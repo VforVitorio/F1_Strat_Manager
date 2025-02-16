@@ -1,0 +1,407 @@
+### **Integración de Recomendaciones en Tiempo Real ("X coche vs Y coche")**
+
+ **Objetivo Ampliado** : Añadir un módulo de simulación estratégica que, dado un contexto específico (ej: coche A está 1.5s detrás de coche B en la vuelta 20), recomiende acciones óptimas (neumáticos, momento de parada, undercut/overcut) basado en condiciones actuales y predicciones.
+
+---
+
+### **Relación con Cada Asignatura y Herramientas**
+
+| **Asignatura**                       | **Componente Ampliado**                                                                                                                                                                                    | **Herramientas/Enfoque**                                                                                                                           | **Datos Necesarios**                                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Visión por Computador**           | -**Detección de posición relativa entre coches** (gap en segundos).``<br />- **Estado de los neumáticos** (degradación visual en cámaras cercanas).                                             | - YOLOv8 + DeepSORT (seguimiento de coches).``- OpenCV para estimar distancia entre bboxes.``- Segmentación de neumáticos (si hay imágenes close-up). | Vídeos de carreras (YouTube) + cámaras onboard (ej:[F1TV](https://f1tv.formula1.com/) si accesible). |
+| **Aprendizaje Automático Avanzado** | -**Modelo de predicción de tiempos por vuelta** bajo diferentes neumáticos/clima.``<br />- **Clasificación de undercut/overcut** (¿ganará posición si para antes/después?).                   | - XGBoost/LightGBM para tabular data (variables: gap, tipo neumático, temperatura pista).``- LSTM para predecir evolución de gaps.                     | Datos históricos de paradas y gaps desde FastF1.                                                   |
+| **Sistemas Inteligentes**            | -**Simulación de escenarios** (¿qué pasa si el coche para ahora vs. en 3 vueltas?).``<br />- **Optimización multiobjetivo** (tiempo total vs. riesgo vs. tráfico).                              | - Algoritmos genéticos (DEAP library).``- MDPs (Markov Decision Processes) con RLlib.                                                                   | Resultados de modelos predictivos + reglas de la FIA (ej: duración mínima de neumáticos).        |
+| **Procesamiento de Lenguaje**        | -**Extracción de contexto estratégico** de radios (ej: "El coche B está con neumáticos blandos usados").``<br />- **Generación de explicaciones** en lenguaje natural para las recomendaciones. | - Fine-tuning de BERT para reconocer órdenes estratégicas.``- Plantillas de texto con variables (usando F-strings o Jinja2).                           | Transcripciones de radios (reales o sintéticas con GPT-4).                                         |
+
+---
+
+### **Fuentes de Datos Adicionales**
+
+1. **Gaps entre coches** :
+
+* Calculados desde datos de posición de FastF1 (`session.pos_data`) o estimados por visión por computador (píxeles entre coches en vídeo → conversión a metros usando referencia de ancho de pista).
+
+1. **Efectividad histórica de undercuts** :
+
+* FastF1 permite extraer laps antes/después de paradas para calcular ganancias/pérdidas de posición.
+
+1. **Temperatura de pista y degradación de neumáticos** :
+
+* Columnas `TrackStatus` y `TyreLife` en datos de FastF1.
+
+---
+
+### **Ejemplo de Flujo de Trabajo**
+
+1. **Entrada** : Vídeo en vivo (o grabado) + datos en tiempo real de FastF1.
+2. **Procesamiento** :
+
+* **Visión** : Detectar que el coche A (posición 5) está a 1.2s del coche B (posición 4).
+* **ML** : Predecir que con neumáticos duros nuevos, el coche A hará vueltas 0.8s más rápidas que B en las próximas 5 vueltas.
+* **Sistemas Inteligentes** : Simular que parar en la vuelta 22 permite un undercut exitoso (ganar 2 posiciones).
+* **NLP** : Generar el mensaje: *"Recomendado: PARAR EN VUELTA 22. Neumáticos duros. Undercut posible al coche B (riesgo bajo: 75% éxito)."*
+
+---
+
+### **Herramientas Específicas para la Ampliación**
+
+* **Simulación de Estrategias** : `FastF1` ya incluye funciones para calcular diferencias de tiempo (`calc_time_diff`).
+* **Visualización de Estrategias** : Usar `Plotly` para mostrar gráficos de proyección de gaps y paradas.
+* **Optimización** : `Optuna` para ajustar hiperparámetros de los modelos de decisión.
+
+---
+
+### **Riesgos y Soluciones**
+
+| **Riesgo**                                | **Mitigación**                                                                             |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Datos en tiempo real limitados**        | Usar modo histórico con datos de FastF1 (ej: GP de España 2023) para desarrollar y testear.     |
+| **Cálculo impreciso de gaps**            | Combinar datos de posición de FastF1 (precisos) con visión por computador (solo como respaldo). |
+| **Overfitting en modelos de predicción** | Validación cruzada con datos de múltiples circuitos (Monza, Mónaco, etc.).                     |
+
+### **Plan de Desarrollo - 3 Meses**
+
+ **Objetivo** : Construir un MVP funcional del sistema de estrategia para F1, integrando visión por computador, modelos predictivos, simulación de decisiones y NLP.
+
+---
+
+### **Mes 1: Configuración y Componentes Básicos**
+
+| **Semana** | **Tareas**                                                                                                                                                                  | **Entregables**                                   | **Asignaturas Relacionadas**             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------- |
+| **1**      | - Configurar entorno Python (venv o conda).``- Explorar FastF1: Extraer datos históricos (ej: GP España 2023).``- Descargar vídeos de YouTube (Creative Commons) para pruebas. | Entorno listo + dataset inicial (CSV/Parquet).          | Aprendizaje Automático, Sistemas Inteligentes |
+| **2**      | - Implementar detección de coches/banderas con YOLOv8 en un vídeo estático.``- Calcular gaps entre coches usando posición en pista (FastF1).                                  | Script de detección + métricas de gaps.               | Visión por Computador                         |
+| **3**      | - Preprocesar datos de telemetría (neumáticos, tiempos por vuelta).``- Entrenar modelo básico de regresión (ej: predecir tiempo de vuelta).                                   | Modelo XGBoost inicial + informe de rendimiento (RMSE). | Aprendizaje Automático                        |
+| **4**      | - Simular un sistema de decisiones con reglas "if-else" (ej: parar si neumáticos > 30% degradación).``- Crear interfaz básica en Streamlit para visualizar datos.              | Sistema de reglas + dashboard simple (Streamlit).       | Sistemas Inteligentes                          |
+
+---
+
+### **Mes 2: Desarrollo de Módulos Clave**
+
+| **Semana** | **Tareas**                                                                                                                                              | **Entregables**                                | **Asignaturas Relacionadas** |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------- |
+| **5**      | - Mejorar modelo predictivo: Incluir variables climáticas y tipo de neumático.``- Implementar LSTM para predecir degradación de neumáticos.               | Modelo avanzado + gráficos de predicción.          | Aprendizaje Automático            |
+| **6**      | - Integrar visión por computador con FastF1: Sincronizar timestamp de vídeo y datos de telemetría.``- Calcular gaps en tiempo real usando YOLO + DeepSORT. | Script de sincronización + demo en vídeo.          | Visión por Computador             |
+| **7**      | - Desarrollar simulador de estrategias con algoritmos genéticos (DEAP): Minimizar tiempo total de carrera.``- Definir restricciones (ej: mínimo 1 parada).  | Simulador funcional + resultados de optimización.   | Sistemas Inteligentes              |
+| **8**      | - Procesar radios de equipo-piloto: Transcribir audios con Whisper.``- Extraer órdenes clave ("Box now", "Stay out").                                        | Dataset de transcripciones + código de extracción. | Procesamiento de Lenguaje          |
+| **9**      | - Integrar todos los módulos en un flujo único (ej: input vídeo → output recomendación).``- Crear API REST con FastAPI para conectar componentes.        | API funcional + ejemplo de request/respuesta.        | Todas                              |
+
+---
+
+### **Mes 3: Integración y Refinamiento**
+
+| **Semana** | **Tareas**                                                                                                                                                                     | **Entregables**                                        | **Asignaturas Relacionadas** |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------- |
+| **10**     | - Entrenar modelo de clasificación para undercut/overcut (usar datos históricos de paradas).``- Generar alertas visuales en el vídeo (ej: "Undercut recomendado").                | Modelo de clasificación + overlay en vídeo.                | Aprendizaje Automático, Visión   |
+| **11**     | - Mejorar el sistema de decisiones con RL (ej: Stable Baselines3).``- Añadir lógica de priorización de alertas (ej: riesgo alto/medio/bajo).                                      | Agente de RL entrenado + sistema de priorización.           | Sistemas Inteligentes              |
+| **12**     | - Desarrollar dashboard interactivo en Streamlit: Mostrar predicciones, vídeo y recomendaciones.``- Añadir explicaciones en lenguaje natural (ej: "Parar en vuelta 22 porque..."). | Dashboard completo + NLP explicativo.                        | Procesamiento de Lenguaje          |
+| **13**     | - Testeo integral: Validar con datos de 2-3 carreras distintas.``- Optimizar rendimiento (reducir latencia, mejorar precisión).                                                     | Informe de testeo + métricas finales (ej: precisión >85%). | Todas                              |
+
+---
+
+### **Entregables Finales**
+
+* **Código** : Repositorio GitHub con módulos documentados.
+* **Demo** : Dashboard Streamlit desplegado localmente o en Hugging Face Spaces.
+* **Informe Técnico** : Explicación de arquitectura, resultados y lecciones aprendidas.
+
+### **Herramientas Clave por Fase**
+
+* **Control de Versiones** : GitHub (ramas por módulo: `vision`, `ml`, `nlp`).
+* **MLOps** : MLflow para registrar modelos y parámetros.
+* **Visualización** : Plotly para gráficos interactivos, OpenCV para overlays en vídeo.
+
+### **Riesgos y Buffer**
+
+* **Semana 14 (Buffer)** : Reservada para debugging, ajustes finales o incorporar feedback.
+* **Mitigación** : Si falta datos de radios, usar síntesis con GPT-4 (ej: generar 100 diálogos estratégicos).
+
+### **Plan de Desarrollo Detallado (Semana a Semana) con Modularidad y Opciones de Modelado**
+
+Cada semana se centra en un **módulo independiente** vinculado a una asignatura, permitiendo desarrollo incremental y pruebas tempranas. Donde sea posible, se proponen **alternativas de implementación** (modelos clásicos vs. redes neuronales).
+
+---
+
+### **Mes 1: Configuración y Componentes Básicos**
+
+#### **Semana 1: Configuración Inicial y Extracción de Datos**
+
+* **Tareas** :
+
+1. **Entorno** :
+   * Crear entorno virtual (`conda create -n f1-strategy python=3.10`).
+   * Instalar librerías base: `fastf1`, `pandas`, `numpy`.
+2. **Datos FastF1** :
+   * Extraer datos del GP España 2023: Tiempos por vuelta, paradas, clima.
+   * Guardar en formato Parquet para eficiencia.
+3. **Vídeos** :
+   * Descargar 2-3 resúmenes de carreras (YouTube Creative Commons) usando `pytube`.
+
+* **Entregables** :
+* Script `data_extraction.py` + dataset en `data/raw`.
+* Documentación de estructura de datos.
+* **Asignatura** :  *Aprendizaje Automático / Sistemas Inteligentes* .
+
+---
+
+#### **Semana 2: Detección de Objetos con Visión por Computador**
+
+* **Tareas** :
+
+1. **Opción 1 (YOLOv8)** :
+   * Entrenar YOLOv8-nano en dataset COCO para detectar coches (transfer learning).
+   * Probar en fotogramas de vídeo estático.
+2. **Opción 2 (CNN Custom)** :
+   * Crear red convolucional simple en PyTorch (2-3 capas) para detección de coches.
+   * Usar dataset sintético: recortes de coches de F1 superpuestos en fondos de pista.
+3. **Cálculo de Gaps** :
+   * Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
+
+* **Entregables** :
+* Script `object_detection.py` + ejemplos de detección en `outputs/week2`.
+* Métricas de precisión (mAP si es YOLO).
+* **Asignatura** :  *Visión por Computador* .
+
+---
+
+#### **Semana 3: Modelo Predictivo de Tiempos por Vuelta**
+
+* **Tareas** :
+
+1. **Opción 1 (XGBoost/LightGBM)** :
+   * Entrenar modelo para predecir `LapTime` usando variables: `TyreCompound`, `TrackTemp`, `AirTemp`.
+2. **Opción 2 (Red Neuronal)** :
+   * Implementar MLP en PyTorch con capas densas (64-32-16-1) y activación ReLU.
+   * Comparar resultados con XGBoost.
+3. **Feature Engineering** :
+   * Crear variables como `TyreAge` (vueltas usadas) y `PositionChange`.
+
+* **Entregables** :
+* Script `lap_time_prediction.py` + modelo guardado en `models/week3`.
+* Gráfico de dispersión predicciones vs. reales.
+* **Asignatura** :  *Aprendizaje Automático Avanzado* .
+
+---
+
+#### **Semana 4: Sistema de Decisiones Basado en Reglas**
+
+* **Tareas**:
+
+  1. **Agente Lógico**:
+     - Implementar un motor de reglas avanzado con `Pyke` o `Experta` para decisiones estratégicas.
+     - Definir reglas basadas en lógica proposicional (ej: `IF TyreDeg > 30% AND Lap > 20 THEN PitStop`).
+  2. **Simulación Simple**:
+     - Validar reglas con datos históricos (ej: GP España 2023).
+  3. **Interfaz Streamlit**:
+     - Añadir panel de control para activar/desactivar reglas.
+* **Entregables**:
+
+  - Script `rule_based_system.py` + dashboard en `src/dashboard`.
+  - Documentación de reglas lógicas en `docs/rules.md`.
+* **Asignatura**: *Sistemas Inteligentes (Unidad IV - 4.1)*.
+
+---
+
+### **Mes 2: Desarrollo de Módulos Clave**
+
+#### **Semana 5: Modelo de Degradación de Neumáticos**
+
+* **Tareas** :
+
+1. **Opción 1 (LSTM)** :
+   * Entrenar LSTM para predecir `TyreDegradation` secuencialmente (usar ventanas de 5 vueltas).
+2. **Opción 2 (Regresión Cuantílica)** :
+   * Usar XGBoost con función de pérdida quantile para predecir degradación en percentiles 10-50-90.
+3. **Dataset** :
+   * Combinar `TyreLife`, `TrackTemp`, y `LapTime` de FastF1.
+
+* **Entregables** :
+* Script `tyre_degradation.py` + predicciones en formato serie temporal.
+* Gráfico interactivo con Plotly.
+* **Asignatura** :  *Aprendizaje Automático Avanzado* .
+
+---
+
+#### **Semana 6: Integración Visión + Datos en Tiempo Real**
+
+* **Tareas** :
+
+1. **Sincronización Vídeo-Telemetría** :
+   * Mapear timestamps de vídeo con datos de FastF1 (ej: `session.pos_data`).
+2. **Visualización** :
+   * Superponer gaps calculados (en segundos) sobre el vídeo con OpenCV.
+3. **Opción CNN Custom** :
+   * Si el tiempo permite, entrenar modelo para estimar degradación visual de neumáticos (usar imágenes de cámaras onboard).
+
+* **Entregables** :
+* Script `video_sync.py` + vídeo demo con overlays.
+* Documentación de sincronización.
+* **Asignatura** :  *Visión por Computador* .
+
+---
+
+#### **Semana 7: Simulador de Estrategias con Búsqueda Adversarial**
+
+* **Tareas**:
+
+  1. **Algoritmo Genético + Poda Alfa-Beta**:
+     - Combinar DEAP con poda alfa-beta para simular estrategias rivales (ej: anticipar undercuts).
+  2. **Fitness Function**:
+     - Incluir penalización por riesgo de colisión o tráfico.
+  3. **Visualización**:
+     - Graficar árbol de decisiones adversarial con `NetworkX`.
+* **Entregables**:
+
+  - Script `genetic_algorithm.py` + gráficos de convergencia.
+  - Ejemplo: "Estrategia óptima considerando respuesta de Mercedes".
+* **Asignatura**: *Sistemas Inteligentes (Unidad II - 2.2)*.
+
+---
+
+#### **Semana 8: Procesamiento de Radios con NLP**
+
+* **Tareas** :
+
+1. **Transcripción con Whisper** :
+   * Procesar audios de radios (ej: "Box now, box now") desde vídeos de YouTube.
+2. **Clasificación de Intención** :
+   * Fine-tuning de BERT-base para detectar órdenes (`parar`, `continuar`, `neutral`).
+3. **Generación de Datos Sintéticos** :
+   * Usar GPT-4 para crear diálogos plausibles si faltan datos reales.
+
+* **Entregables** :
+* Dataset `radios.csv` con texto y etiquetas.
+* Script `nlp_pipeline.py` (transcripción + clasificación).
+* **Asignatura** :  *Procesamiento de Lenguaje* .
+
+---
+
+### **Mes 3: Integración y Refinamiento**
+
+#### **Semana 9: API REST para Integración de Módulos**
+
+* **Tareas** :
+
+1. **Definir Endpoints** :
+   * `/predict_strategy` (input: vídeo + telemetría, output: recomendación).
+2. **Implementar con FastAPI** :
+   * Conectar modelos entrenados (cargar con `joblib` o `torch.load`).
+3. **Pruebas Locales** :
+   * Enviar request POST con datos de prueba y validar respuesta.
+
+* **Entregables** :
+* API funcional en `api/main.py`.
+* Colección Postman para pruebas.
+* **Asignatura** :  *Todas (integración transversal)* .
+
+---
+
+#### **Semana 10: Modelo de Clasificación de Undercut/Overcut**
+
+* **Tareas** :
+
+1. **Dataset Histórico** :
+   * Extraer casos de paradas y su resultado (ganancia/pérdida de posición).
+2. **Opción 1 (XGBoost)** :
+   * Entrenar clasificador binario (`undercut_exitoso`: sí/no).
+3. **Opción 2 (Red Neuronal)** :
+   * Implementar CNN 1D para tratar secuencias de laps pre-parada.
+
+* **Entregables** :
+* Script `undercut_classifier.py` + matriz de confusión.
+* Ejemplo: "En condiciones similares, el undercut tiene un 78% de éxito".
+* **Asignatura** :  *Aprendizaje Automático Avanzado* .
+
+---
+
+#### **Semana 11: Sistema de Decisiones con Agentes Competitivos RL**
+
+* **Tareas**:
+
+  1. **Entorno Multiagente**:
+     - Crear dos agentes RL (ej: Tu equipo vs Red Bull) usando `Stable Baselines3`.
+  2. **Recompensas Competitivas**:
+     - Diseñar recompensas basadas en posición relativa (ej: +10 si adelantas, -5 si te adelantan).
+  3. **Teoría de Juegos**:
+     - Analizar equilibrios de Nash en estrategias simuladas.
+* **Entregables**:
+
+  - Script `rl_training.py` + video de simulación competitiva.
+  - Informe de equilibrios estratégicos en `docs/game_theory.md`.
+* **Asignatura**: *Sistemas Inteligentes (Unidad III - 3.3)*.
+
+---
+
+
+#### **Semana 12: Dashboard con Grafo de Decisiones**
+
+* **Tareas**:
+
+  1. **Integración de Grafo**:
+     - Usar `Graphviz` o `PyVis` para mostrar el árbol de decisiones del agente lógico.
+  2. **Explicaciones en NLP**:
+     - Vincular nodos del grafo con explicaciones generadas por GPT-3.5.
+  3. **Interactividad**:
+     - Permitir hacer clic en nodos para ver detalles de reglas aplicadas.
+* **Entregables**:
+
+  - Dashboard en `src/dashboard` con grafo interactivo.
+  - Ejemplo: "Nodo 'Parar en vuelta 22' → Regla 4.1.3 + Predicción ML".
+* **Asignatura**: *Sistemas Inteligentes (Unidad IV - 4.2)*.
+
+---
+
+
+#### **Semana 13: Testeo Integral y Optimización**
+
+* **Tareas** :
+
+1. **Validar con 2-3 Carreras** :
+   * Comparar predicciones vs. estrategias reales (ej: ¿qué hizo Red Bull en Hungría 2023?).
+2. **Optimizar Rendimiento** :
+   * Convertir modelos a ONNX para inferencia rápida.
+   * Perfilamiento con `cProfile` para identificar cuellos de botella.
+3. **Documentación Final** :
+   * Crear `README.md` con guía de instalación y ejemplos de uso.
+
+* **Entregables** :
+* Informe de testeo en `docs/testing_report.pdf`.
+* Repositorio GitHub organizado y documentado.
+* **Asignatura** :  *Todas (integración transversal)* .
+
+---
+
+### **Modularidad del Proyecto**
+
+* **Estructura de Carpetas** :
+
+  Copy
+
+```
+  f1-strategy/  
+  ├── data/          # Datos crudos y procesados  
+  ├── models/        # Modelos guardados (XGBoost, PyTorch, YOLO)  
+  ├── src/  
+  │   ├── vision/    # Scripts de visión por computador  
+  │   ├── ml/        # Modelos de aprendizaje automático  
+  │   ├── nlp/       # Procesamiento de lenguaje  
+  │   └── systems/   # Sistemas inteligentes y simulaciones  
+  ├── api/           # Código de la API FastAPI  
+  └── dashboard/     # Interfaz Streamlit  
+```
+
+* **Independencia de Módulos** :
+* Cada semana genera scripts en su carpeta correspondiente (ej: `src/vision/week2`).
+* Comunicación entre módulos vía archivos JSON/CSV o llamadas API.
+
+
+### **Sección Nueva: Adaptaciones para Sistemas Inteligentes**
+
+| **Semana** | **Cambio Clave**                        | **Herramientas**       | **Unidad Vinculada**    |
+| ---------------- | --------------------------------------------- | ---------------------------- | ----------------------------- |
+| 4                | Agente lógico con Pyke/Experta               | Pyke, Experta                | IV (4.1 - Agentes Lógicos)   |
+| 7                | Búsqueda adversarial (alfa-beta + genético) | DEAP, NetworkX               | II (2.2 - Búsqueda Compleja) |
+| 11               | Agentes RL competitivos                       | Stable Baselines3, OpenSpiel | III (3.3 - Teoría de Juegos) |
+| 12               | Grafo de decisiones interactivo               | Graphviz, PyVis              | IV (4.2 - Razonamiento)       |
+
+---
