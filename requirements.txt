@@ -1,0 +1,6 @@
+pyarrow
+numpy 
+pandas
+fastf1
+pathlib
+yt-dlp

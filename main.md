@@ -126,10 +126,13 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 #### **Semana 1: Configuración Inicial y Extracción de Datos**
 
+* [X] Marcar como hecho
+
 * **Tareas** :
 
 1. **Entorno** :
    * Crear entorno virtual (`conda create -n f1-strategy python=3.10`).
+   * OpenF1 API también será utilizada para extraer mensajes de radio y otras cosas que FastF1 no posee.
    * Instalar librerías base: `fastf1`, `pandas`, `numpy`.
 2. **Datos FastF1** :
    * Extraer datos del GP España 2023: Tiempos por vuelta, paradas, clima.
@@ -258,21 +261,22 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 ---
 
-#### **Semana 8: Procesamiento de Radios con NLP**
+#### Semana 8: Procesamiento de Radios con NLP (Actualizada)
 
-* **Tareas** :
+ **Objetivo** : Extraer información estratégica clave de las comunicaciones equipo-piloto usando NLP.
 
-1. **Transcripción con Whisper** :
-   * Procesar audios de radios (ej: "Box now, box now") desde vídeos de YouTube.
-2. **Clasificación de Intención** :
-   * Fine-tuning de BERT-base para detectar órdenes (`parar`, `continuar`, `neutral`).
-3. **Generación de Datos Sintéticos** :
-   * Usar GPT-4 para crear diálogos plausibles si faltan datos reales.
+| **Tareas**                                   | **Herramientas/Detalles**                                                                                                                                                                                                                 | **Entregables**                                                                              |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **1. Transcripción con Whisper**            | - Usar `whisper-timestamped` para transcribir radios con marcas de tiempo.                                                                                                                                                                    | Dataset `radios_raw.csv` con columnas: `[timestamp, audio_path, text]`.                        |
+| **2. Limpieza y Preprocesamiento**           | - Eliminar ruido (ej: "copy", "box box box") con expresiones regulares.                                                                                                                                                                         | Script `clean_radios.py` + dataset `radios_clean.csv`.                                         |
+| **3. Detección de Entidades con SpaCy**     | - Crear un modelo personalizado en SpaCy para reconocer:``-  **Entidades** : Pilotos (`"HAM"`, `"VER"`), Neumáticos (`"soft"`, `"hard"`), Estrategias (`"undercut"`, `"overcut"`).``-  **Relaciones** : Ej: `"HAM → soft → lap 22"`. | Modelo SpaCy personalizado (`ner_strategy_model`) + dataset enriquecido `radios_entities.csv`. |
+| **4. Clasificación de Intención con BERT** | - Fine-tuning de `bert-base-uncased` para detectar acciones (`"parar"`, `"continuar"`, `"adelantar"`).                                                                                                                                  | Modelo BERT guardado en `models/nlp/bert_intent`.                                                |
+| **5. Generación de Datos Sintéticos**      | - Usar GPT-4 para simular diálogos estratégicos con entidades anotadas.                                                                                                                                                                       | Dataset sintético `radios_synthetic.csv` (500 ejemplos).                                        |
 
-* **Entregables** :
-* Dataset `radios.csv` con texto y etiquetas.
-* Script `nlp_pipeline.py` (transcripción + clasificación).
-* **Asignatura** :  *Procesamiento de Lenguaje* .
+ **Entregables Finales (Semana 8)** :
+
+* Scripts: `transcribe_radios.py`, `spacy_ner.py`, `bert_intent_classifier.py`.
+* Datasets: `radios_clean.csv`, `radios_entities.csv`, `radios_synthetic.csv`.
 
 ---
 
@@ -332,25 +336,38 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 ---
 
+#### Semana 12: Dashboard con Explicaciones Enriquecidas (Nuevas Tareas)
 
-#### **Semana 12: Dashboard con Grafo de Decisiones**
+ **Objetivo** : Integrar las entidades detectadas por SpaCy en las explicaciones generadas.
 
-* **Tareas**:
+| **Tareas**                                         | **Herramientas/Detalles**                                                                                                                                        | **Entregables**                              |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **1. Vinculación Entidades-Recomendaciones**      | - Usar las entidades de SpaCy (ej: neumáticos detectados) para personalizar mensajes.``- Ejemplo:`"Parar en lap 22 (neumáticos HARD detectados en radio lap 20)"`. | Lógica de vinculación en `dashboard_logic.py`. |
+| **2. Visualización de Entidades en Dashboard**    | - Mostrar entidades clave en el panel de Streamlit usando tarjetas interactivas.                                                                                       | Componente `entities_viewer.py` en el dashboard. |
+| **3. Generación de Explicaciones con Plantillas** | - Crear plantillas Jinja2 que combinen predicciones ML + entidades SpaCy.``- Ejemplo:`"{{ driver }} debe parar en lap {{ lap }} ({{ entity }} detectado en radio)"`. | Plantillas en `templates/explanations.j2`.       |
 
-  1. **Integración de Grafo**:
-     - Usar `Graphviz` o `PyVis` para mostrar el árbol de decisiones del agente lógico.
-  2. **Explicaciones en NLP**:
-     - Vincular nodos del grafo con explicaciones generadas por GPT-3.5.
-  3. **Interactividad**:
-     - Permitir hacer clic en nodos para ver detalles de reglas aplicadas.
-* **Entregables**:
+ **Entregables Finales (Semana 12)** :
 
-  - Dashboard en `src/dashboard` con grafo interactivo.
-  - Ejemplo: "Nodo 'Parar en vuelta 22' → Regla 4.1.3 + Predicción ML".
-* **Asignatura**: *Sistemas Inteligentes (Unidad IV - 4.2)*.
+* Dashboard con pestaña "Análisis de Radios" mostrando entidades y relaciones.
+* Sistema de explicaciones basado en entidades detectadas.
 
 ---
 
+### **Relación con Asignaturas**
+
+| **Asignatura**                | **Componentes Añadidos**                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Procesamiento de Lenguaje** | - Modelo SpaCy para entidades estratégicas.``- Integración de entidades en explicaciones.                         |
+| **Sistemas Inteligentes**     | - Uso de entidades para mejorar decisiones estratégicas (ej: priorizar paradas si se detecta "degradación alta"). |
+
+---
+
+### **Riesgos y Mitigación**
+
+| **Riesgo**                                 | **Mitigación**                                                               |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Bajo rendimiento del modelo SpaCy**      | Usar el dataset sintético de GPT-4 para aumentar datos de entrenamiento.           |
+| **Falta de contexto en las explicaciones** | Combinar SpaCy con LLMs (GPT-3.5) para generar texto natural a partir de entidades. |
 
 #### **Semana 13: Testeo Integral y Optimización**
 
@@ -384,7 +401,10 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
   ├── src/  
   │   ├── vision/    # Scripts de visión por computador  
   │   ├── ml/        # Modelos de aprendizaje automático  
-  │   ├── nlp/       # Procesamiento de lenguaje  
+  │   ├── nlp/       # Procesamiento de lenguaje 
+  │   | ├── spacy_ner/            # Modelo SpaCy y scripts de entrenamiento  
+  │   | ├── bert_intent/          # Clasificador de intención con BERT  
+  |   | └── templates/            # Plantillas Jinja2 para explicaciones
   │   └── systems/   # Sistemas inteligentes y simulaciones  
   ├── api/           # Código de la API FastAPI  
   └── dashboard/     # Interfaz Streamlit  
@@ -393,7 +413,6 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 * **Independencia de Módulos** :
 * Cada semana genera scripts en su carpeta correspondiente (ej: `src/vision/week2`).
 * Comunicación entre módulos vía archivos JSON/CSV o llamadas API.
-
 
 ### **Sección Nueva: Adaptaciones para Sistemas Inteligentes**
 

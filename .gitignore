@@ -1,1 +1,12 @@
 zoom_links.md
+IS Project Proposal Vega Sobral Víctor.pdf
+# Excluir datos y caché
+data/
+f1_cache/
+
+# Excluir archivos de entorno virtual y IDE
+venv/
+.env
+.idea/
+__pycache__/
+*.pyc
