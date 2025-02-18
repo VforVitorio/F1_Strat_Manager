@@ -149,6 +149,8 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 #### **Semana 2: Detección de Objetos con Visión por Computador**
 
+* [ ] Marcar como hecho
+
 * **Tareas** :
 
 1. **Opción 1 (YOLOv8)** :
