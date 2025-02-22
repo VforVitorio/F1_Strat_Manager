@@ -5,6 +5,7 @@ data/
 f1_cache/
 f1-dataset/
 
+yolo-files
 # Excluir archivos de entorno virtual y IDE
 venv/
 .env

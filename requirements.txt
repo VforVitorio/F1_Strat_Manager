@@ -1,6 +1,10 @@
 pyarrow
-numpy 
+numpy ==2.1.2
 pandas
 fastf1
 pathlib
 yt-dlp
+ultralytics
+supervision
+opencv-python
+albumentations
