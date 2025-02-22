@@ -152,14 +152,18 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 * [ ] Marcar como hecho
 
 * **Tareas** :
+* [X] Descargado dataset
 
 1. **Opción 1 (YOLOv8)** :
+
    * Entrenar YOLOv8-nano en dataset COCO para detectar coches (transfer learning).
    * Probar en fotogramas de vídeo estático.
 2. **Opción 2 (CNN Custom)** :
+
    * Crear red convolucional simple en PyTorch (2-3 capas) para detección de coches.
    * Usar dataset sintético: recortes de coches de F1 superpuestos en fondos de pista.
 3. **Cálculo de Gaps** :
+
    * Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
 
 * **Entregables** :
