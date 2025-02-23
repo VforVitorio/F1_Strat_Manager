@@ -1,3 +1,10 @@
+"""
+
+Archivo de data augmentation para el conjunto de entrenamiento train del dataset de imágenes.
+
+"""
+
+
 import os
 import random
 import numpy as np
