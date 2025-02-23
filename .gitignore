@@ -4,7 +4,7 @@ IS Project Proposal Vega Sobral Víctor.pdf
 data/
 f1_cache/
 f1-dataset/
-
+f1-strategy/weights
 yolo-files
 # Excluir archivos de entorno virtual y IDE
 venv/
