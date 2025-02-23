@@ -16,7 +16,7 @@ CLASS_NAMES = [
     "Kick Sauber", "Racing Bulls", "Alpine", "Aston Martin",
     "Ferarri", "Haas", "Mclaren", "Mercedes", "Red Bull", "Williams"
 ]
-TARGET_PER_CLASS = 200
+TARGET_PER_CLASS = 250
 BASE_DIR = r"C:\Users\victo\Desktop\Documents\Tercer año\Segundo Cuatrimestre\Finales\f1-strategy\f1-dataset"
 
 # Transformaciones con Albumentations
