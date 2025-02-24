@@ -25,5 +25,10 @@ if __name__ == "__main__":
     # spain_2023_fp2_url = "https://www.youtube.com/watch?v=qs9LlesYl7k"
 
     # download_f1_video(spain_2023_fp2_url, "spain_2023_race.mp4")
-    abu_dhabi_2024 = "https://www.youtube.com/watch?v=Qa0nj2CcaSM"
-    download_f1_video(abu_dhabi_2024, "abu_dhabi_2024_race.mp4")
+    # abu_dhabi_2024 = "https://www.youtube.com/watch?v=Qa0nj2CcaSM"
+    # download_f1_video(abu_dhabi_2024, "abu_dhabi_2024_race.mp4")
+
+    # best_overtakes_2023 = "https://www.youtube.com/watch?v=pz9UYcvJzN8"
+    # download_f1_video(best_overtakes_2023, "best_overtakes_2023.mp4")
+    onboard_lec = "https://www.youtube.com/watch?v=heu1y6H7puQ"
+    download_f1_video(onboard_lec, "onboard_video_lecrerc")
