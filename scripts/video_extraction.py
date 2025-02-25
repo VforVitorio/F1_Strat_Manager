@@ -30,5 +30,8 @@ if __name__ == "__main__":
 
     # best_overtakes_2023 = "https://www.youtube.com/watch?v=pz9UYcvJzN8"
     # download_f1_video(best_overtakes_2023, "best_overtakes_2023.mp4")
-    onboard_lec = "https://www.youtube.com/watch?v=heu1y6H7puQ"
-    download_f1_video(onboard_lec, "onboard_video_lecrerc")
+    # onboard_lec = "https://www.youtube.com/watch?v=heu1y6H7puQ"
+    # download_f1_video(onboard_lec, "onboard_video_lecrerc")
+
+    bahrein_2023 = "https://www.youtube.com/watch?v=f9j8nhMNYO4&list=PLfoNZDHitwjX-oU5YVAkfuXkALZqempRS"
+    download_f1_video(bahrein_2023, "onboard_video_lecrerc")

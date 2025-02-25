@@ -6,12 +6,12 @@
 
 ### **Relación con Cada Asignatura y Herramientas**
 
-| **Asignatura**                       | **Componente Ampliado**                                                                                                                                                                                    | **Herramientas/Enfoque**                                                                                                                           | **Datos Necesarios**                                                                          |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Asignatura**                      | **Componente Ampliado**                                                                                                                                                                         | **Herramientas/Enfoque**                                                                                                                            | **Datos Necesarios**                                                                                 |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **Visión por Computador**           | -**Detección de posición relativa entre coches** (gap en segundos).``<br />- **Estado de los neumáticos** (degradación visual en cámaras cercanas).                                             | - YOLOv8 + DeepSORT (seguimiento de coches).`- OpenCV para estimar distancia entre bboxes.`- Segmentación de neumáticos (si hay imágenes close-up). | Vídeos de carreras (YouTube) + cámaras onboard (ej:[F1TV](https://f1tv.formula1.com/) si accesible). |
-| **Aprendizaje Automático Avanzado** | -**Modelo de predicción de tiempos por vuelta** bajo diferentes neumáticos/clima.``<br />- **Clasificación de undercut/overcut** (¿ganará posición si para antes/después?).                   | - XGBoost/LightGBM para tabular data (variables: gap, tipo neumático, temperatura pista).``- LSTM para predecir evolución de gaps.                     | Datos históricos de paradas y gaps desde FastF1.                                                   |
-| **Sistemas Inteligentes**            | -**Simulación de escenarios** (¿qué pasa si el coche para ahora vs. en 3 vueltas?).``<br />- **Optimización multiobjetivo** (tiempo total vs. riesgo vs. tráfico).                              | - Algoritmos genéticos (DEAP library).``- MDPs (Markov Decision Processes) con RLlib.                                                                   | Resultados de modelos predictivos + reglas de la FIA (ej: duración mínima de neumáticos).        |
-| **Procesamiento de Lenguaje**        | -**Extracción de contexto estratégico** de radios (ej: "El coche B está con neumáticos blandos usados").``<br />- **Generación de explicaciones** en lenguaje natural para las recomendaciones. | - Fine-tuning de BERT para reconocer órdenes estratégicas.``- Plantillas de texto con variables (usando F-strings o Jinja2).                           | Transcripciones de radios (reales o sintéticas con GPT-4).                                         |
+| **Aprendizaje Automático Avanzado** | -**Modelo de predicción de tiempos por vuelta** bajo diferentes neumáticos/clima.``<br />- **Clasificación de undercut/overcut** (¿ganará posición si para antes/después?).                     | - XGBoost/LightGBM para tabular data (variables: gap, tipo neumático, temperatura pista).``- LSTM para predecir evolución de gaps.                  | Datos históricos de paradas y gaps desde FastF1.                                                     |
+| **Sistemas Inteligentes**           | -**Simulación de escenarios** (¿qué pasa si el coche para ahora vs. en 3 vueltas?).``<br />- **Optimización multiobjetivo** (tiempo total vs. riesgo vs. tráfico).                              | - Algoritmos genéticos (DEAP library).``- MDPs (Markov Decision Processes) con RLlib.                                                               | Resultados de modelos predictivos + reglas de la FIA (ej: duración mínima de neumáticos).            |
+| **Procesamiento de Lenguaje**       | -**Extracción de contexto estratégico** de radios (ej: "El coche B está con neumáticos blandos usados").``<br />- **Generación de explicaciones** en lenguaje natural para las recomendaciones. | - Fine-tuning de BERT para reconocer órdenes estratégicas.``- Plantillas de texto con variables (usando F-strings o Jinja2).                        | Transcripciones de radios (reales o sintéticas con GPT-4).                                           |
 
 ---
 
@@ -53,11 +53,11 @@
 
 ### **Riesgos y Soluciones**
 
-| **Riesgo**                                | **Mitigación**                                                                             |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Datos en tiempo real limitados**        | Usar modo histórico con datos de FastF1 (ej: GP de España 2023) para desarrollar y testear.     |
+| **Riesgo**                               | **Mitigación**                                                                                  |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Datos en tiempo real limitados**       | Usar modo histórico con datos de FastF1 (ej: GP de España 2023) para desarrollar y testear.     |
 | **Cálculo impreciso de gaps**            | Combinar datos de posición de FastF1 (precisos) con visión por computador (solo como respaldo). |
-| **Overfitting en modelos de predicción** | Validación cruzada con datos de múltiples circuitos (Monza, Mónaco, etc.).                     |
+| **Overfitting en modelos de predicción** | Validación cruzada con datos de múltiples circuitos (Monza, Mónaco, etc.).                      |
 
 ### **Plan de Desarrollo - 3 Meses**
 
@@ -67,35 +67,35 @@
 
 ### **Mes 1: Configuración y Componentes Básicos**
 
-| **Semana** | **Tareas**                                                                                                                                                                  | **Entregables**                                   | **Asignaturas Relacionadas**             |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------- |
+| **Semana** | **Tareas**                                                                                                                                                                   | **Entregables**                                         | **Asignaturas Relacionadas**                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------- |
 | **1**      | - Configurar entorno Python (venv o conda).`- Explorar FastF1: Extraer datos históricos (ej: GP España 2023).`- Descargar vídeos de YouTube (Creative Commons) para pruebas. | Entorno listo + dataset inicial (CSV/Parquet).          | Aprendizaje Automático, Sistemas Inteligentes |
-| **2**      | - Implementar detección de coches/banderas con YOLOv8 en un vídeo estático.``- Calcular gaps entre coches usando posición en pista (FastF1).                                  | Script de detección + métricas de gaps.               | Visión por Computador                         |
-| **3**      | - Preprocesar datos de telemetría (neumáticos, tiempos por vuelta).``- Entrenar modelo básico de regresión (ej: predecir tiempo de vuelta).                                   | Modelo XGBoost inicial + informe de rendimiento (RMSE). | Aprendizaje Automático                        |
-| **4**      | - Simular un sistema de decisiones con reglas "if-else" (ej: parar si neumáticos > 30% degradación).``- Crear interfaz básica en Streamlit para visualizar datos.              | Sistema de reglas + dashboard simple (Streamlit).       | Sistemas Inteligentes                          |
+| **2**      | - Implementar detección de coches/banderas con YOLOv8 en un vídeo estático.``- Calcular gaps entre coches usando posición en pista (FastF1).                                 | Script de detección + métricas de gaps.                 | Visión por Computador                         |
+| **3**      | - Preprocesar datos de telemetría (neumáticos, tiempos por vuelta).``- Entrenar modelo básico de regresión (ej: predecir tiempo de vuelta).                                  | Modelo XGBoost inicial + informe de rendimiento (RMSE). | Aprendizaje Automático                        |
+| **4**      | - Simular un sistema de decisiones con reglas "if-else" (ej: parar si neumáticos > 30% degradación).``- Crear interfaz básica en Streamlit para visualizar datos.            | Sistema de reglas + dashboard simple (Streamlit).       | Sistemas Inteligentes                         |
 
 ---
 
 ### **Mes 2: Desarrollo de Módulos Clave**
 
-| **Semana** | **Tareas**                                                                                                                                              | **Entregables**                                | **Asignaturas Relacionadas** |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------- |
-| **5**      | - Mejorar modelo predictivo: Incluir variables climáticas y tipo de neumático.``- Implementar LSTM para predecir degradación de neumáticos.               | Modelo avanzado + gráficos de predicción.          | Aprendizaje Automático            |
-| **6**      | - Integrar visión por computador con FastF1: Sincronizar timestamp de vídeo y datos de telemetría.``- Calcular gaps en tiempo real usando YOLO + DeepSORT. | Script de sincronización + demo en vídeo.          | Visión por Computador             |
-| **7**      | - Desarrollar simulador de estrategias con algoritmos genéticos (DEAP): Minimizar tiempo total de carrera.``- Definir restricciones (ej: mínimo 1 parada).  | Simulador funcional + resultados de optimización.   | Sistemas Inteligentes              |
-| **8**      | - Procesar radios de equipo-piloto: Transcribir audios con Whisper.``- Extraer órdenes clave ("Box now", "Stay out").                                        | Dataset de transcripciones + código de extracción. | Procesamiento de Lenguaje          |
-| **9**      | - Integrar todos los módulos en un flujo único (ej: input vídeo → output recomendación).``- Crear API REST con FastAPI para conectar componentes.        | API funcional + ejemplo de request/respuesta.        | Todas                              |
+| **Semana** | **Tareas**                                                                                                                                                 | **Entregables**                                    | **Asignaturas Relacionadas** |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------- |
+| **5**      | - Mejorar modelo predictivo: Incluir variables climáticas y tipo de neumático.``- Implementar LSTM para predecir degradación de neumáticos.                | Modelo avanzado + gráficos de predicción.          | Aprendizaje Automático       |
+| **6**      | - Integrar visión por computador con FastF1: Sincronizar timestamp de vídeo y datos de telemetría.``- Calcular gaps en tiempo real usando YOLO + DeepSORT. | Script de sincronización + demo en vídeo.          | Visión por Computador        |
+| **7**      | - Desarrollar simulador de estrategias con algoritmos genéticos (DEAP): Minimizar tiempo total de carrera.``- Definir restricciones (ej: mínimo 1 parada). | Simulador funcional + resultados de optimización.  | Sistemas Inteligentes        |
+| **8**      | - Procesar radios de equipo-piloto: Transcribir audios con Whisper.``- Extraer órdenes clave ("Box now", "Stay out").                                      | Dataset de transcripciones + código de extracción. | Procesamiento de Lenguaje    |
+| **9**      | - Integrar todos los módulos en un flujo único (ej: input vídeo → output recomendación).``- Crear API REST con FastAPI para conectar componentes.          | API funcional + ejemplo de request/respuesta.      | Todas                        |
 
 ---
 
 ### **Mes 3: Integración y Refinamiento**
 
-| **Semana** | **Tareas**                                                                                                                                                                     | **Entregables**                                        | **Asignaturas Relacionadas** |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------- |
-| **10**     | - Entrenar modelo de clasificación para undercut/overcut (usar datos históricos de paradas).``- Generar alertas visuales en el vídeo (ej: "Undercut recomendado").                | Modelo de clasificación + overlay en vídeo.                | Aprendizaje Automático, Visión   |
-| **11**     | - Mejorar el sistema de decisiones con RL (ej: Stable Baselines3).``- Añadir lógica de priorización de alertas (ej: riesgo alto/medio/bajo).                                      | Agente de RL entrenado + sistema de priorización.           | Sistemas Inteligentes              |
-| **12**     | - Desarrollar dashboard interactivo en Streamlit: Mostrar predicciones, vídeo y recomendaciones.``- Añadir explicaciones en lenguaje natural (ej: "Parar en vuelta 22 porque..."). | Dashboard completo + NLP explicativo.                        | Procesamiento de Lenguaje          |
-| **13**     | - Testeo integral: Validar con datos de 2-3 carreras distintas.``- Optimizar rendimiento (reducir latencia, mejorar precisión).                                                     | Informe de testeo + métricas finales (ej: precisión >85%). | Todas                              |
+| **Semana** | **Tareas**                                                                                                                                                                         | **Entregables**                                            | **Asignaturas Relacionadas**   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
+| **10**     | - Entrenar modelo de clasificación para undercut/overcut (usar datos históricos de paradas).``- Generar alertas visuales en el vídeo (ej: "Undercut recomendado").                 | Modelo de clasificación + overlay en vídeo.                | Aprendizaje Automático, Visión |
+| **11**     | - Mejorar el sistema de decisiones con RL (ej: Stable Baselines3).``- Añadir lógica de priorización de alertas (ej: riesgo alto/medio/bajo).                                       | Agente de RL entrenado + sistema de priorización.          | Sistemas Inteligentes          |
+| **12**     | - Desarrollar dashboard interactivo en Streamlit: Mostrar predicciones, vídeo y recomendaciones.``- Añadir explicaciones en lenguaje natural (ej: "Parar en vuelta 22 porque..."). | Dashboard completo + NLP explicativo.                      | Procesamiento de Lenguaje      |
+| **13**     | - Testeo integral: Validar con datos de 2-3 carreras distintas.``- Optimizar rendimiento (reducir latencia, mejorar precisión).                                                    | Informe de testeo + métricas finales (ej: precisión >85%). | Todas                          |
 
 ---
 
@@ -126,7 +126,7 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 #### **Semana 1: Configuración Inicial y Extracción de Datos**
 
-- [X] Marcar como hecho
+- [x] Marcar como hecho
 
 - **Tareas** :
 
@@ -153,14 +153,15 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 - **Tareas** :
 
-- [X] Descargado dataset
+- [x] Descargado dataset
 
 1. **Opción 1 (YOLOv8)** :
 
-   - [X] Entrenar YOLOv8-medium en dataset COCO para detectar coches (transfer learning). Finalmente, entrenado yolo medieum desde cero y buenos resultados.
-   - [X] Probar en fotogramas de vídeo estático.
-   - [X] Probar en vídeo dinámico.
+   - [x] Entrenar YOLOv8-medium en dataset COCO para detectar coches (transfer learning). Finalmente, entrenado yolo medieum desde cero y buenos resultados.
+   - [x] Probar en fotogramas de vídeo estático.
+   - [x] Probar en vídeo dinámico.
    - [ ] Reducir recall y reentrenar.
+
 2. **Cálculo de Gaps** :
 
    - [ ] Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
@@ -202,10 +203,12 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
      - Validar reglas con datos históricos (ej: GP España 2023).
   3. **Interfaz Streamlit**:
      - Añadir panel de control para activar/desactivar reglas.
+
 - **Entregables**:
 
   - Script `rule_based_system.py` + dashboard en `src/dashboard`.
   - Documentación de reglas lógicas en `docs/rules.md`.
+
 - **Asignatura**: _Sistemas Inteligentes (Unidad IV - 4.1)_.
 
 ---
@@ -258,10 +261,12 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
      - Incluir penalización por riesgo de colisión o tráfico.
   3. **Visualización**:
      - Graficar árbol de decisiones adversarial con `NetworkX`.
+
 - **Entregables**:
 
   - Script `genetic_algorithm.py` + gráficos de convergencia.
   - Ejemplo: "Estrategia óptima considerando respuesta de Mercedes".
+
 - **Asignatura**: _Sistemas Inteligentes (Unidad II - 2.2)_.
 
 ---
@@ -270,13 +275,13 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 **Objetivo** : Extraer información estratégica clave de las comunicaciones equipo-piloto usando NLP.
 
-| **Tareas**                                   | **Herramientas/Detalles**                                                                                                                                                                                                                | **Entregables**                                                                              |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **1. Transcripción con Whisper**            | - Usar `whisper-timestamped` para transcribir radios con marcas de tiempo.                                                                                                                                                                   | Dataset `radios_raw.csv` con columnas: `[timestamp, audio_path, text]`.                        |
-| **2. Limpieza y Preprocesamiento**           | - Eliminar ruido (ej: "copy", "box box box") con expresiones regulares.                                                                                                                                                                        | Script `clean_radios.py` + dataset `radios_clean.csv`.                                         |
-| **3. Detección de Entidades con SpaCy**     | - Crear un modelo personalizado en SpaCy para reconocer:``-  **Entidades** : Pilotos (`"HAM"`, `"VER"`), Neumáticos (`"soft"`, `"hard"`), Estrategias (`"undercut"`, `"overcut"`).``- **Relaciones** : Ej: `"HAM → soft → lap 22"`. | Modelo SpaCy personalizado (`ner_strategy_model`) + dataset enriquecido `radios_entities.csv`. |
-| **4. Clasificación de Intención con BERT** | - Fine-tuning de `bert-base-uncased` para detectar acciones (`"parar"`, `"continuar"`, `"adelantar"`).                                                                                                                                 | Modelo BERT guardado en `models/nlp/bert_intent`.                                                |
-| **5. Generación de Datos Sintéticos**      | - Usar GPT-4 para simular diálogos estratégicos con entidades anotadas.                                                                                                                                                                      | Dataset sintético `radios_synthetic.csv` (500 ejemplos).                                        |
+| **Tareas**                                 | **Herramientas/Detalles**                                                                                                                                                                                                             | **Entregables**                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **1. Transcripción con Whisper**           | - Usar `whisper-timestamped` para transcribir radios con marcas de tiempo.                                                                                                                                                            | Dataset `radios_raw.csv` con columnas: `[timestamp, audio_path, text]`.                        |
+| **2. Limpieza y Preprocesamiento**         | - Eliminar ruido (ej: "copy", "box box box") con expresiones regulares.                                                                                                                                                               | Script `clean_radios.py` + dataset `radios_clean.csv`.                                         |
+| **3. Detección de Entidades con SpaCy**    | - Crear un modelo personalizado en SpaCy para reconocer:`` -  **Entidades** : Pilotos (`"HAM"`, `"VER"`), Neumáticos (`"soft"`, `"hard"`), Estrategias (`"undercut"`, `"overcut"`). ``- **Relaciones** : Ej: `"HAM → soft → lap 22"`. | Modelo SpaCy personalizado (`ner_strategy_model`) + dataset enriquecido `radios_entities.csv`. |
+| **4. Clasificación de Intención con BERT** | - Fine-tuning de `bert-base-uncased` para detectar acciones (`"parar"`, `"continuar"`, `"adelantar"`).                                                                                                                                | Modelo BERT guardado en `models/nlp/bert_intent`.                                              |
+| **5. Generación de Datos Sintéticos**      | - Usar GPT-4 para simular diálogos estratégicos con entidades anotadas.                                                                                                                                                               | Dataset sintético `radios_synthetic.csv` (500 ejemplos).                                       |
 
 **Entregables Finales (Semana 8)** :
 
@@ -333,10 +338,12 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
      - Diseñar recompensas basadas en posición relativa (ej: +10 si adelantas, -5 si te adelantan).
   3. **Teoría de Juegos**:
      - Analizar equilibrios de Nash en estrategias simuladas.
+
 - **Entregables**:
 
   - Script `rl_training.py` + video de simulación competitiva.
   - Informe de equilibrios estratégicos en `docs/game_theory.md`.
+
 - **Asignatura**: _Sistemas Inteligentes (Unidad III - 3.3)_.
 
 ---
@@ -345,10 +352,10 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 **Objetivo** : Integrar las entidades detectadas por SpaCy en las explicaciones generadas.
 
-| **Tareas**                                         | **Herramientas/Detalles**                                                                                                                                        | **Entregables**                              |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| **1. Vinculación Entidades-Recomendaciones**      | - Usar las entidades de SpaCy (ej: neumáticos detectados) para personalizar mensajes.``- Ejemplo:`"Parar en lap 22 (neumáticos HARD detectados en radio lap 20)"`. | Lógica de vinculación en `dashboard_logic.py`. |
-| **2. Visualización de Entidades en Dashboard**    | - Mostrar entidades clave en el panel de Streamlit usando tarjetas interactivas.                                                                                       | Componente `entities_viewer.py` en el dashboard. |
+| **Tareas**                                        | **Herramientas/Detalles**                                                                                                                                            | **Entregables**                                  |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **1. Vinculación Entidades-Recomendaciones**      | - Usar las entidades de SpaCy (ej: neumáticos detectados) para personalizar mensajes.``- Ejemplo:`"Parar en lap 22 (neumáticos HARD detectados en radio lap 20)"`.   | Lógica de vinculación en `dashboard_logic.py`.   |
+| **2. Visualización de Entidades en Dashboard**    | - Mostrar entidades clave en el panel de Streamlit usando tarjetas interactivas.                                                                                     | Componente `entities_viewer.py` en el dashboard. |
 | **3. Generación de Explicaciones con Plantillas** | - Crear plantillas Jinja2 que combinen predicciones ML + entidades SpaCy.``- Ejemplo:`"{{ driver }} debe parar en lap {{ lap }} ({{ entity }} detectado en radio)"`. | Plantillas en `templates/explanations.j2`.       |
 
 **Entregables Finales (Semana 12)** :
@@ -360,8 +367,8 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 ### **Relación con Asignaturas**
 
-| **Asignatura**                | **Componentes Añadidos**                                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Asignatura**                | **Componentes Añadidos**                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Procesamiento de Lenguaje** | - Modelo SpaCy para entidades estratégicas.``- Integración de entidades en explicaciones.                         |
 | **Sistemas Inteligentes**     | - Uso de entidades para mejorar decisiones estratégicas (ej: priorizar paradas si se detecta "degradación alta"). |
 
@@ -369,9 +376,9 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 ### **Riesgos y Mitigación**
 
-| **Riesgo**                                 | **Mitigación**                                                               |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| **Bajo rendimiento del modelo SpaCy**      | Usar el dataset sintético de GPT-4 para aumentar datos de entrenamiento.           |
+| **Riesgo**                                 | **Mitigación**                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Bajo rendimiento del modelo SpaCy**      | Usar el dataset sintético de GPT-4 para aumentar datos de entrenamiento.            |
 | **Falta de contexto en las explicaciones** | Combinar SpaCy con LLMs (GPT-3.5) para generar texto natural a partir de entidades. |
 
 #### **Semana 13: Testeo Integral y Optimización**
@@ -421,11 +428,11 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 ### **Sección Nueva: Adaptaciones para Sistemas Inteligentes**
 
-| **Semana** | **Cambio Clave**                        | **Herramientas**       | **Unidad Vinculada**    |
-| ---------------- | --------------------------------------------- | ---------------------------- | ----------------------------- |
-| 4                | Agente lógico con Pyke/Experta               | Pyke, Experta                | IV (4.1 - Agentes Lógicos)   |
-| 7                | Búsqueda adversarial (alfa-beta + genético) | DEAP, NetworkX               | II (2.2 - Búsqueda Compleja) |
-| 11               | Agentes RL competitivos                       | Stable Baselines3, OpenSpiel | III (3.3 - Teoría de Juegos) |
-| 12               | Grafo de decisiones interactivo               | Graphviz, PyVis              | IV (4.2 - Razonamiento)       |
+| **Semana** | **Cambio Clave**                            | **Herramientas**             | **Unidad Vinculada**         |
+| ---------- | ------------------------------------------- | ---------------------------- | ---------------------------- |
+| 4          | Agente lógico con Pyke/Experta              | Pyke, Experta                | IV (4.1 - Agentes Lógicos)   |
+| 7          | Búsqueda adversarial (alfa-beta + genético) | DEAP, NetworkX               | II (2.2 - Búsqueda Compleja) |
+| 11         | Agentes RL competitivos                     | Stable Baselines3, OpenSpiel | III (3.3 - Teoría de Juegos) |
+| 12         | Grafo de decisiones interactivo             | Graphviz, PyVis              | IV (4.2 - Razonamiento)      |
 
 ---
