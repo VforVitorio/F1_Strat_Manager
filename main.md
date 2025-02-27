@@ -134,6 +134,7 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
    - Crear entorno virtual (`conda create -n f1-strategy python=3.10`).
    - OpenF1 API también será utilizada para extraer mensajes de radio y otras cosas que FastF1 no posee.
    - Instalar librerías base: `fastf1`, `pandas`, `numpy`.
+   - Implementar `extract_openf1_intervals(race, session)` → crear esquema de almacenamiento unificado → desarrollar funciones de conversión entre formatos
 2. **Datos FastF1** :
    - Extraer datos del GP España 2023: Tiempos por vuelta, paradas, clima.
    - Guardar en formato Parquet para eficiencia.
@@ -149,7 +150,7 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 #### **Semana 2: Detección de Objetos con Visión por Computador**
 
-- [ ] Marcar como hecho
+- [x] Marcar como hecho
 
 - **Tareas** :
 
@@ -160,11 +161,11 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
    - [x] Entrenar YOLOv8-medium en dataset COCO para detectar coches (transfer learning). Finalmente, entrenado yolo medieum desde cero y buenos resultados.
    - [x] Probar en fotogramas de vídeo estático.
    - [x] Probar en vídeo dinámico.
-   - [ ] Reducir recall y reentrenar.
+   - [x] Reducir recall y reentrenar.
 
 2. **Cálculo de Gaps** :
 
-   - [ ] Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
+   - [x] Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
 
 - **Entregables** :
 - Script `object_detection.py` + ejemplos de detección en `outputs/week2`.
@@ -175,7 +176,7 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 #### **Semana 3: Modelo Predictivo de Tiempos por Vuelta**
 
-- **Tareas** :
+- [ ] **Tareas** :
 
 1. **Opción 1 (XGBoost/LightGBM)** :
    - Entrenar modelo para predecir `LapTime` usando variables: `TyreCompound`, `TrackTemp`, `AirTemp`.
@@ -199,6 +200,8 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
   1. **Agente Lógico**:
      - Implementar un motor de reglas avanzado con `Pyke` o `Experta` para decisiones estratégicas.
      - Definir reglas basadas en lógica proposicional (ej: `IF TyreDeg > 30% AND Lap > 20 THEN PitStop`).
+     - Explorar método API openfq https://openf1.org/#intervals para tener en cuenta intervalo con el coche de delante y el lider.
+     - Extraer intervalos de OpenF1 → construir reglas basadas en gaps (< 1.5s = zona undercut) → implementar visualización de umbrales de gap en dashboard
   2. **Simulación Simple**:
      - Validar reglas con datos históricos (ej: GP España 2023).
   3. **Interfaz Streamlit**:
@@ -239,6 +242,8 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
 1. **Sincronización Vídeo-Telemetría** :
    - Mapear timestamps de vídeo con datos de FastF1 (ej: `session.pos_data`).
+   - Poder tener en cuenta timestamps de OpenF1 intervals.
+   - 📌 Crear función `reconcile_gaps(vision_gap, fastf1_gap, openf1_gap)` → añadir overlay comparativo en video → sincronizar timeline triple (video + FastF1 + OpenF1)
 2. **Visualización** :
    - Superponer gaps calculados (en segundos) sobre el vídeo con OpenCV.
 3. **Opción CNN Custom** :
@@ -257,6 +262,8 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 
   1. **Algoritmo Genético + Poda Alfa-Beta**:
      - Combinar DEAP con poda alfa-beta para simular estrategias rivales (ej: anticipar undercuts).
+     - Tener en cuenta de nuevo intervals de : Explorar método API openfq https://openf1.org/#intervals en semana 4
+     - 📌 Crear modelo `GapEvolutionPredictor` usando históricos OpenF1 → integrar predicción de gaps en fitness function → visualizar evolución de intervalos en árbol de decisiones
   2. **Fitness Function**:
      - Incluir penalización por riesgo de colisión o tráfico.
   3. **Visualización**:
@@ -313,6 +320,10 @@ Cada semana se centra en un **módulo independiente** vinculado a una asignatura
 #### **Semana 10: Modelo de Clasificación de Undercut/Overcut**
 
 - **Tareas** :
+
+  Explorar método API openfq https://openf1.org/#intervals otra vez.
+
+- Crear features `gap_evolution_pre_pit` y `gap_evolution_post_pit` → implementar análisis SHAP para identificar umbrales críticos → desarrollar predictor de éxito basado en intervalos iniciales
 
 1. **Dataset Histórico** :
    - Extraer casos de paradas y su resultado (ganancia/pérdida de posición).
