@@ -8,3 +8,5 @@ ultralytics
 supervision
 opencv-python
 albumentations
+xgboost
+lightgbm

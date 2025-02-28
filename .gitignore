@@ -2,6 +2,8 @@ zoom_links.md
 IS Project Proposal Vega Sobral Víctor.pdf
 # Excluir datos y caché
 data/
+models/
+outputs/
 f1_cache/
 f1-dataset/
 f1-strategy/weights
