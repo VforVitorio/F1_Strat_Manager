@@ -33,5 +33,8 @@ if __name__ == "__main__":
     # onboard_lec = "https://www.youtube.com/watch?v=heu1y6H7puQ"
     # download_f1_video(onboard_lec, "onboard_video_lecrerc")
 
-    bahrein_2023 = "https://www.youtube.com/watch?v=f9j8nhMNYO4&list=PLfoNZDHitwjX-oU5YVAkfuXkALZqempRS"
-    download_f1_video(bahrein_2023, "onboard_video_lecrerc")
+    # = "https://www.youtube.com/watch?v=f9j8nhMNYO4&list=PLfoNZDHitwjX-oU5YVAkfuXkALZqempRS"
+    # download_f1_video(bahrein_2023, "onboard_video_lecrerc")
+
+    belgium_gp = "https://www.youtube.com/watch?v=C6h7NnkX7hk"
+    download_f1_video(belgium_gp, "belgium_gp")
