@@ -69,6 +69,7 @@ def fetch_openf1_intervals(year, gp_name, max_interval=None):
         f"Buscando datos en OpenF1 para {gp_name} {year} (session_key: {session_key})")
 
     # Construir la URL directamente, exactamente como la que funciona en el navegador
+    # can change max_interval to min_interval if we change the < sign to >
     if max_interval is not None:
         url = f"{base_url}?session_key={session_key}&interval<{max_interval}"
         print(f"URL: {url}")
