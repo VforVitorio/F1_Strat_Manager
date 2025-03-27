@@ -14,7 +14,7 @@
 
 # # Formula 1 NER Recognition
 #
-# As a continuation of `N04_radio_info.ipynb`, this notebook demonstrates the development of a custom Named Entity Recognition (NER) system for Formula 1 team radio communications. 
+# As a continuation of `N04_radio_info.ipynb`, this notebook demonstrates the development of a custom Named Entity Recognition (NER) system for Formula 1 team radio communications.
 #
 # The system extracts structured information from unstructured radio messages exchanged between drivers and race engineers during F1 races.
 #
@@ -24,7 +24,7 @@
 
 # ---
 
-# ## Methodology 
+# ## Methodology
 #
 # The notebook implements:
 #
@@ -40,6 +40,7 @@
 
 # ## 1. Library Imports
 
+from sklearn.utils import compute_class_weight
 import json
 import numpy as np
 import pandas as pd
@@ -49,13 +50,13 @@ from transformers import DebertaV2Tokenizer, DebertaV2ForTokenClassification
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import AdamW
 from transformers import (
-    AutoTokenizer, 
-    AutoModelForTokenClassification, 
-    Trainer, 
+    AutoTokenizer,
+    AutoModelForTokenClassification,
+    Trainer,
     TrainingArguments,
     DataCollatorForTokenClassification,
     EarlyStoppingCallback,
-    
+
     get_linear_schedule_with_warmup
 )
 
@@ -71,7 +72,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# ## 3. Constant Definition 
+# ## 3. Constant Definition
 #
 # In this cell, I´ll document the type of entities and their correspondent colors.
 
@@ -93,17 +94,13 @@ ENTITY_COLORS = {
     "ACTION": "#4e79a7",           # Blue
     "SITUATION": "#f28e2c",         # Orange
     "INCIDENT": "#e15759",          # Red
-    "STRATEGY_INSTRUCTION": "#76b7b2", # Teal
+    "STRATEGY_INSTRUCTION": "#76b7b2",  # Teal
     "POSITION_CHANGE": "#59a14f",   # Green
     "PIT_CALL": "#edc949",          # Yellow
     "TRACK_CONDITION": "#af7aa1",   # Purple
     "TECHNICAL_ISSUE": "#ff9da7",   # Pink
     "WEATHER": "#9c755f"            # Brown
 }
-
-print("Entity types defined:")
-for entity, description in ENTITY_TYPES.items():
-    print(f"  - {entity}: {description}")
 
 
 # ## 4. Load and Explore Data
@@ -113,16 +110,17 @@ def load_f1_radio_data(json_file):
     """Load and explore F1 radio data from JSON file"""
     with open(json_file, 'r') as f:
         data = json.load(f)
-    
+
     print(f"Loaded {len(data)} messages from {json_file}")
-    
+
     # Show sample structure
     if len(data) > 0:
         print("\nSample record structure:")
         sample = data[0]
         print(f"  Driver: {sample.get('driver', 'N/A')}")
-        print(f"  Radio message: {sample.get('radio_message', 'N/A')[:100]}...")
-        
+        print(
+            f"  Radio message: {sample.get('radio_message', 'N/A')[:100]}...")
+
         if 'annotations' in sample and len(sample['annotations']) > 1:
             if isinstance(sample['annotations'][1], dict) and 'entities' in sample['annotations'][1]:
                 entities = sample['annotations'][1]['entities']
@@ -130,10 +128,10 @@ def load_f1_radio_data(json_file):
                 if len(entities) > 0:
                     entity = entities[0]
                     entity_text = sample['radio_message'][entity[0]:entity[1]]
-                    print(f"  Sample entity: [{entity[0]}, {entity[1]}, '{entity_text}', '{entity[2]}']")
-    
-    return data
+                    print(
+                        f"  Sample entity: [{entity[0]}, {entity[1]}, '{entity_text}', '{entity[2]}']")
 
+    return data
 
 
 # Load the JSON data
@@ -146,11 +144,8 @@ for item in f1_data:
     if 'annotations' in item and len(item['annotations']) > 1:
         if isinstance(item['annotations'][1], dict) and 'entities' in item['annotations'][1]:
             for _, _, entity_type in item['annotations'][1]['entities']:
-                entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
-
-print("\nEntity type distribution in dataset:")
-for entity_type, count in sorted(entity_counts.items(), key=lambda x: x[1], reverse=True):
-    print(f"  - {entity_type}: {count}")
+                entity_counts[entity_type] = entity_counts.get(
+                    entity_type, 0) + 1
 
 
 # ## 5. Preprocessing F1 Radio Data
@@ -159,25 +154,25 @@ def preprocess_f1_data(data):
     """Extract and preprocess F1 radio data with valid annotations"""
     processed_data = []
     skipped_count = 0
-    
+
     for item in data:
         if 'radio_message' not in item or 'annotations' not in item:
             skipped_count += 1
             continue
-            
+
         text = item['radio_message']
-        
+
         # Skip items with empty or null text
         if not text or text.strip() == "":
             skipped_count += 1
             continue
-            
+
         # Extract entities if they exist in expected format
         if len(item['annotations']) > 1 and isinstance(item['annotations'][1], dict):
             annotations = item['annotations'][1]
             if 'entities' in annotations and annotations['entities']:
                 entities = annotations['entities']
-                
+
                 # Add to processed data
                 processed_data.append({
                     'text': text,
@@ -188,10 +183,11 @@ def preprocess_f1_data(data):
                 skipped_count += 1
         else:
             skipped_count += 1
-    
+
     print(f"Processed {len(processed_data)} messages with valid annotations")
-    print(f"Skipped {skipped_count} messages with missing or invalid annotations")
-    
+    print(
+        f"Skipped {skipped_count} messages with missing or invalid annotations")
+
     # Show a sample of processed data
     if processed_data:
         sample = processed_data[10]
@@ -201,160 +197,81 @@ def preprocess_f1_data(data):
         for start, end, entity_type in sample['entities']:
             entity_text = sample['text'][start:end]
             print(f"  - [{start}, {end}] '{entity_text}' ({entity_type})")
-    
-    return processed_data
 
+    return processed_data
 
 
 # Preprocess the loaded data
 processed_f1_data = preprocess_f1_data(f1_data)
 
 
-# ## 6. Covert to BIO tagging format
-#
-# Deeper BIO tagging format information can be searched [here](https://en.wikipedia.org/wiki/Inside–outside–beginning_(tagging)).
-#
-# ### BIO Format Explanation
-#
-# The **BIO format** is a way to label words in a sentence to indicate if they are part of a named entity, and if so, where in the entity they belong. It uses three types of labels:
-#
-# - **B- (Beginning)**: The first word in an entity.
-# - **I- (Inside)**: Any word inside the entity that isn't the first one.
-# - **O (Outside)**: Words that are not part of any entity.
-#
-# ---
-#
-# ### Example Radio
-#
-# Here is an example of a radio message from Max Verstappen´s track engineer: 
-#
-# **Text:**  
-# *"Max, we've currently got yellows in turn 7. Ferrari in the wall, no? Yes, that's Charles stopped. We are expecting the potential of an aborted start, but just keep to your protocol at the moment."*
-#
-# Here are the entities mentioned in the message:
-#
-# 1. **'keep to your protocol at the moment'** (ACTION)
-# 2. **'we've currently got yellows in turn 7'** (SITUATION)
-# 3. **'We are expecting the potential of an aborted start'** (SITUATION)
-# 4. **'Ferrari in the wall'** (INCIDENT)
-# 5. **'that's Charles stopped'** (INCIDENT)
-#
-# ---
-#
-# ### Breaking the Sentence
-#
-# We break the sentence into words and then tag them as follows:
-#
-# | Word            | BIO Tag          |
-# |-----------------|------------------|
-# | Max,            | O                |
-# | we've           | O                |
-# | currently       | O                |
-# | got             | O                |
-# | yellows         | O                |
-# | in              | O                |
-# | turn            | O                |
-# | 7.              | O                |
-# | Ferrari         | B-INCIDENT       |
-# | in              | I-INCIDENT       |
-# | the             | I-INCIDENT       |
-# | wall,           | I-INCIDENT       |
-# | no?             | O                |
-# | Yes,            | O                |
-# | that's          | B-INCIDENT       |
-# | Charles         | I-INCIDENT       |
-# | stopped.        | I-INCIDENT       |
-# | We              | B-SITUATION      |
-# | are             | I-SITUATION      |
-# | expecting       | I-SITUATION      |
-# | the             | I-SITUATION      |
-# | potential       | I-SITUATION      |
-# | of              | I-SITUATION      |
-# | an              | I-SITUATION      |
-# | aborted         | I-SITUATION      |
-# | start,          | I-SITUATION      |
-# | but             | O                |
-# | just            | O                |
-# | keep            | B-ACTION         |
-# | to              | I-ACTION         |
-# | your            | I-ACTION         |
-# | protocol        | I-ACTION         |
-# | at              | I-ACTION         |
-# | the             | I-ACTION         |
-# | moment.         | I-ACTION         |
-#
-#
-#
-
 def create_ner_tags(text, entities):
     """Convert character-based entity spans to token-based BIO tags"""
     words = text.split()
     tags = ["O"] * len(words)
     char_to_word = {}
-    
+
     # Create mapping from character positions to word indices
     char_idx = 0
     for word_idx, word in enumerate(words):
         # Account for spaces
         if char_idx > 0:
             char_idx += 1  # Space
-        
+
         # Map each character position to its word index
         for char_pos in range(char_idx, char_idx + len(word)):
             char_to_word[char_pos] = word_idx
-        
+
         char_idx += len(word)
-    
+
     # Apply entity tags
     for start_char, end_char, entity_type in entities:
         # Skip invalid spans
         if start_char >= len(text) or end_char > len(text) or start_char >= end_char:
             continue
-            
+
         # Find word indices for start and end characters
         if start_char in char_to_word:
             start_word = char_to_word[start_char]
             # Find the last word of the entity
             end_word = char_to_word.get(end_char - 1, start_word)
-            
+
             # Tag the first word as B-entity
             tags[start_word] = f"B-{entity_type}"
-            
+
             # Tag subsequent words as I-entity
             for word_idx in range(start_word + 1, end_word + 1):
                 tags[word_idx] = f"I-{entity_type}"
-    
+
     return words, tags
-
-
-
 
 
 def convert_to_bio_format(processed_data):
     """Convert processed data to BIO tagging format"""
     bio_data = []
     mapping_errors = 0
-    
+
     for item in processed_data:
         text = item['text']
         entities = item['entities']
-        
+
         # Convert to BIO tags
         words, tags = create_ner_tags(text, entities)
-        
+
         # Check if we mapped any entities
         if all(tag == "O" for tag in tags) and len(entities) > 0:
             mapping_errors += 1
-        
+
         bio_data.append({
             "tokens": words,
             "ner_tags": tags,
             "driver": item.get('driver', None)
         })
-    
+
     print(f"Converted {len(bio_data)} messages to BIO format")
-    print(f"Mapping errors: {mapping_errors} (messages where no entities were mapped)")
-    
+    print(
+        f"Mapping errors: {mapping_errors} (messages where no entities were mapped)")
+
     # Show an example
     if bio_data:
         sample = bio_data[10]
@@ -362,7 +279,7 @@ def convert_to_bio_format(processed_data):
         print(f"Original text: {' '.join(sample['tokens'])}")
         for token, tag in zip(sample['tokens'], sample['ner_tags']):
             print(f"  {token} -> {tag}")
-    
+
     return bio_data
 
 
@@ -370,45 +287,19 @@ def convert_to_bio_format(processed_data):
 bio_data = convert_to_bio_format(processed_f1_data)
 
 
-# ### What the Function Does
-#
-# The function `create_ner_tags` takes the text and entities and converts them into BIO format. It starts by splitting the text into words. 
-#
-# Then, it maps each word to a tag: "O" for words that are not part of an entity, "B-" for the first word of an entity, and "I-" for subsequent words inside the entity. 
-#
-# The function also uses the character positions of the entities to determine which words they correspond to. Once the tags are assigned, the function returns the words and their BIO tags, ready for use in training a Named Entity Recognition (NER) model.
-
-# ## 7. Create tag mappings and prepare datasets.
-
-# ### 7.1 `create_tag_mappings`
-#
-# This function creates mappings between NER (Named Entity Recognition) tags and unique IDs. It does this by:
-#
-# 1. Collecting all unique NER tags from the `bio_data`.
-# 2. Sorting and assigning each unique tag an ID.
-# 3. Creating two mappings:
-#    - `tag2id`: Maps each tag to its corresponding ID.
-#    - `id2tag`: Maps each ID back to its corresponding tag.
-#
-# It then prints out the mappings and returns the two dictionaries: `tag2id` and `id2tag`.
-#
-# **What it does:**
-# - Converts NER tags into unique IDs for easier processing in machine learning models.
-# - Helps with transforming the tags when working with model inputs and outputs.
-
 def create_tag_mappings(bio_data):
     """Create mappings between NER tags and IDs"""
     unique_tags = set()
     for item in bio_data:
         unique_tags.update(item["ner_tags"])
-    
+
     tag2id = {tag: id for id, tag in enumerate(sorted(list(unique_tags)))}
     id2tag = {id: tag for tag, id in tag2id.items()}
-    
+
     print(f"Created mappings for {len(tag2id)} unique tags:")
     for tag, idx in tag2id.items():
         print(f"  {tag}: {idx}")
-    
+
     return tag2id, id2tag
 
 
@@ -416,45 +307,32 @@ def create_tag_mappings(bio_data):
 tag2id, id2tag = create_tag_mappings(bio_data)
 
 
-# ---
-
-# ### 7.2 `prepare_datasets`
-#
-# This function prepares the dataset for training a model by splitting it into training, validation, and test sets using the Hugging Face library. Here's what it does:
-#
-# 1. Converts the input `bio_data` into a Hugging Face `Dataset`.
-# 2. Splits the data into two parts: training + validation, and test.
-# 3. Further splits the training data into training and validation sets based on the specified sizes (`test_size` and `val_size`).
-# 4. Returns a `DatasetDict` containing the `train`, `validation`, and `test` sets.
-#
-# **What it does:**
-# - Converts the data into a format suitable for machine learning.
-# - Splits the data into three parts: training, validation, and test sets for model evaluation.
-
 def prepare_datasets(bio_data, test_size=0.1, val_size=0.1, seed=42):
     """Convert to Hugging Face Dataset and split into train/val/test"""
     # Convert to Hugging Face dataset
     hf_dataset = HFDataset.from_list(bio_data)
-    
+
     # First split: train + validation vs test
-    train_val_test = hf_dataset.train_test_split(test_size=test_size, seed=seed)
-    
+    train_val_test = hf_dataset.train_test_split(
+        test_size=test_size, seed=seed)
+
     # Second split: train vs validation (validation is val_size/(1-test_size) of the train set)
     val_fraction = val_size / (1 - test_size)
-    train_val = train_val_test["train"].train_test_split(test_size=val_fraction, seed=seed)
-    
+    train_val = train_val_test["train"].train_test_split(
+        test_size=val_fraction, seed=seed)
+
     # Combine into DatasetDict
     datasets = DatasetDict({
         "train": train_val["train"],
         "validation": train_val["test"],
         "test": train_val_test["test"]
     })
-    
+
     print(f"Prepared datasets with:")
     print(f"  - Train: {len(datasets['train'])} examples")
     print(f"  - Validation: {len(datasets['validation'])} examples")
     print(f"  - Test: {len(datasets['test'])} examples")
-    
+
     return datasets
 
 
@@ -462,7 +340,7 @@ datasets = prepare_datasets(bio_data)
 
 # ---
 #
-# ## 8. Calling Up the Model 
+# ## 8. Calling Up the Model
 #
 # In the first run, I tried with *Microsoft Deberta-v3-large*, a bigger model than BERT or RoBERTa. I believe more that the robustness of this architecture can provide good results.
 #
@@ -518,7 +396,7 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
     def __init__(self, hf_dataset, tokenizer, tag2id, max_len=128):
         """
         Initializes the dataset with a Hugging Face dataset, tokenizer, tag-to-id mapping, and maximum sequence length.
-        
+
         Parameters:
         - hf_dataset: The dataset containing tokenized text and NER tags.
         - tokenizer: A tokenizer to process and convert text to token IDs.
@@ -529,21 +407,21 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
         self.tokenizer = tokenizer
         self.tag2id = tag2id  # Mapping of NER tags to their numeric IDs
         self.max_len = max_len
-        
+
     def __len__(self):
         """
         Returns the number of examples in the dataset.
         """
         return len(self.dataset)
-    
+
     def __getitem__(self, idx):
         """
         Retrieves the data example at the given index, processes tokens and tags,
         and prepares input tensors for a NER model.
-        
+
         Parameters:
         - idx: Index of the data example to retrieve.
-        
+
         Returns:
         A dictionary containing:
         - input_ids: Tensor of token IDs for the input sequence.
@@ -554,11 +432,11 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
         item = self.dataset[idx]
         tokens = item["tokens"]         # List of word tokens
         tags = item["ner_tags"]         # Corresponding NER tags
-        
+
         # Initialize lists to store word indices and all sub-tokens
         word_ids = []  # Maps each sub-token to its original word index
         all_tokens = []  # Stores all sub-tokens after tokenization
-        
+
         # Tokenize each word separately
         for word_idx, word in enumerate(tokens):
             # Tokenize the word using the provided tokenizer
@@ -566,19 +444,20 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
             if not word_tokens:
                 # Handle cases where tokenization results in an empty list
                 word_tokens = [self.tokenizer.unk_token]
-            
+
             # For each sub-token produced from the word, record the original word index
             for _ in word_tokens:
                 word_ids.append(word_idx)
-                
+
             # Add the sub-tokens to the overall list of tokens
             all_tokens.extend(word_tokens)
-        
+
         # Check if the tokenized sequence needs truncation
-        if len(all_tokens) > self.max_len - 2:  # -2 accounts for special tokens ([CLS] and [SEP])
+        # -2 accounts for special tokens ([CLS] and [SEP])
+        if len(all_tokens) > self.max_len - 2:
             all_tokens = all_tokens[:self.max_len - 2]
             word_ids = word_ids[:self.max_len - 2]
-        
+
         # Encode the tokenized input, adding special tokens and padding as needed
         encoded_input = self.tokenizer.encode_plus(
             all_tokens,
@@ -589,10 +468,10 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
             truncation=True,
             return_tensors="pt"  # Return PyTorch tensors
         )
-        
+
         # Initialize the labels tensor with -100 to ignore special tokens and padding during loss computation
         labels = torch.ones(self.max_len, dtype=torch.long) * -100
-        
+
         # Align NER labels with the tokenized sequence
         # The first token ([CLS]) is already set to -100 by initialization
         for i, word_idx in enumerate(word_ids):
@@ -600,13 +479,14 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
             if i + 1 < self.max_len - 1:
                 # Check if the tag is a string and convert it to its numeric ID if necessary
                 if isinstance(tags[word_idx], str):
-                    tag_id = self.tag2id.get(tags[word_idx], 0)  # Defaults to 0, often representing 'O'
+                    # Defaults to 0, often representing 'O'
+                    tag_id = self.tag2id.get(tags[word_idx], 0)
                 else:
                     tag_id = tags[word_idx]  # Already a numeric ID
-                    
+
                 # Set the label at the corresponding position (offset by 1 for [CLS])
                 labels[i + 1] = tag_id
-        
+
         # Return the processed inputs as a dictionary
         return {
             "input_ids": encoded_input["input_ids"].flatten(),
@@ -615,32 +495,30 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
         }
 
 
-
 # ---
 # ## 10. Pytorch Setup
 #
-# In PyTorch, creating custom datasets and corresponding DataLoaders is essential for efficiently feeding data into our model during training and evaluation. 
+# In PyTorch, creating custom datasets and corresponding DataLoaders is essential for efficiently feeding data into our model during training and evaluation.
 #
 # I found that the following steps are crucial:
 #
 # ### A) Creating Pytorch Datasets
 #
-# By using the ``F1RadioNERDataset`` class, we convert our raw data (tokens, NER tags, etc.) into a format that is compatible with PyTorch. 
+# By using the ``F1RadioNERDataset`` class, we convert our raw data (tokens, NER tags, etc.) into a format that is compatible with PyTorch.
 #
 # This allows us to perform operations such as tokenization and label alignment on the fly. Passing the ``tag2id`` mapping ensures that the **NER tags are correctly converted into numeric IDs**, which is **necessary for training** the model.
 #
 # ### B) Creating the DataLoaders
 #
-# The DataLoader is a PyTorch utility that **provides an iterable over our dataset**. It handles **batching, shuffling (for training), and even parallel data loading** with multiple workers if needed. 
+# The DataLoader is a PyTorch utility that **provides an iterable over our dataset**. It handles **batching, shuffling (for training), and even parallel data loading** with multiple workers if needed.
 #
-# This *makes the training process more efficient* and helps in managing *memory usage*, parts that are crucial knwoging that I am training these models in my own graphics card, with a limited VRAM. 
+# This *makes the training process more efficient* and helps in managing *memory usage*, parts that are crucial knwoging that I am training these models in my own graphics card, with a limited VRAM.
 #
 # By specifying a batch size and shuffling the training data, we ensure that each mini-batch is representative and that the **model doesn’t overfit to the order** of the training data.
 #
 #
 
 # ### 10.1 Creating Pytorch Datasets
-
 # Create PyTorch datasets using the custom F1RadioNERDataset class.
 # Passing the tag2id mapping is crucial as it converts NER tag strings to numeric IDs,
 # which are needed for model training.
@@ -649,14 +527,13 @@ val_dataset = F1RadioNERDataset(datasets["validation"], tokenizer, tag2id)
 test_dataset = F1RadioNERDataset(datasets["test"], tokenizer, tag2id)
 
 
-
-
 # ### 10.2 Creating Dataloaders
 
 # Create DataLoaders for the datasets.
 # DataLoaders are used in PyTorch to efficiently batch and shuffle data during training and evaluation.
 # They help in managing memory and speeding up the training process by allowing parallel data loading.
-batch_size = 8  # Reduced batch size due to model size constraints and resource availability.
+# Reduced batch size due to model size constraints and resource availability.
+batch_size = 8
 
 # For training, shuffling is enabled to ensure the model does not learn the order of the data.
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -664,7 +541,6 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 # For validation and testing, shuffling is typically not required.
 val_loader = DataLoader(val_dataset, batch_size=batch_size)
 test_loader = DataLoader(test_dataset, batch_size=batch_size)
-
 
 
 # ### 10.3 Validating Samples
@@ -689,7 +565,7 @@ print(f"Sample labels shape: {sample['labels'].shape}")
 # In the following cell, next things will be implemented:
 #
 # #### I) Device Setup
-# PyTorch models and tensors need to be moved to the appropriate hardware (CPU or GPU) for computation. 
+# PyTorch models and tensors need to be moved to the appropriate hardware (CPU or GPU) for computation.
 #
 # Checking if a GPU (CUDA) is available and setting the device accordingly ensures that the model leverages the faster processing power of a GPU when available. I will use it, as I have a Nvidia GPU with the drivers installed.
 #
@@ -697,7 +573,7 @@ print(f"Sample labels shape: {sample['labels'].shape}")
 #
 # #### II) Model Initialization with Label Information
 #
-# The ``DebertaV2ForTokenClassification`` model is loaded from a pretrained checkpoint, and it needs to know the number of labels for token classification. 
+# The ``DebertaV2ForTokenClassification`` model is loaded from a pretrained checkpoint, and it needs to know the number of labels for token classification.
 #
 # By using ``num_labels = len(tag2id)``, the model is configured to produce outputs that align with the NER task. This ensures that the final classification layer has the correct dimensions to predict the right classes.
 #
@@ -715,7 +591,7 @@ print(f"Using device: {device}")
 
 num_labels = len(tag2id)  # Use our existing tag2id mapping
 model = DebertaV2ForTokenClassification.from_pretrained(
-    model_name, 
+    model_name,
     num_labels=num_labels
 )
 model.to(device)
@@ -728,7 +604,7 @@ print(f"Number of labels: {num_labels}")
 #
 # #### A) Extracting Training Labels
 #
-# In token classification tasks, not every token is relevant for computing the loss (for instance, special tokens or padding tokens are ignored by marking them with ``-100``). 
+# In token classification tasks, not every token is relevant for computing the loss (for instance, special tokens or padding tokens are ignored by marking them with ``-100``).
 #
 # This code iterates over the training DataLoader and collects only the relevant labels (i.e., those not marked with ``-100``). This step is necessary to accurately analyze the distribution of actual labels used in training.
 #
@@ -738,7 +614,6 @@ print(f"Number of labels: {num_labels}")
 #
 # Using scikit-learn's ``compute_class_weight`` function helps to compute weights for each class inversely proportional to their frequency in the dataset. These weights can later be used during training (e.g., in the loss function) to give more importance to minority classes and improve model performance.
 
-from sklearn.utils import compute_class_weight
 
 # Set the number of training epochs
 epochs = 10
@@ -750,18 +625,19 @@ train_labels = []
 for batch in train_loader:
     # Get the labels tensor from the current batch
     labels = batch['labels']
-    
+
     # Create a mask to filter out tokens with the ignore index (-100)
     mask = labels != -100
-    
+
     # Extend the train_labels list with the valid labels (convert tensor to numpy array)
     train_labels.extend(labels[mask].numpy())
 
 # Calculate class weights using scikit-learn's compute_class_weight
 # 'balanced' mode adjusts weights inversely proportional to class frequencies in the dataset.
 class_weights = compute_class_weight(
-    'balanced', 
-    classes=np.unique(train_labels),  # Unique classes present in the training labels
+    'balanced',
+    # Unique classes present in the training labels
+    classes=np.unique(train_labels),
     y=train_labels                    # List of training labels
 )
 
@@ -770,7 +646,7 @@ class_weights = compute_class_weight(
 
 # #### C) Class Weights Conversion
 #
-# The ``computed class weights`` (from scikit-learn) are converted to a PyTorch tensor and moved to the appropriate device (GPU or CPU). 
+# The ``computed class weights`` (from scikit-learn) are converted to a PyTorch tensor and moved to the appropriate device (GPU or CPU).
 #
 # This conversion is necessary because the **loss function will use these weights during training**, and they must be in the **same format and on the same device as the model's parameters**.
 #
@@ -803,7 +679,8 @@ class_weights = torch.FloatTensor(class_weights).to(device)
 loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=-100)
 
 # Set a small learning rate for better fine tuning of the pre-trained model.
-learning_rate = 1e-5  # Reduced from 2e-5 to 1e-5 for more gradual learning updates.
+# Reduced from 2e-5 to 1e-5 for more gradual learning updates.
+learning_rate = 1e-5
 
 # Calculate the number of warmup steps.
 # Here, warmup steps are set to 10% of the total training steps to stabilize the initial training.
@@ -818,7 +695,7 @@ optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
 # Set up a linear learning rate scheduler with warmup.
 # This scheduler increases the learning rate for the warmup_steps, then linearly decays it.
 scheduler = get_linear_schedule_with_warmup(
-    optimizer, 
+    optimizer,
     num_warmup_steps=warmup_steps,
     num_training_steps=total_steps  # Total training steps
 )
@@ -830,15 +707,15 @@ scheduler = get_linear_schedule_with_warmup(
 #
 # 1. **Prediction Processing**
 #
-#     - The function starts by converting raw model outputs (logits) into predicted labels by using np.argmax along the classification dimension. 
-#     
+#     - The function starts by converting raw model outputs (logits) into predicted labels by using np.argmax along the classification dimension.
+#
 #     - This produces the most likely class for each token.
 #
 # 2. **Flattening and Filtering**
 #     - Both predictions and true labels are flattened into 1D arrays.
-#      
-#     - Special tokens and padding tokens are marked with -100 in the labels; filtering these out ensures that only valid tokens are considered when calculating the metrics. 
-#      
+#
+#     - Special tokens and padding tokens are marked with -100 in the labels; filtering these out ensures that only valid tokens are considered when calculating the metrics.
+#
 #     - This step prevents skewing the evaluation metrics by including irrelevant tokens.
 #
 # 3. **Metric Calculation**
@@ -852,23 +729,23 @@ def compute_metrics(preds, labels):
     # Convert model outputs (logits) to predicted labels by selecting the class with the highest probability
     preds = np.argmax(preds, axis=2).flatten()
     labels = labels.flatten()
-    
+
     # Create a mask to filter out tokens with the ignore index (-100), which are not used in training (e.g., padding)
     mask = labels != -100
-    
+
     # Apply the mask to both predictions and labels to keep only the valid tokens
     preds = preds[mask]
     labels = labels[mask]
-    
+
     # Calculate accuracy: the fraction of correctly predicted labels
     accuracy = accuracy_score(labels, preds)
-    
+
     # Calculate precision, recall, and F1 score using weighted averages to account for class imbalances.
     # The weighted average ensures that each class contributes to the overall metric proportionally to its frequency.
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, preds, average='weighted'
     )
-    
+
     # Return a dictionary containing all computed metrics for easy access and logging.
     return {
         'accuracy': accuracy,
@@ -876,7 +753,6 @@ def compute_metrics(preds, labels):
         'recall': recall,
         'f1': f1
     }
-
 
 
 # ---
@@ -896,37 +772,37 @@ def compute_metrics(preds, labels):
 def train_epoch():
     model.train()  # Set the model to training mode
     total_loss = 0  # Initialize the total loss accumulator
-    
+
     # Iterate over training batches with a progress bar
     for batch in tqdm(train_loader, desc="Training"):
         optimizer.zero_grad()  # Reset gradients
-        
+
         # Move inputs and labels to the designated device (GPU or CPU)
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
-        
+
         # Forward pass: obtain model outputs (logits)
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
         logits = outputs.logits
-        
+
         # Create a mask for valid tokens (ignore tokens with label -100)
         active_loss = labels != -100
-        
+
         # Reshape logits to match the expected loss function input
         active_logits = logits.view(-1, num_labels)
-        
+
         # Prepare active labels: use the ignore index where needed
         active_labels = torch.where(
-            active_loss.view(-1), 
-            labels.view(-1), 
+            active_loss.view(-1),
+            labels.view(-1),
             torch.tensor(loss_fn.ignore_index).type_as(labels)
         )
-        
+
         # Calculate the loss for the current batch
         loss = loss_fn(active_logits, active_labels)
         total_loss += loss.item()  # Accumulate loss
-        
+
         # Backward pass: compute gradients
         loss.backward()
         # Clip gradients to avoid exploding gradients
@@ -935,15 +811,14 @@ def train_epoch():
         optimizer.step()
         # Update the learning rate
         scheduler.step()
-        
+
     # Return the average loss for the epoch
     return total_loss / len(train_loader)
 
 
-
 # ---
 
-# #### Evaluation 
+# #### Evaluation
 #
 # The `evaluate` function switches the model to evaluation mode, processing the given data loader without updating the gradients. It also calculates the loss and collects predictions and true labels. Finally, it computes the predefined metrics with our `compute_metrics` function (accuracy, f1-score,etc) and then returns them along with the average loss.
 #
@@ -954,7 +829,7 @@ def evaluate(data_loader):
     total_loss = 0  # Initialize loss accumulator
     all_preds = []  # To store predictions
     all_labels = []  # To store true labels
-    
+
     # Disable gradient computation for evaluation
     with torch.no_grad():
         # Iterate over batches in the data loader with a progress bar
@@ -963,32 +838,32 @@ def evaluate(data_loader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
-            
+
             # Get model outputs including loss and logits
             outputs = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 labels=labels
             )
-            
+
             # Accumulate the loss from the current batch
             loss = outputs.loss
             total_loss += loss.item()
-            
+
             # Detach logits and move them to CPU for metric calculation
             logits = outputs.logits
             all_preds.append(logits.detach().cpu().numpy())
             all_labels.append(labels.detach().cpu().numpy())
-    
+
     # Concatenate all batch predictions and labels into single arrays
     all_preds = np.concatenate(all_preds, axis=0)
     all_labels = np.concatenate(all_labels, axis=0)
-    
+
     # Compute evaluation metrics (accuracy, precision, recall, F1)
     metrics = compute_metrics(all_preds, all_labels)
     # Add the average loss to the metrics dictionary
     metrics['loss'] = total_loss / len(data_loader)
-    
+
     return metrics
 
 
@@ -1007,7 +882,7 @@ def evaluate(data_loader):
 # If the F1 score improves over the best observed so far, the model’s state is saved. This helps to keep the best performing model checkpoint.
 #
 # #### IV) Commenting Out: Disclaimer.
-# The entire block is commented out to prevent accidental execution. 
+# The entire block is commented out to prevent accidental execution.
 
 # The following training loop is commented out to prevent accidental execution.
 # Uncomment it when you are ready to run the training process.
@@ -1018,17 +893,17 @@ def evaluate(data_loader):
 #     print(f"\n{'='*50}")
 #     print(f"Epoch {epoch+1}/{epochs}")
 #     print(f"{'='*50}")
-    
+
 #     # Train the model for one epoch and print the training loss
 #     train_loss = train_epoch()
 #     print(f"Training loss: {train_loss:.4f}")
-    
+
 #     # Evaluate the model on the validation set and print the validation metrics
 #     val_metrics = evaluate(val_loader)
 #     print(f"Validation loss: {val_metrics['loss']:.4f}")
 #     print(f"Validation metrics: accuracy={val_metrics['accuracy']:.4f}, precision={val_metrics['precision']:.4f}, "
 #           f"recall={val_metrics['recall']:.4f}, f1={val_metrics['f1']:.4f}")
-    
+
 #     # Save the model if it has the best F1 score so far
 #     if val_metrics['f1'] > best_f1:
 #         best_f1 = val_metrics['f1']
@@ -1050,7 +925,7 @@ def evaluate(data_loader):
 # Even though general metrics are computed, a detailed classification report is also generated. This involves iterating through the validation DataLoader, gathering predictions and true labels, filtering out tokens marked as ``-100``, converting numerical labels to their corresponding tag names using the ``id2tag mapping``, and then printing the report with ``scikit-learn’s classification_report``.
 #
 # #### III) Commented Out Code:
-# The entire cell is commented out to prevent accidental execution. 
+# The entire cell is commented out to prevent accidental execution.
 
 # The following evaluation cell is commented out to prevent accidental execution.
 # Uncomment the code when you are ready to perform the evaluation.
@@ -1076,18 +951,18 @@ def evaluate(data_loader):
 #         input_ids = batch['input_ids'].to(device)
 #         attention_mask = batch['attention_mask'].to(device)
 #         labels = batch['labels'].to(device)
-        
+
 #         # Forward pass: obtain the model's output logits.
 #         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 #         # Compute the predictions by taking the argmax over the logits for each token.
 #         preds = torch.argmax(outputs.logits, dim=2)
-        
+
 #         # Create a mask to filter out tokens with an ignore label (-100).
 #         active_mask = labels != -100
 #         # Extract the true labels and predictions from positions that are not ignored.
 #         true = labels[active_mask].cpu().numpy()
 #         pred = preds[active_mask].cpu().numpy()
-        
+
 #         # Append the results for the current batch to our overall lists.
 #         all_labels.extend(true)
 #         all_preds.extend(pred)
@@ -1125,7 +1000,7 @@ def evaluate(data_loader):
 # print(f"Test metrics: accuracy={test_metrics['accuracy']:.4f}, precision={test_metrics['precision']:.4f}, "
 #       f"recall={test_metrics['recall']:.4f}, f1={test_metrics['f1']:.4f}")
 
-# ## Metrics and Next Steps 
+# ## Metrics and Next Steps
 #
 # Some metrics are quite challenging, with low values, and a global f1-score of 0.41. Therefore, I believe it is a good idea to **try other models** that can be more easy to adjust. As I mentioned early, I will train a **specific BERT model** made for NER, improve it, and comment the results before choosing the best model.
 #
@@ -1184,7 +1059,7 @@ def evaluate(data_loader):
 #
 # 1. **Initialize the BERT tokenizer and model** pre-trained on general NER tasks.
 #
-# 2. **Develop a custom dataset class** optimized for BERT's tokenization approach. That is, our current class but slightly changed for BERT´s architecture instead of Deberta´s. 
+# 2. **Develop a custom dataset class** optimized for BERT's tokenization approach. That is, our current class but slightly changed for BERT´s architecture instead of Deberta´s.
 #
 # 3. **Implement specialized loss functions** (Focal Loss and Weighted Cross-Entropy) to address class imbalance.
 # 4. **Fine-tune the model with focus** on the most challenging entity categories.
@@ -1201,7 +1076,7 @@ def evaluate(data_loader):
 #
 # The following code can result repetitive in some parts. However, it is necessary to redefine a great part of my old code, so I decided to implement it here to keep the old results and workflow. As some parts are almost the same, **shallower explanations will be made in those parts**.
 
-# Again, we add a manual seed to always initialize the bert-large in the same seed. 
+# Again, we add a manual seed to always initialize the bert-large in the same seed.
 torch.manual_seed(42)
 
 # Define the model name for the pretrained BERT tokenizer
@@ -1211,7 +1086,8 @@ model_name = "dbmdz/bert-large-cased-finetuned-conll03-english"
 tokenizer = BertTokenizerFast.from_pretrained(model_name)
 
 # Check if it loaded correctly
-print(f"Tokenizer loaded: {tokenizer.__class__.__name__}")  # Display tokenizer class name
+# Display tokenizer class name
+print(f"Tokenizer loaded: {tokenizer.__class__.__name__}")
 print(f"Vocabulary size: {len(tokenizer)}")  # Display vocabulary size
 
 
@@ -1232,9 +1108,11 @@ num_labels = len(tag2id)
 model = BertForTokenClassification.from_pretrained(
     model_name,  # Pretrained BERT model name
     num_labels=num_labels,  # Number of classification labels
-    id2label={i: l for l, i in tag2id.items()},  # Map IDs to labels (for interpretability)
+    # Map IDs to labels (for interpretability)
+    id2label={i: l for l, i in tag2id.items()},
     label2id=tag2id,  # Map labels to IDs (for training and inference)
-    ignore_mismatched_sizes=True  # Allows model loading even if the classifier head size differs
+    # Allows model loading even if the classifier head size differs
+    ignore_mismatched_sizes=True
 )
 
 # Move the model to the selected device (GPU/CPU)
@@ -1242,18 +1120,19 @@ model.to(device)
 
 # Print model information
 print(f"Model loaded: {model_name}")  # Confirm the model has been loaded
-print(f"Number of labels: {num_labels}")  # Display the number of classification labels
+# Display the number of classification labels
+print(f"Number of labels: {num_labels}")
 
 
 # ---
 
-# ###  Differences in `F1RadioNERDataset` (BERT) Compared to DeBERTa Version  
+# ###  Differences in `F1RadioNERDataset` (BERT) Compared to DeBERTa Version
 #
 # This dataset class is designed for Named Entity Recognition (NER) in **Formula 1 Radio Messages**, but with adaptations for **BERT models** instead of DeBERTa. Below are the key differences:
 #
-# ####  Tokenization Strategy  
+# ####  Tokenization Strategy
 #
-# - In **DeBERTa**, we used `tokenizer.encode_plus()`, while here we use:  
+# - In **DeBERTa**, we used `tokenizer.encode_plus()`, while here we use:
 #
 #   ```python
 #   tokenized_inputs = self.tokenizer(
@@ -1289,10 +1168,10 @@ print(f"Number of labels: {num_labels}")  # Display the number of classification
 #
 #     - This ensures consistency across different data formats.
 #
-# #### 3️. Word-to-Token Alignment  
-# In both implementations, we align tokenized words with their corresponding labels.  
+# #### 3️. Word-to-Token Alignment
+# In both implementations, we align tokenized words with their corresponding labels.
 #
-# However, in **BERT**, we explicitly use `word_ids(batch_index=0)` to retrieve word-level alignment:  
+# However, in **BERT**, we explicitly use `word_ids(batch_index=0)` to retrieve word-level alignment:
 #
 # ```python
 # word_ids = tokenized_inputs.word_ids(batch_index=0)
@@ -1319,9 +1198,9 @@ print(f"Number of labels: {num_labels}")  # Display the number of classification
 #
 #     - Others prefer ignoring subwords (setting them to -100).
 #
-# --- 
+# ---
 #
-# #### Summary of Key Changes  
+# #### Summary of Key Changes
 #
 # | Feature           | DeBERTa Implementation         | BERT Implementation                        |
 # |-------------------|--------------------------------|--------------------------------------------|
@@ -1338,17 +1217,17 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
         self.tokenizer = tokenizer
         self.tag2id = tag2id
         self.max_len = max_len
-        
+
     def __len__(self):
         # Return the length of the dataset
         return len(self.dataset)
-    
+
     def __getitem__(self, idx):
         # Retrieve a sample from the dataset
         item = self.dataset[idx]
         words = item["tokens"]  # Tokens from the dataset
         tags = item["ner_tags"]  # Corresponding NER tags
-        
+
         # Convert tags from string to ID if necessary
         tag_ids = []  # List to store numerical tag ids
         for tag in tags:
@@ -1356,7 +1235,7 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
                 tag_ids.append(self.tag2id[tag])
             else:  # If the tag is already in ID form, use it directly
                 tag_ids.append(tag)
-        
+
         # Tokenize the text and align the labels
         tokenized_inputs = self.tokenizer(
             words,  # Tokenized words
@@ -1366,13 +1245,13 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
             truncation=True,  # Truncate sequences that exceed max_length
             return_tensors="pt"  # Return PyTorch tensors
         )
-        
+
         # Initialize labels with -100 for padding tokens
         labels = torch.ones(self.max_len, dtype=torch.long) * -100
-        
+
         # Get word_ids to align the labels with words
         word_ids = tokenized_inputs.word_ids(batch_index=0)
-        
+
         # Assign labels to non-special tokens (word pieces)
         previous_word_idx = None  # To keep track of the previous word index
         for i, word_idx in enumerate(word_ids):
@@ -1388,14 +1267,15 @@ class F1RadioNERDataset(torch.utils.data.Dataset):
                         # Option 2: Use the same label for all subwords of the word
                         labels[i] = tag_ids[word_idx]
             previous_word_idx = word_idx  # Update the previous word index
-        
+
         # Return the tokenized inputs and labels
         return {
-            "input_ids": tokenized_inputs["input_ids"].flatten(),  # Flattened input ids
-            "attention_mask": tokenized_inputs["attention_mask"].flatten(),  # Flattened attention mask
+            # Flattened input ids
+            "input_ids": tokenized_inputs["input_ids"].flatten(),
+            # Flattened attention mask
+            "attention_mask": tokenized_inputs["attention_mask"].flatten(),
             "labels": labels  # The aligned labels
         }
-
 
 
 # ---
@@ -1408,23 +1288,25 @@ class FocalLoss(nn.Module):
     def __init__(self, weight=None, gamma=2.0):
         """
         Focal Loss is designed to address the class imbalance problem by focusing more on hard-to-classify examples.
-        
+
         Args:
             weight (Tensor, optional): Class weights for addressing class imbalance.
             gamma (float, optional): The focusing parameter, typically set to 2.0 to reduce the relative loss for well-classified examples.
         """
         super(FocalLoss, self).__init__()
-        self.weight = weight  # Weight for class imbalance, can be set to None or a tensor of shape [num_classes]
-        self.gamma = gamma  # Focusing parameter, controls the rate at which easy examples are down-weighted
-        
+        # Weight for class imbalance, can be set to None or a tensor of shape [num_classes]
+        self.weight = weight
+        # Focusing parameter, controls the rate at which easy examples are down-weighted
+        self.gamma = gamma
+
     def forward(self, input, target):
         """
         Forward pass for calculating Focal Loss.
-        
+
         Args:
             input (Tensor): Predicted logits from the model, shape [batch_size, seq_len, num_classes].
             target (Tensor): True labels, shape [batch_size, seq_len].
-        
+
         Returns:
             Tensor: Computed focal loss value.
         """
@@ -1432,28 +1314,28 @@ class FocalLoss(nn.Module):
         if input.dim() > 2:
             # Reshape input to (batch_size*seq_len, num_classes) to flatten sequence dimension
             input = input.view(-1, input.size(-1))
-        
+
         if target.dim() > 1:
             # Flatten target to (batch_size*seq_len,) to match the input
             target = target.view(-1)
-        
+
         # Calculate Cross-Entropy Loss without reduction for each token in the sequence
-        ce_loss = F.cross_entropy(input, target, weight=self.weight, ignore_index=-100, reduction='none')
-        
+        ce_loss = F.cross_entropy(
+            input, target, weight=self.weight, ignore_index=-100, reduction='none')
+
         # Calculate the probability (pt) for each class
-        pt = torch.exp(-ce_loss)  # pt is the probability that the model assigned to the correct class
-        
+        # pt is the probability that the model assigned to the correct class
+        pt = torch.exp(-ce_loss)
+
         # Compute the focal loss
         # The term (1 - pt) ** gamma reduces the contribution from easy examples
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
-        
+
         # Return the mean of the focal loss
         return focal_loss.mean()
 
 
-
 # ### Keeping the same Tarining Config, but now using the new loss function
-
 # Set the number of training epochs
 epochs = 10
 
@@ -1461,9 +1343,9 @@ epochs = 10
 train_labels = []
 for batch in train_loader:
     labels = batch['labels']
-    
+
     # Create a mask to filter out ignored tokens (-100) since they should not contribute to class weighting
-    mask = labels != -100  
+    mask = labels != -100
     train_labels.extend(labels[mask].numpy())  # Convert and store valid labels
 
 # Compute class weights to handle class imbalance in the dataset
@@ -1477,45 +1359,46 @@ class_weights = compute_class_weight(
 class_weights = torch.FloatTensor(class_weights).to(device)
 
 # Define the loss function (CrossEntropyLoss) with class weights to give more importance to underrepresented classes
-loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=-100)  
+loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights, ignore_index=-100)
 # ignore_index=-100 ensures that padding tokens are not considered in loss computation
 
 # Set the learning rate; it was previously 2e-5 but has been slightly increased to 3e-5
 learning_rate = 3e-5
 
 # Define warmup steps: A small portion of the training steps is dedicated to gradually increasing the learning rate
-warmup_steps = int(0.05 * len(train_loader) * epochs)  # 5% of total training steps
+# 5% of total training steps
+warmup_steps = int(0.05 * len(train_loader) * epochs)
 
 # Calculate the total number of training steps (number of batches per epoch * number of epochs)
-total_steps = len(train_loader) * epochs  
+total_steps = len(train_loader) * epochs
 
 # Define the AdamW optimizer, which helps prevent overfitting by applying weight decay
-optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.03)  
+optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.03)
 # weight_decay=0.03 applies L2 regularization to reduce overfitting
 
 # Define a learning rate scheduler to linearly decrease the learning rate after warmup
 scheduler = get_linear_schedule_with_warmup(
-    optimizer, 
+    optimizer,
     num_warmup_steps=warmup_steps,  # Gradual warmup phase
     num_training_steps=total_steps  # Decay learning rate linearly after warmup
 )
 
 
-# ### Same Training loop. Commented 
+# ### Same Training loop. Commented
 
 # # Initialize the best F1-score to track improvements across epochs
-# best_f1 = 0  
+# best_f1 = 0
 
 # # Loop through the training process for the specified number of epochs
 # for epoch in range(epochs):
 #     print(f"\n{'='*50}")
 #     print(f"Epoch {epoch+1}/{epochs}")  # Display current epoch
 #     print(f"{'='*50}")
-    
+
 #     # Train the model for one epoch and obtain the training loss
 #     train_loss = train_epoch()  # The train_epoch() function is assumed to be already defined
 #     print(f"Training loss: {train_loss:.4f}")  # Print the training loss for monitoring
-    
+
 #     # Evaluate the model on the validation dataset
 #     val_metrics = evaluate(val_loader)  # The evaluate() function is assumed to be already defined
 #     print(f"Validation loss: {val_metrics['loss']:.4f}")
@@ -1556,18 +1439,18 @@ scheduler = get_linear_schedule_with_warmup(
 #         input_ids = batch['input_ids'].to(device)
 #         attention_mask = batch['attention_mask'].to(device)
 #         labels = batch['labels'].to(device)
-        
+
 #         # Forward pass: obtain the model's output logits.
 #         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 #         # Compute the predictions by taking the argmax over the logits for each token.
 #         preds = torch.argmax(outputs.logits, dim=2)
-        
+
 #         # Create a mask to filter out tokens with an ignore label (-100).
 #         active_mask = labels != -100
 #         # Extract the true labels and predictions from positions that are not ignored.
 #         true = labels[active_mask].cpu().numpy()
 #         pred = preds[active_mask].cpu().numpy()
-        
+
 #         # Append the results for the current batch to our overall lists.
 #         all_labels.extend(true)
 #         all_preds.extend(pred)
@@ -1602,7 +1485,7 @@ scheduler = get_linear_schedule_with_warmup(
 # We'll implement a focused fine-tuning strategy with these key elements:
 #
 # 1. **Class-Weighted Loss Function**: We're creating a custom `WeightedCrossEntropyLoss` that assigns higher importance (5x weight) to our target classes, particularly STRATEGY_INSTRUCTION and TRACK_CONDITION
-#    
+#
 # 2. **Lower Learning Rate**: Reducing from 3e-5 to 2e-6 to make smaller, more precise adjustments to the model
 #
 # 3. **Short Training Cycle**: Using just 5 epochs to avoid overfitting while refining detection capabilities
@@ -1625,7 +1508,7 @@ scheduler = get_linear_schedule_with_warmup(
 # ##### Uncomment this lines if needed
 
 # 1. First, load the saved model that we have already trained
-model_path = '../../outputs/week4/models/best_bert_large_ner_model.pt'  
+model_path = '../../outputs/week4/models/best_bert_large_ner_model.pt'
 model = BertForTokenClassification.from_pretrained(
     "dbmdz/bert-large-cased-finetuned-conll03-english",
     num_labels=len(tag2id),
@@ -1633,7 +1516,6 @@ model = BertForTokenClassification.from_pretrained(
     label2id=tag2id,
     ignore_mismatched_sizes=True
 )
-
 
 
 #
@@ -1677,28 +1559,28 @@ class WeightedCrossEntropyLoss(nn.Module):
 
         # Initialize all class weights to 1.0
         self.class_weights = torch.ones(num_labels, dtype=torch.float)
-        
+
         # Identify original target classes
         original_targets = []
         for tag, idx in tag2id.items():
             if "STRATEGY_INSTRUCTION" in tag or "TRACK_CONDITION" in tag:
                 original_targets.append(idx)
-        
+
         # Assign weights to relevant classes
         if target_classes:
             for cls_idx in target_classes:
                 tag = id2tag[cls_idx]  # Convert index to label name
-                
+
                 if cls_idx in original_targets:
                     # Keep a high weight for original target classes (default 5.0)
-                    self.class_weights[cls_idx] = class_weight_factor  
+                    self.class_weights[cls_idx] = class_weight_factor
                 elif "TECHNICAL_ISSUE" in tag or "INCIDENT" in tag:
                     # Assign a moderate weight (3.0) to new categories related to technical issues or incidents
-                    self.class_weights[cls_idx] = 3.0  
+                    self.class_weights[cls_idx] = 3.0
 
         # Define the ignore index for padding tokens
         self.ignore_index = -100
-    
+
     def forward(self, logits, labels):
         """
         Computes weighted cross-entropy loss.
@@ -1712,15 +1594,15 @@ class WeightedCrossEntropyLoss(nn.Module):
         """
         # Move class weights to the same device as logits
         self.class_weights = self.class_weights.to(logits.device)
-        
+
         # Apply cross-entropy loss with class weights
         return F.cross_entropy(
-            logits.view(-1, logits.size(-1)),  # Reshape for correct loss computation
+            # Reshape for correct loss computation
+            logits.view(-1, logits.size(-1)),
             labels.view(-1),  # Ensure labels match expected format
             weight=self.class_weights,  # Apply custom class weights
             ignore_index=self.ignore_index  # Ignore padding tokens (-100)
         )
-
 
 
 # ---
@@ -1732,18 +1614,20 @@ class WeightedCrossEntropyLoss(nn.Module):
 # 1. **Identifies specific target classes** in `tag2id` that contain `"STRATEGY_INSTRUCTION"` or `"TRACK_CONDITION"`.
 # 2. **Prints their corresponding indices** for debugging purposes.
 # 3. **Creates a `WeightedCrossEntropyLoss` instance** using these target classes and assigns them a higher weight (×5).
-
 # Identify indices of problematic classes
 target_class_indices = []
 for tag, idx in tag2id.items():
     if "STRATEGY_INSTRUCTION" in tag or "TRACK_CONDITION" in tag:
         target_class_indices.append(idx)
-        print(f"Target class: {tag} (ID: {idx})")  # Debugging output to verify selected classes
+        # Debugging output to verify selected classes
+        print(f"Target class: {tag} (ID: {idx})")
 
 # Create custom loss function with increased weight for target classes
 custom_loss = WeightedCrossEntropyLoss(
-    num_labels=len(tag2id),  # Total number of labels in the classification task
-    target_classes=target_class_indices,  # Indices of classes that need higher weighting
+    # Total number of labels in the classification task
+    num_labels=len(tag2id),
+    # Indices of classes that need higher weighting
+    target_classes=target_class_indices,
     class_weight_factor=5.0  # Increase weight by 5x for the selected target classes
 )
 
@@ -1763,28 +1647,28 @@ custom_loss = WeightedCrossEntropyLoss(
 def train_epoch_focused():
     model.train()
     total_loss = 0
-    
+
     for batch in tqdm(train_loader, desc="Training"):
         optimizer.zero_grad()
-        
+
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
-        
+
         # Normal forward pass
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
         logits = outputs.logits
-        
+
         # Compute loss using custom function
         loss = custom_loss(logits, labels)
         total_loss += loss.item()
-        
+
         # Backward pass
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         scheduler.step()
-    
+
     return total_loss / len(train_loader)
 
 
@@ -1795,7 +1679,7 @@ optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
 # Short cycle for fine-tuning
 fine_tuning_epochs = 5
 scheduler = get_linear_schedule_with_warmup(
-    optimizer, 
+    optimizer,
     num_warmup_steps=int(0.1 * len(train_loader) * fine_tuning_epochs),
     num_training_steps=len(train_loader) * fine_tuning_epochs
 )
@@ -1803,39 +1687,42 @@ scheduler = get_linear_schedule_with_warmup(
 
 def evaluate_model(data_loader):
     """Evaluates the model on the given data loader and computes relevant metrics."""
-    
+
     model.eval()  # Set the model to evaluation mode (disables dropout, batch norm, etc.)
     total_loss = 0  # Initialize the total loss accumulator
     all_preds = []  # List to store all model predictions
     all_labels = []  # List to store all ground-truth labels
-    
+
     with torch.no_grad():  # Disable gradient computation to improve efficiency
         for batch in tqdm(data_loader, desc="Evaluating"):  # Iterate over the data loader
             # Move input tensors to the specified device (CPU or GPU)
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
-            
+
             # Forward pass through the model to obtain logits (raw predictions)
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
             logits = outputs.logits  # Extract logits from the model output
-            
+
             # Compute loss using the custom loss function
             loss = custom_loss(logits, labels)
             total_loss += loss.item()  # Accumulate the total loss
-            
+
             # Store predictions and true labels for later evaluation
-            all_preds.append(logits.detach().cpu().numpy())  # Convert logits to NumPy and store
-            all_labels.append(labels.detach().cpu().numpy())  # Convert labels to NumPy and store
-    
+            # Convert logits to NumPy and store
+            all_preds.append(logits.detach().cpu().numpy())
+            # Convert labels to NumPy and store
+            all_labels.append(labels.detach().cpu().numpy())
+
     # Concatenate stored predictions and labels into single NumPy arrays
     all_preds = np.concatenate([p for p in all_preds], axis=0)
     all_labels = np.concatenate([l for l in all_labels], axis=0)
-    
+
     # Compute evaluation metrics such as accuracy, precision, recall, and F1-score
     metrics = compute_metrics(all_preds, all_labels)
-    metrics['loss'] = total_loss / len(data_loader)  # Include the average loss in the metrics
-    
+    # Include the average loss in the metrics
+    metrics['loss'] = total_loss / len(data_loader)
+
     return metrics  # Return computed evaluation metrics
 
 
@@ -1874,16 +1761,16 @@ def evaluate_model(data_loader):
 #     print(f"\n{'='*50}")
 #     print(f"Epoch {epoch+1}/{fine_tuning_epochs}")
 #     print(f"{'='*50}")
-    
+
 #     train_loss = train_epoch_focused()
 #     print(f"Training loss: {train_loss:.4f}")
-    
+
 #     # Use the new evaluation function
 #     val_metrics = evaluate_model(val_loader)
 #     print(f"Validation loss: {val_metrics['loss']:.4f}")
 #     print(f"Validation metrics: accuracy={val_metrics['accuracy']:.4f}, precision={val_metrics['precision']:.4f}, "
 #           f"recall={val_metrics['recall']:.4f}, f1={val_metrics['f1']:.4f}")
-    
+
 #     # Save if F1 improves
 #     if val_metrics['f1'] > best_f1:
 #         best_f1 = val_metrics['f1']
@@ -1945,15 +1832,15 @@ def evaluate_model(data_loader):
 #         input_ids = batch['input_ids'].to(device)
 #         attention_mask = batch['attention_mask'].to(device)
 #         labels = batch['labels'].to(device)
-        
+
 #         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 #         preds = torch.argmax(outputs.logits, dim=2)
-        
+
 #         # Filter out padding tokens
 #         active_mask = labels != -100
 #         true = labels[active_mask].cpu().numpy()
 #         pred = preds[active_mask].cpu().numpy()
-        
+
 #         all_labels.extend(true)
 #         all_preds.extend(pred)
 
@@ -1967,7 +1854,7 @@ def evaluate_model(data_loader):
 
 # # Specific analysis for target classes
 # print("\nTarget class analysis:")
-# target_tags = ["B-STRATEGY_INSTRUCTION", "I-STRATEGY_INSTRUCTION", 
+# target_tags = ["B-STRATEGY_INSTRUCTION", "I-STRATEGY_INSTRUCTION",
 #               "B-TRACK_CONDITION", "I-TRACK_CONDITION"]
 
 # for tag in target_tags:
@@ -1976,7 +1863,7 @@ def evaluate_model(data_loader):
 #     if indices:
 #         true_subset = [true_tags[i] for i in indices]
 #         pred_subset = [pred_tags[i] for i in indices]
-        
+
 #         print(f"\nFor {tag}:")
 #         print(f"Total examples: {len(indices)}")
 #         correct = sum(1 for t, p in zip(true_subset, pred_subset) if t == p)
@@ -2023,20 +1910,20 @@ def evaluate_model(data_loader):
 def extract_entities_from_radio(radio_message, model, tokenizer, id2tag):
     """
     Extracts entities from an F1 radio message and returns them in a clean format.
-    
+
     Args:
         radio_message (str): The raw F1 team radio message text
         model: The fine-tuned BERT model for entity recognition
         tokenizer: The tokenizer corresponding to the model
         id2tag (dict): Mapping from numeric IDs to entity tags
-        
+
     Returns:
         dict: A dictionary with entity types as keys and lists of entity text as values
     """
     # Split the message into individual word tokens
     # This simple approach works for basic tokenization before passing to BERT tokenizer
     tokens = radio_message.split()
-    
+
     # Convert tokens to model inputs using the tokenizer
     # Parameters:
     #   - is_split_into_words=True: Indicates input is already tokenized
@@ -2050,48 +1937,50 @@ def extract_entities_from_radio(radio_message, model, tokenizer, id2tag):
         padding=True,
         truncation=True
     ).to(device)  # Move tensors to the appropriate device (GPU/CPU)
-    
+
     # Set model to evaluation mode to disable dropout, etc.
     model.eval()
-    
+
     # Disable gradient calculation for inference (saves memory and computation)
     with torch.no_grad():
         # Forward pass through the model
         outputs = model(**inputs)
-        
+
         # Get the predicted class for each token
         # - outputs.logits: model output with shape [batch, seq_len, num_classes]
         # - torch.argmax(..., dim=2): Get the class with highest probability for each token
         # - [0]: Get the first (and only) example in the batch
         # - .cpu().numpy(): Move to CPU and convert to numpy for processing
         predictions = torch.argmax(outputs.logits, dim=2)[0].cpu().numpy()
-    
+
     # Initialize containers for processing results
     entities = {}               # Will hold all extracted entities by type
     current_entity = None       # The entity type we're currently tracking
     current_text = []           # Tokens for the current entity we're building
-    
+
     # BERT tokenizer splits words into subwords, so we need to map predictions back
     # to original words. word_ids gives us this mapping.
     word_ids = inputs.word_ids(batch_index=0)
     previous_word_idx = None    # Track previous word to detect token boundaries
     token_predictions = []      # Will hold one prediction per original token
-    
+
     # First pass: map predictions from subwords back to original words
     for idx, word_idx in enumerate(word_ids):
         # Special tokens like [CLS] and [SEP] have word_idx=None
         if word_idx is None:
             continue
-            
+
         # We only want one prediction per original word, not per subword
         # For words split into multiple subwords, we only take the prediction
         # from the first subword (standard practice in BERT-based NER)
         if word_idx != previous_word_idx:
             tag_id = predictions[idx]          # Get the predicted class ID
-            tag = id2tag[tag_id]               # Convert ID to tag string (e.g., "B-ACTION")
-            token_predictions.append(tag)      # Store prediction for this original token
+            # Convert ID to tag string (e.g., "B-ACTION")
+            tag = id2tag[tag_id]
+            # Store prediction for this original token
+            token_predictions.append(tag)
             previous_word_idx = word_idx       # Update tracking variable
-    
+
     # Second pass: process the predictions to extract continuous entities
     # using the BIO (Beginning-Inside-Outside) tagging scheme
     for i, (token, tag) in enumerate(zip(tokens, token_predictions)):
@@ -2103,16 +1992,18 @@ def extract_entities_from_radio(radio_message, model, tokenizer, id2tag):
                 if current_entity not in entities:
                     entities[current_entity] = []
                 entities[current_entity].append(entity_text)
-            
+
             # Start tracking the new entity
-            current_entity = tag[2:]           # Remove the "B-" prefix to get entity type
-            current_text = [token]             # Start collecting tokens for this entity
-            
+            # Remove the "B-" prefix to get entity type
+            current_entity = tag[2:]
+            # Start collecting tokens for this entity
+            current_text = [token]
+
         # Case 2: Inside/continuation of an entity (I-*)
         elif tag.startswith('I-') and current_entity == tag[2:]:
             # Only append if it's continuing the same entity type we're tracking
             current_text.append(token)
-            
+
         # Case 3: Outside any entity (O) or mismatch between I-tag and current entity
         else:
             # If we were tracking an entity, finalize it
@@ -2124,14 +2015,14 @@ def extract_entities_from_radio(radio_message, model, tokenizer, id2tag):
                 # Reset tracking variables
                 current_entity = None
                 current_text = []
-    
+
     # Handle edge case: if message ends while still tracking an entity
     if current_entity:
         entity_text = ' '.join(current_text)
         if current_entity not in entities:
             entities[current_entity] = []
         entities[current_entity].append(entity_text)
-    
+
     # Return the structured entity dictionary
     # Format: {'ACTION': ['box this lap', 'push harder'], 'WEATHER': ['rain expected'], ...}
     return entities
@@ -2156,28 +2047,28 @@ def extract_entities_from_radio(radio_message, model, tokenizer, id2tag):
 def analyze_f1_radio(message):
     """
     Function for the end user: analyzes a message and displays the entities.
-    
+
     This function provides a user-friendly interface to extract and display
     named entities from F1 radio communications.
-    
+
     Args:
         message (str): The raw F1 team radio message to analyze
-        
+
     Returns:
         dict: A dictionary with entity types as keys and lists of entity text as values
     """
     # Print the original message to provide context for the analysis results
     # The quotes help visually distinguish the message from other output
     print(f"\nAnalyzing message: \"{message}\"")
-    
+
     # Process the message using our entity extraction function
     # This passes the message through the NER model and structures the results
     # The function handles all the complexity of tokenization and BIO tag processing
     entities = extract_entities_from_radio(message, model, tokenizer, id2tag)
-    
+
     # Begin displaying results with a header
     print("\nDetected entities:")
-    
+
     # Handle the case where no entities were detected
     # This could happen with very short messages or messages without strategic content
     if not entities:
@@ -2188,12 +2079,12 @@ def analyze_f1_radio(message):
         for entity_type, texts in sorted(entities.items()):
             # Print the entity type with proper indentation
             print(f"  {entity_type}:")
-            
+
             # For each instance of this entity type, display with bullet points
             # The quotes help visually distinguish the extracted text
             for text in texts:
                 print(f"    • \"{text}\"")
-    
+
     # Return the structured entity dictionary for potential further processing
     # This allows the function to be used both for display and as part of a pipeline
     return entities
@@ -2201,29 +2092,29 @@ def analyze_f1_radio(message):
 
 # ## Finally, an example usage
 
-# Prove the model with some real and synthetic messages
-example_messages = [
-    "Box this lap, box this lap. We're switching to slicks.",
-    "Hamilton is 1.2 seconds behind you and closing fast. Defend position.",
-    "Yellow flags in sector 2, incident at turn 7. Be careful.",
-    "Track is drying up now, lap times are improving.",
-    "Box this lap and switch to intermediates – we’re facing a technical issue on the front wing and worsening track conditions.",
-    "Incident at turn 6 with debris on the track; you’re 0.8 seconds behind – defend your position immediately.",
-    "Box now, the track is drying rapidly while the weather forecast predicts rain incoming; adjust your strategy and check for any technical issues.",
-    "Maintain pace but be cautious: an incident at turn 3 is causing yellow flags and changing track conditions – reposition immediately.",
-    "Switch pit call: we’re experiencing a gearbox technical issue while the weather remains clear; focus on defending your position with updated strategy instructions.",
-    "Immediate action required – an incident occurred in sector 2 and track conditions are deteriorating; box next lap and follow strategy instructions.",
-    "Overtake now, but be aware the weather might worsen and a technical issue with the engine is causing vibrations; adjust your positioning accordingly.",
-    "Attention: the track is wet and slippery, and an incident at turn 5 has been reported; box this lap and modify your strategy as needed.",
-    "Driver reporting a technical issue with the rear brakes while track conditions are improving; defend your position and prepare for a pit call.",
-    "Urgent: a multi-car incident in sector 3 has occurred, track conditions have deteriorated, and the weather is turning unpredictable; box immediately and follow strategy instructions."
-    "Okay Max, we're expecting rain in about 9 or 10 minutes. What are your thoughts? That you can get there or should we box? We'd need to box this lap to cover Leclerc. I can't see the weather, can I? I don't know.",
-    "Max, we've currently got yellows in turn 7. Ferrari in the wall, no? Yes, that's Charles stopped. We are expecting the potential of an aborted start, but just keep to your protocol at the moment.",
-]
+# # Prove the model with some real and synthetic messages
+# example_messages = [
+#     "Box this lap, box this lap. We're switching to slicks.",
+#     "Hamilton is 1.2 seconds behind you and closing fast. Defend position.",
+#     "Yellow flags in sector 2, incident at turn 7. Be careful.",
+#     "Track is drying up now, lap times are improving.",
+#     "Box this lap and switch to intermediates – we’re facing a technical issue on the front wing and worsening track conditions.",
+#     "Incident at turn 6 with debris on the track; you’re 0.8 seconds behind – defend your position immediately.",
+#     "Box now, the track is drying rapidly while the weather forecast predicts rain incoming; adjust your strategy and check for any technical issues.",
+#     "Maintain pace but be cautious: an incident at turn 3 is causing yellow flags and changing track conditions – reposition immediately.",
+#     "Switch pit call: we’re experiencing a gearbox technical issue while the weather remains clear; focus on defending your position with updated strategy instructions.",
+#     "Immediate action required – an incident occurred in sector 2 and track conditions are deteriorating; box next lap and follow strategy instructions.",
+#     "Overtake now, but be aware the weather might worsen and a technical issue with the engine is causing vibrations; adjust your positioning accordingly.",
+#     "Attention: the track is wet and slippery, and an incident at turn 5 has been reported; box this lap and modify your strategy as needed.",
+#     "Driver reporting a technical issue with the rear brakes while track conditions are improving; defend your position and prepare for a pit call.",
+#     "Urgent: a multi-car incident in sector 3 has occurred, track conditions have deteriorated, and the weather is turning unpredictable; box immediately and follow strategy instructions."
+#     "Okay Max, we're expecting rain in about 9 or 10 minutes. What are your thoughts? That you can get there or should we box? We'd need to box this lap to cover Leclerc. I can't see the weather, can I? I don't know.",
+#     "Max, we've currently got yellows in turn 7. Ferrari in the wall, no? Yes, that's Charles stopped. We are expecting the potential of an aborted start, but just keep to your protocol at the moment.",
+# ]
 
-for message in example_messages:
-    analyze_f1_radio(message)
-    print("\n" + "-"*50)
+# for message in example_messages:
+#     analyze_f1_radio(message)
+#     print("\n" + "-"*50)
 
 # # Named Entity Recognition Model Analysis for F1 Radio Communications
 #
@@ -2301,7 +2192,7 @@ for message in example_messages:
 # - **Racing Context Awareness:** Combines different perspectives for better strategic insights
 #
 #
-# ## **Integration with logical agent**: 
+# ## **Integration with logical agent**:
 #
 # Connect the NER system with the strategic recommendation engine for real-time race strategy optimization.
 #

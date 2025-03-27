@@ -109,8 +109,6 @@ CONFIG = {
     "example_text": "Box this lap for softs, Hamilton is catching up"
 }
 
-print("Configuration loaded successfully")
-
 
 # ---
 
@@ -283,27 +281,6 @@ def predict_sentiment(text, model, tokenizer, device="cuda" if torch.cuda.is_ava
     return result
 
 
-# Load model and tokenizer
-sentiment_result = load_sentiment_model()
-sentiment_model = sentiment_result["model"]
-sentiment_tokenizer = sentiment_result["tokenizer"]
-
-# Verify that they loaded correctly
-print(f"Tokenizer type: {type(sentiment_tokenizer)}")
-print(f"Model type: {type(sentiment_model)}")
-
-
-# Example radio message
-radio_message = "Great move Oscar"
-
-# Predict sentiment
-prediction = predict_sentiment(
-    radio_message, sentiment_model, sentiment_tokenizer)
-print(f"Text: '{prediction['text']}'")
-print(f"Sentiment: {prediction['sentiment']}")
-print(f"Confidence: {prediction['confidence']}%")
-
-
 # ---
 
 # ## 6. Intent Prediction Function
@@ -353,45 +330,6 @@ def predict_intent(text, model, tokenizer, device="cuda" if torch.cuda.is_availa
     }
 
     return result
-
-
-# # Load intent model and tokenizer
-# intent_result = load_intent_model()
-# intent_model = intent_result["model"]
-# intent_tokenizer = intent_result["tokenizer"]
-
-# # Verify that they loaded correctly
-# print(f"Tokenizer type: {type(intent_tokenizer)}")
-# print(f"Model type: {type(intent_model)}")
-
-
-# # Example radio message
-# radio_message = "Possible debris turn 7"
-
-# # Predict intent
-# prediction = predict_intent(radio_message, intent_model, intent_tokenizer)
-# print(f"Text: '{prediction['text']}'")
-# print(f"Intent: {prediction['intent']}")
-# print(f"Confidence: {prediction['confidence']}%")
-
-# ## 7. NER Prediction Function
-
-# # Load intent model and tokenizer
-# ner_result = load_bert_ner_model(CONFIG)
-# ner_model = ner_result["model"]
-# ner_tokenizer = ner_result["tokenizer"]
-
-# # Verify that they loaded correctly
-# print(f"Tokenizer type: {type(ner_tokenizer)}")
-# print(f"Model type: {type(ner_model)}")
-
-
-# radio_message = "Max, we've currently got yellows in turn 7. Ferrari in the wall, no? Yes, that's Charles stopped. We are expecting the potential of an aborted start, but just keep to your protocol at the moment."
-
-
-# result = analyze_f1_radio(radio_message)
-
-# ---
 
 
 def analyze_radio_message(radio_message):
@@ -487,21 +425,6 @@ def transcribe_audio(audio_path):
 
 # Path to example audio file
 audio_path = "../../f1-strategy/data/audio/driver_(14,)/driver_(14,)_monaco_radio_168.mp3"
-
-# Transcribe the audio
-transcribed_text = transcribe_audio(audio_path)
-print("\nTranscribed Text:")
-print(transcribed_text)
-json_filename = analyze_radio_message(transcribed_text)
-
-# Mensaje de radio de ejemplo
-radio_message = "Max, we've currently got yellows in turn 7. Ferrari in the wall, no? Yes, that's Charles stopped. We are expecting the potential of an aborted start, but just keep to your protocol at the moment."
-
-# Llamar a la función y obtener el archivo JSON resultante
-json_filename = analyze_radio_message(radio_message)
-
-# Imprimir la ruta del archivo JSON
-print(f"El análisis se guardó en: {json_filename}")
 
 
 # # 🏁 NLP Pipeline Summary: Model Integration
