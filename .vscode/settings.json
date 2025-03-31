@@ -5,5 +5,5 @@
         "{git,gitlens,git-graph}:/**/*.{md,csv,svg}": "default",
         "file:/**/*.parquet": "jupyter-data-wrangler"
     },
-    "CodeGPT.apiKey": "CodeGPT Plus Beta"
+    "CodeGPT.apiKey": "LM Studio"
 }
