@@ -99,7 +99,7 @@
 
 ### **Mes 1 - Semana 2: Detección de Objetos con Visión por Computador**
 
-* [ ] Marcar como hecho
+* [X] Marcar como hecho
 
 * **Tareas** :
 
@@ -141,7 +141,7 @@
 
 ### **Mes 1 - Semana 4: Procesamiento de Radios con NLP (Adelantado de Semana 8)**
 
-* [ ]
+* [X] [ ]
 
  **Objetivo** : Extraer información estratégica de las comunicaciones equipo-piloto para enriquecer las reglas lógicas del sistema.
 
@@ -157,7 +157,6 @@
 
 ---
 
-
 ### **Mes 2: Desarrollo de Módulos Clave**
 
 <pre class="font-styrene border-border-100/50 overflow-x-scroll w-full rounded border-[0.5px] shadow-[0_2px_12px_hsl(var(--always-black)/5%)]"><table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888] whitespace-normal"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody>&]:odd:bg-bg-500/10"><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Semana</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Tareas</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Entregables</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Asignaturas Relacionadas</strong></th></tr></thead><tbody><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>5</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Mejorar modelo predictivo: Incluir variables climáticas y tipo de neumático.``- Implementar LSTM para predecir degradación de neumáticos.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Modelo avanzado + gráficos de predicción.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Aprendizaje Automático</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>6</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Sistema de decisiones con reglas lógicas mejoradas basadas en NLP. <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Integrar información de radios (sentiment, entidades) en reglas.</code></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Sistema de reglas enriquecido + pruebas de integración.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Sistemas Inteligentes</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>7</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Integrar visión por computador con FastF1: Sincronizar timestamp de vídeo y datos de telemetría.``- Calcular gaps en tiempo real usando YOLO + DeepSORT.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Script de sincronización + demo en vídeo.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Visión por Computador</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>8</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Desarrollar simulador de estrategias con algoritmos genéticos (DEAP): Minimizar tiempo total de carrera.``- Definir restricciones (ej: mínimo 1 parada).</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Simulador funcional + resultados de optimización.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Sistemas Inteligentes</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>9</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Procesamiento avanzado de radios: Fine-tuning de BERT para clasificación de intención y reconocimiento de entidades estratégicas. <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Expandir el modelo de extracción de entidades con SpaCy.</code></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Modelo BERT y SpaCy avanzados + dataset etiquetado.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Procesamiento de Lenguaje</td></tr></tbody></table></pre>
@@ -166,12 +165,11 @@
 
 ### **Mes 2 - Semana 5: Modelo de Predicción y Degradación**
 
-* [ ]
-
-* **Tareas** :
+* [X] 
+* [X] **Tareas** :
 
 1. **Opción 1 (LSTM)** :
-   * Entrenar LSTM para predecir `TyreDegradation` secuencialmente (usar ventanas de 5 vueltas).
+   * Entrenar LSTM para predecir `TyreDegradation` secuencialmente (usar ventanas de 3 vueltas).
 2. **Opción 2 (Regresión Cuantílica)** :
    * Usar XGBoost con función de pérdida quantile para predecir degradación en percentiles 10-50-90.
 3. **Dataset** :
@@ -186,11 +184,59 @@
 
 ### **Mes 2 - Semana 6: Sistema de Decisiones Basado en Reglas Enriquecidas con NLP**
 
-* [ ]
+* [ ] 
 
  **Objetivo** : Desarrollar un sistema de reglas lógicas que integre información de telemetría y comunicaciones de radio.
 
 <pre class="font-styrene border-border-100/50 overflow-x-scroll w-full rounded border-[0.5px] shadow-[0_2px_12px_hsl(var(--always-black)/5%)]"><table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888] whitespace-normal"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody>&]:odd:bg-bg-500/10"><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Tareas</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Herramientas/Detalles</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Entregables</strong></th></tr></thead><tbody><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>1. Diseño de Reglas Lógicas Avanzadas</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Implementar reglas usando <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">Experta</code> o <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">Pyke</code> que incorporen:**<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Datos de telemetría</code> (degradación, tiempos).<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- </code>Sentimiento de radio<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]"> (positivo/negativo).</code>- <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">Entidades extraídas</code> (neumáticos, acciones mencionadas).</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Script <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">rule_engine.py</code> con base de conocimiento.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>2. Integración de Datos Multi-fuente</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Crear pipeline para combinar datos temporales:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Sincronizar timestamps de FastF1 con transcripciones de radio.</code>- Mapear sentimiento y entidades al timeline de carrera.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Script <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">data_integration.py</code> + dataset unificado <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">integrated_data.csv</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>3. Reglas Condicionadas por Sentimiento</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Implementar reglas específicas que utilizan señales de NLP:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Ejemplo: </code>IF TyreDeg > 30% AND Radio_Sentiment = Negative THEN PitRisk = High`.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Conjunto de reglas en <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">knowledge_base/sentiment_rules.py</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>4. Sistema de Explicación para Decisiones Lógicas</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Crear sistema que justifique decisiones usando lenguaje natural:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Ejemplo: </code>"Se recomienda parar debido a: 1) Alta degradación (35%), 2) Sentimiento negativo en últimas 3 radios"`.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Componente <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">rule_explanation.py</code> que genera explicaciones basadas en reglas activadas.</td></tr></tbody></table></pre>
+
+
+
+## Plan Paso a Paso para Implementación
+
+### 1. Preparación y Configuración
+
+* Instalar Experta: `pip install experta`
+* Crear estructura de módulos para el agente lógico
+
+### 2. Definir la Estructura de Base de Conocimientos
+
+* Crear clases para diferentes tipos de hechos:
+  * `TelemetryFact`: degradación, tiempos por vuelta
+  * `RadioFact`: sentimiento, entidades, intención
+  * `PositionFact`: gaps, posición en pista
+  * `WeatherFact`: temperatura, precipitación
+
+### 3. Definir Reglas Básicas
+
+* Implementar reglas simples de alta confianza:
+  * Umbrales de degradación para recomendación de parada
+  * Ajustes de estrategia basados en clima
+  * Condiciones básicas de undercut/overcut
+
+### 4. Integración con Modelos Existentes
+
+* Crear pipeline de datos para transformar salidas de modelos en hechos:
+  * Convertir predicciones del modelo de neumáticos
+  * Transformar análisis NLP (sentiment, entities, intent)
+  * Procesar datos de posición de FastF1
+
+### 5. Implementar Reglas Complejas con Integración NLP
+
+* Crear reglas que combinen telemetría y análisis NLP:
+  * Reglas considerando sentimiento negativo sobre neumáticos
+  * Reglas utilizando entidades detectadas
+  * Reglas respondiendo a diferentes intenciones
+
+### 6. Añadir Capacidades de Explicación
+
+* Implementar seguimiento de activaciones de reglas
+* Crear explicaciones en lenguaje natural para recomendaciones
+
+### 7. Pruebas y Evaluación
+
+* Probar el sistema con datos históricos de carreras
+* Comparar recomendaciones con estrategias reales
 
  **Entregables Finales (Semana 6)** :
 
