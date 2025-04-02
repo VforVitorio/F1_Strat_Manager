@@ -14,15 +14,15 @@
 
 1. **Gaps entre coches** :
 
-* Calculados desde datos de posición de FastF1 (`session.pos_data`) o estimados por visión por computador (píxeles entre coches en vídeo → conversión a metros usando referencia de ancho de pista).
+- Calculados desde datos de posición de FastF1 (`session.pos_data`) o estimados por visión por computador (píxeles entre coches en vídeo → conversión a metros usando referencia de ancho de pista).
 
 1. **Efectividad histórica de undercuts** :
 
-* FastF1 permite extraer laps antes/después de paradas para calcular ganancias/pérdidas de posición.
+- FastF1 permite extraer laps antes/después de paradas para calcular ganancias/pérdidas de posición.
 
 1. **Temperatura de pista y degradación de neumáticos** :
 
-* Columnas `TrackStatus` y `TyreLife` en datos de FastF1.
+- Columnas `TrackStatus` y `TyreLife` en datos de FastF1.
 
 ---
 
@@ -31,18 +31,18 @@
 1. **Entrada** : Vídeo en vivo (o grabado) + datos en tiempo real de FastF1.
 2. **Procesamiento** :
 
-* **Visión** : Detectar que el coche A (posición 5) está a 1.2s del coche B (posición 4).
-* **ML** : Predecir que con neumáticos duros nuevos, el coche A hará vueltas 0.8s más rápidas que B en las próximas 5 vueltas.
-* **Sistemas Inteligentes** : Simular que parar en la vuelta 22 permite un undercut exitoso (ganar 2 posiciones).
-* **NLP** : Generar el mensaje: *"Recomendado: PARAR EN VUELTA 22. Neumáticos duros. Undercut posible al coche B (riesgo bajo: 75% éxito)."*
+- **Visión** : Detectar que el coche A (posición 5) está a 1.2s del coche B (posición 4).
+- **ML** : Predecir que con neumáticos duros nuevos, el coche A hará vueltas 0.8s más rápidas que B en las próximas 5 vueltas.
+- **Sistemas Inteligentes** : Simular que parar en la vuelta 22 permite un undercut exitoso (ganar 2 posiciones).
+- **NLP** : Generar el mensaje: _"Recomendado: PARAR EN VUELTA 22. Neumáticos duros. Undercut posible al coche B (riesgo bajo: 75% éxito)."_
 
 ---
 
 ### **Herramientas Específicas para la Ampliación**
 
-* **Simulación de Estrategias** : `FastF1` ya incluye funciones para calcular diferencias de tiempo (`calc_time_diff`).
-* **Visualización de Estrategias** : Usar `Plotly` para mostrar gráficos de proyección de gaps y paradas.
-* **Optimización** : `Optuna` para ajustar hiperparámetros de los modelos de decisión.
+- **Simulación de Estrategias** : `FastF1` ya incluye funciones para calcular diferencias de tiempo (`calc_time_diff`).
+- **Visualización de Estrategias** : Usar `Plotly` para mostrar gráficos de proyección de gaps y paradas.
+- **Optimización** : `Optuna` para ajustar hiperparámetros de los modelos de decisión.
 
 ---
 
@@ -76,84 +76,84 @@
 
 ### **Mes 1 - Semana 1: Configuración Inicial y Extracción de Datos**
 
-* [X] Marcar como hecho
+- [x] Marcar como hecho
 
-* **Tareas** :
+- **Tareas** :
 
 1. **Entorno** :
-   * Crear entorno virtual (`conda create -n f1-strategy python=3.10`).
-   * OpenF1 API también será utilizada para extraer mensajes de radio y otras cosas que FastF1 no posee.
-   * Instalar librerías base: `fastf1`, `pandas`, `numpy`.
+   - Crear entorno virtual (`conda create -n f1-strategy python=3.10`).
+   - OpenF1 API también será utilizada para extraer mensajes de radio y otras cosas que FastF1 no posee.
+   - Instalar librerías base: `fastf1`, `pandas`, `numpy`.
 2. **Datos FastF1** :
-   * Extraer datos del GP España 2023: Tiempos por vuelta, paradas, clima.
-   * Guardar en formato Parquet para eficiencia.
+   - Extraer datos del GP España 2023: Tiempos por vuelta, paradas, clima.
+   - Guardar en formato Parquet para eficiencia.
 3. **Vídeos** :
-   * Descargar 2-3 resúmenes de carreras (YouTube Creative Commons) usando `pytube`.
+   - Descargar 2-3 resúmenes de carreras (YouTube Creative Commons) usando `pytube`.
 
-* **Entregables** :
-* Script `data_extraction.py` + dataset en `data/raw`.
-* Documentación de estructura de datos.
-* **Asignatura** : *Aprendizaje Automático / Sistemas Inteligentes* .
+- **Entregables** :
+- Script `data_extraction.py` + dataset en `data/raw`.
+- Documentación de estructura de datos.
+- **Asignatura** : _Aprendizaje Automático / Sistemas Inteligentes_ .
 
 ---
 
 ### **Mes 1 - Semana 2: Detección de Objetos con Visión por Computador**
 
-* [X] Marcar como hecho
+- [x] Marcar como hecho
 
-* **Tareas** :
+- **Tareas** :
 
-* [X] Descargado dataset
+- [x] Descargado dataset
 
 1. **Opción 1 (YOLOv8)** :
-   * [X] Entrenar YOLOv8-medium en dataset COCO para detectar coches (transfer learning). Finalmente, entrenado yolo medieum desde cero y buenos resultados.
-   * [X] Probar en fotogramas de vídeo estático.
-   * [X] Probar en vídeo dinámico.
-   * [X] Reducir recall y reentrenar.
+   - [x] Entrenar YOLOv8-medium en dataset COCO para detectar coches (transfer learning). Finalmente, entrenado yolo medieum desde cero y buenos resultados.
+   - [x] Probar en fotogramas de vídeo estático.
+   - [x] Probar en vídeo dinámico.
+   - [x] Reducir recall y reentrenar.
 2. **Cálculo de Gaps** :
-   * [X] Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
+   - [x] Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
 
-* **Entregables** :
-* Script `object_detection.py` + ejemplos de detección en `outputs/week2`.
-* Métricas de precisión (mAP si es YOLO).
-* **Asignatura** : *Visión por Computador* .
+- **Entregables** :
+- Script `object_detection.py` + ejemplos de detección en `outputs/week2`.
+- Métricas de precisión (mAP si es YOLO).
+- **Asignatura** : _Visión por Computador_ .
 
 ---
 
 ### **Mes 1 - Semana 3: Modelo Predictivo de Tiempos por Vuelta**
 
-* [X] **Tareas** :
+- [x] **Tareas** :
 
 1. **Opción 1 (XGBoost/LightGBM)** :
-   * Entrenar modelo para predecir `LapTime` usando variables: `TyreCompound`, `TrackTemp`, `AirTemp`.
+   - Entrenar modelo para predecir `LapTime` usando variables: `TyreCompound`, `TrackTemp`, `AirTemp`.
 2. **Opción 2 (Red Neuronal)** :
-   * Implementar MLP en PyTorch con capas densas (64-32-16-1) y activación ReLU.
-   * Comparar resultados con XGBoost.
+   - Implementar MLP en PyTorch con capas densas (64-32-16-1) y activación ReLU.
+   - Comparar resultados con XGBoost.
 3. **Feature Engineering** :
-   * Crear variables como `TyreAge` (vueltas usadas) y `PositionChange`.
+   - Crear variables como `TyreAge` (vueltas usadas) y `PositionChange`.
 
-* **Entregables** :
-* Script `lap_time_prediction.py` + modelo guardado en `models/week3`.
-* Gráfico de dispersión predicciones vs. reales.
-* **Asignatura** : *Aprendizaje Automático Avanzado* .
+- **Entregables** :
+- Script `lap_time_prediction.py` + modelo guardado en `models/week3`.
+- Gráfico de dispersión predicciones vs. reales.
+- **Asignatura** : _Aprendizaje Automático Avanzado_ .
 
 ---
 
 ### **Mes 1 - Semana 4: Procesamiento de Radios con NLP (Adelantado de Semana 8)**
 
-* [X] [ ]
+- [x] [ ]
 
- **Objetivo** : Extraer información estratégica de las comunicaciones equipo-piloto para enriquecer las reglas lógicas del sistema.
+  **Objetivo** : Extraer información estratégica de las comunicaciones equipo-piloto para enriquecer las reglas lógicas del sistema.
 
 <pre class="font-styrene border-border-100/50 overflow-x-scroll w-full rounded border-[0.5px] shadow-[0_2px_12px_hsl(var(--always-black)/5%)]"><table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888] whitespace-normal"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody>&]:odd:bg-bg-500/10"><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Tareas</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Herramientas/Detalles</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Entregables</strong></th></tr></thead><tbody><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>1. Extracción de Radios y Transcripción</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Usar <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">OpenF1 API</code> para extraer mensajes de radio.`- Implementar Whisper para transcribir audio a texto con timestamps.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Dataset <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">radios_raw.csv</code> con columnas: <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">[timestamp, audio_path, text]</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>2. Análisis de Sentimiento</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Implementar modelo básico de clasificación de sentimiento (positivo/negativo) con <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">transformers</code>.`- Etiquetar dataset de entrenamiento inicial (manual o semi-manual).</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Modelo de sentimiento + dataset <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">radios_sentiment.csv</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>3. Extracción Avanzada de Información</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- RoBERTa para clasificación de intención (órdenes, información, preguntas, advertencias).<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Modelo NER personalizado de SpaCy para reconocer:</code>- <strong>Entidades</strong>: Pilotos, equipos, neumáticos, número de vueltas, diferencias de tiempo.<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- <strong>Términos estratégicos</strong>: undercut, overcut, estrategias de parada.</code></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Clasificador de intención RoBERTa + Modelo NER SpaCy personalizado + dataset <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">radios_info_estructurada.csv</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>4. Generación de Datos Sintéticos (opcional)</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Usar GPT-4 para simular radios estratégicas adicionales.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Dataset sintético <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">radios_synthetic.csv</code> (100 ejemplos iniciales para pruebas).</td></tr></tbody></table></pre>
 
- **Entregables Finales (Semana 4)** :
+**Entregables Finales (Semana 4)** :
 
-* Scripts: `radio_extraction.py`, `transcribe_radios.py`, `sentiment_analysis.py`, `extract_entities.py`.
-* Datasets: `radios_raw.csv`, `radios_sentiment.csv`, `radios_entities_basic.csv`.
-* Documentación: `radio_processing_guide.md` explicando el procesamiento y significado de las etiquetas.
+- Scripts: `radio_extraction.py`, `transcribe_radios.py`, `sentiment_analysis.py`, `extract_entities.py`.
+- Datasets: `radios_raw.csv`, `radios_sentiment.csv`, `radios_entities_basic.csv`.
+- Documentación: `radio_processing_guide.md` explicando el procesamiento y significado de las etiquetas.
 
- **Asignatura** :  *Procesamiento de Lenguaje* .
+  **Asignatura** : _Procesamiento de Lenguaje_ .
 
 ---
 
@@ -165,144 +165,207 @@
 
 ### **Mes 2 - Semana 5: Modelo de Predicción y Degradación**
 
-* [X]
-* [X] **Tareas** :
+- [X]
+- [x] **Tareas** :
 
 1. **Opción 1 (LSTM)** :
-   * Entrenar LSTM para predecir `TyreDegradation` secuencialmente (usar ventanas de 3 vueltas).
+   - Entrenar LSTM para predecir `TyreDegradation` secuencialmente (usar ventanas de 3 vueltas).
 2. **Opción 2 (Regresión Cuantílica)** :
-   * Usar XGBoost con función de pérdida quantile para predecir degradación en percentiles 10-50-90.
+   - Usar XGBoost con función de pérdida quantile para predecir degradación en percentiles 10-50-90.
 3. **Dataset** :
-   * Combinar `TyreLife`, `TrackTemp`, y `LapTime` de FastF1. Usar el csv de lap_prediction.ipynb
+   - Combinar `TyreLife`, `TrackTemp`, y `LapTime` de FastF1. Usar el csv de lap_prediction.ipynb
 
-* **Entregables** :
-* Script `tyre_degradation.py` + predicciones en formato serie temporal.
-* Gráfico interactivo con Plotly.
-* **Asignatura** : *Aprendizaje Automático Avanzado* .
+- **Entregables** :
+- Script `tyre_degradation.py` + predicciones en formato serie temporal.
+- Gráfico interactivo con Plotly.
+- **Asignatura** : _Aprendizaje Automático Avanzado_ .
 
 ---
 
 ### **Mes 2 - Semana 6: Sistema de Decisiones Basado en Reglas Enriquecidas con NLP**
 
-* [ ] [ ]
+- [ ] [ ]
 
- **Objetivo** : Desarrollar un sistema de reglas lógicas que integre información de telemetría y comunicaciones de radio.
+  **Objetivo** : Desarrollar un sistema de reglas lógicas que integre información de telemetría y comunicaciones de radio.
 
 <pre class="font-styrene border-border-100/50 overflow-x-scroll w-full rounded border-[0.5px] shadow-[0_2px_12px_hsl(var(--always-black)/5%)]"><table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888] whitespace-normal"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody>&]:odd:bg-bg-500/10"><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Tareas</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Herramientas/Detalles</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Entregables</strong></th></tr></thead><tbody><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>1. Diseño de Reglas Lógicas Avanzadas</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Implementar reglas usando <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">Experta</code> o <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">Pyke</code> que incorporen:**<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Datos de telemetría</code> (degradación, tiempos).<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- </code>Sentimiento de radio<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]"> (positivo/negativo).</code>- <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">Entidades extraídas</code> (neumáticos, acciones mencionadas).</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Script <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">rule_engine.py</code> con base de conocimiento.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>2. Integración de Datos Multi-fuente</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Crear pipeline para combinar datos temporales:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Sincronizar timestamps de FastF1 con transcripciones de radio.</code>- Mapear sentimiento y entidades al timeline de carrera.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Script <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">data_integration.py</code> + dataset unificado <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">integrated_data.csv</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>3. Reglas Condicionadas por Sentimiento</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Implementar reglas específicas que utilizan señales de NLP:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Ejemplo: </code>IF TyreDeg > 30% AND Radio_Sentiment = Negative THEN PitRisk = High`.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Conjunto de reglas en <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">knowledge_base/sentiment_rules.py</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>4. Sistema de Explicación para Decisiones Lógicas</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Crear sistema que justifique decisiones usando lenguaje natural:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Ejemplo: </code>"Se recomienda parar debido a: 1) Alta degradación (35%), 2) Sentimiento negativo en últimas 3 radios"`.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Componente <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">rule_explanation.py</code> que genera explicaciones basadas en reglas activadas.</td></tr></tbody></table></pre>
 
-## Plan Paso a Paso para Implementación
-
-### 1. Preparación y Configuración
-
-* Instalar Experta: `pip install experta`
-* Crear estructura de módulos para el agente lógico
-
-### 2. Definir la Estructura de Base de Conocimientos
-
-* Crear clases para diferentes tipos de hechos:
-  * `TelemetryFact`: degradación, tiempos por vuelta
-  * `RadioFact`: sentimiento, entidades, intención
-  * `PositionFact`: gaps, posición en pista
-  * `WeatherFact`: temperatura, precipitación
-
-### 3. Definir Reglas Básicas
-
-* Implementar reglas simples de alta confianza:
-  * Umbrales de degradación para recomendación de parada
-  * Ajustes de estrategia basados en clima
-  * Condiciones básicas de undercut/overcut
-
-### 4. Integración con Modelos Existentes
-
-* Crear pipeline de datos para transformar salidas de modelos en hechos:
-  * Convertir predicciones del modelo de neumáticos
-  * Transformar análisis NLP (sentiment, entities, intent)
-  * Procesar datos de posición de FastF1
-
-### 5. Implementar Reglas Complejas con Integración NLP
-
-* Crear reglas que combinen telemetría y análisis NLP:
-  * Reglas considerando sentimiento negativo sobre neumáticos
-  * Reglas utilizando entidades detectadas
-  * Reglas respondiendo a diferentes intenciones
-
-### 6. Añadir Capacidades de Explicación
-
-* Implementar seguimiento de activaciones de reglas
-* Crear explicaciones en lenguaje natural para recomendaciones
-
-### 7. Pruebas y Evaluación
-
-* Probar el sistema con datos históricos de carreras
-* Comparar recomendaciones con estrategias reales
-
- **Entregables Finales (Semana 6)** :
-
-* Sistema completo de reglas en `src/systems/rule_based_system/`.
-* Dashboard simple para visualización de reglas en `dashboard/rules_visualization.py`.
-* Documentación de reglas y su relación con datos de NLP en `docs/rules_nlp_integration.md`.
-
- **Asignatura** :  *Sistemas Inteligentes (Unidad IV - 4.1)* .
-
 ### **Mes 2 - Semana 7: Integración Visión + Datos en Tiempo Real**
 
-* [ ]
+## Flujo de Trabajo Correcto
 
-* **Tareas** :
+1. Datos crudos → Modelos predictivos → Predicciones
+2. Predicciones → Agente Lógico → Decisiones estratégicas
+
+## Variables Clave de Nuestros Modelos
+
+Ahora, con los modelos que ya has implementado, nuestras reglas deben basarse en:
+
+1. **Modelo de Predicción de Tiempo por Vuelta (XGBoost)**
+   - Predice: `LapTime` (tiempo esperado en la siguiente vuelta)
+2. **Modelo de Degradación de Neumáticos**
+   - Predice: `DegradationRate` (incremento de tiempo por vuelta debido a degradación)
+   - Interpretación: Este valor indica cuántos segundos más lento será el coche en cada vuelta adicional
+3. **Análisis NLP de Radios**
+   - Produce: sentiment, intent, entities (como vimos en el JSON)
+4. **Gaps desde YOLO** (o simulados)
+   - Información sobre distancias entre coches específicos
+
+## Reglas Estratégicas Refinadas
+
+### A. Reglas basadas en Degradación Predicha
+
+1. **Parada por Tasa de Degradación Alta** :
+
+- SI (DegradationRate > 0.15 Y TyreAge > 10)
+- ENTONCES recomendar parada prioritaria
+- CONFIANZA: 0.85
+
+1. **Extensión de Stint por Baja Degradación** :
+
+- SI (DegradationRate < 0.08 Y TyreAge > 12 Y Position < 5)
+- ENTONCES recomendar extender stint actual
+- CONFIANZA: 0.75
+
+1. **Alerta Temprana de Degradación** :
+
+- SI (DegradationRate aumenta más de 0.03 en 3 vueltas consecutivas)
+- ENTONCES recomendar preparación para parada
+- CONFIANZA: 0.7
+
+### B. Reglas basadas en Predicciones de Tiempo por Vuelta
+
+1. **Ventana de Rendimiento Óptimo** :
+
+- SI (LapTime predicho < LapTime actual Y Position > 3 Y TyreAge < 8)
+- ENTONCES recomendar push estratégico
+- CONFIANZA: 0.75
+
+1. **Detección de Cliff de Rendimiento** :
+
+- SI (LapTime predicho > LapTime actual + 0.7 Y TyreAge > 15)
+- ENTONCES recomendar parada prioritaria
+- CONFIANZA: 0.85
+
+1. **Recuperación post-tráfico** :
+
+- SI (LapTime predicho < LapTime actual - 0.5 Y Position cambió negativo en última vuelta)
+- ENTONCES recomendar stint de recuperación
+- CONFIANZA: 0.7
+
+### C. Reglas de Undercut/Overcut (con Gaps)
+
+1. **Oportunidad de Undercut** :
+
+- SI (gap_ahead < 2.0s Y DegradationRate > 0.12 Y TyreAge > 8)
+- ENTONCES recomendar undercut
+- CONFIANZA: 0.8
+
+1. **Defensa contra Undercut** :
+
+- SI (gap_behind < 2.5s Y gap_behind disminuyendo Y DegradationRate > 0.1)
+- ENTONCES recomendar parada defensiva
+- CONFIANZA: 0.75
+
+1. **Overcut Estratégico** :
+
+- SI (gap_ahead < 3.5s Y LapTime predicho < tiempo_vuelta_delantero Y DegradationRate < 0.1)
+- ENTONCES recomendar overcut
+- CONFIANZA: 0.75
+
+### D. Reglas Basadas en Comunicaciones (NLP)
+
+1. **Respuesta a Problemas de Grip** :
+
+- SI (sentiment == "negative" Y "grip" en entities["SITUATION"] Y DegradationRate > 0.09)
+- ENTONCES incrementar prioridad de parada
+- CONFIANZA: 0.85
+
+1. **Ajuste por Información Meteorológica** :
+
+- SI (intent == "WARNING" Y ("rain" en entities["SITUATION"] O "wet" en entities["SITUATION"]))
+- ENTONCES preparar para cambio a neumáticos de lluvia
+- CONFIANZA: 0.9
+
+1. **Reacción a Incidentes** :
+
+- SI ("safety" en entities["INCIDENT"] O "yellow" en entities["SITUATION"])
+- ENTONCES reevaluar ventana de parada aprovechando neutralización
+- CONFIANZA: 0.85
+
+### E. Reglas Combinadas de Alta Prioridad
+
+1. **Deterioro Crítico Confirmado** :
+
+- SI (DegradationRate > 0.18 Y LapTime predicho > LapTime anterior + 0.5 Y sentiment == "negative")
+- ENTONCES recomendar parada urgente
+- CONFIANZA: 0.95
+- PRIORIDAD: Alta
+
+1. **Oportunidad Táctica en Incidente** :
+
+- SI ("yellow" en entities["SITUATION"] Y Position > 10 Y gap_ahead > 5.0s)
+- ENTONCES recomendar parada aprovechando bandera amarilla
+- CONFIANZA: 0.85
+- PRIORIDAD: Alta
+
+- [ ]
+
+- **Tareas** :
 
 1. **Sincronización Vídeo-Telemetría** :
-   * Mapear timestamps de vídeo con datos de FastF1 (ej: `session.pos_data`).
+   - Mapear timestamps de vídeo con datos de FastF1 (ej: `session.pos_data`).
 2. **Visualización** :
-   * Superponer gaps calculados (en segundos) sobre el vídeo con OpenCV.
+   - Superponer gaps calculados (en segundos) sobre el vídeo con OpenCV.
 3. **Opción CNN Custom** :
-   * Si el tiempo permite, entrenar modelo para estimar degradación visual de neumáticos (usar imágenes de cámaras onboard).
+   - Si el tiempo permite, entrenar modelo para estimar degradación visual de neumáticos (usar imágenes de cámaras onboard).
 
-* **Entregables** :
-* Script `video_sync.py` + vídeo demo con overlays.
-* Documentación de sincronización.
-* **Asignatura** : *Visión por Computador* .
+- **Entregables** :
+- Script `video_sync.py` + vídeo demo con overlays.
+- Documentación de sincronización.
+- **Asignatura** : _Visión por Computador_ .
 
 ---
 
 ### **Mes 2 - Semana 8: Simulador de Estrategias con Búsqueda Adversarial**
 
-* [ ]
+- [ ]
 
-* **Tareas** :
+- **Tareas** :
 
 1. **Algoritmo Genético + Poda Alfa-Beta** :
-   * Combinar DEAP con poda alfa-beta para simular estrategias rivales (ej: anticipar undercuts).
+   - Combinar DEAP con poda alfa-beta para simular estrategias rivales (ej: anticipar undercuts).
 2. **Fitness Function** :
-   * Incluir penalización por riesgo de colisión o tráfico.
+   - Incluir penalización por riesgo de colisión o tráfico.
 3. **Visualización** :
-   * Graficar árbol de decisiones adversarial con `NetworkX`.
+   - Graficar árbol de decisiones adversarial con `NetworkX`.
 
-* **Entregables** :
-* Script `genetic_algorithm.py` + gráficos de convergencia.
-* Ejemplo: "Estrategia óptima considerando respuesta de Mercedes".
-* **Asignatura** :  *Sistemas Inteligentes (Unidad II - 2.2)* .
+- **Entregables** :
+- Script `genetic_algorithm.py` + gráficos de convergencia.
+- Ejemplo: "Estrategia óptima considerando respuesta de Mercedes".
+- **Asignatura** : _Sistemas Inteligentes (Unidad II - 2.2)_ .
 
 ---
 
 ### **Mes 2 - Semana 9: Procesamiento Avanzado de Radios con NLP**
 
-* [ ]
+- [ ]
 
- **Objetivo** : Expandir la capacidad del sistema para extraer información estratégica compleja de las comunicaciones.
+  **Objetivo** : Expandir la capacidad del sistema para extraer información estratégica compleja de las comunicaciones.
 
 <pre class="font-styrene border-border-100/50 overflow-x-scroll w-full rounded border-[0.5px] shadow-[0_2px_12px_hsl(var(--always-black)/5%)]"><table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888] whitespace-normal"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody>&]:odd:bg-bg-500/10"><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Tareas</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Herramientas/Detalles</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Entregables</strong></th></tr></thead><tbody><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>1. Fine-tuning de BERT para Intención</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Afinar BERT para clasificar intenciones estratégicas:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- **Categorías**: Orden directa, Información, Pregunta, Advertencia.</code>- Usar datos etiquetados de la semana 4 + nuevos datos.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Modelo BERT guardado en <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">models/nlp/bert_intent</code> + métricas de evaluación.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>2. Modelo Avanzado SpaCy para Entidades</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Crear un modelo personalizado en SpaCy para reconocer:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- **Entidades complejas**: Estrategias (`"undercut"`, `"overcut"`), Condiciones pista.</code>- <strong>Relaciones</strong>: Ej: <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">"HAM → soft → lap 22"</code>.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Modelo SpaCy personalizado (<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">ner_strategy_model</code>) + dataset enriquecido <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">radios_entities.csv</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>3. Extracción de Información Temporal</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Implementar algoritmo para relacionar menciones temporales:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Vincular "Box next lap" con número de vuelta actual.</code>- Extraer ventanas temporales ("Push for next 5 laps").</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Componente <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">temporal_extraction.py</code> + dataset <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">radios_temporal.csv</code>.</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>4. Expansión de Datos Sintéticos</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Ampliar dataset sintético con GPT-4:<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Generar 500 ejemplos estratégicos con anotaciones.</code>- Incluir situaciones específicas (ej: Safety Car, lluvia).</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Dataset expandido <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">radios_synthetic_v2.csv</code> (500 ejemplos).</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>5. Evaluación y Refinamiento</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Evaluar rendimiento de modelos en datos reales.<code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">- Calcular precisión, recall y F1 para cada aspecto (sentimiento, entidades, intención).</code>- Refinar modelos según resultados.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Informe de evaluación en <code class="bg-text-200/5 border border-0.5 border-border-300 text-danger-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.9rem]">reports/nlp_evaluation.md</code>.</td></tr></tbody></table></pre>
 
- **Entregables Finales (Semana 9)** :
+**Entregables Finales (Semana 9)** :
 
-* Modelos: BERT para intención, SpaCy para entidades avanzadas.
-* Scripts: `bert_intent_classifier.py`, `spacy_ner_advanced.py`, `temporal_extraction.py`.
-* Datasets: `radios_intent.csv`, `radios_entities.csv`, `radios_temporal.csv`, `radios_synthetic_v2.csv`.
+- Modelos: BERT para intención, SpaCy para entidades avanzadas.
+- Scripts: `bert_intent_classifier.py`, `spacy_ner_advanced.py`, `temporal_extraction.py`.
+- Datasets: `radios_intent.csv`, `radios_entities.csv`, `radios_temporal.csv`, `radios_synthetic_v2.csv`.
 
- **Asignatura** :  *Procesamiento de Lenguaje* .
+  **Asignatura** : _Procesamiento de Lenguaje_ .
 
 ### **Mes 3: Integración y Refinamiento**
 
-* [ ]
+- [ ]
 
 #### **Semana 9: API REST para Integración de Módulos**
 
@@ -324,12 +387,13 @@
 
 #### **Semana 10: Modelo de Clasificación de Undercut/Overcut**
 
-* [ ]
+- [ ]
 
-- **Tareas** :
+* **Tareas** :
 
   Explorar método API openfq https://openf1.org/#intervals otra vez.
-- Crear features `gap_evolution_pre_pit` y `gap_evolution_post_pit` → implementar análisis SHAP para identificar umbrales críticos → desarrollar predictor de éxito basado en intervalos iniciales
+
+* Crear features `gap_evolution_pre_pit` y `gap_evolution_post_pit` → implementar análisis SHAP para identificar umbrales críticos → desarrollar predictor de éxito basado en intervalos iniciales
 
 1. **Dataset Histórico** :
    - Extraer casos de paradas y su resultado (ganancia/pérdida de posición).
@@ -355,10 +419,12 @@
      - Diseñar recompensas basadas en posición relativa (ej: +10 si adelantas, -5 si te adelantan).
   3. **Teoría de Juegos**:
      - Analizar equilibrios de Nash en estrategias simuladas.
+
 - **Entregables**:
 
   - Script `rl_training.py` + video de simulación competitiva.
   - Informe de equilibrios estratégicos en `docs/game_theory.md`.
+
 - **Asignatura**: _Sistemas Inteligentes (Unidad III - 3.3)_.
 
 ---
@@ -367,10 +433,10 @@
 
 **Objetivo** : Integrar las entidades detectadas por SpaCy en las explicaciones generadas.
 
-| **Tareas**                                         | **Herramientas/Detalles**                                                                                                                                        | **Entregables**                              |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| **1. Vinculación Entidades-Recomendaciones**      | - Usar las entidades de SpaCy (ej: neumáticos detectados) para personalizar mensajes.``- Ejemplo:`"Parar en lap 22 (neumáticos HARD detectados en radio lap 20)"`. | Lógica de vinculación en `dashboard_logic.py`. |
-| **2. Visualización de Entidades en Dashboard**    | - Mostrar entidades clave en el panel de Streamlit usando tarjetas interactivas.                                                                                       | Componente `entities_viewer.py` en el dashboard. |
+| **Tareas**                                        | **Herramientas/Detalles**                                                                                                                                            | **Entregables**                                  |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **1. Vinculación Entidades-Recomendaciones**      | - Usar las entidades de SpaCy (ej: neumáticos detectados) para personalizar mensajes.``- Ejemplo:`"Parar en lap 22 (neumáticos HARD detectados en radio lap 20)"`.   | Lógica de vinculación en `dashboard_logic.py`.   |
+| **2. Visualización de Entidades en Dashboard**    | - Mostrar entidades clave en el panel de Streamlit usando tarjetas interactivas.                                                                                     | Componente `entities_viewer.py` en el dashboard. |
 | **3. Generación de Explicaciones con Plantillas** | - Crear plantillas Jinja2 que combinen predicciones ML + entidades SpaCy.``- Ejemplo:`"{{ driver }} debe parar en lap {{ lap }} ({{ entity }} detectado en radio)"`. | Plantillas en `templates/explanations.j2`.       |
 
 **Entregables Finales (Semana 12)** :
@@ -382,8 +448,8 @@
 
 ### **Relación con Asignaturas**
 
-| **Asignatura**                | **Componentes Añadidos**                                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Asignatura**                | **Componentes Añadidos**                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Procesamiento de Lenguaje** | - Modelo SpaCy para entidades estratégicas.``- Integración de entidades en explicaciones.                         |
 | **Sistemas Inteligentes**     | - Uso de entidades para mejorar decisiones estratégicas (ej: priorizar paradas si se detecta "degradación alta"). |
 
@@ -391,9 +457,9 @@
 
 ### **Riesgos y Mitigación**
 
-| **Riesgo**                                 | **Mitigación**                                                               |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| **Bajo rendimiento del modelo SpaCy**      | Usar el dataset sintético de GPT-4 para aumentar datos de entrenamiento.           |
+| **Riesgo**                                 | **Mitigación**                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **Bajo rendimiento del modelo SpaCy**      | Usar el dataset sintético de GPT-4 para aumentar datos de entrenamiento.            |
 | **Falta de contexto en las explicaciones** | Combinar SpaCy con LLMs (GPT-3.5) para generar texto natural a partir de entidades. |
 
 #### **Semana 13: Testeo Integral y Optimización**
@@ -443,11 +509,11 @@
 
 ### **Sección Nueva: Adaptaciones para Sistemas Inteligentes**
 
-| **Semana** | **Cambio Clave**                        | **Herramientas**       | **Unidad Vinculada**    |
-| ---------------- | --------------------------------------------- | ---------------------------- | ----------------------------- |
-| 4                | Agente lógico con Pyke/Experta               | Pyke, Experta                | IV (4.1 - Agentes Lógicos)   |
-| 7                | Búsqueda adversarial (alfa-beta + genético) | DEAP, NetworkX               | II (2.2 - Búsqueda Compleja) |
-| 11               | Agentes RL competitivos                       | Stable Baselines3, OpenSpiel | III (3.3 - Teoría de Juegos) |
-| 12               | Grafo de decisiones interactivo               | Graphviz, PyVis              | IV (4.2 - Razonamiento)       |
+| **Semana** | **Cambio Clave**                            | **Herramientas**             | **Unidad Vinculada**         |
+| ---------- | ------------------------------------------- | ---------------------------- | ---------------------------- |
+| 4          | Agente lógico con Pyke/Experta              | Pyke, Experta                | IV (4.1 - Agentes Lógicos)   |
+| 7          | Búsqueda adversarial (alfa-beta + genético) | DEAP, NetworkX               | II (2.2 - Búsqueda Compleja) |
+| 11         | Agentes RL competitivos                     | Stable Baselines3, OpenSpiel | III (3.3 - Teoría de Juegos) |
+| 12         | Grafo de decisiones interactivo             | Graphviz, PyVis              | IV (4.2 - Razonamiento)      |
 
 ---
