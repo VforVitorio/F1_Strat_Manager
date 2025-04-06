@@ -394,19 +394,51 @@ def clean_redundant_variables(df):
 
 # ## 6. Create sequences for predictions
 
+# ### Strategic Tire Degradation Monitoring
+#
+# #### Why Monitor Tire Degradation from Specific Lap Thresholds?
+#
+# Formula 1 tire performance follows a predictable pattern throughout its lifecycle:
+#
+# 1. **Initial Phase (First Few Laps)**:
+#    - Tires are in their optimal window with minimal degradation
+#    - Performance is relatively stable and predictable
+#    - Strategic decisions rarely needed during this phase
+#
+# 2. **Critical Monitoring Phase**:
+#    - Begins when tires start showing meaningful degradation patterns
+#    - Different compounds reach this phase at different times:
+#      - **Soft Compounds**: ~6 laps (faster degradation)
+#      - **Medium Compounds**: ~12 laps (moderate degradation)
+#      - **Hard Compounds**: ~25 laps (slower degradation)
+#    - This is when predictive models become most valuable for strategy decisions
+#
+# 3. **End-of-Life Phase**:
+#    - Severe performance drop-off ("cliff")
+#    - Critical for pit stop timing decisions
+#
+# By focusing our monitoring on the compound-specific critical phases, we:
+# - Reduce noise from initial break-in laps
+# - Focus computational resources on strategically relevant predictions
+# - Improve model accuracy by training on more consistent degradation patterns
+# - Better align predictions with real-world strategic decision points
+#
+# This approach mirrors how F1 teams monitor tires during races, where they typically start considering tire strategy once compounds reach their respective monitoring thresholds.
+#
+#
+
 # ---
 
-def create_sequences_for_prediction(df, input_length=5):
+def create_sequences_for_prediction(df, input_length=5, compound_start_laps=None):
     """
-    Creates sequences for prediction by grouping consecutive laps.
-
-    This function transforms tabular lap data into chronologically ordered sequences
-    needed for time-series models. It creates sliding windows of consecutive laps,
-    grouped by driver, stint, and compound to ensure temporal integrity.
+    Creates sequences for prediction starting from specific lap thresholds based on tire compound.
 
     Parameters:
     - df: Clean DataFrame with relevant variables
     - input_length: Number of consecutive laps to include in each sequence (default: 5)
+    - compound_start_laps: Dictionary mapping compound IDs to starting lap numbers
+                          Example: {1: 6, 2: 12, 3: 25} for monitoring soft tires from lap 6,
+                          medium from lap 12, and hard from lap 25
 
     Returns:
     - sequences: List of DataFrames, each containing a sequence of consecutive laps
@@ -416,8 +448,12 @@ def create_sequences_for_prediction(df, input_length=5):
     sequences = []
     metadata = []
 
+    # Default thresholds if none provided
+    if compound_start_laps is None:
+        # Default: monitor all from lap 1
+        compound_start_laps = {1: 1, 2: 1, 3: 1}
+
     # Group data by driver, stint, and compound
-    # This ensures we don't mix data across different tire sets
     groupby_columns = ['DriverNumber', 'Stint', 'CompoundID']
 
     # Process each group separately
@@ -425,29 +461,34 @@ def create_sequences_for_prediction(df, input_length=5):
         # Unpack the group identifier
         driver, stint, compound = name
 
+        # Get the starting lap threshold for this compound
+        min_tyre_age = compound_start_laps.get(compound, 1)
+
         # Sort by TyreAge to ensure chronological order
         sorted_group = group.sort_values('TyreAge').reset_index(drop=True)
 
+        # Filter group to only include laps at or after the starting threshold
+        filtered_group = sorted_group[sorted_group['TyreAge'] >= min_tyre_age]
+
         # Skip if we don't have enough laps for a complete sequence
-        if len(sorted_group) < input_length:
+        if len(filtered_group) < input_length:
             continue
 
         # Create sliding window sequences
-        for i in range(len(sorted_group) - input_length + 1):
+        for i in range(len(filtered_group) - input_length + 1):
             # Extract sequence of 'input_length' consecutive laps
-            seq = sorted_group.iloc[i:i+input_length]
+            seq = filtered_group.iloc[i:i+input_length]
 
             # Add sequence to the list
             sequences.append(seq)
 
-            # Store metadata for this sequence to help with interpretation later
+            # Store metadata
             meta = {
-                'DriverNumber': driver,          # Driver identifier
-                'Stint': stint,                  # Current stint number
-                'CompoundID': compound,          # Tire compound
-                'StartLap': seq['TyreAge'].iloc[0],    # First lap in sequence
-                'EndLap': seq['TyreAge'].iloc[-1],     # Last lap in sequence
-                # Most recent lap time
+                'DriverNumber': driver,
+                'Stint': stint,
+                'CompoundID': compound,
+                'StartLap': seq['TyreAge'].iloc[0],
+                'EndLap': seq['TyreAge'].iloc[-1],
                 'LatestLapTime': seq['FuelAdjustedLapTime'].iloc[-1]
             }
             metadata.append(meta)
@@ -549,7 +590,7 @@ def load_models(models_path):
     return global_model, specialized_models
 
 
-# ## 7. Preparing sequences for the model
+# ## 8. Preparing sequences for the model
 
 # ---
 
@@ -595,7 +636,7 @@ def prepare_sequences_for_model(sequences):
     return X_tensor
 
 
-# ## 8. Making the ensemble predictions
+# ## 9. Making the ensemble predictions
 
 # ---
 
@@ -704,17 +745,14 @@ def make_ensemble_predictions(sequences, metadata, global_model, specialized_mod
     return all_predictions
 
 
-# ## 9. Prediction formating
+# ## 10. Prediction formating
 
 # ---
 
 def format_predictions(predictions, original_df):
     """
-    Formats raw ensemble predictions into a structured, analysis-ready DataFrame.
-
-    This function takes the raw predictions from the ensemble model and transforms
-    them into a clean DataFrame where each row represents a predicted future lap's
-    degradation rate. It adds contextual information and confidence metrics.
+    Formats raw ensemble predictions into a structured, analysis-ready DataFrame
+    with simplified columns and controlled decimal precision.
 
     Parameters:
     - predictions: List of dictionaries with ensemble predictions and metadata
@@ -749,12 +787,12 @@ def format_predictions(predictions, original_df):
         base_info = {
             'DriverNumber': meta['DriverNumber'],         # Driver identifier
             'Stint': meta['Stint'],                       # Current stint
-            'CompoundID': meta['CompoundID'],            # Numeric compound ID
-            'CompoundName': compound_name,               # Human-readable compound name
-            'CurrentTyreAge': meta['EndLap'],            # Current age of tires
-            'CurrentLapTime': meta['LatestLapTime'],     # Most recent lap time
-            # Weight of specialized model (0-1)
-            'ModelWeight': pred['specialized_weight']
+            'CompoundID': meta['CompoundID'],             # Numeric compound ID
+            'CompoundName': compound_name,                # Human-readable compound name
+            # Current age of tires
+            'CurrentTyreAge': meta['EndLap'],
+            # Most recent lap time (3 decimals)
+            'CurrentLapTime': round(meta['LatestLapTime'], 3)
         }
 
         # Create a row for each future lap prediction
@@ -765,13 +803,11 @@ def format_predictions(predictions, original_df):
             # Create a result entry for this future lap
             result = base_info.copy()
             result.update({
-                'FutureLap': lap_number,                # Future lap number
-                'LapsAhead': i + 1,                     # How many laps ahead of current
-                'PredictedDegradationRate': future_value,  # Predicted degradation rate
-
-                # Set confidence level based on specialized model weight
-                # Higher weight = higher confidence (more compound-specific data)
-                'ConfidenceLevel': 'High' if pred['specialized_weight'] > 0.4 else 'Medium'
+                # Future lap number (TyreAge)
+                'FutureLap': lap_number,
+                'LapsAheadPred': i + 1,                 # How many laps ahead of current
+                # Predicted degradation rate (3 decimals)
+                'PredictedDegradationRate': round(future_value, 3)
             })
 
             # Add to results list
@@ -788,35 +824,22 @@ def format_predictions(predictions, original_df):
     print(
         f"Formatted results: {len(results_df)} predictions for {results_df['DriverNumber'].nunique()} drivers")
 
-    # Add derived metrics useful for strategy
-    # Critical degradation threshold (>0.15s/lap is considered high)
-    results_df['HighDegradation'] = results_df['PredictedDegradationRate'] > 0.15
-
-    # Calculate cumulative degradation over future laps
-    # Group by driver and stint
-    for (driver, stint), group in results_df.groupby(['DriverNumber', 'Stint']):
-        # Sort by future lap
-        group = group.sort_values('FutureLap')
-        # Calculate cumulative sum of degradation
-        cumul_deg = group['PredictedDegradationRate'].cumsum()
-        # Assign back to results DataFrame
-        idx = group.index
-        results_df.loc[idx, 'CumulativeDegradation'] = cumul_deg
-
     return results_df
 
 
-# # 10. The great Function: Predicting tire degradation
+# # 11. The great Function: Predicting tire degradation
 
 # ---
 
-def predict_tire_degradation(input_data, models_path='../../outputs/week5/models/'):
+def predict_tire_degradation(input_data, models_path='../../outputs/week5/models/', compound_start_laps=None):
     """
-    Complete function to predict tire degradation.
+    Complete function to predict tire degradation starting from specified tire age thresholds.
 
     Parameters:
     - input_data: DataFrame or path to CSV with lap data
     - models_path: Path where the saved models are located
+    - compound_start_laps: Dictionary mapping compound IDs to starting lap numbers
+                          Example: {1: 6, 2: 12, 3: 25}
 
     Returns:
     - DataFrame with degradation predictions for the next 3 laps
@@ -831,7 +854,8 @@ def predict_tire_degradation(input_data, models_path='../../outputs/week5/models
     df = clean_redundant_variables(df)
 
     # Step 4-5: Create sequences
-    sequences, metadata = create_sequences_for_prediction(df)
+    sequences, metadata = create_sequences_for_prediction(
+        df, compound_start_laps=compound_start_laps)
 
     # Step 6: Load models
     global_model, specialized_models = load_models(models_path)
@@ -846,17 +870,188 @@ def predict_tire_degradation(input_data, models_path='../../outputs/week5/models
     return results
 
 
-if __name__ == "main":
-    # ## 11. Example for Calling it
+# ## 12. Example for Calling it
 
+# #### Disclaimer for compound start laps
+#
+#
+# For the example usage, as the data is from the 2023 Spanish Grand Prix, I will base my starting predictions from the pitstops made in the Grand Prix.
+# <p align="center">
+#   <img src="../ML_tyre_pred/ML_utils/pitstops_bar.jpg" alt="Texto alternativo" width="800"/>
+# </p>
+#
+
+
+def simulate_real_time_predictions(csv_path, models_path, interval=5, compound_start_laps=None, max_rows=None, prediction_horizon=3):
+    """
+    Simulates a real-time racing environment by processing a CSV row by row
+    and running the complete prediction model at regular intervals.
+
+    Parameters:
+    - csv_path: Path to CSV with lap data
+    - models_path: Path where models are stored
+    - interval: Time interval between updates in seconds (default: 5)
+    - compound_start_laps: Lap thresholds for each compound
+    - max_rows: Maximum number of rows to process (None = all)
+    - prediction_horizon: Number of laps ahead to highlight in predictions (default: 3)
+
+    Returns:
+    - DataFrame with complete prediction history
+    """
+    import pandas as pd
+    import time
+    from IPython.display import display, clear_output
+
+    # Read the full CSV for incremental processing
+    full_df = pd.read_csv(csv_path)
+
+    # Limit the number of rows if specified
+    if max_rows is not None:
+        full_df = full_df.iloc[:max_rows]
+
+    # Accumulative DataFrame to simulate real-time data arrival
+    accumulated_df = pd.DataFrame(columns=full_df.columns)
+
+    # DataFrame to store all historical predictions
+    all_predictions = pd.DataFrame()
+
+    print(
+        f"Starting simulation with {len(full_df)} data rows, interval: {interval}s")
+
+    # Process row by row
+    for i, row in full_df.iterrows():
+        # Add the new row to the accumulative DataFrame
+        accumulated_df = pd.concat(
+            [accumulated_df, pd.DataFrame([row])], ignore_index=True)
+
+        # Execute complete prediction with accumulated data
+        try:
+            # Use existing function with all accumulated data so far
+            latest_predictions = predict_tire_degradation(
+                accumulated_df,  # Pass DataFrame instead of CSV path
+                models_path,
+                compound_start_laps
+            )
+
+            # Clear all previous output now that we have new predictions
+            clear_output(wait=False)
+
+            # If there are predictions, display and save them
+            if not latest_predictions.empty:
+                # Add timestamp for tracking (without DataRowsProcessed)
+                latest_predictions['PredictionTimestamp'] = pd.Timestamp.now()
+
+                # First show key degradation predictions
+                print("=== KEY DEGRADATION PREDICTIONS ===")
+
+                # Group by driver
+                for driver, driver_group in latest_predictions.groupby('DriverNumber'):
+                    # Get the latest stint for this driver
+                    latest_stint = driver_group['Stint'].max()
+                    stint_data = driver_group[driver_group['Stint']
+                                              == latest_stint]
+
+                    # Get predictions for the requested horizon
+                    near_future = stint_data[stint_data['LapsAheadPred']
+                                             <= prediction_horizon]
+
+                    if not near_future.empty:
+                        # Get only the unique LapsAheadPred values, sorted
+                        lap_ahead_values = sorted(
+                            near_future['LapsAheadPred'].unique())
+
+                        # Get the most recent CurrentTyreAge (sort by CurrentTyreAge descending and take first)
+                        most_recent_data = near_future.sort_values(
+                            'CurrentTyreAge', ascending=False).iloc[0]
+                        compound = most_recent_data['CompoundName']
+                        current_age = most_recent_data['CurrentTyreAge']
+
+                        print(
+                            f"\nDriver #{driver} - {compound} tires (Current age: {current_age})")
+
+                        # For each unique lap ahead value, get only the most recent prediction
+                        for lap_ahead in lap_ahead_values:
+                            # Get predictions for this specific lap ahead
+                            lap_preds = near_future[near_future['LapsAheadPred']
+                                                    == lap_ahead]
+
+                            # Sort by current tyre age (most recent window)
+                            lap_preds = lap_preds.sort_values(
+                                'CurrentTyreAge', ascending=False)
+
+                            # Take only the first (most recent) prediction
+                            latest_pred = lap_preds.iloc[0]
+
+                            print(
+                                f"  Lap +{int(lap_ahead)}: Predicted degradation = {latest_pred['PredictedDegradationRate']:.3f} s/lap")
+
+                # Then show processing status
+                print(
+                    f"\nProcessing row {i+1} of {len(full_df)} ({(i+1)/len(full_df)*100:.1f}%)")
+
+                # Display DataFrame for reference
+                print("\n=== PREDICTION DATAFRAME ===")
+                display(latest_predictions.head(10))
+
+                # Save to history
+                all_predictions = pd.concat(
+                    [all_predictions, latest_predictions], ignore_index=True)
+                print(f"Total accumulated predictions: {len(all_predictions)}")
+            else:
+                # Clear output and show status even if no predictions
+                clear_output(wait=False)
+                print(
+                    f"Processing row {i+1} of {len(full_df)} ({(i+1)/len(full_df)*100:.1f}%)")
+                print(
+                    "No predictions generated with current data (possibly insufficient sequences)")
+        except Exception as e:
+            # Clear output and show error
+            clear_output(wait=False)
+            print(
+                f"Processing row {i+1} of {len(full_df)} ({(i+1)/len(full_df)*100:.1f}%)")
+            print(f"Error during processing: {str(e)}")
+
+        # Wait for the specified interval before next update
+        if i < len(full_df) - 1:  # Don't wait after the last row
+            print(f"Waiting {interval} seconds for next update...")
+            time.sleep(interval)
+
+    print("\n--- Simulation completed ---")
+    print(f"Total rows processed: {len(full_df)}")
+    print(f"Total predictions generated: {len(all_predictions)}")
+
+    return all_predictions
+
+
+if __name__ == "main":
     # Define path to the CSV file
     csv_path = '../../outputs/week3/lap_prediction_data.csv'
 
     # Define path to models
     models_path = '../../outputs/week5/models/'
 
-    # Call the prediction function
-    predictions = predict_tire_degradation(csv_path, models_path)
+    # Define monitoring thresholds by compound
+    compound_start_laps = {
+        1: 6,   # Soft tires: monitor from lap 6 onwards
+        2: 12,  # Medium tires: monitor from lap 12 onwards
+        3: 25   # Hard tires: monitor from lap 25 onwards
+    }
 
+    # Call the prediction function
+    predictions = predict_tire_degradation(
+        csv_path,
+        models_path,
+        compound_start_laps=compound_start_laps
+    )
     # Display the predictions
-    print(predictions.head())
+    predictions.head()
+
+    # Run simulation
+    predictions_history = simulate_real_time_predictions(
+        csv_path='../../outputs/week3/lap_prediction_data.csv',
+        models_path='../../outputs/week5/models/',
+        interval=0.1,  # 5 seconds between updates
+        compound_start_laps=compound_start_laps,
+        max_rows=200,  # Optional: limit number of rows for testing
+        prediction_horizon=3  # Show predictions for next 3 laps
+    )
