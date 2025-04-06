@@ -46,7 +46,7 @@ def load_lap_prediction_model(model_path=None):
     """
     if model_path is None:
         # Default path
-        model_path = "../../outputs/week3/best_xgb_model.pkl"
+        model_path = "../../outputs/week3/xgb_sequential_model.pkl"
     
     try:
         with open(model_path, 'rb') as f:
@@ -55,7 +55,9 @@ def load_lap_prediction_model(model_path=None):
         # Extract feature names
         feature_names = model.feature_names_in_
         print(f"Model loaded successfully with {len(feature_names)} features")
+        
         return model, feature_names
+        
     except Exception as e:
         print(f"Error loading model: {str(e)}")
         return None, None
@@ -382,9 +384,8 @@ def predict_lap_times(input_data, model_path=None, include_next_lap=True):
 # ---
 
 # telemetry_data = pd.read_csv('../../outputs/week3/lap_prediction_data.csv.')
-
 # predictions_df = predict_lap_times(telemetry_data)
-# predictions_df.head()
+# # predictions_df.head()
 
 if __name__ == "main":
     predictions_df = predict_lap_times('../../outputs/week3/lap_prediction_data.csv.')
