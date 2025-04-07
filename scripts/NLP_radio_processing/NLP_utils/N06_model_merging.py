@@ -51,6 +51,14 @@ import spacy
 import whisper
 import torch
 from transformers import BertForTokenClassification, BertConfig, BertTokenizer
+import warnings
+
+import logging
+import transformers
+# Ignorar FutureWarning
+warnings.filterwarnings("ignore", category=FutureWarning)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+transformers.logging.set_verbosity_error()
 
 
 # ## 2. Configuration
@@ -365,7 +373,7 @@ def analyze_radio_message(radio_message):
     ner_tokenizer = ner_result["tokenizer"]
 
     # Execute NER notebook (assuming this is needed)
-    from N05_ner_models import analyze_f1_radio
+    from .N05_ner_models import analyze_f1_radio
 
     sys.stdout = original_stdout  # Restore stdout
 
@@ -423,8 +431,8 @@ def transcribe_audio(audio_path):
     return result["text"]
 
 
-# Path to example audio file
-audio_path = "../../f1-strategy/data/audio/driver_(14,)/driver_(14,)_monaco_radio_168.mp3"
+# # Path to example audio file
+# audio_path = "../../f1-strategy/data/audio/driver_(14,)/driver_(14,)_monaco_radio_168.mp3"
 
 
 # # 🏁 NLP Pipeline Summary: Model Integration
