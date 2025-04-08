@@ -50,6 +50,13 @@ from utils.N01_agent_setup import (
     F1StrategyEngine,
 
 )
+
+from utils.N01_agent_setup import (
+    get_current_degradation,
+    load_tire_predictions,
+    transform_tire_predictions
+)
+
 import utils.N01_agent_setup as agent_setup
 from experta import DefFacts, Fact, Field, KnowledgeEngine
 from experta import Rule, NOT, OR, AND, AS, MATCH, TEST, EXISTS
