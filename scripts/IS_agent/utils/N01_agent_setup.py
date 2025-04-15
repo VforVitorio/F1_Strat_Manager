@@ -197,10 +197,15 @@ class GapFact(Fact):
     """
     Facts about gaps to other cars
     """
-    gap_ahead = Field(float, mandatory= False)          # Time to car ahead (seconds)
-    gap_behind = Field(float, mandatory= False)         # Time to car behind (seconds)
-    gap_ahead_trend = Field(float, mandatory= False)    # Change in gap ahead over last laps
-    gap_behind_trend = Field(float, mandatory= False)   # Change in gap behind over last laps
+    driver_number = Field(int, mandatory=True)          # Driver this gap data is for
+    gap_ahead = Field(float, mandatory=False)           # Time to car ahead (seconds)
+    gap_behind = Field(float, mandatory=False)          # Time to car behind (seconds)
+    gap_ahead_trend = Field(float, mandatory=False)     # Change in gap ahead over last laps
+    gap_behind_trend = Field(float, mandatory=False)    # Change in gap behind over last laps
+    car_ahead = Field(int, mandatory=False)             # Driver number of car ahead
+    car_behind = Field(int, mandatory=False)            # Driver number of car behind
+    in_undercut_window = Field(bool, mandatory=False)   # Whether in undercut window (gap < 1.5s)
+    in_drs_window = Field(bool, mandatory=False)        # Whether in DRS window (gap < 1.0s)
 
 
 # ### 2.4 Radio Facts
@@ -407,15 +412,6 @@ def load_tire_predictions(race_data, models_path, compound_thresholds=None):
     
     return predictions
 
-######################### SEE IF THIS FUNCTION CAN FIX THE ERROR MENTIONED IN THE FACTS
-### PLACE OF THE ERROR: LINE 39, CELL 4.1
-# degradation_fact = DegradationFact(
-#         # Get current degradation - not directly available in predictions
-#         # Using a placeholder value (could be obtained from elsewhere)
-#         degradation_rate=0.0,  
-#         predicted_rates=predicted_rates  # Array of future predictions
-#     )
-####################### SEE HOW TO VIEW THE DATATYPES MADE BY THE PREDICITON AND THE ONES EXPECTED BY THE ENGINE
 
 
 def get_current_degradation(telemetry_data, driver_number):
@@ -615,6 +611,145 @@ def analyze_and_transform_radio(message, is_audio=False):
     
     # Step 2: Transform the analysis into a fact
     return transform_radio_analysis(json_path)
+
+
+# ---
+
+# ## 4.4 Transforming gap data
+
+def transform_gap_data(gaps_df, driver_number):
+    """
+    Transform gap data from FastF1 into facts for the rule engine.
+    
+    Args:
+        gaps_df (DataFrame): DataFrame with gap data
+        driver_number (int): The driver number to extract data for
+        
+    Returns:
+        GapFact: Fact with gap information
+    """
+    # Filter data for the specific driver
+    driver_data = gaps_df[gaps_df['DriverNumber'] == driver_number]
+    
+    if driver_data.empty:
+        print(f"Warning: No gap data found for driver {driver_number}")
+        return None
+    
+    # Get the most recent gap data
+    latest_data = driver_data.iloc[-1]
+    
+    # Create the gap fact with available information
+    gap_fact = GapFact(
+        driver_number=int(driver_number),
+        # Gap to car ahead (if available)
+        gap_ahead=float(latest_data.get('GapToCarAhead', 0.0)),
+        # Gap to car behind (if available)
+        gap_behind=float(latest_data.get('GapToCarBehind', 0.0)),
+        # Car numbers (if available)
+        car_ahead=int(latest_data.get('CarAheadNumber', 0)) if not pd.isna(latest_data.get('CarAheadNumber', 0)) else None,
+        car_behind=int(latest_data.get('CarBehindNumber', 0)) if not pd.isna(latest_data.get('CarBehindNumber', 0)) else None,
+        # Trend data (if available)
+        gap_ahead_trend=float(latest_data.get('GapToCarAheadTrend', 0.0)),
+        gap_behind_trend=float(latest_data.get('GapToCarBehindTrend', 0.0)),
+        # Undercut and DRS windows
+        in_undercut_window=bool(latest_data.get('InUndercutWindow', False)),
+        in_drs_window=bool(latest_data.get('InDRSWindow', False))
+    )
+    
+    return gap_fact
+
+
+def load_gap_data(race_session, window_size=3):
+    """
+    Load and process gap data from FastF1 session.
+    
+    Args:
+        race_session: FastF1 session object with loaded data
+        window_size (int): Number of laps to calculate trend over
+        
+    Returns:
+        DataFrame: Processed gap data with relevant metrics
+    """
+    # Make sure we have the necessary data
+    if not hasattr(race_session, 'laps'):
+        print("Error: Session does not have lap data loaded")
+        return pd.DataFrame()
+    
+    # Get all laps data
+    laps_df = race_session.laps
+    
+    # Initialize our result dataframe
+    gaps_data = []
+    
+    # Get unique drivers
+    drivers = laps_df['DriverNumber'].unique()
+    
+    # Process each lap for each driver
+    for lap_number in sorted(laps_df['LapNumber'].unique()):
+        # Get this lap's data for all drivers
+        lap_data = laps_df[laps_df['LapNumber'] == lap_number]
+        
+        # Sort by position to find cars ahead and behind
+        lap_data = lap_data.sort_values('Position')
+        
+        # For each driver, calculate gaps to cars ahead and behind
+        for i, driver_lap in lap_data.iterrows():
+            driver_number = driver_lap['DriverNumber']
+            position = driver_lap['Position']
+            
+            # Find car ahead
+            car_ahead_data = lap_data[lap_data['Position'] == position - 1]
+            car_behind_data = lap_data[lap_data['Position'] == position + 1]
+            
+            # Calculate gaps
+            gap_to_car_ahead = None
+            car_ahead_number = None
+            if not car_ahead_data.empty:
+                car_ahead_number = car_ahead_data.iloc[0]['DriverNumber']
+                # Calculate gap using time difference
+                # This is simplified - in real code you might need more complex calculation
+                gap_to_car_ahead = driver_lap['LapTime'] - car_ahead_data.iloc[0]['LapTime']
+            
+            gap_to_car_behind = None
+            car_behind_number = None
+            if not car_behind_data.empty:
+                car_behind_number = car_behind_data.iloc[0]['DriverNumber']
+                # Similar calculation for car behind
+                gap_to_car_behind = car_behind_data.iloc[0]['LapTime'] - driver_lap['LapTime']
+            
+            # Store this data point
+            gaps_data.append({
+                'DriverNumber': driver_number,
+                'LapNumber': lap_number,
+                'Position': position,
+                'CarAheadNumber': car_ahead_number,
+                'CarBehindNumber': car_behind_number,
+                'GapToCarAhead': gap_to_car_ahead,
+                'GapToCarBehind': gap_to_car_behind,
+                'InUndercutWindow': gap_to_car_ahead is not None and gap_to_car_ahead < 1.5,
+                'InDRSWindow': gap_to_car_ahead is not None and gap_to_car_ahead < 1.0
+            })
+    
+    # Convert to DataFrame
+    gaps_df = pd.DataFrame(gaps_data)
+    
+    # Calculate trends over the specified window
+    if not gaps_df.empty:
+        # Group by driver
+        for driver in drivers:
+            driver_data = gaps_df[gaps_df['DriverNumber'] == driver].sort_values('LapNumber')
+            
+            # Calculate rolling difference for gap ahead
+            if 'GapToCarAhead' in driver_data.columns:
+                gaps_df.loc[driver_data.index, 'GapToCarAheadTrend'] = \
+                    driver_data['GapToCarAhead'].diff(periods=window_size)
+            
+            # Calculate rolling difference for gap behind
+            if 'GapToCarBehind' in driver_data.columns:
+                gaps_df.loc[driver_data.index, 'GapToCarBehindTrend'] = \
+                    driver_data['GapToCarBehind'].diff(periods=window_size)
+    
+    return gaps_df
 
 
 # ---
