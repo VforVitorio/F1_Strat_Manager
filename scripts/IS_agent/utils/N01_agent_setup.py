@@ -22,7 +22,7 @@
 
 # ---
 
-# ## What are Expert Systems? 
+# ## What are Expert Systems?
 #
 # An expert system is formed by 3 key components:
 #
@@ -41,7 +41,7 @@
 #
 # Experta´s core is RETE algorithm, designed in 1982 by Charles L.Forgy. This algorithm is crucal for knowing what Experta is doing and also knowing why it is efficient:
 #
-# - Its **function** is to optimize the coincidence of patterns between facts and rules. 
+# - Its **function** is to optimize the coincidence of patterns between facts and rules.
 #
 # - It builds a node network that represent patterns. Then, it avoids reevaluating all the rules when the facts change.
 #
@@ -62,7 +62,7 @@
 
 # ## Declarative vs Imperative Programming
 #
-# Experta is a **Declarative Programming paradigm**, in contrast with traditional programming. Instead of defining HOW to make something step by step, Declarative Programming specifies WHICH conditions need to be acomplished. In Experta, the developer defines rules declaratively and the motor is the one that says when and how are they going to be applied. 
+# Experta is a **Declarative Programming paradigm**, in contrast with traditional programming. Instead of defining HOW to make something step by step, Declarative Programming specifies WHICH conditions need to be acomplished. In Experta, the developer defines rules declaratively and the motor is the one that says when and how are they going to be applied.
 
 # ---
 
@@ -136,6 +136,8 @@
 
 # ## 1. Import the Libraries
 
+import tempfile
+from experta import Fact, Field, KnowledgeEngine
 import sys
 import os
 import pandas as pd
@@ -154,12 +156,10 @@ sys.path.append(os.path.abspath('../'))
 
 # ---
 
-from experta import Fact, Field, KnowledgeEngine
-
 
 # Field object takes 5 possible arguments:
 #
-# 1. Datatype(mandatory) specifies the expected data type. 
+# 1. Datatype(mandatory) specifies the expected data type.
 # 2. Default(optional) specifies a default value if none is given.
 # 3. Mandatory(optional) is a boolean to put if the Field is mandatory.
 # 4. Optional, contrary to Mandaroty.
@@ -171,11 +171,13 @@ class TelemetryFact(Fact):
     """
     Facts about car telemetry and performance
     """
-    lap_time = Field(float, mandatory= False)           # Current lap time
-    predicted_lap_time = Field(float, mandatory=False)  # Predicted lap time by the model
-    tire_age = Field(int, mandatory=False)              # Age of the current tire set in laps
+    lap_time = Field(float, mandatory=False)           # Current lap time
+    # Predicted lap time by the model
+    predicted_lap_time = Field(float, mandatory=False)
+    # Age of the current tire set in laps
+    tire_age = Field(int, mandatory=False)
     compound_id = Field(int, mandatory=False)           # Tire type with ID
-    position = Field(int, mandatory= False)             # Current race position
+    position = Field(int, mandatory=False)             # Current race position
     driver_number = Field(int, mandatory=False)         # Driver number
 
 
@@ -185,10 +187,14 @@ class DegradationFact(Fact):
     """
     Facts about tire degradation including future predictions
     """
-    degradation_rate = Field(float, mandatory=False)           # Current seconds lost per lap
-    previous_rates = Field(list, mandatory=False)              # Historical degradation rates
-    fuel_adjusted_deg_percent = Field(float, mandatory=False)  # Percentage degradation adjusted for fuel
-    predicted_rates = Field(list, mandatory=False)             # Array of predicted future degradation rates
+    degradation_rate = Field(
+        float, mandatory=False)           # Current seconds lost per lap
+    # Historical degradation rates
+    previous_rates = Field(list, mandatory=False)
+    # Percentage degradation adjusted for fuel
+    fuel_adjusted_deg_percent = Field(float, mandatory=False)
+    # Array of predicted future degradation rates
+    predicted_rates = Field(list, mandatory=False)
 
 
 # ### 2.3 Gap Facts
@@ -197,15 +203,24 @@ class GapFact(Fact):
     """
     Facts about gaps to other cars
     """
-    driver_number = Field(int, mandatory=True)          # Driver this gap data is for
-    gap_ahead = Field(float, mandatory=False)           # Time to car ahead (seconds)
-    gap_behind = Field(float, mandatory=False)          # Time to car behind (seconds)
-    gap_ahead_trend = Field(float, mandatory=False)     # Change in gap ahead over last laps
-    gap_behind_trend = Field(float, mandatory=False)    # Change in gap behind over last laps
-    car_ahead = Field(int, mandatory=False)             # Driver number of car ahead
-    car_behind = Field(int, mandatory=False)            # Driver number of car behind
-    in_undercut_window = Field(bool, mandatory=False)   # Whether in undercut window (gap < 1.5s)
-    in_drs_window = Field(bool, mandatory=False)        # Whether in DRS window (gap < 1.0s)
+    driver_number = Field(
+        int, mandatory=True)          # Driver this gap data is for
+    # Time to car ahead (seconds)
+    gap_ahead = Field(float, mandatory=False)
+    # Time to car behind (seconds)
+    gap_behind = Field(float, mandatory=False)
+    # Change in gap ahead over last laps
+    gap_ahead_trend = Field(float, mandatory=False)
+    # Change in gap behind over last laps
+    gap_behind_trend = Field(float, mandatory=False)
+    # Driver number of car ahead
+    car_ahead = Field(int, mandatory=False)
+    # Driver number of car behind
+    car_behind = Field(int, mandatory=False)
+    # Whether in undercut window (gap < 1.5s)
+    in_undercut_window = Field(bool, mandatory=False)
+    # Whether in DRS window (gap < 1.0s)
+    in_drs_window = Field(bool, mandatory=False)
 
 
 # ### 2.4 Radio Facts
@@ -214,10 +229,11 @@ class RadioFact(Fact):
     """
     Facts from radio communications analysis
     """
-    sentiment = Field(str, mandatory= False)  # positive, negative, neutral
-    intent = Field(str, mandatory= False)     # WARNING, QUESTION, etc.
-    entities = Field(dict, mandatory= False)  # Detected entities categorized (SITUATION, INCIDENT, PIT_CALL, etc)
-    timestamp = Field(float, mandatory= False)# When the message was received
+    sentiment = Field(str, mandatory=False)  # positive, negative, neutral
+    intent = Field(str, mandatory=False)     # WARNING, QUESTION, etc.
+    # Detected entities categorized (SITUATION, INCIDENT, PIT_CALL, etc)
+    entities = Field(dict, mandatory=False)
+    timestamp = Field(float, mandatory=False)  # When the message was received
 
 
 # ### 2.5 Race Status
@@ -226,11 +242,11 @@ class RaceStatusFact(Fact):
     """
     Facts about current race status
     """
-    lap = Field(int, mandatory= True)               # Current lap
-    total_laps = Field(int, mandatory= True)        # Total race laps
-    race_phase = Field(str, mandatory= False)       # start, mid, end
-    track_status = Field(str, mandatory= False)     # clear, yellow, safety car, red flag
-    
+    lap = Field(int, mandatory=True)               # Current lap
+    total_laps = Field(int, mandatory=True)        # Total race laps
+    race_phase = Field(str, mandatory=False)       # start, mid, end
+    # clear, yellow, safety car, red flag
+    track_status = Field(str, mandatory=False)
 
 
 # ### 2.6 Strategy Recomendation
@@ -239,11 +255,16 @@ class StrategyRecommendation(Fact):
     """
     Reccommendation produced by the Expert System
     """
-    action = Field(str, mandatory= True)                        # Specific action to take
-    confidence = Field(float, mandatory= True)                  # Confidende level (0-1)
-    explanation = Field(str, mandatory= True)                   # Natural Language Explanation
-    priority = Field(int, mandatory= False, default = 0)        # Priority level (higher = more urgent)
-    lap_issued = Field(int, mandatory= True)                    # Lap when reccomendation was made
+    action = Field(
+        str, mandatory=True)                        # Specific action to take
+    # Confidende level (0-1)
+    confidence = Field(float, mandatory=True)
+    # Natural Language Explanation
+    explanation = Field(str, mandatory=True)
+    # Priority level (higher = more urgent)
+    priority = Field(int, mandatory=False, default=0)
+    # Lap when reccomendation was made
+    lap_issued = Field(int, mandatory=True)
 
 
 # ---
@@ -258,7 +279,7 @@ class F1StrategyEngine(KnowledgeEngine):
     def __init__(self):
         super().__init__()
         self.rules_fired = []  # Tracking the rules that have been activated
-    
+
     def get_recommendations(self):
         """
         Retrieve all current recommendations, sorted by priority and confidence
@@ -273,15 +294,15 @@ class F1StrategyEngine(KnowledgeEngine):
                         "confidence": fact["confidence"],
                         "explanation": fact["explanation"],
                         "priority": fact.get("priority", 0),
-                        "lap_issued" : fact["lap_issued"]
+                        "lap_issued": fact["lap_issued"]
                     }
                 )
         return sorted(
             recommendations,
-            key = lambda x: (x["priority"], x["confidence"]),
-            reverse= True
+            key=lambda x: (x["priority"], x["confidence"]),
+            reverse=True
         )
-    
+
     def record_rule_fired(self, rule_name):
         """
         Record when a rule is fired for explanation and debugging
@@ -292,7 +313,7 @@ class F1StrategyEngine(KnowledgeEngine):
             if isinstance(fact, RaceStatusFact):
                 current_lap = fact.get("lap")
                 break
-        
+
         self.rules_fired.append(
             {
                 "rule": rule_name,
@@ -315,46 +336,49 @@ class F1StrategyEngine(KnowledgeEngine):
 def transform_tire_predictions(predictions_df, driver_number):
     """
     Transform the output from predict_tire_degradation into facts for the rule engine.
-    
+
     Args:
         predictions_df (DataFrame): Output from predict_tire_degradation function
         driver_number (int): The driver number to extract data for
-        
+
     Returns:
         dict: Dictionary with facts to declare
     """
     # Filter data for the specific driver
-    driver_data = predictions_df[predictions_df['DriverNumber'] == driver_number]
-    
+    driver_data = predictions_df[predictions_df['DriverNumber']
+                                 == driver_number]
+
     if driver_data.empty:
         print(f"Warning: No prediction data found for driver {driver_number}")
         return None
-    
+
     # Get the most recent stint
     latest_stint = driver_data['Stint'].max()
     stint_data = driver_data[driver_data['Stint'] == latest_stint]
-    
+
     # Group predictions by current tire age (we want the most recent window)
     latest_age = stint_data['CurrentTyreAge'].max()
     latest_data = stint_data[stint_data['CurrentTyreAge'] == latest_age]
-    
+
     # Sort predictions by how far in the future they are
     future_data = latest_data.sort_values('LapsAheadPred')
-    
+
     # Extract future degradation rates
     predicted_rates = future_data['PredictedDegradationRate'].tolist()
-    
+
     # Get basic info about current state
     current_info = future_data.iloc[0]
-    
+
     # CORRECTION: Use the first predicted degradation rate as the current rate
     # instead of using 0.0 as a placeholder
     current_degradation_rate = predicted_rates[0] if predicted_rates else 0.0
-    print(f"Using first predicted rate as current degradation: {current_degradation_rate}")
-    
+    print(
+        f"Using first predicted rate as current degradation: {current_degradation_rate}")
+
     # Create degradation fact with current and predicted data
     degradation_fact = DegradationFact(
-        degradation_rate=current_degradation_rate,  # Now using the actual predicted rate
+        # Now using the actual predicted rate
+        degradation_rate=current_degradation_rate,
         predicted_rates=predicted_rates  # Array of future predictions
     )
 
@@ -366,11 +390,11 @@ def transform_tire_predictions(predictions_df, driver_number):
         # Add position if available
         position=int(current_info.get('Position', 0))
     )
-    
+
     # Add current lap time if available
     if 'CurrentLapTime' in current_info:
         telemetry_fact['lap_time'] = float(current_info['CurrentLapTime'])
-    
+
     return {
         'degradation': degradation_fact,
         'telemetry': telemetry_fact
@@ -380,21 +404,20 @@ def transform_tire_predictions(predictions_df, driver_number):
 def load_tire_predictions(race_data, models_path, compound_thresholds=None):
     """
     Load tire predictions from the prediction module.
-    
+
     Args:
         race_data (DataFrame): Race telemetry data
         models_path (str): Path to the directory containing model files
         compound_thresholds (dict): Dictionary mapping compound IDs to starting lap numbers
                                   (e.g., {1: 6, 2: 12, 3: 25})
-                                  
+
     Returns:
         DataFrame: Tire degradation predictions
     """
-   
-    
+
     # Import the module
     from ML_tyre_pred.ML_utils import N02_model_tire_predictions as tdp
-    
+
     # Default thresholds based on F1 knowledge if none provided
     if compound_thresholds is None:
         compound_thresholds = {
@@ -402,38 +425,38 @@ def load_tire_predictions(race_data, models_path, compound_thresholds=None):
             2: 12,  # Medium tires: monitor from lap 12 onwards
             3: 25   # Hard tires: monitor from lap 25 onwards
         }
-    
+
     # Get predictions
     predictions = tdp.predict_tire_degradation(
         race_data,
         models_path,
         compound_start_laps=compound_thresholds
     )
-    
-    return predictions
 
+    return predictions
 
 
 def get_current_degradation(telemetry_data, driver_number):
     """
     Extract current degradation rate from telemetry data.
-    
+
     Args:
         telemetry_data (DataFrame): Processed telemetry data with DegradationRate
         driver_number (int): Driver number to get data for
-        
+
     Returns:
         float: Current degradation rate or 0.0 if not available
     """
     # Filter for the specific driver
-    driver_data = telemetry_data[telemetry_data['DriverNumber'] == driver_number]
-    
+    driver_data = telemetry_data[telemetry_data['DriverNumber']
+                                 == driver_number]
+
     if driver_data.empty:
         return 0.0
-    
+
     # Get the most recent lap data
     latest_data = driver_data.sort_values('TyreAge', ascending=False).iloc[0]
-    
+
     # Return degradation rate if available
     return float(latest_data.get('DegradationRate', 0.0))
 
@@ -445,32 +468,35 @@ def get_current_degradation(telemetry_data, driver_number):
 def transform_lap_time_predictions(predictions_df, driver_number):
     """
     Transform the output from predict_lap_times into facts for the rule engine.
-    
+
     Args:
         predictions_df (DataFrame): Output from predict_lap_times function
         driver_number (int): The driver number to extract data for
-        
+
     Returns:
         dict: Dictionary with facts to declare
     """
     # Filter data for the specific driver
-    driver_data = predictions_df[predictions_df['DriverNumber'] == driver_number]
-    
+    driver_data = predictions_df[predictions_df['DriverNumber']
+                                 == driver_number]
+
     if driver_data.empty:
-        print(f"Warning: No lap time prediction data found for driver {driver_number}")
+        print(
+            f"Warning: No lap time prediction data found for driver {driver_number}")
         return None
-    
+
     # Get the most recent lap data
     latest_lap = driver_data.iloc[-1]
-    
+
     # Check if this is a next lap prediction (future prediction)
     is_future = latest_lap.get('IsNextLapPrediction', False)
-    
+
     # Create telemetry fact with current and predicted lap times
     telemetry_fact = TelemetryFact(
         driver_number=int(driver_number),
         # Current lap time if available
-        lap_time=float(latest_lap['LapTime']) if not pd.isna(latest_lap['LapTime']) else None,
+        lap_time=float(latest_lap['LapTime']) if not pd.isna(
+            latest_lap['LapTime']) else None,
         # Future lap time prediction
         predicted_lap_time=float(latest_lap['PredictedLapTime']),
         # Include other available telemetry data
@@ -478,38 +504,36 @@ def transform_lap_time_predictions(predictions_df, driver_number):
         tire_age=int(latest_lap.get('TyreAge', 0)),
         position=int(latest_lap.get('Position', 0))
     )
-    
+
     return {
         'telemetry': telemetry_fact
     }
 
 
-
 def load_lap_time_predictions(race_data, model_path=None):
     """
     Load lap time predictions from the prediction module.
-    
+
     Args:
         race_data (DataFrame): Race telemetry data
         model_path (str): Path to the model file
-        
+
     Returns:
         DataFrame: Lap time predictions
     """
-   
-    
+
     # Use a dynamic import to avoid issues if module structure changes
     try:
         # Try importing the module separately
         from ML_tyre_pred.ML_utils.N00_model_lap_prediction import predict_lap_times
-        
+
         # Get predictions
         predictions = predict_lap_times(
             race_data,
             model_path=model_path,
             include_next_lap=True
         )
-        
+
         return predictions
     except ImportError:
         print("Warning: Could not import lap prediction module.")
@@ -525,20 +549,20 @@ def load_lap_time_predictions(race_data, model_path=None):
 def transform_radio_analysis(radio_json_path):
     """
     Transform NLP radio analysis into facts.
-    
+
     Args:
         radio_json_path (str): Path to the JSON file containing radio analysis
-        
+
     Returns:
         RadioFact: Fact with radio analysis information
     """
     # Load the JSON file
     with open(radio_json_path, 'r') as file:
         radio_data = json.load(file)
-    
+
     # Extract the analysis section
     analysis = radio_data['analysis']
-    
+
     # Create the RadioFact
     return RadioFact(
         sentiment=analysis['sentiment'],
@@ -548,16 +572,14 @@ def transform_radio_analysis(radio_json_path):
     )
 
 
-
-
 def process_radio_message(message, is_audio=False):
     """
     Process a radio message (text or audio) and get its analysis.
-    
+
     Args:
         message (str): Text message or path to audio file
         is_audio (bool): Whether the input is an audio file
-        
+
     Returns:
         str: Path to the JSON file with the analysis
     """
@@ -565,10 +587,10 @@ def process_radio_message(message, is_audio=False):
     import sys
     import os
     sys.path.append(os.path.abspath('../'))
-    
+
     try:
         from NLP_radio_processing.NLP_utils import N06_model_merging as radio_nlp
-        
+
         # If it's audio, first transcribe it
         if is_audio:
             print(f"Transcribing audio from: {message}")
@@ -576,13 +598,13 @@ def process_radio_message(message, is_audio=False):
             print(f"Transcription: '{message_text}'")
         else:
             message_text = message
-        
+
         # Analyze the message
         print(f"Analyzing message: '{message_text}'")
         json_path = radio_nlp.analyze_radio_message(message_text)
-        
+
         return json_path
-    
+
     except ImportError:
         print("Error: Could not import NLP module. Make sure it's in the correct path.")
         return None
@@ -594,21 +616,21 @@ def process_radio_message(message, is_audio=False):
 def analyze_and_transform_radio(message, is_audio=False):
     """
     Complete function to process a radio message and transform it into a fact.
-    
+
     Args:
         message (str): Text message or path to audio file
         is_audio (bool): Whether the input is an audio file
-        
+
     Returns:
         RadioFact: Fact with structured radio analysis
     """
     # Step 1: Process the message
     json_path = process_radio_message(message, is_audio)
-    
+
     if json_path is None:
         print("Failed to process radio message.")
         return None
-    
+
     # Step 2: Transform the analysis into a fact
     return transform_radio_analysis(json_path)
 
@@ -620,24 +642,24 @@ def analyze_and_transform_radio(message, is_audio=False):
 def transform_gap_data(gaps_df, driver_number):
     """
     Transform gap data from FastF1 into facts for the rule engine.
-    
+
     Args:
         gaps_df (DataFrame): DataFrame with gap data
         driver_number (int): The driver number to extract data for
-        
+
     Returns:
         GapFact: Fact with gap information
     """
     # Filter data for the specific driver
     driver_data = gaps_df[gaps_df['DriverNumber'] == driver_number]
-    
+
     if driver_data.empty:
         print(f"Warning: No gap data found for driver {driver_number}")
         return None
-    
+
     # Get the most recent gap data
     latest_data = driver_data.iloc[-1]
-    
+
     # Create the gap fact with available information
     gap_fact = GapFact(
         driver_number=int(driver_number),
@@ -646,27 +668,26 @@ def transform_gap_data(gaps_df, driver_number):
         # Gap to car behind (if available)
         gap_behind=float(latest_data.get('GapToCarBehind', 0.0)),
         # Car numbers (if available)
-        car_ahead=int(latest_data.get('CarAheadNumber', 0)) if not pd.isna(latest_data.get('CarAheadNumber', 0)) else None,
-        car_behind=int(latest_data.get('CarBehindNumber', 0)) if not pd.isna(latest_data.get('CarBehindNumber', 0)) else None,
-        # Trend data (if available)
-        gap_ahead_trend=float(latest_data.get('GapToCarAheadTrend', 0.0)),
-        gap_behind_trend=float(latest_data.get('GapToCarBehindTrend', 0.0)),
+        car_ahead=int(latest_data.get('CarAheadNumber', 0)) if not pd.isna(
+            latest_data.get('CarAheadNumber', 0)) else None,
+        car_behind=int(latest_data.get('CarBehindNumber', 0)) if not pd.isna(
+            latest_data.get('CarBehindNumber', 0)) else None,
         # Undercut and DRS windows
         in_undercut_window=bool(latest_data.get('InUndercutWindow', False)),
         in_drs_window=bool(latest_data.get('InDRSWindow', False))
     )
-    
+
     return gap_fact
 
 
 def load_gap_data(race_session, window_size=3):
     """
     Load and process gap data from FastF1 session.
-    
+
     Args:
         race_session: FastF1 session object with loaded data
         window_size (int): Number of laps to calculate trend over
-        
+
     Returns:
         DataFrame: Processed gap data with relevant metrics
     """
@@ -674,33 +695,33 @@ def load_gap_data(race_session, window_size=3):
     if not hasattr(race_session, 'laps'):
         print("Error: Session does not have lap data loaded")
         return pd.DataFrame()
-    
+
     # Get all laps data
     laps_df = race_session.laps
-    
+
     # Initialize our result dataframe
     gaps_data = []
-    
+
     # Get unique drivers
     drivers = laps_df['DriverNumber'].unique()
-    
+
     # Process each lap for each driver
     for lap_number in sorted(laps_df['LapNumber'].unique()):
         # Get this lap's data for all drivers
         lap_data = laps_df[laps_df['LapNumber'] == lap_number]
-        
+
         # Sort by position to find cars ahead and behind
         lap_data = lap_data.sort_values('Position')
-        
+
         # For each driver, calculate gaps to cars ahead and behind
         for i, driver_lap in lap_data.iterrows():
             driver_number = driver_lap['DriverNumber']
             position = driver_lap['Position']
-            
+
             # Find car ahead
             car_ahead_data = lap_data[lap_data['Position'] == position - 1]
             car_behind_data = lap_data[lap_data['Position'] == position + 1]
-            
+
             # Calculate gaps
             gap_to_car_ahead = None
             car_ahead_number = None
@@ -708,15 +729,17 @@ def load_gap_data(race_session, window_size=3):
                 car_ahead_number = car_ahead_data.iloc[0]['DriverNumber']
                 # Calculate gap using time difference
                 # This is simplified - in real code you might need more complex calculation
-                gap_to_car_ahead = driver_lap['LapTime'] - car_ahead_data.iloc[0]['LapTime']
-            
+                gap_to_car_ahead = driver_lap['LapTime'] - \
+                    car_ahead_data.iloc[0]['LapTime']
+
             gap_to_car_behind = None
             car_behind_number = None
             if not car_behind_data.empty:
                 car_behind_number = car_behind_data.iloc[0]['DriverNumber']
                 # Similar calculation for car behind
-                gap_to_car_behind = car_behind_data.iloc[0]['LapTime'] - driver_lap['LapTime']
-            
+                gap_to_car_behind = car_behind_data.iloc[0]['LapTime'] - \
+                    driver_lap['LapTime']
+
             # Store this data point
             gaps_data.append({
                 'DriverNumber': driver_number,
@@ -729,26 +752,27 @@ def load_gap_data(race_session, window_size=3):
                 'InUndercutWindow': gap_to_car_ahead is not None and gap_to_car_ahead < 1.5,
                 'InDRSWindow': gap_to_car_ahead is not None and gap_to_car_ahead < 1.0
             })
-    
+
     # Convert to DataFrame
     gaps_df = pd.DataFrame(gaps_data)
-    
+
     # Calculate trends over the specified window
     if not gaps_df.empty:
         # Group by driver
         for driver in drivers:
-            driver_data = gaps_df[gaps_df['DriverNumber'] == driver].sort_values('LapNumber')
-            
+            driver_data = gaps_df[gaps_df['DriverNumber']
+                                  == driver].sort_values('LapNumber')
+
             # Calculate rolling difference for gap ahead
             if 'GapToCarAhead' in driver_data.columns:
                 gaps_df.loc[driver_data.index, 'GapToCarAheadTrend'] = \
                     driver_data['GapToCarAhead'].diff(periods=window_size)
-            
+
             # Calculate rolling difference for gap behind
             if 'GapToCarBehind' in driver_data.columns:
                 gaps_df.loc[driver_data.index, 'GapToCarBehindTrend'] = \
                     driver_data['GapToCarBehind'].diff(periods=window_size)
-    
+
     return gaps_df
 
 
@@ -776,7 +800,8 @@ engine = F1StrategyEngine()
 engine.reset()
 
 # Example declaring some initial facts
-engine.declare(RaceStatusFact(lap=1, total_laps=60, race_phase="start", track_status="clear"))
+engine.declare(RaceStatusFact(lap=1, total_laps=60,
+               race_phase="start", track_status="clear"))
 
 # Print the engine state to verify initialization
 print(f"Engine initialized with {len(engine.facts)} facts")
@@ -863,8 +888,6 @@ mock_radio_json = {
 }
 
 # Save mock JSON to temporary file for processing
-import tempfile
-import json
 with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
     json.dump(mock_radio_json, tmp)
     tmp_path = tmp.name
@@ -876,7 +899,6 @@ if radio_fact:
     print(f"Radio fact declared: {radio_fact}")
 else:
     print("Failed to create radio fact")
-
 
 
 # Final fact count
