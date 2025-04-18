@@ -639,16 +639,81 @@ def analyze_and_transform_radio(message, is_audio=False):
 
 # ## 4.4 Transforming gap data
 
-def transform_gap_data(gaps_df, driver_number):
+# ------------------------------------------------------------------------------------
+# PREPROCESSING FUNCTION: CALCULATE GAP CONSISTENCY
+# ------------------------------------------------------------------------------------
+def calculate_gap_consistency(gaps_df):
     """
-    Transform gap data from FastF1 into facts for the rule engine.
+    Calculate how many consecutive laps a driver has been in the same gap window.
+
+    This function adds two columns to the dataframe:
+    - consistent_gap_ahead_laps: Number of consecutive laps with gap_ahead in the same window
+    - consistent_gap_behind_laps: Number of consecutive laps with gap_behind in the same window
 
     Args:
         gaps_df (DataFrame): DataFrame with gap data
-        driver_number (int): The driver number to extract data for
 
     Returns:
-        GapFact: Fact with gap information
+        DataFrame: The same DataFrame with added consistency columns
+    """
+    print("Calculating gap consistency across laps...")
+
+    # Define the gap windows we care about
+    def get_ahead_window(gap):
+        if gap < 2.0:
+            return "undercut_window"
+        elif 2.0 <= gap < 3.5:
+            return "overcut_window"
+        else:
+            return "out_of_range"
+
+    def get_behind_window(gap):
+        if gap < 2.0:
+            return "defensive_window"
+        else:
+            return "safe_window"
+
+    # Add window classification columns
+    gaps_df['ahead_window'] = gaps_df['GapToCarAhead'].apply(get_ahead_window)
+    gaps_df['behind_window'] = gaps_df['GapToCarBehind'].apply(
+        get_behind_window)
+
+    # Initialize consistency columns
+    gaps_df['consistent_gap_ahead_laps'] = 1
+    gaps_df['consistent_gap_behind_laps'] = 1
+
+    # Process each driver separately
+    for driver in gaps_df['DriverNumber'].unique():
+        driver_data = gaps_df[gaps_df['DriverNumber']
+                              == driver].sort_values('LapNumber')
+
+        # Skip if less than 2 laps of data
+        if len(driver_data) < 2:
+            continue
+
+        # Process consistency of ahead gap
+        for i in range(1, len(driver_data)):
+            current_idx = driver_data.iloc[i].name
+            prev_idx = driver_data.iloc[i-1].name
+
+            if driver_data.iloc[i]['ahead_window'] == driver_data.iloc[i-1]['ahead_window']:
+                gaps_df.loc[current_idx, 'consistent_gap_ahead_laps'] = gaps_df.loc[prev_idx,
+                                                                                    'consistent_gap_ahead_laps'] + 1
+
+            if driver_data.iloc[i]['behind_window'] == driver_data.iloc[i-1]['behind_window']:
+                gaps_df.loc[current_idx, 'consistent_gap_behind_laps'] = gaps_df.loc[prev_idx,
+                                                                                     'consistent_gap_behind_laps'] + 1
+
+    print("Gap consistency calculation complete!")
+    return gaps_df
+
+
+# ------------------------------------------------------------------------------------
+# UPDATE THE TRANSFORM FUNCTION TO INCLUDE CONSISTENCY
+# ------------------------------------------------------------------------------------
+def transform_gap_data_with_consistency(gaps_df, driver_number):
+    """
+    Enhanced version of transform_gap_data that includes consistency metrics
     """
     # Filter data for the specific driver
     driver_data = gaps_df[gaps_df['DriverNumber'] == driver_number]
@@ -658,21 +723,52 @@ def transform_gap_data(gaps_df, driver_number):
         return None
 
     # Get the most recent gap data
-    latest_data = driver_data.iloc[-1]
+    latest_data = driver_data.sort_values('LapNumber', ascending=False).iloc[0]
 
-    # Create the gap fact with available information
+    # Handle car ahead number conversion safely
+    try:
+        car_ahead_val = latest_data.get('CarAheadNumber', 0)
+        # If it's "Leader" or another non-numeric string, use a placeholder value
+        if isinstance(car_ahead_val, str) and not car_ahead_val.isdigit():
+            car_ahead = -1  # Use -1 to represent the leader
+        else:
+            car_ahead = int(car_ahead_val) if not pd.isna(
+                car_ahead_val) else -1
+    except (ValueError, TypeError):
+        print(
+            f"Warning: Could not convert CarAheadNumber '{car_ahead_val}' to int. Using -1.")
+        car_ahead = -1
+
+    # Handle car behind number conversion safely
+    try:
+        car_behind_val = latest_data.get('CarBehindNumber', 0)
+        # If it's "Tail" or another non-numeric string, use a placeholder value
+        if isinstance(car_behind_val, str) and not car_behind_val.isdigit():
+            car_behind = -2  # Use -2 to represent the tail
+        else:
+            car_behind = int(car_behind_val) if not pd.isna(
+                car_behind_val) else -2
+    except (ValueError, TypeError):
+        print(
+            f"Warning: Could not convert CarBehindNumber '{car_behind_val}' to int. Using -2.")
+        car_behind = -2
+
+    # Check if consistency columns exist, if not, we need to calculate them
+    if 'consistent_gap_ahead_laps' not in latest_data:
+        print("Warning: consistency metrics not found in data. Ensure calculate_gap_consistency was called.")
+
+    # Create gap fact with safe type conversions
     gap_fact = GapFact(
         driver_number=int(driver_number),
-        # Gap to car ahead (if available)
         gap_ahead=float(latest_data.get('GapToCarAhead', 0.0)),
-        # Gap to car behind (if available)
         gap_behind=float(latest_data.get('GapToCarBehind', 0.0)),
-        # Car numbers (if available)
-        car_ahead=int(latest_data.get('CarAheadNumber', 0)) if not pd.isna(
-            latest_data.get('CarAheadNumber', 0)) else None,
-        car_behind=int(latest_data.get('CarBehindNumber', 0)) if not pd.isna(
-            latest_data.get('CarBehindNumber', 0)) else None,
-        # Undercut and DRS windows
+        car_ahead=car_ahead,
+        car_behind=car_behind,
+        gap_to_leader=float(latest_data.get('GapToLeader', 0.0)),
+        consistent_gap_ahead_laps=int(
+            latest_data.get('consistent_gap_ahead_laps', 1)),
+        consistent_gap_behind_laps=int(
+            latest_data.get('consistent_gap_behind_laps', 1)),
         in_undercut_window=bool(latest_data.get('InUndercutWindow', False)),
         in_drs_window=bool(latest_data.get('InDRSWindow', False))
     )
