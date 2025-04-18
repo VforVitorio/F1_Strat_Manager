@@ -189,46 +189,6 @@ display(degradation_data.head())
 
 # ---
 
-# ### 2.3 Plotting degradation for sample drivers for putting thresholds
-
-# Plot degradation for a sample driver across race laps
-sample_driver = degradation_data['DriverNumber'].unique()[0]
-driver_data = degradation_data[degradation_data['DriverNumber']
-                               == sample_driver]
-
-# Visualize degradation with the correct thresholds and limited y-axis
-plt.figure(figsize=(12, 6))
-plt.plot(driver_data['RaceLap'],
-         driver_data['DegradationRate'], 'o-', linewidth=2)
-plt.axhline(y=0.3, color='r', linestyle='--',
-            label='High Degradation Threshold (0.3)')
-plt.axhline(y=0.15, color='g', linestyle='--',
-            label='Low Degradation Threshold (0.15)')
-
-# Mark stint changes
-stint_changes = []
-for i in range(1, len(driver_data)):
-    if driver_data.iloc[i]['Stint'] != driver_data.iloc[i-1]['Stint']:
-        stint_changes.append(driver_data.iloc[i]['RaceLap'])
-
-for lap in stint_changes:
-    plt.axvline(x=lap, color='k', linestyle='--',
-                label='Pit Stop' if 'Pit Stop' not in plt.gca().get_legend_handles_labels()[1] else "")
-
-# Stablish Y axis limits for not putting anything below -1 in the graphic. Important for seeing the real scale
-plt.ylim(bottom=-1)
-
-plt.xlabel('Race Lap')
-plt.ylabel('Degradation Rate (seconds/lap)')
-plt.title(f'Tire Degradation Profile for Driver {sample_driver}')
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-
-# ---
-
 # ## 3. Defining the Engine Class with all three degradation rules
 
 # ---
@@ -520,7 +480,46 @@ def test_with_real_data(race_data_path, models_path):
         'recommendations': recommendations,
         'engine': engine
     }
+ # ---
 
+
+def dergradation_plot():
+    # ### 2.3 Plotting degradation for sample drivers for putting thresholds
+
+    # Plot degradation for a sample driver across race laps
+    sample_driver = degradation_data['DriverNumber'].unique()[0]
+    driver_data = degradation_data[degradation_data['DriverNumber']
+                                   == sample_driver]
+
+    # Visualize degradation with the correct thresholds and limited y-axis
+    plt.figure(figsize=(12, 6))
+    plt.plot(driver_data['RaceLap'],
+             driver_data['DegradationRate'], 'o-', linewidth=2)
+    plt.axhline(y=0.3, color='r', linestyle='--',
+                label='High Degradation Threshold (0.3)')
+    plt.axhline(y=0.15, color='g', linestyle='--',
+                label='Low Degradation Threshold (0.15)')
+
+    # Mark stint changes
+    stint_changes = []
+    for i in range(1, len(driver_data)):
+        if driver_data.iloc[i]['Stint'] != driver_data.iloc[i-1]['Stint']:
+            stint_changes.append(driver_data.iloc[i]['RaceLap'])
+
+    for lap in stint_changes:
+        plt.axvline(x=lap, color='k', linestyle='--',
+                    label='Pit Stop' if 'Pit Stop' not in plt.gca().get_legend_handles_labels()[1] else "")
+
+    # Stablish Y axis limits for not putting anything below -1 in the graphic. Important for seeing the real scale
+    plt.ylim(bottom=-1)
+
+    plt.xlabel('Race Lap')
+    plt.ylabel('Degradation Rate (seconds/lap)')
+    plt.title(f'Tire Degradation Profile for Driver {sample_driver}')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 # race_data_path = '../../outputs/week3/lap_prediction_data.csv'
 # models_path = '../../outputs/week5/models'
@@ -529,6 +528,8 @@ def test_with_real_data(race_data_path, models_path):
 # ### 4.2 Testing with multiple drivers
 
 # Function to test multiple drivers
+
+
 def test_multiple_drivers(race_data_path, models_path, driver_numbers=None):
     """
     Test the rule engine with data from multiple drivers
