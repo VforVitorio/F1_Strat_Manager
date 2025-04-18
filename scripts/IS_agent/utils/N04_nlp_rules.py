@@ -85,7 +85,7 @@ class F1RadioRules(F1StrategyEngine):
         weather = entities.get('WEATHER', [])
         wet = [c for c in entities.get(
             'TRACK_CONDITION', []) if 'wet' in c.lower()]
-        weather_text = weather + wet or ['changing weather conditions']
+        weather_text = list(weather) + wet or ['changing weather conditions']
         self.declare(
             StrategyRecommendation(
                 action="prepare_rain_tires",
