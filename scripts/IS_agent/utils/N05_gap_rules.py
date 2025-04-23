@@ -45,48 +45,136 @@ def get_gap_at_lap_completion(driver, lap_number, laps_data):
 
 
 def calculate_all_gaps(laps_data):
+    """
+    Calculates the gaps for all drivers at the completion of each lap.
+
+    Args:
+        laps_data (DataFrame): Lap data from FastF1 or another source
+
+    Returns:
+        DataFrame: Processed gap data with all calculated metrics
+    """
     gap_results = []
-    drivers = laps_data['Driver'].unique()
-    lap_numbers = sorted(laps_data['LapNumber'].unique())
+
+    # Check if we need to use 'DriverNumber' instead of 'Driver'
+    driver_column = 'Driver' if 'Driver' in laps_data.columns else 'DriverNumber'
+
+    print(f"Using '{driver_column}' as driver identifier column")
+
+    # Get unique drivers and sorted lap numbers from the lap data
+    drivers = laps_data[driver_column].unique()
+    lap_numbers = sorted(laps_data['LapNumber'].unique(
+    )) if 'LapNumber' in laps_data.columns else sorted(laps_data['TyreAge'].unique())
+    lap_column = 'LapNumber' if 'LapNumber' in laps_data.columns else 'TyreAge'
+
     print(
-        f"Processing gaps for {len(drivers)} drivers across {len(lap_numbers)} laps...")
+        f"Processing gaps for {len(drivers)} drivers across {len(lap_numbers)} laps using '{lap_column}' column...")
+
+    # Function to get the gap at lap completion
+    def get_gap_at_lap_completion(driver_id, lap_num):
+        # Filter for specific driver and lap
+        driver_lap = laps_data[(laps_data[driver_column] == driver_id) & (
+            laps_data[lap_column] == lap_num)]
+        if driver_lap.empty:
+            return None
+
+        # Get reference time - either 'Time' column or calculated from 'LapTime'
+        if 'Time' in driver_lap.columns:
+            driver_finish_time = driver_lap.iloc[0]['Time']
+        elif 'LapTime' in driver_lap.columns:
+            # If we only have lap time, use that as a proxy
+            driver_finish_time = driver_lap.iloc[0]['LapTime']
+        else:
+            return None
+
+        # Get all laps at this lap number
+        lap_group = laps_data[laps_data[lap_column] == lap_num]
+
+        # Get minimum time for this lap (leader's time)
+        if 'Time' in lap_group.columns:
+            leader_time = lap_group['Time'].min()
+        elif 'LapTime' in lap_group.columns:
+            leader_time = lap_group['LapTime'].min()
+        else:
+            return None
+
+        # Calculate gap to leader
+        gap_to_leader = driver_finish_time - leader_time
+
+        # Handle timedelta objects if needed
+        if hasattr(gap_to_leader, 'total_seconds'):
+            gap_to_leader = gap_to_leader.total_seconds()
+
+        return gap_to_leader
+
+    # Process each lap
     for lap_num in lap_numbers:
         print(f"Processing lap {lap_num}...", end='\r')
+
+        # Dictionary to store gap to leader for each driver
         lap_positions = {}
+
+        # Calculate gap to leader for each driver
         for driver in drivers:
-            gap_to_leader = get_gap_at_lap_completion(
-                driver, lap_num, laps_data)
+            gap_to_leader = get_gap_at_lap_completion(driver, lap_num)
             if gap_to_leader is not None:
                 lap_positions[driver] = gap_to_leader
+
+        # Sort drivers by gap to leader
         sorted_drivers = sorted(lap_positions.items(), key=lambda x: x[1])
+
+        # For each driver, calculate additional gap metrics
         for i, (driver, gap_to_leader) in enumerate(sorted_drivers):
-            driver_info = laps_data[laps_data['Driver'] == driver].iloc[0]
-            driver_number = driver_info['DriverNumber']
+            # Get driver info (driver number and team)
+            driver_info = laps_data[laps_data[driver_column] == driver].iloc[0]
+
+            # Initialize default values
+            driver_number = driver
+            if driver_column == 'Driver' and 'DriverNumber' in driver_info:
+                driver_number = driver_info['DriverNumber']
+
+            # Initialize gap values
             gap_ahead = None
             car_ahead = None
             gap_behind = None
             car_behind = None
+            car_ahead_number = None
+            car_behind_number = None
+
+            # Calculate gap to car ahead
             if i > 0:
                 car_ahead = sorted_drivers[i-1][0]
                 gap_ahead = gap_to_leader - sorted_drivers[i-1][1]
-                car_ahead_info = laps_data[laps_data['Driver']
-                                           == car_ahead].iloc[0]
-                car_ahead_number = car_ahead_info['DriverNumber']
-            else:
-                car_ahead_number = None
+
+                # Get car ahead number
+                if car_ahead in laps_data[driver_column].values:
+                    car_ahead_info = laps_data[laps_data[driver_column]
+                                               == car_ahead].iloc[0]
+                    if driver_column == 'Driver' and 'DriverNumber' in car_ahead_info:
+                        car_ahead_number = car_ahead_info['DriverNumber']
+                    else:
+                        car_ahead_number = car_ahead
+
+            # Calculate gap to car behind
             if i < len(sorted_drivers) - 1:
                 car_behind = sorted_drivers[i+1][0]
                 gap_behind = sorted_drivers[i+1][1] - gap_to_leader
-                car_behind_info = laps_data[laps_data['Driver']
-                                            == car_behind].iloc[0]
-                car_behind_number = car_behind_info['DriverNumber']
-            else:
-                car_behind_number = None
+
+                # Get car behind number
+                if car_behind in laps_data[driver_column].values:
+                    car_behind_info = laps_data[laps_data[driver_column]
+                                                == car_behind].iloc[0]
+                    if driver_column == 'Driver' and 'DriverNumber' in car_behind_info:
+                        car_behind_number = car_behind_info['DriverNumber']
+                    else:
+                        car_behind_number = car_behind
+
+            # Create result entry
             gap_results.append({
                 'LapNumber': lap_num,
                 'Driver': driver,
                 'DriverNumber': driver_number,
-                'Position': i + 1,
+                'Position': i + 1,  # Position is 1-indexed
                 'GapToLeader': gap_to_leader,
                 'CarAhead': car_ahead,
                 'CarAheadNumber': car_ahead_number,
@@ -97,6 +185,7 @@ def calculate_all_gaps(laps_data):
                 'InUndercutWindow': gap_ahead is not None and gap_ahead < 2.5,
                 'InDRSWindow': gap_ahead is not None and gap_ahead < 1.0
             })
+
     print("\nProcessing complete!")
     return pd.DataFrame(gap_results)
 
