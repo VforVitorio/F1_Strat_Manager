@@ -28,6 +28,22 @@ import os
 # ---
 
 # ## 2. Loading the prediction model
+compound_colors = {
+    1: 'red',     # SOFT
+    2: 'yellow',  # MEDIUM
+    3: 'gray',    # HARD
+    4: 'green',   # INTERMEDIATE
+    5: 'blue'     # WET
+}
+
+# Compound names for better labels in the legend
+compound_names = {
+    1: 'SOFT',
+    2: 'MEDIUM',
+    3: 'HARD',
+    4: 'INTERMEDIATE',
+    5: 'WET'
+}
 
 
 def load_lap_prediction_model(model_path=None):

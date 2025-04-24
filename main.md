@@ -76,7 +76,7 @@
 
 ### **Mes 1 - Semana 1: Configuración Inicial y Extracción de Datos**
 
-- [x] Marcar como hecho
+- [X] Marcar como hecho
 
 - **Tareas** :
 
@@ -99,19 +99,19 @@
 
 ### **Mes 1 - Semana 2: Detección de Objetos con Visión por Computador**
 
-- [x] Marcar como hecho
+- [X] Marcar como hecho
 
 - **Tareas** :
 
-- [x] Descargado dataset
+- [X] Descargado dataset
 
 1. **Opción 1 (YOLOv8)** :
-   - [x] Entrenar YOLOv8-medium en dataset COCO para detectar coches (transfer learning). Finalmente, entrenado yolo medieum desde cero y buenos resultados.
-   - [x] Probar en fotogramas de vídeo estático.
-   - [x] Probar en vídeo dinámico.
-   - [x] Reducir recall y reentrenar.
+   - [X] Entrenar YOLOv8-medium en dataset COCO para detectar coches (transfer learning). Finalmente, entrenado yolo medieum desde cero y buenos resultados.
+   - [X] Probar en fotogramas de vídeo estático.
+   - [X] Probar en vídeo dinámico.
+   - [X] Reducir recall y reentrenar.
 2. **Cálculo de Gaps** :
-   - [x] Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
+   - [X] Usar `OpenCV` para estimar distancia entre bboxes (píxeles → metros con referencia de ancho de pista).
 
 - **Entregables** :
 - Script `object_detection.py` + ejemplos de detección en `outputs/week2`.
@@ -122,7 +122,7 @@
 
 ### **Mes 1 - Semana 3: Modelo Predictivo de Tiempos por Vuelta**
 
-- [x] **Tareas** :
+- [X] **Tareas** :
 
 1. **Opción 1 (XGBoost/LightGBM)** :
    - Entrenar modelo para predecir `LapTime` usando variables: `TyreCompound`, `TrackTemp`, `AirTemp`.
@@ -141,7 +141,7 @@
 
 ### **Mes 1 - Semana 4: Procesamiento de Radios con NLP (Adelantado de Semana 8)**
 
-- [x] [ ]
+- [X] [ ]
 
   **Objetivo** : Extraer información estratégica de las comunicaciones equipo-piloto para enriquecer las reglas lógicas del sistema.
 
@@ -166,7 +166,7 @@
 ### **Mes 2 - Semana 5: Modelo de Predicción y Degradación**
 
 - [X]
-- [x] **Tareas** :
+- [X] **Tareas** :
 
 1. **Opción 1 (LSTM)** :
    - Entrenar LSTM para predecir `TyreDegradation` secuencialmente (usar ventanas de 3 vueltas).
@@ -363,123 +363,21 @@ Ahora, con los modelos que ya has implementado, nuestras reglas deben basarse en
 
   **Asignatura** : _Procesamiento de Lenguaje_ .
 
-### **Mes 3: Integración y Refinamiento**
-
-- [ ]
-
-#### **Semana 9: API REST para Integración de Módulos**
-
-- **Tareas** :
-
-1. **Definir Endpoints** :
-   - `/predict_strategy` (input: vídeo + telemetría, output: recomendación).
-2. **Implementar con FastAPI** :
-   - Conectar modelos entrenados (cargar con `joblib` o `torch.load`).
-3. **Pruebas Locales** :
-   - Enviar request POST con datos de prueba y validar respuesta.
-
-- **Entregables** :
-- API funcional en `api/main.py`.
-- Colección Postman para pruebas.
-- **Asignatura** : _Todas (integración transversal)_ .
-
----
-
-#### **Semana 10: Modelo de Clasificación de Undercut/Overcut**
-
-- [ ]
-
-* **Tareas** :
-
-  Explorar método API openfq https://openf1.org/#intervals otra vez.
-
-* Crear features `gap_evolution_pre_pit` y `gap_evolution_post_pit` → implementar análisis SHAP para identificar umbrales críticos → desarrollar predictor de éxito basado en intervalos iniciales
-
-1. **Dataset Histórico** :
-   - Extraer casos de paradas y su resultado (ganancia/pérdida de posición).
-2. **Opción 1 (XGBoost)** :
-   - Entrenar clasificador binario (`undercut_exitoso`: sí/no).
-3. **Opción 2 (Red Neuronal)** :
-   - Implementar CNN 1D para tratar secuencias de laps pre-parada.
-
-- **Entregables** :
-- Script `undercut_classifier.py` + matriz de confusión.
-- Ejemplo: "En condiciones similares, el undercut tiene un 78% de éxito".
-- **Asignatura** : _Aprendizaje Automático Avanzado_ .
-
----
-
-#### **Semana 11: Sistema de Decisiones con Agentes Competitivos RL**
-
-- **Tareas**:
-
-  1. **Entorno Multiagente**:
-     - Crear dos agentes RL (ej: Tu equipo vs Red Bull) usando `Stable Baselines3`.
-  2. **Recompensas Competitivas**:
-     - Diseñar recompensas basadas en posición relativa (ej: +10 si adelantas, -5 si te adelantan).
-  3. **Teoría de Juegos**:
-     - Analizar equilibrios de Nash en estrategias simuladas.
-
-- **Entregables**:
-
-  - Script `rl_training.py` + video de simulación competitiva.
-  - Informe de equilibrios estratégicos en `docs/game_theory.md`.
-
-- **Asignatura**: _Sistemas Inteligentes (Unidad III - 3.3)_.
-
----
-
-#### Semana 12: Dashboard con Explicaciones Enriquecidas (Nuevas Tareas)
-
-**Objetivo** : Integrar las entidades detectadas por SpaCy en las explicaciones generadas.
-
-| **Tareas**                                        | **Herramientas/Detalles**                                                                                                                                            | **Entregables**                                  |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| **1. Vinculación Entidades-Recomendaciones**      | - Usar las entidades de SpaCy (ej: neumáticos detectados) para personalizar mensajes.``- Ejemplo:`"Parar en lap 22 (neumáticos HARD detectados en radio lap 20)"`.   | Lógica de vinculación en `dashboard_logic.py`.   |
-| **2. Visualización de Entidades en Dashboard**    | - Mostrar entidades clave en el panel de Streamlit usando tarjetas interactivas.                                                                                     | Componente `entities_viewer.py` en el dashboard. |
-| **3. Generación de Explicaciones con Plantillas** | - Crear plantillas Jinja2 que combinen predicciones ML + entidades SpaCy.``- Ejemplo:`"{{ driver }} debe parar en lap {{ lap }} ({{ entity }} detectado en radio)"`. | Plantillas en `templates/explanations.j2`.       |
-
-**Entregables Finales (Semana 12)** :
-
-- Dashboard con pestaña "Análisis de Radios" mostrando entidades y relaciones.
-- Sistema de explicaciones basado en entidades detectadas.
-
----
-
 ### **Relación con Asignaturas**
 
-| **Asignatura**                | **Componentes Añadidos**                                                                                          |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Asignatura**                | **Componentes Añadidos**                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Procesamiento de Lenguaje** | - Modelo SpaCy para entidades estratégicas.``- Integración de entidades en explicaciones.                         |
 | **Sistemas Inteligentes**     | - Uso de entidades para mejorar decisiones estratégicas (ej: priorizar paradas si se detecta "degradación alta"). |
 
 ---
 
-### **Riesgos y Mitigación**
-
-| **Riesgo**                                 | **Mitigación**                                                                      |
-| ------------------------------------------ | ----------------------------------------------------------------------------------- |
-| **Bajo rendimiento del modelo SpaCy**      | Usar el dataset sintético de GPT-4 para aumentar datos de entrenamiento.            |
-| **Falta de contexto en las explicaciones** | Combinar SpaCy con LLMs (GPT-3.5) para generar texto natural a partir de entidades. |
-
-#### **Semana 13: Testeo Integral y Optimización**
-
-- **Tareas** :
-
-1. **Validar con 2-3 Carreras** :
-   - Comparar predicciones vs. estrategias reales (ej: ¿qué hizo Red Bull en Hungría 2023?).
-2. **Optimizar Rendimiento** :
-   - Convertir modelos a ONNX para inferencia rápida.
-   - Perfilamiento con `cProfile` para identificar cuellos de botella.
-3. **Documentación Final** :
-   - Crear `README.md` con guía de instalación y ejemplos de uso.
-
-- **Entregables** :
-- Informe de testeo en `docs/testing_report.pdf`.
-- Repositorio GitHub organizado y documentado.
-- **Asignatura** : _Todas (integración transversal)_ .
-
 ---
+
+### **Mes 3: Integración y Refinamiento**
+
+<pre class="font-styrene border-border-100/50 overflow-x-scroll w-full rounded border-[0.5px] shadow-[0_2px_12px_hsl(var(--always-black)/5%)]"><table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888] whitespace-normal"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody>&]:odd:bg-bg-500/10"><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Semana</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Tareas</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Entregables</strong></th><th class="text-text-000 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] font-400 px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>Asignaturas Relacionadas</strong></th></tr></thead><tbody><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>10</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Integrar todos los módulos en un flujo único.``- Convertir notebooks a módulos de Python importables.``- Crear pipeline para recomendaciones completas.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Módulo `f1_strategy` con API para generar recomendaciones.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Todas</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>11-12</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Desarrollar dashboard interactivo en Streamlit.``- Integrar visualizaciones de todos los módulos.``- Crear paneles para análisis de degradación, gaps y decisiones estratégicas.``- Implementar selectores de carrera, piloto y condiciones.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Dashboard base funcional con visualización de datos y recomendaciones.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Sistemas Inteligentes, Procesamiento de Lenguaje</td></tr><tr class="[tbody>&]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]"><strong>13-14</strong></td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">- Incorporar LLM para explicación de estrategias.``- Implementar interfaz de chat similar a S12_lab.py.``- Capacidad para analizar el CSV de recomendaciones.``- Permitir preguntas sobre decisiones específicas.``- Añadir gráficos interactivos para tendencias de degradación y gaps.``- Testeo integral con datos de múltiples carreras.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Dashboard completo con chat inteligente + visualizaciones interactivas + análisis de datos históricos.</td><td class="border-t-border-100/50 [&:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&:not(:first-child)]:border-l-[0.5px]">Procesamiento de Lenguaje, Aprendizaje Automático</td></tr></tbody></table></pre>
+
 
 ### **Modularidad del Proyecto**
 
@@ -509,11 +407,8 @@ Ahora, con los modelos que ya has implementado, nuestras reglas deben basarse en
 
 ### **Sección Nueva: Adaptaciones para Sistemas Inteligentes**
 
-| **Semana** | **Cambio Clave**                            | **Herramientas**             | **Unidad Vinculada**         |
-| ---------- | ------------------------------------------- | ---------------------------- | ---------------------------- |
-| 4          | Agente lógico con Pyke/Experta              | Pyke, Experta                | IV (4.1 - Agentes Lógicos)   |
-| 7          | Búsqueda adversarial (alfa-beta + genético) | DEAP, NetworkX               | II (2.2 - Búsqueda Compleja) |
-| 11         | Agentes RL competitivos                     | Stable Baselines3, OpenSpiel | III (3.3 - Teoría de Juegos) |
-| 12         | Grafo de decisiones interactivo             | Graphviz, PyVis              | IV (4.2 - Razonamiento)      |
+| **Semana** | **Cambio Clave**          | **Herramientas** | **Unidad Vinculada**  |
+| ---------------- | ------------------------------- | ---------------------- | --------------------------- |
+| 4                | Agente lógico con Pyke/Experta | Pyke, Experta          | IV (4.1 - Agentes Lógicos) |
 
 ---

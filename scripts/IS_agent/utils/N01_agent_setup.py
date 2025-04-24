@@ -1,171 +1,15 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: nomarker
-#       format_version: '1.0'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: f1_strat_manager
-#     language: python
-#     name: python3
-# ---
-
-# # Experta: Theory Fundamentals of Production Systems and RETE Algorithm
-
-# ---
-
-# ## Introduction
-#
-# Experta is a Python library based on Production Systems, also known as Expert Systems or Rule-Based Systems, wich is a fundamental paradigm in simbolic AI.
-
-# ---
-
-# ## What are Expert Systems?
-#
-# An expert system is formed by 3 key components:
-#
-# 1. **Facts base**: it stores the factual knowledge of the system. That is, what the system knows in a specific moment.
-#
-# 2. **Rule Base**: contains the procedure knowledge as "if-then" rules.
-#
-# 3. **Inference motor**: motor that determines whether apply one rule or another and when to apply it.
-#
-# The central idea is no model the thinking as a rule chaining process, simillar at how human experts would take a decission applying their knowledge to a specific subject.
-#
-
-# ---
-
-# ## RETE Algorithm
-#
-# Experta´s core is RETE algorithm, designed in 1982 by Charles L.Forgy. This algorithm is crucal for knowing what Experta is doing and also knowing why it is efficient:
-#
-# - Its **function** is to optimize the coincidence of patterns between facts and rules.
-#
-# - It builds a node network that represent patterns. Then, it avoids reevaluating all the rules when the facts change.
-#
-# Therefore, RETE builds a "discrimination net" that acts as an efficient filter for determining which rules should be activated in response to changes made on the facts base.
-
-# ---
-
-# ## Experta´s execution cycle
-#
-# 1. **Match**: the motor identifies all the rules that can be activaded with the actual facts base.
-# 2. **Conflict Resolution**: if multiple rules coincide, the motor decides which one is executed first (using conflic resolution strategies).
-# 3. **Act**: it executes the action associated with the selected rule, that tipically modifies the facts base.
-# 4. **Cycle**: the process is repeated until there are no more rules to be activated.
-#
-# This cycle is knwon as "cycle recognize-act" or "production cycle".
-
-# ---
-
-# ## Declarative vs Imperative Programming
-#
-# Experta is a **Declarative Programming paradigm**, in contrast with traditional programming. Instead of defining HOW to make something step by step, Declarative Programming specifies WHICH conditions need to be acomplished. In Experta, the developer defines rules declaratively and the motor is the one that says when and how are they going to be applied.
-
-# ---
-
-# ## Relevance for F1 Strategy
-#
-# Experta´s selection for the F1 strategy problem is theoretically justified due to this 5 points:
-#
-# 1. **Codificable expert knowledge**: F1 strategies can be expressed naturally as conditional rules based on expert knowledge.
-# 2. **Incremental Reasoning**: during the race, information comes continously, such as radios, telemetry, track data or weather. RETE is efficient for updating conclussions based on new information.
-# 3. **Knowledge Explanation**: rules can be read and modified by humans, allowing adjusting strategies based on feedback.
-# 4. **Explainable Capacity**: unlike black box models like Neural Networks, a system based on rules can explain exactly which conditions made them make a decission.
-# 5. **Multiple Information Integration**: key for my project, as it brings me the capacity to merge structured information as data with semi-structured information like NLP radio analysis or my prediction models in the same logical framework.
-#
-# The implementation through Experta allows to capture strategic reasoning of F1 Teams, creating a system that emulates how they would take real-time decissions based on the actual avaliable information.
-
-# ---
-
-# ## Basic Example of Decision Making with an Expert System
-#
-# I will illustrate a simple case: deciding whether an F1 car should pit based on tire degradation and weather conditions.
-#
-# ### 1. Problem Definition
-# We have basic rules to decide on a pit stop:
-#
-# - If tire degradation is greater than 60%, recommend a pit stop.
-# - If it is raining and the car has dry tires, recommend a pit stop.
-# - If the degradation is moderate (30-60%) and the driver reports grip issues, recommend a pit stop.
-#
-# ### 2. Step-by-Step Process
-# Here is what happens when we run Experta:
-#
-# #### 2.1 Initialization:
-# - The rule engine `EstrategiaF1` is created.
-# - The method `reset()` is called to prepare the engine.
-#
-# #### 2.2 Declaration of Facts:
-# - We add that the tires have a degradation of 45% and are of the dry type.
-# - We add that it is not raining.
-# - We add that the driver reports grip issues.
-#
-# #### 2.3 Execution of the RETE Cycle:
-# - The engine calls `run()`, starting the inference cycle.
-# - RETE builds an activation network with the three defined rules.
-#
-# #### 2.4 Rule Evaluation:
-# - **First rule (very_degraded_tires):** DOES NOT MATCH because degradation = 45% (less than 60%).
-# - **Second rule (change_to_rain):** DOES NOT MATCH because raining = False.
-# - **Third rule (moderate_grip_problems):** MATCHES because:
-#   - degradation = 45% (is between 30% and 60%)
-#   - the message contains "problems" and "grip"
-#
-# #### Rule Activation:
-# - The rule `moderate_grip_problems` is activated.
-# - Its action is executed, declaring a new fact: **Recommendation**.
-#
-# #### New Evaluation Cycle:
-# - The engine evaluates whether there are new rules that match the newly added fact.
-# - In this case, no additional rules are activated.
-# - The engine terminates the execution.
-#
-# ### Final Result:
-# We obtain a recommendation:
-# - **Action recommended:** pit
-# - **Reason:** Grip issues reported with moderate degradation
-# - **Urgency:** medium
-#
-# This is the essence of how the expert system processes the rules: it continuously evaluates the available facts against the rule conditions and executes the corresponding actions when matches occur. The RETE algorithm makes this process efficient by avoiding the need to re-evaluate all rules for every fact.
-#
-
-# ---
-
-# ## 1. Import the Libraries
-
 import tempfile
-from experta import Fact, Field, KnowledgeEngine
 import sys
 import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import json
-# Import the tire prediction module
-import sys
-import os
+from experta import Fact, Field, KnowledgeEngine
+
 # Add parent directory to path if needed
 sys.path.append(os.path.abspath('../'))
 
-# ---
-
-# ## 2. Definition of Fact Classes
-
-# ---
-
-
-# Field object takes 5 possible arguments:
-#
-# 1. Datatype(mandatory) specifies the expected data type.
-# 2. Default(optional) specifies a default value if none is given.
-# 3. Mandatory(optional) is a boolean to put if the Field is mandatory.
-# 4. Optional, contrary to Mandaroty.
-# 5. Test (function) allows defininf a function to validate the value.
-
-# ### 2.1 Telemetry Facts
 
 class TelemetryFact(Fact):
     """
@@ -181,8 +25,6 @@ class TelemetryFact(Fact):
     driver_number = Field(int, mandatory=False)         # Driver number
 
 
-# ### 2.2 Degradation Facts
-
 class DegradationFact(Fact):
     """
     Facts about tire degradation including future predictions
@@ -196,8 +38,6 @@ class DegradationFact(Fact):
     # Array of predicted future degradation rates
     predicted_rates = Field(list, mandatory=False)
 
-
-# ### 2.3 Gap Facts
 
 class GapFact(Fact):
     """
@@ -223,8 +63,6 @@ class GapFact(Fact):
     in_drs_window = Field(bool, mandatory=False)
 
 
-# ### 2.4 Radio Facts
-
 class RadioFact(Fact):
     """
     Facts from radio communications analysis
@@ -236,8 +74,6 @@ class RadioFact(Fact):
     timestamp = Field(float, mandatory=False)  # When the message was received
 
 
-# ### 2.5 Race Status
-
 class RaceStatusFact(Fact):
     """
     Facts about current race status
@@ -248,8 +84,6 @@ class RaceStatusFact(Fact):
     # clear, yellow, safety car, red flag
     track_status = Field(str, mandatory=False)
 
-
-# ### 2.6 Strategy Recomendation
 
 class StrategyRecommendation(Fact):
     """
@@ -266,10 +100,6 @@ class StrategyRecommendation(Fact):
     # Lap when reccomendation was made
     lap_issued = Field(int, mandatory=True)
 
-
-# ---
-
-# ## 3. Engine Definition with Rule Documentation
 
 class F1StrategyEngine(KnowledgeEngine):
     """
@@ -322,16 +152,6 @@ class F1StrategyEngine(KnowledgeEngine):
             }
         )
 
-
-# ---
-
-# ## 4. Data Transformation Functions
-
-# ### 4.1 Transforming tire predictions
-
-# ---
-
-# Reemplaza completamente la función transform_tire_predictions en utils/N01_agent_setup.py
 
 def transform_tire_predictions(predictions_df, driver_number):
     """
@@ -461,10 +281,6 @@ def get_current_degradation(telemetry_data, driver_number):
     return float(latest_data.get('DegradationRate', 0.0))
 
 
-# ---
-
-# ### 4.2 Transforming Lap Times predictions
-
 def transform_lap_time_predictions(predictions_df, driver_number):
     """
     Transform the output from predict_lap_times into facts for the rule engine.
@@ -543,8 +359,6 @@ def load_lap_time_predictions(race_data, model_path=None):
         print(f"Error predicting lap times: {str(e)}")
         return None
 
-
-# ### 4.3 Transforming Radio Analysis
 
 def transform_radio_analysis(radio_json_path):
     """
@@ -635,13 +449,6 @@ def analyze_and_transform_radio(message, is_audio=False):
     return transform_radio_analysis(json_path)
 
 
-# ---
-
-# ## 4.4 Transforming gap data
-
-# ------------------------------------------------------------------------------------
-# PREPROCESSING FUNCTION: CALCULATE GAP CONSISTENCY
-# ------------------------------------------------------------------------------------
 def calculate_gap_consistency(gaps_df):
     """
     Calculate how many consecutive laps a driver has been in the same gap window.
@@ -708,12 +515,16 @@ def calculate_gap_consistency(gaps_df):
     return gaps_df
 
 
-# ------------------------------------------------------------------------------------
-# UPDATE THE TRANSFORM FUNCTION TO INCLUDE CONSISTENCY
-# ------------------------------------------------------------------------------------
 def transform_gap_data_with_consistency(gaps_df, driver_number):
     """
     Enhanced version of transform_gap_data that includes consistency metrics
+
+    Args:
+        gaps_df (DataFrame): DataFrame with gap data including consistency columns
+        driver_number (int): The driver number to extract data for
+
+    Returns:
+        GapFact: Fact with enhanced gap information
     """
     # Filter data for the specific driver
     driver_data = gaps_df[gaps_df['DriverNumber'] == driver_number]
@@ -872,10 +683,6 @@ def load_gap_data(race_session, window_size=3):
     return gaps_df
 
 
-# ---
-
-# ## 5. Calculating Race Phase
-
 def calculate_race_phase(current_lap, total_laps):
     """Calculate the current phase of the race."""
     percentage = (current_lap / total_laps) * 100
@@ -887,169 +694,117 @@ def calculate_race_phase(current_lap, total_laps):
         return "mid"
 
 
-# ---
+if __name__ == "__main__":
+    # Create an engine instance
+    engine = F1StrategyEngine()
+    engine.reset()
 
-# ## 6. Basic Engine Initialization Example
+    # Example declaring some initial facts
+    engine.declare(RaceStatusFact(lap=1, total_laps=60,
+                   race_phase="start", track_status="clear"))
 
-# Create an engine instance
-engine = F1StrategyEngine()
-engine.reset()
+    # Print the engine state to verify initialization
+    print(f"Engine initialized with {len(engine.facts)} facts")
+    facts_list = [f for f in engine.facts.values()]
+    print(f"Initial facts: {facts_list}")
 
-# Example declaring some initial facts
-engine.declare(RaceStatusFact(lap=1, total_laps=60,
-               race_phase="start", track_status="clear"))
+    # 1. TIRE DEGRADATION EXAMPLE
+    # --------------------------
+    print("\n=== TIRE DEGRADATION ANALYSIS ===")
 
-# Print the engine state to verify initialization
-print(f"Engine initialized with {len(engine.facts)} facts")
-facts_list = [f for f in engine.facts.values()]
-print(f"Initial facts: {facts_list}")
+    # Example of transforming model predictions into facts
+    mock_degradation_data = pd.DataFrame({
+        'DriverNumber': [44, 44, 44],  # Same driver
+        'Stint': [1, 1, 1],  # Same stint
+        'CurrentTyreAge': [4, 4, 4],  # Same current tire age
+        'LapsAheadPred': [1, 2, 3],  # Predictions for 1, 2, and 3 laps ahead
+        # Increasing degradation
+        'PredictedDegradationRate': [0.07, 0.09, 0.12],
+        'CompoundID': [2, 2, 2],  # Medium tires
+        'Position': [1, 1, 1],  # Position
+        'FuelAdjustedDegPercent': [5.0, 6.0, 7.0]  # Optional
+    })
 
-# 1. TIRE DEGRADATION EXAMPLE
-# --------------------------
-print("\n=== TIRE DEGRADATION ANALYSIS ===")
+    # Transform degradation data into facts
+    tire_facts = transform_tire_predictions(mock_degradation_data, 44)
+    if tire_facts:
+        engine.declare(tire_facts['degradation'])
+        engine.declare(tire_facts['telemetry'])
+        print(f"Tire facts declared: {tire_facts}")
+    else:
+        print("Failed to create tire facts")
 
-# Example of transforming model predictions into facts
-mock_degradation_data = pd.DataFrame({
-    'DriverNumber': [44, 44, 44],  # Same driver
-    'Stint': [1, 1, 1],  # Same stint
-    'CurrentTyreAge': [4, 4, 4],  # Same current tire age
-    'LapsAheadPred': [1, 2, 3],  # Predictions for 1, 2, and 3 laps ahead
-    'PredictedDegradationRate': [0.07, 0.09, 0.12],  # Increasing degradation
-    'CompoundID': [2, 2, 2],  # Medium tires
-    'Position': [1, 1, 1],  # Position
-    'FuelAdjustedDegPercent': [5.0, 6.0, 7.0]  # Optional
-})
+    # Count facts after tire data
+    print(f"Engine now has {len(engine.facts)} facts")
 
-# Transform degradation data into facts
-tire_facts = transform_tire_predictions(mock_degradation_data, 44)
-if tire_facts:
-    engine.declare(tire_facts['degradation'])
-    engine.declare(tire_facts['telemetry'])
-    print(f"Tire facts declared: {tire_facts}")
-else:
-    print("Failed to create tire facts")
+    # 2. LAP TIME PREDICTION EXAMPLE
+    # -----------------------------
+    print("\n=== LAP TIME PREDICTION ===")
 
-# Count facts after tire data
-print(f"Engine now has {len(engine.facts)} facts")
+    # Example lap time data
+    mock_lap_time_data = pd.DataFrame({
+        'DriverNumber': [44, 44],
+        'LapNumber': [3, 4],
+        'LapTime': [80.5, 80.3],
+        'PredictedLapTime': [80.1, 79.9],
+        'CompoundID': [2, 2],
+        'TyreAge': [3, 4],
+        'Position': [1, 1],
+        'IsNextLapPrediction': [False, False]
+    })
 
-# 2. LAP TIME PREDICTION EXAMPLE
-# -----------------------------
-print("\n=== LAP TIME PREDICTION ===")
+    # Transform lap time predictions into facts
+    lap_facts = transform_lap_time_predictions(mock_lap_time_data, 44)
+    if lap_facts:
+        engine.declare(lap_facts['telemetry'])
+        print(f"Lap time facts declared: {lap_facts}")
+    else:
+        print("Failed to create lap time facts")
 
-# Example lap time data
-mock_lap_time_data = pd.DataFrame({
-    'DriverNumber': [44, 44],
-    'LapNumber': [3, 4],
-    'LapTime': [80.5, 80.3],
-    'PredictedLapTime': [80.1, 79.9],
-    'CompoundID': [2, 2],
-    'TyreAge': [3, 4],
-    'Position': [1, 1],
-    'IsNextLapPrediction': [False, False]
-})
+    # Count facts after lap time data
+    print(f"Engine now has {len(engine.facts)} facts")
 
-# Transform lap time predictions into facts
-lap_facts = transform_lap_time_predictions(mock_lap_time_data, 44)
-if lap_facts:
-    engine.declare(lap_facts['telemetry'])
-    print(f"Lap time facts declared: {lap_facts}")
-else:
-    print("Failed to create lap time facts")
+    # 3. RADIO ANALYSIS EXAMPLE
+    # -----------------------
+    print("\n=== RADIO ANALYSIS ===")
 
-# Count facts after lap time data
-print(f"Engine now has {len(engine.facts)} facts")
-
-# 3. RADIO ANALYSIS EXAMPLE
-# -----------------------
-print("\n=== RADIO ANALYSIS ===")
-
-# Mock radio analysis result (simulating the JSON output)
-mock_radio_json = {
-    "message": "Box this lap for softs, there's rain expected in 10 minutes",
-    "analysis": {
-        "sentiment": "neutral",
-        "intent": "ORDER",
-        "entities": {
-            "ACTION": [],
-            "SITUATION": ["rain expected"],
-            "INCIDENT": [],
-            "STRATEGY_INSTRUCTION": [],
-            "POSITION_CHANGE": [],
-            "PIT_CALL": ["Box this lap"],
-            "TRACK_CONDITION": [],
-            "TECHNICAL_ISSUE": [],
-            "WEATHER": ["rain"]
+    # Mock radio analysis result (simulating the JSON output)
+    mock_radio_json = {
+        "message": "Box this lap for softs, there's rain expected in 10 minutes",
+        "analysis": {
+            "sentiment": "neutral",
+            "intent": "ORDER",
+            "entities": {
+                "ACTION": [],
+                "SITUATION": ["rain expected"],
+                "INCIDENT": [],
+                "STRATEGY_INSTRUCTION": [],
+                "POSITION_CHANGE": [],
+                "PIT_CALL": ["Box this lap"],
+                "TRACK_CONDITION": [],
+                "TECHNICAL_ISSUE": [],
+                "WEATHER": ["rain"]
+            }
         }
     }
-}
 
-# Save mock JSON to temporary file for processing
-with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
-    json.dump(mock_radio_json, tmp)
-    tmp_path = tmp.name
+    # Save mock JSON to temporary file for processing
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+        json.dump(mock_radio_json, tmp)
+        tmp_path = tmp.name
 
-# Transform radio analysis into fact
-radio_fact = transform_radio_analysis(tmp_path)
-if radio_fact:
-    engine.declare(radio_fact)
-    print(f"Radio fact declared: {radio_fact}")
-else:
-    print("Failed to create radio fact")
+    # Transform radio analysis into fact
+    radio_fact = transform_radio_analysis(tmp_path)
+    if radio_fact:
+        engine.declare(radio_fact)
+        print(f"Radio fact declared: {radio_fact}")
+    else:
+        print("Failed to create radio fact")
 
+    # Final fact count
+    print(f"Engine now has {len(engine.facts)} facts")
 
-# Final fact count
-print(f"Engine now has {len(engine.facts)} facts")
-
-# Display all facts in engine
-print("\n=== ALL ENGINE FACTS ===")
-for i, fact in enumerate(engine.facts.values()):
-    print(f"Fact {i+1}: {type(fact).__name__} - {fact}")
-
-# ## Summary and Next Steps
-#
-# ### What We've Accomplished
-#
-# In this notebook, we've established the foundation for our F1 Strategy Expert System:
-#
-# 1. **Theoretical Framework**: We've explored the fundamentals of production systems, the RETE algorithm, and why Experta is an excellent choice for modeling F1 strategy decisions.
-#
-# 2. **Data Structure**: We've defined fact classes that will store our knowledge:
-#    - `TelemetryFact`: For car performance data
-#    - `DegradationFact`: For tire wear information
-#    - `GapFact`: For tracking race positions
-#    - `RadioFact`: For communication analysis
-#    - `RaceStatusFact`: For race conditions
-#    - `StrategyRecommendation`: For system output
-#
-# 3. **Engine Setup**: We've created the `F1StrategyEngine` class that will manage rules and track recommendations.
-#
-# 4. **Data Transformation**: We've implemented functions to convert:
-#    - Tire degradation predictions into facts
-#    - Lap time predictions into facts
-#    - NLP radio analysis into facts
-#
-# 5. **Initial Testing**: We've verified our setup using mock data examples.
-#
-#
-
-# ---
-
-# ### Next Steps (Notebook N02)
-#
-# In the next notebook (``N02_degradation_time_rules.ipynb``), we will:
-#
-# 1. **Analyze Real Data**: Examine tire degradation patterns from actual races to determine appropriate thresholds for our rules.
-#
-# 2. **Implement Core Rules**: Create specific rules related to tire degradation:
-#    - High degradation rate pit stop recommendation
-#    - Stint extension for low degradation
-#    - Early warning for increasing degradation
-#    - Prediction-based degradation alerts
-#
-# 3. **Visualize Degradation**: Create plots to understand degradation patterns across race laps and different drivers.
-#
-# 4. **Test Rules**: Apply our rules to real race scenarios to validate their effectiveness.
-#
-# 5. **Integrate with Model Predictions**: Connect our tire degradation ML models with the rule engine.
-#
-# The next notebook will transform our general framework into a practical decision support system for F1 pit stop strategies based on tire performance.
+    # Display all facts in engine
+    print("\n=== ALL ENGINE FACTS ===")
+    for i, fact in enumerate(engine.facts.values()):
+        print(f"Fact {i+1}: {type(fact).__name__} - {fact}")
