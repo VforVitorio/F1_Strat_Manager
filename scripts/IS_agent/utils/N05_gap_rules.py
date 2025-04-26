@@ -22,9 +22,9 @@ import fastf1
 from experta import Rule, NOT, OR, AND, AS, MATCH, TEST, EXISTS
 from experta import DefFacts, Fact, Field, KnowledgeEngine
 
-sys.path.append(os.path.abspath('../'))
+import os
+os.makedirs('../../f1-strategy/f1_cache', exist_ok=True)
 fastf1.Cache.enable_cache('../../f1-strategy/f1_cache')
-
 
 plt.style.use('seaborn-v0_8-darkgrid')
 sns.set_context("notebook", font_scale=1.2)
@@ -649,7 +649,7 @@ def test_analyze_race_gaps(
         print("- Rules not matching current race conditions")
 
 
-def plot_driver_recommendations(driver_number, df=recommendations_df):
+def plot_driver_recommendations(driver_number, df):
     """
     Plots each recommendation for a single driver as a scatter plot of lap vs. action category.
     Pass the driver's number to generate their specific chart.
