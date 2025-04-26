@@ -1,44 +1,3 @@
-# ---
-# jupyter:
-#   jupytext:
-#     text_representation:
-#       extension: .py
-#       format_name: nomarker
-#       format_version: '1.0'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: f1_strat_manager
-#     language: python
-#     name: python3
-# ---
-
-# # Notebook 2: Tire Degradation Rules Implementation
-#
-# This notebook focuses on implementing the rule set related to tire degradation for our F1 Strategy Engine. These rules are crucial for race strategy as they determine when a car should pit based on tire performance analysis.
-#
-# ## Overview of Degradation Rules
-#
-# We'll implement three core rules:
-#
-# 1. **High Degradation Rate Pit Stop**
-#    - IF (DegradationRate > 0.15 AND TyreAge > 10)
-#    - THEN recommend priority pit stop
-#    - CONFIDENCE: 0.85
-#
-# 2. **Stint Extension for Low Degradation**
-#    - IF (DegradationRate < 0.08 AND TyreAge > 12 AND Position < 5)
-#    - THEN recommend extending current stint
-#    - CONFIDENCE: 0.75
-#
-# 3. **Early Degradation Warning**
-#    - IF (DegradationRate increases by more than 0.03 in 3 consecutive laps)
-#    - THEN recommend pit stop preparation
-#    - CONFIDENCE: 0.7
-#
-# Each rule handles specific aspects of tire degradation strategy that F1 teams consider during races.
-
-# ---
-
 # ## 1. Importing necessary Libraries
 
 # Import standard libraries
@@ -174,20 +133,118 @@ def load_degradation_data(file_path='../../outputs/week5/tire_degradation_fuel_a
     return df
 
 
-# Load the data
-degradation_data = load_degradation_data()
-
-# Display sample of the data
-print("Loaded degradation data:")
-display(degradation_data.head())
-
-
 # ---
 
 # ### 2.2 Chossing thresholds for degradation
 
 
 # ---
+
+
+# Encapsulate the degradation rate analysis into a function
+def analyze_degradation_rate(degradation_data):
+    """
+    Analyze the distribution of positive degradation rates to suggest high/low thresholds,
+    and plot the histogram with percentile lines.
+
+    Returns:
+        tuple(float, float): (high_degradation_threshold, low_degradation_threshold)
+    """
+    import matplotlib.pyplot as plt
+    from IPython.display import display
+
+    # Overall statistics
+    print("DegradationRate statistics:")
+    display(degradation_data['DegradationRate'].describe())
+
+    # Filter to positive values only
+    positive_deg = degradation_data[degradation_data['DegradationRate']
+                                    > 0]['DegradationRate']
+    print("\nStatistics for positive degradation values only:")
+    display(positive_deg.describe())
+
+    # Plot distribution
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.hist(positive_deg, bins=30, alpha=0.7)
+    q75 = positive_deg.quantile(0.75)
+    q25 = positive_deg.quantile(0.25)
+    ax.axvline(q75, linestyle='--', label=f'75th percentile: {q75:.3f}')
+    ax.axvline(q25, linestyle='--', label=f'25th percentile: {q25:.3f}')
+    ax.set_xlabel('Degradation Rate (seconds/lap)')
+    ax.set_ylabel('Frequency')
+    ax.set_title('Distribution of Positive Degradation Rates')
+    ax.legend()
+    fig.tight_layout()
+    plt.show()
+
+    # Compute suggested thresholds
+    high_degradation_threshold = q75
+    low_degradation_threshold = q25
+
+    print("\nSuggested thresholds based on data distribution:")
+    print(
+        f"High Degradation Threshold: {high_degradation_threshold:.3f} seconds/lap")
+    print(
+        f"Low Degradation Threshold: {low_degradation_threshold:.3f} seconds/lap")
+
+    return high_degradation_threshold, low_degradation_threshold
+
+
+# Encapsulate the driver degradation profile plot into a function
+def plot_driver_degradation_profile(degradation_data, driver_number=None,
+                                    high_threshold=0.3, low_threshold=0.15):
+    """
+    Plot degradation rate across race laps for a given driver, with thresholds and pit stops.
+
+    Args:
+        degradation_data (pd.DataFrame): must contain 'DriverNumber', 'RaceLap', 'DegradationRate', 'Stint'
+        driver_number (int, optional): specific driver to plot; if None, uses the first in the dataset
+        high_threshold (float): y-value for high degradation threshold line
+        low_threshold (float): y-value for low degradation threshold line
+
+    Returns:
+        matplotlib.figure.Figure: the created figure
+    """
+    import matplotlib.pyplot as plt
+
+    # Choose driver
+    if driver_number is None:
+        driver_number = degradation_data['DriverNumber'].unique()[0]
+    driver_df = degradation_data[degradation_data['DriverNumber']
+                                 == driver_number]
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(driver_df['RaceLap'], driver_df['DegradationRate'], 'o-', linewidth=2,
+            label=f'Driver {driver_number}')
+
+    # Add threshold lines
+    ax.axhline(y=high_threshold, linestyle='--',
+               label=f'High Degradation Threshold ({high_threshold})')
+    ax.axhline(y=low_threshold, linestyle='--',
+               label=f'Low Degradation Threshold ({low_threshold})')
+
+    # Mark pit stops (stint changes)
+    stint_changes = driver_df['RaceLap'][driver_df['Stint'].diff(
+    ) != 0].tolist()
+    for lap in stint_changes:
+        # Only label the first pit stop line
+        label = 'Pit Stop' if lap == stint_changes[0] else ""
+        ax.axvline(x=lap, linestyle='--', label=label)
+
+    # Limit y-axis bottom
+    ax.set_ylim(bottom=-1)
+
+    ax.set_xlabel('Race Lap')
+    ax.set_ylabel('Degradation Rate (seconds/lap)')
+    ax.set_title(f'Tire Degradation Profile for Driver {driver_number}')
+    ax.legend()
+    ax.grid(True)
+    fig.tight_layout()
+    plt.show()
+
+    return fig
+
 
 # ## 3. Defining the Engine Class with all three degradation rules
 
@@ -483,48 +540,6 @@ def test_with_real_data(race_data_path, models_path):
  # ---
 
 
-def dergradation_plot():
-    # ### 2.3 Plotting degradation for sample drivers for putting thresholds
-
-    # Plot degradation for a sample driver across race laps
-    sample_driver = degradation_data['DriverNumber'].unique()[0]
-    driver_data = degradation_data[degradation_data['DriverNumber']
-                                   == sample_driver]
-
-    # Visualize degradation with the correct thresholds and limited y-axis
-    plt.figure(figsize=(12, 6))
-    plt.plot(driver_data['RaceLap'],
-             driver_data['DegradationRate'], 'o-', linewidth=2)
-    plt.axhline(y=0.3, color='r', linestyle='--',
-                label='High Degradation Threshold (0.3)')
-    plt.axhline(y=0.15, color='g', linestyle='--',
-                label='Low Degradation Threshold (0.15)')
-
-    # Mark stint changes
-    stint_changes = []
-    for i in range(1, len(driver_data)):
-        if driver_data.iloc[i]['Stint'] != driver_data.iloc[i-1]['Stint']:
-            stint_changes.append(driver_data.iloc[i]['RaceLap'])
-
-    for lap in stint_changes:
-        plt.axvline(x=lap, color='k', linestyle='--',
-                    label='Pit Stop' if 'Pit Stop' not in plt.gca().get_legend_handles_labels()[1] else "")
-
-    # Stablish Y axis limits for not putting anything below -1 in the graphic. Important for seeing the real scale
-    plt.ylim(bottom=-1)
-
-    plt.xlabel('Race Lap')
-    plt.ylabel('Degradation Rate (seconds/lap)')
-    plt.title(f'Tire Degradation Profile for Driver {sample_driver}')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-# race_data_path = '../../outputs/week3/lap_prediction_data.csv'
-# models_path = '../../outputs/week5/models'
-# test_results = test_with_real_data(race_data_path, models_path)
-
 # ### 4.2 Testing with multiple drivers
 
 # Function to test multiple drivers
@@ -736,38 +751,12 @@ def test_multiple_drivers(race_data_path, models_path, driver_numbers=None):
 if __name__ == "main":
     # Analyze DegradationRate distribution to set appropriate thresholds
     print("DegradationRate statistics:")
-    display(degradation_data['DegradationRate'].describe())
+    # Load the data
+    degradation_data = load_degradation_data()
 
-    # Distribution of positive degradation values (actual degradation)
-    positive_deg = degradation_data[degradation_data['DegradationRate']
-                                    > 0]['DegradationRate']
-    print("\nStatistics for positive degradation values only:")
-    display(positive_deg.describe())
-
-    # Visualize the distribution
-    plt.figure(figsize=(10, 6))
-    plt.hist(positive_deg, bins=30, alpha=0.7)
-    plt.axvline(positive_deg.quantile(0.75), color='r', linestyle='--',
-                label=f'75th percentile: {positive_deg.quantile(0.75):.3f}')
-    plt.axvline(positive_deg.quantile(0.25), color='g', linestyle='--',
-                label=f'25th percentile: {positive_deg.quantile(0.25):.3f}')
-    plt.xlabel('Degradation Rate (seconds/lap)')
-    plt.ylabel('Frequency')
-    plt.title('Distribution of Positive Degradation Rates')
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-    # Suggested thresholds based on data percentiles
-    high_degradation_threshold = positive_deg.quantile(0.75)  # 75th percentile
-    low_degradation_threshold = positive_deg.quantile(0.25)   # 25th percentile
-
-    print(f"\nSuggested thresholds based on data distribution:")
-    print(
-        f"High Degradation Threshold: {high_degradation_threshold:.3f} seconds/lap")
-    print(
-        f"Low Degradation Threshold: {low_degradation_threshold:.3f} seconds/lap")
-
+    high_deg_thresh, low_deg_thresh = analyze_degradation_rate(
+        degradation_data)
+    driver_fig = plot_driver_degradation_profile(degradation_data)
     # Example usage
     race_data_path = '../../outputs/week3/lap_prediction_data.csv'
     models_path = '../../outputs/week5/models'

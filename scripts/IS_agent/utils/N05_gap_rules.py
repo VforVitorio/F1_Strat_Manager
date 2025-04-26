@@ -649,5 +649,144 @@ def test_analyze_race_gaps(
         print("- Rules not matching current race conditions")
 
 
+def plot_driver_recommendations(driver_number, df=recommendations_df):
+    """
+    Plots each recommendation for a single driver as a scatter plot of lap vs. action category.
+    Pass the driver's number to generate their specific chart.
+    """
+    # Filter for the selected driver
+    driver_df = df[df["DriverNumber"] == driver_number]
+    if driver_df.empty:
+        print(f"No recommendations found for driver #{driver_number}")
+        return
+
+    # Map actions to numeric positions
+    actions = driver_df["action"].unique()
+    action_to_y = {action: idx for idx, action in enumerate(actions)}
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Plot each action type
+    for action, y in action_to_y.items():
+        subset = driver_df[driver_df["action"] == action]
+        ax.scatter(subset["lap_issued"], [y] * len(subset),
+                   s=80, alpha=0.7, label=action)
+
+    # Highlight strategic windows
+    ax.axvspan(6, 26, alpha=0.1)
+    ax.axvspan(26, 48, alpha=0.1)
+
+    # Formatting
+    ax.set_xlabel("Lap Number")
+    ax.set_ylabel("Action")
+    ax.set_yticks(list(action_to_y.values()))
+    ax.set_yticklabels(list(action_to_y.keys()))
+    driver_name = driver_df["DriverName"].iloc[0]
+    ax.set_title(f"Recommendations for {driver_name} (#{driver_number})")
+    ax.legend(title="Action", bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.tight_layout()
+    plt.show()
+
+
+# Encapsulate the bar chart of recommendations per driver into a function
+def plot_recommendations_per_driver(recommendations_df):
+    """
+    Plot a horizontal bar chart showing total recommendations per driver.
+
+    Args:
+        recommendations_df (pd.DataFrame): must contain 'DriverNumber', 'DriverName'
+
+    Returns:
+        matplotlib.figure.Figure: the generated figure
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # Prepare counts by driver
+    driver_counts = (
+        recommendations_df
+        .groupby(['DriverNumber', 'DriverName'])
+        .size()
+        .reset_index(name='count')
+    )
+    driver_counts['DriverLabel'] = (
+        driver_counts['DriverNumber'].astype(
+            str) + ' - ' + driver_counts['DriverName']
+    )
+    driver_counts = driver_counts.sort_values('count', ascending=False)
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(12, 6))
+    sns.barplot(
+        x='count',
+        y='DriverLabel',
+        data=driver_counts,
+        palette='viridis',
+        ax=ax
+    )
+    ax.set_xlabel('Number of Recommendations')
+    ax.set_ylabel('Driver')
+    ax.set_title('Total Recommendations by Driver')
+    fig.tight_layout()
+
+    plt.show()
+    return fig
+
+
+# Encapsulate the distribution of recommendation types into a function
+def plot_recommendation_type_distribution(recommendations_df):
+    """
+    Plot the distribution of recommendation actions and print summary stats.
+
+    Args:
+        recommendations_df (pd.DataFrame): must contain 'action', 'DriverNumber', 'lap_issued'
+
+    Returns:
+        matplotlib.figure.Figure, dict: (figure, summary_stats)
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # Create the countplot for recommendation types
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.countplot(
+        y='action',
+        data=recommendations_df,
+        palette='viridis',
+        order=recommendations_df['action'].value_counts().index,
+        ax=ax
+    )
+    ax.set_xlabel('Count')
+    ax.set_ylabel('Recommendation Type')
+    ax.set_title('Distribution of Recommendation Types')
+    fig.tight_layout()
+    plt.show()
+
+    # Compute summary statistics
+    total_recs = len(recommendations_df)
+    unique_drivers = recommendations_df['DriverNumber'].nunique()
+    lap_min = recommendations_df['lap_issued'].min()
+    lap_max = recommendations_df['lap_issued'].max()
+
+    print(f"Total recommendations: {total_recs}")
+    print(f"Unique drivers with recommendations: {unique_drivers}")
+    print(f"Lap range: {lap_min} to {lap_max}")
+
+    summary_stats = {
+        'total_recommendations': total_recs,
+        'unique_drivers': unique_drivers,
+        'lap_range': (lap_min, lap_max)
+    }
+    return fig, summary_stats
+
+
 if __name__ == "__main__":
     test_analyze_race_gaps()
+    # Load the recommendations CSV
+    recommendations_path = "../../f1-strategy/data/processed/recommendations_spain_2023.csv"
+    recommendations_df = pd.read_csv(recommendations_path)
+    plot_driver_recommendations(81)  # For driver #81
+    fig_driver_recs = plot_recommendations_per_driver(recommendations_df)
+    fig_type_distribution, rec_summary = plot_recommendation_type_distribution(
+        recommendations_df)
