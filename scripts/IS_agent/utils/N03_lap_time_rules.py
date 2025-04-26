@@ -104,6 +104,131 @@ def load_lap_time_data(file_path='../../outputs/week3/lap_prediction_data.csv'):
     return df
 
 
+# Encapsulate the lap time difference analysis into a function
+def analyze_lap_time_differences(lap_time_data):
+    """
+    Analyze lap time differences to determine thresholds for performance cliff
+    and recovery opportunity, and plot the distribution.
+
+    Returns:
+        tuple(float, float): (performance_cliff_threshold, improvement_threshold)
+    """
+    import matplotlib.pyplot as plt
+
+    if 'LapTimeDifference' in lap_time_data.columns:
+        # Basic statistics
+        print("\nStatistics for lap time differences:")
+        print(lap_time_data['LapTimeDifference'].describe())
+
+        # Filter out extreme outliers
+        reasonable_diffs = lap_time_data[
+            (lap_time_data['LapTimeDifference'] > -3) &
+            (lap_time_data['LapTimeDifference'] < 3)
+        ]['LapTimeDifference']
+
+        # Plot histogram
+        plt.figure(figsize=(10, 6))
+        plt.hist(reasonable_diffs, bins=30, alpha=0.7)
+
+        # Percentile lines
+        p75 = reasonable_diffs.quantile(0.75)
+        p25 = reasonable_diffs.quantile(0.25)
+        plt.axvline(p75, linestyle='--', label=f'75th percentile: {p75:.3f}')
+        plt.axvline(p25, linestyle='--', label=f'25th percentile: {p25:.3f}')
+
+        # Fixed-rule thresholds
+        plt.axvline(0.7, linestyle='-.',
+                    label='Performance cliff threshold: 0.7')
+        plt.axvline(-0.5, linestyle='-.',
+                    label='Recovery opportunity threshold: -0.5')
+
+        plt.xlabel('Lap Time Difference (seconds)')
+        plt.ylabel('Frequency')
+        plt.title('Distribution of Lap Time Differences')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        # Compute suggested thresholds
+        performance_cliff_threshold = reasonable_diffs.quantile(0.85)
+        improvement_threshold = reasonable_diffs.quantile(0.15)
+
+        print("\nSuggested thresholds based on data distribution:")
+        print(
+            f"Performance Cliff Threshold: {performance_cliff_threshold:.3f} seconds")
+        print(
+            f"Significant Improvement Threshold: {improvement_threshold:.3f} seconds")
+        print("\nFor our rules, we'll use:")
+        print("- 0.7s for performance cliff (worse by 0.7s or more)")
+        print("- -0.5s for recovery opportunity (better by 0.5s or more)")
+
+        return performance_cliff_threshold, improvement_threshold
+    else:
+        print("LapTimeDifference column not available in the data.")
+        return None, None
+
+
+# Encapsulate the tyre-age vs lap-time analysis into a function
+def analyze_tyre_age_vs_lap_time(lap_time_data, sample_n=3):
+    """
+    Plot average lap time vs tyre age for the first `sample_n` drivers
+    and print recommended tyre-age thresholds.
+
+    Args:
+        lap_time_data (pd.DataFrame): must contain 'TyreAge', 'LapTime', 'DriverNumber'
+        sample_n (int): number of distinct drivers to sample for the plot
+
+    Returns:
+        matplotlib.figure.Figure, dict: (figure, thresholds)
+    """
+    import matplotlib.pyplot as plt
+
+    # Verify required columns
+    if not {'TyreAge', 'LapTime', 'DriverNumber'}.issubset(lap_time_data.columns):
+        print("TyreAge, LapTime, or DriverNumber columns not available in the data.")
+        return None, {}
+
+    # Select sample drivers
+    drivers = sorted(lap_time_data['DriverNumber'].unique())[:sample_n]
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot each driver’s average lap time by tyre age
+    for driver in drivers:
+        df_drv = lap_time_data[lap_time_data['DriverNumber'] == driver]
+        avg_by_age = df_drv.groupby('TyreAge')['LapTime'].mean().reset_index()
+        ax.plot(avg_by_age['TyreAge'], avg_by_age['LapTime'], 'o-', linewidth=2,
+                label=f'Driver {driver}')
+
+    # Fixed tyre-age thresholds
+    thresholds = {'fresh_tire_max': 8, 'old_tire_min': 15}
+    ax.axvline(x=thresholds['fresh_tire_max'],
+               linestyle='--', label='Fresh tire threshold (8 laps)')
+    ax.axvline(x=thresholds['old_tire_min'], linestyle='--',
+               label='Old tire threshold (15 laps)')
+
+    ax.set_xlabel('Tire Age (laps)')
+    ax.set_ylabel('Average Lap Time (seconds)')
+    ax.set_title('Relationship Between Tire Age and Lap Time')
+    ax.legend()
+    ax.grid(True)
+    fig.tight_layout()
+
+    # Show the plot
+    plt.show()
+
+    # Print threshold info
+    print("\nTire age thresholds for our rules:")
+    print(f"- Fresh tires: Less than {thresholds['fresh_tire_max']} laps")
+    print(f"- Old tires: More than {thresholds['old_tire_min']} laps")
+    print("\nNote: These thresholds are based on typical F1 tire performance patterns.")
+    print("Different compounds and track conditions may shift these values.")
+
+    return fig, thresholds
+
+
 class F1LapTimeRules(F1StrategyEngine):
     """
     Engine implemting lap time related rules for F1 Strategy.
@@ -575,108 +700,9 @@ if __name__ == "main":
     print("Loaded lap time data (first 5 rows):")
     print(lap_time_data.head())
 
-    # ---
-
-    # ### 2.2 Analyze lap time distribution
-
-    # #### 2.2.1 Analyzing lap time differences to determine thresholds for our rules
-
-    # Analyze lap time differences to determine thresholds for our rules
-    if 'LapTimeDifference' in lap_time_data.columns:
-        # First, get basic statistics about the lap time differences
-        print("\nStatistics for lap time differences:")
-        print(lap_time_data['LapTimeDifference'].describe())
-
-        # Filter out extreme values that might skew our analysis
-        # This gives us a more realistic distribution to work with
-        reasonable_diffs = lap_time_data[
-            (lap_time_data['LapTimeDifference'] > -3) &
-            (lap_time_data['LapTimeDifference'] < 3)
-        ]['LapTimeDifference']
-
-        # Create a histogram to visualize the distribution
-        plt.figure(figsize=(10, 6))
-        plt.hist(reasonable_diffs, bins=30, alpha=0.7)
-
-        # Add lines for important percentiles to help identify thresholds
-        plt.axvline(reasonable_diffs.quantile(0.75), color='r', linestyle='--',
-                    label=f'75th percentile: {reasonable_diffs.quantile(0.75):.3f}')
-        plt.axvline(reasonable_diffs.quantile(0.25), color='g', linestyle='--',
-                    label=f'25th percentile: {reasonable_diffs.quantile(0.25):.3f}')
-
-        # Add our proposed thresholds for the rules
-        plt.axvline(0.7, color='orange', linestyle='-.',
-                    label='Performance cliff threshold: 0.7')
-        plt.axvline(-0.5, color='purple', linestyle='-.',
-                    label='Recovery opportunity threshold: -0.5')
-
-        plt.xlabel('Lap Time Difference (seconds)')
-        plt.ylabel('Frequency')
-        plt.title('Distribution of Lap Time Differences')
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-        # Calculate suggested thresholds based on data percentiles
-        # 85th percentile for performance cliff (significant slowdown)
-        performance_cliff_threshold = reasonable_diffs.quantile(0.85)
-        # 15th percentile for significant improvement
-        improvement_threshold = reasonable_diffs.quantile(0.15)
-
-        print(f"\nSuggested thresholds based on data distribution:")
-        print(
-            f"Performance Cliff Threshold: {performance_cliff_threshold:.3f} seconds")
-        print(
-            f"Significant Improvement Threshold: {improvement_threshold:.3f} seconds")
-        print(f"\nFor our rules, we'll use:")
-        print(f"- 0.7s for performance cliff (when lap time gets worse by 0.7s or more)")
-        print(f"- -0.5s for recovery opportunity (when lap time improves by 0.5s or more)")
-    else:
-        print("LapTimeDifference column not available in the data.")
-
-    # #### 2.2.2 Analyze relationship between tire age and lap time
-
-    # analyze the relationship between tire age and lap time
-    if 'TyreAge' in lap_time_data.columns and 'LapTime' in lap_time_data.columns:
-        # Get a few sample drivers to visualize
-        sample_drivers = sorted(lap_time_data['DriverNumber'].unique())[:3]
-
-        # Create a plot showing how lap time changes with tire age
-        plt.figure(figsize=(12, 8))
-
-        for driver in sample_drivers:
-            driver_data = lap_time_data[lap_time_data['DriverNumber'] == driver]
-
-            # Group by TyreAge and calculate mean lap time
-            # This smooths out individual variations and shows the trend
-            tire_vs_lap = driver_data.groupby(
-                'TyreAge')['LapTime'].mean().reset_index()
-
-            plt.plot(tire_vs_lap['TyreAge'], tire_vs_lap['LapTime'], 'o-', linewidth=2,
-                     label=f'Driver {driver}')
-
-        # Add lines for our tire age thresholds
-        plt.axvline(x=8, color='g', linestyle='--',
-                    label='Fresh tire threshold (8 laps)')
-        plt.axvline(x=15, color='r', linestyle='--',
-                    label='Old tire threshold (15 laps)')
-
-        plt.xlabel('Tire Age (laps)')
-        plt.ylabel('Average Lap Time (seconds)')
-        plt.title('Relationship Between Tire Age and Lap Time')
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-        print("\nTire age thresholds for our rules:")
-        print("- Fresh tires: Less than 8 laps")
-        print("- Old tires: More than 15 laps")
-        print("\nNote: These thresholds are based on typical F1 tire performance patterns.")
-        print("Different compounds and track conditions may shift these values.")
-    else:
-        print("TyreAge or LapTime columns not available in the data.")
+    perf_cliff_thresh, improv_thresh = analyze_lap_time_differences(
+        lap_time_data)
+    tyre_fig, tyre_thresholds = analyze_tyre_age_vs_lap_time(lap_time_data)
     # Run the test with a realistic approach
     race_data_path = '../../outputs/week3/lap_prediction_data.csv'
     realistic_results = test_with_realistic_approach(race_data_path)
