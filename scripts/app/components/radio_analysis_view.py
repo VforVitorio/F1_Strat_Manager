@@ -1,3 +1,4 @@
+import tempfile
 from app_modules.nlp_radio_processing.N06_model_merging import transcribe_audio, analyze_radio_message
 import streamlit as st
 import sys
@@ -17,10 +18,11 @@ def render_radio_analysis_view():
 
     uploaded_file = st.file_uploader("Upload MP3 file", type=["mp3"])
     if uploaded_file is not None:
-        # Save the uploaded file to a temporary location
-        temp_audio_path = f"temp_radio_{uploaded_file.name}"
-        with open(temp_audio_path, "wb") as f:
-            f.write(uploaded_file.read())
+        # Guardar archivo temporalmente en una carpeta específica
+        os.makedirs("outputs/temp", exist_ok=True)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3", dir="outputs/temp") as tmp_file:
+            tmp_file.write(uploaded_file.read())
+            temp_audio_path = tmp_file.name
         st.audio(temp_audio_path)
 
         with st.spinner("Transcribing audio..."):
