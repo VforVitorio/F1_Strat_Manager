@@ -1,29 +1,30 @@
-# app.py
-
-from utils.data_loader import load_race_data, load_recommendation_data, get_available_drivers
-from utils.processing import get_processed_race_data, get_processed_recommendations, prepare_visualization_data
-from utils.visualization import st_plot_speed_vs_tire_age, st_plot_regular_vs_adjusted_degradation, st_plot_degradation_rate
-# Importar el nuevo componente
-from components.degradation_view import render_degradation_view
+import os
+import sys
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import os
-import sys
 
-# Add the parent directory to the path so we can import from our modules
+from utils.data_loader import load_race_data, load_recommendation_data, get_available_drivers
+from utils.processing import get_processed_race_data, get_processed_recommendations, prepare_visualization_data
+from components.degradation_view import render_degradation_view
+from components.recommendations_view import render_recommendations_view
+from components.team_radio_view import render_radio_analysis
+from components.overview_view import render_overview
+from components.radio_analysis_view import render_radio_analysis_view
+
+
+# Add parent directory to path for module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Function to load CSS from a file
 
 
 def load_css(css_file):
-    with open(css_file, 'r') as f:
+    """Load custom CSS into Streamlit app."""
+    with open(css_file, 'r', encoding="utf-8") as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 
-# Initialize session state for data caching
+# Initialize session state for caching
 if 'race_data' not in st.session_state:
     st.session_state.race_data = None
 if 'recommendations' not in st.session_state:
@@ -31,7 +32,7 @@ if 'recommendations' not in st.session_state:
 if 'selected_driver' not in st.session_state:
     st.session_state.selected_driver = None
 
-# PAGE CONFIG
+# Page configuration
 st.set_page_config(
     page_title="F1 Strategy Dashboard",
     page_icon="🏎️",
@@ -40,7 +41,7 @@ st.set_page_config(
 )
 
 # Load custom CSS
-load_css('app/assets/style.css')
+load_css('scripts/app/assets/style.css')
 
 # Title and description
 st.title("🏎️ Formula 1 Strategy Dashboard")
@@ -49,211 +50,111 @@ This dashboard provides strategic insights and recommendations for Formula 1 rac
 combining tire degradation analysis, gap calculations, and NLP from team radios.
 """)
 
-# Sidebar for navigation and filters
-st.sidebar.title("Navigation")
-
-# Create navigation options
+# Modern sidebar navigation
+st.sidebar.markdown(
+    '<div class="sidebar-title">Navigation</div>'
+    '<div class="sidebar-nav">', unsafe_allow_html=True)
 page = st.sidebar.radio(
-    "Select a Page",
+    "",  # hide default label
     ["Overview", "Tire Analysis", "Gap Analysis",
-        "Team Radio Analysis", "Strategy Recommendations"]
+        "Team Radio Analysis", "Strategy Recommendations"],
+    index=0
 )
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
-# Data loading section in sidebar
-st.sidebar.title("Data Selection")
+# Data selection section
+st.sidebar.markdown(
+    '<div class="sidebar-title">Data Selection</div>'
+    '<div class="sidebar-nav">', unsafe_allow_html=True)
 
-# Race selection (currently fixed to Spain 2023)
+# Fixed race selection
 selected_race = "Spain 2023"
-st.sidebar.text(f"Race: {selected_race}")
+st.sidebar.markdown(f"**Race:** {selected_race}")
 
-# Load available drivers dynamically
+# Driver selection with error handling
 try:
     available_drivers = get_available_drivers()
     if not available_drivers:
-        available_drivers = list(range(1, 21))  # Fallback
+        available_drivers = list(range(1, 21))  # fallback list
         st.sidebar.warning(
             "Could not load driver data. Using placeholder values.")
 except Exception as e:
     st.sidebar.error(f"Error loading driver data: {str(e)}")
-    available_drivers = list(range(1, 21))  # Fallback
+    available_drivers = list(range(1, 21))
 
-# Driver selection with dynamic list
 selected_driver = st.sidebar.selectbox("Choose a Driver", available_drivers)
 
-# Cache the selected driver in session state to maintain across page changes
+# Cache driver selection and reset data if changed
 if st.session_state.selected_driver != selected_driver:
     st.session_state.selected_driver = selected_driver
-    # Reset cached data when driver changes
     st.session_state.race_data = None
     st.session_state.recommendations = None
 
-# Load data with loading indicator
+# End of data selection container
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+
+def get_lap_range():
+    """Determine min and max lap based on loaded data."""
+    df = st.session_state.race_data
+    if df is not None and 'LapNumber' in df.columns:
+        return int(df['LapNumber'].min()), int(df['LapNumber'].max())
+    return 1, 66  # default fallback
+
+
+# Lap range slider
+min_lap, max_lap = get_lap_range()
+st.sidebar.markdown("**Lap Range**")
+lap_range = st.sidebar.slider(
+    "Lap Range", min_lap, max_lap, (min_lap, max_lap))
 
 
 def load_data():
+    """Load and cache race data and strategy recommendations."""
     if st.session_state.race_data is None:
         with st.spinner("Loading race data..."):
             try:
-                # Load processed race data for the selected driver
-                race_data = get_processed_race_data(
+                st.session_state.race_data = get_processed_race_data(
                     st.session_state.selected_driver)
-                st.session_state.race_data = race_data
             except Exception as e:
                 st.error(f"Error loading race data: {str(e)}")
-                return None
+                return None, None
 
     if st.session_state.recommendations is None:
         with st.spinner("Loading strategy recommendations..."):
             try:
-                # Load recommendations for the selected driver
-                recommendations = get_processed_recommendations(
+                st.session_state.recommendations = get_processed_recommendations(
                     st.session_state.selected_driver)
-                st.session_state.recommendations = recommendations
             except Exception as e:
                 st.error(f"Error loading recommendations: {str(e)}")
-                st.session_state.recommendations = pd.DataFrame()  # Empty DataFrame as fallback
+                st.session_state.recommendations = pd.DataFrame()
 
     return st.session_state.race_data, st.session_state.recommendations
 
-# Get min and max laps from the data for the lap range slider
 
-
-def get_lap_range():
-    if st.session_state.race_data is not None and 'LapNumber' in st.session_state.race_data.columns:
-        min_lap = int(st.session_state.race_data['LapNumber'].min())
-        max_lap = int(st.session_state.race_data['LapNumber'].max())
-        return min_lap, max_lap
-    else:
-        return 1, 66  # Default fallback
-
-
-# Get lap range based on actual data
-min_lap, max_lap = get_lap_range()
-lap_range = st.sidebar.slider(
-    "Lap Range", min_lap, max_lap, (min_lap, max_lap))
-
-# Load data for the current page
+# Load data for rendering views
 race_data, recommendations = load_data()
 
-# Main content based on navigation
+# Render main pages
 if page == "Overview":
-    st.header("Race Overview")
-
-    if race_data is None or race_data.empty:
-        st.warning("No race data available for the selected driver.")
-    else:
-        # Display driver information
-        st.subheader(f"Driver #{selected_driver} - {selected_race}")
-
-        # Calculate key metrics from actual data
-        avg_degradation = "N/A"
-        pit_stops = "N/A"
-        final_position = "N/A"
-
-        # Try to calculate actual metrics
-        try:
-            if 'DegradationRate' in race_data.columns:
-                avg_degradation = f"{race_data['DegradationRate'].mean():.3f} s/lap"
-
-            if 'Stint' in race_data.columns:
-                pit_stops = str(race_data['Stint'].nunique() - 1)
-
-            if 'Position' in race_data.columns:
-                final_position = str(race_data.iloc[-1]['Position'])
-        except Exception as e:
-            st.warning(f"Could not calculate some metrics: {e}")
-
-        # Display key metrics
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(label="Avg. Degradation", value=avg_degradation)
-        with col2:
-            st.metric(label="Pit Stops", value=pit_stops)
-        with col3:
-            st.metric(label="Final Position", value=final_position)
-
-        # Create overview charts
-        st.subheader("Race Performance Overview")
-
-        # # Use actual visualization functions if data is available
-        try:
-            pass
-        except Exception as e:
-            pass
-
+    render_overview(race_data, selected_driver, selected_race)
 elif page == "Tire Analysis":
-    # Usar el componente para renderizar esta sección
     render_degradation_view(race_data, selected_driver)
-
 elif page == "Gap Analysis":
     st.header("Gap Analysis")
     st.write("This section analyzes the gaps between cars throughout the race.")
-
-    # Placeholder for gap analysis with error handling
     if race_data is None or race_data.empty:
         st.warning("No gap data available for the selected driver.")
     else:
         st.info("Gap analysis visualizations will be implemented here.")
-        # Future: Add the gap analysis visualizations using your functions
 
 elif page == "Team Radio Analysis":
-    st.header("Team Radio Analysis")
-    st.write("This section analyzes team radio communications for strategic insights.")
-
-    # Placeholder for radio analysis
-    if recommendations is None or recommendations.empty:
-        st.warning("No radio analysis data available for the selected driver.")
-    else:
-        # Display any radio-related recommendations
-        radio_recs = None
-        try:
-            if 'action' in recommendations.columns and 'explanation' in recommendations.columns:
-                radio_recs = recommendations[recommendations['action'].isin(
-                    ['prepare_rain_tires', 'reevaluate_pit_window', 'prioritize_pit']
-                )]
-        except Exception as e:
-            st.error(f"Error processing radio recommendations: {e}")
-
-        if radio_recs is not None and not radio_recs.empty:
-            st.subheader("Radio-Based Strategic Recommendations")
-            for i, rec in radio_recs.iterrows():
-                with st.expander(f"{rec['action']} (Lap {rec.get('LapNumber', 'N/A')})"):
-                    st.write(f"**Explanation:** {rec['explanation']}")
-                    st.write(f"**Confidence:** {rec.get('confidence', 'N/A')}")
-        else:
-            st.info("No radio-based recommendations found for this driver.")
+    render_radio_analysis(recommendations)
+    render_radio_analysis_view()
 
 elif page == "Strategy Recommendations":
-    st.header("Strategy Recommendations")
-    st.write("Strategic recommendations for race optimization.")
+    render_recommendations_view(recommendations)
 
-    if recommendations is None or recommendations.empty:
-        st.warning("No recommendations available for the selected driver.")
-    else:
-        # Group recommendations by action type
-        try:
-            action_types = recommendations['action'].unique()
-
-            # Create tabs for different recommendation types
-            rec_tabs = st.tabs([action.replace('_', ' ').title()
-                               for action in action_types])
-
-            for i, action in enumerate(action_types):
-                with rec_tabs[i]:
-                    action_recs = recommendations[recommendations['action'] == action]
-
-                    for j, rec in action_recs.iterrows():
-                        with st.expander(f"Lap {rec.get('LapNumber', 'N/A')} - Confidence: {rec.get('confidence', 'N/A'):.2f}"):
-                            st.write(f"**Explanation:** {rec['explanation']}")
-                            st.write(
-                                f"**Priority:** {rec.get('priority', 'N/A')}")
-                            if 'rule_fired' in rec:
-                                st.write(f"**Rule:** {rec['rule_fired']}")
-        except Exception as e:
-            st.error(f"Error displaying recommendations: {e}")
-
-            # Fallback - simple table display
-            st.dataframe(recommendations)
 
 # Footer
 st.markdown("---")
