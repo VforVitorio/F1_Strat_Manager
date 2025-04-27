@@ -1,0 +1,26 @@
+.main {
+    background-color: #0e1117;
+}
+.sidebar .sidebar-content {
+    background-color: #1e2130;
+}
+h1, h2, h3 {
+    color: #ff4b4b;
+}
+/* Additional F1-themed styles */
+.stButton>button {
+    background-color: #e10600;
+    color: white;
+    border-radius: 5px;
+    border: none;
+}
+.stButton>button:hover {
+    background-color: #ff1801;
+}
+/* Card-like containers for metrics */
+.metric-container {
+    background-color: #1e2130;
+    border-radius: 5px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

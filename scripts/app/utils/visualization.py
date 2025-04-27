@@ -32,7 +32,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import from N01_tire_prediction: {e}")
     COMPOUND_COLORS = {1: 'red', 2: 'yellow',
-                       3: 'white', 4: 'green', 5: 'blue'}
+                       3: 'gray', 4: 'green', 5: 'blue'}
     COMPOUND_NAMES = {1: "Soft", 2: "Medium",
                       3: "Hard", 4: "Intermediate", 5: "Wet"}
     LAP_TIME_IMPROVEMENT_PER_LAP = 0.055  # Use the known default
@@ -42,39 +42,68 @@ except ImportError as e:
 # -----------------------------------------------------------------------------
 
 
-def st_plot_lap_time_deltas(processed_race_data, driver_number=None, lap_range=None):
-    """
-    Plot lap time deltas for a driver or all drivers.
-    Assumes processed_race_data already contains all necessary columns.
-    """
-    filtered_data = processed_race_data.copy()
-    if driver_number is not None:
-        filtered_data = filtered_data[filtered_data['DriverNumber']
-                                      == driver_number]
-    if lap_range is not None and 'LapNumber' in filtered_data.columns:
-        filtered_data = filtered_data[
-            (filtered_data['LapNumber'] >= lap_range[0]) &
-            (filtered_data['LapNumber'] <= lap_range[1])
-        ]
-    plt.figure(figsize=(10, 6))
-    fig = plot_lap_time_deltas(filtered_data, COMPOUND_COLORS, COMPOUND_NAMES)
-    plt.title(
-        f"Lap Time Deltas for Driver {driver_number}" if driver_number else "Lap Time Deltas for All Drivers")
-    return fig if fig else plt.gcf()
+# def st_plot_lap_time_deltas(processed_race_data, driver_number=None, lap_range=None):
+#     print("DEBUG: Entering st_plot_lap_time_deltas")
+#     print(f"DEBUG: DataFrame shape: {processed_race_data.shape}")
+#     print(f"DEBUG: Columns: {processed_race_data.columns.tolist()}")
+#     if 'CompoundID' in processed_race_data.columns:
+#         print(
+#             f"DEBUG: Unique CompoundID values: {processed_race_data['CompoundID'].unique()}")
+#     if 'DriverNumber' in processed_race_data.columns:
+#         print(
+#             f"DEBUG: Unique DriverNumber values: {processed_race_data['DriverNumber'].unique()}")
+#     filtered_data = processed_race_data.copy()
+#     if driver_number is not None:
+#         filtered_data = filtered_data[filtered_data['DriverNumber']
+#                                       == driver_number]
+#         print(
+#             f"DEBUG: After filtering by driver {driver_number}, shape: {filtered_data.shape}")
+#     if lap_range is not None and 'LapNumber' in filtered_data.columns:
+#         filtered_data = filtered_data[
+#             (filtered_data['LapNumber'] >= lap_range[0]) &
+#             (filtered_data['LapNumber'] <= lap_range[1])
+#         ]
+#         print(
+#             f"DEBUG: After filtering by lap_range {lap_range}, shape: {filtered_data.shape}")
+#     if filtered_data.empty:
+#         print("WARNING: Filtered DataFrame is empty in st_plot_lap_time_deltas.")
+#         return None
+#     plt.figure(figsize=(10, 6))
+#     fig = plot_lap_time_deltas(filtered_data, COMPOUND_COLORS, COMPOUND_NAMES)
+#     plt.title(
+#         f"Lap Time Deltas for Driver {driver_number}" if driver_number else "Lap Time Deltas for All Drivers")
+#     return fig if fig else plt.gcf()
 
 
 def st_plot_speed_vs_tire_age(processed_race_data, driver_number=None, compound_id=None):
-    """
-    Plot speed vs tire age for a driver and compound.
-    Assumes processed_race_data already contains all necessary columns.
-    """
+    print("DEBUG: Entering st_plot_speed_vs_tire_age")
+    print(f"DEBUG: DataFrame shape: {processed_race_data.shape}")
+    print(f"DEBUG: Columns: {processed_race_data.columns.tolist()}")
+    if 'CompoundID' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique CompoundID values: {processed_race_data['CompoundID'].unique()}")
+    if 'DriverNumber' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique DriverNumber values: {processed_race_data['DriverNumber'].unique()}")
     filtered_data = processed_race_data.copy()
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
+        print(
+            f"DEBUG: After filtering by driver {driver_number}, shape: {filtered_data.shape}")
     if compound_id is None:
         compound_counts = filtered_data['CompoundID'].value_counts()
         compound_id = compound_counts.index[0] if not compound_counts.empty else 2
+        print(
+            f"DEBUG: No compound_id provided, using most common: {compound_id}")
+    else:
+        print(f"DEBUG: Using provided compound_id: {compound_id}")
+    filtered_data = filtered_data[filtered_data['CompoundID'] == compound_id]
+    print(
+        f"DEBUG: After filtering by compound_id {compound_id}, shape: {filtered_data.shape}")
+    if filtered_data.empty:
+        print("WARNING: Filtered DataFrame is empty in st_plot_speed_vs_tire_age.")
+        return None
     plt.figure(figsize=(10, 6))
     plot_speed_vs_tire_age(filtered_data, compound_id,
                            COMPOUND_COLORS, COMPOUND_NAMES)
@@ -85,17 +114,29 @@ def st_plot_speed_vs_tire_age(processed_race_data, driver_number=None, compound_
 
 
 def st_plot_regular_vs_adjusted_degradation(processed_race_data, driver_number=None, lap_time_improvement_per_lap=None):
-    """
-    Plot regular vs fuel-adjusted degradation for a driver or all drivers.
-    Assumes processed_race_data already contains all necessary columns.
-    """
+    print("DEBUG: Entering st_plot_regular_vs_adjusted_degradation")
+    print(f"DEBUG: DataFrame shape: {processed_race_data.shape}")
+    print(f"DEBUG: Columns: {processed_race_data.columns.tolist()}")
+    if 'CompoundID' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique CompoundID values: {processed_race_data['CompoundID'].unique()}")
+    if 'DriverNumber' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique DriverNumber values: {processed_race_data['DriverNumber'].unique()}")
     filtered_data = processed_race_data.copy()
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
+        print(
+            f"DEBUG: After filtering by driver {driver_number}, shape: {filtered_data.shape}")
     # Use default if not provided
     if lap_time_improvement_per_lap is None:
         lap_time_improvement_per_lap = LAP_TIME_IMPROVEMENT_PER_LAP
+        print(
+            f"DEBUG: Using default lap_time_improvement_per_lap: {lap_time_improvement_per_lap}")
+    if filtered_data.empty:
+        print("WARNING: Filtered DataFrame is empty in st_plot_regular_vs_adjusted_degradation.")
+        return None
     plt.figure(figsize=(12, 8))
     plot_regular_vs_adjusted_degradation(
         filtered_data, COMPOUND_COLORS, COMPOUND_NAMES, lap_time_improvement_per_lap)
@@ -105,14 +146,24 @@ def st_plot_regular_vs_adjusted_degradation(processed_race_data, driver_number=N
 
 
 def st_plot_fuel_adjusted_degradation(processed_race_data, driver_number=None):
-    """
-    Plot fuel-adjusted absolute degradation for a driver or all drivers.
-    Assumes processed_race_data already contains all necessary columns.
-    """
+    print("DEBUG: Entering st_plot_fuel_adjusted_degradation")
+    print(f"DEBUG: DataFrame shape: {processed_race_data.shape}")
+    print(f"DEBUG: Columns: {processed_race_data.columns.tolist()}")
+    if 'CompoundID' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique CompoundID values: {processed_race_data['CompoundID'].unique()}")
+    if 'DriverNumber' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique DriverNumber values: {processed_race_data['DriverNumber'].unique()}")
     filtered_data = processed_race_data.copy()
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
+        print(
+            f"DEBUG: After filtering by driver {driver_number}, shape: {filtered_data.shape}")
+    if filtered_data.empty:
+        print("WARNING: Filtered DataFrame is empty in st_plot_fuel_adjusted_degradation.")
+        return None
     plt.figure(figsize=(10, 6))
     plot_fuel_adjusted_degradation(
         filtered_data, COMPOUND_COLORS, COMPOUND_NAMES)
@@ -122,14 +173,24 @@ def st_plot_fuel_adjusted_degradation(processed_race_data, driver_number=None):
 
 
 def st_plot_fuel_adjusted_percentage_degradation(processed_race_data, driver_number=None):
-    """
-    Plot fuel-adjusted percentage degradation for a driver or all drivers.
-    Assumes processed_race_data already contains all necessary columns.
-    """
+    print("DEBUG: Entering st_plot_fuel_adjusted_percentage_degradation")
+    print(f"DEBUG: DataFrame shape: {processed_race_data.shape}")
+    print(f"DEBUG: Columns: {processed_race_data.columns.tolist()}")
+    if 'CompoundID' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique CompoundID values: {processed_race_data['CompoundID'].unique()}")
+    if 'DriverNumber' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique DriverNumber values: {processed_race_data['DriverNumber'].unique()}")
     filtered_data = processed_race_data.copy()
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
+        print(
+            f"DEBUG: After filtering by driver {driver_number}, shape: {filtered_data.shape}")
+    if filtered_data.empty:
+        print("WARNING: Filtered DataFrame is empty in st_plot_fuel_adjusted_percentage_degradation.")
+        return None
     plt.figure(figsize=(10, 6))
     plot_fuel_adjusted_percentage_degradation(
         filtered_data, COMPOUND_COLORS, COMPOUND_NAMES)
@@ -139,20 +200,29 @@ def st_plot_fuel_adjusted_percentage_degradation(processed_race_data, driver_num
 
 
 def st_plot_degradation_rate(processed_race_data, driver_number=None):
-    """
-    Plot degradation rate for a driver or all drivers.
-    Assumes processed_race_data already contains all necessary columns.
-    """
+    print("DEBUG: Entering st_plot_degradation_rate")
+    print(f"DEBUG: DataFrame shape: {processed_race_data.shape}")
+    print(f"DEBUG: Columns: {processed_race_data.columns.tolist()}")
+    if 'CompoundID' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique CompoundID values: {processed_race_data['CompoundID'].unique()}")
+    if 'DriverNumber' in processed_race_data.columns:
+        print(
+            f"DEBUG: Unique DriverNumber values: {processed_race_data['DriverNumber'].unique()}")
     filtered_data = processed_race_data.copy()
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
+        print(
+            f"DEBUG: After filtering by driver {driver_number}, shape: {filtered_data.shape}")
+    if filtered_data.empty:
+        print("WARNING: Filtered DataFrame is empty in st_plot_degradation_rate.")
+        return None
     plt.figure(figsize=(10, 6))
     plot_degradation_rate(filtered_data, COMPOUND_COLORS, COMPOUND_NAMES)
     plt.title(
         f"Degradation Rate for Driver {driver_number}" if driver_number else "Degradation Rate for All Drivers")
     return plt.gcf()
-
 # -----------------------------------------------------------------------------
 # Test function for visualization (uses processed data, does not process or load)
 # -----------------------------------------------------------------------------
@@ -198,11 +268,11 @@ def test_visualization():
                     driver_data[driver_data['CompoundID'] == comp_id])
                 print(f"  {comp_name} (ID: {comp_id}): {comp_count} laps")
 
-            print("\nTesting lap time deltas plot...")
-            fig1 = st_plot_lap_time_deltas(
-                race_data, driver_number=test_driver)
-            print("✓ Lap time deltas plot created")
-            plt.close(fig1)
+            # print("\nTesting lap time deltas plot...")
+            # fig1 = st_plot_lap_time_deltas(
+            #     race_data, driver_number=test_driver)
+            # print("✓ Lap time deltas plot created")
+            # plt.close(fig1)
 
             for compound_id in driver_compounds:
                 compound_name = COMPOUND_NAMES.get(

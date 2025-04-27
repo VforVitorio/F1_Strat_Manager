@@ -5,6 +5,7 @@
 #          needed for different views in the application.
 # -----------------------------------------------------------------------------
 
+from .data_loader import load_race_data, load_recommendation_data
 import sys
 from pathlib import Path
 import pandas as pd
@@ -19,12 +20,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 # --- Import data loading and transformation functions ---
-try:
-    # Functions to load race data and recommendations
-    from app.utils.data_loader import load_race_data, load_recommendation_data
-except ImportError:
-    load_race_data = None
-    load_recommendation_data = None
+
+# Functions to load race data and recommendations
+
 
 try:
     # Functions for tire metrics calculation
@@ -57,6 +55,21 @@ except ImportError:
 # --- Main processing functions ---
 
 
+def add_lap_time_delta(df):
+    """
+    Añade la columna LapTime_Delta al DataFrame.
+    Calcula la diferencia de LapTime entre vueltas consecutivas para cada piloto.
+    """
+    if 'LapTime' in df.columns:
+        df = df.sort_values(['DriverNumber', 'LapNumber'])
+        df['LapTime_Delta'] = df.groupby('DriverNumber')['LapTime'].diff()
+    elif 'FuelAdjustedLapTime' in df.columns:
+        df = df.sort_values(['DriverNumber', 'LapNumber'])
+        df['LapTime_Delta'] = df.groupby('DriverNumber')[
+            'FuelAdjustedLapTime'].diff()
+    return df
+
+
 def get_processed_race_data(driver_number=None):
     """
     Loads and processes race data, applying fuel adjustment and degradation metrics.
@@ -70,6 +83,7 @@ def get_processed_race_data(driver_number=None):
     if calculate_fuel_adjusted_metrics and calculate_degradation_rate:
         df = calculate_fuel_adjusted_metrics(df)
         df = calculate_degradation_rate(df)
+        # df = add_lap_time_delta(df)
     return df
 
 

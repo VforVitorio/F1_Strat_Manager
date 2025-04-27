@@ -9,7 +9,7 @@ import seaborn as sns
 compound_colors = {
     1: 'red',      # Soft
     2: 'yellow',   # Medium
-    3: 'white'     # Hard
+    3: 'gray'     # Hard
 }
 
 compound_names = {
