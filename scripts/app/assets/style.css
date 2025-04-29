@@ -210,3 +210,45 @@ footer {
     margin-top: 2rem;
     color: var(--text-secondary);
 }
+
+
+
+/* Add this CSS snippet to your style.css file for the stat cards */
+
+.stat-card {
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.stat-label {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.blue {
+    background-color: #3385FF;
+    color: white;
+}
+
+.green {
+    background-color: #33FF57;
+    color: white;
+}
+
+.orange {
+    background-color: #FF8833;
+    color: white;
+}
+
+.purple {
+    background-color: #BD33FF;
+    color: white;
+}

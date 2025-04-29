@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-# Example import (adjust the path if needed)
-# from app_modules.agent.pred.N02_model_tire_predictions import perform_live_race_simulation
-
 
 def render_time_predictions_view(predictions_df, selected_driver):
     """
@@ -79,8 +76,3 @@ def render_time_predictions_view(predictions_df, selected_driver):
         )
     )
     st.plotly_chart(fig, use_container_width=True)
-
-    # Example: Show how the live simulation works (optional)
-    # st.subheader("Live Race Simulation Example")
-    # if st.button("Run Live Simulation Example"):
-    #     perform_live_race_simulation()  # Adjust arguments as needed
