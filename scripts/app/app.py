@@ -13,6 +13,9 @@ from components.team_radio_view import render_radio_analysis
 from components.overview_view import render_overview
 from components.radio_analysis_view import render_radio_analysis_view
 from components.gap_analysis_view import render_gap_analysis
+from components.time_predictions_view import render_time_predictions_view
+from utils.processing import get_lap_time_predictions
+
 
 # Add parent directory to path for module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -58,7 +61,7 @@ st.sidebar.markdown(
     '<div class="sidebar-nav">', unsafe_allow_html=True)
 page = st.sidebar.radio(
     "",  # hide default label
-    ["Overview", "Tire Analysis", "Gap Analysis",
+    ["Overview", "Tire Analysis", "Gap Analysis", "Lap Time Predictions",
         "Team Radio Analysis", "Strategy Recommendations"],
     index=0
 )
@@ -154,6 +157,16 @@ elif page == "Tire Analysis":
     render_degradation_view(race_data, selected_driver)
 elif page == "Gap Analysis":
     render_gap_analysis(gap_data, selected_driver)
+
+
+if page == "Lap Time Predictions":
+    predictions_df = get_lap_time_predictions(
+        race_data, model_path="outputs/week3/xgb_sequential_model.pkl"
+    )
+    if predictions_df is not None:
+        render_time_predictions_view(predictions_df, selected_driver)
+
+
 elif page == "Team Radio Analysis":
     render_radio_analysis(recommendations)
     render_radio_analysis_view()
