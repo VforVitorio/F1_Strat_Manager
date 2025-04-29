@@ -20,6 +20,8 @@ def render_degradation_view(race_data, selected_driver):
         race_data (pd.DataFrame): Processed race data
         selected_driver (int): Driver number
     """
+    st.markdown("---")
+
     st.header("Tire Degradation Analysis")
 
     if race_data is None or race_data.empty:

@@ -11,6 +11,8 @@ def render_radio_analysis(recommendations):
     Parameters:
         recommendations (pd.DataFrame): Strategy recommendations with radio data
     """
+
+    st.markdown("---")
     st.header("Team Radio Analysis")
     st.write("This section analyzes team radio communications for strategic insights.")
 

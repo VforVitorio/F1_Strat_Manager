@@ -54,10 +54,47 @@ except ImportError:
 try:
     # Gap data transformation with consistency metrics
     from IS_agent.utils.N01_agent_setup import transform_gap_data_with_consistency
+
 except ImportError:
     transform_gap_data_with_consistency = None
 
+try:
+    from IS_agent.utils.N03_lap_time_rules import add_race_lap_column
+except ImportError:
+    add_race_lap_column = None
+
 # --- Main processing functions ---
+
+
+def add_race_lap_column(df):
+    """
+    Añade la columna 'LapNumber' calculando la vuelta real de carrera para cada piloto y stint.
+    """
+    # Obtener la longitud de cada stint por piloto
+    max_age_by_stint = df.groupby(['DriverNumber', 'Stint'])[
+        'TyreAge'].max().reset_index()
+    max_age_by_stint = max_age_by_stint.rename(
+        columns={'TyreAge': 'StintLength'})
+    # Crear un diccionario con la suma acumulada de stints previos
+    stint_lengths = {}
+    for driver in df['DriverNumber'].unique():
+        driver_stints = max_age_by_stint[max_age_by_stint['DriverNumber'] == driver]
+        stint_lengths[driver] = {}
+        acc = 0
+        for _, row in driver_stints.iterrows():
+            stint = row['Stint']
+            stint_lengths[driver][stint] = acc
+            acc += row['StintLength']
+    # Calcular LapNumber sumando TyreAge y la suma acumulada de stints previos
+
+    def calc_lap(row):
+        driver = row['DriverNumber']
+        stint = row['Stint']
+        tyre_age = row['TyreAge']
+        start_lap = stint_lengths.get(driver, {}).get(stint, 0)
+        return start_lap + tyre_age
+    df['LapNumber'] = df.apply(calc_lap, axis=1)
+    return df
 
 
 def add_lap_time_delta(df):
@@ -78,13 +115,14 @@ def add_lap_time_delta(df):
 def get_processed_race_data(driver_number=None):
     """
     Loads and processes race data, applying fuel adjustment and degradation metrics.
-    Optionally filters by driver_number.
     Returns a pandas DataFrame ready for downstream analysis or visualization.
     """
     if load_race_data is None:
         raise ImportError("Could not import load_race_data")
-    df = load_race_data(driver_number)
-    # Apply fuel adjustment and degradation calculations if available
+
+    df = load_race_data()
+    df = add_race_lap_column(df)
+
     if calculate_fuel_adjusted_metrics and calculate_degradation_rate:
         df = calculate_fuel_adjusted_metrics(df)
         df = calculate_degradation_rate(df)

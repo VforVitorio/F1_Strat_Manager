@@ -11,6 +11,8 @@ def render_recommendations_view(recommendations):
     Parameters:
         recommendations (pd.DataFrame): DataFrame containing strategy recommendations
     """
+
+    st.markdown("---")
     st.header("Strategy Recommendations")
     st.write("Strategic recommendations for race optimization.")
 

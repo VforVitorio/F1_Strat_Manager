@@ -21,6 +21,8 @@ def render_gap_analysis(gap_data, selected_driver):
         gap_data (pd.DataFrame): Processed gap data (all drivers)
         selected_driver (int): Driver number
     """
+
+    st.markdown("---")
     st.header("Gap Analysis")
     st.write("This section analyzes the gaps between cars throughout the race.")
 

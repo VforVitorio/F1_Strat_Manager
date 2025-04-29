@@ -117,8 +117,7 @@ def load_data():
     if st.session_state.race_data is None:
         with st.spinner("Loading race data..."):
             try:
-                st.session_state.race_data = get_processed_race_data(
-                    st.session_state.selected_driver)
+                st.session_state.race_data = get_processed_race_data()
             except Exception as e:
                 st.error(f"Error loading race data: {str(e)}")
                 return None, None

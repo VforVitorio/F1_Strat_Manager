@@ -13,6 +13,8 @@ def render_radio_analysis_view():
     """
     Streamlit component for uploading an MP3, transcribing it, and analyzing the radio message.
     """
+
+    st.markdown("---")
     st.header("Analyze a Team Radio Audio File")
     st.write("Upload a team radio MP3 file to transcribe and analyze its content using the NLP pipeline.")
 
