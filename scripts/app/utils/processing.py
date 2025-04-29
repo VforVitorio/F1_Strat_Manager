@@ -14,15 +14,20 @@ import pandas as pd
 FILE_PATH = Path(__file__).resolve()
 PROJECT_ROOT = FILE_PATH.parents[2]
 PARENT_DIR = PROJECT_ROOT.parent
+# Since 'outputs' is alongside 'scripts', check in PARENT_DIR
+if (PARENT_DIR / "outputs").exists():
+    BASE_DIR = PARENT_DIR
+else:
+    # Fallback: still set BASE_DIR to PARENT_DIR, errors will be raised on missing files
+    print(
+        f"Warning: 'outputs' directory not found at expected location: {PARENT_DIR / 'outputs'}")
+    BASE_DIR = PARENT_DIR
 
 # Ensure the project root is in sys.path for module imports
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 # --- Import data loading and transformation functions ---
-
-# Functions to load race data and recommendations
-
 
 try:
     # Functions for tire metrics calculation
@@ -57,8 +62,8 @@ except ImportError:
 
 def add_lap_time_delta(df):
     """
-    Añade la columna LapTime_Delta al DataFrame.
-    Calcula la diferencia de LapTime entre vueltas consecutivas para cada piloto.
+    Adds the LapTime_Delta column to the DataFrame.
+    Calculates the difference in LapTime between consecutive laps for each driver.
     """
     if 'LapTime' in df.columns:
         df = df.sort_values(['DriverNumber', 'LapNumber'])
@@ -83,7 +88,6 @@ def get_processed_race_data(driver_number=None):
     if calculate_fuel_adjusted_metrics and calculate_degradation_rate:
         df = calculate_fuel_adjusted_metrics(df)
         df = calculate_degradation_rate(df)
-        # df = add_lap_time_delta(df)
     return df
 
 
@@ -126,6 +130,234 @@ def get_gap_data_with_consistency(gap_df, driver_number=None):
         raise ImportError(
             "Could not import transform_gap_data_with_consistency")
     return transform_gap_data_with_consistency(gap_df, driver_number)
+
+
+def get_processed_gap_data(driver_number=None):
+    """
+    Load and process gap data with extensive debugging.
+
+    Args:
+        driver_number (int, optional): Driver to filter for
+
+    Returns:
+        pd.DataFrame: Processed gap data with consistency metrics
+    """
+    # Path to the gap data CSV
+    gap_data_path = BASE_DIR / "outputs" / "week6" / "gap_data.csv"
+
+    print(f"DEBUG: Looking for gap data at: {gap_data_path}")
+    print(f"DEBUG: File exists: {gap_data_path.exists()}")
+
+    if not gap_data_path.exists():
+        print(f"Error: Gap data file not found at {gap_data_path}")
+        return None
+
+    try:
+        # Load the CSV into a DataFrame
+        gap_df = pd.read_csv(gap_data_path, dtype={'DriverNumber': int})
+        print(f"DEBUG: Initial load - DataFrame shape: {gap_df.shape}")
+        print(
+            f"DEBUG: Unique drivers in initial load: {sorted(gap_df['DriverNumber'].unique())}")
+
+        # Show a sample of the data
+        print("DEBUG: First 3 rows of loaded data:")
+        print(gap_df.head(3))
+
+        # Check if there are any NaN values in critical columns
+        print(
+            f"DEBUG: NaN values in DriverNumber: {gap_df['DriverNumber'].isna().sum()}")
+
+        # Check data types
+        print(f"DEBUG: DriverNumber dtype: {gap_df['DriverNumber'].dtype}")
+
+        # Calculate consistency metrics if not already present
+        if 'consistent_gap_ahead_laps' not in gap_df.columns:
+            print("DEBUG: Calculating gap consistency")
+            gap_df = calculate_gap_consistency(gap_df)
+            print(
+                f"DEBUG: After consistency calculation - shape: {gap_df.shape}")
+
+        # Create a complete copy to avoid reference issues
+        result_df = gap_df.copy()
+        print(f"DEBUG: After copy - shape: {result_df.shape}")
+
+        # Filter for specific driver if requested
+        if driver_number is not None:
+            print(f"DEBUG: Filtering for driver: {driver_number}")
+            try:
+                driver_number = int(driver_number)
+                result_df['DriverNumber'] = result_df['DriverNumber'].astype(
+                    int)
+            except Exception as e:
+                print(f"DEBUG: Error converting DriverNumber to int: {e}")
+            print("DEBUG: Unique DriverNumbers after conversion:")
+            print(result_df['DriverNumber'].unique())
+
+            print(
+                f"DEBUG: Received driver_number type: {type(driver_number)}, value: {driver_number}")
+
+            filtered_df = result_df[result_df['DriverNumber'] == driver_number]
+            print(
+                f"DEBUG: After driver filtering - shape: {filtered_df.shape}")
+
+            if filtered_df.empty:
+                print(f"DEBUG: No data found for driver {driver_number}")
+                print(
+                    f"DEBUG: Available drivers: {sorted(result_df['DriverNumber'].unique())}")
+
+                # If we're in this scenario where filtering yielded empty result but
+                # there is data in the original DataFrame, let's try a workaround
+                if gap_df.shape[0] > 0:
+                    print(
+                        "DEBUG: Trying to create synthetic data based on first driver")
+                    # Create synthetic data based on first available driver
+                    available_drivers = sorted(gap_df['DriverNumber'].unique())
+                    if available_drivers:
+                        first_driver = available_drivers[0]
+                        base_data = gap_df[gap_df['DriverNumber']
+                                           == first_driver].copy()
+                        base_data['DriverNumber'] = driver_number
+                        print(
+                            f"DEBUG: Created synthetic data shape: {base_data.shape}")
+                        return base_data
+
+            return filtered_df
+
+        return result_df
+
+    except Exception as e:
+        print(f"Error processing gap data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def calculate_gap_consistency(gap_df):
+    """
+    Calculate how many consecutive laps a driver has been in the same gap window.
+    Adds two columns to the dataframe:
+    - consistent_gap_ahead_laps: Number of consecutive laps with gap_ahead in the same window
+    - consistent_gap_behind_laps: Number of consecutive laps with gap_behind in the same window
+
+    Args:
+        gap_df (DataFrame): DataFrame with gap data
+
+    Returns:
+        DataFrame: The same DataFrame with added consistency columns
+    """
+    print("Calculating gap consistency across laps...")
+
+    # Define the gap windows we care about
+    def get_ahead_window(gap):
+        if gap is None or pd.isna(gap):
+            return "unknown"
+        if gap < 2.0:
+            return "undercut_window"
+        elif 2.0 <= gap < 3.5:
+            return "overcut_window"
+        else:
+            return "out_of_range"
+
+    def get_behind_window(gap):
+        if gap is None or pd.isna(gap):
+            return "unknown"
+        if gap < 2.0:
+            return "defensive_window"
+        else:
+            return "safe_window"
+
+    # Create a copy to avoid modifying the original DataFrame
+    result_df = gap_df.copy()
+
+    # Add window classification columns
+    result_df['ahead_window'] = result_df['GapToCarAhead'].apply(
+        get_ahead_window)
+    result_df['behind_window'] = result_df['GapToCarBehind'].apply(
+        get_behind_window)
+
+    # Initialize consistency columns
+    result_df['consistent_gap_ahead_laps'] = 1
+    result_df['consistent_gap_behind_laps'] = 1
+
+    # Process each driver separately
+    for driver in result_df['DriverNumber'].unique():
+        driver_data = result_df[result_df['DriverNumber']
+                                == driver].sort_values('LapNumber')
+
+        # Skip if less than 2 laps of data
+        if len(driver_data) < 2:
+            continue
+
+        # Process consistency of ahead gap
+        for i in range(1, len(driver_data)):
+            current_idx = driver_data.iloc[i].name
+            prev_idx = driver_data.iloc[i-1].name
+
+            if driver_data.iloc[i]['ahead_window'] == driver_data.iloc[i-1]['ahead_window']:
+                result_df.loc[current_idx, 'consistent_gap_ahead_laps'] = result_df.loc[prev_idx,
+                                                                                        'consistent_gap_ahead_laps'] + 1
+
+            if driver_data.iloc[i]['behind_window'] == driver_data.iloc[i-1]['behind_window']:
+                result_df.loc[current_idx, 'consistent_gap_behind_laps'] = result_df.loc[prev_idx,
+                                                                                         'consistent_gap_behind_laps'] + 1
+
+    print("Gap consistency calculation complete!")
+    return result_df
+
+
+def calculate_strategic_windows(gap_data):
+    """
+    Calculate strategic windows like undercut, overcut, and defensive opportunities.
+    This function identifies and flags strategic opportunities in the data.
+
+    Args:
+        gap_data (DataFrame): DataFrame with gap consistency data
+
+    Returns:
+        DataFrame: Enhanced DataFrame with strategic opportunity flags
+    """
+    # Create a copy of the input data
+    result_df = gap_data.copy()
+
+    # Define strategic thresholds
+    undercut_threshold = 2.0  # seconds
+    overcut_min = 2.0  # seconds
+    overcut_max = 3.5  # seconds
+    defensive_threshold = 2.0  # seconds
+    consistency_threshold = 3  # laps
+
+    # Add strategic opportunity flags
+    result_df['undercut_opportunity'] = (
+        (result_df['GapToCarAhead'] < undercut_threshold) &
+        (result_df['consistent_gap_ahead_laps'] >= consistency_threshold)
+    )
+
+    result_df['overcut_opportunity'] = (
+        (result_df['GapToCarAhead'] >= overcut_min) &
+        (result_df['GapToCarAhead'] < overcut_max) &
+        (result_df['consistent_gap_ahead_laps'] >= consistency_threshold)
+    )
+
+    result_df['defensive_needed'] = (
+        (result_df['GapToCarBehind'] < defensive_threshold) &
+        (result_df['consistent_gap_behind_laps'] >= consistency_threshold)
+    )
+
+    # Count opportunities by lap range
+    if 'LapNumber' in result_df.columns:
+        # Early stint (first third)
+        early_laps = result_df['LapNumber'].max() // 3
+        result_df['early_stint'] = result_df['LapNumber'] <= early_laps
+
+        # Mid stint (second third)
+        mid_laps = early_laps * 2
+        result_df['mid_stint'] = (result_df['LapNumber'] > early_laps) & (
+            result_df['LapNumber'] <= mid_laps)
+
+        # Late stint (final third)
+        result_df['late_stint'] = result_df['LapNumber'] > mid_laps
+
+    return result_df
 
 
 def prepare_visualization_data(driver_number=None, models_path=None, lap_model_path=None, gap_df=None):

@@ -6,13 +6,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils.data_loader import load_race_data, load_recommendation_data, get_available_drivers
-from utils.processing import get_processed_race_data, get_processed_recommendations, prepare_visualization_data
+from utils.processing import get_processed_race_data, get_processed_recommendations, prepare_visualization_data, get_processed_gap_data
 from components.degradation_view import render_degradation_view
 from components.recommendations_view import render_recommendations_view
 from components.team_radio_view import render_radio_analysis
 from components.overview_view import render_overview
 from components.radio_analysis_view import render_radio_analysis_view
-
+from components.gap_analysis_view import render_gap_analysis
 
 # Add parent directory to path for module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,6 +31,8 @@ if 'recommendations' not in st.session_state:
     st.session_state.recommendations = None
 if 'selected_driver' not in st.session_state:
     st.session_state.selected_driver = None
+if 'gap_data' not in st.session_state:
+    st.session_state.gap_data = None
 
 # Page configuration
 st.set_page_config(
@@ -89,6 +91,7 @@ if st.session_state.selected_driver != selected_driver:
     st.session_state.selected_driver = selected_driver
     st.session_state.race_data = None
     st.session_state.recommendations = None
+    # Do NOT reset gap_data here, so we keep the full DataFrame loaded
 
 # End of data selection container
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
@@ -129,11 +132,21 @@ def load_data():
                 st.error(f"Error loading recommendations: {str(e)}")
                 st.session_state.recommendations = pd.DataFrame()
 
-    return st.session_state.race_data, st.session_state.recommendations
+    # Always load the FULL gap data (all drivers), only once
+    if st.session_state.gap_data is None:
+        with st.spinner("Loading gap data..."):
+            try:
+                st.session_state.gap_data = get_processed_gap_data(
+                    driver_number=None)
+            except Exception as e:
+                st.error(f"Error loading gap data: {str(e)}")
+                st.session_state.gap_data = pd.DataFrame()
+
+    return st.session_state.race_data, st.session_state.recommendations, st.session_state.gap_data
 
 
 # Load data for rendering views
-race_data, recommendations = load_data()
+race_data, recommendations, gap_data = load_data()
 
 # Render main pages
 if page == "Overview":
@@ -141,20 +154,12 @@ if page == "Overview":
 elif page == "Tire Analysis":
     render_degradation_view(race_data, selected_driver)
 elif page == "Gap Analysis":
-    st.header("Gap Analysis")
-    st.write("This section analyzes the gaps between cars throughout the race.")
-    if race_data is None or race_data.empty:
-        st.warning("No gap data available for the selected driver.")
-    else:
-        st.info("Gap analysis visualizations will be implemented here.")
-
+    render_gap_analysis(gap_data, selected_driver)
 elif page == "Team Radio Analysis":
     render_radio_analysis(recommendations)
     render_radio_analysis_view()
-
 elif page == "Strategy Recommendations":
     render_recommendations_view(recommendations)
-
 
 # Footer
 st.markdown("---")
