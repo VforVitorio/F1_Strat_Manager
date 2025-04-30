@@ -64,10 +64,11 @@ def filter_and_sort_recommendations(recommendations, confidence_threshold, selec
     return filtered
 
 
-def plot_recommendation_timeline(filtered_recs, action_colors):
+def plot_recommendation_timeline(filtered_recs, action_colors, key=None):
     """
     Plot a timeline of recommendations by action type and lap number.
     """
+
     fig = go.Figure()
     for action in filtered_recs['action'].unique():
         action_data = filtered_recs[filtered_recs['action'] == action]
@@ -95,7 +96,7 @@ def plot_recommendation_timeline(filtered_recs, action_colors):
         height=400,
         margin=dict(l=40, r=40, t=50, b=40),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=key)
 
 
 def plot_priority_distribution(filtered_recs):

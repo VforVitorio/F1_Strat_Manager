@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from components.recommendations_module.optimal_strategy_generator import generate_optimal_strategy
 from components.recommendations_module.recommendations_helpers import (
     ACTION_COLORS,
     render_stat_card,
@@ -96,7 +97,8 @@ def render_recommendations_view(recommendations):
 
     # Timeline visualization
     st.subheader("Recommendation Timeline")
-    plot_recommendation_timeline(filtered_recs, ACTION_COLORS)
+    plot_recommendation_timeline(
+        filtered_recs, ACTION_COLORS, key="main_timeline")
 
     # Distribution charts
     st.subheader("Recommendation Distribution")
@@ -129,3 +131,15 @@ def render_recommendations_view(recommendations):
         for j, rec in chrono_recs.iterrows():
             render_recommendation_card(
                 rec, ACTION_COLORS, key_prefix=f"chrono_{j}_")
+
+    st.markdown("---")
+    st.subheader("Optimal Strategy")
+    optimal_recs, summary = generate_optimal_strategy(recommendations)
+    st.markdown(f"**Strategy Narrative:**\n\n{summary}")
+
+    # Visual timeline (reuse plot_recommendation_timeline)
+    if optimal_recs:
+        import pandas as pd
+        optimal_df = pd.DataFrame(optimal_recs)
+        plot_recommendation_timeline(
+            optimal_df, ACTION_COLORS, key="optimal_timeline")
