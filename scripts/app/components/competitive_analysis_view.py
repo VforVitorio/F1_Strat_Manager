@@ -1,6 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
-import pandas as pd
+import numpy as np
 
 
 def plot_single_driver_position(race_data, selected_driver):
@@ -63,10 +63,108 @@ def plot_multi_driver_position(race_data, selected_drivers):
                     key=f"multi_driver_{key_str}")
 
 
+def extract_stints(race_data, driver_number):
+    """
+    Returns a list of (stint_start_lap, stint_end_lap, compound) for the given driver.
+    """
+    driver_data = race_data[race_data['DriverNumber']
+                            == driver_number].sort_values('LapNumber')
+    # Drop rows with missing LapNumber or Compound
+    driver_data = driver_data.dropna(subset=['LapNumber', 'Compound'])
+    stints = []
+    last_compound = None
+    stint_start = None
+    for _, row in driver_data.iterrows():
+        compound = row.get("Compound")
+        lap = row["LapNumber"]
+        if last_compound is None:
+            last_compound = compound
+            stint_start = lap
+        elif compound != last_compound:
+            stints.append((stint_start, lap-1, last_compound))
+            stint_start = lap
+            last_compound = compound
+    # Add last stint
+    if stint_start is not None and last_compound is not None:
+        stints.append(
+            (stint_start, driver_data["LapNumber"].max(), last_compound))
+    return stints
+
+
+def estimate_pit_window(stints):
+    """
+    Returns the typical stint length (mean, std) for a list of stints.
+    """
+    lengths = [end - start + 1 for start, end, _ in stints]
+    if lengths:
+        return int(np.mean(lengths)), int(np.std(lengths))
+    return None, None
+
+
+def render_opponent_strategy_estimation(race_data, selected_driver):
+    """
+    Show a table with rivals, their current stint info, and pit/undercut/overcut alerts.
+    """
+    st.markdown("---")
+    st.header("Opponent Strategy Estimation")
+    rivals = sorted(
+        [d for d in race_data['DriverNumber'].unique() if d != selected_driver])
+    rows = []
+    for rival in rivals:
+        stints = extract_stints(race_data, rival)
+        mean_stint, std_stint = estimate_pit_window(
+            stints[:-1]) if len(stints) > 1 else (None, None)
+        current_stint = stints[-1] if stints else (None, None, None)
+        stint_start, stint_end, compound = current_stint
+        laps_on_tyre = race_data[(race_data['DriverNumber'] == rival) & (
+            race_data['LapNumber'] >= stint_start)].shape[0] if stint_start else None
+        likely_pit = False
+        if mean_stint and laps_on_tyre and laps_on_tyre >= (mean_stint - 2):
+            likely_pit = True
+        rows.append({
+            "Rival": rival,
+            "Tyre": compound,
+            "Current Stint Laps": laps_on_tyre,
+            "Typical Stint (mean)": mean_stint,
+            "Pit Soon?": "Yes" if likely_pit else "No"
+        })
+    st.dataframe(rows, use_container_width=True)
+    # Grouped alert box for all rivals likely to pit soon, sorted by stint laps ascending
+    rows_sorted = sorted(
+        [row for row in rows if row["Pit Soon?"] ==
+            "Yes" and row["Current Stint Laps"] is not None],
+        key=lambda x: x["Current Stint Laps"]
+    )
+    alerts = [
+        f"- Rival {row['Rival']} likely to pit soon (on {row['Tyre']}, {row['Current Stint Laps']} laps)."
+        for row in rows_sorted
+    ]
+    if alerts:
+        st.warning("**Rivals likely to pit soon:**\n\n" + "\n".join(alerts))
+
+
 def render_competitive_analysis_view(race_data, selected_driver):
     """
     Render the competitive analysis section (position evolution).
     """
+    # Ensure LapNumber exists
+    if 'LapNumber' not in race_data.columns:
+        try:
+            from utils.processing import add_race_lap_column
+            race_data = add_race_lap_column(race_data)
+        except ImportError:
+            st.error("LapNumber column missing and add_race_lap_column not found.")
+            return
+
+    # Ensure Compound exists
+    COMPOUND_NAMES = {1: "Soft", 2: "Medium",
+                      3: "Hard", 4: "Intermediate", 5: "Wet"}
+    if 'Compound' not in race_data.columns and 'CompoundID' in race_data.columns:
+        race_data['Compound'] = race_data['CompoundID'].map(COMPOUND_NAMES)
+
+    # Drop rows with missing LapNumber or Compound
+    race_data = race_data.dropna(subset=['LapNumber', 'Compound'])
+
     # Filter for valid race laps (e.g., Spain GP: 1-66)
     MAX_LAPS = 66
     race_data = race_data[(race_data['LapNumber'] >= 1)
@@ -95,3 +193,6 @@ def render_competitive_analysis_view(race_data, selected_driver):
     st.markdown("---")
     if selected_drivers:
         plot_multi_driver_position(race_data, selected_drivers)
+
+    st.markdown("---")
+    render_opponent_strategy_estimation(race_data, selected_driver)
