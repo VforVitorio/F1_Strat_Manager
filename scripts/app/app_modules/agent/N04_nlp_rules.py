@@ -1,4 +1,4 @@
-from N01_agent_setup import (
+from app_modules.agent.N01_agent_setup import (
     TelemetryFact,
     DegradationFact,
     RaceStatusFact,

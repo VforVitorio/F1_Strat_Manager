@@ -236,7 +236,7 @@ def load_tire_predictions(race_data, models_path, compound_thresholds=None):
     """
 
     # Import the module
-    from pred import N02_model_tire_predictions as tdp
+    from app_modules.agent.pred import N02_model_tire_predictions as tdp
 
     # Default thresholds based on F1 knowledge if none provided
     if compound_thresholds is None:
@@ -341,7 +341,7 @@ def load_lap_time_predictions(race_data, model_path=None):
     # Use a dynamic import to avoid issues if module structure changes
     try:
         # Try importing the module separately
-        from pred.N00_model_lap_prediction import predict_lap_times
+        from app_modules.agent.pred.N00_model_lap_prediction import predict_lap_times
 
         # Get predictions
         predictions = predict_lap_times(

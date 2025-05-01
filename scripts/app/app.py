@@ -17,6 +17,8 @@ from components.time_predictions_view import render_time_predictions_view
 from utils.processing import get_lap_time_predictions
 from components.competitive_analysis_view import render_competitive_analysis_view
 from components.vision_view import render_vision_view
+from components.strategy_overview import render_strategy_overview
+
 # Add parent directory to path for module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -150,34 +152,77 @@ def load_data():
 # Load data for rendering views
 race_data, recommendations, gap_data = load_data()
 
-# Render main pages
+csv_path = "outputs/week6/spain_gp_recommendations.csv"
+
+
+def strategy_ready():
+    return st.session_state.get("strategy_csv_ready", False) or os.path.exists(csv_path)
+
+
+# Routing for each page
 if page == "Overview":
-    render_overview(race_data, selected_driver, selected_race)
+    render_strategy_overview()
+    if strategy_ready():
+        render_overview(race_data, selected_driver, selected_race)
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard.")
+
 elif page == "Tire Analysis":
-    render_degradation_view(race_data, selected_driver)
+    render_strategy_overview()
+    if strategy_ready():
+        render_degradation_view(race_data, selected_driver)
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard.")
+
 elif page == "Gap Analysis":
-    render_gap_analysis(gap_data, selected_driver)
+    render_strategy_overview()
+    if strategy_ready():
+        render_gap_analysis(gap_data, selected_driver)
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-
-if page == "Lap Time Predictions":
-    predictions_df = get_lap_time_predictions(
-        race_data, model_path="outputs/week3/xgb_sequential_model.pkl"
-    )
-    if predictions_df is not None:
-        render_time_predictions_view(predictions_df, selected_driver)
-
+elif page == "Lap Time Predictions":
+    render_strategy_overview()
+    if strategy_ready():
+        predictions_df = get_lap_time_predictions(
+            race_data, model_path="outputs/week3/xgb_sequential_model.pkl"
+        )
+        if predictions_df is not None:
+            render_time_predictions_view(predictions_df, selected_driver)
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
 elif page == "Team Radio Analysis":
-    render_radio_analysis(recommendations)
-    render_radio_analysis_view()
-elif page == "Strategy Recommendations":
-    render_recommendations_view(recommendations)
+    render_strategy_overview()
+    if strategy_ready():
+        render_radio_analysis(recommendations)
+        render_radio_analysis_view()
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-if page == "Competitive Analysis":
-    render_competitive_analysis_view(race_data, selected_driver)
+elif page == "Strategy Recommendations":
+    render_strategy_overview()
+    if strategy_ready():
+        render_recommendations_view(recommendations)
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard.")
+
+elif page == "Competitive Analysis":
+    render_strategy_overview()
+    if strategy_ready():
+        render_competitive_analysis_view(race_data, selected_driver)
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard.")
+
 elif page == "Vision Gap Extraction":
     render_vision_view()
-
 
 # Footer
 st.markdown("---")

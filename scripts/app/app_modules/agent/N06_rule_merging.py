@@ -11,7 +11,7 @@ It includes utilities for loading data, transforming it into facts, and analyzin
 """
 
 # Import necessary modules
-from N01_agent_setup import (
+from app_modules.agent.N01_agent_setup import (
     # Fact classes for our rule engine
     TelemetryFact,
     DegradationFact,
@@ -36,16 +36,16 @@ from N01_agent_setup import (
 
 # Import the rule engines from each domain
 # Tire degradation rules
-from N02_degradation_time_rules import F1DegradationRules
+from app_modules.agent.N02_degradation_time_rules import F1DegradationRules
 
 # Lap time prediction rules
-from N03_lap_time_rules import F1LapTimeRules
+from app_modules.agent.N03_lap_time_rules import F1LapTimeRules
 
 # Radio communication analysis rules
-from N04_nlp_rules import F1RadioRules
+from app_modules.agent.N04_nlp_rules import F1RadioRules
 
 # Gap analysis rules
-from N05_gap_rules import F1GapRules, calculate_all_gaps, calculate_gap_consistency, transform_gap_data_with_consistency
+from app_modules.agent.N05_gap_rules import F1GapRules, calculate_all_gaps, calculate_gap_consistency, transform_gap_data_with_consistency
 
 # Import standard libraries
 import pandas as pd

@@ -1,7 +1,7 @@
 # ## 1. Importing necessary Libraries
 
 # Import standard libraries
-from N01_agent_setup import (
+from app_modules.agent.N01_agent_setup import (
     TelemetryFact,
     DegradationFact,
     RaceStatusFact,
@@ -10,13 +10,12 @@ from N01_agent_setup import (
 
 )
 
-from N01_agent_setup import (
+from app_modules.agent.N01_agent_setup import (
     get_current_degradation,
     load_tire_predictions,
     transform_tire_predictions
 )
 
-import N01_agent_setup as agent_setup
 from experta import DefFacts, Fact, Field, KnowledgeEngine
 from experta import Rule, NOT, OR, AND, AS, MATCH, TEST, EXISTS
 import pandas as pd

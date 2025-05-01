@@ -2,7 +2,7 @@
 # ## 1. Importing Necessary Libraries
 
 # Import standard Python libraries
-from N01_agent_setup import (
+from app_modules.agent.N01_agent_setup import (
     TelemetryFact,              # For storing car performance data
     DegradationFact,            # For storing tire degradation information
     RaceStatusFact,             # For storing current race conditions
@@ -11,7 +11,6 @@ from N01_agent_setup import (
     transform_lap_time_predictions,  # Function to convert predictions to facts
     load_lap_time_predictions        # Function to load lap time predictions
 )
-import N01_agent_setup as agent_setup
 from experta import DefFacts, Fact, Field, KnowledgeEngine      # Core Experta classes
 # Rule definition components
 from experta import Rule, NOT, OR, AND, AS, MATCH, TEST, EXISTS
