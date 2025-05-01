@@ -102,21 +102,6 @@ if st.session_state.selected_driver != selected_driver:
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 
-def get_lap_range():
-    """Determine min and max lap based on loaded data."""
-    df = st.session_state.race_data
-    if df is not None and 'LapNumber' in df.columns:
-        return int(df['LapNumber'].min()), int(df['LapNumber'].max())
-    return 1, 66  # default fallback
-
-
-# Lap range slider
-min_lap, max_lap = get_lap_range()
-st.sidebar.markdown("**Lap Range**")
-lap_range = st.sidebar.slider(
-    "Lap Range", min_lap, max_lap, (min_lap, max_lap))
-
-
 def load_data():
     """Load and cache race data and strategy recommendations."""
     if st.session_state.race_data is None:
@@ -169,7 +154,6 @@ if page == "Overview":
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
 elif page == "Tire Analysis":
-    render_strategy_overview()
     if strategy_ready():
         render_degradation_view(race_data, selected_driver)
     else:
@@ -177,7 +161,6 @@ elif page == "Tire Analysis":
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
 elif page == "Gap Analysis":
-    render_strategy_overview()
     if strategy_ready():
         render_gap_analysis(gap_data, selected_driver)
     else:
@@ -185,7 +168,6 @@ elif page == "Gap Analysis":
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
 elif page == "Lap Time Predictions":
-    render_strategy_overview()
     if strategy_ready():
         predictions_df = get_lap_time_predictions(
             race_data, model_path="outputs/week3/xgb_sequential_model.pkl"
@@ -197,7 +179,6 @@ elif page == "Lap Time Predictions":
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
 elif page == "Team Radio Analysis":
-    render_strategy_overview()
     if strategy_ready():
         render_radio_analysis(recommendations)
         render_radio_analysis_view()
@@ -206,7 +187,6 @@ elif page == "Team Radio Analysis":
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
 elif page == "Strategy Recommendations":
-    render_strategy_overview()
     if strategy_ready():
         render_recommendations_view(recommendations)
     else:
@@ -214,7 +194,6 @@ elif page == "Strategy Recommendations":
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
 elif page == "Competitive Analysis":
-    render_strategy_overview()
     if strategy_ready():
         render_competitive_analysis_view(race_data, selected_driver)
     else:

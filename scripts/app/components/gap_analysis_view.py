@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 
 from utils.visualization import (
     st_plot_gap_evolution,
@@ -49,7 +48,7 @@ def render_gap_analysis(gap_data, selected_driver):
         try:
             gap_fig = st_plot_gap_evolution(gap_data, selected_driver)
             if gap_fig:
-                st.pyplot(gap_fig)
+                st.plotly_chart(gap_fig, use_container_width=True)
             else:
                 st.info("Not enough data to create gap evolution visualization.")
         except Exception as e:
@@ -63,7 +62,7 @@ def render_gap_analysis(gap_data, selected_driver):
             undercut_fig = st_plot_undercut_opportunities(
                 gap_data, selected_driver)
             if undercut_fig:
-                st.pyplot(undercut_fig)
+                st.plotly_chart(undercut_fig, use_container_width=True)
             else:
                 st.info(
                     "Not enough data to create undercut opportunity visualization.")
@@ -78,7 +77,7 @@ def render_gap_analysis(gap_data, selected_driver):
             consistency_fig = st_plot_gap_consistency(
                 gap_data, selected_driver)
             if consistency_fig:
-                st.pyplot(consistency_fig)
+                st.plotly_chart(consistency_fig, use_container_width=True)
             else:
                 st.info("Not enough data to create gap consistency visualization.")
         except Exception as e:

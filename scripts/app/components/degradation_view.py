@@ -1,10 +1,7 @@
-# components/degradation_view.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-# Corregir la importación para evitar el ciclo
+# No longer need matplotlib.pyplot as plt
 from utils.visualization import (
     st_plot_degradation_rate,
     st_plot_regular_vs_adjusted_degradation,
@@ -40,7 +37,10 @@ def render_degradation_view(race_data, selected_driver):
         try:
             degradation_fig = st_plot_degradation_rate(
                 race_data, selected_driver)
-            st.pyplot(degradation_fig)
+            if degradation_fig:
+                st.plotly_chart(degradation_fig, use_container_width=True)
+            else:
+                st.info("Not enough data to create degradation rate visualization.")
         except Exception as e:
             st.error(f"Error creating degradation rate visualization: {e}")
 
@@ -52,7 +52,10 @@ def render_degradation_view(race_data, selected_driver):
         try:
             fuel_adj_fig = st_plot_regular_vs_adjusted_degradation(
                 race_data, selected_driver)
-            st.pyplot(fuel_adj_fig)
+            if fuel_adj_fig:
+                st.plotly_chart(fuel_adj_fig, use_container_width=True)
+            else:
+                st.info("Not enough data to create fuel-adjusted visualization.")
         except Exception as e:
             st.error(f"Error creating fuel-adjusted visualization: {e}")
 
@@ -68,6 +71,9 @@ def render_degradation_view(race_data, selected_driver):
 
             speed_fig = st_plot_speed_vs_tire_age(
                 race_data, selected_driver, compound_id)
-            st.pyplot(speed_fig)
+            if speed_fig:
+                st.plotly_chart(speed_fig, use_container_width=True)
+            else:
+                st.info("Not enough data to create speed vs tire age visualization.")
         except Exception as e:
             st.error(f"Error creating speed vs tire age visualization: {e}")

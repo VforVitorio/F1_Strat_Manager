@@ -133,6 +133,9 @@
     border-radius: 12px;
     padding: 0.25rem;
     color: var(--text-light);
+    min-width: 120px !important;
+    width: 200px !important;
+    max-width: 100% !important;
 }
 
 /* Slider styling */
