@@ -15,7 +15,7 @@ from components.radio_analysis_view import render_radio_analysis_view
 from components.gap_analysis_view import render_gap_analysis
 from components.time_predictions_view import render_time_predictions_view
 from utils.processing import get_lap_time_predictions
-
+from components.competitive_analysis_view import render_competitive_analysis_view
 
 # Add parent directory to path for module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,7 +62,7 @@ st.sidebar.markdown(
 page = st.sidebar.radio(
     "",  # hide default label
     ["Overview", "Tire Analysis", "Gap Analysis", "Lap Time Predictions",
-        "Team Radio Analysis", "Strategy Recommendations"],
+        "Team Radio Analysis", "Strategy Recommendations", "Competitive Analysis"],
     index=0
 )
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
@@ -172,6 +172,9 @@ elif page == "Team Radio Analysis":
     render_radio_analysis_view()
 elif page == "Strategy Recommendations":
     render_recommendations_view(recommendations)
+
+if page == "Competitive Analysis":
+    render_competitive_analysis_view(race_data, selected_driver)
 
 # Footer
 st.markdown("---")

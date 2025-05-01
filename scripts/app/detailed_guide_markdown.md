@@ -4,76 +4,87 @@
 
 ---
 
-## 1. Optimal Strategy Construction and Visualization
-
-### 1.1. Automatic Selection of Compatible Recommendations
-
-- Implement an algorithm to select a compatible subset of recommendations, resolving conflicts automatically (e.g., avoid 'extend_stint' and 'pit_stop' on close laps).
-- Ensure FIA rules are respected (at least one pit stop and two different tyre compounds if applicable).
-- Allow for future override by user selection.
-
-### 1.2. Timeline and Step Chart Visualization
-
-- Visualize the optimal strategy as a step chart or sequential timeline.
-- Clearly show transitions between stints and pit stops.
-- Use color and labels to distinguish action types and priorities.
-- Display projected metrics (lap times, expected position, degradation) in tooltips or directly on the chart.
-
-### 1.3. Narrative Summary
-
-- Generate a natural language summary of the optimal strategy, including stint breakdown, key decisions, and projected outcomes.
-- Highlight any FIA rule warnings (e.g., only one compound detected).
-
----
-
-## 2. Strategic Conflict Detection and Resolution
-
-### 2.1. Conflict Identification
-
-- Automatically detect incompatible or overlapping recommendations.
-- Highlight conflicts visually in the UI (e.g., warning icons, color overlays).
-
-### 2.2. Conflict Explanation and User Resolution
-
-- Provide clear explanations for why recommendations are considered conflicting.
-- Suggest resolutions based on confidence, priority, or projected impact.
-- Allow the user to manually resolve conflicts and re-calculate the optimal strategy.
-
 ---
 
 ---
 
-## 4. Critical Decision Point Mapping
-
-### 4.1. Identification of Key Moments
-
-- Analyze the race timeline to identify laps where strategic decisions have the highest impact.
-- Use heuristics or ML models to detect windows of opportunity or risk.
-
-### 4.2. Heatmap or Timeline Visualization
-
-- Display a heatmap or similar visualization showing the density and importance of decision points across the race.
-- Allow users to click on a point to see detailed context and recommendations.
+Recopilando información del área de trabajoTe recomiendo el siguiente **planning paso a paso** para implementar la sección de Competitive Analysis de forma robusta y escalable, aprovechando lo que ya tienes en tu workspace:
 
 ---
 
-## 5. Competitive Analysis
+## Punto 5
 
-### 5.1. Relative Position and Gap Mapping
+### **Fase 1: Visualización de Posición Relativa y Gaps (5.1)**
 
-- Visualize the car's position relative to competitors on track.
-- Show gap evolution with key rivals and potential undercut/overcut windows.
+1. **Preparar los datos necesarios**
 
-### 5.2. Opponent Strategy Estimation
+   - Asegúrate de tener un DataFrame con las posiciones y gaps por vuelta (`race_data` y/o `gap_data`).
+   - Incluye columnas: `LapNumber`, `DriverNumber`, `Position`, `GapToCarAhead`, `GapToCarBehind`.
 
-- Estimate likely strategies of other teams based on historical data and current race context.
-- Alert the user to strategic threats or opportunities (e.g., "Rival X likely to pit soon").
+2. **Visualización básica**
 
-### 5.3. Defensive and Offensive Recommendations
+   - Implementa un gráfico de evolución de posición por vuelta (línea para cada piloto relevante).
+   - Añade un gráfico de evolución de gap con los rivales clave (adelante/detrás).
+   - Usa colores y leyendas claras para distinguir pilotos.
 
-- Provide context-aware suggestions for defending or attacking based on real-time gaps and projected stints.
+3. **Visualización de ventanas de undercut/overcut**
+
+   - Usa la función `st_plot_undercut_opportunities` de `utils/visualization.py` para mostrar zonas de oportunidad.
+   - Permite seleccionar el rival a comparar.
 
 ---
+
+### **Fase 2: Estimación de Estrategia de Rivales (5.2)**
+
+4. **Análisis de patrones históricos**
+
+   - Extrae de los datos históricos las vueltas típicas de parada de cada equipo/rival.
+   - Calcula la probabilidad de parada en las próximas vueltas para cada rival (puede ser una simple heurística basada en stint actual y degradación).
+
+5. **Alertas de amenazas u oportunidades**
+
+   - Implementa lógica para detectar si un rival está cerca de su ventana de parada o si está en posición de undercut/overcut.
+   - Muestra alertas tipo:
+     - "Rival X likely to pit in next 2 laps"
+     - "Undercut threat from Rival Y"
+
+---
+
+### **Fase 3: Recomendaciones Defensivas/Ofensivas (5.3)**
+
+6. **Generación de recomendaciones contextuales**
+
+   - Usa reglas simples (como las de tus notebooks y scripts de gap rules) para sugerir:
+     - Defender posición si el gap detrás es bajo y el rival está en ventana de undercut.
+     - Atacar si el gap delante es bajo y el rival está cerca de su parada.
+   - Muestra estas recomendaciones en tarjetas o mensajes destacados.
+
+7. **Integración visual**
+
+   - Añade iconos o colores en los gráficos para indicar momentos de riesgo/oportunidad.
+   - Permite al usuario ver detalles de la recomendación (explicación, confianza, etc.).
+
+---
+
+### **Fase 4: Refinamiento y Automatización**
+
+8. **Automatiza la actualización en tiempo real**
+
+   - Si tienes datos en vivo, refresca las visualizaciones y recomendaciones automáticamente.
+
+9. **Prepara la integración futura con LLM**
+
+   - Deja hooks o funciones para que el LLM pueda generar explicaciones o sugerencias más avanzadas en el futuro.
+
+---
+
+### **Resumen visual del planning**
+
+1. **Datos y visualización básica de posiciones/gaps**
+2. **Visualización de oportunidades de undercut/overcut**
+3. **Estimación de estrategias rivales y alertas**
+4. **Recomendaciones defensivas/ofensivas contextuales**
+5. **Refinamiento, automatización y preparación para LLM**
 
 ## 6. Video Analysis and gap_calculation.ipynb Integration
 
