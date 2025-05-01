@@ -187,6 +187,8 @@ def render_overview(race_data, selected_driver, selected_race):
         default=[f"Driver {driver_num}"],
         max_selections=3
     )
+    st.markdown("---")
+
     compare_drivers = [driver_map[label] for label in compare_drivers_labels]
 
     if compare_drivers:
