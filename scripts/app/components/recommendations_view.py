@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 from components.recommendations_module.optimal_strategy_generator import (
     generate_optimal_strategy,
-    plot_optimal_strategy_gantt
+    plot_optimal_strategy_step_chart,
+    plot_optimal_strategy_swimlane,
+    render_optimal_strategy_summary_table
 )
 from components.recommendations_module.recommendations_helpers import (
     ACTION_COLORS,
@@ -137,10 +139,15 @@ def render_recommendations_view(recommendations):
 
     # --- OPTIMAL STRATEGY SECTION ---
     st.markdown("---")
-    st.subheader("Optimal Strategy (not following FIA rules)")
+    st.subheader("Optimal Strategy")
     optimal_recs, summary, stints = generate_optimal_strategy(recommendations)
     st.markdown(f"**Strategy Narrative:**\n\n{summary}")
 
-    # Visual timeline for optimal strategy (Gantt)
-    if stints:
-        plot_optimal_strategy_gantt(stints)
+    st.subheader("Step Chart (Action Timeline)")
+    plot_optimal_strategy_step_chart(optimal_recs)
+
+    st.subheader("Swimlane Chart (Action Lanes)")
+    plot_optimal_strategy_swimlane(optimal_recs)
+
+    st.subheader("Summary Table")
+    render_optimal_strategy_summary_table(optimal_recs)
