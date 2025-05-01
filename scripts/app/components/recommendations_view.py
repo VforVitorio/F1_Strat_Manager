@@ -16,12 +16,21 @@ from components.recommendations_module.recommendations_helpers import (
     render_recommendation_card
 )
 
+from components.recommendations_module.strategy_comparator import (
+    render_strategy_comparison,
+    generate_aggressive_strategy,
+    generate_conservative_strategy
+)
+from utils.processing import get_processed_race_data
 
-def render_recommendations_view(recommendations):
+
+def render_recommendations_view(recommendations, selected_driver=None):
     """
     Main entry point for the strategy recommendations section.
     Uses helper functions for stats, filtering, timeline, distributions, and cards.
     """
+
+    race_data = get_processed_race_data(selected_driver)
     st.header("Strategy Recommendations")
     st.write(
         "Interactive analysis of AI-generated strategic recommendations for race optimization.")
@@ -101,11 +110,14 @@ def render_recommendations_view(recommendations):
     )
 
     # Timeline visualization
+    st.markdown("---")
     st.subheader("Recommendation Timeline")
     plot_recommendation_timeline(
         filtered_recs, ACTION_COLORS, key="main_timeline")
 
     # Distribution charts
+
+    st.markdown("---")
     st.subheader("Recommendation Distribution")
     col1, col2 = st.columns(2)
     with col1:
@@ -114,6 +126,8 @@ def render_recommendations_view(recommendations):
         plot_confidence_distribution(filtered_recs)
 
     # Detailed recommendation cards
+
+    st.markdown("---")
     st.subheader("Detailed Recommendations")
     view_mode = st.radio(
         "View Mode",
@@ -141,13 +155,35 @@ def render_recommendations_view(recommendations):
     st.markdown("---")
     st.subheader("Optimal Strategy")
     optimal_recs, summary, stints = generate_optimal_strategy(recommendations)
+
+    aggressive_recs, aggressive_summary, aggressive_stints = generate_aggressive_strategy(
+        recommendations)
+    conservative_recs, conservative_summary, conservative_stints = generate_conservative_strategy(
+        recommendations)
+
+    all_strategies = {
+        "Optimal": optimal_recs,
+        "Aggressive": aggressive_recs,
+        "Conservative": conservative_recs
+    }
+
     st.markdown(f"**Strategy Narrative:**\n\n{summary}")
 
+    st.markdown("---")
     st.subheader("Step Chart (Action Timeline)")
     plot_optimal_strategy_step_chart(optimal_recs)
+
+    st.markdown("---")
 
     st.subheader("Swimlane Chart (Action Lanes)")
     plot_optimal_strategy_swimlane(optimal_recs)
 
+    st.markdown("---")
+
     st.subheader("Summary Table")
     render_optimal_strategy_summary_table(optimal_recs)
+
+    # --- STRATEGY COMPARATOR SECTION ---
+    st.markdown("---")
+    st.subheader("Strategy Comparator")
+    render_strategy_comparison(all_strategies, race_data)
