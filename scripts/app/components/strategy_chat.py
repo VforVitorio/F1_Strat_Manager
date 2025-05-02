@@ -131,7 +131,7 @@ def generate_chat_name(context=None):
 
 
 def get_chat_history():
-    """
+    """@
     Return the current chat message history.
     """
     return st.session_state.get("strategy_chat_history", [])
@@ -218,43 +218,68 @@ def handle_user_input_streaming(text, image=None, model="llama3.2-vision", tempe
     """
     Process user input and display the model's response in streaming.
     """
+    # Check if image is actually being passed properly
+    if image is not None:
+        st.write(f"**Debug:** Image data received, size: {len(image)} bytes")
+        st.image(image, caption="Debug: Thumbnail of uploaded image", width=100)
+    else:
+        st.write("**Debug:** No image data received")
+
     messages = []
     # Fixed system prompt (not visible)
     system_prompt = (
-        "You are an advanced Formula 1 strategy assistant. "
-        "You are only allowed to answer questions strictly related to Formula 1, its history, races, drivers, teams, regulations, and technical or strategic aspects. "
-        "You have access to historical F1 data, including race results, lap times, pit stops, weather conditions, tyre choices, and championship standings. "
-        "You can analyze and interpret a wide variety of visual data, including but not limited to: lap time charts, tyre degradation graphs, stint comparison plots, pit stop timelines, position change graphs, weather evolution charts, and tables of race results or driver statistics. "
-        "When an image is provided, first describe its content in detail, then extract relevant insights, and answer any specific questions about it. "
-        "If the user uploads a chart, table, or image, always relate your analysis to F1 context and strategy. "
-        "If a question is not related to Formula 1, politely refuse to answer and remind the user of your scope. "
-        "Continue the conversation using both textual and visual information as context, maintaining coherence and memory of previous exchanges. "
-        "Always provide clear, concise, and actionable responses, using technical F1 terminology when appropriate."
+        "You are an expert Formula 1 strategy assistant with deep knowledge of history, regulations, teams, drivers, and technical data. "
+        "Your goal is to provide detailed analyses and tactical recommendations based on:\n\n"
+        "1. **Scope of Expertise**  \n"
+        "- Only answer questions related to Formula 1: its history, regulations, races, teams, drivers, real-time and historical data, telemetry, and charts.  \n"
+        "- If asked about anything outside this scope, politely decline and redirect to an F1 topic.\n\n"
+        "2. **Data Types & Visualizations**  \n"
+        "- Stint-length charts, tyre-degradation graphs, lap-time comparisons, pit-stop timelines, position-change plots, weather evolution charts, etc.  \n"
+        "- Result tables, sector-time breakdowns, stint summaries, and heatmaps.\n\n"
+        "3. **Workflow for Image Inputs**  \n"
+        "   a) **Identification**: Describe precisely what type of chart or table it is and its axes/dimensions.  \n"
+        "   b) **Extraction**: Highlight key metrics (e.g., lap-time delta, degradation curves, tyre compounds).  \n"
+        "   c) **Contextualization**: Relate findings to race strategy—optimal pit-stop window, undercut/overcut opportunities, fuel saving, compound selection, Safety Car windows, etc.  \n"
+        "   d) **Recommendation**: Propose a clear strategy, stating advantages, risks, and triggering conditions.\n\n"
+        "4. **Answer Style**  \n"
+        "- Use precise technical terminology (DRS window, stint length, delta, stint profile, etc.).  \n"
+        "- Structure responses with numbered sections or bullet points for clarity.  \n"
+        "- Be concise yet thorough enough to justify each strategic recommendation.  \n"
+        "- When referencing historical data, cite specific seasons, Grands Prix, or drivers (e.g., “At the 2021 Italian GP, Mercedes…”).\n\n"
+        "5. **Memory & Coherence**  \n"
+        "- Maintain conversational context: remember chosen drivers, circuits, and conditions previously discussed.  \n"
+        "- Update your analysis and recommendations when new information arrives (e.g., revised weather forecast).\n\n"
+        "6. **Example Response**  \n"
+        "   1. Chart Identification: Heatmap of sector times at Silverstone (Sector 1 vs Sector 2).  \n"
+        "   2. Key Findings: Driver A is 0.3 s slower in Sector 2 than teammate, likely due to oversteer.  \n"
+        "   3. Strategy Proposal: Execute an undercut on lap 18 with medium tyres, leveraging consistent pace in Sector 1.  \n"
+        "   4. Risks: Potential early degradation in Sector 3 if track temperature rises.  \n"
     )
-    messages.append({"role": "system", "type": "text",
-                    "content": system_prompt})
 
-    if text and image:
-        img_b64 = base64.b64encode(image).decode("utf-8")
-        multimodal_content = [
-            {"type": "text", "text": text},
-            {"type": "image", "image": img_b64}
-        ]
-        messages.append({"role": "user", "type": "multimodal",
-                        "content": multimodal_content})
-        add_message("user", "text", text)
-        add_message("user", "image", image)
+    messages.append({"role": "system", "content": system_prompt})
+
+    # Always send at least a dummy text with the image for Ollama vision models
+    if image is not None:
+        if hasattr(image, "read"):
+            img_bytes = image.read()
+        else:
+            img_bytes = image
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+        if not text:
+            text = "Analyze this image."
+        messages.append({
+            "role": "user",
+            "content": text,
+            "images": [img_b64]
+        })
     elif text:
-        messages.append({"role": "user", "type": "text", "content": text})
+        messages.append({"role": "user", "content": text})
+
+    # Add to chat history for display
+    if text:
         add_message("user", "text", text)
-    elif image:
-        img_b64 = base64.b64encode(image).decode("utf-8")
-        multimodal_content = [{"type": "image", "image": img_b64}]
-        messages.append({"role": "user", "type": "multimodal",
-                        "content": multimodal_content})
+    if image is not None:
         add_message("user", "image", image)
-    else:
-        return
 
     # Show streaming response
     response_placeholder = st.empty()
@@ -274,38 +299,58 @@ def stream_llm_response(messages, model, temperature):
     """
     Returns the model's text in streaming (chunks).
     """
-    ollama_messages = []
-    for msg in messages:
-        if msg["type"] == "text":
-            ollama_messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
-        elif msg["type"] == "image":
-            if ollama_messages and ollama_messages[-1]["role"] == "user":
-                last = ollama_messages.pop()
-                multimodal_content = []
-                if isinstance(last["content"], str):
-                    multimodal_content.append(
-                        {"type": "text", "text": last["content"]})
-                if isinstance(msg["content"], bytes):
-                    img_b64 = base64.b64encode(msg["content"]).decode("utf-8")
-                else:
-                    img_b64 = msg["content"]
-                multimodal_content.append({"type": "image", "image": img_b64})
-                ollama_messages.append({
-                    "role": "user",
-                    "content": multimodal_content
-                })
+    # Create a debug container in the UI
+    debug_container = st.expander(
+        "Debug Information (Expand to see)", expanded=False)
+
+    # Important: Keep messages exactly as passed in - no reformatting
+    # Ollama expects a specific format we shouldn't modify
+    ollama_messages = messages
+
+    # Display debug info in Streamlit UI
+    with debug_container:
+        st.write(f"**Model being used:** {model}")
+        st.write(f"**Number of messages in payload:** {len(ollama_messages)}")
+
+        for i, msg in enumerate(ollama_messages):
+            st.write(f"**Message {i+1}:** Role = {msg['role']}")
+            content = msg["content"]
+            if isinstance(content, list):
+                st.write(f"- Message has {len(content)} content items")
+                for j, item in enumerate(content):
+                    content_type = item.get("type", "unknown")
+                    st.write(f"  - Content item {j+1} type: {content_type}")
+                    if content_type == "image" and isinstance(item.get("image"), str):
+                        # Debug output for image data
+                        img_data = item["image"]
+                        img_len = len(img_data)
+                        st.write(f"  - Image data length: {img_len} chars")
+                        if img_len > 100:
+                            st.write(
+                                f"  - Image data sample start: {img_data[:50]}...")
+                            st.write(
+                                f"  - Image data sample end: ...{img_data[-50:]}")
+                            is_valid = True
+                            try:
+                                # For data URLs, skip the prefix when decoding
+                                if img_data.startswith("data:"):
+                                    base64_part = img_data.split(",", 1)[1]
+                                    base64.b64decode(base64_part)
+                                else:
+                                    base64.b64decode(img_data)
+                            except Exception as e:
+                                is_valid = False
+                                st.error(
+                                    f"  - ERROR: Image data is NOT valid base64: {str(e)}")
+
+                            if is_valid:
+                                st.success("  - Image data is valid base64")
+                        else:
+                            st.error(
+                                "  - Image data is too short! Length should be thousands of characters")
             else:
-                if isinstance(msg["content"], bytes):
-                    img_b64 = base64.b64encode(msg["content"]).decode("utf-8")
-                else:
-                    img_b64 = msg["content"]
-                ollama_messages.append({
-                    "role": msg["role"],
-                    "content": [{"type": "image", "image": img_b64}]
-                })
+                content_len = len(str(content)) if content else 0
+                st.write(f"  - Simple content with length: {content_len}")
 
     payload = {
         "model": model,
@@ -313,29 +358,55 @@ def stream_llm_response(messages, model, temperature):
         "temperature": temperature
     }
 
-    response = requests.post(
-        "http://localhost:11434/api/chat",
-        json=payload,
-        timeout=120,
-        stream=True
-    )
-    response.raise_for_status()
+    # Also add request/response debugging
+    response_info = {"status": None, "headers": None, "error": None}
 
-    # Read line by line and yield text chunks
-    for line in response.iter_lines():
-        if line:
-            try:
-                data = json.loads(line.decode("utf-8"))
-                if "message" in data and "content" in data["message"]:
-                    content = data["message"]["content"]
-                    if isinstance(content, str):
-                        yield content
-                    elif isinstance(content, list):
-                        for part in content:
-                            if part.get("type") == "text":
-                                yield part.get("text", "")
-            except Exception:
-                continue
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/chat",
+            json=payload,
+            timeout=120,
+            stream=True
+        )
+        response_info["status"] = response.status_code
+        response_info["headers"] = dict(response.headers)
+
+        response.raise_for_status()
+
+        # Read line by line and yield text chunks
+        for line in response.iter_lines():
+            if line:
+                try:
+                    data = json.loads(line.decode("utf-8"))
+                    if "message" in data and "content" in data["message"]:
+                        content = data["message"]["content"]
+                        if isinstance(content, str):
+                            yield content
+                        elif isinstance(content, list):
+                            for part in content:
+                                if part.get("type") == "text":
+                                    yield part.get("text", "")
+                except Exception as e:
+                    response_info["error"] = f"Error processing response line: {str(e)}"
+                    continue
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Error making request to Ollama: {str(e)}"
+        response_info["error"] = error_msg
+        if hasattr(e, 'response') and e.response:
+            response_info["status"] = e.response.status_code
+            response_info["response_text"] = e.response.text[:500]
+        yield f"Error communicating with the model service. Please try again later."
+
+    # Update the debug container with response info
+    with debug_container:
+        st.write("**API Response:**")
+        st.write(f"- Status code: {response_info['status']}")
+        if response_info.get("error"):
+            st.error(f"- Error: {response_info['error']}")
+        st.write(f"- Headers: {response_info['headers']}")
+        if "response_text" in response_info:
+            st.write(
+                f"- Response text sample: {response_info['response_text']}")
 
 
 def send_message_to_llm(messages, model, temperature):
