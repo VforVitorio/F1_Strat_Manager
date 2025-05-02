@@ -143,16 +143,14 @@ def initialize_chat_state():
         st.session_state.current_chat_name = None
 
 
-def generate_chat_name(context=None):
-    """
-    Generate a representative chat name using context and timestamp.
-    Args:
-        context (str, optional): Context info (e.g., section, driver, chart type)
-    Returns:
-        str: Generated chat name
-    """
+def generate_chat_name(context=None, user_message=None):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    if context:
+    if user_message:
+        # Usa los primeros 30 caracteres del mensaje del usuario
+        title = user_message[:30] + \
+            "..." if len(user_message) > 30 else user_message
+        return f"{title}"
+    elif context:
         return f"{context}_{timestamp}"
     else:
         return f"Chat_{timestamp}"
@@ -169,9 +167,14 @@ def create_new_chat(context=None):
     """
     Create a new chat, saving the current one if it has content.
     """
-    # If current chat has content, save it before creating a new one
     if st.session_state.strategy_chat_history and st.session_state.current_chat_name is None:
-        chat_name = generate_chat_name(context)
+
+        user_msg = next(
+            (msg["content"] for msg in st.session_state.strategy_chat_history if msg["role"]
+             == "user" and msg["type"] == "text"),
+            None
+        )
+        chat_name = generate_chat_name(context, user_message=user_msg)
         st.session_state.strategy_saved_chats[chat_name] = list(
             st.session_state.strategy_chat_history)
         st.session_state.current_chat_name = chat_name
