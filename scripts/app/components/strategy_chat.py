@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import base64
 import datetime
+import json
 
 
 def render_strategy_chat(section_title="F1 Strategy Assistant Chat", context=None):
@@ -16,17 +17,27 @@ def render_strategy_chat(section_title="F1 Strategy Assistant Chat", context=Non
     with st.sidebar:
         st.markdown("### 💬 Strategy Chats")
         if st.button("➕ New chat", key="new_chat_btn"):
-            reset_chat(context)
-            st.success("New chat started.")
+            create_new_chat(context)
+            st.rerun()
+
+        # Display saved chats
         chat_names = list(st.session_state.get(
             "strategy_saved_chats", {}).keys())
-        selected_chat = st.selectbox("Chat history", [""] + chat_names)
-        if st.button("Load chat", key="load_chat_btn") and selected_chat:
-            load_chat(selected_chat)
-            st.success(f"Chat '{selected_chat}' loaded.")
+        if chat_names:
+            st.markdown("#### Chat history")
+            for chat_name in chat_names:
+                # Only show button for chats that aren't the current one
+                if chat_name != st.session_state.get("current_chat_name", None):
+                    if st.button(chat_name, key=f"load_{chat_name}"):
+                        load_chat(chat_name)
+                        st.rerun()
+                else:
+                    # Highlight the current chat
+                    st.markdown(f"**→ {chat_name}**")
+
         if st.button("🗑️ Delete current chat", key="delete_chat_btn"):
-            reset_chat(context)
-            st.success("Current chat deleted.")
+            delete_current_chat()
+            st.rerun()
 
         st.markdown("---")
         st.markdown("### ⚙️ Model parameters")
@@ -35,17 +46,10 @@ def render_strategy_chat(section_title="F1 Strategy Assistant Chat", context=Non
             "Model", available_models) if available_models else "llama3.2-vision"
         temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.01)
 
-        st.markdown("---")
-        with st.expander("📝 System prompt", expanded=False):
-            custom_prompt = st.text_area(
-                "System prompt", st.session_state.get("strategy_system_prompt", ""))
-            if st.button("Update prompt", key="set_prompt_btn"):
-                set_system_prompt(custom_prompt)
-                st.success("Prompt updated.")
-
-    # --- MAIN AREA: ChatGPT-style conversation ---
     st.markdown(f"## {section_title}")
+    st.markdown("#### Write your message or upload an image")
 
+    # --- Chat history and user input together ---
     chat_container = st.container()
     with chat_container:
         st.markdown("#### Conversation")
@@ -73,25 +77,28 @@ def render_strategy_chat(section_title="F1 Strategy Assistant Chat", context=Non
                     if msg["content"] is not None:
                         st.image(msg["content"])
 
-    # --- User input ---
-    st.markdown("#### Write your message or upload an image")
+        # --- User input ALWAYS AT THE BOTTOM ---
+        if "user_input_key" not in st.session_state:
+            st.session_state.user_input_key = 0
 
-    # Text input (large, always visible)
-    user_text = st.text_area("Message", "", key="user_text_area")
+        user_text = st.text_area(
+            "Message",
+            value="",
+            key=f"user_text_area_{st.session_state.user_input_key}"
+        )
+        user_image = st.file_uploader(
+            "Upload an image (PNG, JPG, JPEG)",
+            type=["png", "jpg", "jpeg"],
+            key="user_image_uploader"
+        )
+        send_btn = st.button("Send", key="send_btn")
 
-    # Image uploader (large, always visible, just below text input)
-    user_image = st.file_uploader(
-        "Upload an image (PNG, JPG, JPEG)",
-        type=["png", "jpg", "jpeg"],
-        key="user_image_uploader"
-    )
-
-    # Send button
-    if st.button("Send", key="send_btn"):
-        image_bytes = user_image.read() if user_image else None
-        handle_user_input(user_text, image=image_bytes,
-                          model=model, temperature=temperature)
-        st.rerun()
+        if send_btn:
+            image_bytes = user_image.read() if user_image else None
+            handle_user_input_streaming(user_text, image=image_bytes,
+                                        model=model, temperature=temperature)
+            st.session_state.user_input_key += 1
+            st.rerun()
 
 
 def initialize_chat_state():
@@ -102,6 +109,10 @@ def initialize_chat_state():
         st.session_state.strategy_chat_history = []
     if "strategy_system_prompt" not in st.session_state:
         st.session_state.strategy_system_prompt = ""
+    if "strategy_saved_chats" not in st.session_state:
+        st.session_state.strategy_saved_chats = {}
+    if "current_chat_name" not in st.session_state:
+        st.session_state.current_chat_name = None
 
 
 def generate_chat_name(context=None):
@@ -126,23 +137,59 @@ def get_chat_history():
     return st.session_state.get("strategy_chat_history", [])
 
 
-def save_current_chat(chat_name):
+def create_new_chat(context=None):
     """
-    Save the current chat history under a given name.
+    Create a new chat, saving the current one if it has content.
     """
-    if "strategy_saved_chats" not in st.session_state:
-        st.session_state.strategy_saved_chats = {}
-    st.session_state.strategy_saved_chats[chat_name] = list(
-        st.session_state.strategy_chat_history)
+    # If current chat has content, save it before creating a new one
+    if st.session_state.strategy_chat_history and st.session_state.current_chat_name is None:
+        chat_name = generate_chat_name(context)
+        st.session_state.strategy_saved_chats[chat_name] = list(
+            st.session_state.strategy_chat_history)
+        st.session_state.current_chat_name = chat_name
+
+    # Create a new empty chat
+    st.session_state.strategy_chat_history = []
+    st.session_state.strategy_system_prompt = ""
+    st.session_state.current_chat_name = None
+
+
+def delete_current_chat():
+    """
+    Delete the current chat. If it's a saved chat, remove it from saved chats.
+    """
+    if st.session_state.current_chat_name:
+        if st.session_state.current_chat_name in st.session_state.strategy_saved_chats:
+            del st.session_state.strategy_saved_chats[st.session_state.current_chat_name]
+
+    # Clear current chat
+    st.session_state.strategy_chat_history = []
+    st.session_state.strategy_system_prompt = ""
+    st.session_state.current_chat_name = None
 
 
 def load_chat(chat_name):
     """
     Load a saved chat history by name.
     """
-    if "strategy_saved_chats" in st.session_state and chat_name in st.session_state.strategy_saved_chats:
+    if chat_name in st.session_state.strategy_saved_chats:
+        # Save current chat if needed
+        current_chat_name = st.session_state.current_chat_name
+        if current_chat_name != chat_name and st.session_state.strategy_chat_history:
+            if current_chat_name is None:
+                # Only autosave if the chat doesn't already have a name
+                new_name = generate_chat_name()
+                st.session_state.strategy_saved_chats[new_name] = list(
+                    st.session_state.strategy_chat_history)
+            else:
+                # Update existing chat
+                st.session_state.strategy_saved_chats[current_chat_name] = list(
+                    st.session_state.strategy_chat_history)
+
+        # Load the selected chat
         st.session_state.strategy_chat_history = list(
             st.session_state.strategy_saved_chats[chat_name])
+        st.session_state.current_chat_name = chat_name
 
 
 def add_message(role, msg_type, content):
@@ -161,10 +208,71 @@ def add_message(role, msg_type, content):
     }
     st.session_state.strategy_chat_history.append(message)
 
+    # If the chat has a name, update it in saved chats
+    if st.session_state.current_chat_name:
+        st.session_state.strategy_saved_chats[st.session_state.current_chat_name] = list(
+            st.session_state.strategy_chat_history)
 
-def send_message_to_llm(messages, model, temperature):
+
+def handle_user_input_streaming(text, image=None, model="llama3.2-vision", temperature=0.2):
     """
-    Send the message history to the LLM (Ollama) and return the response.
+    Process user input and display the model's response in streaming.
+    """
+    messages = []
+    # Fixed system prompt (not visible)
+    system_prompt = (
+        "You are an advanced Formula 1 strategy assistant. "
+        "You are only allowed to answer questions strictly related to Formula 1, its history, races, drivers, teams, regulations, and technical or strategic aspects. "
+        "You have access to historical F1 data, including race results, lap times, pit stops, weather conditions, tyre choices, and championship standings. "
+        "You can analyze and interpret a wide variety of visual data, including but not limited to: lap time charts, tyre degradation graphs, stint comparison plots, pit stop timelines, position change graphs, weather evolution charts, and tables of race results or driver statistics. "
+        "When an image is provided, first describe its content in detail, then extract relevant insights, and answer any specific questions about it. "
+        "If the user uploads a chart, table, or image, always relate your analysis to F1 context and strategy. "
+        "If a question is not related to Formula 1, politely refuse to answer and remind the user of your scope. "
+        "Continue the conversation using both textual and visual information as context, maintaining coherence and memory of previous exchanges. "
+        "Always provide clear, concise, and actionable responses, using technical F1 terminology when appropriate."
+    )
+    messages.append({"role": "system", "type": "text",
+                    "content": system_prompt})
+
+    if text and image:
+        img_b64 = base64.b64encode(image).decode("utf-8")
+        multimodal_content = [
+            {"type": "text", "text": text},
+            {"type": "image", "image": img_b64}
+        ]
+        messages.append({"role": "user", "type": "multimodal",
+                        "content": multimodal_content})
+        add_message("user", "text", text)
+        add_message("user", "image", image)
+    elif text:
+        messages.append({"role": "user", "type": "text", "content": text})
+        add_message("user", "text", text)
+    elif image:
+        img_b64 = base64.b64encode(image).decode("utf-8")
+        multimodal_content = [{"type": "image", "image": img_b64}]
+        messages.append({"role": "user", "type": "multimodal",
+                        "content": multimodal_content})
+        add_message("user", "image", image)
+    else:
+        return
+
+    # Show streaming response
+    response_placeholder = st.empty()
+    assistant_text = ""
+    for chunk in stream_llm_response(messages, model, temperature):
+        if chunk:
+            assistant_text += chunk
+            response_placeholder.markdown(
+                f'<div style="background-color:#393e46; color:#fff; padding:12px; border-radius:16px; margin-bottom:8px; text-align:left; max-width:70%;"><b>Assistant:</b> {assistant_text}</div>',
+                unsafe_allow_html=True
+            )
+    if assistant_text.strip():
+        add_message("assistant", "text", assistant_text)
+
+
+def stream_llm_response(messages, model, temperature):
+    """
+    Returns the model's text in streaming (chunks).
     """
     ollama_messages = []
     for msg in messages:
@@ -174,11 +282,8 @@ def send_message_to_llm(messages, model, temperature):
                 "content": msg["content"]
             })
         elif msg["type"] == "image":
-            # Only add image if previous message is not from user
             if ollama_messages and ollama_messages[-1]["role"] == "user":
-                # If last message is from user and is text, convert to multimodal
                 last = ollama_messages.pop()
-                # Convert to multimodal content
                 multimodal_content = []
                 if isinstance(last["content"], str):
                     multimodal_content.append(
@@ -193,7 +298,6 @@ def send_message_to_llm(messages, model, temperature):
                     "content": multimodal_content
                 })
             else:
-                # Image without text
                 if isinstance(msg["content"], bytes):
                     img_b64 = base64.b64encode(msg["content"]).decode("utf-8")
                 else:
@@ -212,22 +316,109 @@ def send_message_to_llm(messages, model, temperature):
     response = requests.post(
         "http://localhost:11434/api/chat",
         json=payload,
-        timeout=120
+        timeout=120,
+        stream=True
     )
     response.raise_for_status()
-    return response.json()
+
+    # Read line by line and yield text chunks
+    for line in response.iter_lines():
+        if line:
+            try:
+                data = json.loads(line.decode("utf-8"))
+                if "message" in data and "content" in data["message"]:
+                    content = data["message"]["content"]
+                    if isinstance(content, str):
+                        yield content
+                    elif isinstance(content, list):
+                        for part in content:
+                            if part.get("type") == "text":
+                                yield part.get("text", "")
+            except Exception:
+                continue
+
+
+def send_message_to_llm(messages, model, temperature):
+    """
+    Send the message history to the LLM (Ollama) and return the response.
+    """
+    ollama_messages = []
+    for msg in messages:
+        if msg["type"] == "text":
+            ollama_messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+        elif msg["type"] == "image":
+            if ollama_messages and ollama_messages[-1]["role"] == "user":
+                last = ollama_messages.pop()
+                multimodal_content = []
+                if isinstance(last["content"], str):
+                    multimodal_content.append(
+                        {"type": "text", "text": last["content"]})
+                if isinstance(msg["content"], bytes):
+                    img_b64 = base64.b64encode(msg["content"]).decode("utf-8")
+                else:
+                    img_b64 = msg["content"]
+                multimodal_content.append({"type": "image", "image": img_b64})
+                ollama_messages.append({
+                    "role": "user",
+                    "content": multimodal_content
+                })
+            else:
+                if isinstance(msg["content"], bytes):
+                    img_b64 = base64.b64encode(msg["content"]).decode("utf-8")
+                else:
+                    img_b64 = msg["content"]
+                ollama_messages.append({
+                    "role": msg["role"],
+                    "content": [{"type": "image", "image": img_b64}]
+                })
+
+    payload = {
+        "model": model,
+        "messages": ollama_messages,
+        "temperature": temperature
+    }
+
+    response = requests.post(
+        "http://localhost:11434/api/chat",
+        json=payload,
+        timeout=120,
+        stream=True
+    )
+    response.raise_for_status()
+
+    # Read line by line and decode the last JSON
+    last_message = None
+    for line in response.iter_lines():
+        if line:
+            try:
+                last_message = json.loads(line.decode("utf-8"))
+            except Exception:
+                continue
+    return last_message if last_message else {}
 
 
 def handle_user_input(text, image=None, model="llama3.2-vision", temperature=0.2):
     """
     Process user input (text and/or image), add to history, and query LLM.
     """
-    # Prepare messages for LLM (including system prompt if set)
+    # Fixed system prompt
+    system_prompt = (
+        "You are an advanced Formula 1 strategy assistant. "
+        "You are only allowed to answer questions strictly related to Formula 1, its history, races, drivers, teams, regulations, and technical or strategic aspects. "
+        "You have access to historical F1 data, including race results, lap times, pit stops, weather conditions, tyre choices, and championship standings. "
+        "You can analyze and interpret a wide variety of visual data, including but not limited to: lap time charts, tyre degradation graphs, stint comparison plots, pit stop timelines, position change graphs, weather evolution charts, and tables of race results or driver statistics. "
+        "When an image is provided, first describe its content in detail, then extract relevant insights, and answer any specific questions about it. "
+        "If the user uploads a chart, table, or image, always relate your analysis to F1 context and strategy. "
+        "If a question is not related to Formula 1, politely refuse to answer and remind the user of your scope. "
+        "Continue the conversation using both textual and visual information as context, maintaining coherence and memory of previous exchanges. "
+        "Always provide clear, concise, and actionable responses, using technical F1 terminology when appropriate."
+    )
     messages = []
-    system_prompt = st.session_state.get("strategy_system_prompt", "")
-    if system_prompt:
-        messages.append({"role": "system", "type": "text",
-                        "content": system_prompt})
+    messages.append({"role": "system", "type": "text",
+                    "content": system_prompt})
 
     # --- Combine text and image in a single message if both are present ---
     if text and image:
@@ -278,48 +469,10 @@ def open_chat_with_image(image, description=None, new_chat=False, context=None):
         context (str, optional): Context info for naming the chat
     """
     if new_chat:
-        reset_chat(context)
+        create_new_chat(context)
     if description:
         add_message("user", "text", description)
     add_message("user", "image", image)
-    # If you want to trigger the LLM response immediately, uncomment:
-    # handle_user_input(text=description if description else "", image=image)
-
-
-def reset_chat(context=None):
-    """
-    Save the current chat automatically with a representative name, then clear the chat history.
-    """
-    if st.session_state.strategy_chat_history:
-        chat_name = generate_chat_name(context)
-        if "strategy_saved_chats" not in st.session_state:
-            st.session_state.strategy_saved_chats = {}
-        st.session_state.strategy_saved_chats[chat_name] = list(
-            st.session_state.strategy_chat_history)
-    st.session_state.strategy_chat_history = []
-    st.session_state.strategy_system_prompt = ""
-
-
-def set_system_prompt(prompt=None):
-    """
-    Set a custom system prompt (e.g., for F1 context and image analysis).
-
-    Args:
-        prompt (str, optional): System prompt text. If None, sets a detailed default prompt.
-    """
-    if prompt is None:
-        prompt = (
-            "You are an advanced Formula 1 strategy assistant. "
-            "You are only allowed to answer questions strictly related to Formula 1, its history, races, drivers, teams, regulations, and technical or strategic aspects. "
-            "You have access to historical F1 data, including race results, lap times, pit stops, weather conditions, tyre choices, and championship standings. "
-            "You can analyze and interpret a wide variety of visual data, including but not limited to: lap time charts, tyre degradation graphs, stint comparison plots, pit stop timelines, position change graphs, weather evolution charts, and tables of race results or driver statistics. "
-            "When an image is provided, first describe its content in detail, then extract relevant insights, and answer any specific questions about it. "
-            "If the user uploads a chart, table, or image, always relate your analysis to F1 context and strategy. "
-            "If a question is not related to Formula 1, politely refuse to answer and remind the user of your scope. "
-            "Continue the conversation using both textual and visual information as context, maintaining coherence and memory of previous exchanges. "
-            "Always provide clear, concise, and actionable responses, using technical F1 terminology when appropriate."
-        )
-    st.session_state.strategy_system_prompt = prompt
 
 
 def get_available_models():
