@@ -47,44 +47,23 @@ def render_strategy_chat(section_title="F1 Strategy Assistant Chat", context=Non
         temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.01)
 
     st.markdown(f"## {section_title}")
-    st.markdown("#### Write your message or upload an image")
 
-    # --- Chat history and user input together ---
+    # Create two main containers: one for chat history, one for input
     chat_container = st.container()
-    with chat_container:
-        st.markdown("#### Conversation")
-        for msg in get_chat_history():
-            if msg["type"] == "text":
-                if msg["role"] == "user":
-                    st.markdown(
-                        f'<div style="background-color:#23234a; color:#fff; padding:12px; border-radius:16px; margin-bottom:8px; text-align:right; max-width:70%; margin-left:auto;"><b>You:</b> {msg["content"]}</div>',
-                        unsafe_allow_html=True)
-                else:
-                    st.markdown(
-                        f'<div style="background-color:#393e46; color:#fff; padding:12px; border-radius:16px; margin-bottom:8px; text-align:left; max-width:70%;"><b>Assistant:</b> {msg["content"]}</div>',
-                        unsafe_allow_html=True)
-            elif msg["type"] == "image":
-                if msg["role"] == "user":
-                    st.markdown(
-                        f'<div style="background-color:#23234a; color:#fff; padding:12px; border-radius:16px; margin-bottom:8px; text-align:right; max-width:70%; margin-left:auto;"><b>Image sent:</b></div>',
-                        unsafe_allow_html=True)
-                    if msg["content"] is not None:
-                        st.image(msg["content"])
-                else:
-                    st.markdown(
-                        f'<div style="background-color:#393e46; color:#fff; padding:12px; border-radius:16px; margin-bottom:8px; text-align:left; max-width:70%;"><b>Assistant image:</b></div>',
-                        unsafe_allow_html=True)
-                    if msg["content"] is not None:
-                        st.image(msg["content"])
+    input_container = st.container()
 
-        # --- User input ALWAYS AT THE BOTTOM ---
+    # Inside input_container (at the bottom), create the message input area
+    with input_container:
+        st.markdown("#### Write your message or upload an image")
+
         if "user_input_key" not in st.session_state:
             st.session_state.user_input_key = 0
 
         user_text = st.text_area(
             "Message",
             value="",
-            key=f"user_text_area_{st.session_state.user_input_key}"
+            key=f"user_text_area_{st.session_state.user_input_key}",
+            height=100
         )
         user_image = st.file_uploader(
             "Upload an image (PNG, JPG, JPEG)",
@@ -99,6 +78,55 @@ def render_strategy_chat(section_title="F1 Strategy Assistant Chat", context=Non
                                         model=model, temperature=temperature)
             st.session_state.user_input_key += 1
             st.rerun()
+
+    # Inside chat_container (above the input), display the chat history
+    with chat_container:
+        # Custom CSS for the chat container
+        st.markdown("""
+            <style>
+            .chat-message {
+                padding: 12px;
+                border-radius: 16px;
+                margin-bottom: 8px;
+                color: white;
+                width: 70%;
+            }
+            .user-message {
+                background-color: #23234a;
+                margin-left: auto;
+                text-align: right;
+            }
+            .assistant-message {
+                background-color: #393e46;
+                text-align: left;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # Display chat messages
+        for msg in get_chat_history():
+            if msg["type"] == "text":
+                if msg["role"] == "user":
+                    st.markdown(
+                        f'<div class="chat-message user-message"><span style="float:left;">🏎️</span><b>You:</b> {msg["content"]}</div>',
+                        unsafe_allow_html=True)
+                else:
+                    st.markdown(
+                        f'<div class="chat-message assistant-message"><span style="float:left;">🏁</span><b>Assistant:</b> {msg["content"]}</div>',
+                        unsafe_allow_html=True)
+            elif msg["type"] == "image":
+                if msg["role"] == "user":
+                    st.markdown(
+                        f'<div class="chat-message user-message"><span style="float:left;">🏎️</span><b>Image sent:</b></div>',
+                        unsafe_allow_html=True)
+                    if msg["content"] is not None:
+                        st.image(msg["content"])
+                else:
+                    st.markdown(
+                        f'<div class="chat-message assistant-message"><span style="float:left;">🏁</span><b>Assistant image:</b></div>',
+                        unsafe_allow_html=True)
+                    if msg["content"] is not None:
+                        st.image(msg["content"])
 
 
 def initialize_chat_state():
@@ -218,42 +246,24 @@ def handle_user_input_streaming(text, image=None, model="llama3.2-vision", tempe
     """
     Process user input and display the model's response in streaming.
     """
-    # Check if image is actually being passed properly
+    # Add user messages to chat history
+    if text:
+        add_message("user", "text", text)
     if image is not None:
-        st.write(f"**Debug:** Image data received, size: {len(image)} bytes")
-        st.image(image, caption="Debug: Thumbnail of uploaded image", width=100)
-    else:
-        st.write("**Debug:** No image data received")
+        add_message("user", "image", image)
 
     messages = []
     # Fixed system prompt (not visible)
     system_prompt = (
-        "You are an expert Formula 1 strategy assistant with deep knowledge of history, regulations, teams, drivers, and technical data. "
-        "Your goal is to provide detailed analyses and tactical recommendations based on:\n\n"
-        "1. **Scope of Expertise**  \n"
-        "- Only answer questions related to Formula 1: its history, regulations, races, teams, drivers, real-time and historical data, telemetry, and charts.  \n"
-        "- If asked about anything outside this scope, politely decline and redirect to an F1 topic.\n\n"
-        "2. **Data Types & Visualizations**  \n"
-        "- Stint-length charts, tyre-degradation graphs, lap-time comparisons, pit-stop timelines, position-change plots, weather evolution charts, etc.  \n"
-        "- Result tables, sector-time breakdowns, stint summaries, and heatmaps.\n\n"
-        "3. **Workflow for Image Inputs**  \n"
-        "   a) **Identification**: Describe precisely what type of chart or table it is and its axes/dimensions.  \n"
-        "   b) **Extraction**: Highlight key metrics (e.g., lap-time delta, degradation curves, tyre compounds).  \n"
-        "   c) **Contextualization**: Relate findings to race strategy—optimal pit-stop window, undercut/overcut opportunities, fuel saving, compound selection, Safety Car windows, etc.  \n"
-        "   d) **Recommendation**: Propose a clear strategy, stating advantages, risks, and triggering conditions.\n\n"
-        "4. **Answer Style**  \n"
-        "- Use precise technical terminology (DRS window, stint length, delta, stint profile, etc.).  \n"
-        "- Structure responses with numbered sections or bullet points for clarity.  \n"
-        "- Be concise yet thorough enough to justify each strategic recommendation.  \n"
-        "- When referencing historical data, cite specific seasons, Grands Prix, or drivers (e.g., “At the 2021 Italian GP, Mercedes…”).\n\n"
-        "5. **Memory & Coherence**  \n"
-        "- Maintain conversational context: remember chosen drivers, circuits, and conditions previously discussed.  \n"
-        "- Update your analysis and recommendations when new information arrives (e.g., revised weather forecast).\n\n"
-        "6. **Example Response**  \n"
-        "   1. Chart Identification: Heatmap of sector times at Silverstone (Sector 1 vs Sector 2).  \n"
-        "   2. Key Findings: Driver A is 0.3 s slower in Sector 2 than teammate, likely due to oversteer.  \n"
-        "   3. Strategy Proposal: Execute an undercut on lap 18 with medium tyres, leveraging consistent pace in Sector 1.  \n"
-        "   4. Risks: Potential early degradation in Sector 3 if track temperature rises.  \n"
+        "You are an advanced Formula 1 strategy assistant. "
+        "You are only allowed to answer questions strictly related to Formula 1, its history, races, drivers, teams, regulations, and technical or strategic aspects. "
+        "You have access to historical F1 data, including race results, lap times, pit stops, weather conditions, tyre choices, and championship standings. "
+        "You can analyze and interpret a wide variety of visual data, including but not limited to: lap time charts, tyre degradation graphs, stint comparison plots, pit stop timelines, position change graphs, weather evolution charts, and tables of race results or driver statistics. "
+        "When an image is provided, first describe its content in detail, then extract relevant insights, and answer any specific questions about it. "
+        "If the user uploads a chart, table, or image, always relate your analysis to F1 context and strategy. "
+        "If a question is not related to Formula 1, politely refuse to answer and remind the user of your scope. "
+        "Continue the conversation using both textual and visual information as context, maintaining coherence and memory of previous exchanges. "
+        "Always provide clear, concise, and actionable responses, using technical F1 terminology when appropriate."
     )
 
     messages.append({"role": "system", "content": system_prompt})
@@ -275,22 +285,18 @@ def handle_user_input_streaming(text, image=None, model="llama3.2-vision", tempe
     elif text:
         messages.append({"role": "user", "content": text})
 
-    # Add to chat history for display
-    if text:
-        add_message("user", "text", text)
-    if image is not None:
-        add_message("user", "image", image)
-
-    # Show streaming response
-    response_placeholder = st.empty()
+    # Show streaming response in a temporary area
+    temp_container = st.empty()
     assistant_text = ""
     for chunk in stream_llm_response(messages, model, temperature):
         if chunk:
             assistant_text += chunk
-            response_placeholder.markdown(
-                f'<div style="background-color:#393e46; color:#fff; padding:12px; border-radius:16px; margin-bottom:8px; text-align:left; max-width:70%;"><b>Assistant:</b> {assistant_text}</div>',
+            temp_container.markdown(
+                f'<div class="chat-message assistant-message"><span style="float:left;">🏁</span><b>Assistant:</b> {assistant_text}</div>',
                 unsafe_allow_html=True
             )
+
+    # When streaming is complete, add to chat history
     if assistant_text.strip():
         add_message("assistant", "text", assistant_text)
 
@@ -299,67 +305,13 @@ def stream_llm_response(messages, model, temperature):
     """
     Returns the model's text in streaming (chunks).
     """
-    # Create a debug container in the UI
-    debug_container = st.expander(
-        "Debug Information (Expand to see)", expanded=False)
-
-    # Important: Keep messages exactly as passed in - no reformatting
-    # Ollama expects a specific format we shouldn't modify
     ollama_messages = messages
-
-    # Display debug info in Streamlit UI
-    with debug_container:
-        st.write(f"**Model being used:** {model}")
-        st.write(f"**Number of messages in payload:** {len(ollama_messages)}")
-
-        for i, msg in enumerate(ollama_messages):
-            st.write(f"**Message {i+1}:** Role = {msg['role']}")
-            content = msg["content"]
-            if isinstance(content, list):
-                st.write(f"- Message has {len(content)} content items")
-                for j, item in enumerate(content):
-                    content_type = item.get("type", "unknown")
-                    st.write(f"  - Content item {j+1} type: {content_type}")
-                    if content_type == "image" and isinstance(item.get("image"), str):
-                        # Debug output for image data
-                        img_data = item["image"]
-                        img_len = len(img_data)
-                        st.write(f"  - Image data length: {img_len} chars")
-                        if img_len > 100:
-                            st.write(
-                                f"  - Image data sample start: {img_data[:50]}...")
-                            st.write(
-                                f"  - Image data sample end: ...{img_data[-50:]}")
-                            is_valid = True
-                            try:
-                                # For data URLs, skip the prefix when decoding
-                                if img_data.startswith("data:"):
-                                    base64_part = img_data.split(",", 1)[1]
-                                    base64.b64decode(base64_part)
-                                else:
-                                    base64.b64decode(img_data)
-                            except Exception as e:
-                                is_valid = False
-                                st.error(
-                                    f"  - ERROR: Image data is NOT valid base64: {str(e)}")
-
-                            if is_valid:
-                                st.success("  - Image data is valid base64")
-                        else:
-                            st.error(
-                                "  - Image data is too short! Length should be thousands of characters")
-            else:
-                content_len = len(str(content)) if content else 0
-                st.write(f"  - Simple content with length: {content_len}")
 
     payload = {
         "model": model,
         "messages": ollama_messages,
         "temperature": temperature
     }
-
-    # Also add request/response debugging
-    response_info = {"status": None, "headers": None, "error": None}
 
     try:
         response = requests.post(
@@ -368,9 +320,6 @@ def stream_llm_response(messages, model, temperature):
             timeout=120,
             stream=True
         )
-        response_info["status"] = response.status_code
-        response_info["headers"] = dict(response.headers)
-
         response.raise_for_status()
 
         # Read line by line and yield text chunks
@@ -386,27 +335,10 @@ def stream_llm_response(messages, model, temperature):
                             for part in content:
                                 if part.get("type") == "text":
                                     yield part.get("text", "")
-                except Exception as e:
-                    response_info["error"] = f"Error processing response line: {str(e)}"
+                except Exception:
                     continue
-    except requests.exceptions.RequestException as e:
-        error_msg = f"Error making request to Ollama: {str(e)}"
-        response_info["error"] = error_msg
-        if hasattr(e, 'response') and e.response:
-            response_info["status"] = e.response.status_code
-            response_info["response_text"] = e.response.text[:500]
-        yield f"Error communicating with the model service. Please try again later."
-
-    # Update the debug container with response info
-    with debug_container:
-        st.write("**API Response:**")
-        st.write(f"- Status code: {response_info['status']}")
-        if response_info.get("error"):
-            st.error(f"- Error: {response_info['error']}")
-        st.write(f"- Headers: {response_info['headers']}")
-        if "response_text" in response_info:
-            st.write(
-                f"- Response text sample: {response_info['response_text']}")
+    except requests.exceptions.RequestException:
+        yield "Error communicating with the model service. Please try again later."
 
 
 def send_message_to_llm(messages, model, temperature):
@@ -487,6 +419,7 @@ def handle_user_input(text, image=None, model="llama3.2-vision", temperature=0.2
         "Continue the conversation using both textual and visual information as context, maintaining coherence and memory of previous exchanges. "
         "Always provide clear, concise, and actionable responses, using technical F1 terminology when appropriate."
     )
+
     messages = []
     messages.append({"role": "system", "type": "text",
                     "content": system_prompt})
