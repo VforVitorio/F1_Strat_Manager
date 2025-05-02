@@ -221,36 +221,44 @@ def send_message_to_llm(messages, model, temperature):
 def handle_user_input(text, image=None, model="llama3.2-vision", temperature=0.2):
     """
     Process user input (text and/or image), add to history, and query LLM.
-
-    Args:
-        text (str): User input text
-        image (bytes, optional): Image data
-        model (str): Model name for Ollama
-        temperature (float): Sampling temperature
     """
-    # Add user message(s) to history
-    if text:
-        add_message("user", "text", text)
-    if image:
-        add_message("user", "image", image)
-
     # Prepare messages for LLM (including system prompt if set)
     messages = []
     system_prompt = st.session_state.get("strategy_system_prompt", "")
     if system_prompt:
         messages.append({"role": "system", "type": "text",
                         "content": system_prompt})
-    messages.extend(get_chat_history())
+
+    # --- Combine text and image in a single message if both are present ---
+    if text and image:
+        img_b64 = base64.b64encode(image).decode("utf-8")
+        multimodal_content = [
+            {"type": "text", "text": text},
+            {"type": "image", "image": img_b64}
+        ]
+        messages.append({"role": "user", "type": "multimodal",
+                        "content": multimodal_content})
+        # Add to chat history for display
+        add_message("user", "text", text)
+        add_message("user", "image", image)
+    elif text:
+        messages.append({"role": "user", "type": "text", "content": text})
+        add_message("user", "text", text)
+    elif image:
+        img_b64 = base64.b64encode(image).decode("utf-8")
+        multimodal_content = [{"type": "image", "image": img_b64}]
+        messages.append({"role": "user", "type": "multimodal",
+                        "content": multimodal_content})
+        add_message("user", "image", image)
+    else:
+        return  # Nothing to send
 
     # Query LLM and add assistant response to history
     response = send_message_to_llm(messages, model, temperature)
-    # Ollama's response format: {'message': {'role': 'assistant', 'content': ...}}
     assistant_msg = response.get("message", {})
     if assistant_msg:
-        # If content is a list (for multimodal), handle accordingly
         content = assistant_msg.get("content")
         if isinstance(content, list):
-            # For multimodal, append each part (text/image)
             for part in content:
                 if part.get("type") == "text":
                     add_message("assistant", "text", part.get("text", ""))
