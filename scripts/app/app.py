@@ -18,6 +18,7 @@ from utils.processing import get_lap_time_predictions
 from components.competitive_analysis_view import render_competitive_analysis_view
 from components.vision_view import render_vision_view
 from components.strategy_overview import render_strategy_overview
+from components.strategy_chat import render_strategy_chat, open_chat_with_image
 
 # Add parent directory to path for module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,6 +40,10 @@ if 'selected_driver' not in st.session_state:
 if 'gap_data' not in st.session_state:
     st.session_state.gap_data = None
 
+# Track the active page for navigation and AI chat redirection
+if "active_page" not in st.session_state:
+    st.session_state.active_page = "Overview"
+
 # Page configuration
 st.set_page_config(
     page_title="F1 Strategy Dashboard",
@@ -57,17 +62,32 @@ This dashboard provides strategic insights and recommendations for Formula 1 rac
 combining tire degradation analysis, gap calculations, and NLP from team radios.
 """)
 
-# Modern sidebar navigation
+# Sidebar navigation
 st.sidebar.markdown(
     '<div class="sidebar-title">Navigation</div>'
     '<div class="sidebar-nav">', unsafe_allow_html=True)
+pages = [
+    "Overview",
+    "Tire Analysis",
+    "Gap Analysis",
+    "Lap Time Predictions",
+    "Team Radio Analysis",
+    "Strategy Recommendations",
+    "Competitive Analysis",
+    "Vision Gap Extraction",
+    "Strategy Chat"
+]
 page = st.sidebar.radio(
     "",  # hide default label
-    ["Overview", "Tire Analysis", "Gap Analysis", "Lap Time Predictions",
-        "Team Radio Analysis", "Strategy Recommendations", "Competitive Analysis", "Vision Gap Extraction"],
-    index=0
+    pages,
+    index=pages.index(st.session_state.active_page)
 )
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+# Update active page if changed
+if page != st.session_state.active_page:
+    st.session_state.active_page = page
+    st.rerun()
 
 # Data selection section
 st.sidebar.markdown(
@@ -144,8 +164,8 @@ def strategy_ready():
     return st.session_state.get("strategy_csv_ready", False) or os.path.exists(csv_path)
 
 
-# Routing for each page
-if page == "Overview":
+# Routing for each page WITHOUT Ask AI integration
+if st.session_state.active_page == "Overview":
     render_strategy_overview()
     if strategy_ready():
         render_overview(race_data, selected_driver, selected_race)
@@ -153,21 +173,21 @@ if page == "Overview":
         st.warning(
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-elif page == "Tire Analysis":
+elif st.session_state.active_page == "Tire Analysis":
     if strategy_ready():
         render_degradation_view(race_data, selected_driver)
     else:
         st.warning(
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-elif page == "Gap Analysis":
+elif st.session_state.active_page == "Gap Analysis":
     if strategy_ready():
         render_gap_analysis(gap_data, selected_driver)
     else:
         st.warning(
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-elif page == "Lap Time Predictions":
+elif st.session_state.active_page == "Lap Time Predictions":
     if strategy_ready():
         predictions_df = get_lap_time_predictions(
             race_data, model_path="outputs/week3/xgb_sequential_model.pkl"
@@ -178,7 +198,7 @@ elif page == "Lap Time Predictions":
         st.warning(
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-elif page == "Team Radio Analysis":
+elif st.session_state.active_page == "Team Radio Analysis":
     if strategy_ready():
         render_radio_analysis(recommendations)
         render_radio_analysis_view()
@@ -186,22 +206,25 @@ elif page == "Team Radio Analysis":
         st.warning(
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-elif page == "Strategy Recommendations":
+elif st.session_state.active_page == "Strategy Recommendations":
     if strategy_ready():
         render_recommendations_view(recommendations)
     else:
         st.warning(
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-elif page == "Competitive Analysis":
+elif st.session_state.active_page == "Competitive Analysis":
     if strategy_ready():
         render_competitive_analysis_view(race_data, selected_driver)
     else:
         st.warning(
             "Please run the strategy analysis to generate recommendations before using the dashboard.")
 
-elif page == "Vision Gap Extraction":
+elif st.session_state.active_page == "Vision Gap Extraction":
     render_vision_view()
+
+elif st.session_state.active_page == "Strategy Chat":
+    render_strategy_chat()
 
 # Footer
 st.markdown("---")
