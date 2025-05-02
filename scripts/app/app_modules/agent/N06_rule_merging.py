@@ -1072,12 +1072,14 @@ def analyze_all_drivers_with_real_radios(
             total_laps = total_laps_from_data
             print(f"Confirmed total laps from gap data: {total_laps}")
 
-    # Define strategic points for analysis
-    strategic_points = [
-        int(total_laps * 0.25),  # 25% of race
-        int(total_laps * 0.5),   # 50% of race (midpoint)
-        int(total_laps * 0.75)   # 75% of race
-    ]
+    # Define strategic points for analysis using compound thresholds and intervals
+    compound_thresholds = {1: 6, 2: 12, 3: 25}  # Soft: 6, Medium: 12, Hard: 25
+    # Interval between recommendations (puedes ajustar este valor)
+    interval = 5
+    strategic_points = set()
+    for start_lap in compound_thresholds.values():
+        strategic_points.update(range(start_lap, total_laps + 1, interval))
+    strategic_points = sorted(strategic_points)
     print(f"Strategic analysis points: Laps {strategic_points}")
 
     # 9. Process each driver
