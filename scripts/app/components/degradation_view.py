@@ -25,6 +25,12 @@ def render_degradation_view(race_data, selected_driver):
         st.warning("No tire data available for the selected driver.")
         return
 
+    # Limit to valid laps (1 to 66)
+    MAX_LAPS = 66
+    if 'LapNumber' in race_data.columns:
+        race_data = race_data[(race_data['LapNumber'] >= 1) & (
+            race_data['LapNumber'] <= MAX_LAPS)]
+
     # Create tabs for different tire analyses
     tire_tabs = st.tabs(
         ["Degradation Rate", "Fuel-Adjusted Analysis", "Speed Comparison"])

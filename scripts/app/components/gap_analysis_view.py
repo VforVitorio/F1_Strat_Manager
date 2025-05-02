@@ -29,6 +29,12 @@ def render_gap_analysis(gap_data, selected_driver):
         st.warning("No gap data available.")
         return
 
+    # Limit to valid laps (1 to 66)
+    MAX_LAPS = 66
+    if 'LapNumber' in gap_data.columns:
+        gap_data = gap_data[(gap_data['LapNumber'] >= 1) &
+                            (gap_data['LapNumber'] <= MAX_LAPS)]
+
     # Calculate strategic windows from the data
     try:
         strategic_data = calculate_strategic_windows(gap_data)

@@ -24,9 +24,15 @@ except ImportError as e:
                       3: "Hard", 4: "Intermediate", 5: "Wet"}
     LAP_TIME_IMPROVEMENT_PER_LAP = 0.055
 
+MAX_LAPS = 66  # Limit for valid laps
+
 
 def st_plot_speed_vs_tire_age(processed_race_data, driver_number=None, compound_id=None):
     filtered_data = processed_race_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
@@ -68,6 +74,10 @@ def st_plot_speed_vs_tire_age(processed_race_data, driver_number=None, compound_
 
 def st_plot_regular_vs_adjusted_degradation(processed_race_data, driver_number=None, lap_time_improvement_per_lap=None):
     filtered_data = processed_race_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
@@ -107,6 +117,10 @@ def st_plot_regular_vs_adjusted_degradation(processed_race_data, driver_number=N
 
 def st_plot_fuel_adjusted_degradation(processed_race_data, driver_number=None):
     filtered_data = processed_race_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
@@ -136,6 +150,10 @@ def st_plot_fuel_adjusted_degradation(processed_race_data, driver_number=None):
 
 def st_plot_fuel_adjusted_percentage_degradation(processed_race_data, driver_number=None):
     filtered_data = processed_race_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
@@ -165,6 +183,10 @@ def st_plot_fuel_adjusted_percentage_degradation(processed_race_data, driver_num
 
 def st_plot_degradation_rate(processed_race_data, driver_number=None):
     filtered_data = processed_race_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
@@ -194,6 +216,10 @@ def st_plot_degradation_rate(processed_race_data, driver_number=None):
 
 def st_plot_gap_evolution(gap_data, driver_number=None):
     filtered_data = gap_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None and 'DriverNumber' in filtered_data.columns:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
@@ -243,6 +269,10 @@ def st_plot_gap_evolution(gap_data, driver_number=None):
 
 def st_plot_undercut_opportunities(gap_data, driver_number=None):
     filtered_data = gap_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None and 'DriverNumber' in filtered_data.columns:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]
@@ -291,6 +321,10 @@ def st_plot_undercut_opportunities(gap_data, driver_number=None):
 
 def st_plot_gap_consistency(gap_data, driver_number=None):
     filtered_data = gap_data.copy()
+    # Limit to valid laps (1 to 66)
+    if 'LapNumber' in filtered_data.columns:
+        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
+            filtered_data['LapNumber'] <= MAX_LAPS)]
     if driver_number is not None and 'DriverNumber' in filtered_data.columns:
         filtered_data = filtered_data[filtered_data['DriverNumber']
                                       == driver_number]

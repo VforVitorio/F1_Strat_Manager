@@ -23,6 +23,12 @@ def render_overview(race_data, selected_driver, selected_race):
         st.warning("No race data available for the selected driver.")
         return
 
+    # Limit to valid laps (1 to 66)
+    MAX_LAPS = 66
+    if 'LapNumber' in race_data.columns:
+        race_data = race_data[(race_data['LapNumber'] >= 1) & (
+            race_data['LapNumber'] <= MAX_LAPS)]
+
     # Clean column names in case there are spaces
     race_data.columns = race_data.columns.str.strip()
 
