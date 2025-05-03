@@ -3,7 +3,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 import plotly.express as px
 import streamlit as st
-
+import matplotlib.pyplot as plt
 FILE_PATH = Path(__file__).resolve()
 PROJECT_ROOT = FILE_PATH.parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -72,46 +72,57 @@ def st_plot_speed_vs_tire_age(processed_race_data, driver_number=None, compound_
     return fig
 
 
-def st_plot_regular_vs_adjusted_degradation(processed_race_data, driver_number=None, lap_time_improvement_per_lap=None):
-    filtered_data = processed_race_data.copy()
-    # Limit to valid laps (1 to 66)
-    if 'LapNumber' in filtered_data.columns:
-        filtered_data = filtered_data[(filtered_data['LapNumber'] >= 1) & (
-            filtered_data['LapNumber'] <= MAX_LAPS)]
-    if driver_number is not None:
-        filtered_data = filtered_data[filtered_data['DriverNumber']
-                                      == driver_number]
-    if lap_time_improvement_per_lap is None:
-        lap_time_improvement_per_lap = LAP_TIME_IMPROVEMENT_PER_LAP
-    if filtered_data.empty:
-        return None
-    fig = go.Figure()
-    for compound_id in filtered_data['CompoundID'].unique():
-        compound_name = COMPOUND_NAMES.get(
-            compound_id, f"Unknown ({compound_id})")
-        data = filtered_data[filtered_data['CompoundID'] == compound_id]
-        fig.add_trace(go.Scatter(
-            x=data['TyreAge'],
-            y=data['DegradationRate'],
-            mode='lines+markers',
-            name=f"{compound_name} - Regular",
-            line=dict(color=COMPOUND_COLORS.get(compound_id, 'gray'))
-        ))
-        if 'FuelAdjustedDegradation' in data.columns:
-            fig.add_trace(go.Scatter(
-                x=data['TyreAge'],
-                y=data['FuelAdjustedDegradation'],
-                mode='lines+markers',
-                name=f"{compound_name} - Fuel Adjusted",
-                line=dict(dash='dash', color=COMPOUND_COLORS.get(
-                    compound_id, 'gray'))
-            ))
-    fig.update_layout(
-        title=f"Regular vs Fuel-Adjusted Degradation for Driver {driver_number}" if driver_number else "Regular vs Fuel-Adjusted Degradation for All Drivers",
-        xaxis_title="Tire Age (laps)",
-        yaxis_title="Degradation Rate (s/lap)",
-        template="plotly_dark"
-    )
+def st_plot_regular_vs_adjusted_degradation(tire_deg_data, compound_names=None, compound_colors=None, lap_time_improvement_per_lap=0.055):
+    """
+    Streamlit-friendly version: shows subplots for each compound,
+    comparing regular vs fuel-adjusted degradation (absolute).
+    """
+    if compound_names is None:
+        compound_names = {1: 'Soft', 2: 'Medium', 3: 'Hard'}
+    if compound_colors is None:
+        compound_colors = {1: 'red', 2: 'yellow', 3: 'gray'}
+
+    compound_ids = tire_deg_data['CompoundID'].unique()
+    n_compounds = len(compound_ids)
+    fig, axes = plt.subplots(n_compounds, 1, figsize=(
+        16, 4 * n_compounds), sharex=False)
+    if n_compounds == 1:
+        axes = [axes]
+
+    for i, compound_id in enumerate(compound_ids):
+        ax = axes[i]
+        compound_subset = tire_deg_data[tire_deg_data['CompoundID']
+                                        == compound_id]
+        color = compound_colors.get(compound_id, 'black')
+        compound_name = compound_names.get(
+            compound_id, f'Unknown ({compound_id})')
+
+        reg_agg = compound_subset.groupby('TyreAge')['TireDegAbsolute'].mean()
+        adj_agg = compound_subset.groupby(
+            'TyreAge')['FuelAdjustedDegAbsolute'].mean()
+
+        ax.plot(reg_agg.index, reg_agg.values, 'o--', color=color,
+                alpha=0.5, label=f'{compound_name} (Regular)')
+        ax.plot(adj_agg.index, adj_agg.values, 'o-', color=color,
+                linewidth=2, label=f'{compound_name} (Fuel Adjusted)')
+        ax.axhline(y=0, color='gray', linestyle='--', alpha=0.7)
+        ax.set_ylabel('Degradation (s)')
+        ax.set_title(
+            f'{compound_name} Tire Degradation: Regular vs. Fuel-Adjusted')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        min_lap = reg_agg.index.min() if not reg_agg.empty else 0
+        max_lap = reg_agg.index.max() if not reg_agg.empty else 0
+        total_laps = max_lap - min_lap
+        total_fuel_effect = total_laps * lap_time_improvement_per_lap
+        ax.annotate(f"Est. total fuel effect: ~{total_fuel_effect:.2f}s",
+                    xy=(0.02, 0.05), xycoords='axes fraction',
+                    bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.8))
+        if i == n_compounds - 1:
+            ax.set_xlabel('Tire Age (laps)')
+
+    plt.tight_layout()
     return fig
 
 

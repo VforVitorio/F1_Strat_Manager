@@ -56,10 +56,12 @@ def render_degradation_view(race_data, selected_driver):
             "Comparing raw vs fuel-adjusted tire degradation to isolate pure tire wear effects.")
 
         try:
+            compound_names = {1: "Soft", 2: "Medium", 3: "Hard"}
+            compound_colors = {1: "red", 2: "yellow", 3: "gray"}
             fuel_adj_fig = st_plot_regular_vs_adjusted_degradation(
-                race_data, selected_driver)
+                race_data, compound_names, compound_colors)
             if fuel_adj_fig:
-                st.plotly_chart(fuel_adj_fig, use_container_width=True)
+                st.pyplot(fuel_adj_fig)
             else:
                 st.info("Not enough data to create fuel-adjusted visualization.")
         except Exception as e:
