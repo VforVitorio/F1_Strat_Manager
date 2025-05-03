@@ -76,3 +76,5 @@ def render_time_predictions_view(predictions_df, selected_driver):
         )
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    return fig

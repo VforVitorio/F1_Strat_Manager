@@ -3,18 +3,14 @@ import plotly.graph_objects as go
 import numpy as np
 
 
-def plot_single_driver_position(race_data, selected_driver):
+def plot_single_driver_position_figure(race_data, selected_driver):
     """
-    Plot position evolution for a single driver.
-    Y axis: Position (1 = leader, 20 = last)
-    X axis: Lap number
+    Returns a Plotly figure of position evolution for a single driver.
     """
-    st.subheader("Position Evolution (Single Driver)")
     driver_data = race_data[race_data['DriverNumber']
                             == selected_driver].sort_values('LapNumber')
     if driver_data.empty:
-        st.info("No data available for the selected driver.")
-        return
+        return None
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=driver_data['LapNumber'],
@@ -29,15 +25,13 @@ def plot_single_driver_position(race_data, selected_driver):
         yaxis=dict(autorange='reversed', dtick=1, range=[20, 1]),
         template="plotly_dark"
     )
-    st.plotly_chart(fig, use_container_width=True,
-                    key=f"single_driver_{selected_driver}")
+    return fig
 
 
-def plot_multi_driver_position(race_data, selected_drivers):
+def plot_multi_driver_position_figure(race_data, selected_drivers):
     """
-    Plot position evolution for up to 3 drivers.
+    Returns a Plotly figure of position evolution for up to 3 drivers.
     """
-    st.subheader("Position Evolution Comparison (Up to 3 Drivers)")
     fig = go.Figure()
     colors = ['royalblue', 'crimson', 'orange']
     for idx, driver in enumerate(selected_drivers):
@@ -58,9 +52,7 @@ def plot_multi_driver_position(race_data, selected_drivers):
         yaxis=dict(autorange='reversed', dtick=1, range=[20, 1]),
         template="plotly_dark"
     )
-    key_str = "_".join(str(d) for d in selected_drivers)
-    st.plotly_chart(fig, use_container_width=True,
-                    key=f"multi_driver_{key_str}")
+    return fig
 
 
 def extract_stints(race_data, driver_number):
@@ -69,7 +61,6 @@ def extract_stints(race_data, driver_number):
     """
     driver_data = race_data[race_data['DriverNumber']
                             == driver_number].sort_values('LapNumber')
-    # Drop rows with missing LapNumber or Compound
     driver_data = driver_data.dropna(subset=['LapNumber', 'Compound'])
     stints = []
     last_compound = None
@@ -84,7 +75,6 @@ def extract_stints(race_data, driver_number):
             stints.append((stint_start, lap-1, last_compound))
             stint_start = lap
             last_compound = compound
-    # Add last stint
     if stint_start is not None and last_compound is not None:
         stints.append(
             (stint_start, driver_data["LapNumber"].max(), last_compound))
@@ -99,6 +89,46 @@ def estimate_pit_window(stints):
     if lengths:
         return int(np.mean(lengths)), int(np.std(lengths))
     return None, None
+
+
+def get_competitive_analysis_figures(race_data, selected_driver):
+    """
+    Returns a list of Plotly figures for competitive analysis (for export).
+    Does NOT render anything to Streamlit.
+    """
+    # Ensure LapNumber exists
+    if 'LapNumber' not in race_data.columns:
+        try:
+            from utils.processing import add_race_lap_column
+            race_data = add_race_lap_column(race_data)
+        except ImportError:
+            return []
+
+    # Ensure Compound exists
+    COMPOUND_NAMES = {1: "Soft", 2: "Medium",
+                      3: "Hard", 4: "Intermediate", 5: "Wet"}
+    if 'Compound' not in race_data.columns and 'CompoundID' in race_data.columns:
+        race_data['Compound'] = race_data['CompoundID'].map(COMPOUND_NAMES)
+
+    race_data = race_data.dropna(subset=['LapNumber', 'Compound'])
+    MAX_LAPS = 66
+    race_data = race_data[(race_data['LapNumber'] >= 1)
+                          & (race_data['LapNumber'] <= MAX_LAPS)]
+
+    figs = []
+    fig1 = plot_single_driver_position_figure(race_data, selected_driver)
+    if fig1 is not None:
+        figs.append(fig1)
+
+    # Multi-driver comparison (default: selected_driver + 2 closest rivals by number)
+    all_drivers = sorted(race_data['DriverNumber'].unique())
+    rivals = [d for d in all_drivers if d != selected_driver]
+    selected_drivers = [selected_driver] + rivals[:2]
+    fig2 = plot_multi_driver_position_figure(race_data, selected_drivers)
+    if fig2 is not None:
+        figs.append(fig2)
+
+    return figs
 
 
 def render_opponent_strategy_estimation(race_data, selected_driver):
@@ -145,7 +175,7 @@ def render_opponent_strategy_estimation(race_data, selected_driver):
 
 def render_competitive_analysis_view(race_data, selected_driver):
     """
-    Render the competitive analysis section (position evolution).
+    Render the competitive analysis section (position evolution) in Streamlit.
     """
     # Ensure LapNumber exists
     if 'LapNumber' not in race_data.columns:
@@ -162,19 +192,18 @@ def render_competitive_analysis_view(race_data, selected_driver):
     if 'Compound' not in race_data.columns and 'CompoundID' in race_data.columns:
         race_data['Compound'] = race_data['CompoundID'].map(COMPOUND_NAMES)
 
-    # Drop rows with missing LapNumber or Compound
     race_data = race_data.dropna(subset=['LapNumber', 'Compound'])
-
-    # Filter for valid race laps (e.g., Spain GP: 1-66)
     MAX_LAPS = 66
     race_data = race_data[(race_data['LapNumber'] >= 1)
                           & (race_data['LapNumber'] <= MAX_LAPS)]
 
     st.markdown("---")
-
     st.header("Competitive Analysis: Position Evolution")
     st.markdown("---")
-    plot_single_driver_position(race_data, selected_driver)
+    fig1 = plot_single_driver_position_figure(race_data, selected_driver)
+    if fig1 is not None:
+        st.plotly_chart(fig1, use_container_width=True,
+                        key=f"single_driver_{selected_driver}")
 
     # Multi-driver comparison (up to 3 drivers)
     all_drivers = sorted(race_data['DriverNumber'].unique())
@@ -192,7 +221,10 @@ def render_competitive_analysis_view(race_data, selected_driver):
 
     st.markdown("---")
     if selected_drivers:
-        plot_multi_driver_position(race_data, selected_drivers)
+        fig2 = plot_multi_driver_position_figure(race_data, selected_drivers)
+        if fig2 is not None:
+            st.plotly_chart(fig2, use_container_width=True,
+                            key=f"multi_driver_{'_'.join(map(str, selected_drivers))}")
 
     st.markdown("---")
     render_opponent_strategy_estimation(race_data, selected_driver)

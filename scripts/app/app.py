@@ -15,10 +15,11 @@ from components.radio_analysis_view import render_radio_analysis_view
 from components.gap_analysis_view import render_gap_analysis
 from components.time_predictions_view import render_time_predictions_view
 from utils.processing import get_lap_time_predictions
-from components.competitive_analysis_view import render_competitive_analysis_view
+from components.competitive_analysis_view import render_competitive_analysis_view, get_competitive_analysis_figures
 from components.vision_view import render_vision_view
 from components.strategy_overview import render_strategy_overview
 from components.strategy_chat import render_strategy_chat, open_chat_with_image
+from components.report_export import render_report_export_ui
 
 # Add parent directory to path for module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -75,7 +76,8 @@ pages = [
     "Strategy Recommendations",
     "Competitive Analysis",
     "Vision Gap Extraction",
-    "Strategy Chat"
+    "Strategy Chat",
+    "Export Strategy Report"
 ]
 page = st.sidebar.radio(
     "",  # hide default label
@@ -225,6 +227,97 @@ elif st.session_state.active_page == "Vision Gap Extraction":
 
 elif st.session_state.active_page == "Strategy Chat":
     render_strategy_chat()
+
+elif st.session_state.active_page == "Export Strategy Report":
+    if strategy_ready():
+        # Load predictions (lap time and degradation)
+        predictions_df = get_lap_time_predictions(
+            race_data, model_path="outputs/week3/xgb_sequential_model.pkl"
+        )
+
+        # Competitive analysis figures (do NOT render, just get figures)
+        competitive_charts = get_competitive_analysis_figures(
+            race_data, selected_driver)
+
+        # Degradation analysis figures
+        from utils.visualization import (
+            st_plot_degradation_rate,
+            st_plot_regular_vs_adjusted_degradation,
+            st_plot_speed_vs_tire_age
+        )
+        degradation_figs = []
+        try:
+            fig1 = st_plot_degradation_rate(race_data, selected_driver)
+            if fig1:
+                degradation_figs.append(fig1)
+            fig2 = st_plot_regular_vs_adjusted_degradation(
+                race_data, selected_driver)
+            if fig2:
+                degradation_figs.append(fig2)
+            # For speed vs tire age, try all compounds
+            if 'CompoundID' in race_data.columns:
+                for compound_id in race_data['CompoundID'].unique():
+                    fig3 = st_plot_speed_vs_tire_age(
+                        race_data, selected_driver, compound_id)
+                    if fig3:
+                        degradation_figs.append(fig3)
+        except Exception:
+            pass
+
+        # Gap analysis figures
+        from utils.visualization import (
+            st_plot_gap_evolution,
+            st_plot_undercut_opportunities,
+            st_plot_gap_consistency
+        )
+        gap_figs = []
+        try:
+            fig1 = st_plot_gap_evolution(gap_data, selected_driver)
+            if fig1:
+                gap_figs.append(fig1)
+            fig2 = st_plot_undercut_opportunities(gap_data, selected_driver)
+            if fig2:
+                gap_figs.append(fig2)
+            fig3 = st_plot_gap_consistency(gap_data, selected_driver)
+            if fig3:
+                gap_figs.append(fig3)
+        except Exception:
+            pass
+
+        # Lap time prediction figures
+        from components.time_predictions_view import render_time_predictions_view
+        from utils.visualization import st_plot_fuel_adjusted_degradation
+        prediction_figs = []
+        try:
+            fig1 = st_plot_fuel_adjusted_degradation(
+                race_data, selected_driver)
+            if fig1:
+                prediction_figs.append(fig1)
+        except Exception:
+            pass
+
+        # Overview figures (lap time evolution, comparison)
+        from components.overview_view import render_overview
+        # Not all overview charts are easily exportable, but you can add more here if needed
+
+        # Prepare all data for export
+        render_report_export_ui(
+            selected_driver,
+            race_data,
+            recommendations,
+            gap_data,
+            predictions_df,
+            None,  # radio_data
+            race_data,  # competitive_data
+            gap_charts=gap_figs,
+            prediction_charts=prediction_figs,
+            degradation_charts=degradation_figs,
+            competitive_charts=competitive_charts
+        )
+    else:
+        st.warning(
+            "Please run the strategy analysis to generate recommendations before using the dashboard."
+        )
 
 # Footer
 st.markdown("---")
