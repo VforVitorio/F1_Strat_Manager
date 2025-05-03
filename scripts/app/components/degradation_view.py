@@ -61,7 +61,7 @@ def render_degradation_view(race_data, selected_driver):
             fuel_adj_fig = st_plot_regular_vs_adjusted_degradation(
                 race_data, compound_names, compound_colors)
             if fuel_adj_fig:
-                st.pyplot(fuel_adj_fig)
+                st.plotly_chart(fuel_adj_fig, use_container_width=True)
             else:
                 st.info("Not enough data to create fuel-adjusted visualization.")
         except Exception as e:
