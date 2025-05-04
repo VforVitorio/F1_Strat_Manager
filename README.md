@@ -16,23 +16,23 @@ Develop an **intelligent strategy recommender** that, based on processed race da
 
 - **Sources** : FastF1, OpenF1, Roboflow
 - **Data Types** :
-- Weather data
-- Track and race conditions
-- Team radio communications
-- Video frames (used for computer vision models)
+  - Weather data
+  - Track and race conditions
+  - Team radio communications
+  - Video frames (used for computer vision models)
 - **Augmentation & Labelling** :
-- Enhanced image dataset using flips, rotation, blur, etc.
-- Manual labelling of radios (sentiment, intent, NER)
+  - Enhanced image dataset using flips, rotation, blur, etc.
+  - Manual labelling of radios (sentiment, intent, NER)
 - **Pipeline** :
-- All data merged into a single structured DataFrame
-- Generated synthetic variables and filtered irrelevant ones
-- Divided data by stint and lap sequences
+  - All data merged into a single structured DataFrame
+  - Generated synthetic variables and filtered irrelevant ones
+  - Divided data by stint and lap sequences
 
 ### 🎯 Machine Learning Models
 
 - **XGBoost** : Lap time prediction with MAE = 0.09s and RMSE = 0.15s
 - **TCN (Temporal Convolutional Networks)** : For tire degradation modeling
-- **YOLOv5** : Team identification from race footage with >90% mAP50
+- **YOLOv8** : Team identification from race footage with >90% mAP50
 - **Whisper Turbo + BERT** : NLP pipeline for radio communication analysis
 
 ### 🧠 Expert System
@@ -46,7 +46,7 @@ Develop an **intelligent strategy recommender** that, based on processed race da
 - Allows:
   - Model interaction per section (Vision, NLP, ML)
   - Visual exploration and graphing
-  - Chatbot Q&A via LLM for post-race reports and image analysis
+  - Chatbot Q&A via LLM for post-race reports and image analysis using Llama3.2-vision
 
 ## 🖥️ Environment Setup & Usage
 
