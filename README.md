@@ -1,6 +1,6 @@
 # 🏎️ F1 Strategy Manager
 
-**Revolutionizing strategic decision-making in Formula 1 through AI-powered models, computer vision, and expert systems.**
+**Revolutionizing strategic decision-making in Formula 1 through AI-powered models, computer vision, and expert systems. For a deeper insight, see the project's [paper here](F1_Strategy_Manager_AI.pdf).**
 
 ## 🚀 Project Overview
 
