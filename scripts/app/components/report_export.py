@@ -6,6 +6,13 @@ import base64
 import streamlit as st
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+
+# ------------------------------------------------------------------------
+# NOTE: need to fix the payload for making all the sections of the report.
+# Investigate if this occurs by hardware constraints.
+# ------------------------------------------------------------------------
+
+
 # F1 2023 driver mapping (English)
 F1_2023_DRIVERS_BY_TEAM = {
     "Red Bull Racing": [
