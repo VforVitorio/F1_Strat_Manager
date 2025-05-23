@@ -73,7 +73,7 @@ jobs:
 
           # Wait and verify service is available
           for i in {1..30}; do
-            if curl -s http://localhost:3000/ > /dev/null 2>&1 || curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
+            if curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
               echo "DeepWiki MCP is available"
               break
             fi
@@ -81,7 +81,7 @@ jobs:
             sleep 2
           done
 
-          # Verify once more - check both root and /mcp endpoints
+          # Verify once more - check /mcp endpoint
           if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: DeepWiki MCP not available after 60 seconds"
             echo "Service logs:"
@@ -121,22 +121,8 @@ jobs:
             echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
           fi
 
-          # Prepare JSON-RPC 2.0 payload
-          JSON_PAYLOAD=$(cat <<EOF
-          {
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-              "name": "deepwiki_fetch",
-              "arguments": {
-                "url": "$DEEPWIKI_URL",
-                "mode": "aggregate"
-              }
-            },
-            "id": 1
-          }
-          EOF
-          )
+          # Create JSON payload using proper escaping
+          JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","mode":"aggregate"}},"id":1}'
 
           echo "JSON-RPC 2.0 payload to send:"
           echo "$JSON_PAYLOAD" | jq . || echo "$JSON_PAYLOAD"
@@ -178,20 +164,7 @@ jobs:
               
               for METHOD in "${METHODS[@]}"; do
                 echo "Trying method: $METHOD"
-                ALT_PAYLOAD=$(cat <<EOF
-                {
-                  "jsonrpc": "2.0",
-                  "method": "tools/call",
-                  "params": {
-                    "name": "$METHOD",
-                    "arguments": {
-                      "url": "$DEEPWIKI_URL"
-                    }
-                  },
-                  "id": 1
-                }
-                EOF
-                )
+                ALT_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'$METHOD'","arguments":{"url":"'$DEEPWIKI_URL'"}},"id":1}'
                 
                 HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
                   -H "Content-Type: application/json" \
