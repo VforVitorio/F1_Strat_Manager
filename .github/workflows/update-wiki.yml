@@ -241,9 +241,7 @@ jobs:
               # Clean up beginning of content
               content = content.strip()
               
-              return content
-
-          def get_page_title_from_content(content):
+              return content          def get_page_title_from_content(content):
               """Extract a clean title from content"""
               lines = content.split('\n')
               for line in lines:
@@ -251,13 +249,33 @@ jobs:
                       title = line.strip()[2:].strip()
                       # Clean the title
                       title = re.sub(r'^/.*?/', '', title)  # Remove leading path
-                      if title:
+                      title = re.sub(r'[^\w\s-]', '', title)  # Remove special characters
+                      title = title.strip()
+                      if title and len(title) > 0:
                           return title
               return "Documentation"
 
-          def categorize_section(title):
-              """Categorize sections according to the specified hierarchy"""
-              title_lower = title.lower()
+          def safe_filename(title, fallback_idx=None):
+              """Genera un nombre de archivo seguro a partir del título. Si el título es vacío, usa un fallback único."""
+              if not title or len(title.strip()) == 0:
+                  if fallback_idx is not None:
+                      return f"unknown-section-{fallback_idx}"
+                  return "unknown-section"
+              
+              filename = title.lower().strip()
+              # Elimina caracteres especiales y reemplaza por guiones
+              filename = re.sub(r'[^\w\s-]', '', filename)
+              filename = re.sub(r'[-\s]+', '-', filename)
+              filename = filename.strip('-')  # Quita guiones al inicio/fin
+              if not filename:
+                  if fallback_idx is not None:
+                      return f"unknown-section-{fallback_idx}"
+                  return "unknown-section"
+              return filename
+
+          def categorize_section(title, fallback_idx=None):
+              """Categoriza secciones según la jerarquía especificada"""
+              title_lower = title.lower() if title else ''
               
               # Main sections
               if any(keyword in title_lower for keyword in ['overview', 'introducción', 'introduction']):
@@ -320,9 +338,8 @@ jobs:
                   return ('sub', 'Overview', '01-01-system-architecture.md')
               elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
                   return ('sub', 'Overview', '01-02-installation-setup.md')
-              
-              # Default fallback
-              return ('misc', 'Other', f'99-{title.lower().replace(" ", "-")}.md')          # Read the JSON response
+                # Fallback seguro
+              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')# Read the JSON response
           try:
               with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   data = json.load(f)
@@ -358,11 +375,20 @@ jobs:
                   'subsections': {},
                   'misc': []
               }
-              
-              # Process each page/section
+                # Process each page/section
               for i, content in enumerate(pages_content):
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
+                  
+                  # Validate content is not None or empty
+                  if not content or len(str(content).strip()) == 0:
+                      print(f"Skipping empty content section {i+1}")
+                      continue
+                  
+                  # Ensure content is string
+                  if not isinstance(content, str):
+                      print(f"Converting content to string for section {i+1}")
+                      content = str(content)
                   
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
@@ -370,10 +396,17 @@ jobs:
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
-                  
-                  # Get title and categorize
+                    # Get title and categorize
                   title = get_page_title_from_content(cleaned_content)
-                  section_type, parent_section, filename = categorize_section(title)
+                  # Validación de título vacío
+                  if not title or len(title.strip()) == 0:
+                      print(f"Warning: Empty title found in section {i+1}, using fallback")
+                      title = f"Section_{i+1}"
+                  section_type, parent_section, filename = categorize_section(title, fallback_idx=i+1)
+                  # Validación adicional para filename
+                  if not filename or filename == '.md' or filename.startswith('99-.md'):
+                      print(f"Warning: Invalid filename generated for '{title}', using fallback")
+                      filename = f'99-section-{i+1}.md'
                   
                   # Ensure proper title format
                   if not cleaned_content.strip().startswith('# '):
