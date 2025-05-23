@@ -140,7 +140,7 @@ jobs:
           HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD" \
-            -o docs-md/f1-strat-manager.md \
+            -o docs-md/f1-strat-manager-raw.md \
             -w "%{http_code}" \
             -s)
 
@@ -152,7 +152,7 @@ jobs:
           else
             echo "❌ Error HTTP $HTTP_CODE"
             echo "Response content:"
-            cat docs-md/f1-strat-manager.md
+            cat docs-md/f1-strat-manager-raw.md
             
             # Try fallback method without mode parameter
             echo "Trying fallback method without mode parameter..."
@@ -161,7 +161,7 @@ jobs:
             HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
               -H "Content-Type: application/json" \
               -d "$FALLBACK_PAYLOAD" \
-              -o docs-md/f1-strat-manager.md \
+              -o docs-md/f1-strat-manager-raw.md \
               -w "%{http_code}" \
               -s)
             
@@ -173,22 +173,114 @@ jobs:
           fi
 
           # Verify file was created and is not empty
-          if [ ! -f docs-md/f1-strat-manager.md ]; then
+          if [ ! -f docs-md/f1-strat-manager-raw.md ]; then
             echo "Error: Markdown file was not created"
             exit 1
           fi
 
-          if [ ! -s docs-md/f1-strat-manager.md ]; then
+          if [ ! -s docs-md/f1-strat-manager-raw.md ]; then
             echo "Error: Markdown file is empty"
             echo "File content:"
-            cat docs-md/f1-strat-manager.md
+            cat docs-md/f1-strat-manager-raw.md
             exit 1
           fi
 
-          echo "✅ Markdown file created successfully:"
+          echo "✅ Raw markdown file created successfully:"
           ls -la docs-md/
-          echo "First 10 lines of file:"
-          head -10 docs-md/f1-strat-manager.md
+          echo "First 10 lines of raw file:"
+          head -10 docs-md/f1-strat-manager-raw.md
+
+      - name: Process and Clean Markdown Content
+        run: |
+          echo "Processing and cleaning markdown content..."
+
+          # Install jq if not available
+          sudo apt-get update && sudo apt-get install -y jq
+
+          # Extract the actual content from the JSON response
+          if jq -e '.result.content[0].text' docs-md/f1-strat-manager-raw.md > /dev/null 2>&1; then
+            echo "Extracting content from JSON response..."
+            jq -r '.result.content[0].text' docs-md/f1-strat-manager-raw.md > docs-md/f1-strat-manager-content.md
+          else
+            echo "Not a JSON response, treating as plain text..."
+            cp docs-md/f1-strat-manager-raw.md docs-md/f1-strat-manager-content.md
+          fi
+
+          # Clean the markdown content using Python
+          python3 << 'EOF'
+          import re
+          import sys
+
+          def clean_deepwiki_content(content):
+              """Clean and format DeepWiki content for GitHub Wiki"""
+              
+              # Remove DeepWiki UI elements
+              content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
+              content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
+              content = re.sub(r'.*?Share.*?\n', '', content, flags=re.IGNORECASE)
+              content = re.sub(r'.*?Last indexed:.*?\n', '', content, flags=re.IGNORECASE)
+              content = re.sub(r'.*?Try DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
+              content = re.sub(r'.*?Auto-refresh not enabled yet.*?\n', '', content, flags=re.IGNORECASE)
+              
+              # Remove navigation elements
+              content = re.sub(r'- Overview\n- System Architecture.*?- Getting Started\n', '', content, flags=re.DOTALL)
+              content = re.sub(r'Menu\n', '', content)
+              content = re.sub(r'### On this page.*?- Getting Started\n', '', content, flags=re.DOTALL)
+              
+              # Remove source file references (they clutter the wiki)
+              content = re.sub(r'Relevant source files.*?\n\n', '', content, flags=re.DOTALL)
+              content = re.sub(r'Sources:.*?\n', '', content, flags=re.MULTILINE)
+              
+              # Clean up multiple consecutive newlines
+              content = re.sub(r'\n{3,}', '\n\n', content)
+              
+              # Remove empty sections
+              content = re.sub(r'\n## \n', '', content)
+              content = re.sub(r'\n### \n', '', content)
+              
+              # Fix malformed headers
+              content = re.sub(r'^([#]+)\s*$', '', content, flags=re.MULTILINE)
+              
+              # Remove VforVitorio/F1_Strat_Manager title duplicates
+              content = re.sub(r'^# /VforVitorio/F1_Strat_Manager.*?\n', '', content, flags=re.MULTILINE)
+              content = re.sub(r'VforVitorio/F1_Strat_Manager \| DeepWiki.*?\n', '', content)
+              
+              # Start with proper title
+              if not content.strip().startswith('# F1 Strategy Manager'):
+                  content = '# F1 Strategy Manager\n\n' + content.strip()
+              
+              # Clean up beginning of content
+              content = content.strip()
+              
+              return content
+
+          # Read the content
+          try:
+              with open('docs-md/f1-strat-manager-content.md', 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              print(f"Original content length: {len(content)} characters")
+              
+              # Clean the content
+              cleaned_content = clean_deepwiki_content(content)
+              
+              print(f"Cleaned content length: {len(cleaned_content)} characters")
+              
+              # Write the cleaned content
+              with open('docs-md/f1-strat-manager.md', 'w', encoding='utf-8') as f:
+                  f.write(cleaned_content)
+              
+              print("✅ Content cleaned and saved successfully")
+              
+          except Exception as e:
+              print(f"❌ Error processing content: {e}")
+              sys.exit(1)
+          EOF
+
+          echo "Cleaned markdown file created:"
+          ls -la docs-md/
+          echo "First 20 lines of cleaned file:"
+          head -20 docs-md/f1-strat-manager.md
 
       - name: Checkout Wiki
         uses: actions/checkout@v3
@@ -200,8 +292,8 @@ jobs:
       - name: Copy to Wiki
         run: |
           # Verify we have files to copy
-          if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
-            echo "Error: No markdown files to copy"
+          if [ ! -f docs-md/f1-strat-manager.md ]; then
+            echo "Error: No cleaned markdown file to copy"
             exit 1
           fi
 
@@ -217,8 +309,33 @@ jobs:
           echo "Current wiki contents:"
           ls -la wiki/
 
-          # Copy files to wiki
-          cp docs-md/*.md wiki/
+          # Copy cleaned file to wiki
+          cp docs-md/f1-strat-manager.md wiki/
+
+          # Create or update index page
+          cat > wiki/Home.md << 'EOF'
+          # Welcome to F1 Strategy Manager Wiki
+
+          This wiki contains comprehensive documentation for the F1 Strategy Manager project.
+
+          ## Documentation Pages
+
+          - **[F1 Strategy Manager](f1-strat-manager)** - Complete system documentation including architecture, components, and usage guide
+
+          ## Project Overview
+
+          The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support, combining:
+
+          - Machine learning models for predictive analytics
+          - Computer vision for gap calculation
+          - Natural language processing for radio analysis
+          - Rule-based expert systems for strategy recommendations
+          - Interactive Streamlit dashboard
+
+          ---
+
+          *This documentation is automatically generated from the project's DeepWiki documentation.*
+          EOF
 
           echo "Files copied to wiki:"
           ls -la wiki/
@@ -234,7 +351,7 @@ jobs:
           if git diff --quiet --staged; then
             echo "No changes to commit"
           else
-            git commit -m "🔄 Update Wiki from DeepWiki"
+            git commit -m "🔄 Update Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
             git push
             echo "Changes pushed successfully"
           fi
