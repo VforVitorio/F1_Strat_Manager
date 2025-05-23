@@ -143,6 +143,9 @@ jobs:
 
       - name: Copy All Documentation to Wiki
         run: |
+          # Clean existing wiki content to force full regeneration
+          rm -rf wiki/*
+
           # Verify we have files to copy
           if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
             echo "Error: No markdown files to copy"
