@@ -96,8 +96,6 @@ jobs:
 
       - name: Export ALL Markdown from DeepWiki
         run: |
-          mkdir -p docs-md
-
           # Verify service is available before making the call
           if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: Service not available before export"
@@ -106,97 +104,14 @@ jobs:
             exit 1
           fi
 
-          # Test connectivity first
-          echo "Testing service connectivity..."
-          curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' -v || echo "Tools list check failed"
-
-          # Validate DeepWiki URL accessibility
-          echo "Validating DeepWiki URL accessibility..."
-          DEEPWIKI_URL="https://deepwiki.com/VforVitorio/F1_Strat_Manager"
-
-          # Check if the URL is accessible
-          if curl -s --head "$DEEPWIKI_URL" | head -n 1 | grep -q "200 OK"; then
-            echo "✅ DeepWiki URL is accessible: $DEEPWIKI_URL"
-          else
-            echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
-          fi
-
-          # Create JSON payload to get ALL pages (maxDepth: 1, mode: "pages")
-          JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"pages"}},"id":1}'
-
-          echo "JSON-RPC 2.0 payload to send (ALL PAGES):"
-          echo "$JSON_PAYLOAD" | jq . || echo "$JSON_PAYLOAD"
-
-          # Validate JSON syntax
-          if echo "$JSON_PAYLOAD" | jq . > /dev/null 2>&1; then
-            echo "✅ JSON payload is valid"
-          else
-            echo "❌ JSON payload is invalid"
-            exit 1
-          fi
-
-          # Make the POST request to get ALL pages
-          echo "Making POST request to get ALL DeepWiki pages..."
-          HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
-            -H "Content-Type: application/json" \
-            -d "$JSON_PAYLOAD" \
-            -o docs-md/all-pages-raw.json \
-            -w "%{http_code}" \
-            -s)
-
-          echo "HTTP status code: $HTTP_CODE"
-
-          # Handle different HTTP response codes
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Success: All pages request completed successfully"
-          else
-            echo "❌ Error HTTP $HTTP_CODE"
-            echo "Response content:"
-            cat docs-md/all-pages-raw.json
-            
-            # Try fallback with aggregate mode
-            echo "Trying fallback with aggregate mode..."
-            FALLBACK_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"aggregate"}},"id":1}'
-            
-            HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
-              -H "Content-Type: application/json" \
-              -d "$FALLBACK_PAYLOAD" \
-              -o docs-md/all-pages-raw.json \
-              -w "%{http_code}" \
-              -s)
-            
-            if [ "$HTTP_CODE" != "200" ]; then
-              echo "Fallback method also failed with HTTP $HTTP_CODE"
-              exit 1
-            fi
-            echo "✅ Fallback method succeeded"
-          fi
-
-          # Verify file was created and is not empty
-          if [ ! -f docs-md/all-pages-raw.json ]; then
-            echo "Error: Response file was not created"
-            exit 1
-          fi
-
-          if [ ! -s docs-md/all-pages-raw.json ]; then
-            echo "Error: Response file is empty"
-            echo "File content:"
-            cat docs-md/all-pages-raw.json
-            exit 1
-          fi
-
-          echo "✅ All pages response received successfully:"
-          ls -la docs-md/
-          echo "Response structure:"
-          jq -r 'keys' docs-md/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
-          head -c 500 docs-md/all-pages-raw.json
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
 
       - name: Process and Split Multiple Pages
         run: |
           echo "Processing multiple pages from DeepWiki response..."
-
-          # Install jq if not available
-          sudo apt-get update && sudo apt-get install -y jq
 
           # Process the response with Python to handle multiple pages
           python3 << 'EOF'
