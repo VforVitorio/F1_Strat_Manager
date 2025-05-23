@@ -24,18 +24,73 @@ jobs:
       - name: Start DeepWiki MCP (HTTP mode)
         working-directory: deepwiki-mcp
         run: |
-          # Ejecutar el CLI en modo HTTP en el puerto 3000
-          node ./bin/cli.mjs --http --port 3000 &
-          sleep 10
+          # Verificar que los archivos necesarios existan
+          ls -la
+          ls -la bin/
+
+          # Iniciar el servicio en background
+          node ./bin/cli.mjs --http --port 3000 > ../deepwiki.log 2>&1 &
+          DEEPWIKI_PID=$!
+          echo "DeepWiki PID: $DEEPWIKI_PID"
+
+          # Esperar y verificar que el servicio esté disponible
+          for i in {1..30}; do
+            if curl -s http://localhost:3000/ > /dev/null; then
+              echo "DeepWiki MCP está disponible"
+              break
+            fi
+            echo "Esperando que DeepWiki MCP esté disponible... intento $i/30"
+            sleep 2
+          done
+
+          # Verificar una vez más
+          if ! curl -s http://localhost:3000/ > /dev/null; then
+            echo "Error: DeepWiki MCP no está disponible después de 60 segundos"
+            echo "Logs del servicio:"
+            cat ../deepwiki.log
+            exit 1
+          fi
+
+          # Verificar que el proceso esté ejecutándose
+          ps aux | grep node | grep -v grep
 
       - name: Export Markdown from DeepWiki
         run: |
           mkdir -p docs-md
+
+          # Verificar que el servicio esté disponible antes de hacer la llamada
+          if ! curl -s http://localhost:3000/ > /dev/null; then
+            echo "Error: Servicio no disponible antes de exportar"
+            echo "Logs del servicio:"
+            cat deepwiki.log || echo "No se encontraron logs"
+            exit 1
+          fi
+
           # Llamada POST al endpoint /mcp para obtener el Markdown
           curl -X POST http://localhost:3000/mcp \
             -H "Content-Type: application/json" \
             -d '{"id":"req-1","action":"deepwiki_fetch","params":{"url":"https://deepwiki.com/VforVitorio/F1_Strat_Manager","mode":"aggregate"}}' \
-            -o docs-md/f1-strat-manager.md
+            -o docs-md/f1-strat-manager.md \
+            --fail-with-body \
+            -w "HTTP status: %{http_code}\n"
+
+          # Verificar que el archivo se haya creado correctamente
+          if [ ! -f docs-md/f1-strat-manager.md ]; then
+            echo "Error: El archivo markdown no se creó"
+            exit 1
+          fi
+
+          if [ ! -s docs-md/f1-strat-manager.md ]; then
+            echo "Error: El archivo markdown está vacío"
+            echo "Contenido del archivo:"
+            cat docs-md/f1-strat-manager.md
+            exit 1
+          fi
+
+          echo "Archivo markdown creado exitosamente:"
+          ls -la docs-md/
+          echo "Primeras líneas del archivo:"
+          head -10 docs-md/f1-strat-manager.md
 
       - name: Checkout Wiki
         uses: actions/checkout@v3
@@ -46,8 +101,21 @@ jobs:
 
       - name: Copy to Wiki
         run: |
+          # Verificar que tenemos archivos para copiar
+          if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
+            echo "Error: No hay archivos markdown para copiar"
+            exit 1
+          fi
+
+          echo "Archivos a copiar:"
+          ls -la docs-md/
+
+          # Limpiar wiki y copiar archivos
           rm -rf wiki/*
           cp docs-md/*.md wiki/
+
+          echo "Archivos copiados a wiki:"
+          ls -la wiki/
 
       - name: Commit & Push changes
         working-directory: wiki
@@ -55,5 +123,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --quiet || git commit -m "🔄 Update Wiki from DeepWiki"
-          git push
+
+          # Verificar si hay cambios antes de hacer commit
+          if git diff --quiet --staged; then
+            echo "No hay cambios para commitear"
+          else
+            git commit -m "🔄 Update Wiki from DeepWiki"
+            git push
+            echo "Cambios enviados exitosamente"
+          fi
