@@ -245,40 +245,76 @@ jobs:
               
               return content
 
-          def add_placeholder_diagrams(content):
-              """Add placeholder diagrams where images should be"""
+          def add_contextual_diagrams(content):
+              """Add diagrams based on EXACT contextual markers and empty spaces"""
               
-              # Dictionary of common diagram placeholders based on context
-              diagram_patterns = {
-                  r'(The F1 Strategy Manager.*?system is organized into.*?interconnected.*?layers.*?)\n\n': 
-                      r'\1\n\n```mermaid\ngraph TB\n    A[Data Sources] --> B[Processing Layer]\n    B --> C[Analysis Layer]\n    C --> D[Strategy Engine]\n    D --> E[User Interface]\n    \n    A1[FastF1 Telemetry] --> A\n    A2[OpenF1 Radio] --> A\n    A3[Video Feed] --> A\n    \n    B1[Data Processing] --> B\n    B2[Feature Engineering] --> B\n    \n    C1[ML Models] --> C\n    C2[Computer Vision] --> C\n    C3[NLP Pipeline] --> C\n    \n    D1[Expert System] --> D\n    D2[Rule Engine] --> D\n    \n    E1[Streamlit Dashboard] --> E\n    E2[Strategy Views] --> E\n```\n\n',
+              # First, detect exact patterns that indicate where specific diagrams should go
+              specific_patterns = [
+                  # System Architecture Main Diagram
+                  {
+                      'pattern': r'(The F1 Strategy Manager is structured as a multi-layered system with specialized components for data acquisition, processing, analysis, and visualization:)\s*\n\n+',
+                      'replacement': r'\1\n\n```mermaid\nflowchart TB\n    subgraph "Data Sources"\n        A1[FastF1 Telemetry]\n        A2[OpenF1 Radio]\n        A3[Video Footage]\n    end\n    \n    subgraph "Processing Layer"\n        B1[Data Processing]\n        B2[Feature Engineering]\n        B3[Gap Calculation]\n    end\n    \n    subgraph "Analysis Layer"\n        C1[ML Models]\n        C2[Computer Vision]\n        C3[NLP Pipeline]\n    end\n    \n    subgraph "Expert System"\n        D1[Rule Engine]\n        D2[Strategy Recommendations]\n    end\n    \n    subgraph "User Interface"\n        E1[Streamlit Dashboard]\n        E2[Interactive Views]\n    end\n    \n    A1 --> B1\n    A2 --> B2\n    A3 --> B3\n    B1 --> C1\n    B2 --> C3\n    B3 --> C2\n    C1 --> D1\n    C2 --> D1\n    C3 --> D1\n    D1 --> D2\n    D2 --> E1\n    E1 --> E2\n```\n\n'
+                  },
                   
-                  r'(.*?system architecture.*?components.*?)\n\n':
-                      r'\1\n\n```mermaid\nflowchart LR\n    subgraph "Data Layer"\n        A[Telemetry Data]\n        B[Radio Data]\n        C[Video Data]\n    end\n    \n    subgraph "Processing Layer"\n        D[Data Processing]\n        E[Feature Engineering]\n    end\n    \n    subgraph "Analysis Layer"\n        F[ML Models]\n        G[Computer Vision]\n        H[NLP Pipeline]\n    end\n    \n    subgraph "Strategy Layer"\n        I[Expert System]\n        J[Rule Engine]\n    end\n    \n    subgraph "UI Layer"\n        K[Streamlit Dashboard]\n    end\n    \n    A --> D\n    B --> D\n    C --> D\n    D --> E\n    E --> F\n    E --> G\n    E --> H\n    F --> I\n    G --> I\n    H --> I\n    I --> J\n    J --> K\n```\n\n',
+                  # Data Flow Diagram
+                  {
+                      'pattern': r'(The following diagram illustrates how data flows through the system from input sources to the user interface:)\s*\n\n+',
+                      'replacement': r'\1\n\n```mermaid\nsequenceDiagram\n    participant FS as FastF1 API\n    participant OF as OpenF1 Radio\n    participant VF as Video Feed\n    participant DP as Data Processing\n    participant ML as ML Models\n    participant CV as Computer Vision\n    participant NLP as NLP Pipeline\n    participant ES as Expert System\n    participant UI as Streamlit UI\n    participant U as User\n    \n    FS->>DP: Telemetry Data\n    OF->>DP: Radio Transcripts\n    VF->>DP: Video Frames\n    \n    DP->>ML: Processed Telemetry\n    DP->>CV: Video Frames\n    DP->>NLP: Radio Text\n    \n    ML->>ES: Lap Time Predictions\n    CV->>ES: Gap Calculations\n    NLP->>ES: Radio Insights\n    \n    ES->>UI: Strategy Recommendations\n    UI->>U: Interactive Dashboard\n```\n\n'
+                  },
                   
-                  r'(.*?data flow.*?through.*?system.*?)\n\n':
-                      r'\1\n\n```mermaid\nsequenceDiagram\n    participant U as User\n    participant UI as Streamlit UI\n    participant P as Processing\n    participant ML as ML Models\n    participant ES as Expert System\n    participant D as Data Sources\n    \n    U->>UI: Request Analysis\n    UI->>P: Process Data Request\n    P->>D: Fetch Raw Data\n    D-->>P: Return Data\n    P->>ML: Run Predictions\n    ML-->>P: Return Predictions\n    P->>ES: Apply Rules\n    ES-->>P: Return Recommendations\n    P-->>UI: Processed Results\n    UI-->>U: Display Analysis\n```\n\n',
+                  # Expert System Rules Diagram
+                  {
+                      'pattern': r'(The F1CompleteStrategyEngine integrates multiple rule sets and resolves conflicts to generate coherent strategy recommendations\.)\s*\n\n+',
+                      'replacement': r'\1\n\n```mermaid\nflowchart TB\n    A[Race Data Input] --> B{Data Analysis}\n    \n    B --> C[Degradation Rules]\n    B --> D[Gap Analysis Rules]\n    B --> E[Radio Message Rules]\n    \n    C --> F[Tire Strategy]\n    D --> G[Position Strategy]\n    E --> H[Communication Insights]\n    \n    F --> I[Strategy Engine]\n    G --> I\n    H --> I\n    \n    I --> J{Conflict Resolution}\n    J --> K[Final Recommendations]\n    \n    K --> L[Pit Window]\n    K --> M[Tire Choice]\n    K --> N[Race Strategy]\n```\n\n'
+                  },
                   
-                  r'(.*?machine learning.*?pipeline.*?)\n\n':
-                      r'\1\n\n```mermaid\ngraph TD\n    A[Raw Telemetry] --> B[Data Preprocessing]\n    B --> C[Feature Engineering]\n    C --> D[Model Training]\n    D --> E[Model Validation]\n    E --> F[Prediction Engine]\n    \n    G[XGBoost Model] --> F\n    H[TCN Model] --> F\n    I[Vision Model] --> F\n    \n    F --> J[Strategy Recommendations]\n```\n\n',
-                  
-                  r'(.*?expert system.*?rules.*?)\n\n':
-                      r'\1\n\n```mermaid\nflowchart TB\n    A[Race Data Input] --> B{Analyze Conditions}\n    B --> C[Tire Degradation Rules]\n    B --> D[Gap Analysis Rules]\n    B --> E[Radio Message Rules]\n    \n    C --> F[Degradation Assessment]\n    D --> G[Position Analysis]\n    E --> H[Communication Insights]\n    \n    F --> I[Strategy Engine]\n    G --> I\n    H --> I\n    \n    I --> J[Final Recommendations]\n```\n\n',
-                  
-                  # Detect empty spaces where diagrams should be
-                  r'(.*?following diagram.*?)\n\n\n+':
-                      r'\1\n\n```mermaid\ngraph LR\n    A[Component A] --> B[Component B]\n    B --> C[Component C]\n    C --> D[Output]\n```\n\n*(Original diagram available in [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager))*\n\n',
-                      
-                  r'(.*?diagram.*?shows.*?)\n\n\n+':
-                      r'\1\n\n```mermaid\ngraph TB\n    A[Input] --> B[Process]\n    B --> C[Output]\n```\n\n*(Diagram placeholder - see [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager) for visual representation)*\n\n',
-              }
+                  # Machine Learning Pipeline
+                  {
+                      'pattern': r'(These models process telemetry data to generate predictions that feed into the expert system for strategic decision-making\.)\s*\n\n+',
+                      'replacement': r'\1\n\n```mermaid\ngraph LR\n    A[Raw Telemetry] --> B[Data Preprocessing]\n    B --> C[Feature Engineering]\n    \n    C --> D[XGBoost Model]\n    C --> E[TCN Model]\n    C --> F[Vision Model]\n    \n    D --> G[Lap Time Predictions]\n    E --> H[Degradation Predictions]\n    F --> I[Gap Calculations]\n    \n    G --> J[Expert System]\n    H --> J\n    I --> J\n    \n    J --> K[Strategy Recommendations]\n```\n\n'
+                  }
+              ]
               
-              # Apply diagram patterns
-              for pattern, replacement in diagram_patterns.items():
+              # Apply specific patterns first
+              for pattern_dict in specific_patterns:
+                  pattern = pattern_dict['pattern']
+                  replacement = pattern_dict['replacement']
+                  old_content = content
+                  content = re.sub(pattern, replacement, content, flags=re.IGNORECASE | re.DOTALL)
+                  if content != old_content:
+                      print(f"✅ Applied specific diagram pattern")
+              
+              # Then handle generic empty spaces that weren't caught by specific patterns
+              # But be more conservative - only replace if there's clear indication of missing content
+              
+              # Look for specific section patterns that should have diagrams
+              section_patterns = [
+                  # Generic architecture section
+                  {
+                      'pattern': r'(## System Architecture\s*\n\n.*?architecture.*?)\n\n\n+(?=##|\Z)',
+                      'replacement': r'\1\n\n*Architecture diagram available in [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager)*\n\n'
+                  },
+                  
+                  # Generic data flow section  
+                  {
+                      'pattern': r'(## Data Flow\s*\n\n.*?flow.*?)\n\n\n+(?=##|\Z)',
+                      'replacement': r'\1\n\n*Data flow diagram available in [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager)*\n\n'
+                  },
+                  
+                  # Tables with empty spaces
+                  {
+                      'pattern': r'(\| .+ \|\s*\n\s*\|[-\s\|]+\|\s*\n(?:\| .+ \|\s*\n)*)\n\n\n+',
+                      'replacement': r'\1\n\n'
+                  }
+              ]
+              
+              for pattern_dict in section_patterns:
+                  pattern = pattern_dict['pattern']
+                  replacement = pattern_dict['replacement']
                   content = re.sub(pattern, replacement, content, flags=re.IGNORECASE | re.DOTALL)
               
-              # Generic empty space detection
-              content = re.sub(r'\n\n\n\n+', '\n\n*(Diagram/Image placeholder - see [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager) for visual representation)*\n\n', content)
+              # Final cleanup: remove excessive empty lines but preserve intentional spacing
+              content = re.sub(r'\n{4,}', '\n\n', content)
               
               return content
 
@@ -347,8 +383,8 @@ jobs:
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
                   
-                  # Add placeholder diagrams
-                  cleaned_content = add_placeholder_diagrams(cleaned_content)
+                  # Add contextual diagrams EXACTLY where they should be
+                  cleaned_content = add_contextual_diagrams(cleaned_content)
                   
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
@@ -375,7 +411,7 @@ jobs:
               
               main_content = "# F1 Strategy Manager - Complete Documentation\n\n"
               main_content += "This document contains the complete documentation for the F1 Strategy Manager project.\n\n"
-              main_content += "> **Note**: Some diagrams are represented as Mermaid diagrams or placeholders. For the original visual representations, please visit the [DeepWiki documentation](https://deepwiki.com/VforVitorio/F1_Strat_Manager).\n\n"
+              main_content += "> **Note**: Diagrams are placed exactly where they appear in the original DeepWiki documentation. Some complex diagrams may be represented as placeholders with links to the original.\n\n"
               main_content += "## Table of Contents\n\n"
               
               # Add table of contents
@@ -408,7 +444,7 @@ jobs:
                   content = f.read()
               
               cleaned_content = clean_deepwiki_content(content)
-              cleaned_content = add_placeholder_diagrams(cleaned_content)
+              cleaned_content = add_contextual_diagrams(cleaned_content)
               
               if not cleaned_content.strip().startswith('# '):
                   cleaned_content = '# F1 Strategy Manager\n\n' + cleaned_content.strip()
