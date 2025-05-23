@@ -223,12 +223,46 @@ jobs:
           echo "First 10 lines of file:"
           head -10 docs-md/f1-strat-manager.md
 
-      - name: Checkout Wiki
+      - name: Initialize or Checkout Wiki
+        id: wiki-checkout
+        continue-on-error: true
         uses: actions/checkout@v3
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
+
+      - name: Create Wiki if it doesn't exist
+        if: steps.wiki-checkout.outcome == 'failure'
+        run: |
+          echo "Wiki repository doesn't exist, creating it..."
+          mkdir -p wiki
+          cd wiki
+
+          # Initialize a new git repository
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create a welcome page
+          cat > Home.md << 'EOF'
+          # Welcome to F1 Strategy Manager Wiki
+
+          This wiki is automatically generated from DeepWiki content.
+
+          ## Pages
+
+          - [F1 Strategy Manager](f1-strat-manager.md)
+          EOF
+
+          # Add and commit
+          git add .
+          git commit -m "Initialize wiki"
+
+          # Add remote and push (this will create the wiki repository)
+          git remote add origin https://${{ secrets.WIKI_PAT }}@github.com/${{ github.repository }}.wiki.git
+          git branch -M main
+          git push -u origin main
 
       - name: Copy to Wiki
         run: |
@@ -241,8 +275,13 @@ jobs:
           echo "Files to copy:"
           ls -la docs-md/
 
-          # Clean wiki and copy files
-          rm -rf wiki/*
+          # Ensure wiki directory exists
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
+            exit 1
+          fi
+
+          # Copy files (preserve existing files, only update our generated ones)
           cp docs-md/*.md wiki/
 
           echo "Files copied to wiki:"
