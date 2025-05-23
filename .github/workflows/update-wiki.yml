@@ -408,10 +408,10 @@ jobs:
                                       imgf.write(r.content)
                           except Exception:
                               print(f"Advertencia: no se pudo descargar imagen {img_url}")
-                  # Actualiza ruta en markdown
-                  cleaned_content = cleaned_content.replace(f']({img_url})', f'](images/{img_name})')
+                          # Actualiza ruta en markdown
+                          cleaned_content = cleaned_content.replace(f']({img_url})', f'](images/{img_name})')
 
-          # Ensure proper title format
+                  # Ensure proper title format
           if not cleaned_content.strip().startswith('# '):
               cleaned_content = f'# {title}\n\n' + cleaned_content.strip()
 
