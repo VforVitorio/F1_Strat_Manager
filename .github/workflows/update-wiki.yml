@@ -96,13 +96,31 @@ jobs:
 
       - name: Export ALL Markdown from DeepWiki
         run: |
-          # Verify service is available before making the call
+          # Verify that service is available before making the call
           if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: Service not available before export"
             echo "Service logs:"
             cat deepwiki.log || echo "No logs found"
             exit 1
           fi
+          # Prepare output directory and fetch all pages
+          mkdir -p docs-md
+          echo "Testing service connectivity..."
+          curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' > /dev/null || echo "Tools list check failed"
+          DEEPWIKI_URL="https://deepwiki.com/VforVitorio/F1_Strat_Manager"
+          JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"pages"}},"id":1}'
+          echo "Fetching all pages..."
+          HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD" \
+            -o docs-md/all-pages-raw.json \
+            -w "%{http_code}" -s)
+          if [ "$HTTP_CODE" != "200" ] || [ ! -s docs-md/all-pages-raw.json ]; then
+            echo "Error fetching pages: HTTP $HTTP_CODE"
+            cat docs-md/all-pages-raw.json || true
+            exit 1
+          fi
+          echo "✅ All pages JSON created: docs-md/all-pages-raw.json"
 
       - name: Setup Python
         uses: actions/setup-python@v4
