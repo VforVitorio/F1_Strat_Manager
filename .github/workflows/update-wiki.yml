@@ -7,7 +7,7 @@ on:
 
 jobs:
   update-wiki:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -51,5 +51,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --quiet && echo "Nothing to update" || git commit -m "🔄 Update Wiki from DeepWiki"
+          git diff --quiet || git commit -m "🔄 Update Wiki from DeepWiki"
           git push
