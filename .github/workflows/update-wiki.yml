@@ -133,48 +133,44 @@ jobs:
           echo "Processing multiple pages from DeepWiki response..."
 
           python3 <<-'EOF'
-            import json, re, sys, os
+          import json, re, sys, os
 
-            def clean_deepwiki_content(content):
-                """Limpia lo esencial y elimina saltos de línea extra."""
-                content = re.sub(r'DeepWiki.*\n', '', content, flags=re.IGNORECASE)
-                content = re.sub(r'\n{3,}', '\n\n', content)
-                return content.strip()
+          def clean_deepwiki_content(content):
+              """Limpia lo esencial y elimina saltos de línea extra."""
+              content = re.sub(r'DeepWiki.*\n', '', content, flags=re.IGNORECASE)
+              content = re.sub(r'\n{3,}', '\n\n', content)
+              return content.strip()
 
-            try:
-                data = json.load(open('docs-md/all-pages-raw.json', encoding='utf-8'))
-            except Exception as e:
-                print(f"❌ Error loading JSON: {e}")
-                sys.exit(1)
+          try:
+              data = json.load(open('docs-md/all-pages-raw.json', encoding='utf-8'))
+          except Exception as e:
+              print(f"❌ Error loading JSON: {e}")
+              sys.exit(1)
 
-            # Extraer textos
-            pages = []
-            result = data.get('result')
-            if isinstance(result, dict) and 'content' in result:
-                items = result['content']
-                if isinstance(items, list):
-                    pages = [item.get('text','') for item in items if isinstance(item, dict)]
-                else:
-                    pages = [items.get('text','')]
-            elif isinstance(result, str):
-                pages = [result]
+          # Extraer textos
+          pages = []
+          result = data.get('result')
+          if isinstance(result, dict) and 'content' in result:
+              items = result['content']
+              if isinstance(items, list): pages = [item.get('text','') for item in items if isinstance(item, dict)]
+              else: pages = [items.get('text','')]
+          elif isinstance(result, str): pages = [result]
 
-            os.makedirs('docs-md', exist_ok=True)
-            created = []
-            for i, text in enumerate(pages, 1):
-                clean = clean_deepwiki_content(text)
-                if len(clean) < 50:
-                    continue
-                title = clean.splitlines()[0].lstrip('# ').strip() or f"Page_{i}"
-                fname = re.sub(r'[^\w\-]', '_', title) + '.md'
-                with open(f'docs-md/{fname}', 'w', encoding='utf-8') as f:
-                    f.write(f'# {title}\n\n{clean}')
-                created.append(fname)
-                print(f"✅ Created {fname}")
-            if not created:
-                print("❌ No pages procesadas.")
-                sys.exit(1)
-            print("📄 Ficheros creados:", created)
+          os.makedirs('docs-md', exist_ok=True)
+          created = []
+          for i, text in enumerate(pages, 1):
+              clean = clean_deepwiki_content(text)
+              if len(clean) < 50: continue
+              title = clean.splitlines()[0].lstrip('# ').strip() or f"Page_{i}"
+              fname = re.sub(r'[^\w\-]', '_', title) + '.md'
+              with open(f'docs-md/{fname}', 'w', encoding='utf-8') as f:
+                  f.write(f'# {title}\n\n{clean}')
+              created.append(fname)
+              print(f"✅ Created {fname}")
+          if not created:
+              print("❌ No pages procesadas.")
+              sys.exit(1)
+          print("📄 Ficheros creados:", created)
           EOF
 
           echo "Final documentation files created:"
