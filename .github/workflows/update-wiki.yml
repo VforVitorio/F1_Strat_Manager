@@ -581,7 +581,8 @@ jobs:
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
 
-          This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation.
+          This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
+          It is generated through DeepWiki, if you want to see also the figures of the documentation, please, navigate to [this link over here](https://deepwiki.com/VforVitorio/F1_Strat_Manager).
 
           ## 📋 Complete Documentation
 
