@@ -202,7 +202,6 @@ jobs:
           import re
           import sys
           import os
-          import requests
 
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
@@ -393,56 +392,54 @@ jobs:
                   
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
-
-                  # Descarga y referencia imágenes embebidas
-                  img_urls = re.findall(r'!\[.*?\]\((https?://[^)]+)\)', cleaned_content)
-                  if img_urls:
-                      os.makedirs('docs-md/images', exist_ok=True)
-                      for img_url in img_urls:
-                          img_name = os.path.basename(img_url)
-                          img_path = f'docs-md/images/{img_name}'
-                          try:
-                              r = requests.get(img_url)
-                              if r.status_code == 200:
-                                  with open(img_path, 'wb') as imgf:
-                                      imgf.write(r.content)
-                          except Exception:
-                              print(f"Advertencia: no se pudo descargar imagen {img_url}")
-                          # Actualiza ruta en markdown
-                          cleaned_content = cleaned_content.replace(f']({img_url})', f'](images/{img_name})')
-
+                  
+                  if len(cleaned_content.strip()) < 50:  # Skip very short content
+                      print(f"Skipping short content section {i+1}")
+                      continue
+                    # Get title and categorize
+                  title = get_page_title_from_content(cleaned_content)
+                  # Validación de título vacío
+                  if not title or len(title.strip()) == 0:
+                      print(f"Warning: Empty title found in section {i+1}, using fallback")
+                      title = f"Section_{i+1}"
+                  section_type, parent_section, filename = categorize_section(title, fallback_idx=i+1)
+                  # Validación adicional para filename
+                  if not filename or filename == '.md' or filename.startswith('99-.md'):
+                      print(f"Warning: Invalid filename generated for '{title}', using fallback")
+                      filename = f'99-section-{i+1}.md'
+                  
                   # Ensure proper title format
-          if not cleaned_content.strip().startswith('# '):
-              cleaned_content = f'# {title}\n\n' + cleaned_content.strip()
-
-          # Write individual file
-          filepath = f'docs-md/{filename}'
-          with open(filepath, 'w', encoding='utf-8') as f:
-              f.write(cleaned_content)
-
-          # Organize content
-          if section_type == 'main':
-              organized_content['main_sections'][parent_section] = {
-                  'filename': filename,
-                  'title': title,
-                  'content': cleaned_content
-              }
-          elif section_type == 'sub':
-              if parent_section not in organized_content['subsections']:
-                  organized_content['subsections'][parent_section] = []
-              organized_content['subsections'][parent_section].append({
-                  'filename': filename,
-                  'title': title,
-                  'content': cleaned_content
-              })
-          else:
-              organized_content['misc'].append({
-                  'filename': filename,
-                  'title': title,
-                  'content': cleaned_content
-              })
-
-          print(f"✅ Created: {filename} (Category: {section_type}, Parent: {parent_section})")
+                  if not cleaned_content.strip().startswith('# '):
+                      cleaned_content = f'# {title}\n\n' + cleaned_content.strip()
+                  
+                  # Write individual file
+                  filepath = f'docs-md/{filename}'
+                  with open(filepath, 'w', encoding='utf-8') as f:
+                      f.write(cleaned_content)
+                  
+                  # Organize content
+                  if section_type == 'main':
+                      organized_content['main_sections'][parent_section] = {
+                          'filename': filename,
+                          'title': title,
+                          'content': cleaned_content
+                      }
+                  elif section_type == 'sub':
+                      if parent_section not in organized_content['subsections']:
+                          organized_content['subsections'][parent_section] = []
+                      organized_content['subsections'][parent_section].append({
+                          'filename': filename,
+                          'title': title,
+                          'content': cleaned_content
+                      })
+                  else:
+                      organized_content['misc'].append({
+                          'filename': filename,
+                          'title': title,
+                          'content': cleaned_content
+                      })
+                  
+                  print(f"✅ Created: {filename} (Category: {section_type}, Parent: {parent_section})")
               
               # Create structured comprehensive documentation
               print(f"\nCreating structured comprehensive documentation...")
@@ -652,6 +649,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
           git add .
 
           # Check if there are changes before committing
