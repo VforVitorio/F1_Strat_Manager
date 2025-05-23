@@ -94,7 +94,7 @@ jobs:
           # Verify process is running
           ps aux | grep node | grep -v grep
 
-      - name: Export Markdown from DeepWiki
+      - name: Export ALL Markdown from DeepWiki
         run: |
           mkdir -p docs-md
 
@@ -121,10 +121,10 @@ jobs:
             echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
           fi
 
-          # Create JSON payload using proper escaping
-          JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","mode":"aggregate"}},"id":1}'
+          # Create JSON payload to get ALL pages (maxDepth: 1, mode: "pages")
+          JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"pages"}},"id":1}'
 
-          echo "JSON-RPC 2.0 payload to send:"
+          echo "JSON-RPC 2.0 payload to send (ALL PAGES):"
           echo "$JSON_PAYLOAD" | jq . || echo "$JSON_PAYLOAD"
 
           # Validate JSON syntax
@@ -135,12 +135,12 @@ jobs:
             exit 1
           fi
 
-          # Make the POST request
-          echo "Making POST request to DeepWiki MCP..."
+          # Make the POST request to get ALL pages
+          echo "Making POST request to get ALL DeepWiki pages..."
           HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD" \
-            -o docs-md/f1-strat-manager-raw.md \
+            -o docs-md/all-pages-raw.json \
             -w "%{http_code}" \
             -s)
 
@@ -148,20 +148,20 @@ jobs:
 
           # Handle different HTTP response codes
           if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Success: Request completed successfully"
+            echo "✅ Success: All pages request completed successfully"
           else
             echo "❌ Error HTTP $HTTP_CODE"
             echo "Response content:"
-            cat docs-md/f1-strat-manager-raw.md
+            cat docs-md/all-pages-raw.json
             
-            # Try fallback method without mode parameter
-            echo "Trying fallback method without mode parameter..."
-            FALLBACK_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'"}},"id":1}'
+            # Try fallback with aggregate mode
+            echo "Trying fallback with aggregate mode..."
+            FALLBACK_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"aggregate"}},"id":1}'
             
             HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
               -H "Content-Type: application/json" \
               -d "$FALLBACK_PAYLOAD" \
-              -o docs-md/f1-strat-manager-raw.md \
+              -o docs-md/all-pages-raw.json \
               -w "%{http_code}" \
               -s)
             
@@ -173,43 +173,37 @@ jobs:
           fi
 
           # Verify file was created and is not empty
-          if [ ! -f docs-md/f1-strat-manager-raw.md ]; then
-            echo "Error: Markdown file was not created"
+          if [ ! -f docs-md/all-pages-raw.json ]; then
+            echo "Error: Response file was not created"
             exit 1
           fi
 
-          if [ ! -s docs-md/f1-strat-manager-raw.md ]; then
-            echo "Error: Markdown file is empty"
+          if [ ! -s docs-md/all-pages-raw.json ]; then
+            echo "Error: Response file is empty"
             echo "File content:"
-            cat docs-md/f1-strat-manager-raw.md
+            cat docs-md/all-pages-raw.json
             exit 1
           fi
 
-          echo "✅ Raw markdown file created successfully:"
+          echo "✅ All pages response received successfully:"
           ls -la docs-md/
-          echo "First 10 lines of raw file:"
-          head -10 docs-md/f1-strat-manager-raw.md
+          echo "Response structure:"
+          jq -r 'keys' docs-md/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
+          head -c 500 docs-md/all-pages-raw.json
 
-      - name: Process and Clean Markdown Content
+      - name: Process and Split Multiple Pages
         run: |
-          echo "Processing and cleaning markdown content..."
+          echo "Processing multiple pages from DeepWiki response..."
 
           # Install jq if not available
           sudo apt-get update && sudo apt-get install -y jq
 
-          # Extract the actual content from the JSON response
-          if jq -e '.result.content[0].text' docs-md/f1-strat-manager-raw.md > /dev/null 2>&1; then
-            echo "Extracting content from JSON response..."
-            jq -r '.result.content[0].text' docs-md/f1-strat-manager-raw.md > docs-md/f1-strat-manager-content.md
-          else
-            echo "Not a JSON response, treating as plain text..."
-            cp docs-md/f1-strat-manager-raw.md docs-md/f1-strat-manager-content.md
-          fi
-
-          # Clean the markdown content using Python
+          # Process the response with Python to handle multiple pages
           python3 << 'EOF'
+          import json
           import re
           import sys
+          import os
 
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
@@ -221,6 +215,7 @@ jobs:
               content = re.sub(r'.*?Last indexed:.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Try DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Auto-refresh not enabled yet.*?\n', '', content, flags=re.IGNORECASE)
+              content = re.sub(r'.*?Which repo would you like to understand.*?\n', '', content, flags=re.IGNORECASE)
               
               # Remove navigation elements
               content = re.sub(r'- Overview\n- System Architecture.*?- Getting Started\n', '', content, flags=re.DOTALL)
@@ -245,42 +240,151 @@ jobs:
               content = re.sub(r'^# /VforVitorio/F1_Strat_Manager.*?\n', '', content, flags=re.MULTILINE)
               content = re.sub(r'VforVitorio/F1_Strat_Manager \| DeepWiki.*?\n', '', content)
               
-              # Start with proper title
-              if not content.strip().startswith('# F1 Strategy Manager'):
-                  content = '# F1 Strategy Manager\n\n' + content.strip()
-              
               # Clean up beginning of content
               content = content.strip()
               
               return content
 
-          # Read the content
+          def get_page_title_from_content(content):
+              """Extract a clean title from content"""
+              lines = content.split('\n')
+              for line in lines:
+                  if line.strip().startswith('# ') and len(line.strip()) > 2:
+                      title = line.strip()[2:].strip()
+                      # Clean the title
+                      title = re.sub(r'^/.*?/', '', title)  # Remove leading path
+                      if title:
+                          return title
+              return "Documentation"
+
+          def generate_filename(title, url=""):
+              """Generate a safe filename from title"""
+              if url and "F1_Strat_Manager/" in url:
+                  # Extract section from URL
+                  section = url.split("F1_Strat_Manager/")[-1]
+                  if section and section != "":
+                      return section.replace("-", "_").replace(".", "_") + ".md"
+              
+              # Fallback to title-based filename
+              filename = title.lower()
+              filename = re.sub(r'[^\w\s-]', '', filename)
+              filename = re.sub(r'[-\s]+', '-', filename)
+              return filename + ".md"
+
+          # Read the JSON response
           try:
-              with open('docs-md/f1-strat-manager-content.md', 'r', encoding='utf-8') as f:
+              with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
+                  data = json.load(f)
+              
+              print(f"Response structure: {list(data.keys())}")
+              
+              # Handle different response structures
+              pages_content = []
+              
+              if 'result' in data and 'content' in data['result']:
+                  if isinstance(data['result']['content'], list):
+                      # Multiple content items
+                      for item in data['result']['content']:
+                          if 'text' in item:
+                              pages_content.append(item['text'])
+                  else:
+                      # Single content item
+                      if 'text' in data['result']['content']:
+                          pages_content.append(data['result']['content']['text'])
+              elif 'result' in data and isinstance(data['result'], str):
+                  # Direct string result
+                  pages_content.append(data['result'])
+              else:
+                  print("❌ Unexpected response structure")
+                  print(f"Data keys: {list(data.keys())}")
+                  sys.exit(1)
+              
+              print(f"Found {len(pages_content)} content sections")
+              
+              # Process each page/section
+              all_files = []
+              for i, content in enumerate(pages_content):
+                  print(f"\nProcessing content section {i+1}...")
+                  print(f"Content length: {len(content)} characters")
+                  
+                  # Clean the content
+                  cleaned_content = clean_deepwiki_content(content)
+                  
+                  if len(cleaned_content.strip()) < 50:  # Skip very short content
+                      print(f"Skipping short content section {i+1}")
+                      continue
+                  
+                  # Get title and filename
+                  title = get_page_title_from_content(cleaned_content)
+                  filename = generate_filename(title)
+                  
+                  # Ensure proper title format
+                  if not cleaned_content.strip().startswith('# '):
+                      cleaned_content = f'# {title}\n\n' + cleaned_content.strip()
+                  
+                  # Write individual file
+                  filepath = f'docs-md/{filename}'
+                  with open(filepath, 'w', encoding='utf-8') as f:
+                      f.write(cleaned_content)
+                  
+                  all_files.append((filename, title))
+                  print(f"✅ Created: {filename} ({len(cleaned_content)} chars)")
+              
+              # Create a comprehensive main file that combines everything
+              print(f"\nCreating comprehensive documentation...")
+              
+              main_content = "# F1 Strategy Manager - Complete Documentation\n\n"
+              main_content += "This document contains the complete documentation for the F1 Strategy Manager project.\n\n"
+              main_content += "## Table of Contents\n\n"
+              
+              # Add table of contents
+              for filename, title in all_files:
+                  section_link = title.lower().replace(' ', '-').replace('.', '').replace('(', '').replace(')', '')
+                  main_content += f"- [{title}](#{section_link})\n"
+              
+              main_content += "\n---\n\n"
+              
+              # Add all content
+              for filename, title in all_files:
+                  with open(f'docs-md/{filename}', 'r', encoding='utf-8') as f:
+                      content = f.read()
+                  main_content += content + "\n\n---\n\n"
+              
+              # Write main comprehensive file
+              with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
+                  f.write(main_content)
+              
+              print(f"✅ Created comprehensive documentation: f1-strat-manager-complete.md")
+              print(f"Total files created: {len(all_files) + 1}")
+              print(f"Files: {[f[0] for f in all_files] + ['f1-strat-manager-complete.md']}")
+              
+          except json.JSONDecodeError as e:
+              print(f"❌ Error parsing JSON: {e}")
+              print("Response might not be valid JSON, trying as plain text...")
+              
+              # Try to handle as plain text
+              with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   content = f.read()
               
-              print(f"Original content length: {len(content)} characters")
-              
-              # Clean the content
               cleaned_content = clean_deepwiki_content(content)
               
-              print(f"Cleaned content length: {len(cleaned_content)} characters")
+              if not cleaned_content.strip().startswith('# '):
+                  cleaned_content = '# F1 Strategy Manager\n\n' + cleaned_content.strip()
               
-              # Write the cleaned content
-              with open('docs-md/f1-strat-manager.md', 'w', encoding='utf-8') as f:
+              with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
                   f.write(cleaned_content)
               
-              print("✅ Content cleaned and saved successfully")
+              print("✅ Processed as plain text")
               
           except Exception as e:
               print(f"❌ Error processing content: {e}")
               sys.exit(1)
           EOF
 
-          echo "Cleaned markdown file created:"
+          echo "Final documentation files created:"
           ls -la docs-md/
-          echo "First 20 lines of cleaned file:"
-          head -20 docs-md/f1-strat-manager.md
+          echo "Preview of main documentation:"
+          head -30 docs-md/f1-strat-manager-complete.md
 
       - name: Checkout Wiki
         uses: actions/checkout@v3
@@ -289,11 +393,11 @@ jobs:
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
 
-      - name: Copy to Wiki
+      - name: Copy All Documentation to Wiki
         run: |
           # Verify we have files to copy
-          if [ ! -f docs-md/f1-strat-manager.md ]; then
-            echo "Error: No cleaned markdown file to copy"
+          if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
+            echo "Error: No markdown files to copy"
             exit 1
           fi
 
@@ -309,18 +413,37 @@ jobs:
           echo "Current wiki contents:"
           ls -la wiki/
 
-          # Copy cleaned file to wiki
-          cp docs-md/f1-strat-manager.md wiki/
+          # Copy ALL markdown files to wiki
+          cp docs-md/*.md wiki/
 
-          # Create or update index page
+          # Create or update index page with links to all documentation
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
 
           This wiki contains comprehensive documentation for the F1 Strategy Manager project.
 
-          ## Documentation Pages
+          ## Complete Documentation
 
-          - **[F1 Strategy Manager](f1-strat-manager)** - Complete system documentation including architecture, components, and usage guide
+          - **[Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections
+
+          ## Individual Sections
+
+          The complete documentation is also available in separate sections:
+          EOF
+
+          # Add links to individual files
+          echo "" >> wiki/Home.md
+          for file in docs-md/*.md; do
+            if [ -f "$file" ] && [ "$(basename "$file")" != "f1-strat-manager-complete.md" ]; then
+              filename=$(basename "$file" .md)
+              title=$(head -1 "$file" | sed 's/^# //' | sed 's/\r$//')
+              if [ ! -z "$title" ]; then
+                echo "- **[$title]($filename)** - Individual section documentation" >> wiki/Home.md
+              fi
+            fi
+          done
+
+          cat >> wiki/Home.md << 'EOF'
 
           ## Project Overview
 
@@ -351,7 +474,7 @@ jobs:
           if git diff --quiet --staged; then
             echo "No changes to commit"
           else
-            git commit -m "🔄 Update Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
+            git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
             git push
             echo "Changes pushed successfully"
           fi
