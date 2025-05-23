@@ -398,10 +398,9 @@ jobs:
                   img_urls = re.findall(r'!\[.*?\]\((https?://[^)]+)\)', cleaned_content)
                   if img_urls:
                       os.makedirs('docs-md/images', exist_ok=True)
-                  for img_url in img_urls:
-                      img_name = os.path.basename(img_url)
-                      img_path = f'docs-md/images/{img_name}'
-                      if not os.path.exists(img_path):
+                      for img_url in img_urls:
+                          img_name = os.path.basename(img_url)
+                          img_path = f'docs-md/images/{img_name}'
                           try:
                               r = requests.get(img_url)
                               if r.status_code == 200:
@@ -409,8 +408,8 @@ jobs:
                                       imgf.write(r.content)
                           except Exception:
                               print(f"Advertencia: no se pudo descargar imagen {img_url}")
-                      # Actualiza ruta en markdown
-                      cleaned_content = cleaned_content.replace(f']({img_url})', f'](images/{img_name})')
+                  # Actualiza ruta en markdown
+                  cleaned_content = cleaned_content.replace(f']({img_url})', f'](images/{img_name})')
 
           # Ensure proper title format
           if not cleaned_content.strip().startswith('# '):
