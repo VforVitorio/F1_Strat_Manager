@@ -24,112 +24,190 @@ jobs:
       - name: Build DeepWiki MCP
         working-directory: deepwiki-mcp
         run: |
-          # Verificar si existe package.json y los scripts disponibles
+          # Check if package.json exists and available scripts
           echo "Package.json scripts:"
           npm run || true
 
-          # Intentar construir el proyecto
+          # Try to build the project
           if npm run build 2>/dev/null; then
-            echo "Build completado con npm run build"
+            echo "Build completed with npm run build"
           elif npm run compile 2>/dev/null; then
-            echo "Build completado con npm run compile"
+            echo "Build completed with npm run compile"
           elif npm run dist 2>/dev/null; then
-            echo "Build completado con npm run dist"
+            echo "Build completed with npm run dist"
           else
-            echo "Intentando build manual con typescript..."
-            npx tsc || echo "No se pudo compilar con tsc"
+            echo "Trying manual build with typescript..."
+            npx tsc || echo "Could not compile with tsc"
           fi
 
-          # Verificar que el archivo dist existe
-          echo "Verificando archivos compilados:"
+          # Verify that dist file exists
+          echo "Checking compiled files:"
           ls -la
           if [ -d "dist" ]; then
             ls -la dist/
           else
-            echo "Directorio dist no encontrado"
-            echo "Buscando archivos .mjs en el proyecto:"
+            echo "dist directory not found"
+            echo "Looking for .mjs files in project:"
             find . -name "*.mjs" -type f
           fi
 
       - name: Start DeepWiki MCP (HTTP mode)
         working-directory: deepwiki-mcp
         run: |
-          # Verificar que los archivos necesarios existan
+          # Verify that necessary files exist
           ls -la
           ls -la bin/
 
-          # Verificar que el archivo dist/index.mjs existe
+          # Verify that dist/index.mjs file exists
           if [ ! -f "dist/index.mjs" ]; then
-            echo "Error: dist/index.mjs no encontrado"
-            echo "Archivos disponibles:"
+            echo "Error: dist/index.mjs not found"
+            echo "Available files:"
             find . -name "*.mjs" -type f
             exit 1
           fi
 
-          # Iniciar el servicio en background
+          # Start service in background
           node ./bin/cli.mjs --http --port 3000 > ../deepwiki.log 2>&1 &
           DEEPWIKI_PID=$!
           echo "DeepWiki PID: $DEEPWIKI_PID"
 
-          # Esperar y verificar que el servicio esté disponible
+          # Wait and verify service is available
           for i in {1..30}; do
             if curl -s http://localhost:3000/ > /dev/null; then
-              echo "DeepWiki MCP está disponible"
+              echo "DeepWiki MCP is available"
               break
             fi
-            echo "Esperando que DeepWiki MCP esté disponible... intento $i/30"
+            echo "Waiting for DeepWiki MCP to be available... attempt $i/30"
             sleep 2
           done
 
-          # Verificar una vez más
+          # Verify once more
           if ! curl -s http://localhost:3000/ > /dev/null; then
-            echo "Error: DeepWiki MCP no está disponible después de 60 segundos"
-            echo "Logs del servicio:"
+            echo "Error: DeepWiki MCP not available after 60 seconds"
+            echo "Service logs:"
             cat ../deepwiki.log
-            echo "Estado del proceso:"
-            ps aux | grep node | grep -v grep || echo "No se encontró el proceso"
+            echo "Process status:"
+            ps aux | grep node | grep -v grep || echo "Process not found"
             exit 1
           fi
 
-          # Verificar que el proceso esté ejecutándose
+          # Verify process is running
           ps aux | grep node | grep -v grep
 
       - name: Export Markdown from DeepWiki
         run: |
           mkdir -p docs-md
 
-          # Verificar que el servicio esté disponible antes de hacer la llamada
+          # Verify service is available before making the call
           if ! curl -s http://localhost:3000/ > /dev/null; then
-            echo "Error: Servicio no disponible antes de exportar"
-            echo "Logs del servicio:"
-            cat deepwiki.log || echo "No se encontraron logs"
+            echo "Error: Service not available before export"
+            echo "Service logs:"
+            cat deepwiki.log || echo "No logs found"
             exit 1
           fi
 
-          # Llamada POST al endpoint /mcp para obtener el Markdown
-          curl -X POST http://localhost:3000/mcp \
-            -H "Content-Type: application/json" \
-            -d '{"id":"req-1","action":"deepwiki_fetch","params":{"url":"https://deepwiki.com/VforVitorio/F1_Strat_Manager","mode":"aggregate"}}' \
-            -o docs-md/f1-strat-manager.md \
-            --fail-with-body \
-            -w "HTTP status: %{http_code}\n"
+          # Test connectivity first
+          echo "Testing service connectivity..."
+          curl -X GET http://localhost:3000/ -v || echo "Health check failed"
 
-          # Verificar que el archivo se haya creado correctamente
+          # Try different URL formats and validate the URL first
+          echo "Validating DeepWiki URL accessibility..."
+          DEEPWIKI_URL="https://deepwiki.com/VforVitorio/F1_Strat_Manager"
+
+          # Check if the URL is accessible
+          if curl -s --head "$DEEPWIKI_URL" | head -n 1 | grep -q "200 OK"; then
+            echo "✅ DeepWiki URL is accessible: $DEEPWIKI_URL"
+          else
+            echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
+          fi
+
+          # Prepare JSON payload with proper escaping
+          JSON_PAYLOAD=$(cat <<EOF
+          {
+            "id": "req-1",
+            "action": "deepwiki_fetch",
+            "params": {
+              "url": "$DEEPWIKI_URL",
+              "mode": "aggregate"
+            }
+          }
+          EOF
+          )
+
+          echo "JSON payload to send:"
+          echo "$JSON_PAYLOAD" | jq . || echo "$JSON_PAYLOAD"
+
+          # Validate JSON syntax
+          if echo "$JSON_PAYLOAD" | jq . > /dev/null 2>&1; then
+            echo "✅ JSON payload is valid"
+          else
+            echo "❌ JSON payload is invalid"
+            exit 1
+          fi
+
+          # Make the POST request
+          echo "Making POST request to DeepWiki MCP..."
+          HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD" \
+            -o docs-md/f1-strat-manager.md \
+            -w "%{http_code}" \
+            -s)
+
+          echo "HTTP status code: $HTTP_CODE"
+
+          # Handle different HTTP response codes
+          case $HTTP_CODE in
+            200)
+              echo "✅ Success: Request completed successfully"
+              ;;
+            400)
+              echo "❌ Error 400: Bad Request"
+              echo "Response content:"
+              cat docs-md/f1-strat-manager.md
+              echo ""
+              echo "Possible issues:"
+              echo "- URL format is incorrect"
+              echo "- JSON payload is malformed"
+              echo "- Missing required parameters"
+              echo "- URL domain is not deepwiki.com"
+              exit 1
+              ;;
+            404)
+              echo "❌ Error 404: Endpoint not found"
+              echo "Check if the /mcp endpoint exists"
+              exit 1
+              ;;
+            500)
+              echo "❌ Error 500: Internal Server Error"
+              echo "Check server logs for details"
+              cat deepwiki.log || echo "No logs available"
+              exit 1
+              ;;
+            *)
+              echo "❌ Unexpected HTTP status: $HTTP_CODE"
+              echo "Response content:"
+              cat docs-md/f1-strat-manager.md
+              exit 1
+              ;;
+          esac
+
+          # Verify file was created and is not empty
           if [ ! -f docs-md/f1-strat-manager.md ]; then
-            echo "Error: El archivo markdown no se creó"
+            echo "Error: Markdown file was not created"
             exit 1
           fi
 
           if [ ! -s docs-md/f1-strat-manager.md ]; then
-            echo "Error: El archivo markdown está vacío"
-            echo "Contenido del archivo:"
+            echo "Error: Markdown file is empty"
+            echo "File content:"
             cat docs-md/f1-strat-manager.md
             exit 1
           fi
 
-          echo "Archivo markdown creado exitosamente:"
+          echo "✅ Markdown file created successfully:"
           ls -la docs-md/
-          echo "Primeras líneas del archivo:"
+          echo "First 10 lines of file:"
           head -10 docs-md/f1-strat-manager.md
 
       - name: Checkout Wiki
@@ -141,20 +219,20 @@ jobs:
 
       - name: Copy to Wiki
         run: |
-          # Verificar que tenemos archivos para copiar
+          # Verify we have files to copy
           if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
-            echo "Error: No hay archivos markdown para copiar"
+            echo "Error: No markdown files to copy"
             exit 1
           fi
 
-          echo "Archivos a copiar:"
+          echo "Files to copy:"
           ls -la docs-md/
 
-          # Limpiar wiki y copiar archivos
+          # Clean wiki and copy files
           rm -rf wiki/*
           cp docs-md/*.md wiki/
 
-          echo "Archivos copiados a wiki:"
+          echo "Files copied to wiki:"
           ls -la wiki/
 
       - name: Commit & Push changes
@@ -164,11 +242,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
 
-          # Verificar si hay cambios antes de hacer commit
+          # Check if there are changes before committing
           if git diff --quiet --staged; then
-            echo "No hay cambios para commitear"
+            echo "No changes to commit"
           else
             git commit -m "🔄 Update Wiki from DeepWiki"
             git push
-            echo "Cambios enviados exitosamente"
+            echo "Changes pushed successfully"
           fi
