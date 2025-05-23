@@ -73,7 +73,7 @@ jobs:
 
           # Wait and verify service is available
           for i in {1..30}; do
-            if curl -s http://localhost:3000/ > /dev/null; then
+            if curl -s http://localhost:3000/ > /dev/null 2>&1 || curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
               echo "DeepWiki MCP is available"
               break
             fi
@@ -81,8 +81,8 @@ jobs:
             sleep 2
           done
 
-          # Verify once more
-          if ! curl -s http://localhost:3000/ > /dev/null; then
+          # Verify once more - check both root and /mcp endpoints
+          if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: DeepWiki MCP not available after 60 seconds"
             echo "Service logs:"
             cat ../deepwiki.log
@@ -99,7 +99,7 @@ jobs:
           mkdir -p docs-md
 
           # Verify service is available before making the call
-          if ! curl -s http://localhost:3000/ > /dev/null; then
+          if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: Service not available before export"
             echo "Service logs:"
             cat deepwiki.log || echo "No logs found"
@@ -108,9 +108,9 @@ jobs:
 
           # Test connectivity first
           echo "Testing service connectivity..."
-          curl -X GET http://localhost:3000/ -v || echo "Health check failed"
+          curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' -v || echo "Tools list check failed"
 
-          # Try different URL formats and validate the URL first
+          # Validate DeepWiki URL accessibility
           echo "Validating DeepWiki URL accessibility..."
           DEEPWIKI_URL="https://deepwiki.com/VforVitorio/F1_Strat_Manager"
 
@@ -121,20 +121,24 @@ jobs:
             echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
           fi
 
-          # Prepare JSON payload with proper escaping
+          # Prepare JSON-RPC 2.0 payload
           JSON_PAYLOAD=$(cat <<EOF
           {
-            "id": "req-1",
-            "action": "deepwiki_fetch",
+            "jsonrpc": "2.0",
+            "method": "tools/call",
             "params": {
-              "url": "$DEEPWIKI_URL",
-              "mode": "aggregate"
-            }
+              "name": "deepwiki_fetch",
+              "arguments": {
+                "url": "$DEEPWIKI_URL",
+                "mode": "aggregate"
+              }
+            },
+            "id": 1
           }
           EOF
           )
 
-          echo "JSON payload to send:"
+          echo "JSON-RPC 2.0 payload to send:"
           echo "$JSON_PAYLOAD" | jq . || echo "$JSON_PAYLOAD"
 
           # Validate JSON syntax
@@ -166,12 +170,48 @@ jobs:
               echo "Response content:"
               cat docs-md/f1-strat-manager.md
               echo ""
-              echo "Possible issues:"
-              echo "- URL format is incorrect"
-              echo "- JSON payload is malformed"
-              echo "- Missing required parameters"
-              echo "- URL domain is not deepwiki.com"
-              exit 1
+              echo "Trying alternative method names..."
+              
+              # Try different method names
+              METHODS=("deepwiki_fetch" "fetch" "get_content")
+              SUCCESS=false
+              
+              for METHOD in "${METHODS[@]}"; do
+                echo "Trying method: $METHOD"
+                ALT_PAYLOAD=$(cat <<EOF
+                {
+                  "jsonrpc": "2.0",
+                  "method": "tools/call",
+                  "params": {
+                    "name": "$METHOD",
+                    "arguments": {
+                      "url": "$DEEPWIKI_URL"
+                    }
+                  },
+                  "id": 1
+                }
+                EOF
+                )
+                
+                HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
+                  -H "Content-Type: application/json" \
+                  -d "$ALT_PAYLOAD" \
+                  -o docs-md/f1-strat-manager-$METHOD.md \
+                  -w "%{http_code}" \
+                  -s)
+                
+                if [ "$HTTP_CODE" = "200" ] && [ -f docs-md/f1-strat-manager-$METHOD.md ] && [ -s docs-md/f1-strat-manager-$METHOD.md ]; then
+                  echo "✅ Success with method: $METHOD"
+                  cp docs-md/f1-strat-manager-$METHOD.md docs-md/f1-strat-manager.md
+                  SUCCESS=true
+                  break
+                fi
+              done
+              
+              if [ "$SUCCESS" = false ]; then
+                echo "All methods failed. Exiting."
+                exit 1
+              fi
               ;;
             404)
               echo "❌ Error 404: Endpoint not found"
