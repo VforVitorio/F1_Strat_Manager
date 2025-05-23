@@ -205,118 +205,327 @@ jobs:
           import sys
           import os
 
+          # Define the diagrams with unique markers
+          def get_diagram(diagram_type):
+              diagrams = {
+                  "SYSTEM_ARCHITECTURE_MAIN": [
+                      "```mermaid",
+                      "flowchart TB",
+                      '    subgraph "Data Sources"',
+                      "        A1[FastF1 Telemetry]",
+                      "        A2[OpenF1 Radio]",
+                      "        A3[Video Footage]",
+                      "    end",
+                      "    ",
+                      '    subgraph "Processing Layer"',
+                      "        B1[Data Processing]",
+                      "        B2[Feature Engineering]",
+                      "        B3[Gap Calculation]",
+                      "    end",
+                      "    ",
+                      '    subgraph "Analysis Layer"',
+                      "        C1[ML Models]",
+                      "        C2[Computer Vision]",
+                      "        C3[NLP Pipeline]",
+                      "    end",
+                      "    ",
+                      '    subgraph "Expert System"',
+                      "        D1[Rule Engine]",
+                      "        D2[Strategy Recommendations]",
+                      "    end",
+                      "    ",
+                      '    subgraph "User Interface"',
+                      "        E1[Streamlit Dashboard]",
+                      "        E2[Interactive Views]",
+                      "    end",
+                      "    ",
+                      "    A1 --> B1",
+                      "    A2 --> B2",
+                      "    A3 --> B3",
+                      "    B1 --> C1",
+                      "    B2 --> C3",
+                      "    B3 --> C2",
+                      "    C1 --> D1",
+                      "    C2 --> D1",
+                      "    C3 --> D1",
+                      "    D1 --> D2",
+                      "    D2 --> E1",
+                      "    E1 --> E2",
+                      "```"
+                  ],
+                  "DATA_FLOW_SEQUENCE": [
+                      "```mermaid",
+                      "sequenceDiagram",
+                      "    participant FS as FastF1 API",
+                      "    participant OF as OpenF1 Radio",
+                      "    participant VF as Video Feed",
+                      "    participant DP as Data Processing",
+                      "    participant ML as ML Models",
+                      "    participant CV as Computer Vision",
+                      "    participant NLP as NLP Pipeline",
+                      "    participant ES as Expert System",
+                      "    participant UI as Streamlit UI",
+                      "    participant U as User",
+                      "    ",
+                      "    FS->>DP: Telemetry Data",
+                      "    OF->>DP: Radio Transcripts",
+                      "    VF->>DP: Video Frames",
+                      "    ",
+                      "    DP->>ML: Processed Telemetry",
+                      "    DP->>CV: Video Frames",
+                      "    DP->>NLP: Radio Text",
+                      "    ",
+                      "    ML->>ES: Lap Time Predictions",
+                      "    CV->>ES: Gap Calculations",
+                      "    NLP->>ES: Radio Insights",
+                      "    ",
+                      "    ES->>UI: Strategy Recommendations",
+                      "    UI->>U: Interactive Dashboard",
+                      "```"
+                  ],
+                  "EXPERT_SYSTEM_RULES": [
+                      "```mermaid",
+                      "flowchart TB",
+                      "    A[Race Data Input] --> B{Data Analysis}",
+                      "    ",
+                      "    B --> C[Degradation Rules]",
+                      "    B --> D[Gap Analysis Rules]",
+                      "    B --> E[Radio Message Rules]",
+                      "    ",
+                      "    C --> F[Tire Strategy]",
+                      "    D --> G[Position Strategy]",
+                      "    E --> H[Communication Insights]",
+                      "    ",
+                      "    F --> I[Strategy Engine]",
+                      "    G --> I",
+                      "    H --> I",
+                      "    ",
+                      "    I --> J{Conflict Resolution}",
+                      "    J --> K[Final Recommendations]",
+                      "    ",
+                      "    K --> L[Pit Window]",
+                      "    K --> M[Tire Choice]",
+                      "    K --> N[Race Strategy]",
+                      "```"
+                  ],
+                  "ML_PIPELINE": [
+                      "```mermaid",
+                      "graph LR",
+                      "    A[Raw Telemetry] --> B[Data Preprocessing]",
+                      "    B --> C[Feature Engineering]",
+                      "    ",
+                      "    C --> D[XGBoost Model]",
+                      "    C --> E[TCN Model]",
+                      "    C --> F[Vision Model]",
+                      "    ",
+                      "    D --> G[Lap Time Predictions]",
+                      "    E --> H[Degradation Predictions]",
+                      "    F --> I[Gap Calculations]",
+                      "    ",
+                      "    G --> J[Expert System]",
+                      "    H --> J",
+                      "    I --> J",
+                      "    ",
+                      "    J --> K[Strategy Recommendations]",
+                      "```"
+                  ]
+              }
+              return '\n'.join(diagrams.get(diagram_type, []))
+
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
               
+              # First, mark image/diagram locations before cleaning
+              # Look for patterns that indicate where diagrams should be
+              diagram_markers = []
+              
+              # Find empty code blocks or image placeholders
+              lines = content.split('\n')
+              for i, line in enumerate(lines):
+                  if line.strip() == '```' and i + 1 < len(lines) and lines[i+1].strip() == '```':
+                      diagram_markers.append((i, i+1, 'EMPTY_BLOCK'))
+              
+              # Find image references 
+              import re
+              for match in re.finditer(r'!\[([^\]]*)\]\(([^\)]*)\)', content):
+                  diagram_markers.append((match.start(), match.end(), 'IMAGE', match.group(1), match.group(2)))
+              
+              # Find diagram placeholders or references
+              for match in re.finditer(r'(?:diagram|figure|chart|graph)[\s:]*(?:\n\n+|$)', content, re.IGNORECASE):
+                  diagram_markers.append((match.start(), match.end(), 'DIAGRAM_REF'))
+              
+              # Sort markers by position
+              diagram_markers.sort(key=lambda x: x[0])
+              
+              # Now clean the content while preserving markers
               # Remove DeepWiki UI elements
-              content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
-              content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
-              content = re.sub(r'.*?Share.*?\n', '', content, flags=re.IGNORECASE)
-              content = re.sub(r'.*?Last indexed:.*?\n', '', content, flags=re.IGNORECASE)
-              content = re.sub(r'.*?Try DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
-              content = re.sub(r'.*?Auto-refresh not enabled yet.*?\n', '', content, flags=re.IGNORECASE)
-              content = re.sub(r'.*?Which repo would you like to understand.*?\n', '', content, flags=re.IGNORECASE)
+              patterns_to_remove = [
+                  r'.*?DeepWiki.*?\n',
+                  r'.*?Powered by Devin.*?\n',
+                  r'.*?Share.*?\n',
+                  r'.*?Last indexed:.*?\n',
+                  r'.*?Try DeepWiki.*?\n',
+                  r'.*?Auto-refresh not enabled yet.*?\n',
+                  r'.*?Which repo would you like to understand.*?\n',
+                  r'Menu\n',
+                  r'Sources:.*?\n',
+                  r'^# /VforVitorio/F1_Strat_Manager.*?\n',
+                  r'VforVitorio/F1_Strat_Manager \| DeepWiki.*?\n'
+              ]
+              
+              for pattern in patterns_to_remove:
+                  content = re.sub(pattern, '', content, flags=re.IGNORECASE | re.MULTILINE)
               
               # Remove navigation elements
               content = re.sub(r'- Overview\n- System Architecture.*?- Getting Started\n', '', content, flags=re.DOTALL)
-              content = re.sub(r'Menu\n', '', content)
               content = re.sub(r'### On this page.*?- Getting Started\n', '', content, flags=re.DOTALL)
               
-              # Remove source file references (they clutter the wiki)
+              # Remove source file references 
               content = re.sub(r'Relevant source files.*?\n\n', '', content, flags=re.DOTALL)
-              content = re.sub(r'Sources:.*?\n', '', content, flags=re.MULTILINE)
               
-              # Clean up multiple consecutive newlines
-              content = re.sub(r'\n{3,}', '\n\n', content)
+              # Clean up multiple consecutive newlines but preserve structure
+              content = re.sub(r'\n{4,}', '\n\n\n', content)
               
               # Remove empty sections
               content = re.sub(r'\n## \n', '', content)
               content = re.sub(r'\n### \n', '', content)
               
               # Fix malformed headers
-              content = re.sub(r'^([#]+)\s*$', '', content, flags=re.MULTILINE)
-              
-              # Remove VforVitorio/F1_Strat_Manager title duplicates
-              content = re.sub(r'^# /VforVitorio/F1_Strat_Manager.*?\n', '', content, flags=re.MULTILINE)
-              content = re.sub(r'VforVitorio/F1_Strat_Manager \| DeepWiki.*?\n', '', content)
-              
-              # Clean up beginning of content
-              content = content.strip()
-              
-              return content
+              content = re.sub(r'^([#]+)\s*
 
-          def add_contextual_diagrams(content):
-              """Add diagrams based on EXACT contextual markers and empty spaces"""
+          def insert_diagrams_precisely(content, markers):
+              """Insert diagrams at their exact locations based on context"""
               
-              # First, detect exact patterns that indicate where specific diagrams should go
-              specific_patterns = [
-                  # System Architecture Main Diagram
-                  {
-                      'pattern': r'(The F1 Strategy Manager is structured as a multi-layered system with specialized components for data acquisition, processing, analysis, and visualization:)\s*\n\n+',
-                      'replacement': r'\1\n\n```mermaid\nflowchart TB\n    subgraph "Data Sources"\n        A1[FastF1 Telemetry]\n        A2[OpenF1 Radio]\n        A3[Video Footage]\n    end\n    \n    subgraph "Processing Layer"\n        B1[Data Processing]\n        B2[Feature Engineering]\n        B3[Gap Calculation]\n    end\n    \n    subgraph "Analysis Layer"\n        C1[ML Models]\n        C2[Computer Vision]\n        C3[NLP Pipeline]\n    end\n    \n    subgraph "Expert System"\n        D1[Rule Engine]\n        D2[Strategy Recommendations]\n    end\n    \n    subgraph "User Interface"\n        E1[Streamlit Dashboard]\n        E2[Interactive Views]\n    end\n    \n    A1 --> B1\n    A2 --> B2\n    A3 --> B3\n    B1 --> C1\n    B2 --> C3\n    B3 --> C2\n    C1 --> D1\n    C2 --> D1\n    C3 --> D1\n    D1 --> D2\n    D2 --> E1\n    E1 --> E2\n```\n\n'
-                  },
-                  
-                  # Data Flow Diagram
-                  {
-                      'pattern': r'(The following diagram illustrates how data flows through the system from input sources to the user interface:)\s*\n\n+',
-                      'replacement': r'\1\n\n```mermaid\nsequenceDiagram\n    participant FS as FastF1 API\n    participant OF as OpenF1 Radio\n    participant VF as Video Feed\n    participant DP as Data Processing\n    participant ML as ML Models\n    participant CV as Computer Vision\n    participant NLP as NLP Pipeline\n    participant ES as Expert System\n    participant UI as Streamlit UI\n    participant U as User\n    \n    FS->>DP: Telemetry Data\n    OF->>DP: Radio Transcripts\n    VF->>DP: Video Frames\n    \n    DP->>ML: Processed Telemetry\n    DP->>CV: Video Frames\n    DP->>NLP: Radio Text\n    \n    ML->>ES: Lap Time Predictions\n    CV->>ES: Gap Calculations\n    NLP->>ES: Radio Insights\n    \n    ES->>UI: Strategy Recommendations\n    UI->>U: Interactive Dashboard\n```\n\n'
-                  },
-                  
-                  # Expert System Rules Diagram
-                  {
-                      'pattern': r'(The F1CompleteStrategyEngine integrates multiple rule sets and resolves conflicts to generate coherent strategy recommendations\.)\s*\n\n+',
-                      'replacement': r'\1\n\n```mermaid\nflowchart TB\n    A[Race Data Input] --> B{Data Analysis}\n    \n    B --> C[Degradation Rules]\n    B --> D[Gap Analysis Rules]\n    B --> E[Radio Message Rules]\n    \n    C --> F[Tire Strategy]\n    D --> G[Position Strategy]\n    E --> H[Communication Insights]\n    \n    F --> I[Strategy Engine]\n    G --> I\n    H --> I\n    \n    I --> J{Conflict Resolution}\n    J --> K[Final Recommendations]\n    \n    K --> L[Pit Window]\n    K --> M[Tire Choice]\n    K --> N[Race Strategy]\n```\n\n'
-                  },
-                  
-                  # Machine Learning Pipeline
-                  {
-                      'pattern': r'(These models process telemetry data to generate predictions that feed into the expert system for strategic decision-making\.)\s*\n\n+',
-                      'replacement': r'\1\n\n```mermaid\ngraph LR\n    A[Raw Telemetry] --> B[Data Preprocessing]\n    B --> C[Feature Engineering]\n    \n    C --> D[XGBoost Model]\n    C --> E[TCN Model]\n    C --> F[Vision Model]\n    \n    D --> G[Lap Time Predictions]\n    E --> H[Degradation Predictions]\n    F --> I[Gap Calculations]\n    \n    G --> J[Expert System]\n    H --> J\n    I --> J\n    \n    J --> K[Strategy Recommendations]\n```\n\n'
-                  }
+              # Create a mapping of content sections to diagrams
+              section_diagram_map = [
+                  (r'system\s+architecture|architecture\s+overview', 'SYSTEM_ARCHITECTURE_MAIN'),
+                  (r'data\s+flow|data\s+pipeline', 'DATA_FLOW_SEQUENCE'),
+                  (r'expert\s+system|rule\s+engine|strategy\s+engine', 'EXPERT_SYSTEM_RULES'),
+                  (r'machine\s+learning|ml\s+pipeline|ml\s+models', 'ML_PIPELINE')
               ]
               
-              # Apply specific patterns first
-              for pattern_dict in specific_patterns:
-                  pattern = pattern_dict['pattern']
-                  replacement = pattern_dict['replacement']
-                  old_content = content
-                  content = re.sub(pattern, replacement, content, flags=re.IGNORECASE | re.DOTALL)
-                  if content != old_content:
-                      print(f"✅ Applied specific diagram pattern")
+              # Process content line by line to find exact insertion points
+              lines = content.split('\n')
+              processed_lines = []
+              i = 0
               
-              # Then handle generic empty spaces that weren't caught by specific patterns
-              # But be more conservative - only replace if there's clear indication of missing content
-              
-              # Look for specific section patterns that should have diagrams
-              section_patterns = [
-                  # Generic architecture section
-                  {
-                      'pattern': r'(## System Architecture\s*\n\n.*?architecture.*?)\n\n\n+(?=##|\Z)',
-                      'replacement': r'\1\n\n*Architecture diagram available in [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager)*\n\n'
-                  },
+              while i < len(lines):
+                  line = lines[i]
+                  processed_lines.append(line)
                   
-                  # Generic data flow section  
-                  {
-                      'pattern': r'(## Data Flow\s*\n\n.*?flow.*?)\n\n\n+(?=##|\Z)',
-                      'replacement': r'\1\n\n*Data flow diagram available in [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager)*\n\n'
-                  },
+                  # Check if this is a section header
+                  if line.strip().startswith('#'):
+                      header_text = line.strip().lower()
+                      
+                      # Check if we should insert a diagram after this header
+                      for pattern, diagram_key in section_diagram_map:
+                          if re.search(pattern, header_text, re.IGNORECASE):
+                              # Look ahead to see if there's already a diagram or if there's an empty space
+                              next_lines = []
+                              j = i + 1
+                              while j < len(lines) and j < i + 5:
+                                  next_lines.append(lines[j])
+                                  j += 1
+                              
+                              # Check if there's an empty space or placeholder for a diagram
+                              combined_next = '\n'.join(next_lines)
+                              
+                              should_insert = False
+                              insertion_index = i + 1
+                              
+                              # Check for empty lines
+                              if len(next_lines) > 1 and not next_lines[0].strip() and not next_lines[1].strip():
+                                  should_insert = True
+                                  insertion_index = i + 1
+                              
+                              # Check for empty code blocks
+                              for k, next_line in enumerate(next_lines):
+                                  if next_line.strip() == '```' and k + 1 < len(next_lines) and next_lines[k+1].strip() == '```':
+                                      should_insert = True
+                                      insertion_index = i + 1 + k
+                                      break
+                              
+                              # Check if text mentions diagram
+                              if not should_insert:
+                                  for k, next_line in enumerate(next_lines):
+                                      if next_line.strip() and re.search(r'following|below|above', next_line, re.IGNORECASE) and re.search(r'diagram|illustrat|show', next_line, re.IGNORECASE):
+                                          should_insert = True
+                                          insertion_index = i + 1 + k + 1
+                                          break
+                              
+                              if should_insert:
+                                  # Skip to the insertion point
+                                  while i < insertion_index - 1:
+                                      i += 1
+                                      if i < len(lines):
+                                          processed_lines.append(lines[i])
+                                  
+                                  # Insert the diagram
+                                  processed_lines.append('')
+                                  processed_lines.append(get_diagram(diagram_key))
+                                  processed_lines.append('')
+                                  
+                                  # Skip any empty lines or placeholders at the insertion point
+                                  while i + 1 < len(lines):
+                                      next_line = lines[i + 1]
+                                      if not next_line.strip() or (next_line.strip() == '```' and i + 2 < len(lines) and lines[i + 2].strip() == '```'):
+                                          i += 1
+                                      else:
+                                          break
+                              
+                              break
                   
-                  # Tables with empty spaces
-                  {
-                      'pattern': r'(\| .+ \|\s*\n\s*\|[-\s\|]+\|\s*\n(?:\| .+ \|\s*\n)*)\n\n\n+',
-                      'replacement': r'\1\n\n'
-                  }
-              ]
+                  i += 1
               
-              for pattern_dict in section_patterns:
-                  pattern = pattern_dict['pattern']
-                  replacement = pattern_dict['replacement']
-                  content = re.sub(pattern, replacement, content, flags=re.IGNORECASE | re.DOTALL)
+              return '\n'.join(processed_lines)
+
+          def preserve_original_structure(content):
+              """Preserve the exact structure and spacing from the original content"""
               
-              # Final cleanup: remove excessive empty lines but preserve intentional spacing
-              content = re.sub(r'\n{4,}', '\n\n', content)
+              # Mark all potential diagram locations with placeholders
+              placeholder_count = 0
+              placeholders = {}
               
-              return content
+              # Find empty code blocks
+              lines = content.split('\n')
+              new_lines = []
+              i = 0
+              while i < len(lines):
+                  if i + 1 < len(lines) and lines[i].strip() == '```' and lines[i+1].strip() == '```':
+                      placeholder = f"<<<DIAGRAM_PLACEHOLDER_{placeholder_count}>>>"
+                      placeholders[placeholder] = ('EMPTY_BLOCK', i)
+                      placeholder_count += 1
+                      new_lines.append(placeholder)
+                      i += 2
+                  else:
+                      new_lines.append(lines[i])
+                      i += 1
+              content = '\n'.join(new_lines)
+              
+              # Find and mark image references
+              import re
+              for match in re.finditer(r'!\[([^\]]*)\]\(([^\)]*)\)', content):
+                  placeholder = f"<<<DIAGRAM_PLACEHOLDER_{placeholder_count}>>>"
+                  placeholders[placeholder] = ('IMAGE', match.start(), match.group(1), match.group(2))
+                  placeholder_count += 1
+                  content = content[:match.start()] + placeholder + content[match.end():]
+              
+              # Find and mark sections that reference diagrams
+              lines = content.split('\n')
+              for i, line in enumerate(lines):
+                  if re.search(r'(?:following|below|above).*?(?:diagram|illustrat|show|figure)', line, re.IGNORECASE):
+                      # Mark the next empty area as a diagram location
+                      for j in range(i + 1, min(i + 5, len(lines))):
+                          if not lines[j].strip() and j + 1 < len(lines) and not lines[j + 1].strip():
+                              placeholder = f"<<<DIAGRAM_PLACEHOLDER_{placeholder_count}>>>"
+                              lines[j] = placeholder
+                              placeholders[placeholder] = ('DIAGRAM_AREA', j)
+                              placeholder_count += 1
+                              break
+              
+              content = '\n'.join(lines)
+              
+              return content, placeholders
 
           def get_page_title_from_content(content):
               """Extract a clean title from content"""
@@ -380,38 +589,41 @@ jobs:
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
                   
-                  # Clean the content
-                  cleaned_content = clean_deepwiki_content(content)
+                  # First preserve the structure
+                  structured_content, placeholders = preserve_original_structure(content)
                   
-                  # Add contextual diagrams EXACTLY where they should be
-                  cleaned_content = add_contextual_diagrams(cleaned_content)
+                  # Clean the content while preserving placeholders
+                  cleaned_content, original_markers = clean_deepwiki_content(structured_content)
                   
-                  if len(cleaned_content.strip()) < 50:  # Skip very short content
+                  # Insert diagrams at the exact preserved locations
+                  final_content = insert_diagrams_precisely(cleaned_content, original_markers)
+                  
+                  if len(final_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
                   
                   # Get title and filename
-                  title = get_page_title_from_content(cleaned_content)
+                  title = get_page_title_from_content(final_content)
                   filename = generate_filename(title)
                   
                   # Ensure proper title format
-                  if not cleaned_content.strip().startswith('# '):
-                      cleaned_content = f'# {title}\n\n' + cleaned_content.strip()
+                  if not final_content.strip().startswith('# '):
+                      final_content = f'# {title}\n\n' + final_content.strip()
                   
                   # Write individual file
                   filepath = f'docs-md/{filename}'
                   with open(filepath, 'w', encoding='utf-8') as f:
-                      f.write(cleaned_content)
+                      f.write(final_content)
                   
                   all_files.append((filename, title))
-                  print(f"✅ Created: {filename} ({len(cleaned_content)} chars)")
+                  print(f"✅ Created: {filename} ({len(final_content)} chars)")
               
               # Create a comprehensive main file that combines everything
               print(f"\nCreating comprehensive documentation...")
               
               main_content = "# F1 Strategy Manager - Complete Documentation\n\n"
               main_content += "This document contains the complete documentation for the F1 Strategy Manager project.\n\n"
-              main_content += "> **Note**: Diagrams are placed exactly where they appear in the original DeepWiki documentation. Some complex diagrams may be represented as placeholders with links to the original.\n\n"
+              main_content += "> **Note**: All diagrams are positioned exactly as they appear in the original DeepWiki documentation.\n\n"
               main_content += "## Table of Contents\n\n"
               
               # Add table of contents
@@ -443,14 +655,405 @@ jobs:
               with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   content = f.read()
               
-              cleaned_content = clean_deepwiki_content(content)
-              cleaned_content = add_contextual_diagrams(cleaned_content)
+              # Process with structure preservation
+              structured_content, placeholders = preserve_original_structure(content)
+              cleaned_content, original_markers = clean_deepwiki_content(structured_content)
+              final_content = insert_diagrams_precisely(cleaned_content, original_markers)
               
-              if not cleaned_content.strip().startswith('# '):
-                  cleaned_content = '# F1 Strategy Manager\n\n' + cleaned_content.strip()
+              if not final_content.strip().startswith('# '):
+                  final_content = '# F1 Strategy Manager\n\n' + final_content.strip()
               
               with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
-                  f.write(cleaned_content)
+                  f.write(final_content)
+              
+              print("✅ Processed as plain text")
+              
+          except Exception as e:
+              print(f"❌ Error processing content: {e}")
+              sys.exit(1)
+          EOF
+
+          echo "Final documentation files created:"
+          ls -la docs-md/
+          echo "Preview of main documentation:"
+          head -30 docs-md/f1-strat-manager-complete.md
+
+      - name: Checkout Wiki
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository }}.wiki
+          token: ${{ secrets.WIKI_PAT }}
+          path: wiki
+
+      - name: Copy All Documentation to Wiki
+        run: |
+          # Verify we have files to copy
+          if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
+            echo "Error: No markdown files to copy"
+            exit 1
+          fi
+
+          echo "Files to copy:"
+          ls -la docs-md/
+
+          # Ensure wiki directory exists
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
+            exit 1
+          fi
+
+          echo "Current wiki contents:"
+          ls -la wiki/
+
+          # Copy ALL markdown files to wiki
+          cp docs-md/*.md wiki/
+
+          # Create or update index page with links to all documentation
+          cat > wiki/Home.md << 'EOF'
+          # Welcome to F1 Strategy Manager Wiki
+
+          This wiki contains comprehensive documentation for the F1 Strategy Manager project.
+
+          ## Complete Documentation
+
+          - **[Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections
+
+          ## Individual Sections
+
+          The complete documentation is also available in separate sections:
+          EOF
+
+          # Add links to individual files
+          echo "" >> wiki/Home.md
+          for file in docs-md/*.md; do
+            if [ -f "$file" ] && [ "$(basename "$file")" != "f1-strat-manager-complete.md" ]; then
+              filename=$(basename "$file" .md)
+              title=$(head -1 "$file" | sed 's/^# //' | sed 's/\r$//')
+              if [ ! -z "$title" ]; then
+                echo "- **[$title]($filename)** - Individual section documentation" >> wiki/Home.md
+              fi
+            fi
+          done
+
+          cat >> wiki/Home.md << 'EOF'
+
+          ## Project Overview
+
+          The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support, combining:
+
+          - Machine learning models for predictive analytics
+          - Computer vision for gap calculation
+          - Natural language processing for radio analysis
+          - Rule-based expert systems for strategy recommendations
+          - Interactive Streamlit dashboard
+
+          ---
+
+          *This documentation is automatically generated from the project's DeepWiki documentation.*
+          EOF
+
+          echo "Files copied to wiki:"
+          ls -la wiki/
+
+      - name: Commit & Push changes
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+
+          # Check if there are changes before committing
+          if git diff --quiet --staged; then
+            echo "No changes to commit"
+          else
+            git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
+            git push
+            echo "Changes pushed successfully"
+          fi, '', content, flags=re.MULTILINE)
+              
+              # Clean up beginning of content
+              content = content.strip()
+              
+              return content, diagram_markers
+
+          def insert_diagrams_precisely(content, markers):
+              """Insert diagrams at their exact locations based on context"""
+              
+              # Create a mapping of content sections to diagrams
+              section_diagram_map = {
+                  r'(?:system\s+architecture|architecture\s+overview)': 'SYSTEM_ARCHITECTURE_MAIN',
+                  r'(?:data\s+flow|data\s+pipeline)': 'DATA_FLOW_SEQUENCE',
+                  r'(?:expert\s+system|rule\s+engine|strategy\s+engine)': 'EXPERT_SYSTEM_RULES',
+                  r'(?:machine\s+learning|ml\s+pipeline|ml\s+models)': 'ML_PIPELINE'
+              }
+              
+              # Process content line by line to find exact insertion points
+              lines = content.split('\n')
+              processed_lines = []
+              i = 0
+              
+              while i < len(lines):
+                  line = lines[i]
+                  processed_lines.append(line)
+                  
+                  # Check if this is a section header
+                  if line.strip().startswith('#'):
+                      header_text = line.strip().lower()
+                      
+                      # Check if we should insert a diagram after this header
+                      for pattern, diagram_key in section_diagram_map.items():
+                          if re.search(pattern, header_text, re.IGNORECASE):
+                              # Look ahead to see if there's already a diagram or if there's an empty space
+                              next_lines = []
+                              j = i + 1
+                              while j < len(lines) and j < i + 5:
+                                  next_lines.append(lines[j])
+                                  j += 1
+                              
+                              # Check if there's an empty space or placeholder for a diagram
+                              combined_next = '\n'.join(next_lines)
+                              
+                              # Patterns that indicate a diagram should go here
+                              insertion_patterns = [
+                                  r'^\s*$\n\s*$',  # Multiple empty lines
+                                  r'```\s*```',     # Empty code block
+                                  r'!\[[^\]]*\]\([^\)]*\)',  # Image placeholder
+                                  r'(?:diagram|figure|chart).*?:?\s*$',  # Diagram reference
+                              ]
+                              
+                              should_insert = False
+                              insertion_index = i + 1
+                              
+                              for pattern in insertion_patterns:
+                                  match = re.search(pattern, combined_next, re.MULTILINE | re.IGNORECASE)
+                                  if match:
+                                      should_insert = True
+                                      # Find the exact line where we should insert
+                                      for k, next_line in enumerate(next_lines):
+                                          if re.search(pattern, next_line, re.IGNORECASE):
+                                              insertion_index = i + 1 + k
+                                              break
+                                      break
+                              
+                              # Also check if the next non-empty line is a paragraph that mentions the diagram
+                              if not should_insert:
+                                  for k, next_line in enumerate(next_lines):
+                                      if next_line.strip():
+                                          if re.search(r'(?:following|below|above).*?(?:diagram|illustrat|show)', next_line, re.IGNORECASE):
+                                              should_insert = True
+                                              insertion_index = i + 1 + k + 1
+                                          break
+                              
+                              if should_insert:
+                                  # Skip to the insertion point
+                                  while i < insertion_index - 1:
+                                      i += 1
+                                      if i < len(lines):
+                                          processed_lines.append(lines[i])
+                                  
+                                  # Insert the diagram
+                                  processed_lines.append('')
+                                  processed_lines.append(get_diagram(diagram_key))
+                                  processed_lines.append('')
+                                  
+                                  # Skip any empty lines or placeholders at the insertion point
+                                  while i + 1 < len(lines) and (not lines[i + 1].strip() or 
+                                                                 re.match(r'```\s*```', lines[i + 1]) or
+                                                                 re.match(r'!\[[^\]]*\]\([^\)]*\)', lines[i + 1])):
+                                      i += 1
+                              
+                              break
+                  
+                  i += 1
+              
+              return '\n'.join(processed_lines)
+
+          def preserve_original_structure(content):
+              """Preserve the exact structure and spacing from the original content"""
+              
+              # Mark all potential diagram locations with placeholders
+              placeholder_count = 0
+              placeholders = {}
+              
+              # Find empty code blocks
+              lines = content.split('\n')
+              new_lines = []
+              i = 0
+              while i < len(lines):
+                  if i + 1 < len(lines) and lines[i].strip() == '```' and lines[i+1].strip() == '```':
+                      placeholder = f"<<<DIAGRAM_PLACEHOLDER_{placeholder_count}>>>"
+                      placeholders[placeholder] = ('EMPTY_BLOCK', i)
+                      placeholder_count += 1
+                      new_lines.append(placeholder)
+                      i += 2
+                  else:
+                      new_lines.append(lines[i])
+                      i += 1
+              content = '\n'.join(new_lines)
+              
+              # Find and mark image references
+              import re
+              for match in re.finditer(r'!\[([^\]]*)\]\(([^\)]*)\)', content):
+                  placeholder = f"<<<DIAGRAM_PLACEHOLDER_{placeholder_count}>>>"
+                  placeholders[placeholder] = ('IMAGE', match.start(), match.group(1), match.group(2))
+                  placeholder_count += 1
+                  content = content[:match.start()] + placeholder + content[match.end():]
+              
+              # Find and mark sections that reference diagrams
+              lines = content.split('\n')
+              for i, line in enumerate(lines):
+                  if re.search(r'(?:following|below|above).*?(?:diagram|illustrat|show|figure)', line, re.IGNORECASE):
+                      # Mark the next empty area as a diagram location
+                      for j in range(i + 1, min(i + 5, len(lines))):
+                          if not lines[j].strip() and j + 1 < len(lines) and not lines[j + 1].strip():
+                              placeholder = f"<<<DIAGRAM_PLACEHOLDER_{placeholder_count}>>>"
+                              lines[j] = placeholder
+                              placeholders[placeholder] = ('DIAGRAM_AREA', j)
+                              placeholder_count += 1
+                              break
+              
+              content = '\n'.join(lines)
+              
+              return content, placeholders
+
+          def get_page_title_from_content(content):
+              """Extract a clean title from content"""
+              lines = content.split('\n')
+              for line in lines:
+                  if line.strip().startswith('# ') and len(line.strip()) > 2:
+                      title = line.strip()[2:].strip()
+                      # Clean the title
+                      title = re.sub(r'^/.*?/', '', title)  # Remove leading path
+                      if title:
+                          return title
+              return "Documentation"
+
+          def generate_filename(title, url=""):
+              """Generate a safe filename from title"""
+              if url and "F1_Strat_Manager/" in url:
+                  # Extract section from URL
+                  section = url.split("F1_Strat_Manager/")[-1]
+                  if section and section != "":
+                      return section.replace("-", "_").replace(".", "_") + ".md"
+              
+              # Fallback to title-based filename
+              filename = title.lower()
+              filename = re.sub(r'[^\w\s-]', '', filename)
+              filename = re.sub(r'[-\s]+', '-', filename)
+              return filename + ".md"
+
+          # Read the JSON response
+          try:
+              with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
+                  data = json.load(f)
+              
+              print(f"Response structure: {list(data.keys())}")
+              
+              # Handle different response structures
+              pages_content = []
+              
+              if 'result' in data and 'content' in data['result']:
+                  if isinstance(data['result']['content'], list):
+                      # Multiple content items
+                      for item in data['result']['content']:
+                          if 'text' in item:
+                              pages_content.append(item['text'])
+                  else:
+                      # Single content item
+                      if 'text' in data['result']['content']:
+                          pages_content.append(data['result']['content']['text'])
+              elif 'result' in data and isinstance(data['result'], str):
+                  # Direct string result
+                  pages_content.append(data['result'])
+              else:
+                  print("❌ Unexpected response structure")
+                  print(f"Data keys: {list(data.keys())}")
+                  sys.exit(1)
+              
+              print(f"Found {len(pages_content)} content sections")
+              
+              # Process each page/section
+              all_files = []
+              for i, content in enumerate(pages_content):
+                  print(f"\nProcessing content section {i+1}...")
+                  print(f"Content length: {len(content)} characters")
+                  
+                  # First preserve the structure
+                  structured_content, placeholders = preserve_original_structure(content)
+                  
+                  # Clean the content while preserving placeholders
+                  cleaned_content, original_markers = clean_deepwiki_content(structured_content)
+                  
+                  # Insert diagrams at the exact preserved locations
+                  final_content = insert_diagrams_precisely(cleaned_content, original_markers)
+                  
+                  if len(final_content.strip()) < 50:  # Skip very short content
+                      print(f"Skipping short content section {i+1}")
+                      continue
+                  
+                  # Get title and filename
+                  title = get_page_title_from_content(final_content)
+                  filename = generate_filename(title)
+                  
+                  # Ensure proper title format
+                  if not final_content.strip().startswith('# '):
+                      final_content = f'# {title}\n\n' + final_content.strip()
+                  
+                  # Write individual file
+                  filepath = f'docs-md/{filename}'
+                  with open(filepath, 'w', encoding='utf-8') as f:
+                      f.write(final_content)
+                  
+                  all_files.append((filename, title))
+                  print(f"✅ Created: {filename} ({len(final_content)} chars)")
+              
+              # Create a comprehensive main file that combines everything
+              print(f"\nCreating comprehensive documentation...")
+              
+              main_content = "# F1 Strategy Manager - Complete Documentation\n\n"
+              main_content += "This document contains the complete documentation for the F1 Strategy Manager project.\n\n"
+              main_content += "> **Note**: All diagrams are positioned exactly as they appear in the original DeepWiki documentation.\n\n"
+              main_content += "## Table of Contents\n\n"
+              
+              # Add table of contents
+              for filename, title in all_files:
+                  section_link = title.lower().replace(' ', '-').replace('.', '').replace('(', '').replace(')', '')
+                  main_content += f"- [{title}](#{section_link})\n"
+              
+              main_content += "\n---\n\n"
+              
+              # Add all content
+              for filename, title in all_files:
+                  with open(f'docs-md/{filename}', 'r', encoding='utf-8') as f:
+                      content = f.read()
+                  main_content += content + "\n\n---\n\n"
+              
+              # Write main comprehensive file
+              with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
+                  f.write(main_content)
+              
+              print(f"✅ Created comprehensive documentation: f1-strat-manager-complete.md")
+              print(f"Total files created: {len(all_files) + 1}")
+              print(f"Files: {[f[0] for f in all_files] + ['f1-strat-manager-complete.md']}")
+              
+          except json.JSONDecodeError as e:
+              print(f"❌ Error parsing JSON: {e}")
+              print("Response might not be valid JSON, trying as plain text...")
+              
+              # Try to handle as plain text
+              with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              # Process with structure preservation
+              structured_content, placeholders = preserve_original_structure(content)
+              cleaned_content, original_markers = clean_deepwiki_content(structured_content)
+              final_content = insert_diagrams_precisely(cleaned_content, original_markers)
+              
+              if not final_content.strip().startswith('# '):
+                  final_content = '# F1 Strategy Manager\n\n' + final_content.strip()
+              
+              with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
+                  f.write(final_content)
               
               print("✅ Processed as plain text")
               
