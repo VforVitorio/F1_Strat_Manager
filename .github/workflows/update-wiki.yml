@@ -196,9 +196,7 @@ jobs:
           echo "Processing multiple pages from DeepWiki response..."
 
           # Install jq if not available
-          sudo apt-get update && sudo apt-get install -y jq
-
-          # Process the response with Python to handle multiple pages
+          sudo apt-get update && sudo apt-get install -y jq          # Process the response with Python to handle multiple pages
           python3 << 'EOF'
           import json
           import re
@@ -257,21 +255,74 @@ jobs:
                           return title
               return "Documentation"
 
-          def generate_filename(title, url=""):
-              """Generate a safe filename from title"""
-              if url and "F1_Strat_Manager/" in url:
-                  # Extract section from URL
-                  section = url.split("F1_Strat_Manager/")[-1]
-                  if section and section != "":
-                      return section.replace("-", "_").replace(".", "_") + ".md"
+          def categorize_section(title):
+              """Categorize sections according to the specified hierarchy"""
+              title_lower = title.lower()
               
-              # Fallback to title-based filename
-              filename = title.lower()
-              filename = re.sub(r'[^\w\s-]', '', filename)
-              filename = re.sub(r'[-\s]+', '-', filename)
-              return filename + ".md"
-
-          # Read the JSON response
+              # Main sections
+              if any(keyword in title_lower for keyword in ['overview', 'introducción', 'introduction']):
+                  return ('main', 'Overview', '01-overview.md')
+              elif any(keyword in title_lower for keyword in ['streamlit', 'dashboard', 'interfaz']):
+                  return ('main', 'Streamlit Dashboard', '02-streamlit-dashboard.md')
+              elif any(keyword in title_lower for keyword in ['machine learning', 'ml', 'modelo']):
+                  return ('main', 'Machine Learning Models', '03-machine-learning-models.md')
+              elif any(keyword in title_lower for keyword in ['nlp', 'natural language', 'radio', 'processing']):
+                  return ('main', 'NLP Pipeline', '04-nlp-pipeline.md')
+              elif any(keyword in title_lower for keyword in ['expert', 'rules', 'engine', 'reglas']):
+                  return ('main', 'Expert System', '05-expert-system.md')
+              elif any(keyword in title_lower for keyword in ['developer', 'api', 'integration', 'guide']):
+                  return ('main', 'Developer Guide', '06-developer-guide.md')
+              
+              # Streamlit Dashboard subsections
+              elif any(keyword in title_lower for keyword in ['strategy recommendations', 'recomendaciones']):
+                  return ('sub', 'Streamlit Dashboard', '02-01-strategy-recommendations-view.md')
+              elif any(keyword in title_lower for keyword in ['gap analysis view', 'análisis de gaps']):
+                  return ('sub', 'Streamlit Dashboard', '02-02-gap-analysis-view.md')
+              elif any(keyword in title_lower for keyword in ['radio analysis view', 'análisis de radio']):
+                  return ('sub', 'Streamlit Dashboard', '02-03-radio-analysis-view.md')
+              elif any(keyword in title_lower for keyword in ['time predictions', 'predicciones']):
+                  return ('sub', 'Streamlit Dashboard', '02-04-time-predictions-view.md')
+              elif any(keyword in title_lower for keyword in ['chat interface', 'interfaz de chat']):
+                  return ('sub', 'Streamlit Dashboard', '02-05-strategy-chat-interface.md')
+              
+              # Machine Learning subsections
+              elif any(keyword in title_lower for keyword in ['lap time prediction', 'predicción de tiempos']):
+                  return ('sub', 'Machine Learning Models', '03-01-lap-time-prediction.md')
+              elif any(keyword in title_lower for keyword in ['tire degradation', 'degradación', 'neumáticos']):
+                  return ('sub', 'Machine Learning Models', '03-02-tire-degradation-modeling.md')
+              elif any(keyword in title_lower for keyword in ['vision', 'gap calculation', 'cálculo']):
+                  return ('sub', 'Machine Learning Models', '03-03-vision-based-gap-calculation.md')
+              
+              # NLP Pipeline subsections
+              elif any(keyword in title_lower for keyword in ['transcription', 'transcripción']):
+                  return ('sub', 'NLP Pipeline', '04-01-radio-transcription.md')
+              elif any(keyword in title_lower for keyword in ['sentiment', 'intent', 'análisis']):
+                  return ('sub', 'NLP Pipeline', '04-02-sentiment-intent-analysis.md')
+              elif any(keyword in title_lower for keyword in ['named entity', 'ner', 'entidades']):
+                  return ('sub', 'NLP Pipeline', '04-03-named-entity-recognition.md')
+              
+              # Expert System subsections
+              elif any(keyword in title_lower for keyword in ['degradation rules', 'reglas de degradación']):
+                  return ('sub', 'Expert System', '05-01-degradation-rules.md')
+              elif any(keyword in title_lower for keyword in ['gap analysis rules', 'reglas de gaps']):
+                  return ('sub', 'Expert System', '05-02-gap-analysis-rules.md')
+              elif any(keyword in title_lower for keyword in ['radio message rules', 'reglas de radio']):
+                  return ('sub', 'Expert System', '05-03-radio-message-rules.md')
+              elif any(keyword in title_lower for keyword in ['integrated rule engine', 'motor de reglas']):
+                  return ('sub', 'Expert System', '05-04-integrated-rule-engine.md')
+              
+              # Developer Guide subsections
+              elif any(keyword in title_lower for keyword in ['api reference', 'referencia api']):
+                  return ('sub', 'Developer Guide', '06-01-api-reference.md')
+              elif any(keyword in title_lower for keyword in ['integration guide', 'guía de integración']):
+                  return ('sub', 'Developer Guide', '06-02-integration-guide.md')
+              elif any(keyword in title_lower for keyword in ['system architecture', 'arquitectura']):
+                  return ('sub', 'Overview', '01-01-system-architecture.md')
+              elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
+                  return ('sub', 'Overview', '01-02-installation-setup.md')
+              
+              # Default fallback
+              return ('misc', 'Other', f'99-{title.lower().replace(" ", "-")}.md')          # Read the JSON response
           try:
               with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   data = json.load(f)
@@ -301,8 +352,14 @@ jobs:
               
               print(f"Found {len(pages_content)} content sections")
               
+              # Structure to organize content by hierarchy
+              organized_content = {
+                  'main_sections': {},
+                  'subsections': {},
+                  'misc': []
+              }
+              
               # Process each page/section
-              all_files = []
               for i, content in enumerate(pages_content):
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
@@ -314,9 +371,9 @@ jobs:
                       print(f"Skipping short content section {i+1}")
                       continue
                   
-                  # Get title and filename
+                  # Get title and categorize
                   title = get_page_title_from_content(cleaned_content)
-                  filename = generate_filename(title)
+                  section_type, parent_section, filename = categorize_section(title)
                   
                   # Ensure proper title format
                   if not cleaned_content.strip().startswith('# '):
@@ -327,36 +384,109 @@ jobs:
                   with open(filepath, 'w', encoding='utf-8') as f:
                       f.write(cleaned_content)
                   
-                  all_files.append((filename, title))
-                  print(f"✅ Created: {filename} ({len(cleaned_content)} chars)")
+                  # Organize content
+                  if section_type == 'main':
+                      organized_content['main_sections'][parent_section] = {
+                          'filename': filename,
+                          'title': title,
+                          'content': cleaned_content
+                      }
+                  elif section_type == 'sub':
+                      if parent_section not in organized_content['subsections']:
+                          organized_content['subsections'][parent_section] = []
+                      organized_content['subsections'][parent_section].append({
+                          'filename': filename,
+                          'title': title,
+                          'content': cleaned_content
+                      })
+                  else:
+                      organized_content['misc'].append({
+                          'filename': filename,
+                          'title': title,
+                          'content': cleaned_content
+                      })
+                  
+                  print(f"✅ Created: {filename} (Category: {section_type}, Parent: {parent_section})")
               
-              # Create a comprehensive main file that combines everything
-              print(f"\nCreating comprehensive documentation...")
+              # Create structured comprehensive documentation
+              print(f"\nCreating structured comprehensive documentation...")
+              
+              # Define the correct order of main sections
+              section_order = [
+                  'Overview',
+                  'Streamlit Dashboard', 
+                  'Machine Learning Models',
+                  'NLP Pipeline',
+                  'Expert System',
+                  'Developer Guide'
+              ]
               
               main_content = "# F1 Strategy Manager - Complete Documentation\n\n"
-              main_content += "This document contains the complete documentation for the F1 Strategy Manager project.\n\n"
+              main_content += "This document contains the complete documentation for the F1 Strategy Manager project, organized in a hierarchical structure.\n\n"
               main_content += "## Table of Contents\n\n"
               
-              # Add table of contents
-              for filename, title in all_files:
-                  section_link = title.lower().replace(' ', '-').replace('.', '').replace('(', '').replace(')', '')
-                  main_content += f"- [{title}](#{section_link})\n"
+              # Build table of contents
+              for section in section_order:
+                  if section in organized_content['main_sections']:
+                      section_link = section.lower().replace(' ', '-').replace('.', '').replace('(', '').replace(')', '')
+                      main_content += f"### {section}\n"
+                      main_content += f"- **[{section}](#{section_link})**\n"
+                      
+                      # Add subsections
+                      if section in organized_content['subsections']:
+                          for subsection in organized_content['subsections'][section]:
+                              sub_link = subsection['title'].lower().replace(' ', '-').replace('.', '').replace('(', '').replace(')', '')
+                              main_content += f"  - [{subsection['title']}](#{sub_link})\n"
+                      main_content += "\n"
+              
+              # Add miscellaneous sections
+              if organized_content['misc']:
+                  main_content += "### Other Sections\n"
+                  for misc_item in organized_content['misc']:
+                      misc_link = misc_item['title'].lower().replace(' ', '-').replace('.', '').replace('(', '').replace(')', '')
+                      main_content += f"- [{misc_item['title']}](#{misc_link})\n"
+                  main_content += "\n"
               
               main_content += "\n---\n\n"
               
-              # Add all content
-              for filename, title in all_files:
-                  with open(f'docs-md/{filename}', 'r', encoding='utf-8') as f:
-                      content = f.read()
-                  main_content += content + "\n\n---\n\n"
+              # Add all content in the specified order
+              for section in section_order:
+                  if section in organized_content['main_sections']:
+                      main_section = organized_content['main_sections'][section]
+                      main_content += main_section['content'] + "\n\n"
+                      
+                      # Add subsections immediately after their parent
+                      if section in organized_content['subsections']:
+                          for subsection in organized_content['subsections'][section]:
+                              # Adjust header levels for subsections
+                              subsection_content = subsection['content']
+                              # Convert main headers to subheaders
+                              subsection_content = re.sub(r'^# ', '## ', subsection_content, flags=re.MULTILINE)
+                              subsection_content = re.sub(r'^## ', '### ', subsection_content, flags=re.MULTILINE)
+                              subsection_content = re.sub(r'^### ', '#### ', subsection_content, flags=re.MULTILINE)
+                              main_content += subsection_content + "\n\n"
+                      
+                      main_content += "---\n\n"
+              
+              # Add miscellaneous content at the end
+              for misc_item in organized_content['misc']:
+                  main_content += misc_item['content'] + "\n\n---\n\n"
               
               # Write main comprehensive file
               with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
                   f.write(main_content)
               
-              print(f"✅ Created comprehensive documentation: f1-strat-manager-complete.md")
-              print(f"Total files created: {len(all_files) + 1}")
-              print(f"Files: {[f[0] for f in all_files] + ['f1-strat-manager-complete.md']}")
+              # Count total files
+              total_main = len(organized_content['main_sections'])
+              total_sub = sum(len(subs) for subs in organized_content['subsections'].values())
+              total_misc = len(organized_content['misc'])
+              total_files = total_main + total_sub + total_misc + 1  # +1 for complete doc
+              
+              print(f"✅ Created structured documentation:")
+              print(f"  - Main sections: {total_main}")
+              print(f"  - Subsections: {total_sub}")
+              print(f"  - Miscellaneous: {total_misc}")
+              print(f"  - Total files: {total_files}")
               
           except json.JSONDecodeError as e:
               print(f"❌ Error parsing JSON: {e}")
@@ -414,50 +544,68 @@ jobs:
           ls -la wiki/
 
           # Copy ALL markdown files to wiki
-          cp docs-md/*.md wiki/
-
-          # Create or update index page with links to all documentation
+          cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
 
-          This wiki contains comprehensive documentation for the F1 Strategy Manager project.
+          This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation.
 
-          ## Complete Documentation
+          ## 📋 Complete Documentation
 
-          - **[Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections
+          - **[📖 Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections organized hierarchically
 
-          ## Individual Sections
+          ## 🗂️ Documentation Structure
 
-          The complete documentation is also available in separate sections:
-          EOF
+          ### 🔍 1. Overview
+          - **[Overview](01-overview)** - Project introduction and general information
+            - [System Architecture](01-01-system-architecture) - Overall system design and components
+            - [Installation and Setup](01-02-installation-setup) - Getting started guide
 
-          # Add links to individual files
-          echo "" >> wiki/Home.md
-          for file in docs-md/*.md; do
-            if [ -f "$file" ] && [ "$(basename "$file")" != "f1-strat-manager-complete.md" ]; then
-              filename=$(basename "$file" .md)
-              title=$(head -1 "$file" | sed 's/^# //' | sed 's/\r$//')
-              if [ ! -z "$title" ]; then
-                echo "- **[$title]($filename)** - Individual section documentation" >> wiki/Home.md
-              fi
-            fi
-          done
+          ### 📊 2. Streamlit Dashboard
+          - **[Streamlit Dashboard](02-streamlit-dashboard)** - Interactive web interface
+            - [Strategy Recommendations View](02-01-strategy-recommendations-view) - Strategic decision interface
+            - [Gap Analysis View](02-02-gap-analysis-view) - Real-time gap tracking
+            - [Radio Analysis View](02-03-radio-analysis-view) - Team radio insights
+            - [Time Predictions View](02-04-time-predictions-view) - Lap time forecasting
+            - [Strategy Chat Interface](02-05-strategy-chat-interface) - AI-powered strategy chat
 
-          cat >> wiki/Home.md << 'EOF'
+          ### 🤖 3. Machine Learning Models
+          - **[Machine Learning Models](03-machine-learning-models)** - AI/ML components
+            - [Lap Time Prediction](03-01-lap-time-prediction) - Predictive models for lap times
+            - [Tire Degradation Modeling](03-02-tire-degradation-modeling) - Tire performance analysis
+            - [Vision-based Gap Calculation](03-03-vision-based-gap-calculation) - Computer vision for gap detection
 
-          ## Project Overview
+          ### 🎤 4. NLP Pipeline
+          - **[NLP Pipeline](04-nlp-pipeline)** - Natural Language Processing components
+            - [Radio Transcription](04-01-radio-transcription) - Speech-to-text processing
+            - [Sentiment and Intent Analysis](04-02-sentiment-intent-analysis) - Emotional and intent recognition
+            - [Named Entity Recognition](04-03-named-entity-recognition) - Entity extraction from radio communications
+
+          ### ⚙️ 5. Expert System
+          - **[Expert System](05-expert-system)** - Rule-based decision engine
+            - [Degradation Rules](05-01-degradation-rules) - Tire degradation logic
+            - [Gap Analysis Rules](05-02-gap-analysis-rules) - Gap calculation rules
+            - [Radio Message Rules](05-03-radio-message-rules) - Communication analysis rules
+            - [Integrated Rule Engine](05-04-integrated-rule-engine) - Unified rule processing
+
+          ### 👨‍💻 6. Developer Guide
+          - **[Developer Guide](06-developer-guide)** - Technical documentation for developers
+            - [API Reference](06-01-api-reference) - Complete API documentation
+            - [Integration Guide](06-02-integration-guide) - How to integrate with external systems
+
+          ## 🏎️ Project Overview
 
           The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support, combining:
 
-          - Machine learning models for predictive analytics
-          - Computer vision for gap calculation
-          - Natural language processing for radio analysis
-          - Rule-based expert systems for strategy recommendations
-          - Interactive Streamlit dashboard
+          - **🤖 Machine Learning Models** - Predictive analytics for lap times and tire performance
+          - **👁️ Computer Vision** - Automated gap calculation from video feeds
+          - **🎤 Natural Language Processing** - Radio communication analysis and insights
+          - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
+          - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
 
           ---
 
-          *This documentation is automatically generated from the project's DeepWiki documentation.*
+          *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
           EOF
 
           echo "Files copied to wiki:"
