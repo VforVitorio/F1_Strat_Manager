@@ -19,7 +19,7 @@ jobs:
         run: |
           git clone https://github.com/regenrek/deepwiki-mcp.git deepwiki-mcp
           cd deepwiki-mcp
-          npm ci
+          npm install
 
       - name: Start DeepWiki MCP
         working-directory: deepwiki-mcp
