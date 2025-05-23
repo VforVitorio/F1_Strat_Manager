@@ -241,7 +241,9 @@ jobs:
               # Clean up beginning of content
               content = content.strip()
               
-              return content          def get_page_title_from_content(content):
+              return content
+
+          def get_page_title_from_content(content):
               """Extract a clean title from content"""
               lines = content.split('\n')
               for line in lines:
@@ -249,9 +251,7 @@ jobs:
                       title = line.strip()[2:].strip()
                       # Clean the title
                       title = re.sub(r'^/.*?/', '', title)  # Remove leading path
-                      title = re.sub(r'[^\w\s-]', '', title)  # Remove special characters
-                      title = title.strip()
-                      if title and len(title) > 0:
+                      if title:
                           return title
               return "Documentation"
 
