@@ -147,63 +147,30 @@ jobs:
           echo "HTTP status code: $HTTP_CODE"
 
           # Handle different HTTP response codes
-          case $HTTP_CODE in
-            200)
-              echo "✅ Success: Request completed successfully"
-              ;;
-            400)
-              echo "❌ Error 400: Bad Request"
-              echo "Response content:"
-              cat docs-md/f1-strat-manager.md
-              echo ""
-              echo "Trying alternative method names..."
-              
-              # Try different method names
-              METHODS=("deepwiki_fetch" "fetch" "get_content")
-              SUCCESS=false
-              
-              for METHOD in "${METHODS[@]}"; do
-                echo "Trying method: $METHOD"
-                ALT_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'$METHOD'","arguments":{"url":"'$DEEPWIKI_URL'"}},"id":1}'
-                
-                HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
-                  -H "Content-Type: application/json" \
-                  -d "$ALT_PAYLOAD" \
-                  -o docs-md/f1-strat-manager-$METHOD.md \
-                  -w "%{http_code}" \
-                  -s)
-                
-                if [ "$HTTP_CODE" = "200" ] && [ -f docs-md/f1-strat-manager-$METHOD.md ] && [ -s docs-md/f1-strat-manager-$METHOD.md ]; then
-                  echo "✅ Success with method: $METHOD"
-                  cp docs-md/f1-strat-manager-$METHOD.md docs-md/f1-strat-manager.md
-                  SUCCESS=true
-                  break
-                fi
-              done
-              
-              if [ "$SUCCESS" = false ]; then
-                echo "All methods failed. Exiting."
-                exit 1
-              fi
-              ;;
-            404)
-              echo "❌ Error 404: Endpoint not found"
-              echo "Check if the /mcp endpoint exists"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Success: Request completed successfully"
+          else
+            echo "❌ Error HTTP $HTTP_CODE"
+            echo "Response content:"
+            cat docs-md/f1-strat-manager.md
+            
+            # Try fallback method without mode parameter
+            echo "Trying fallback method without mode parameter..."
+            FALLBACK_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'"}},"id":1}'
+            
+            HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
+              -H "Content-Type: application/json" \
+              -d "$FALLBACK_PAYLOAD" \
+              -o docs-md/f1-strat-manager.md \
+              -w "%{http_code}" \
+              -s)
+            
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "Fallback method also failed with HTTP $HTTP_CODE"
               exit 1
-              ;;
-            500)
-              echo "❌ Error 500: Internal Server Error"
-              echo "Check server logs for details"
-              cat deepwiki.log || echo "No logs available"
-              exit 1
-              ;;
-            *)
-              echo "❌ Unexpected HTTP status: $HTTP_CODE"
-              echo "Response content:"
-              cat docs-md/f1-strat-manager.md
-              exit 1
-              ;;
-          esac
+            fi
+            echo "✅ Fallback method succeeded"
+          fi
 
           # Verify file was created and is not empty
           if [ ! -f docs-md/f1-strat-manager.md ]; then
@@ -223,74 +190,12 @@ jobs:
           echo "First 10 lines of file:"
           head -10 docs-md/f1-strat-manager.md
 
-      - name: Initialize or Checkout Wiki
-        id: wiki-checkout
-        continue-on-error: true
+      - name: Checkout Wiki
         uses: actions/checkout@v3
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
-
-      - name: Create Wiki if it doesn't exist
-        if: steps.wiki-checkout.outcome == 'failure'
-        run: |
-          echo "Wiki repository doesn't exist, creating it..."
-
-          # Clean up any existing wiki directory
-          rm -rf wiki
-          mkdir -p wiki
-          cd wiki
-
-          # Initialize a new git repository
-          git init
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Create a welcome page
-          cat > Home.md << 'EOF'
-          # Welcome to F1 Strategy Manager Wiki
-
-          This wiki is automatically generated from DeepWiki content.
-
-          ## Pages
-
-          - [F1 Strategy Manager](f1-strat-manager.md)
-          EOF
-
-          # Add and commit
-          git add .
-          git commit -m "Initialize wiki"
-
-          # Add remote and push (this will create the wiki repository)
-          # Use || true to ignore error if remote already exists
-          git remote add origin https://${{ secrets.WIKI_PAT }}@github.com/${{ github.repository }}.wiki.git || true
-          git branch -M main
-          git push -u origin main
-
-      - name: Ensure Wiki Directory
-        run: |
-          # If wiki directory doesn't exist at this point, something went wrong
-          if [ ! -d wiki ]; then
-            echo "Error: Wiki directory not found after checkout/creation"
-            echo "Attempting to checkout wiki again..."
-            
-            # Try to checkout the wiki repository again
-            git clone https://${{ secrets.WIKI_PAT }}@github.com/${{ github.repository }}.wiki.git wiki || {
-              echo "Failed to clone wiki, creating minimal structure..."
-              mkdir -p wiki
-              cd wiki
-              git init
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              echo "# F1 Strategy Manager Wiki" > Home.md
-              git add .
-              git commit -m "Initialize wiki" || true
-            }
-          fi
-
-          echo "Wiki directory status:"
-          ls -la wiki/ || echo "Wiki directory is empty or doesn't exist"
 
       - name: Copy to Wiki
         run: |
@@ -309,7 +214,10 @@ jobs:
             exit 1
           fi
 
-          # Copy files (preserve existing files, only update our generated ones)
+          echo "Current wiki contents:"
+          ls -la wiki/
+
+          # Copy files to wiki
           cp docs-md/*.md wiki/
 
           echo "Files copied to wiki:"
