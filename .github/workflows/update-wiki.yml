@@ -1,0 +1,55 @@
+name: Update Wiki from DeepWiki
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-wiki:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Clone DeepWiki MCP
+        run: |
+          git clone https://github.com/regenrek/deepwiki-mcp.git deepwiki-mcp
+          cd deepwiki-mcp
+          npm ci
+
+      - name: Start DeepWiki MCP
+        working-directory: deepwiki-mcp
+        run: |
+          npm start &
+          sleep 10
+
+      - name: Export Markdown from DeepWiki
+        run: |
+          mkdir -p docs-md
+          curl "http://localhost:3000/api/export?url=https://deepwiki.com/VforVitorio/F1_Strat_Manager" \
+            -o docs-md/f1-strat-manager.md
+
+      - name: Checkout Wiki
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.repository }}.wiki
+          token: ${{ secrets.WIKI_PAT }}
+          path: wiki
+
+      - name: Copy to Wiki
+        run: |
+          rm -rf wiki/*
+          cp docs-md/*.md wiki/
+
+      - name: Commit & Push changes
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --quiet && echo "Nothing to update" || git commit -m "🔄 Update Wiki from DeepWiki"
+          git push
