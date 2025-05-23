@@ -21,12 +21,50 @@ jobs:
           cd deepwiki-mcp
           npm install
 
+      - name: Build DeepWiki MCP
+        working-directory: deepwiki-mcp
+        run: |
+          # Verificar si existe package.json y los scripts disponibles
+          echo "Package.json scripts:"
+          npm run || true
+
+          # Intentar construir el proyecto
+          if npm run build 2>/dev/null; then
+            echo "Build completado con npm run build"
+          elif npm run compile 2>/dev/null; then
+            echo "Build completado con npm run compile"
+          elif npm run dist 2>/dev/null; then
+            echo "Build completado con npm run dist"
+          else
+            echo "Intentando build manual con typescript..."
+            npx tsc || echo "No se pudo compilar con tsc"
+          fi
+
+          # Verificar que el archivo dist existe
+          echo "Verificando archivos compilados:"
+          ls -la
+          if [ -d "dist" ]; then
+            ls -la dist/
+          else
+            echo "Directorio dist no encontrado"
+            echo "Buscando archivos .mjs en el proyecto:"
+            find . -name "*.mjs" -type f
+          fi
+
       - name: Start DeepWiki MCP (HTTP mode)
         working-directory: deepwiki-mcp
         run: |
           # Verificar que los archivos necesarios existan
           ls -la
           ls -la bin/
+
+          # Verificar que el archivo dist/index.mjs existe
+          if [ ! -f "dist/index.mjs" ]; then
+            echo "Error: dist/index.mjs no encontrado"
+            echo "Archivos disponibles:"
+            find . -name "*.mjs" -type f
+            exit 1
+          fi
 
           # Iniciar el servicio en background
           node ./bin/cli.mjs --http --port 3000 > ../deepwiki.log 2>&1 &
@@ -48,6 +86,8 @@ jobs:
             echo "Error: DeepWiki MCP no está disponible después de 60 segundos"
             echo "Logs del servicio:"
             cat ../deepwiki.log
+            echo "Estado del proceso:"
+            ps aux | grep node | grep -v grep || echo "No se encontró el proceso"
             exit 1
           fi
 
