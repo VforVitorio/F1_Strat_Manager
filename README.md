@@ -32,7 +32,7 @@ Develop an **intelligent strategy recommender** that, based on processed race da
 
 - **XGBoost** : Lap time prediction with MAE = 0.09s and RMSE = 0.15s
 - **TCN (Temporal Convolutional Networks)** : For tire degradation modeling
-- **YOLOv8** : Team identification from race footage with >90% mAP50
+- **YOLOv8** : Team identification from race footage with >90% mAP50. This detection has been changed and further developed in this related repository: [F1_AI_team_detection](https://github.com/VforVitorio/F1_AI_team_detection.git))
 - **Whisper Turbo + BERT** : NLP pipeline for radio communication analysis
 
 ### 🧠 Expert System
