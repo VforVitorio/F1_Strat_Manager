@@ -180,91 +180,94 @@ def process(input_path, output_dir):
         print(f"📄 Found {len(pages)} content sections")
 
     os.makedirs(output_dir, exist_ok=True)
-    created_files = []
-
-    # Process each page/section
+    created_files = []    # Process each page/section
     for i, raw_content in enumerate(pages, 1):
         if len(raw_content.strip()) < 50:
             print(f"⏭️ Skipping short content section {i}")
             continue
-          print(f"🔄 Processing section {i} ({len(raw_content)} chars)...")
-        
+
+        print(f"🔄 Processing section {i} ({len(raw_content)} chars)...")
+
         # Debug: Check for images in original content
         img_count_original = len(re.findall(r'<img[^>]*>', raw_content))
         print(f"   📷 Original images found: {img_count_original}")
-        
+
         # Clean content while preserving structure
         content = clean_deepwiki_content(raw_content)
-        
+
         # Debug: Check for images after cleaning
         img_count_after_clean = len(re.findall(r'<img[^>]*>', content))
         print(f"   📷 Images after cleaning: {img_count_after_clean}")
-        
+
         # Convert images while preserving positioning
         content = preserve_image_positioning(content)
-        
+
         # Debug: Check for markdown images after conversion
         md_img_count = len(re.findall(r'!\[[^\]]*\]\([^)]+\)', content))
         print(f"   📷 Markdown images after conversion: {md_img_count}")
-        
+
         # Add contextual diagrams where appropriate
         content = add_contextual_diagrams(content)
-        
+
         # Debug: Final image count
         final_img_count = len(re.findall(r'!\[[^\]]*\]\([^)]+\)', content))
         mermaid_count = len(re.findall(r'```mermaid', content))
-        print(f"   📷 Final images: {final_img_count}, Mermaid diagrams: {mermaid_count}")
-        
+        print(
+            f"   📷 Final images: {final_img_count}, Mermaid diagrams: {mermaid_count}")
+
         # Extract title and generate filename
         title = extract_section_title(content)
         filename = generate_safe_filename(title)
-        
+
         # Ensure content starts with proper title
         if not content.strip().startswith('# '):
             content = f'# {title}\n\n{content.strip()}'
-        
+
         # Write file
         filepath = os.path.join(output_dir, filename)
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         created_files.append((filename, title))
         print(f"✅ Created {filename} - {title}")
-    
+
     if not created_files:
         print("❌ No pages processed.")
         sys.exit(1)
-    
+
     # Create comprehensive documentation
     print("📚 Creating comprehensive documentation...")
-    
+
     main_content = "# F1 Strategy Manager - Complete Documentation\n\n"
     main_content += "This document contains the complete documentation for the F1 Strategy Manager project.\n\n"
     main_content += "> **Note**: Some diagrams may be represented as Mermaid diagrams or placeholders. For the original visual representations, please visit the [DeepWiki documentation](https://deepwiki.com/VforVitorio/F1_Strat_Manager).\n\n"
-    
+
     # Table of contents
     main_content += "## Table of Contents\n\n"
     for filename, title in created_files:
-        section_link = title.lower().replace(' ', '-').replace('.', '').replace('(', '').replace(')', '')
+        section_link = title.lower().replace(' ', '-').replace('.',
+                                                               '').replace('(', '').replace(')', '')
         main_content += f"- [{title}](#{section_link})\n"
     main_content += "\n---\n\n"
-    
+
     # Add all content
     for filename, title in created_files:
         filepath = os.path.join(output_dir, filename)
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
         main_content += content + "\n\n---\n\n"
-    
+
     # Write comprehensive file
-    comprehensive_path = os.path.join(output_dir, 'f1-strat-manager-complete.md')
+    comprehensive_path = os.path.join(
+        output_dir, 'f1-strat-manager-complete.md')
     with open(comprehensive_path, 'w', encoding='utf-8') as f:
         f.write(main_content)
-    
+
     print(f"✅ Created comprehensive documentation: f1-strat-manager-complete.md")
     print(f"📄 Total files created: {len(created_files) + 1}")
-    print(f"📁 Files: {[f[0] for f in created_files] + ['f1-strat-manager-complete.md']}")
-    
+    print(
+        f"📁 Files: {[f[0] for f in created_files] + ['f1-strat-manager-complete.md']}")
+
     return created_files
 
 
