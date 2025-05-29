@@ -201,26 +201,61 @@ jobs:
           import json
           import re
           import sys
-          import os
-
-          def clean_deepwiki_content(content):
+          import os          def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
-              # Eliminar bloque de navegación/índice DeepWiki completo al principio (menú, títulos, powered by, etc)
-              content = re.sub(r'^(?:Overview\n)?VforVitorio/F1_Strat_Manager\n\n?powered by\n\n?Devin\n\n?(?:Overview\n)?System Architecture\nInstallation and Setup\nStreamlit Dashboard\nStrategy Recommendations View\nGap Analysis View\nRadio Analysis View\nTime Predictions View\nStrategy Chat Interface\nMachine Learning Models\nLap Time Prediction\nTire Degradation Modeling\nVision-based Gap Calculation\nNLP Pipeline\nRadio Transcription\nSentiment and Intent Analysis\nNamed Entity Recognition\nExpert System\nDegradation Rules\nGap Analysis Rules\nRadio Message Rules\nIntegrated Rule Engine\nDeveloper Guide\nAPI Reference\nIntegration Guide\n?','', content, flags=re.MULTILINE)
+              
+              # PASO 1: Eliminar todo el menú/índice de navegación DeepWiki desde el principio
+              # Este patrón captura desde el inicio hasta el primer encabezado real de contenido
+              content = re.sub(r'^.*?(?=^#[^#]|\n#[^#]|^[A-Z][^:]*:|\n[A-Z][^:]*:|\w.*?\n=+)', '', content, flags=re.MULTILINE | re.DOTALL)
+              
+              # PASO 2: Patrones específicos para eliminar elementos del menú DeepWiki
+              # Eliminar líneas que contienen elementos típicos del menú
+              patterns_to_remove = [
+                  r'^Overview\s*$',
+                  r'^VforVitorio/F1_Strat_Manager.*$',
+                  r'^.*powered by.*Devin.*$',
+                  r'^System Architecture\s*$',
+                  r'^Installation and Setup\s*$', 
+                  r'^Streamlit Dashboard\s*$',
+                  r'^Strategy Recommendations View\s*$',
+                  r'^Gap Analysis View\s*$',
+                  r'^Radio Analysis View\s*$',
+                  r'^Time Predictions View\s*$',
+                  r'^Strategy Chat Interface\s*$',
+                  r'^Machine Learning Models\s*$',
+                  r'^Lap Time Prediction\s*$',
+                  r'^Tire Degradation Modeling\s*$',
+                  r'^Vision-based Gap Calculation\s*$',
+                  r'^NLP Pipeline\s*$',
+                  r'^Radio Transcription\s*$',
+                  r'^Sentiment and Intent Analysis\s*$',
+                  r'^Named Entity Recognition\s*$',
+                  r'^Expert System\s*$',
+                  r'^Degradation Rules\s*$',
+                  r'^Gap Analysis Rules\s*$',
+                  r'^Radio Message Rules\s*$',
+                  r'^Integrated Rule Engine\s*$',
+                  r'^Developer Guide\s*$',
+                  r'^API Reference\s*$',
+                  r'^Integration Guide\s*$'
+              ]
+              
+              for pattern in patterns_to_remove:
+                  content = re.sub(pattern, '', content, flags=re.MULTILINE | re.IGNORECASE)
 
-              # Eliminar sección '/' y sus repeticiones
+              # PASO 3: Eliminar sección '/' y sus repeticiones
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
               content = re.sub(r'^/?\n+', '', content, flags=re.MULTILINE)
 
-              # Eliminar menú 'Other Sections' y sus entradas
+              # PASO 4: Eliminar menú 'Other Sections' y sus entradas
               content = re.sub(r'### Other Sections\n([\s\S]*?)(?=\n### |\n---|\n# |\n\Z)', '', content, flags=re.MULTILINE)
               content = re.sub(r'- \[/?Documentation\]\([^)]+\)\n', '', content)
               content = re.sub(r'- \[/?private-repo\]\([^)]+\)\n', '', content)
               content = re.sub(r'- \[Documentation\]\([^)]+\)\n', '', content)
               content = re.sub(r'- \[/\]\([^)]+\)\n', '', content)
 
-              # Remove DeepWiki UI elements
+              # PASO 5: Remove DeepWiki UI elements
               content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Share.*?\n', '', content, flags=re.IGNORECASE)
@@ -229,12 +264,12 @@ jobs:
               content = re.sub(r'.*?Auto-refresh not enabled yet.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Which repo would you like to understand.*?\n', '', content, flags=re.IGNORECASE)
               
-              # Remove navigation elements
+              # PASO 6: Remove navigation elements
               content = re.sub(r'- Overview\n- System Architecture.*?- Getting Started\n', '', content, flags=re.DOTALL)
               content = re.sub(r'Menu\n', '', content)
               content = re.sub(r'### On this page.*?- Getting Started\n', '', content, flags=re.DOTALL)
               
-              # Remove source file references (they clutter the wiki)
+              # PASO 7: Remove source file references (they clutter the wiki)
               content = re.sub(r'Relevant source files.*?\n\n', '', content, flags=re.DOTALL)
               content = re.sub(r'Sources:.*?\n', '', content, flags=re.MULTILINE)
               
