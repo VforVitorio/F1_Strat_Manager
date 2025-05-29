@@ -205,7 +205,10 @@ jobs:
 
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
-              
+              import re
+              # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
+              content = re.sub(r'^(?:[\s\S]{0,300}?)(?:github-actions\[bot\].*?revision\n)?(?:[\s\S]{0,300}?)(?:System Architecture|Overview|Streamlit Dashboard|Machine Learning Models|NLP Pipeline|Expert System|Developer Guide)[\s\S]+?(?=\n# |\n## |\n### |\n\Z)', '', content, flags=re.MULTILINE)
+
               # Remove DeepWiki UI elements
               content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
