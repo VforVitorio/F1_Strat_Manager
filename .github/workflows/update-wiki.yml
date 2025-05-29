@@ -183,9 +183,7 @@ jobs:
             echo "File content:"
             cat docs-md/all-pages-raw.json
             exit 1
-          fi
-
-          echo "✅ All pages response received successfully:"
+          fi          echo "✅ All pages response received successfully:"
           ls -la docs-md/
           echo "Response structure:"
           jq -r 'keys' docs-md/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
@@ -195,13 +193,152 @@ jobs:
         run: |
           echo "Processing multiple pages from DeepWiki response..."
 
-          # Install jq if not available
-          sudo apt-get update && sudo apt-get install -y jq          # Process the response with Python to handle multiple pages
+          # Install required tools including requests for image downloading
+          sudo apt-get update && sudo apt-get install -y jq wget curl
+          pip3 install requests
+
+          # Process the response with Python to handle multiple pages AND images
           python3 << 'EOF'
           import json
           import re
           import sys
           import os
+          import requests
+          from urllib.parse import urlparse, urljoin
+          import time
+
+          def download_and_replace_images(markdown_content, image_dir, base_filename):
+              """Download images and replace references in markdown content"""
+              print(f"Processing images for {base_filename}...")
+              os.makedirs(image_dir, exist_ok=True)
+              
+              image_counter = 1
+              
+              def replacer(match):
+                  nonlocal image_counter
+                  alt_text = match.group(1)
+                  img_url = match.group(2)
+                  
+                  print(f"Found image: {img_url}")
+                  
+                  # Handle different URL formats
+                  if img_url.startswith('//'):
+                      img_url = 'https:' + img_url
+                  elif img_url.startswith('/'):
+                      img_url = 'https://deepwiki.com' + img_url
+                  elif not img_url.startswith(('http://', 'https://')):
+                      img_url = 'https://deepwiki.com/' + img_url.lstrip('/')
+                  
+                  # Generate unique filename
+                  parsed_url = urlparse(img_url)
+                  original_filename = os.path.basename(parsed_url.path)
+                  
+                  # Get file extension
+                  if '.' in original_filename:
+                      extension = '.' + original_filename.split('.')[-1].split('?')[0]
+                  else:
+                      extension = '.png'  # Default extension
+                  
+                  # Create unique filename
+                  filename = f"{base_filename}-img-{image_counter:02d}{extension}"
+                  local_path = os.path.join(image_dir, filename)
+                  
+                  # Download the image if not exists
+                  if not os.path.exists(local_path):
+                      try:
+                          print(f"Downloading {img_url} -> {filename}")
+                          
+                          headers = {
+                              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                          }
+                          
+                          response = requests.get(img_url, timeout=30, headers=headers)
+                          response.raise_for_status()
+                          
+                          with open(local_path, 'wb') as f:
+                              f.write(response.content)
+                          
+                          print(f"✅ Downloaded: {filename}")
+                          
+                          # Small delay to avoid overwhelming the server
+                          time.sleep(0.5)
+                          
+                      except Exception as e:
+                          print(f"❌ Error downloading {img_url}: {e}")
+                          # Return original if download fails
+                          return match.group(0)
+                  else:
+                      print(f"📁 Image already exists: {filename}")
+                  
+                  image_counter += 1
+                  # Return new relative path for wiki
+                  return f'![{alt_text}](images/{filename})'
+              
+              # Process markdown image references ![alt](url)
+              processed_content = re.sub(r'!\[(.*?)\]\((.*?)\)', replacer, markdown_content)
+              
+              # Also handle HTML img tags
+              def html_img_replacer(match):
+                  nonlocal image_counter
+                  full_tag = match.group(0)
+                  src_match = re.search(r'src=["\']([^"\']+)["\']', full_tag)
+                  
+                  if not src_match:
+                      return full_tag
+                  
+                  img_url = src_match.group(1)
+                  print(f"Found HTML image: {img_url}")
+                  
+                  # Handle different URL formats
+                  if img_url.startswith('//'):
+                      img_url = 'https:' + img_url
+                  elif img_url.startswith('/'):
+                      img_url = 'https://deepwiki.com' + img_url
+                  elif not img_url.startswith(('http://', 'https://')):
+                      img_url = 'https://deepwiki.com/' + img_url.lstrip('/')
+                  
+                  # Generate unique filename
+                  parsed_url = urlparse(img_url)
+                  original_filename = os.path.basename(parsed_url.path)
+                  
+                  if '.' in original_filename:
+                      extension = '.' + original_filename.split('.')[-1].split('?')[0]
+                  else:
+                      extension = '.png'
+                  
+                  filename = f"{base_filename}-img-{image_counter:02d}{extension}"
+                  local_path = os.path.join(image_dir, filename)
+                  
+                  # Download the image
+                  if not os.path.exists(local_path):
+                      try:
+                          print(f"Downloading HTML image {img_url} -> {filename}")
+                          
+                          headers = {
+                              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                          }
+                          
+                          response = requests.get(img_url, timeout=30, headers=headers)
+                          response.raise_for_status()
+                          
+                          with open(local_path, 'wb') as f:
+                              f.write(response.content)
+                          
+                          print(f"✅ Downloaded HTML image: {filename}")
+                          time.sleep(0.5)
+                          
+                      except Exception as e:
+                          print(f"❌ Error downloading HTML image {img_url}: {e}")
+                          return full_tag
+                  
+                  image_counter += 1
+                  # Replace src attribute
+                  return re.sub(r'src=["\']([^"\']+)["\']', f'src="images/{filename}"', full_tag)
+              
+              # Process HTML img tags
+              processed_content = re.sub(r'<img[^>]*>', html_img_replacer, processed_content)
+              
+              return processed_content
 
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
@@ -335,11 +472,13 @@ jobs:
               elif any(keyword in title_lower for keyword in ['integration guide', 'guía de integración']):
                   return ('sub', 'Developer Guide', '06-02-integration-guide.md')
               elif any(keyword in title_lower for keyword in ['system architecture', 'arquitectura']):
-                  return ('sub', 'Overview', '01-01-system-architecture.md')
-              elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
+                  return ('sub', 'Overview', '01-01-system-architecture.md')              elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
                   return ('sub', 'Overview', '01-02-installation-setup.md')
-                # Fallback seguro
-              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')# Read the JSON response
+              
+              # Fallback seguro
+              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')
+
+          # Read the JSON response
           try:
               with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   data = json.load(f)
@@ -366,8 +505,7 @@ jobs:
                   print("❌ Unexpected response structure")
                   print(f"Data keys: {list(data.keys())}")
                   sys.exit(1)
-              
-              print(f"Found {len(pages_content)} content sections")
+                print(f"Found {len(pages_content)} content sections")
               
               # Structure to organize content by hierarchy
               organized_content = {
@@ -375,7 +513,11 @@ jobs:
                   'subsections': {},
                   'misc': []
               }
-                # Process each page/section
+              
+              # Set up image directory
+              image_dir = 'docs-md/images'
+              
+              # Process each page/section
               for i, content in enumerate(pages_content):
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
@@ -392,21 +534,24 @@ jobs:
                   
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
-                  
-                  if len(cleaned_content.strip()) < 50:  # Skip very short content
+                    if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
-                    # Get title and categorize
+                  
+                  # Get title and categorize
                   title = get_page_title_from_content(cleaned_content)
                   # Validación de título vacío
                   if not title or len(title.strip()) == 0:
                       print(f"Warning: Empty title found in section {i+1}, using fallback")
-                      title = f"Section_{i+1}"
-                  section_type, parent_section, filename = categorize_section(title, fallback_idx=i+1)
+                      title = f"Section_{i+1}"                  section_type, parent_section, filename = categorize_section(title, fallback_idx=i+1)
                   # Validación adicional para filename
                   if not filename or filename == '.md' or filename.startswith('99-.md'):
                       print(f"Warning: Invalid filename generated for '{title}', using fallback")
                       filename = f'99-section-{i+1}.md'
+                  
+                  # PROCESS IMAGES - This is the key addition!
+                  base_filename = filename.replace('.md', '')
+                  cleaned_content = download_and_replace_images(cleaned_content, image_dir, base_filename)
                   
                   # Ensure proper title format
                   if not cleaned_content.strip().startswith('# '):
@@ -504,22 +649,30 @@ jobs:
               # Add miscellaneous content at the end
               for misc_item in organized_content['misc']:
                   main_content += misc_item['content'] + "\n\n---\n\n"
+                # Process images in the complete documentation too
+              main_content = download_and_replace_images(main_content, image_dir, 'f1-strat-manager-complete')
               
               # Write main comprehensive file
               with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
                   f.write(main_content)
               
-              # Count total files
+              # Count files and images
               total_main = len(organized_content['main_sections'])
               total_sub = sum(len(subs) for subs in organized_content['subsections'].values())
               total_misc = len(organized_content['misc'])
               total_files = total_main + total_sub + total_misc + 1  # +1 for complete doc
               
-              print(f"✅ Created structured documentation:")
+              # Count downloaded images
+              total_images = 0
+              if os.path.exists(image_dir):
+                  total_images = len([f for f in os.listdir(image_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'))])
+              
+              print(f"✅ Created structured documentation with images:")
               print(f"  - Main sections: {total_main}")
               print(f"  - Subsections: {total_sub}")
               print(f"  - Miscellaneous: {total_misc}")
               print(f"  - Total files: {total_files}")
+              print(f"  - Downloaded images: {total_images}")
               
           except json.JSONDecodeError as e:
               print(f"❌ Error parsing JSON: {e}")
@@ -574,10 +727,19 @@ jobs:
           fi
 
           echo "Current wiki contents:"
-          ls -la wiki/
+          ls -la wiki/          # Copy ALL markdown files to wiki
+          cp docs-md/*.md wiki/
 
-          # Copy ALL markdown files to wiki
-          cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
+          # Copy images directory to wiki if it exists
+          if [ -d "docs-md/images" ] && [ -n "$(ls -A docs-md/images/ 2>/dev/null)" ]; then
+            echo "Copying images to wiki..."
+            mkdir -p wiki/images
+            cp docs-md/images/* wiki/images/
+            echo "Images copied:"
+            ls -la wiki/images/
+          else
+            echo "No images directory found or directory is empty"
+          fi# Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
 
@@ -640,9 +802,7 @@ jobs:
           ---
 
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
-          EOF
-
-          echo "Files copied to wiki:"
+          EOF          echo "Files copied to wiki:"
           ls -la wiki/
 
       - name: Commit & Push changes
@@ -650,7 +810,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
           git add .
 
           # Check if there are changes before committing
