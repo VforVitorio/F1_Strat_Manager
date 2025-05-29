@@ -206,8 +206,8 @@ jobs:
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
-              # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
-              content = re.sub(r'^(?:[\s\S]{0,300}?)(?:github-actions\[bot\].*?revision\n)?(?:[\s\S]{0,300}?)(?:System Architecture|Overview|Streamlit Dashboard|Machine Learning Models|NLP Pipeline|Expert System|Developer Guide|Other Sections)[\s\S]+?(?=\n# |\n## |\n### |\n\Z)', '', content, flags=re.MULTILINE)
+              # Eliminar bloque de navegación/índice DeepWiki completo al principio (menú, títulos, powered by, etc)
+              content = re.sub(r'^(?:Overview\n)?VforVitorio/F1_Strat_Manager\n\n?powered by\n\n?Devin\n\n?(?:Overview\n)?System Architecture\nInstallation and Setup\nStreamlit Dashboard\nStrategy Recommendations View\nGap Analysis View\nRadio Analysis View\nTime Predictions View\nStrategy Chat Interface\nMachine Learning Models\nLap Time Prediction\nTire Degradation Modeling\nVision-based Gap Calculation\nNLP Pipeline\nRadio Transcription\nSentiment and Intent Analysis\nNamed Entity Recognition\nExpert System\nDegradation Rules\nGap Analysis Rules\nRadio Message Rules\nIntegrated Rule Engine\nDeveloper Guide\nAPI Reference\nIntegration Guide\n?','', content, flags=re.MULTILINE)
 
               # Eliminar sección '/' y sus repeticiones
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
@@ -238,6 +238,7 @@ jobs:
               content = re.sub(r'Relevant source files.*?\n\n', '', content, flags=re.DOTALL)
               content = re.sub(r'Sources:.*?\n', '', content, flags=re.MULTILINE)
               
+
               # Clean up multiple consecutive newlines
               content = re.sub(r'\n{3,}', '\n\n', content)
               
@@ -245,13 +246,16 @@ jobs:
               content = re.sub(r'\n## \n', '', content)
               content = re.sub(r'\n### \n', '', content)
               
+
               # Fix malformed headers
               content = re.sub(r'^([#]+)\s*$', '', content, flags=re.MULTILINE)
               
+
               # Remove VforVitorio/F1_Strat_Manager title duplicates
               content = re.sub(r'^# /VforVitorio/F1_Strat_Manager.*?\n', '', content, flags=re.MULTILINE)
               content = re.sub(r'VforVitorio/F1_Strat_Manager \| DeepWiki.*?\n', '', content)
               
+
               # Clean up beginning of content
               content = content.strip()
               
@@ -305,6 +309,7 @@ jobs:
               elif any(keyword in title_lower for keyword in ['developer', 'api', 'integration', 'guide']):
                   return ('main', 'Developer Guide', '06-developer-guide.md')
               
+
               # Streamlit Dashboard subsections
               elif any(keyword in title_lower for keyword in ['strategy recommendations', 'recomendaciones']):
                   return ('sub', 'Streamlit Dashboard', '02-01-strategy-recommendations-view.md')
