@@ -181,8 +181,7 @@ jobs:
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
               # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
-              # Nuevo patrón: elimina cualquier bloque de menú que contenga las secciones principales, aunque no haya doble numeración
-              content = re.sub(r'(?s)^.*?Overview\nSystem Architecture\nInstallation and Setup\nStreamlit Dashboard\nStrategy Recommendations View\nGap Analysis View\nRadio Analysis View\nTime Predictions View\nStrategy Chat Interface\nMachine Learning Models\nLap Time Prediction\nTire Degradation Modeling\nVision-based Gap Calculation\nNLP Pipeline\nRadio Transcription\nSentiment and Intent Analysis\nNamed Entity Recognition\nExpert System\nDegradation Rules\nGap Analysis Rules\nRadio Message Rules\nIntegrated Rule Engine\nDeveloper Guide\nAPI Reference\nIntegration Guide\n', '', content)
+              content = re.sub(r'^(?:[\s\S]{0,300}?)(?:github-actions\[bot\].*?revision\n)?(?:[\s\S]{0,300}?)(?:System Architecture|Overview|Streamlit Dashboard|Machine Learning Models|NLP Pipeline|Expert System|Developer Guide|Other Sections)[\s\S]+?(?=\n# |\n## |\n### |\n\Z)', '', content, flags=re.MULTILINE)
               # Eliminar sección '/' y sus repeticiones
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
               content = re.sub(r'^/?\n+', '', content, flags=re.MULTILINE)
