@@ -181,8 +181,8 @@ jobs:
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
               # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
-              # Nuevo patrón más robusto: elimina cualquier bloque de menú que contenga las secciones principales, aunque no haya doble numeración
-              content = re.sub(r'(?s)^([\s\S]{0,1000}?)(Overview\nSystem Architecture\nInstallation and Setup\nStreamlit Dashboard\nStrategy Recommendations View\nGap Analysis View\nRadio Analysis View\nTime Predictions View\nStrategy Chat Interface\nMachine Learning Models\nLap Time Prediction\nTire Degradation Modeling\nVision-based Gap Calculation\nNLP Pipeline\nRadio Transcription\nSentiment and Intent Analysis\nNamed Entity Recognition\nExpert System\nDegradation Rules\nGap Analysis Rules\nRadio Message Rules\nIntegrated Rule Engine\nDeveloper Guide\nAPI Reference\nIntegration Guide[\s\S]+?)(?=\n# |\n## |\n### |\n\Z)', '', content)
+              # Nuevo patrón: elimina cualquier bloque de menú que contenga las secciones principales, aunque no haya doble numeración
+              content = re.sub(r'(?s)^.*?Overview\nSystem Architecture\nInstallation and Setup\nStreamlit Dashboard\nStrategy Recommendations View\nGap Analysis View\nRadio Analysis View\nTime Predictions View\nStrategy Chat Interface\nMachine Learning Models\nLap Time Prediction\nTire Degradation Modeling\nVision-based Gap Calculation\nNLP Pipeline\nRadio Transcription\nSentiment and Intent Analysis\nNamed Entity Recognition\nExpert System\nDegradation Rules\nGap Analysis Rules\nRadio Message Rules\nIntegrated Rule Engine\nDeveloper Guide\nAPI Reference\nIntegration Guide\n', '', content)
               # Eliminar sección '/' y sus repeticiones
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
               content = re.sub(r'^/?\n+', '', content, flags=re.MULTILINE)
@@ -194,23 +194,30 @@ jobs:
               content = re.sub(r'.*?Try DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Auto-refresh not enabled yet.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Which repo would you like to understand.*?\n', '', content, flags=re.IGNORECASE)
+              
               # Remove navigation elements
               content = re.sub(r'- Overview\n- System Architecture.*?- Getting Started\n', '', content, flags=re.DOTALL)
               content = re.sub(r'Menu\n', '', content)
               content = re.sub(r'### On this page.*?- Getting Started\n', '', content, flags=re.DOTALL)
+              
               # Remove source file references (they clutter the wiki)
               content = re.sub(r'Relevant source files.*?\n\n', '', content, flags=re.DOTALL)
               content = re.sub(r'Sources:.*?\n', '', content, flags=re.MULTILINE)
+              
               # Clean up multiple consecutive newlines
               content = re.sub(r'\n{3,}', '\n\n', content)
+              
               # Remove empty sections
               content = re.sub(r'\n## \n', '', content)
               content = re.sub(r'\n### \n', '', content)
+              
               # Fix malformed headers
               content = re.sub(r'^([#]+)\s*$', '', content, flags=re.MULTILINE)
+              
               # Remove VforVitorio/F1_Strat_Manager title duplicates
               content = re.sub(r'^# /VforVitorio/F1_Strat_Manager.*?\n', '', content, flags=re.MULTILINE)
               content = re.sub(r'VforVitorio/F1_Strat_Manager \| DeepWiki.*?\n', '', content)
+              
               # Clean up beginning of content
               content = content.strip()
               
@@ -349,41 +356,44 @@ jobs:
               for i, content in enumerate(pages_content):
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
+                  
                   # Validate content is not None or empty
                   if not content or len(str(content).strip()) == 0:
                       print(f"Skipping empty content section {i+1}")
                       continue
+                  
                   # Ensure content is string
                   if not isinstance(content, str):
                       print(f"Converting content to string for section {i+1}")
                       content = str(content)
+                  
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
+                  
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
-                  # Get title and categorize
+                    # Get title and categorize
                   title = get_page_title_from_content(cleaned_content)
                   # Validación de título vacío
                   if not title or len(title.strip()) == 0:
                       print(f"Warning: Empty title found in section {i+1}, using fallback")
                       title = f"Section_{i+1}"
-                  # OMITIR si el título es '99 private repo' (ignorando mayúsculas/minúsculas y espacios)
-                  if title.strip().lower() == '99 private repo':
-                      print(f"Skipping section {i+1} because title is '99 private repo'")
-                      continue
                   section_type, parent_section, filename = categorize_section(title, fallback_idx=i+1)
                   # Validación adicional para filename
                   if not filename or filename == '.md' or filename.startswith('99-.md'):
                       print(f"Warning: Invalid filename generated for '{title}', using fallback")
                       filename = f'99-section-{i+1}.md'
+                  
                   # Ensure proper title format
                   if not cleaned_content.strip().startswith('# '):
                       cleaned_content = f'# {title}\n\n' + cleaned_content.strip()
+                  
                   # Write individual file
                   filepath = f'docs-md/{filename}'
                   with open(filepath, 'w', encoding='utf-8') as f:
                       f.write(cleaned_content)
+                  
                   # Organize content
                   if section_type == 'main':
                       organized_content['main_sections'][parent_section] = {
@@ -405,6 +415,7 @@ jobs:
                           'title': title,
                           'content': cleaned_content
                       })
+                  
                   print(f"✅ Created: {filename} (Category: {section_type}, Parent: {parent_section})")
               
               # Create structured comprehensive documentation
