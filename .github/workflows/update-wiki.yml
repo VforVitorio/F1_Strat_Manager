@@ -608,7 +608,9 @@ jobs:
           echo "Current wiki contents:"
           ls -la wiki/
 
-          # Copy ALL markdown files to wiki
+          # Eliminar archivos antiguos del wiki antes de copiar los nuevos
+          find wiki/ -type f ! -name '.git' -delete
+          # Copiar todos los archivos generados
           cp docs-md/*.md wiki/
           # Copiar imágenes si existen
           if [ -d docs-md/images ]; then
