@@ -202,6 +202,36 @@ jobs:
           import re
           import sys
           import os
+          import requests
+
+          def download_and_replace_images(markdown, images_dir, section_idx):
+              """Busca imágenes en el markdown, las descarga y reemplaza la URL por la local"""
+              if not os.path.exists(images_dir):
+                  os.makedirs(images_dir)
+              def repl(match):
+                  alt_text = match.group(1)
+                  url = match.group(2)
+                  # Solo descargar si es una URL http(s)
+                  if url.startswith('http://') or url.startswith('https://'):
+                      ext = os.path.splitext(url.split('?')[0])[1] or '.png'
+                      img_name = f"img_{section_idx}_{abs(hash(url)) % (10**8)}{ext}"
+                      img_path = os.path.join(images_dir, img_name)
+                      rel_path = f"images/{img_name}"
+                      try:
+                          r = requests.get(url, timeout=10)
+                          if r.status_code == 200:
+                              with open(img_path, 'wb') as f:
+                                  f.write(r.content)
+                              print(f"Descargada imagen: {url} -> {rel_path}")
+                              return f"![{alt_text}]({rel_path})"
+                          else:
+                              print(f"No se pudo descargar imagen: {url} (status {r.status_code})")
+                      except Exception as e:
+                          print(f"Error descargando imagen {url}: {e}")
+                  # Si no es http(s), dejar igual
+                  return match.group(0)
+              # Reemplaza todas las imágenes
+              return re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', repl, markdown)
 
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
@@ -392,6 +422,8 @@ jobs:
                   
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
+                  # Descargar imágenes y reemplazar URLs
+                  cleaned_content = download_and_replace_images(cleaned_content, 'docs-md/images', i+1)
                   
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
@@ -577,7 +609,12 @@ jobs:
           ls -la wiki/
 
           # Copy ALL markdown files to wiki
-          cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
+          cp docs-md/*.md wiki/
+          # Copiar imágenes si existen
+          if [ -d docs-md/images ]; then
+            cp -r docs-md/images wiki/
+          fi
+          # Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
 
