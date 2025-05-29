@@ -468,11 +468,11 @@ jobs:
               
               # Developer Guide subsections
               elif any(keyword in title_lower for keyword in ['api reference', 'referencia api']):
-                  return ('sub', 'Developer Guide', '06-01-api-reference.md')
-              elif any(keyword in title_lower for keyword in ['integration guide', 'guía de integración']):
+                  return ('sub', 'Developer Guide', '06-01-api-reference.md')              elif any(keyword in title_lower for keyword in ['integration guide', 'guía de integración']):
                   return ('sub', 'Developer Guide', '06-02-integration-guide.md')
               elif any(keyword in title_lower for keyword in ['system architecture', 'arquitectura']):
-                  return ('sub', 'Overview', '01-01-system-architecture.md')              elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
+                  return ('sub', 'Overview', '01-01-system-architecture.md')
+              elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
                   return ('sub', 'Overview', '01-02-installation-setup.md')
               
               # Fallback seguro
@@ -493,8 +493,7 @@ jobs:
                       # Multiple content items
                       for item in data['result']['content']:
                           if 'text' in item:
-                              pages_content.append(item['text'])
-                  else:
+                              pages_content.append(item['text'])                  else:
                       # Single content item
                       if 'text' in data['result']['content']:
                           pages_content.append(data['result']['content']['text'])
@@ -505,7 +504,8 @@ jobs:
                   print("❌ Unexpected response structure")
                   print(f"Data keys: {list(data.keys())}")
                   sys.exit(1)
-                print(f"Found {len(pages_content)} content sections")
+              
+              print(f"Found {len(pages_content)} content sections")
               
               # Structure to organize content by hierarchy
               organized_content = {
@@ -531,10 +531,10 @@ jobs:
                   if not isinstance(content, str):
                       print(f"Converting content to string for section {i+1}")
                       content = str(content)
-                  
-                  # Clean the content
+                    # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
-                    if len(cleaned_content.strip()) < 50:  # Skip very short content
+                  
+                  if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
                   
@@ -543,7 +543,9 @@ jobs:
                   # Validación de título vacío
                   if not title or len(title.strip()) == 0:
                       print(f"Warning: Empty title found in section {i+1}, using fallback")
-                      title = f"Section_{i+1}"                  section_type, parent_section, filename = categorize_section(title, fallback_idx=i+1)
+                      title = f"Section_{i+1}"
+                  
+                  section_type, parent_section, filename = categorize_section(title, fallback_idx=i+1)
                   # Validación adicional para filename
                   if not filename or filename == '.md' or filename.startswith('99-.md'):
                       print(f"Warning: Invalid filename generated for '{title}', using fallback")
