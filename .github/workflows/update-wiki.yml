@@ -697,6 +697,7 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
-            git push
+            # Solo hacer push al repo wiki, no al repo principal
+            git push origin master
             echo "Changes pushed successfully"
           fi
