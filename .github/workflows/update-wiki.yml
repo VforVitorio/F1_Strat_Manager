@@ -20,14 +20,12 @@ jobs:
           git clone https://github.com/regenrek/deepwiki-mcp.git deepwiki-mcp
           cd deepwiki-mcp
           npm install
-
       - name: Build DeepWiki MCP
         working-directory: deepwiki-mcp
         run: |
           # Check if package.json exists and available scripts
           echo "Package.json scripts:"
           npm run || true
-
           # Try to build the project
           if npm run build 2>/dev/null; then
             echo "Build completed with npm run build"
@@ -39,7 +37,6 @@ jobs:
             echo "Trying manual build with typescript..."
             npx tsc || echo "Could not compile with tsc"
           fi
-
           # Verify that dist file exists
           echo "Checking compiled files:"
           ls -la
@@ -50,14 +47,12 @@ jobs:
             echo "Looking for .mjs files in project:"
             find . -name "*.mjs" -type f
           fi
-
       - name: Start DeepWiki MCP (HTTP mode)
         working-directory: deepwiki-mcp
         run: |
           # Verify that necessary files exist
           ls -la
           ls -la bin/
-
           # Verify that dist/index.mjs file exists
           if [ ! -f "dist/index.mjs" ]; then
             echo "Error: dist/index.mjs not found"
@@ -65,12 +60,10 @@ jobs:
             find . -name "*.mjs" -type f
             exit 1
           fi
-
           # Start service in background
           node ./bin/cli.mjs --http --port 3000 > ../deepwiki.log 2>&1 &
           DEEPWIKI_PID=$!
           echo "DeepWiki PID: $DEEPWIKI_PID"
-
           # Wait and verify service is available
           for i in {1..30}; do
             if curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
@@ -80,7 +73,6 @@ jobs:
             echo "Waiting for DeepWiki MCP to be available... attempt $i/30"
             sleep 2
           done
-
           # Verify once more - check /mcp endpoint
           if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: DeepWiki MCP not available after 60 seconds"
@@ -90,14 +82,11 @@ jobs:
             ps aux | grep node | grep -v grep || echo "Process not found"
             exit 1
           fi
-
           # Verify process is running
           ps aux | grep node | grep -v grep
-
       - name: Export ALL Markdown from DeepWiki
         run: |
           mkdir -p docs-md
-
           # Verify service is available before making the call
           if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: Service not available before export"
@@ -105,28 +94,22 @@ jobs:
             cat deepwiki.log || echo "No logs found"
             exit 1
           fi
-
           # Test connectivity first
           echo "Testing service connectivity..."
           curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' -v || echo "Tools list check failed"
-
           # Validate DeepWiki URL accessibility
           echo "Validating DeepWiki URL accessibility..."
           DEEPWIKI_URL="https://deepwiki.com/VforVitorio/F1_Strat_Manager"
-
           # Check if the URL is accessible
           if curl -s --head "$DEEPWIKI_URL" | head -n 1 | grep -q "200 OK"; then
             echo "✅ DeepWiki URL is accessible: $DEEPWIKI_URL"
           else
             echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
           fi
-
           # Create JSON payload to get ALL pages (maxDepth: 1, mode: "pages")
           JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"pages"}},"id":1}'
-
           echo "JSON-RPC 2.0 payload to send (ALL PAGES):"
           echo "$JSON_PAYLOAD" | jq . || echo "$JSON_PAYLOAD"
-
           # Validate JSON syntax
           if echo "$JSON_PAYLOAD" | jq . > /dev/null 2>&1; then
             echo "✅ JSON payload is valid"
@@ -134,7 +117,6 @@ jobs:
             echo "❌ JSON payload is invalid"
             exit 1
           fi
-
           # Make the POST request to get ALL pages
           echo "Making POST request to get ALL DeepWiki pages..."
           HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
@@ -143,9 +125,7 @@ jobs:
             -o docs-md/all-pages-raw.json \
             -w "%{http_code}" \
             -s)
-
           echo "HTTP status code: $HTTP_CODE"
-
           # Handle different HTTP response codes
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Success: All pages request completed successfully"
@@ -171,92 +151,41 @@ jobs:
             fi
             echo "✅ Fallback method succeeded"
           fi
-
           # Verify file was created and is not empty
           if [ ! -f docs-md/all-pages-raw.json ]; then
             echo "Error: Response file was not created"
             exit 1
           fi
-
           if [ ! -s docs-md/all-pages-raw.json ]; then
             echo "Error: Response file is empty"
             echo "File content:"
             cat docs-md/all-pages-raw.json
             exit 1
           fi
-
           echo "✅ All pages response received successfully:"
           ls -la docs-md/
           echo "Response structure:"
           jq -r 'keys' docs-md/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
           head -c 500 docs-md/all-pages-raw.json
-
       - name: Process and Split Multiple Pages
         run: |
           echo "Processing multiple pages from DeepWiki response..."
-
           # Install jq if not available
           sudo apt-get update && sudo apt-get install -y jq          # Process the response with Python to handle multiple pages
-          python3 << 'EOF'          import json
+          python3 << 'EOF'
+          import json
           import re
           import sys
           import os
-
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
-              
-              # PASO 1: Eliminar todo el menú/índice de navegación DeepWiki desde el principio
-              # Este patrón captura desde el inicio hasta el primer encabezado real de contenido
-              content = re.sub(r'^.*?(?=^#[^#]|\n#[^#]|^[A-Z][^:]*:|\n[A-Z][^:]*:|\w.*?\n=+)', '', content, flags=re.MULTILINE | re.DOTALL)
-              
-              # PASO 2: Patrones específicos para eliminar elementos del menú DeepWiki
-              # Eliminar líneas que contienen elementos típicos del menú
-              patterns_to_remove = [
-                  r'^Overview\s*$',
-                  r'^VforVitorio/F1_Strat_Manager.*$',
-                  r'^.*powered by.*Devin.*$',
-                  r'^System Architecture\s*$',
-                  r'^Installation and Setup\s*$', 
-                  r'^Streamlit Dashboard\s*$',
-                  r'^Strategy Recommendations View\s*$',
-                  r'^Gap Analysis View\s*$',
-                  r'^Radio Analysis View\s*$',
-                  r'^Time Predictions View\s*$',
-                  r'^Strategy Chat Interface\s*$',
-                  r'^Machine Learning Models\s*$',
-                  r'^Lap Time Prediction\s*$',
-                  r'^Tire Degradation Modeling\s*$',
-                  r'^Vision-based Gap Calculation\s*$',
-                  r'^NLP Pipeline\s*$',
-                  r'^Radio Transcription\s*$',
-                  r'^Sentiment and Intent Analysis\s*$',
-                  r'^Named Entity Recognition\s*$',
-                  r'^Expert System\s*$',
-                  r'^Degradation Rules\s*$',
-                  r'^Gap Analysis Rules\s*$',
-                  r'^Radio Message Rules\s*$',
-                  r'^Integrated Rule Engine\s*$',
-                  r'^Developer Guide\s*$',
-                  r'^API Reference\s*$',
-                  r'^Integration Guide\s*$'
-              ]
-              
-              for pattern in patterns_to_remove:
-                  content = re.sub(pattern, '', content, flags=re.MULTILINE | re.IGNORECASE)
-
-              # PASO 3: Eliminar sección '/' y sus repeticiones
+              # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
+              content = re.sub(r'^(?:[\s\S]{0,300}?)(?:github-actions\[bot\].*?revision\n)?(?:[\s\S]{0,300}?)(?:System Architecture|Overview|Streamlit Dashboard|Machine Learning Models|NLP Pipeline|Expert System|Developer Guide|Other Sections)[\s\S]+?(?=\n# |\n## |\n### |\n\Z)', '', content, flags=re.MULTILINE)
+              # Eliminar sección '/' y sus repeticiones
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
               content = re.sub(r'^/?\n+', '', content, flags=re.MULTILINE)
-
-              # PASO 4: Eliminar menú 'Other Sections' y sus entradas
-              content = re.sub(r'### Other Sections\n([\s\S]*?)(?=\n### |\n---|\n# |\n\Z)', '', content, flags=re.MULTILINE)
-              content = re.sub(r'- \[/?Documentation\]\([^)]+\)\n', '', content)
-              content = re.sub(r'- \[/?private-repo\]\([^)]+\)\n', '', content)
-              content = re.sub(r'- \[Documentation\]\([^)]+\)\n', '', content)
-              content = re.sub(r'- \[/\]\([^)]+\)\n', '', content)
-
-              # PASO 5: Remove DeepWiki UI elements
+              # Remove DeepWiki UI elements
               content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Share.*?\n', '', content, flags=re.IGNORECASE)
@@ -265,16 +194,15 @@ jobs:
               content = re.sub(r'.*?Auto-refresh not enabled yet.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Which repo would you like to understand.*?\n', '', content, flags=re.IGNORECASE)
               
-              # PASO 6: Remove navigation elements
+              # Remove navigation elements
               content = re.sub(r'- Overview\n- System Architecture.*?- Getting Started\n', '', content, flags=re.DOTALL)
               content = re.sub(r'Menu\n', '', content)
               content = re.sub(r'### On this page.*?- Getting Started\n', '', content, flags=re.DOTALL)
               
-              # PASO 7: Remove source file references (they clutter the wiki)
+              # Remove source file references (they clutter the wiki)
               content = re.sub(r'Relevant source files.*?\n\n', '', content, flags=re.DOTALL)
               content = re.sub(r'Sources:.*?\n', '', content, flags=re.MULTILINE)
               
-
               # Clean up multiple consecutive newlines
               content = re.sub(r'\n{3,}', '\n\n', content)
               
@@ -282,21 +210,17 @@ jobs:
               content = re.sub(r'\n## \n', '', content)
               content = re.sub(r'\n### \n', '', content)
               
-
               # Fix malformed headers
               content = re.sub(r'^([#]+)\s*$', '', content, flags=re.MULTILINE)
               
-
               # Remove VforVitorio/F1_Strat_Manager title duplicates
               content = re.sub(r'^# /VforVitorio/F1_Strat_Manager.*?\n', '', content, flags=re.MULTILINE)
               content = re.sub(r'VforVitorio/F1_Strat_Manager \| DeepWiki.*?\n', '', content)
               
-
               # Clean up beginning of content
               content = content.strip()
               
               return content
-
           def get_page_title_from_content(content):
               """Extract a clean title from content"""
               lines = content.split('\n')
@@ -308,7 +232,6 @@ jobs:
                       if title:
                           return title
               return "Documentation"
-
           def safe_filename(title, fallback_idx=None):
               """Genera un nombre de archivo seguro a partir del título. Si el título es vacío, usa un fallback único."""
               if not title or len(title.strip()) == 0:
@@ -326,7 +249,6 @@ jobs:
                       return f"unknown-section-{fallback_idx}"
                   return "unknown-section"
               return filename
-
           def categorize_section(title, fallback_idx=None):
               """Categoriza secciones según la jerarquía especificada"""
               title_lower = title.lower() if title else ''
@@ -345,7 +267,6 @@ jobs:
               elif any(keyword in title_lower for keyword in ['developer', 'api', 'integration', 'guide']):
                   return ('main', 'Developer Guide', '06-developer-guide.md')
               
-
               # Streamlit Dashboard subsections
               elif any(keyword in title_lower for keyword in ['strategy recommendations', 'recomendaciones']):
                   return ('sub', 'Streamlit Dashboard', '02-01-strategy-recommendations-view.md')
@@ -392,10 +313,9 @@ jobs:
               elif any(keyword in title_lower for keyword in ['system architecture', 'arquitectura']):
                   return ('sub', 'Overview', '01-01-system-architecture.md')
               elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
-                  return ('sub', 'Overview', '01-02-installation-setup.md')              # Fallback seguro
-              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')
-
-          # Read the JSON response
+                  return ('sub', 'Overview', '01-02-installation-setup.md')
+                # Fallback seguro
+              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')# Read the JSON response
           try:
               with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   data = json.load(f)
@@ -424,14 +344,14 @@ jobs:
                   sys.exit(1)
               
               print(f"Found {len(pages_content)} content sections")
-                # Structure to organize content by hierarchy
+              
+              # Structure to organize content by hierarchy
               organized_content = {
                   'main_sections': {},
                   'subsections': {},
                   'misc': []
               }
-              
-              # Process each page/section
+                # Process each page/section
               for i, content in enumerate(pages_content):
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
@@ -448,11 +368,11 @@ jobs:
                   
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
-                    if len(cleaned_content.strip()) < 50:  # Skip very short content
+                  
+                  if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
-                  
-                  # Get title and categorize
+                    # Get title and categorize
                   title = get_page_title_from_content(cleaned_content)
                   # Validación de título vacío
                   if not title or len(title.strip()) == 0:
@@ -599,12 +519,10 @@ jobs:
               print(f"❌ Error processing content: {e}")
               sys.exit(1)
           EOF
-
           echo "Final documentation files created:"
           ls -la docs-md/
           echo "Preview of main documentation:"
           head -30 docs-md/f1-strat-manager-complete.md
-
       - name: Checkout Wiki
         uses: actions/checkout@v3
         with:
@@ -619,38 +537,28 @@ jobs:
             echo "Error: No markdown files to copy"
             exit 1
           fi
-
           echo "Files to copy:"
           ls -la docs-md/
-
           # Ensure wiki directory exists
           if [ ! -d wiki ]; then
             echo "Error: Wiki directory not found"
             exit 1
           fi
-
           echo "Current wiki contents:"
           ls -la wiki/
-
           # Copy ALL markdown files to wiki
           cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
-
           This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
           It is generated through DeepWiki, if you want to see also the figures of the documentation, please, navigate to [this link over here](https://deepwiki.com/VforVitorio/F1_Strat_Manager).
-
           ## 📋 Complete Documentation
-
           - **[📖 Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections organized hierarchically
-
           ## 🗂️ Documentation Structure
-
           ### 🔍 1. Overview
           - **[Overview](01-overview)** - Project introduction and general information
             - [System Architecture](01-01-system-architecture) - Overall system design and components
             - [Installation and Setup](01-02-installation-setup) - Getting started guide
-
           ### 📊 2. Streamlit Dashboard
           - **[Streamlit Dashboard](02-streamlit-dashboard)** - Interactive web interface
             - [Strategy Recommendations View](02-01-strategy-recommendations-view) - Strategic decision interface
@@ -658,49 +566,38 @@ jobs:
             - [Radio Analysis View](02-03-radio-analysis-view) - Team radio insights
             - [Time Predictions View](02-04-time-predictions-view) - Lap time forecasting
             - [Strategy Chat Interface](02-05-strategy-chat-interface) - AI-powered strategy chat
-
           ### 🤖 3. Machine Learning Models
           - **[Machine Learning Models](03-machine-learning-models)** - AI/ML components
             - [Lap Time Prediction](03-01-lap-time-prediction) - Predictive models for lap times
             - [Tire Degradation Modeling](03-02-tire-degradation-modeling) - Tire performance analysis
             - [Vision-based Gap Calculation](03-03-vision-based-gap-calculation) - Computer vision for gap detection
-
           ### 🎤 4. NLP Pipeline
           - **[NLP Pipeline](04-nlp-pipeline)** - Natural Language Processing components
             - [Radio Transcription](04-01-radio-transcription) - Speech-to-text processing
             - [Sentiment and Intent Analysis](04-02-sentiment-intent-analysis) - Emotional and intent recognition
             - [Named Entity Recognition](04-03-named-entity-recognition) - Entity extraction from radio communications
-
           ### ⚙️ 5. Expert System
           - **[Expert System](05-expert-system)** - Rule-based decision engine
             - [Degradation Rules](05-01-degradation-rules) - Tire degradation logic
             - [Gap Analysis Rules](05-02-gap-analysis-rules) - Gap calculation rules
             - [Radio Message Rules](05-03-radio-message-rules) - Communication analysis rules
             - [Integrated Rule Engine](05-04-integrated-rule-engine) - Unified rule processing
-
           ### 👨‍💻 6. Developer Guide
           - **[Developer Guide](06-developer-guide)** - Technical documentation for developers
             - [API Reference](06-01-api-reference) - Complete API documentation
             - [Integration Guide](06-02-integration-guide) - How to integrate with external systems
-
           ## 🏎️ Project Overview
-
           The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support, combining:
-
           - **🤖 Machine Learning Models** - Predictive analytics for lap times and tire performance
           - **👁️ Computer Vision** - Automated gap calculation from video feeds
           - **🎤 Natural Language Processing** - Radio communication analysis and insights
           - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
           - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
-
           ---
-
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
           EOF
-
           echo "Files copied to wiki:"
           ls -la wiki/
-
       - name: Commit & Push changes
         working-directory: wiki
         run: |
@@ -708,7 +605,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git add .
-
           # Check if there are changes before committing
           if git diff --quiet --staged; then
             echo "No changes to commit"
