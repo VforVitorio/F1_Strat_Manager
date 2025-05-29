@@ -197,11 +197,12 @@ jobs:
 
           # Install jq if not available
           sudo apt-get update && sudo apt-get install -y jq          # Process the response with Python to handle multiple pages
-          python3 << 'EOF'
-          import json
+          python3 << 'EOF'          import json
           import re
           import sys
-          import os          def clean_deepwiki_content(content):
+          import os
+
+          def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
               
@@ -391,9 +392,10 @@ jobs:
               elif any(keyword in title_lower for keyword in ['system architecture', 'arquitectura']):
                   return ('sub', 'Overview', '01-01-system-architecture.md')
               elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
-                  return ('sub', 'Overview', '01-02-installation-setup.md')
-                # Fallback seguro
-              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')# Read the JSON response
+                  return ('sub', 'Overview', '01-02-installation-setup.md')              # Fallback seguro
+              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')
+
+          # Read the JSON response
           try:
               with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   data = json.load(f)
@@ -422,14 +424,14 @@ jobs:
                   sys.exit(1)
               
               print(f"Found {len(pages_content)} content sections")
-              
-              # Structure to organize content by hierarchy
+                # Structure to organize content by hierarchy
               organized_content = {
                   'main_sections': {},
                   'subsections': {},
                   'misc': []
               }
-                # Process each page/section
+              
+              # Process each page/section
               for i, content in enumerate(pages_content):
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
@@ -446,11 +448,11 @@ jobs:
                   
                   # Clean the content
                   cleaned_content = clean_deepwiki_content(content)
-                  
-                  if len(cleaned_content.strip()) < 50:  # Skip very short content
+                    if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
-                    # Get title and categorize
+                  
+                  # Get title and categorize
                   title = get_page_title_from_content(cleaned_content)
                   # Validación de título vacío
                   if not title or len(title.strip()) == 0:
