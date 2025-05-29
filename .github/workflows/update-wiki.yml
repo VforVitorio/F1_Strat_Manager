@@ -176,14 +176,14 @@ jobs:
           if [ ! -f docs-md/all-pages-raw.json ]; then
             echo "Error: Response file was not created"
             exit 1
-          fi
-
-          if [ ! -s docs-md/all-pages-raw.json ]; then
+          fi          if [ ! -s docs-md/all-pages-raw.json ]; then
             echo "Error: Response file is empty"
             echo "File content:"
             cat docs-md/all-pages-raw.json
             exit 1
-          fi          echo "✅ All pages response received successfully:"
+          fi
+
+          echo "✅ All pages response received successfully:"
           ls -la docs-md/
           echo "Response structure:"
           jq -r 'keys' docs-md/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
