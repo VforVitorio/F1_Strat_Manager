@@ -213,6 +213,13 @@ jobs:
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
               content = re.sub(r'^/?\n+', '', content, flags=re.MULTILINE)
 
+              # Eliminar menú 'Other Sections' y sus entradas
+              content = re.sub(r'### Other Sections\n([\s\S]*?)(?=\n### |\n---|\n# |\n\Z)', '', content, flags=re.MULTILINE)
+              content = re.sub(r'- \[/?Documentation\]\([^)]+\)\n', '', content)
+              content = re.sub(r'- \[/?private-repo\]\([^)]+\)\n', '', content)
+              content = re.sub(r'- \[Documentation\]\([^)]+\)\n', '', content)
+              content = re.sub(r'- \[/\]\([^)]+\)\n', '', content)
+
               # Remove DeepWiki UI elements
               content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
