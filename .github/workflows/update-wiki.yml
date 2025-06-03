@@ -617,6 +617,64 @@ jobs:
               
               print(f"Found {len(pages_content)} content sections")
               
+              # 🔍 INVESTIGATE: Analyze content structure for image patterns
+              print('\n🔍 CONTENT ANALYSIS:')
+              print('=' * 50)
+              
+              total_content = '\n'.join(str(content) for content in pages_content)
+              print(f'📄 Total content length: {len(total_content)} characters')
+              
+              # Look for different image patterns across all content
+              img_tags = total_content.count('<img')
+              svg_tags = total_content.count('<svg')
+              background_imgs = total_content.count('background-image')
+              data_src = total_content.count('data-src')
+              src_attrs = total_content.count('src=')
+              base64_imgs = total_content.count('data:image')
+              
+              print(f'📊 Image pattern analysis across all sections:')
+              print(f'   • <img tags: {img_tags}')
+              print(f'   • <svg tags: {svg_tags}')
+              print(f'   • background-image: {background_imgs}')
+              print(f'   • data-src attributes: {data_src}')
+              print(f'   • src attributes: {src_attrs}')
+              print(f'   • base64 images: {base64_imgs}')
+              
+              # Look for React/Vue components or other image patterns
+              react_img = total_content.count('Image')
+              react_figure = total_content.count('Figure')
+              media_patterns = total_content.count('media')
+              asset_patterns = total_content.count('asset')
+              cdn_patterns = total_content.count('cdn')
+              
+              print(f'\\n🔧 Framework and content patterns:')
+              print(f'   • Image components: {react_img}')
+              print(f'   • Figure components: {react_figure}')
+              print(f'   • Media references: {media_patterns}')
+              print(f'   • Asset references: {asset_patterns}')
+              print(f'   • CDN references: {cdn_patterns}')
+              
+              # Sample content for investigation
+              if len(total_content) > 2000:
+                  sample = total_content[:2000] + '...'
+                  print(f'\\n📝 Content sample (first 2000 chars):')
+                  print('-' * 30)
+                  print(repr(sample))
+                  print('-' * 30)
+              
+              # Look for alternative patterns like markdown images, CSS references, etc.
+              markdown_imgs = total_content.count('![')
+              css_urls = total_content.count('url(')
+              http_refs = total_content.count('http')
+              
+              print(f'\\n🌐 Alternative image patterns:')
+              print(f'   • Markdown images (![): {markdown_imgs}')
+              print(f'   • CSS url() references: {css_urls}')
+              print(f'   • HTTP/HTTPS links: {http_refs}')
+              
+              print('=' * 50)
+              print('🔍 End of content analysis\\n')
+              
               # Structure to organize content by hierarchy
               organized_content = {
                   'main_sections': {},
@@ -626,8 +684,28 @@ jobs:
               
               # Process each page/section
               for i, content in enumerate(pages_content):
-                  print(f"\nProcessing content section {i+1}...")
+                  print(f"\n🔄 Processing content section {i+1}/{len(pages_content)}...")
                   print(f"Content length: {len(content)} characters")
+                  
+                  # 🔍 SECTION ANALYSIS: Check this specific section for image patterns
+                  section_img_tags = str(content).count('<img')
+                  section_src_attrs = str(content).count('src=')
+                  section_markdown_imgs = str(content).count('![')
+                  section_http_refs = str(content).count('http')
+                  
+                  print(f"📊 Section {i+1} image analysis:")
+                  print(f"   • <img tags: {section_img_tags}")
+                  print(f"   • src attributes: {section_src_attrs}")
+                  print(f"   • Markdown images: {section_markdown_imgs}")
+                  print(f"   • HTTP refs: {section_http_refs}")
+                  
+                  # Show a smaller sample of this section's content if it has potential images
+                  if section_img_tags > 0 or section_src_attrs > 0 or section_markdown_imgs > 0:
+                      sample_content = str(content)[:800] + '...' if len(str(content)) > 800 else str(content)
+                      print(f"📝 Section {i+1} content sample (potential images found):")
+                      print('-' * 20)
+                      print(repr(sample_content))
+                      print('-' * 20)
                   
                   # Validate content is not None or empty
                   if not content or len(str(content).strip()) == 0:
