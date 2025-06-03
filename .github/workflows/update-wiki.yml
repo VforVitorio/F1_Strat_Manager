@@ -187,94 +187,93 @@ jobs:
 
       - name: Install Required Dependencies
         run: |
-          echo "Installing required tools for processing..."
-          sudo apt-get update && sudo apt-get install -y jq curl wget
-          echo "✅ Dependencies installed"
+          echo "Installing required tools for processing (including BeautifulSoup for robust HTML parsing)..."
+          sudo apt-get update && sudo apt-get install -y jq curl wget python3-pip
+          pip3 install beautifulsoup4 requests lxml
+          echo "✅ Dependencies installed including BeautifulSoup for HTML parsing"
 
       - name: Create Image Processing Helper Script
         run: |
           cat > image_processor.py << 'EOF'
           import subprocess
-          import re
           import os
           import urllib.parse
           from pathlib import Path
+          from bs4 import BeautifulSoup
+          import requests
 
-          def extract_and_download_images(html_content, base_url, image_dir, downloaded_images):
-              """Extract image URLs from HTML and download them"""
-              # Find all img tags with various attribute patterns
-              img_patterns = [
-                  r'<img\s+[^>]*src=["\'](.*?)["\'][^>]*>',  # Standard img with quotes
-                  r'<img\s+[^>]*src=([^\s>]+)[^>]*>',        # Img without quotes
-                  r'!\[([^\]]*)\]\(([^)]+)\)',               # Markdown images
-                  r'<img[^>]*src="([^"]*)"[^>]*>',           # Double quotes
-                  r"<img[^>]*src='([^']*)'[^>]*>",           # Single quotes
-                  r'<figure[^>]*>.*?<img[^>]*src=["\'](.*?)["\'][^>]*>.*?</figure>'  # Figure wrapped images
-              ]
+          def extract_and_download_images_with_soup(html_content, base_url, image_dir, downloaded_images):
+              """Extract image URLs from HTML using BeautifulSoup and download them"""
+              print(f"🔍 Processing HTML content for images (length: {len(html_content)} chars)...")
               
-              images_found = []
+              # Parse HTML with BeautifulSoup - much more robust than regex
+              try:
+                  soup = BeautifulSoup(html_content, 'html.parser')
+              except Exception as e:
+                  print(f"❌ Error parsing HTML with BeautifulSoup: {e}")
+                  return {}
               
-              print(f"Scanning content for images (length: {len(html_content)} chars)...")
+              # Find all img tags
+              img_tags = soup.find_all('img')
+              print(f"🖼️ Found {len(img_tags)} <img> tags in HTML")
               
-              for i, pattern in enumerate(img_patterns):
-                  matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
-                  print(f"Pattern {i+1}: Found {len(matches)} matches")
-                  
-                  if pattern.startswith('!'):  # Markdown pattern
-                      images_found.extend([(m[1], m[0]) for m in matches])
-                  elif 'figure' in pattern.lower():  # Figure pattern
-                      for match in matches:
-                          images_found.append((match, ''))
-                  else:
-                      # Extract alt text if available for each match
-                      for match in matches:
-                          # Look for alt text in the surrounding context
-                          img_start = html_content.find(match)
-                          if img_start != -1:
-                              img_context = html_content[max(0, img_start-200):img_start+200]
-                              alt_match = re.search(r'alt=["\'](.*?)["\']', img_context, re.IGNORECASE)
-                              alt_text = alt_match.group(1) if alt_match else ''
-                          else:
-                              alt_text = ''
-                          images_found.append((match, alt_text))
-              
-              print(f"Total images found: {len(images_found)}")
-              for i, (url, alt) in enumerate(images_found[:5]):  # Show first 5
-                  print(f"  {i+1}. {url[:60]}... (alt: {alt[:30]}...)")
+              if len(img_tags) > 0:
+                  print("📝 Sample img tags found:")
+                  for i, img in enumerate(img_tags[:3]):  # Show first 3
+                      print(f"  {i+1}. {str(img)[:100]}...")
               
               downloaded_paths = {}
               
-              for img_url, alt_text in images_found:
+              for i, img_tag in enumerate(img_tags):
+                  src = img_tag.get('src')
+                  alt = img_tag.get('alt', '')
+                  
+                  if not src:
+                      print(f"⚠️ Skipping img tag {i+1}: no src attribute")
+                      continue
+                  
                   # Skip if already downloaded
-                  if img_url in downloaded_images:
-                      downloaded_paths[img_url] = downloaded_images[img_url]
+                  if src in downloaded_images:
+                      downloaded_paths[src] = downloaded_images[src]
+                      print(f"♻️ Already downloaded: {src}")
                       continue
                   
                   try:
-                      # Handle relative and absolute URLs
-                      if img_url.startswith('http://') or img_url.startswith('https://'):
-                          full_url = img_url
-                      elif img_url.startswith('//'):
-                          full_url = 'https:' + img_url
-                      elif img_url.startswith('/'):
+                      # Build absolute URL
+                      if src.startswith('http://') or src.startswith('https://'):
+                          full_url = src
+                      elif src.startswith('//'):
+                          full_url = 'https:' + src
+                      elif src.startswith('/'):
                           # Extract base domain from base_url
                           parsed = urllib.parse.urlparse(base_url)
-                          full_url = f"{parsed.scheme}://{parsed.netloc}{img_url}"
+                          full_url = f"{parsed.scheme}://{parsed.netloc}{src}"
                       else:
                           # Relative URL
-                          full_url = urllib.parse.urljoin(base_url, img_url)
+                          full_url = urllib.parse.urljoin(base_url, src)
                       
-                      # Generate local filename
+                      print(f"🌐 Processing image {i+1}/{len(img_tags)}: {full_url}")
+                      
+                      # Generate descriptive filename
                       url_path = urllib.parse.urlparse(full_url).path
-                      if url_path:
+                      if url_path and url_path != '/':
                           filename = os.path.basename(url_path)
-                          if not filename or filename == '/':
-                              filename = f"image_{len(downloaded_images)}.png"
+                          if not filename or '.' not in filename:
+                              # No extension, try to get from URL or use default
+                              filename = f"image_{i+1}.png"
                       else:
-                          filename = f"image_{len(downloaded_images)}.png"
+                          # Generate descriptive name from alt text or use default
+                          if alt:
+                              safe_alt = "".join(c for c in alt if c.isalnum() or c in (' ', '-', '_')).strip()
+                              safe_alt = safe_alt.replace(' ', '_')[:30]  # Limit length
+                              filename = f"{safe_alt}_{i+1}.png"
+                          else:
+                              filename = f"image_{i+1}.png"
                       
                       # Ensure unique filename
                       base_name, ext = os.path.splitext(filename)
+                      if not ext:
+                          ext = '.png'  # Default extension
                       counter = 1
                       while os.path.exists(os.path.join(image_dir, filename)):
                           filename = f"{base_name}_{counter}{ext}"
@@ -282,96 +281,136 @@ jobs:
                       
                       local_path = os.path.join(image_dir, filename)
                       
-                      # Download image using curl
-                      print(f"Downloading image: {full_url} -> {local_path}")
-                      result = subprocess.run(
-                          ['curl', '-L', '-s', '-o', local_path, '--create-dirs', '--max-time', '30', '--user-agent', 'Mozilla/5.0 (compatible; GitHubActions)', full_url],
-                          capture_output=True,
-                          text=True
-                      )
+                      # Download using requests with proper headers
+                      success = download_image_with_requests(full_url, local_path)
                       
-                      if result.returncode == 0 and os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-                          # Store relative path for markdown (relative to docs directory)
+                      if success:
+                          # Store relative path for markdown
                           relative_path = f"images/{filename}"
-                          downloaded_images[img_url] = relative_path
-                          downloaded_paths[img_url] = (relative_path, alt_text)
+                          downloaded_images[src] = relative_path
+                          downloaded_paths[src] = (relative_path, alt)
                           print(f"✅ Downloaded: {filename} -> {relative_path}")
                       else:
                           print(f"❌ Failed to download: {full_url}")
-                          if result.returncode != 0:
-                              print(f"    Curl error code: {result.returncode}")
-                          if result.stderr:
-                              print(f"    Curl stderr: {result.stderr.decode()}")
-                          downloaded_paths[img_url] = (None, alt_text)
-                          # Clean up empty file if created
-                          if os.path.exists(local_path) and os.path.getsize(local_path) == 0:
-                              os.remove(local_path)
+                          downloaded_paths[src] = (None, alt)
                       
                   except Exception as e:
-                      print(f"❌ Error downloading {img_url}: {e}")
-                      downloaded_paths[img_url] = (None, alt_text)
+                      print(f"❌ Error processing image {src}: {e}")
+                      downloaded_paths[src] = (None, alt)
               
+              print(f"📊 Image processing summary: {len(downloaded_paths)} total, {len([p for p in downloaded_paths.values() if p[0]])} successful downloads")
               return downloaded_paths
 
+          def download_image_with_requests(url, dest_path):
+              """Download image using requests with proper error handling"""
+              try:
+                  # Create directory if it doesn't exist
+                  os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                  
+                  # Download with requests (more reliable than curl for this use case)
+                  headers = {
+                      'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions; +https://github.com)',
+                      'Accept': 'image/*,*/*;q=0.8',
+                      'Accept-Language': 'en-US,en;q=0.5',
+                      'Accept-Encoding': 'gzip, deflate',
+                      'DNT': '1',
+                      'Connection': 'keep-alive',
+                      'Upgrade-Insecure-Requests': '1',
+                  }
+                  
+                  response = requests.get(url, headers=headers, timeout=30, stream=True)
+                  response.raise_for_status()
+                  
+                  # Check if we actually got image content
+                  content_type = response.headers.get('content-type', '')
+                  if not content_type.startswith('image/'):
+                      print(f"⚠️ Warning: Content-Type is '{content_type}', may not be an image")
+                  
+                  # Write the image data
+                  with open(dest_path, 'wb') as f:
+                      for chunk in response.iter_content(chunk_size=8192):
+                          f.write(chunk)
+                  
+                  # Verify file was created and has content
+                  if os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
+                      file_size = os.path.getsize(dest_path)
+                      print(f"  📁 File saved: {os.path.basename(dest_path)} ({file_size} bytes)")
+                      return True
+                  else:
+                      print(f"  ❌ File not created or empty: {dest_path}")
+                      return False
+                      
+              except requests.exceptions.RequestException as e:
+                  print(f"  ❌ Request error: {e}")
+                  return False
+              except Exception as e:
+                  print(f"  ❌ Unexpected error: {e}")
+                  return False
+
           def convert_html_to_markdown_with_images(html_content, image_paths):
-              """Convert HTML to Markdown while preserving image positions"""
-              content = html_content
+              """Convert HTML to Markdown while replacing <img> tags with Markdown syntax"""
+              print(f"🔄 Converting HTML to Markdown with {len(image_paths)} image replacements")
               
-              # Debug: Print found images
-              print(f"Converting {len(image_paths)} images in content")
+              # Parse HTML again for replacement
+              try:
+                  soup = BeautifulSoup(html_content, 'html.parser')
+              except Exception as e:
+                  print(f"❌ Error parsing HTML for conversion: {e}")
+                  return html_content
               
-              # First, handle img tags
-              for img_url, (local_path, alt_text) in image_paths.items():
-                  if local_path:
-                      # Replace HTML img with Markdown image
-                      markdown_img = f"![{alt_text or 'Image'}]({local_path})"
-                      print(f"Converting image: {img_url} -> {markdown_img}")
-                  else:
-                      # Image couldn't be downloaded
-                      markdown_img = f"[IMAGE NOT AVAILABLE: {os.path.basename(img_url) or 'unknown'}]"
-                      print(f"Image not available: {img_url}")
-                  
-                  # Replace various img tag patterns with escaped URL for regex
-                  escaped_url = re.escape(img_url)
-                  patterns = [
-                      rf'<img\s+[^>]*src=["\']?{escaped_url}["\']?[^>]*>',
-                      rf'<img\s+[^>]*src={escaped_url}[^>]*>',
-                      rf'!\[[^\]]*\]\({escaped_url}\)',
-                      # Also try without quotes
-                      rf'<img[^>]*src="{re.escape(img_url)}"[^>]*>',
-                      rf"<img[^>]*src='{re.escape(img_url)}'[^>]*>"
-                  ]
-                  
-                  for pattern in patterns:
-                      old_content = content
-                      content = re.sub(pattern, markdown_img, content, flags=re.IGNORECASE)
-                      if content != old_content:
-                          print(f"✅ Replaced image pattern: {pattern[:50]}...")
-                          break
-                  else:
-                      print(f"⚠️ No pattern matched for: {img_url}")
+              # Replace each img tag with Markdown syntax
+              replacements_made = 0
+              for img_tag in soup.find_all('img'):
+                  src = img_tag.get('src')
+                  if src in image_paths:
+                      local_path, alt_text = image_paths[src]
+                      if local_path:
+                          # Create Markdown image syntax
+                          markdown_img = f"![{alt_text or 'Image'}]({local_path})"
+                          print(f"  🔄 Replacing <img> with: {markdown_img}")
+                      else:
+                          # Image couldn't be downloaded
+                          filename = os.path.basename(src) if src else 'unknown'
+                          markdown_img = f"[IMAGE NOT AVAILABLE: {filename}]"
+                          print(f"  ⚠️ Replacing with placeholder: {markdown_img}")
+                      
+                      # Replace the img tag in the soup
+                      img_tag.replace_with(markdown_img)
+                      replacements_made += 1
               
-              return content
+              print(f"✅ Made {replacements_made} image replacements")
+              return str(soup)
+
+          # Legacy function names for backward compatibility
+          def extract_and_download_images(html_content, base_url, image_dir, downloaded_images):
+              """Legacy wrapper - now uses BeautifulSoup instead of regex"""
+              return extract_and_download_images_with_soup(html_content, base_url, image_dir, downloaded_images)
           EOF
-          echo "✅ Image processing helper created"
+          echo "✅ Image processing helper created (now using BeautifulSoup instead of unreliable regex)"
 
       - name: Create Content Processing Helper Script
         run: |
           cat > content_processor.py << 'EOF'
           import re
-          from image_processor import extract_and_download_images, convert_html_to_markdown_with_images
+          from image_processor import extract_and_download_images_with_soup, convert_html_to_markdown_with_images
 
           def clean_deepwiki_content(content, preserve_images=True, image_dir="", base_url="", downloaded_images={}):
               """Clean and format DeepWiki content for GitHub Wiki"""
               
-              # Extract and download images before cleaning
+              # Extract and download images FIRST using robust BeautifulSoup parsing
               image_paths = {}
               if preserve_images:
-                  image_paths = extract_and_download_images(content, base_url, image_dir, downloaded_images)
+                  print("🖼️ Starting image extraction and download process...")
+                  image_paths = extract_and_download_images_with_soup(content, base_url, image_dir, downloaded_images)
+                  print(f"📊 Image extraction completed: {len(image_paths)} images processed")
               
               # Convert HTML to Markdown with images
               if image_paths:
+                  print("🔄 Converting HTML to Markdown with image replacements...")
                   content = convert_html_to_markdown_with_images(content, image_paths)
+                  print("✅ HTML to Markdown conversion completed")
+              else:
+                  print("ℹ️ No images found, proceeding with text-only conversion")
               
               # Continue with existing cleaning logic...
               # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
@@ -446,7 +485,7 @@ jobs:
                   return "unknown-section"
               return filename
           EOF
-          echo "✅ Content processing helper created"
+          echo "✅ Content processing helper created (now with improved BeautifulSoup-based image handling)"
 
       - name: Create Section Categorization Helper Script
         run: |
@@ -533,6 +572,7 @@ jobs:
           import os
           import re
           from pathlib import Path
+          from bs4 import BeautifulSoup
           from content_processor import clean_deepwiki_content, get_page_title_from_content
           from section_categorizer import categorize_section
 
@@ -599,17 +639,26 @@ jobs:
                       print(f"Converting content to string for section {i+1}")
                       content = str(content)
                   
-                  # Debug: Check for images in raw content before cleaning
-                  img_check_patterns = [r'<img[^>]*>', r'!\[.*?\]\([^)]*\)']
-                  total_imgs_before = sum(len(re.findall(p, content, re.IGNORECASE)) for p in img_check_patterns)
-                  print(f"Images found in raw content: {total_imgs_before}")
-                  
-                  if total_imgs_before > 0:
-                      print("Sample image tags found:")
-                      for pattern in img_check_patterns:
-                          matches = re.findall(pattern, content, re.IGNORECASE)
-                          for j, match in enumerate(matches[:2]):  # Show first 2 of each type
-                              print(f"  {j+1}. {match[:100]}...")
+                  # Debug: Check for images in raw content before cleaning using BeautifulSoup
+                  from bs4 import BeautifulSoup
+                  try:
+                      soup = BeautifulSoup(content, 'html.parser')
+                      img_tags = soup.find_all('img')
+                      total_imgs_before = len(img_tags)
+                      print(f"🖼️ Images found in raw content (BeautifulSoup): {total_imgs_before}")
+                      
+                      if total_imgs_before > 0:
+                          print("📝 Sample image tags found:")
+                          for j, img in enumerate(img_tags[:3]):  # Show first 3
+                              src = img.get('src', 'No src')
+                              alt = img.get('alt', 'No alt')
+                              print(f"  {j+1}. src='{src[:60]}...' alt='{alt[:30]}...'")
+                  except Exception as e:
+                      print(f"⚠️ Error parsing HTML for image preview: {e}")
+                      # Fallback to regex for basic counting
+                      img_check_patterns = [r'<img[^>]*>', r'!\[.*?\]\([^)]*\)']
+                      total_imgs_before = sum(len(re.findall(p, content, re.IGNORECASE)) for p in img_check_patterns)
+                      print(f"Images found in raw content (regex fallback): {total_imgs_before}")
                   
                   # Clean the content (with image support)
                   cleaned_content = clean_deepwiki_content(
@@ -849,34 +898,59 @@ jobs:
         run: |
           # Verify we have files to copy
           if [ ! -d ${{ env.DOCS_DIR }} ] || [ -z "$(ls -A ${{ env.DOCS_DIR }}/*.md 2>/dev/null)" ]; then
-            echo "Error: No markdown files to copy"
+            echo "❌ Error: No markdown files to copy"
             exit 1
           fi
-          echo "Files to copy:"
+          echo "📁 Files to copy:"
           ls -la ${{ env.DOCS_DIR }}/
 
           # Ensure wiki directory exists
           if [ ! -d ${{ env.WIKI_DIR }} ]; then
-            echo "Error: Wiki directory not found"
+            echo "❌ Error: Wiki directory not found"
             exit 1
           fi
-          echo "Current wiki contents:"
+          echo "📂 Current wiki contents:"
           ls -la ${{ env.WIKI_DIR }}/
 
           # Copy ALL markdown files to wiki
+          echo "📄 Copying Markdown files..."
           cp ${{ env.DOCS_DIR }}/*.md ${{ env.WIKI_DIR }}/
+          MARKDOWN_COUNT=$(ls -1 ${{ env.DOCS_DIR }}/*.md | wc -l)
+          echo "✅ Copied $MARKDOWN_COUNT Markdown files"
 
-          # Copy images directory if it exists and has content
-          if [ -d "${{ env.IMAGE_DIR }}" ] && [ "$(ls -A ${{ env.IMAGE_DIR }})" ]; then
-            echo "Copying images to wiki..."
-            # Create images directory in wiki
-            mkdir -p ${{ env.WIKI_DIR }}/images
-            # Copy all images preserving directory structure
-            cp -r ${{ env.IMAGE_DIR }}/* ${{ env.WIKI_DIR }}/images/
-            echo "Images copied:"
-            ls -la ${{ env.WIKI_DIR }}/images/
+          # Copy images directory with enhanced logging and error handling
+          if [ -d "${{ env.IMAGE_DIR }}" ]; then
+            IMAGE_COUNT=$(find "${{ env.IMAGE_DIR }}" -type f -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" -o -name "*.webp" | wc -l)
+            
+            if [ $IMAGE_COUNT -gt 0 ]; then
+              echo "🖼️ Found $IMAGE_COUNT image files to copy..."
+              # Create images directory in wiki
+              mkdir -p ${{ env.WIKI_DIR }}/images
+              
+              # Copy all images preserving directory structure
+              echo "📋 Copying images to wiki/images/..."
+              cp -r ${{ env.IMAGE_DIR }}/* ${{ env.WIKI_DIR }}/images/ 2>/dev/null || {
+                echo "⚠️ Warning: Some image files could not be copied"
+                # Try copying individual files instead
+                find "${{ env.IMAGE_DIR }}" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" -o -name "*.webp" \) -exec cp {} ${{ env.WIKI_DIR }}/images/ \;
+              }
+              
+              # Verify images were copied
+              COPIED_COUNT=$(find "${{ env.WIKI_DIR }}/images/" -type f 2>/dev/null | wc -l)
+              echo "✅ Successfully copied $COPIED_COUNT image files"
+              
+              if [ $COPIED_COUNT -gt 0 ]; then
+                echo "🖼️ Images copied to wiki:"
+                ls -la ${{ env.WIKI_DIR }}/images/ | head -10
+                if [ $COPIED_COUNT -gt 10 ]; then
+                  echo "   ... and $(($COPIED_COUNT - 10)) more images"
+                fi
+              fi
+            else
+              echo "ℹ️ No image files found in ${{ env.IMAGE_DIR }}"
+            fi
           else
-            echo "No images to copy"
+            echo "ℹ️ No images directory found (${{ env.IMAGE_DIR }})"
           fi
 
           # Create or update index page with hierarchical structure
@@ -944,7 +1018,7 @@ jobs:
           *🖼️ Images and diagrams are included where available. If an image is missing, please check the [DeepWiki source](https://deepwiki.com/VforVitorio/F1_Strat_Manager).*
           EOF
 
-          echo "Files copied to wiki:"
+          echo "📂 Final wiki contents:"
           ls -la ${{ env.WIKI_DIR }}/
 
       - name: Commit & Push changes
@@ -956,15 +1030,37 @@ jobs:
 
           # Check if there are changes before committing
           if git diff --quiet --staged; then
-            echo "No changes to commit"
+            echo "ℹ️ No changes to commit"
           else
-            # Count images if any
-            IMAGE_COUNT=$(find . -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" | wc -l)
+            # Count different types of files
+            IMAGE_COUNT=$(find . -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" -o -name "*.webp" | wc -l)
+            MD_COUNT=$(find . -name "*.md" | wc -l)
+            
+            # Build comprehensive commit message
             COMMIT_MSG="🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
+            COMMIT_MSG="$COMMIT_MSG"$'\n'"📄 Updated $MD_COUNT Markdown files with hierarchical documentation"
+            
             if [ $IMAGE_COUNT -gt 0 ]; then
-              COMMIT_MSG="$COMMIT_MSG (includes $IMAGE_COUNT images)"
+              COMMIT_MSG="$COMMIT_MSG"$'\n'"🖼️ Includes $IMAGE_COUNT images downloaded from DeepWiki"
+            else
+              COMMIT_MSG="$COMMIT_MSG"$'\n'"ℹ️ No images found in this update"
             fi
+            
+            COMMIT_MSG="$COMMIT_MSG"$'\n'$'\n'"Generated using BeautifulSoup-based HTML parsing for robust image extraction"
+            
+            echo "📝 Commit message:"
+            echo "$COMMIT_MSG"
+            echo ""
+            
             git commit -m "$COMMIT_MSG"
             git push
-            echo "Changes pushed successfully"
+            echo "✅ Changes pushed successfully to wiki"
+            
+            # Final summary
+            echo ""
+            echo "🎉 Wiki update completed successfully!"
+            echo "📊 Summary:"
+            echo "  - Markdown files: $MD_COUNT"
+            echo "  - Images: $IMAGE_COUNT"
+            echo "  - Using: BeautifulSoup HTML parsing (replaces unreliable regex)"
           fi
