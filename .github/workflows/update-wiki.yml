@@ -23,6 +23,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Chrome for Selenium
+        uses: browser-actions/setup-chrome@latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
       - name: Clone DeepWiki MCP
         run: |
           git clone https://github.com/regenrek/deepwiki-mcp.git deepwiki-mcp
@@ -187,10 +195,10 @@ jobs:
 
       - name: Install Required Dependencies
         run: |
-          echo "Installing required tools for processing (including BeautifulSoup for robust HTML parsing)..."
+          echo "Installing required tools for processing (including BeautifulSoup and Selenium for web scraping)..."
           sudo apt-get update && sudo apt-get install -y jq curl wget python3-pip
-          pip3 install beautifulsoup4 requests lxml
-          echo "✅ Dependencies installed including BeautifulSoup for HTML parsing"
+          pip3 install beautifulsoup4 requests lxml selenium webdriver-manager
+          echo "✅ Dependencies installed including BeautifulSoup, Selenium, and WebDriver Manager"
 
       - name: Create Image Processing Helper Script
         run: |
@@ -675,6 +683,158 @@ jobs:
               print('=' * 50)
               print('🔍 End of content analysis\\n')
               
+              # 🌐 WEB SCRAPING: Extract SVG diagrams directly from DeepWiki web interface
+              print('\n🌐 EXTRACTING SVG DIAGRAMS FROM WEB INTERFACE:')
+              print('=' * 60)
+              
+              import requests
+              from selenium import webdriver
+              from selenium.webdriver.chrome.options import Options
+              from selenium.webdriver.common.by import By
+              from selenium.webdriver.support.ui import WebDriverWait
+              from selenium.webdriver.support import expected_conditions as EC
+              from webdriver_manager.chrome import ChromeDriverManager
+              from selenium.webdriver.chrome.service import Service
+              import time
+              import base64
+              
+              def extract_svg_diagrams(url):
+                  """Extract SVG diagrams from DeepWiki web interface"""
+                  print(f"🔍 Scraping SVG diagrams from: {url}")
+                  
+                  # Setup headless Chrome
+                  chrome_options = Options()
+                  chrome_options.add_argument("--headless")
+                  chrome_options.add_argument("--no-sandbox")
+                  chrome_options.add_argument("--disable-dev-shm-usage")
+                  chrome_options.add_argument("--disable-gpu")
+                  chrome_options.add_argument("--window-size=1920,1080")
+                  
+                  try:
+                      # Setup Chrome driver with webdriver-manager
+                      service = Service(ChromeDriverManager().install())
+                      driver = webdriver.Chrome(service=service, options=chrome_options)
+                      driver.get(url)
+                      
+                      # Wait for page to load completely
+                      print("⏳ Waiting for page to load...")
+                      time.sleep(5)
+                      
+                      # Wait for any dynamic content
+                      try:
+                          WebDriverWait(driver, 10).until(
+                              EC.presence_of_element_located((By.TAG_NAME, "svg"))
+                          )
+                          print("✅ SVG elements detected!")
+                      except:
+                          print("⚠️ No SVG elements found with WebDriverWait, continuing...")
+                      
+                      # Extract all SVG elements
+                      svg_elements = driver.find_elements(By.TAG_NAME, "svg")
+                      print(f"📊 Found {len(svg_elements)} SVG elements")
+                      
+                      extracted_svgs = []
+                      
+                      for i, svg in enumerate(svg_elements):
+                          try:
+                              # Get SVG content
+                              svg_html = svg.get_attribute('outerHTML')
+                              
+                              if svg_html and len(svg_html) > 100:  # Skip very small SVGs
+                                  # Extract dimensions and content info
+                                  width = svg.get_attribute('width') or 'auto'
+                                  height = svg.get_attribute('height') or 'auto'
+                                  viewbox = svg.get_attribute('viewBox') or 'not-set'
+                                  
+                                  print(f"  📋 SVG {i+1}: width={width}, height={height}, viewBox={viewbox}")
+                                  print(f"      Content length: {len(svg_html)} characters")
+                                  
+                                  # Determine diagram type based on content
+                                  diagram_type = "unknown"
+                                  if "flowchart" in svg_html.lower():
+                                      diagram_type = "flowchart"
+                                  elif "mermaid" in svg_html.lower():
+                                      diagram_type = "mermaid"
+                                  elif "system" in svg_html.lower() or "architecture" in svg_html.lower():
+                                      diagram_type = "system-architecture"
+                                  
+                                  # Save SVG file
+                                  svg_filename = f"diagram-{diagram_type}-{i+1}.svg"
+                                  svg_path = f"{IMAGE_DIR}/{svg_filename}"
+                                  
+                                  with open(svg_path, 'w', encoding='utf-8') as f:
+                                      # Add XML declaration and clean SVG
+                                      clean_svg = '<?xml version="1.0" encoding="UTF-8"?>\\n' + svg_html
+                                      f.write(clean_svg)
+                                  
+                                  extracted_svgs.append({
+                                      'filename': svg_filename,
+                                      'path': svg_path,
+                                      'type': diagram_type,
+                                      'width': width,
+                                      'height': height,
+                                      'size': len(svg_html)
+                                  })
+                                  
+                                  print(f"      ✅ Saved as: {svg_filename}")
+                          
+                          except Exception as e:
+                              print(f"      ❌ Error processing SVG {i+1}: {e}")
+                      
+                      # Also look for any canvas elements or other image containers
+                      canvas_elements = driver.find_elements(By.TAG_NAME, "canvas")
+                      if canvas_elements:
+                          print(f"\\n🎨 Found {len(canvas_elements)} canvas elements")
+                          for i, canvas in enumerate(canvas_elements):
+                              try:
+                                  # Try to extract canvas as image
+                                  canvas_data = driver.execute_script(
+                                      "return arguments[0].toDataURL('image/png');", canvas
+                                  )
+                                  if canvas_data:
+                                      # Save canvas as PNG
+                                      img_data = canvas_data.split(',')[1]
+                                      img_binary = base64.b64decode(img_data)
+                                      
+                                      canvas_filename = f"canvas-diagram-{i+1}.png"
+                                      canvas_path = f"{IMAGE_DIR}/{canvas_filename}"
+                                      
+                                      with open(canvas_path, 'wb') as f:
+                                          f.write(img_binary)
+                                      
+                                      extracted_svgs.append({
+                                          'filename': canvas_filename,
+                                          'path': canvas_path,
+                                          'type': 'canvas-diagram',
+                                          'format': 'png'
+                                      })
+                                      
+                                      print(f"      ✅ Canvas saved as: {canvas_filename}")
+                              except Exception as e:
+                                  print(f"      ❌ Error processing canvas {i+1}: {e}")
+                      
+                      return extracted_svgs
+                      
+                  except Exception as e:
+                      print(f"❌ Error during web scraping: {e}")
+                      return []
+                  finally:
+                      try:
+                          driver.quit()
+                      except:
+                          pass
+              
+              # Extract diagrams from the main DeepWiki page
+              extracted_diagrams = extract_svg_diagrams(DEEPWIKI_URL)
+              
+              print(f"\\n📊 EXTRACTION SUMMARY:")
+              print(f"   • Total diagrams extracted: {len(extracted_diagrams)}")
+              for diag in extracted_diagrams:
+                  print(f"   • {diag['filename']} ({diag['type']}) - {diag.get('size', 'unknown')} chars")
+              
+              print('=' * 60)
+              print('🌐 End of SVG extraction\\n')
+              
               # Structure to organize content by hierarchy
               organized_content = {
                   'main_sections': {},
@@ -1031,7 +1191,10 @@ jobs:
             echo "ℹ️ No images directory found (${{ env.IMAGE_DIR }})"
           fi
 
-          # Create or update index page with hierarchical structure
+          # Create or update index page with hierarchical structure and dynamic SVG diagram listing
+          echo "📝 Creating Home.md with SVG diagram detection..."
+
+          # First create the basic Home.md structure
           cat > ${{ env.WIKI_DIR }}/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
 
@@ -1040,6 +1203,32 @@ jobs:
 
           ## 📋 Complete Documentation
           - **[📖 Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections organized hierarchically
+
+          ## 🖼️ System Diagrams
+          The following SVG diagrams have been extracted directly from the DeepWiki interface:
+
+          EOF
+
+          # Add SVG diagram references dynamically
+          if [ -d "${{ env.WIKI_DIR }}/images" ]; then
+            SVG_COUNT=$(find "${{ env.WIKI_DIR }}/images" -name "diagram-*.svg" 2>/dev/null | wc -l)
+            if [ $SVG_COUNT -gt 0 ]; then
+              echo "Found $SVG_COUNT SVG diagrams to reference"
+              for svg_file in ${{ env.WIKI_DIR }}/images/diagram-*.svg; do
+                if [ -f "$svg_file" ]; then
+                  filename=$(basename "$svg_file")
+                  echo "- **[🏗️ $filename](images/$filename)** - System diagram extracted from DeepWiki" >> ${{ env.WIKI_DIR }}/Home.md
+                fi
+              done
+            else
+              echo "- *SVG diagrams will be extracted during the next workflow run*" >> ${{ env.WIKI_DIR }}/Home.md
+            fi
+          else
+            echo "- *SVG diagrams will be extracted during the next workflow run*" >> ${{ env.WIKI_DIR }}/Home.md
+          fi
+
+          # Continue with the rest of the Home.md content
+          cat >> ${{ env.WIKI_DIR }}/Home.md << 'EOF'
 
           ## 🗂️ Documentation Structure
 
@@ -1093,7 +1282,8 @@ jobs:
           ---
 
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
-          *🖼️ Images and diagrams are included where available. If an image is missing, please check the [DeepWiki source](https://deepwiki.com/VforVitorio/F1_Strat_Manager).*
+          *🖼️ Images and diagrams are included where available. SVG diagrams are extracted directly from the DeepWiki web interface.*
+          *If a diagram is missing, please check the [DeepWiki source](https://deepwiki.com/VforVitorio/F1_Strat_Manager).*
           EOF
 
           echo "📂 Final wiki contents:"
@@ -1115,16 +1305,18 @@ jobs:
             MD_COUNT=$(find . -name "*.md" | wc -l)
             
             # Build comprehensive commit message
-            COMMIT_MSG="🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
+            COMMIT_MSG="🔄 Update Complete Wiki from DeepWiki with SVG Extraction - $(date '+%Y-%m-%d %H:%M')"
             COMMIT_MSG="$COMMIT_MSG"$'\n'"📄 Updated $MD_COUNT Markdown files with hierarchical documentation"
             
             if [ $IMAGE_COUNT -gt 0 ]; then
-              COMMIT_MSG="$COMMIT_MSG"$'\n'"🖼️ Includes $IMAGE_COUNT images downloaded from DeepWiki"
+              SVG_COUNT=$(find . -name "*.svg" | wc -l)
+              PNG_COUNT=$(find . -name "*.png" | wc -l)
+              COMMIT_MSG="$COMMIT_MSG"$'\n'"🖼️ Includes $IMAGE_COUNT images: $SVG_COUNT SVG diagrams + $PNG_COUNT other images"
             else
               COMMIT_MSG="$COMMIT_MSG"$'\n'"ℹ️ No images found in this update"
             fi
             
-            COMMIT_MSG="$COMMIT_MSG"$'\n'$'\n'"Generated using BeautifulSoup-based HTML parsing for robust image extraction"
+            COMMIT_MSG="$COMMIT_MSG"$'\n'$'\n'"🌐 Features: Web scraping for SVG extraction, BeautifulSoup HTML parsing, Selenium automation"
             
             echo "📝 Commit message:"
             echo "$COMMIT_MSG"
