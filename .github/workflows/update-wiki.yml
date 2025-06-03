@@ -23,20 +23,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Chrome for Selenium
-        uses: browser-actions/setup-chrome@latest
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
       - name: Clone DeepWiki MCP
         run: |
           git clone https://github.com/regenrek/deepwiki-mcp.git deepwiki-mcp
           cd deepwiki-mcp
           npm install
-
       - name: Build DeepWiki MCP
         working-directory: deepwiki-mcp
         run: |
@@ -64,7 +55,6 @@ jobs:
             echo "Looking for .mjs files in project:"
             find . -name "*.mjs" -type f
           fi
-
       - name: Start DeepWiki MCP (HTTP mode)
         working-directory: deepwiki-mcp
         run: |
@@ -102,7 +92,6 @@ jobs:
           fi
           # Verify process is running
           ps aux | grep node | grep -v grep
-
       - name: Create necessary directories
         run: |
           # Create directories for documentation and images
@@ -110,7 +99,6 @@ jobs:
           mkdir -p ${{ env.IMAGE_DIR }}
           echo "Created directories:"
           ls -la
-
       - name: Export ALL Markdown from DeepWiki
         run: |
           # Verify service is available before making the call
@@ -192,14 +180,12 @@ jobs:
           echo "Response structure:"
           jq -r 'keys' ${{ env.DOCS_DIR }}/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
           head -c 500 ${{ env.DOCS_DIR }}/all-pages-raw.json
-
       - name: Install Required Dependencies
         run: |
-          echo "Installing required tools for processing (including BeautifulSoup and Selenium for web scraping)..."
+          echo "Installing required tools for processing (including BeautifulSoup for robust HTML parsing)..."
           sudo apt-get update && sudo apt-get install -y jq curl wget python3-pip
-          pip3 install beautifulsoup4 requests lxml selenium webdriver-manager
-          echo "✅ Dependencies installed including BeautifulSoup, Selenium, and WebDriver Manager"
-
+          pip3 install beautifulsoup4 requests lxml
+          echo "✅ Dependencies installed including BeautifulSoup for HTML parsing"
       - name: Create Image Processing Helper Script
         run: |
           cat > image_processor.py << 'EOF'
@@ -209,7 +195,6 @@ jobs:
           from pathlib import Path
           from bs4 import BeautifulSoup
           import requests
-
           def extract_and_download_images_with_soup(html_content, base_url, image_dir, downloaded_images):
               """Extract image URLs from HTML using BeautifulSoup and download them"""
               print(f"🔍 Processing HTML content for images (length: {len(html_content)} chars)...")
@@ -308,7 +293,6 @@ jobs:
               
               print(f"📊 Image processing summary: {len(downloaded_paths)} total, {len([p for p in downloaded_paths.values() if p[0]])} successful downloads")
               return downloaded_paths
-
           def download_image_with_requests(url, dest_path):
               """Download image using requests with proper error handling"""
               try:
@@ -354,7 +338,6 @@ jobs:
               except Exception as e:
                   print(f"  ❌ Unexpected error: {e}")
                   return False
-
           def convert_html_to_markdown_with_images(html_content, image_paths):
               """Convert HTML to Markdown while replacing <img> tags with Markdown syntax"""
               print(f"🔄 Converting HTML to Markdown with {len(image_paths)} image replacements")
@@ -388,22 +371,19 @@ jobs:
               
               print(f"✅ Made {replacements_made} image replacements")
               return str(soup)
-
           # Legacy function names for backward compatibility
           def extract_and_download_images(html_content, base_url, image_dir, downloaded_images):
               """Legacy wrapper - now uses BeautifulSoup instead of regex"""
               return extract_and_download_images_with_soup(html_content, base_url, image_dir, downloaded_images)
           EOF
           echo "✅ Image processing helper created (now using BeautifulSoup instead of unreliable regex)"
-
       - name: Create Content Processing Helper Script
         run: |
           cat > content_processor.py << 'EOF'
           import re
           from image_processor import extract_and_download_images_with_soup, convert_html_to_markdown_with_images
-
-          def clean_deepwiki_content(content, preserve_images=True, image_dir="", base_url="", downloaded_images={}, diagram_refs={}):
-              """Clean and format DeepWiki content for GitHub Wiki with SVG diagram integration"""
+          def clean_deepwiki_content(content, preserve_images=True, image_dir="", base_url="", downloaded_images={}):
+              """Clean and format DeepWiki content for GitHub Wiki"""
               
               # Extract and download images FIRST using robust BeautifulSoup parsing
               image_paths = {}
@@ -419,45 +399,6 @@ jobs:
                   print("✅ HTML to Markdown conversion completed")
               else:
                   print("ℹ️ No images found, proceeding with text-only conversion")
-              
-              # Integrate SVG diagrams where appropriate
-              if diagram_refs:
-                  print(f"🖼️ Integrating {len(diagram_refs)} SVG diagrams into content...")
-                  # Look for sections that would benefit from diagrams
-                  content_lower = content.lower()
-                  
-                  # Add system architecture diagram
-                  if any(keyword in content_lower for keyword in ['system architecture', 'architecture', 'overview']):
-                      # Find the best SVG diagram for architecture
-                      arch_diagram = None
-                      for key, filename in diagram_refs.items():
-                          if 'flowchart' in key and int(key.split('-')[1]) > 10000:  # Large flowchart
-                              arch_diagram = filename
-                              break
-                      
-                      if arch_diagram:
-                          # Insert diagram after the first heading
-                          lines = content.split('\n')
-                          for i, line in enumerate(lines):
-                              if line.strip().startswith('# ') and i < len(lines) - 1:
-                                  diagram_md = f"\n![System Architecture Diagram](images/{arch_diagram})\n"
-                                  lines.insert(i + 1, diagram_md)
-                                  content = '\n'.join(lines)
-                                  print(f"  ✅ Added architecture diagram: {arch_diagram}")
-                                  break
-                  
-                  # Add workflow diagrams for process-related content
-                  if any(keyword in content_lower for keyword in ['workflow', 'process', 'pipeline', 'flow']):
-                      # Find mermaid or flowchart diagrams
-                      for key, filename in diagram_refs.items():
-                          if 'mermaid' in key or ('flowchart' in key and int(key.split('-')[1]) > 5000):
-                              diagram_md = f"\n![Process Flow Diagram](images/{filename})\n"
-                              # Insert after first paragraph
-                              if '\n\n' in content:
-                                  parts = content.split('\n\n', 1)
-                                  content = parts[0] + diagram_md + '\n' + parts[1]
-                                  print(f"  ✅ Added process diagram: {filename}")
-                                  break
               
               # Continue with existing cleaning logic...
               # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
@@ -513,7 +454,6 @@ jobs:
                       if title:
                           return title
               return "Documentation"
-
           def safe_filename(title, fallback_idx=None):
               """Genera un nombre de archivo seguro a partir del título. Si el título es vacío, usa un fallback único."""
               if not title or len(title.strip()) == 0:
@@ -533,12 +473,10 @@ jobs:
               return filename
           EOF
           echo "✅ Content processing helper created (now with improved BeautifulSoup-based image handling)"
-
       - name: Create Section Categorization Helper Script
         run: |
           cat > section_categorizer.py << 'EOF'
           from content_processor import safe_filename
-
           def categorize_section(title, fallback_idx=None):
               """Categoriza secciones según la jerarquía especificada"""
               title_lower = title.lower() if title else ''
@@ -608,11 +546,9 @@ jobs:
               return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')
           EOF
           echo "✅ Section categorization helper created"
-
       - name: Process DeepWiki Response and Extract Content
         run: |
           echo "Processing multiple pages from DeepWiki response..."
-
           python3 << 'EOF'
           import json
           import sys
@@ -622,18 +558,14 @@ jobs:
           from bs4 import BeautifulSoup
           from content_processor import clean_deepwiki_content, get_page_title_from_content
           from section_categorizer import categorize_section
-
           # Environment variables
           DOCS_DIR = os.environ.get('DOCS_DIR', 'docs-md')
           IMAGE_DIR = os.environ.get('IMAGE_DIR', 'docs-md/images')
           DEEPWIKI_URL = os.environ.get('DEEPWIKI_URL', 'https://deepwiki.com/VforVitorio/F1_Strat_Manager')
-
           # Create image directory
           Path(IMAGE_DIR).mkdir(parents=True, exist_ok=True)
-
           # Track all downloaded images
           downloaded_images = {}
-
           # Read the JSON response
           try:
               with open(f'{DOCS_DIR}/all-pages-raw.json', 'r', encoding='utf-8') as f:
@@ -664,256 +596,6 @@ jobs:
               
               print(f"Found {len(pages_content)} content sections")
               
-              # 🔍 INVESTIGATE: Analyze content structure for image patterns
-              print('\n🔍 CONTENT ANALYSIS:')
-              print('=' * 50)
-              
-              total_content = '\n'.join(str(content) for content in pages_content)
-              print(f'📄 Total content length: {len(total_content)} characters')
-              
-              # Look for different image patterns across all content
-              img_tags = total_content.count('<img')
-              svg_tags = total_content.count('<svg')
-              background_imgs = total_content.count('background-image')
-              data_src = total_content.count('data-src')
-              src_attrs = total_content.count('src=')
-              base64_imgs = total_content.count('data:image')
-              
-              print(f'📊 Image pattern analysis across all sections:')
-              print(f'   • <img tags: {img_tags}')
-              print(f'   • <svg tags: {svg_tags}')
-              print(f'   • background-image: {background_imgs}')
-              print(f'   • data-src attributes: {data_src}')
-              print(f'   • src attributes: {src_attrs}')
-              print(f'   • base64 images: {base64_imgs}')
-              
-              # Look for React/Vue components or other image patterns
-              react_img = total_content.count('Image')
-              react_figure = total_content.count('Figure')
-              media_patterns = total_content.count('media')
-              asset_patterns = total_content.count('asset')
-              cdn_patterns = total_content.count('cdn')
-              
-              print(f'\\n🔧 Framework and content patterns:')
-              print(f'   • Image components: {react_img}')
-              print(f'   • Figure components: {react_figure}')
-              print(f'   • Media references: {media_patterns}')
-              print(f'   • Asset references: {asset_patterns}')
-              print(f'   • CDN references: {cdn_patterns}')
-              
-              # Sample content for investigation
-              if len(total_content) > 2000:
-                  sample = total_content[:2000] + '...'
-                  print(f'\\n📝 Content sample (first 2000 chars):')
-                  print('-' * 30)
-                  print(repr(sample))
-                  print('-' * 30)
-              
-              # Look for alternative patterns like markdown images, CSS references, etc.
-              markdown_imgs = total_content.count('![')
-              css_urls = total_content.count('url(')
-              http_refs = total_content.count('http')
-              
-              print(f'\\n🌐 Alternative image patterns:')
-              print(f'   • Markdown images (![): {markdown_imgs}')
-              print(f'   • CSS url() references: {css_urls}')
-              print(f'   • HTTP/HTTPS links: {http_refs}')
-              
-              print('=' * 50)
-              print('🔍 End of content analysis\\n')
-              
-              # 🌐 WEB SCRAPING: Extract SVG diagrams directly from DeepWiki web interface
-              print('\n🌐 EXTRACTING SVG DIAGRAMS FROM WEB INTERFACE:')
-              print('=' * 60)
-              
-              import requests
-              from selenium import webdriver
-              from selenium.webdriver.chrome.options import Options
-              from selenium.webdriver.common.by import By
-              from selenium.webdriver.support.ui import WebDriverWait
-              from selenium.webdriver.support import expected_conditions as EC
-              from webdriver_manager.chrome import ChromeDriverManager
-              from selenium.webdriver.chrome.service import Service
-              import time
-              import base64
-              
-              def extract_svg_diagrams(url):
-                  """Extract SVG diagrams from DeepWiki web interface"""
-                  print(f"🔍 Scraping SVG diagrams from: {url}")
-                  
-                  # Setup headless Chrome
-                  chrome_options = Options()
-                  chrome_options.add_argument("--headless")
-                  chrome_options.add_argument("--no-sandbox")
-                  chrome_options.add_argument("--disable-dev-shm-usage")
-                  chrome_options.add_argument("--disable-gpu")
-                  chrome_options.add_argument("--window-size=1920,1080")
-                  
-                  try:
-                      # Setup Chrome driver with webdriver-manager
-                      service = Service(ChromeDriverManager().install())
-                      driver = webdriver.Chrome(service=service, options=chrome_options)
-                      driver.get(url)
-                      
-                      # Wait for page to load completely
-                      print("⏳ Waiting for page to load...")
-                      time.sleep(5)
-                      
-                      # Wait for any dynamic content
-                      try:
-                          WebDriverWait(driver, 10).until(
-                              EC.presence_of_element_located((By.TAG_NAME, "svg"))
-                          )
-                          print("✅ SVG elements detected!")
-                      except:
-                          print("⚠️ No SVG elements found with WebDriverWait, continuing...")
-                      
-                      # Extract all SVG elements
-                      svg_elements = driver.find_elements(By.TAG_NAME, "svg")
-                      print(f"📊 Found {len(svg_elements)} SVG elements")
-                      
-                      extracted_svgs = []
-                      
-                      for i, svg in enumerate(svg_elements):
-                          try:
-                              # Get SVG content
-                              svg_html = svg.get_attribute('outerHTML')
-                              
-                              if svg_html and len(svg_html) > 500:  # Increase threshold to filter decorative SVGs
-                                  # Extract dimensions and content info
-                                  width = svg.get_attribute('width') or 'auto'
-                                  height = svg.get_attribute('height') or 'auto'
-                                  viewbox = svg.get_attribute('viewBox') or 'not-set'
-                                  
-                                  print(f"  📋 SVG {i+1}: width={width}, height={height}, viewBox={viewbox}")
-                                  print(f"      Content length: {len(svg_html)} characters")
-                                  
-                                  # Skip very small decorative SVGs (typical UI elements)
-                                  if len(svg_html) < 1000:
-                                      print(f"      ⏭️ Skipping small SVG (likely decorative): {len(svg_html)} chars")
-                                      continue
-                                  
-                                  # Determine diagram type based on content
-                                  diagram_type = "unknown"
-                                  if "flowchart" in svg_html.lower():
-                                      diagram_type = "flowchart"
-                                  elif "mermaid" in svg_html.lower():
-                                      diagram_type = "mermaid"
-                                  elif "system" in svg_html.lower() or "architecture" in svg_html.lower():
-                                      diagram_type = "system-architecture"
-                                  
-                                  # Save SVG file
-                                  svg_filename = f"diagram-{diagram_type}-{i+1}.svg"
-                                  svg_path = f"{IMAGE_DIR}/{svg_filename}"
-                                  
-                                  with open(svg_path, 'w', encoding='utf-8') as f:
-                                      # Clean and validate SVG content
-                                      # Remove any XML declarations that might already exist
-                                      svg_content = svg_html.strip()
-                                      if svg_content.startswith('<?xml'):
-                                          # Find the end of XML declaration and remove it
-                                          xml_end = svg_content.find('?>') + 2
-                                          svg_content = svg_content[xml_end:].strip()
-                                      
-                                      # Ensure SVG starts properly
-                                      if not svg_content.startswith('<svg'):
-                                          print(f"      ⚠️ Warning: SVG {i+1} doesn't start with <svg tag")
-                                          continue
-                                      
-                                      # Basic SVG validation - ensure it has closing tag
-                                      if '</svg>' not in svg_content:
-                                          print(f"      ⚠️ Warning: SVG {i+1} missing closing </svg> tag")
-                                          continue
-                                      
-                                      # Add clean XML declaration
-                                      clean_svg = '<?xml version="1.0" encoding="UTF-8"?>\\n' + svg_content
-                                      f.write(clean_svg)
-                                  
-                                  extracted_svgs.append({
-                                      'filename': svg_filename,
-                                      'path': svg_path,
-                                      'type': diagram_type,
-                                      'width': width,
-                                      'height': height,
-                                      'size': len(svg_html)
-                                  })
-                                  
-                                  print(f"      ✅ Saved as: {svg_filename}")
-                          
-                          except Exception as e:
-                              print(f"      ❌ Error processing SVG {i+1}: {e}")
-                      
-                      # Also look for any canvas elements or other image containers
-                      canvas_elements = driver.find_elements(By.TAG_NAME, "canvas")
-                      if canvas_elements:
-                          print(f"\\n🎨 Found {len(canvas_elements)} canvas elements")
-                          for i, canvas in enumerate(canvas_elements):
-                              try:
-                                  # Try to extract canvas as image
-                                  canvas_data = driver.execute_script(
-                                      "return arguments[0].toDataURL('image/png');", canvas
-                                  )
-                                  if canvas_data:
-                                      # Save canvas as PNG
-                                      img_data = canvas_data.split(',')[1]
-                                      img_binary = base64.b64decode(img_data)
-                                      
-                                      canvas_filename = f"canvas-diagram-{i+1}.png"
-                                      canvas_path = f"{IMAGE_DIR}/{canvas_filename}"
-                                      
-                                      with open(canvas_path, 'wb') as f:
-                                          f.write(img_binary)
-                                      
-                                      extracted_svgs.append({
-                                          'filename': canvas_filename,
-                                          'path': canvas_path,
-                                          'type': 'canvas-diagram',
-                                          'format': 'png'
-                                      })
-                                      
-                                      print(f"      ✅ Canvas saved as: {canvas_filename}")
-                              except Exception as e:
-                                  print(f"      ❌ Error processing canvas {i+1}: {e}")
-                      
-                      return extracted_svgs
-                      
-                  except Exception as e:
-                      print(f"❌ Error during web scraping: {e}")
-                      return []
-                  finally:
-                      try:
-                          driver.quit()
-                      except:
-                          pass
-              
-              # Extract diagrams from the main DeepWiki page
-              extracted_diagrams = extract_svg_diagrams(DEEPWIKI_URL)
-              
-              print(f"\\n📊 EXTRACTION SUMMARY:")
-              print(f"   • Total diagrams extracted: {len(extracted_diagrams)}")
-              
-              # Only show meaningful diagrams (larger than 1000 chars)
-              meaningful_diagrams = [d for d in extracted_diagrams if d.get('size', 0) > 1000]
-              small_diagrams = [d for d in extracted_diagrams if d.get('size', 0) <= 1000]
-              
-              print(f"   • Meaningful diagrams (>1000 chars): {len(meaningful_diagrams)}")
-              print(f"   • Small/decorative diagrams (≤1000 chars): {len(small_diagrams)}")
-              
-              if meaningful_diagrams:
-                  print("\\n📋 Meaningful diagrams:")
-                  for diag in meaningful_diagrams:
-                      print(f"     • {diag['filename']} ({diag['type']}) - {diag.get('size', 'unknown')} chars")
-              
-              # Create a diagram reference mapping for content integration
-              diagram_refs = {}
-              for diag in meaningful_diagrams:
-                  # Create a mapping based on diagram type and size
-                  key = f"{diag['type']}-{diag.get('size', 0)}"
-                  diagram_refs[key] = diag['filename']
-              
-              print('=' * 60)
-              print('🌐 End of SVG extraction\\n')
-              
               # Structure to organize content by hierarchy
               organized_content = {
                   'main_sections': {},
@@ -923,28 +605,8 @@ jobs:
               
               # Process each page/section
               for i, content in enumerate(pages_content):
-                  print(f"\n🔄 Processing content section {i+1}/{len(pages_content)}...")
+                  print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
-                  
-                  # 🔍 SECTION ANALYSIS: Check this specific section for image patterns
-                  section_img_tags = str(content).count('<img')
-                  section_src_attrs = str(content).count('src=')
-                  section_markdown_imgs = str(content).count('![')
-                  section_http_refs = str(content).count('http')
-                  
-                  print(f"📊 Section {i+1} image analysis:")
-                  print(f"   • <img tags: {section_img_tags}")
-                  print(f"   • src attributes: {section_src_attrs}")
-                  print(f"   • Markdown images: {section_markdown_imgs}")
-                  print(f"   • HTTP refs: {section_http_refs}")
-                  
-                  # Show a smaller sample of this section's content if it has potential images
-                  if section_img_tags > 0 or section_src_attrs > 0 or section_markdown_imgs > 0:
-                      sample_content = str(content)[:800] + '...' if len(str(content)) > 800 else str(content)
-                      print(f"📝 Section {i+1} content sample (potential images found):")
-                      print('-' * 20)
-                      print(repr(sample_content))
-                      print('-' * 20)
                   
                   # Validate content is not None or empty
                   if not content or len(str(content).strip()) == 0:
@@ -977,14 +639,13 @@ jobs:
                       total_imgs_before = sum(len(re.findall(p, content, re.IGNORECASE)) for p in img_check_patterns)
                       print(f"Images found in raw content (regex fallback): {total_imgs_before}")
                   
-                  # Clean the content (with image support and SVG diagram integration)
+                  # Clean the content (with image support)
                   cleaned_content = clean_deepwiki_content(
                       content, 
                       preserve_images=True, 
                       image_dir=IMAGE_DIR, 
                       base_url=DEEPWIKI_URL, 
-                      downloaded_images=downloaded_images,
-                      diagram_refs=diagram_refs
+                      downloaded_images=downloaded_images
                   )
                   
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
@@ -1064,8 +725,7 @@ jobs:
                   preserve_images=True, 
                   image_dir=IMAGE_DIR, 
                   base_url=DEEPWIKI_URL, 
-                  downloaded_images=downloaded_images,
-                  diagram_refs={}
+                  downloaded_images=downloaded_images
               )
               
               if not cleaned_content.strip().startswith('# '):
@@ -1080,21 +740,17 @@ jobs:
               print(f"❌ Error processing content: {e}")
               sys.exit(1)
           EOF
-
       - name: Generate Comprehensive Documentation
         run: |
           echo "Creating structured comprehensive documentation..."
-
           python3 << 'EOF'
           import pickle
           import re
           import os
           from pathlib import Path
-
           # Environment variables
           DOCS_DIR = os.environ.get('DOCS_DIR', 'docs-md')
           IMAGE_DIR = os.environ.get('IMAGE_DIR', 'docs-md/images')
-
           try:
               # Load organized content
               with open('organized_content.pkl', 'rb') as f:
@@ -1198,14 +854,12 @@ jobs:
               import sys
               sys.exit(1)
           EOF
-
           echo "Final documentation files created:"
           ls -la ${{ env.DOCS_DIR }}/
           echo "Images downloaded:"
           ls -la ${{ env.IMAGE_DIR }}/ || echo "No images directory found"
           echo "Preview of main documentation:"
           head -30 ${{ env.DOCS_DIR }}/f1-strat-manager-complete.md
-
       - name: Checkout Wiki
         uses: actions/checkout@v3
         with:
@@ -1222,7 +876,6 @@ jobs:
           fi
           echo "📁 Files to copy:"
           ls -la ${{ env.DOCS_DIR }}/
-
           # Ensure wiki directory exists
           if [ ! -d ${{ env.WIKI_DIR }} ]; then
             echo "❌ Error: Wiki directory not found"
@@ -1230,13 +883,11 @@ jobs:
           fi
           echo "📂 Current wiki contents:"
           ls -la ${{ env.WIKI_DIR }}/
-
           # Copy ALL markdown files to wiki
           echo "📄 Copying Markdown files..."
           cp ${{ env.DOCS_DIR }}/*.md ${{ env.WIKI_DIR }}/
           MARKDOWN_COUNT=$(ls -1 ${{ env.DOCS_DIR }}/*.md | wc -l)
           echo "✅ Copied $MARKDOWN_COUNT Markdown files"
-
           # Copy images directory with enhanced logging and error handling
           if [ -d "${{ env.IMAGE_DIR }}" ]; then
             IMAGE_COUNT=$(find "${{ env.IMAGE_DIR }}" -type f -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" -o -name "*.webp" | wc -l)
@@ -1271,27 +922,18 @@ jobs:
           else
             echo "ℹ️ No images directory found (${{ env.IMAGE_DIR }})"
           fi
-
-          # Create or update index page with hierarchical structure and dynamic SVG diagram listing
-          echo "📝 Creating Home.md with SVG diagram detection..."
-
-          # First create the basic Home.md structure
+          # Create or update index page with hierarchical structure
           cat > ${{ env.WIKI_DIR }}/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
-
           This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
           It is generated through DeepWiki. To see the full documentation with all figures and interactive elements, please visit [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager).
-
           ## 📋 Complete Documentation
           - **[📖 Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections organized hierarchically
-
           ## 🗂️ Documentation Structure
-
           ### 🔍 1. Overview
           - **[Overview](01-overview)** - Project introduction and general information
             - [System Architecture](01-01-system-architecture) - Overall system design and components
             - [Installation and Setup](01-02-installation-setup) - Getting started guide
-
           ### 📊 2. Streamlit Dashboard
           - **[Streamlit Dashboard](02-streamlit-dashboard)** - Interactive web interface
             - [Strategy Recommendations View](02-01-strategy-recommendations-view) - Strategic decision interface
@@ -1299,58 +941,45 @@ jobs:
             - [Radio Analysis View](02-03-radio-analysis-view) - Team radio insights
             - [Time Predictions View](02-04-time-predictions-view) - Lap time forecasting
             - [Strategy Chat Interface](02-05-strategy-chat-interface) - AI-powered strategy chat
-
           ### 🤖 3. Machine Learning Models
           - **[Machine Learning Models](03-machine-learning-models)** - AI/ML components
             - [Lap Time Prediction](03-01-lap-time-prediction) - Predictive models for lap times
             - [Tire Degradation Modeling](03-02-tire-degradation-modeling) - Tire performance analysis
             - [Vision-based Gap Calculation](03-03-vision-based-gap-calculation) - Computer vision for gap detection
-
           ### 🎤 4. NLP Pipeline
           - **[NLP Pipeline](04-nlp-pipeline)** - Natural Language Processing components
             - [Radio Transcription](04-01-radio-transcription) - Speech-to-text processing
             - [Sentiment and Intent Analysis](04-02-sentiment-intent-analysis) - Emotional and intent recognition
             - [Named Entity Recognition](04-03-named-entity-recognition) - Entity extraction from radio communications
-
           ### ⚙️ 5. Expert System
           - **[Expert System](05-expert-system)** - Rule-based decision engine
             - [Degradation Rules](05-01-degradation-rules) - Tire degradation logic
             - [Gap Analysis Rules](05-02-gap-analysis-rules) - Gap calculation rules
             - [Radio Message Rules](05-03-radio-message-rules) - Communication analysis rules
             - [Integrated Rule Engine](05-04-integrated-rule-engine) - Unified rule processing
-
           ### 👨‍💻 6. Developer Guide
           - **[Developer Guide](06-developer-guide)** - Technical documentation for developers
             - [API Reference](06-01-api-reference) - Complete API documentation
             - [Integration Guide](06-02-integration-guide) - How to integrate with external systems
-
           ## 🏎️ Project Overview
-
           The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support, combining:
-
           - **🤖 Machine Learning Models** - Predictive analytics for lap times and tire performance
           - **👁️ Computer Vision** - Automated gap calculation from video feeds
           - **🎤 Natural Language Processing** - Radio communication analysis and insights
           - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
           - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
-
           ---
-
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
-          *🖼️ Images and diagrams are included where available. SVG diagrams are extracted directly from the DeepWiki web interface.*
-          *If a diagram is missing, please check the [DeepWiki source](https://deepwiki.com/VforVitorio/F1_Strat_Manager).*
+          *🖼️ Images and diagrams are included where available. If an image is missing, please check the [DeepWiki source](https://deepwiki.com/VforVitorio/F1_Strat_Manager).*
           EOF
-
           echo "📂 Final wiki contents:"
           ls -la ${{ env.WIKI_DIR }}/
-
       - name: Commit & Push changes
         working-directory: ${{ env.WIKI_DIR }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-
           # Check if there are changes before committing
           if git diff --quiet --staged; then
             echo "ℹ️ No changes to commit"
@@ -1360,18 +989,16 @@ jobs:
             MD_COUNT=$(find . -name "*.md" | wc -l)
             
             # Build comprehensive commit message
-            COMMIT_MSG="🔄 Update Complete Wiki from DeepWiki with SVG Extraction - $(date '+%Y-%m-%d %H:%M')"
+            COMMIT_MSG="🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
             COMMIT_MSG="$COMMIT_MSG"$'\n'"📄 Updated $MD_COUNT Markdown files with hierarchical documentation"
             
             if [ $IMAGE_COUNT -gt 0 ]; then
-              SVG_COUNT=$(find . -name "*.svg" | wc -l)
-              PNG_COUNT=$(find . -name "*.png" | wc -l)
-              COMMIT_MSG="$COMMIT_MSG"$'\n'"🖼️ Includes $IMAGE_COUNT images: $SVG_COUNT SVG diagrams + $PNG_COUNT other images"
+              COMMIT_MSG="$COMMIT_MSG"$'\n'"🖼️ Includes $IMAGE_COUNT images downloaded from DeepWiki"
             else
               COMMIT_MSG="$COMMIT_MSG"$'\n'"ℹ️ No images found in this update"
             fi
             
-            COMMIT_MSG="$COMMIT_MSG"$'\n'$'\n'"🌐 Features: Web scraping for SVG extraction, BeautifulSoup HTML parsing, Selenium automation"
+            COMMIT_MSG="$COMMIT_MSG"$'\n'$'\n'"Generated using BeautifulSoup-based HTML parsing for robust image extraction"
             
             echo "📝 Commit message:"
             echo "$COMMIT_MSG"
