@@ -1,0 +1,178 @@
+name: Update GitHub Wiki from DeepWiki
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # Runs daily at 6:00 AM UTC
+  workflow_dispatch: # Allows manual triggering
+
+env:
+  DEEPWIKI_URL: "https://deepwiki.com/u/VforVitorio/F1_Strat_Manager"
+  DEEPWIKI_MCP_PORT: "3000"
+  DEEPWIKI_MCP_URL: "http://localhost:3000/mcp"
+  DOCS_DIR: "./wiki-docs"
+  IMAGE_DIR: "./wiki-docs/images"
+
+jobs:
+  update-wiki:
+    runs-on: ubuntu-latest
+    steps:      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 html2text markdownify
+
+      - name: Set up Node.js for DeepWiki MCP
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Setup DeepWiki MCP Server
+        run: |
+          echo "🔧 Setting up DeepWiki MCP Server..."
+          
+          # Clone DeepWiki MCP repository
+          git clone https://github.com/modelcontextprotocol/servers.git mcp-servers
+          cd mcp-servers/src/deepwiki
+          
+          # Install dependencies
+          npm install
+          
+          # Build the server
+          npm run build
+          
+          # Start MCP server in background
+          echo "🚀 Starting DeepWiki MCP server on port ${{ env.DEEPWIKI_MCP_PORT }}..."
+          npm start &
+          MCP_PID=$!
+          echo "MCP_PID=$MCP_PID" >> $GITHUB_ENV
+          
+          # Wait for server to be ready
+          echo "⏳ Waiting for MCP server to be ready..."
+          for i in {1..30}; do
+            if curl -s -f "${{ env.DEEPWIKI_MCP_URL }}" > /dev/null 2>&1; then
+              echo "✅ MCP server is ready!"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ MCP server failed to start within 30 seconds"
+              exit 1
+            fi
+            sleep 1
+          done
+          git clone https://github.com/modelcontextprotocol/servers.git mcp-servers
+          cd mcp-servers/src/deepwiki
+          
+          # Install dependencies
+          npm install
+          
+          # Build the server
+          npm run build
+          
+          # Start MCP server in background
+          echo "🚀 Starting DeepWiki MCP server on port ${{ env.DEEPWIKI_MCP_PORT }}..."
+          npm start &
+          MCP_PID=$!
+          echo "MCP_PID=$MCP_PID" >> $GITHUB_ENV
+          
+          # Wait for server to be ready
+          echo "⏳ Waiting for MCP server to be ready..."
+          for i in {1..30}; do
+            if curl -s -f "${{ env.DEEPWIKI_MCP_URL }}" > /dev/null 2>&1; then
+              echo "✅ MCP server is ready!"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "❌ MCP server failed to start within 30 seconds"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Make scripts executable
+        run: chmod +x .github/scripts/*.py
+
+      - name: Create wiki documentation from DeepWiki
+        env:
+          DEEPWIKI_URL: ${{ env.DEEPWIKI_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          cd .github/scripts
+          python3 process_wiki.py
+
+      - name: Verify generated files
+        run: |
+          echo "Generated documentation files:"
+          ls -la ${{ env.DOCS_DIR }}/
+          if [ -d "${{ env.IMAGE_DIR }}" ]; then
+            echo "Generated images:"
+            ls -la ${{ env.IMAGE_DIR }}/
+          fi
+
+      - name: Checkout Wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: wiki
+
+      - name: Copy documentation to Wiki
+        run: |
+          # Verify we have files to copy
+          if [ ! -d ${{ env.DOCS_DIR }} ] || [ -z "$(ls -A ${{ env.DOCS_DIR }}/*.md 2>/dev/null)" ]; then
+            echo "Error: No markdown files to copy"
+            exit 1
+          fi
+
+          # Copy markdown files to wiki
+          cp ${{ env.DOCS_DIR }}/*.md wiki/
+
+          # Copy images if they exist
+          if [ -d "${{ env.IMAGE_DIR }}" ] && [ "$(ls -A ${{ env.IMAGE_DIR }})" ]; then
+            echo "Copying images to wiki..."
+            mkdir -p wiki/images
+            cp -r ${{ env.IMAGE_DIR }}/* wiki/images/
+          fi
+
+          echo "Files copied to wiki:"
+          ls -la wiki/
+
+      - name: Commit and push changes
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+
+          # Check if there are changes before committing
+          if git diff --quiet --staged; then
+            echo "No changes to commit"
+          else
+            # Count files and images
+            MD_COUNT=$(find . -name "*.md" | wc -l)
+            IMAGE_COUNT=$(find . -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" | wc -l)
+            
+            COMMIT_MSG="🔄 Update Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
+            if [ $MD_COUNT -gt 0 ]; then
+              COMMIT_MSG="$COMMIT_MSG ($MD_COUNT files"
+              if [ $IMAGE_COUNT -gt 0 ]; then
+                COMMIT_MSG="$COMMIT_MSG, $IMAGE_COUNT images)"
+              else
+                COMMIT_MSG="$COMMIT_MSG)"
+              fi
+            fi
+            
+            git commit -m "$COMMIT_MSG"
+            git push
+            echo "✅ Changes pushed successfully"
+          fi
