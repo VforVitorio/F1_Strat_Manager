@@ -402,8 +402,8 @@ jobs:
           import re
           from image_processor import extract_and_download_images_with_soup, convert_html_to_markdown_with_images
 
-          def clean_deepwiki_content(content, preserve_images=True, image_dir="", base_url="", downloaded_images={}):
-              """Clean and format DeepWiki content for GitHub Wiki"""
+          def clean_deepwiki_content(content, preserve_images=True, image_dir="", base_url="", downloaded_images={}, diagram_refs={}):
+              """Clean and format DeepWiki content for GitHub Wiki with SVG diagram integration"""
               
               # Extract and download images FIRST using robust BeautifulSoup parsing
               image_paths = {}
@@ -419,6 +419,45 @@ jobs:
                   print("✅ HTML to Markdown conversion completed")
               else:
                   print("ℹ️ No images found, proceeding with text-only conversion")
+              
+              # Integrate SVG diagrams where appropriate
+              if diagram_refs:
+                  print(f"🖼️ Integrating {len(diagram_refs)} SVG diagrams into content...")
+                  # Look for sections that would benefit from diagrams
+                  content_lower = content.lower()
+                  
+                  # Add system architecture diagram
+                  if any(keyword in content_lower for keyword in ['system architecture', 'architecture', 'overview']):
+                      # Find the best SVG diagram for architecture
+                      arch_diagram = None
+                      for key, filename in diagram_refs.items():
+                          if 'flowchart' in key and int(key.split('-')[1]) > 10000:  # Large flowchart
+                              arch_diagram = filename
+                              break
+                      
+                      if arch_diagram:
+                          # Insert diagram after the first heading
+                          lines = content.split('\n')
+                          for i, line in enumerate(lines):
+                              if line.strip().startswith('# ') and i < len(lines) - 1:
+                                  diagram_md = f"\n![System Architecture Diagram](images/{arch_diagram})\n"
+                                  lines.insert(i + 1, diagram_md)
+                                  content = '\n'.join(lines)
+                                  print(f"  ✅ Added architecture diagram: {arch_diagram}")
+                                  break
+                  
+                  # Add workflow diagrams for process-related content
+                  if any(keyword in content_lower for keyword in ['workflow', 'process', 'pipeline', 'flow']):
+                      # Find mermaid or flowchart diagrams
+                      for key, filename in diagram_refs.items():
+                          if 'mermaid' in key or ('flowchart' in key and int(key.split('-')[1]) > 5000):
+                              diagram_md = f"\n![Process Flow Diagram](images/{filename})\n"
+                              # Insert after first paragraph
+                              if '\n\n' in content:
+                                  parts = content.split('\n\n', 1)
+                                  content = parts[0] + diagram_md + '\n' + parts[1]
+                                  print(f"  ✅ Added process diagram: {filename}")
+                                  break
               
               # Continue with existing cleaning logic...
               # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
@@ -740,7 +779,7 @@ jobs:
                               # Get SVG content
                               svg_html = svg.get_attribute('outerHTML')
                               
-                              if svg_html and len(svg_html) > 100:  # Skip very small SVGs
+                              if svg_html and len(svg_html) > 500:  # Increase threshold to filter decorative SVGs
                                   # Extract dimensions and content info
                                   width = svg.get_attribute('width') or 'auto'
                                   height = svg.get_attribute('height') or 'auto'
@@ -748,6 +787,11 @@ jobs:
                                   
                                   print(f"  📋 SVG {i+1}: width={width}, height={height}, viewBox={viewbox}")
                                   print(f"      Content length: {len(svg_html)} characters")
+                                  
+                                  # Skip very small decorative SVGs (typical UI elements)
+                                  if len(svg_html) < 1000:
+                                      print(f"      ⏭️ Skipping small SVG (likely decorative): {len(svg_html)} chars")
+                                      continue
                                   
                                   # Determine diagram type based on content
                                   diagram_type = "unknown"
@@ -763,8 +807,26 @@ jobs:
                                   svg_path = f"{IMAGE_DIR}/{svg_filename}"
                                   
                                   with open(svg_path, 'w', encoding='utf-8') as f:
-                                      # Add XML declaration and clean SVG
-                                      clean_svg = '<?xml version="1.0" encoding="UTF-8"?>\\n' + svg_html
+                                      # Clean and validate SVG content
+                                      # Remove any XML declarations that might already exist
+                                      svg_content = svg_html.strip()
+                                      if svg_content.startswith('<?xml'):
+                                          # Find the end of XML declaration and remove it
+                                          xml_end = svg_content.find('?>') + 2
+                                          svg_content = svg_content[xml_end:].strip()
+                                      
+                                      # Ensure SVG starts properly
+                                      if not svg_content.startswith('<svg'):
+                                          print(f"      ⚠️ Warning: SVG {i+1} doesn't start with <svg tag")
+                                          continue
+                                      
+                                      # Basic SVG validation - ensure it has closing tag
+                                      if '</svg>' not in svg_content:
+                                          print(f"      ⚠️ Warning: SVG {i+1} missing closing </svg> tag")
+                                          continue
+                                      
+                                      # Add clean XML declaration
+                                      clean_svg = '<?xml version="1.0" encoding="UTF-8"?>\\n' + svg_content
                                       f.write(clean_svg)
                                   
                                   extracted_svgs.append({
@@ -829,8 +891,25 @@ jobs:
               
               print(f"\\n📊 EXTRACTION SUMMARY:")
               print(f"   • Total diagrams extracted: {len(extracted_diagrams)}")
-              for diag in extracted_diagrams:
-                  print(f"   • {diag['filename']} ({diag['type']}) - {diag.get('size', 'unknown')} chars")
+              
+              # Only show meaningful diagrams (larger than 1000 chars)
+              meaningful_diagrams = [d for d in extracted_diagrams if d.get('size', 0) > 1000]
+              small_diagrams = [d for d in extracted_diagrams if d.get('size', 0) <= 1000]
+              
+              print(f"   • Meaningful diagrams (>1000 chars): {len(meaningful_diagrams)}")
+              print(f"   • Small/decorative diagrams (≤1000 chars): {len(small_diagrams)}")
+              
+              if meaningful_diagrams:
+                  print("\\n📋 Meaningful diagrams:")
+                  for diag in meaningful_diagrams:
+                      print(f"     • {diag['filename']} ({diag['type']}) - {diag.get('size', 'unknown')} chars")
+              
+              # Create a diagram reference mapping for content integration
+              diagram_refs = {}
+              for diag in meaningful_diagrams:
+                  # Create a mapping based on diagram type and size
+                  key = f"{diag['type']}-{diag.get('size', 0)}"
+                  diagram_refs[key] = diag['filename']
               
               print('=' * 60)
               print('🌐 End of SVG extraction\\n')
@@ -898,13 +977,14 @@ jobs:
                       total_imgs_before = sum(len(re.findall(p, content, re.IGNORECASE)) for p in img_check_patterns)
                       print(f"Images found in raw content (regex fallback): {total_imgs_before}")
                   
-                  # Clean the content (with image support)
+                  # Clean the content (with image support and SVG diagram integration)
                   cleaned_content = clean_deepwiki_content(
                       content, 
                       preserve_images=True, 
                       image_dir=IMAGE_DIR, 
                       base_url=DEEPWIKI_URL, 
-                      downloaded_images=downloaded_images
+                      downloaded_images=downloaded_images,
+                      diagram_refs=diagram_refs
                   )
                   
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
@@ -984,7 +1064,8 @@ jobs:
                   preserve_images=True, 
                   image_dir=IMAGE_DIR, 
                   base_url=DEEPWIKI_URL, 
-                  downloaded_images=downloaded_images
+                  downloaded_images=downloaded_images,
+                  diagram_refs={}
               )
               
               if not cleaned_content.strip().startswith('# '):
@@ -1203,32 +1284,6 @@ jobs:
 
           ## 📋 Complete Documentation
           - **[📖 Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections organized hierarchically
-
-          ## 🖼️ System Diagrams
-          The following SVG diagrams have been extracted directly from the DeepWiki interface:
-
-          EOF
-
-          # Add SVG diagram references dynamically
-          if [ -d "${{ env.WIKI_DIR }}/images" ]; then
-            SVG_COUNT=$(find "${{ env.WIKI_DIR }}/images" -name "diagram-*.svg" 2>/dev/null | wc -l)
-            if [ $SVG_COUNT -gt 0 ]; then
-              echo "Found $SVG_COUNT SVG diagrams to reference"
-              for svg_file in ${{ env.WIKI_DIR }}/images/diagram-*.svg; do
-                if [ -f "$svg_file" ]; then
-                  filename=$(basename "$svg_file")
-                  echo "- **[🏗️ $filename](images/$filename)** - System diagram extracted from DeepWiki" >> ${{ env.WIKI_DIR }}/Home.md
-                fi
-              done
-            else
-              echo "- *SVG diagrams will be extracted during the next workflow run*" >> ${{ env.WIKI_DIR }}/Home.md
-            fi
-          else
-            echo "- *SVG diagrams will be extracted during the next workflow run*" >> ${{ env.WIKI_DIR }}/Home.md
-          fi
-
-          # Continue with the rest of the Home.md content
-          cat >> ${{ env.WIKI_DIR }}/Home.md << 'EOF'
 
           ## 🗂️ Documentation Structure
 
