@@ -204,23 +204,43 @@ jobs:
               """Extract image URLs from HTML and download them"""
               # Find all img tags with various attribute patterns
               img_patterns = [
-                  r'<img\s+[^>]*src=["\'](.*?)["\'][^>]*>',
-                  r'<img\s+[^>]*src=([^\s>]+)[^>]*>',
-                  r'!\[([^\]]*)\]\(([^)]+)\)'  # Markdown images
+                  r'<img\s+[^>]*src=["\'](.*?)["\'][^>]*>',  # Standard img with quotes
+                  r'<img\s+[^>]*src=([^\s>]+)[^>]*>',        # Img without quotes
+                  r'!\[([^\]]*)\]\(([^)]+)\)',               # Markdown images
+                  r'<img[^>]*src="([^"]*)"[^>]*>',           # Double quotes
+                  r"<img[^>]*src='([^']*)'[^>]*>",           # Single quotes
+                  r'<figure[^>]*>.*?<img[^>]*src=["\'](.*?)["\'][^>]*>.*?</figure>'  # Figure wrapped images
               ]
               
               images_found = []
               
-              for pattern in img_patterns:
-                  matches = re.findall(pattern, html_content, re.IGNORECASE)
+              print(f"Scanning content for images (length: {len(html_content)} chars)...")
+              
+              for i, pattern in enumerate(img_patterns):
+                  matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
+                  print(f"Pattern {i+1}: Found {len(matches)} matches")
+                  
                   if pattern.startswith('!'):  # Markdown pattern
                       images_found.extend([(m[1], m[0]) for m in matches])
-                  else:
-                      # Extract alt text if available
+                  elif 'figure' in pattern.lower():  # Figure pattern
                       for match in matches:
-                          alt_match = re.search(r'alt=["\'](.*?)["\']', html_content[html_content.find(match)-100:html_content.find(match)+100])
-                          alt_text = alt_match.group(1) if alt_match else ''
+                          images_found.append((match, ''))
+                  else:
+                      # Extract alt text if available for each match
+                      for match in matches:
+                          # Look for alt text in the surrounding context
+                          img_start = html_content.find(match)
+                          if img_start != -1:
+                              img_context = html_content[max(0, img_start-200):img_start+200]
+                              alt_match = re.search(r'alt=["\'](.*?)["\']', img_context, re.IGNORECASE)
+                              alt_text = alt_match.group(1) if alt_match else ''
+                          else:
+                              alt_text = ''
                           images_found.append((match, alt_text))
+              
+              print(f"Total images found: {len(images_found)}")
+              for i, (url, alt) in enumerate(images_found[:5]):  # Show first 5
+                  print(f"  {i+1}. {url[:60]}... (alt: {alt[:30]}...)")
               
               downloaded_paths = {}
               
@@ -265,18 +285,23 @@ jobs:
                       # Download image using curl
                       print(f"Downloading image: {full_url} -> {local_path}")
                       result = subprocess.run(
-                          ['curl', '-L', '-s', '-o', local_path, '--create-dirs', '--max-time', '30', full_url],
-                          capture_output=True
+                          ['curl', '-L', '-s', '-o', local_path, '--create-dirs', '--max-time', '30', '--user-agent', 'Mozilla/5.0 (compatible; GitHubActions)', full_url],
+                          capture_output=True,
+                          text=True
                       )
                       
                       if result.returncode == 0 and os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-                          # Store relative path for markdown
-                          relative_path = os.path.relpath(local_path, os.path.dirname(image_dir))
+                          # Store relative path for markdown (relative to docs directory)
+                          relative_path = f"images/{filename}"
                           downloaded_images[img_url] = relative_path
                           downloaded_paths[img_url] = (relative_path, alt_text)
-                          print(f"✅ Downloaded: {filename}")
+                          print(f"✅ Downloaded: {filename} -> {relative_path}")
                       else:
                           print(f"❌ Failed to download: {full_url}")
+                          if result.returncode != 0:
+                              print(f"    Curl error code: {result.returncode}")
+                          if result.stderr:
+                              print(f"    Curl stderr: {result.stderr.decode()}")
                           downloaded_paths[img_url] = (None, alt_text)
                           # Clean up empty file if created
                           if os.path.exists(local_path) and os.path.getsize(local_path) == 0:
@@ -292,23 +317,39 @@ jobs:
               """Convert HTML to Markdown while preserving image positions"""
               content = html_content
               
+              # Debug: Print found images
+              print(f"Converting {len(image_paths)} images in content")
+              
               # First, handle img tags
               for img_url, (local_path, alt_text) in image_paths.items():
                   if local_path:
                       # Replace HTML img with Markdown image
                       markdown_img = f"![{alt_text or 'Image'}]({local_path})"
+                      print(f"Converting image: {img_url} -> {markdown_img}")
                   else:
                       # Image couldn't be downloaded
                       markdown_img = f"[IMAGE NOT AVAILABLE: {os.path.basename(img_url) or 'unknown'}]"
+                      print(f"Image not available: {img_url}")
                   
-                  # Replace various img tag patterns
+                  # Replace various img tag patterns with escaped URL for regex
+                  escaped_url = re.escape(img_url)
                   patterns = [
-                      rf'<img\s+[^>]*src=["\']?{re.escape(img_url)}["\']?[^>]*>',
-                      rf'!\[[^\]]*\]\({re.escape(img_url)}\)'
+                      rf'<img\s+[^>]*src=["\']?{escaped_url}["\']?[^>]*>',
+                      rf'<img\s+[^>]*src={escaped_url}[^>]*>',
+                      rf'!\[[^\]]*\]\({escaped_url}\)',
+                      # Also try without quotes
+                      rf'<img[^>]*src="{re.escape(img_url)}"[^>]*>',
+                      rf"<img[^>]*src='{re.escape(img_url)}'[^>]*>"
                   ]
                   
                   for pattern in patterns:
+                      old_content = content
                       content = re.sub(pattern, markdown_img, content, flags=re.IGNORECASE)
+                      if content != old_content:
+                          print(f"✅ Replaced image pattern: {pattern[:50]}...")
+                          break
+                  else:
+                      print(f"⚠️ No pattern matched for: {img_url}")
               
               return content
           EOF
@@ -557,6 +598,18 @@ jobs:
                       print(f"Converting content to string for section {i+1}")
                       content = str(content)
                   
+                  # Debug: Check for images in raw content before cleaning
+                  img_check_patterns = [r'<img[^>]*>', r'!\[.*?\]\([^)]*\)']
+                  total_imgs_before = sum(len(re.findall(p, content, re.IGNORECASE)) for p in img_check_patterns)
+                  print(f"Images found in raw content: {total_imgs_before}")
+                  
+                  if total_imgs_before > 0:
+                      print("Sample image tags found:")
+                      for pattern in img_check_patterns:
+                          matches = re.findall(pattern, content, re.IGNORECASE)
+                          for j, match in enumerate(matches[:2]):  # Show first 2 of each type
+                              print(f"  {j+1}. {match[:100]}...")
+                  
                   # Clean the content (with image support)
                   cleaned_content = clean_deepwiki_content(
                       content, 
@@ -633,6 +686,10 @@ jobs:
               # Try to handle as plain text
               with open(f'{DOCS_DIR}/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   content = f.read()
+              
+              print(f"Processing plain text content (length: {len(content)} chars)")
+              print("First 500 chars of content:")
+              print(content[:500])
               
               cleaned_content = clean_deepwiki_content(
                   content, 
