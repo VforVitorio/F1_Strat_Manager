@@ -185,36 +185,23 @@ jobs:
           jq -r 'keys' ${{ env.DOCS_DIR }}/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
           head -c 500 ${{ env.DOCS_DIR }}/all-pages-raw.json
 
-      - name: Process and Split Multiple Pages with Image Support
+      - name: Install Required Dependencies
         run: |
-          echo "Processing multiple pages from DeepWiki response..."
-          # Install required tools
+          echo "Installing required tools for processing..."
           sudo apt-get update && sudo apt-get install -y jq curl wget
+          echo "✅ Dependencies installed"
 
-          # Process the response with Python to handle multiple pages and images
-          python3 << 'EOF'
-          import json
+      - name: Create Image Processing Helper Script
+        run: |
+          cat > image_processor.py << 'EOF'
+          import subprocess
           import re
-          import sys
           import os
           import urllib.parse
           from pathlib import Path
 
-          # Environment variables
-          DOCS_DIR = os.environ.get('DOCS_DIR', 'docs-md')
-          IMAGE_DIR = os.environ.get('IMAGE_DIR', 'docs-md/images')
-          DEEPWIKI_URL = os.environ.get('DEEPWIKI_URL', 'https://deepwiki.com/VforVitorio/F1_Strat_Manager')
-
-          # Create image directory
-          Path(IMAGE_DIR).mkdir(parents=True, exist_ok=True)
-
-          # Track all downloaded images
-          downloaded_images = {}
-
-          def extract_and_download_images(html_content, base_url=DEEPWIKI_URL):
+          def extract_and_download_images(html_content, base_url, image_dir, downloaded_images):
               """Extract image URLs from HTML and download them"""
-              import subprocess
-              
               # Find all img tags with various attribute patterns
               img_patterns = [
                   r'<img\s+[^>]*src=["\'](.*?)["\'][^>]*>',
@@ -250,8 +237,8 @@ jobs:
                       elif img_url.startswith('//'):
                           full_url = 'https:' + img_url
                       elif img_url.startswith('/'):
-                          # Extract base domain from DEEPWIKI_URL
-                          parsed = urllib.parse.urlparse(DEEPWIKI_URL)
+                          # Extract base domain from base_url
+                          parsed = urllib.parse.urlparse(base_url)
                           full_url = f"{parsed.scheme}://{parsed.netloc}{img_url}"
                       else:
                           # Relative URL
@@ -269,11 +256,11 @@ jobs:
                       # Ensure unique filename
                       base_name, ext = os.path.splitext(filename)
                       counter = 1
-                      while os.path.exists(os.path.join(IMAGE_DIR, filename)):
+                      while os.path.exists(os.path.join(image_dir, filename)):
                           filename = f"{base_name}_{counter}{ext}"
                           counter += 1
                       
-                      local_path = os.path.join(IMAGE_DIR, filename)
+                      local_path = os.path.join(image_dir, filename)
                       
                       # Download image using curl
                       print(f"Downloading image: {full_url} -> {local_path}")
@@ -284,7 +271,7 @@ jobs:
                       
                       if result.returncode == 0 and os.path.exists(local_path) and os.path.getsize(local_path) > 0:
                           # Store relative path for markdown
-                          relative_path = os.path.relpath(local_path, DOCS_DIR)
+                          relative_path = os.path.relpath(local_path, os.path.dirname(image_dir))
                           downloaded_images[img_url] = relative_path
                           downloaded_paths[img_url] = (relative_path, alt_text)
                           print(f"✅ Downloaded: {filename}")
@@ -323,18 +310,23 @@ jobs:
                   for pattern in patterns:
                       content = re.sub(pattern, markdown_img, content, flags=re.IGNORECASE)
               
-              # Continue with existing HTML to Markdown conversion
-              # ... (rest of the clean_deepwiki_content function logic)
               return content
+          EOF
+          echo "✅ Image processing helper created"
 
-          def clean_deepwiki_content(content, preserve_images=True):
+      - name: Create Content Processing Helper Script
+        run: |
+          cat > content_processor.py << 'EOF'
+          import re
+          from image_processor import extract_and_download_images, convert_html_to_markdown_with_images
+
+          def clean_deepwiki_content(content, preserve_images=True, image_dir="", base_url="", downloaded_images={}):
               """Clean and format DeepWiki content for GitHub Wiki"""
-              import re
               
               # Extract and download images before cleaning
               image_paths = {}
               if preserve_images:
-                  image_paths = extract_and_download_images(content)
+                  image_paths = extract_and_download_images(content, base_url, image_dir, downloaded_images)
               
               # Convert HTML to Markdown with images
               if image_paths:
@@ -412,6 +404,13 @@ jobs:
                       return f"unknown-section-{fallback_idx}"
                   return "unknown-section"
               return filename
+          EOF
+          echo "✅ Content processing helper created"
+
+      - name: Create Section Categorization Helper Script
+        run: |
+          cat > section_categorizer.py << 'EOF'
+          from content_processor import safe_filename
 
           def categorize_section(title, fallback_idx=None):
               """Categoriza secciones según la jerarquía especificada"""
@@ -480,6 +479,31 @@ jobs:
                   return ('sub', 'Overview', '01-02-installation-setup.md')
               # Fallback seguro
               return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')
+          EOF
+          echo "✅ Section categorization helper created"
+
+      - name: Process DeepWiki Response and Extract Content
+        run: |
+          echo "Processing multiple pages from DeepWiki response..."
+
+          python3 << 'EOF'
+          import json
+          import sys
+          import os
+          from pathlib import Path
+          from content_processor import clean_deepwiki_content, get_page_title_from_content
+          from section_categorizer import categorize_section
+
+          # Environment variables
+          DOCS_DIR = os.environ.get('DOCS_DIR', 'docs-md')
+          IMAGE_DIR = os.environ.get('IMAGE_DIR', 'docs-md/images')
+          DEEPWIKI_URL = os.environ.get('DEEPWIKI_URL', 'https://deepwiki.com/VforVitorio/F1_Strat_Manager')
+
+          # Create image directory
+          Path(IMAGE_DIR).mkdir(parents=True, exist_ok=True)
+
+          # Track all downloaded images
+          downloaded_images = {}
 
           # Read the JSON response
           try:
@@ -534,7 +558,13 @@ jobs:
                       content = str(content)
                   
                   # Clean the content (with image support)
-                  cleaned_content = clean_deepwiki_content(content, preserve_images=True)
+                  cleaned_content = clean_deepwiki_content(
+                      content, 
+                      preserve_images=True, 
+                      image_dir=IMAGE_DIR, 
+                      base_url=DEEPWIKI_URL, 
+                      downloaded_images=downloaded_images
+                  )
                   
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
@@ -585,8 +615,68 @@ jobs:
                   
                   print(f"✅ Created: {filename} (Category: {section_type}, Parent: {parent_section})")
               
-              # Create structured comprehensive documentation
-              print(f"\nCreating structured comprehensive documentation...")
+              # Save organized content for next step
+              import pickle
+              with open('organized_content.pkl', 'wb') as f:
+                  pickle.dump(organized_content, f)
+              
+              # Save downloaded images info
+              with open('downloaded_images.pkl', 'wb') as f:
+                  pickle.dump(downloaded_images, f)
+              
+              print(f"✅ Content processing completed")
+              
+          except json.JSONDecodeError as e:
+              print(f"❌ Error parsing JSON: {e}")
+              print("Response might not be valid JSON, trying as plain text...")
+              
+              # Try to handle as plain text
+              with open(f'{DOCS_DIR}/all-pages-raw.json', 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              cleaned_content = clean_deepwiki_content(
+                  content, 
+                  preserve_images=True, 
+                  image_dir=IMAGE_DIR, 
+                  base_url=DEEPWIKI_URL, 
+                  downloaded_images=downloaded_images
+              )
+              
+              if not cleaned_content.strip().startswith('# '):
+                  cleaned_content = '# F1 Strategy Manager\n\n' + cleaned_content.strip()
+              
+              with open(f'{DOCS_DIR}/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
+                  f.write(cleaned_content)
+              
+              print("✅ Processed as plain text")
+              
+          except Exception as e:
+              print(f"❌ Error processing content: {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Generate Comprehensive Documentation
+        run: |
+          echo "Creating structured comprehensive documentation..."
+
+          python3 << 'EOF'
+          import pickle
+          import re
+          import os
+          from pathlib import Path
+
+          # Environment variables
+          DOCS_DIR = os.environ.get('DOCS_DIR', 'docs-md')
+          IMAGE_DIR = os.environ.get('IMAGE_DIR', 'docs-md/images')
+
+          try:
+              # Load organized content
+              with open('organized_content.pkl', 'rb') as f:
+                  organized_content = pickle.load(f)
+              
+              # Load downloaded images info
+              with open('downloaded_images.pkl', 'rb') as f:
+                  downloaded_images = pickle.load(f)
               
               # Define the correct order of main sections
               section_order = [
@@ -677,26 +767,9 @@ jobs:
                   if len(image_list) > 10:
                       print(f"    ... and {len(image_list) - 10} more")
               
-          except json.JSONDecodeError as e:
-              print(f"❌ Error parsing JSON: {e}")
-              print("Response might not be valid JSON, trying as plain text...")
-              
-              # Try to handle as plain text
-              with open(f'{DOCS_DIR}/all-pages-raw.json', 'r', encoding='utf-8') as f:
-                  content = f.read()
-              
-              cleaned_content = clean_deepwiki_content(content, preserve_images=True)
-              
-              if not cleaned_content.strip().startswith('# '):
-                  cleaned_content = '# F1 Strategy Manager\n\n' + cleaned_content.strip()
-              
-              with open(f'{DOCS_DIR}/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
-                  f.write(cleaned_content)
-              
-              print("✅ Processed as plain text")
-              
           except Exception as e:
-              print(f"❌ Error processing content: {e}")
+              print(f"❌ Error generating documentation: {e}")
+              import sys
               sys.exit(1)
           EOF
 
