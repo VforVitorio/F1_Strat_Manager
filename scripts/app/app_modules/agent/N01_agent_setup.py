@@ -153,13 +153,14 @@ class F1StrategyEngine(KnowledgeEngine):
         )
 
 
-def transform_tire_predictions(predictions_df, driver_number):
+def transform_tire_predictions(predictions_df, driver_number, current_lap=None):
     """
     Transform the output from predict_tire_degradation into facts for the rule engine.
 
     Args:
         predictions_df (DataFrame): Output from predict_tire_degradation function
         driver_number (int): The driver number to extract data for
+        current_lap (int): Current race lap to filter data for
 
     Returns:
         dict: Dictionary with facts to declare
@@ -172,16 +173,64 @@ def transform_tire_predictions(predictions_df, driver_number):
         print(f"Warning: No prediction data found for driver {driver_number}")
         return None
 
-    # Get the most recent stint
-    latest_stint = driver_data['Stint'].max()
-    stint_data = driver_data[driver_data['Stint'] == latest_stint]
+    # If current_lap is provided, filter data more intelligently
+    if current_lap is not None:
+        # Try to find data for the current lap or closest available
+        # First, let's see if we have 'RaceLap' or similar column
+        if 'RaceLap' in driver_data.columns:
+            # Filter for data up to current lap
+            available_data = driver_data[driver_data['RaceLap'] <= current_lap]
+            if not available_data.empty:
+                # Get the most recent data within current lap
+                latest_race_lap = available_data['RaceLap'].max()
+                driver_data = available_data[available_data['RaceLap']
+                                             == latest_race_lap]
 
-    # Group predictions by current tire age (we want the most recent window)
-    latest_age = stint_data['CurrentTyreAge'].max()
-    latest_data = stint_data[stint_data['CurrentTyreAge'] == latest_age]
+        # Alternative: use CurrentTyreAge to estimate position in race
+        elif 'CurrentTyreAge' in driver_data.columns:
+            # Find the appropriate stint and tire age for current lap
+            # Group by stint and find which stint should be active at current_lap
+            stint_groups = driver_data.groupby('Stint')
+
+            best_data = None
+            for stint, stint_data in stint_groups:
+                # Calculate approximate race lap for this stint data
+                min_age = stint_data['CurrentTyreAge'].min()
+                max_age = stint_data['CurrentTyreAge'].max()
+
+                # Estimate if current_lap falls within this stint's range
+                # This is a simplification - in real scenarios you'd have better mapping
+                if min_age <= current_lap <= max_age:
+                    # Find the closest tire age to current lap within this stint
+                    closest_age = stint_data.iloc[(
+                        stint_data['CurrentTyreAge'] - current_lap).abs().argsort()[:1]]
+                    best_data = closest_age
+                    break
+
+            if best_data is not None:
+                driver_data = best_data
+            else:
+                # Fallback: use most recent data
+                latest_stint = driver_data['Stint'].max()
+                stint_data = driver_data[driver_data['Stint'] == latest_stint]
+                latest_age = stint_data['CurrentTyreAge'].max()
+                driver_data = stint_data[stint_data['CurrentTyreAge']
+                                         == latest_age]
+    else:
+        # Original behavior when no current_lap is provided
+        latest_stint = driver_data['Stint'].max()
+        stint_data = driver_data[driver_data['Stint'] == latest_stint]
+        latest_age = stint_data['CurrentTyreAge'].max()
+        driver_data = stint_data[stint_data['CurrentTyreAge'] == latest_age]
+
+    # Continue with existing logic for the filtered data
+    if driver_data.empty:
+        print(
+            f"Warning: No data available for driver {driver_number} at current lap {current_lap}")
+        return None
 
     # Sort predictions by how far in the future they are
-    future_data = latest_data.sort_values('LapsAheadPred')
+    future_data = driver_data.sort_values('LapsAheadPred')
 
     # Extract future degradation rates
     predicted_rates = future_data['PredictedDegradationRate'].tolist()
@@ -189,25 +238,25 @@ def transform_tire_predictions(predictions_df, driver_number):
     # Get basic info about current state
     current_info = future_data.iloc[0]
 
-    # CORRECTION: Use the first predicted degradation rate as the current rate
-    # instead of using 0.0 as a placeholder
+    # Use the first predicted degradation rate as the current rate
     current_degradation_rate = predicted_rates[0] if predicted_rates else 0.0
-    print(
-        f"Using first predicted rate as current degradation: {current_degradation_rate}")
+
+    # Get current tire age from the filtered data
+    current_tire_age = int(current_info['CurrentTyreAge'])
+
+    print(f"Driver {driver_number}, Lap {current_lap}: tire_age={current_tire_age}, degradation_rate={current_degradation_rate:.3f}")
 
     # Create degradation fact with current and predicted data
     degradation_fact = DegradationFact(
-        # Now using the actual predicted rate
         degradation_rate=current_degradation_rate,
-        predicted_rates=predicted_rates  # Array of future predictions
+        predicted_rates=predicted_rates
     )
 
     # Create corresponding telemetry fact
     telemetry_fact = TelemetryFact(
-        tire_age=int(latest_age),
+        tire_age=current_tire_age,
         compound_id=int(current_info['CompoundID']),
         driver_number=int(driver_number),
-        # Add position if available
         position=int(current_info.get('Position', 0))
     )
 
