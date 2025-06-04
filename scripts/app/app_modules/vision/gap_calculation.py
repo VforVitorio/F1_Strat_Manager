@@ -454,7 +454,7 @@ def extract_gaps_from_video(
     output_csv=None,
     show_video=True,
     streamlit_callback=None,
-    start_time=0  # Nuevo parámetro para salto en segundos
+    start_time=0  # New parameter for jumping to specific seconds
 ):
     """
     Process a video and extract gap data at regular intervals with visualization
@@ -462,10 +462,9 @@ def extract_gaps_from_video(
     Args:
         video_path: Path to the F1 video
         sample_interval_seconds: How often to sample gap data (in seconds)
-        output_csv: Path to save CSV data (if None, will generate a default path)
-        show_video: Whether to display the video during processing
-        streamlit_callback: función para actualizar progreso/log/frame en Streamlit
-        start_time: segundos desde los que empezar el procesamiento
+        output_csv: Path to save CSV data (if None, will generate a default path)        show_video: Whether to display the video during processing
+        streamlit_callback: function to update progress/log/frame in Streamlit
+        start_time: seconds from which to start processing
 
     Returns:
         DataFrame with extracted gap data
@@ -768,10 +767,9 @@ def extract_gaps_from_video(
             current_time = pytime.time()
             current_fps = 10.0 / (current_time - start_time_clock)
             start_time_clock = current_time
-
-        if show_video and streamlit_callback:
-            # Enviar el frame procesado a Streamlit en cada iteración
-            streamlit_callback(progress, log, frame_resized)
+            if show_video and streamlit_callback:
+                # Send the processed frame to Streamlit at each iteration
+                streamlit_callback(progress, log, frame_resized)
 
     cap.release()
     cv2.destroyAllWindows()

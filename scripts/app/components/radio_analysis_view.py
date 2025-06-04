@@ -19,8 +19,9 @@ def render_radio_analysis_view():
     st.write("Upload a team radio MP3 file to transcribe and analyze its content using the NLP pipeline.")
 
     uploaded_file = st.file_uploader("Upload MP3 file", type=["mp3"])
+
     if uploaded_file is not None:
-        # Guardar archivo temporalmente en una carpeta específica
+        # Save file temporarily in a specific folder
         os.makedirs("outputs/temp", exist_ok=True)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3", dir="outputs/temp") as tmp_file:
             tmp_file.write(uploaded_file.read())

@@ -28,12 +28,12 @@ def extract_f1_data(year: int, gp: str, session_type: str = 'R'):
         pit_stops.to_parquet(f"data/raw/{gp}_{year}_pitstops.parquet")
         weather.to_parquet(f"data/raw/{gp}_{year}_weather.parquet")
 
-        print(f"Datos de {gp} {year} extraídos exitosamente!")
+        print(f"Data from {gp} {year} extracted successfully!")
 
     except Exception as e:
         print(f"Error: {e}")
 
 
 if __name__ == "__main__":
-    # Execute only for GP España 2023 (initial prioriry)
+    # Execute only for GP Spain 2023 (initial priority)
     extract_f1_data(2023, "Spain")

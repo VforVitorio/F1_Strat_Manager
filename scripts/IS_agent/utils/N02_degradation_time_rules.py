@@ -312,11 +312,11 @@ class F1DegradationRules(F1StrategyEngine):
     )
     def stint_extension_recommendation(self, deg_rate, pred_rates, age, lap):
         """
-        Rule 2: Stint Extension for Low Degradation (Modificada sin condición de posición)
+        Rule 2: Stint Extension for Low Degradation (Modified without position condition)
         IF (DegradationRate < 0.15 AND PredictedRate < 0.20 AND TyreAge > 12)
         THEN recommend extending current stint
 
-        Versión actualizada que no considera la posición del piloto
+        Updated version that does not consider driver position
         """
         # Debug output
         print(f"Rule activated: stint_extension_recommendation")

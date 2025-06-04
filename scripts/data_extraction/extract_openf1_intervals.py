@@ -1,12 +1,12 @@
 """
 OpenF1 Intervals Data Extraction Script
 ---------------------------------------
-Este script extrae específicamente los datos de intervalos entre pilotos
-desde la API de OpenF1 y los almacena en formato Parquet para su uso posterior
-en análisis de estrategia, undercuts/overcuts, etc.
+This script specifically extracts interval data between drivers
+from the OpenF1 API and stores it in Parquet format for later use
+in strategy analysis, undercuts/overcuts, etc.
 
-Complementa el script existente de extracción de FastF1 para ofrecer
-datos más precisos sobre los gaps entre coches.
+Complements the existing FastF1 extraction script to provide
+more precise data about gaps between cars.
 """
 
 import requests
@@ -17,58 +17,58 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-# Crear directorios necesarios
+# Create necessary directories
 Path("data/raw").mkdir(parents=True, exist_ok=True)
 
 
 def get_session_key(year, gp_name):
     """
-    Obtiene el session_key para la carrera especificada.
+    Gets the session_key for the specified race.
 
     Args:
-        year (int): Año de la carrera
-        gp_name (str): Nombre del Gran Premio
+        year (int): Race year
+        gp_name (str): Grand Prix name
 
     Returns:
-        int: session_key para usar en la API de OpenF1
+        int: session_key to use in OpenF1 API
     """
-    # Para GP España 2023, el session_key correcto es 9102
+    # For GP Spain 2023, the correct session_key is 9102
     if year == 2023 and gp_name.lower() == "spain":
         return 9102
 
-    # Si necesitamos obtener dinámicamente los session_keys para otras carreras,
-    # podríamos implementar una búsqueda usando la API de sesiones de OpenF1
-    # Por ahora, solo implementamos para España 2023
+    # If we need to dynamically get session_keys for other races,
+    # we could implement a search using the OpenF1 sessions API
+    # For now, we only implement for Spain 2023
 
-    print(f"⚠️ Solo tenemos implementado el session_key para España 2023")
-    print(f"⚠️ Para otras carreras, necesitas encontrar el session_key correcto")
+    print(f"⚠️ We only have the session_key implemented for Spain 2023")
+    print(f"⚠️ For other races, you need to find the correct session_key")
     return None
 
 
 def fetch_openf1_intervals(year, gp_name, max_interval=None):
     """
-    Extrae datos de intervalos entre coches desde OpenF1 API para una carrera específica.
+    Extracts interval data between cars from OpenF1 API for a specific race.
 
     Args:
-        year (int): Año de la carrera (ej: 2023)
-        gp_name (str): Nombre del Gran Premio (ej: 'Spain')
-        max_interval (float, optional): Filtrar intervalos menores a este valor (en segundos)
+        year (int): Race year (e.g.: 2023)
+        gp_name (str): Grand Prix name (e.g.: 'Spain')
+        max_interval (float, optional): Filter intervals smaller than this value (in seconds)
 
     Returns:
-        pandas.DataFrame: DataFrame con datos de intervalos entre coches
+        pandas.DataFrame: DataFrame with interval data between cars
     """
     base_url = "https://api.openf1.org/v1/intervals"
 
-    # Obtener el session_key para esta carrera
+    # Get the session_key for this race
     session_key = get_session_key(year, gp_name)
     if session_key is None:
-        print("❌ No se pudo obtener el session_key para esta carrera")
+        print("❌ Could not get session_key for this race")
         return pd.DataFrame()
 
     print(
-        f"Buscando datos en OpenF1 para {gp_name} {year} (session_key: {session_key})")
+        f"Searching for data in OpenF1 for {gp_name} {year} (session_key: {session_key})")
 
-    # Construir la URL directamente, exactamente como la que funciona en el navegador
+    # Build the URL directly, exactly like the one that works in the browser
     # can change max_interval to min_interval if we change the < sign to >
     if max_interval is not None:
         url = f"{base_url}?session_key={session_key}&interval<{max_interval}"
@@ -78,139 +78,136 @@ def fetch_openf1_intervals(year, gp_name, max_interval=None):
         print(f"URL: {url}")
 
     try:
-        print("Realizando petición a OpenF1 API...")
+        print("Making request to OpenF1 API...")
         response = requests.get(url)
         response.raise_for_status()
 
-        print(f"Estado de la respuesta: {response.status_code}")
+        print(f"Response status: {response.status_code}")
 
-        # Comprobar si hemos recibido datos válidos
+        # Check if we have received valid data
         if response.text and response.text.strip():
             try:
-                # Intentar parsear el JSON
+                # Try to parse the JSON
                 intervals_data = response.json()
                 print(
-                    f"✓ Se encontraron {len(intervals_data)} registros para session_key={session_key}")
+                    f"✓ Found {len(intervals_data)} records for session_key={session_key}")
 
-                # Convertir a DataFrame
+                # Convert to DataFrame
                 df_intervals = pd.DataFrame(intervals_data)
 
-                # Procesamiento básico de datos
+                # Basic data processing
                 if 'date' in df_intervals.columns:
-                    # Manejar diferentes formatos de fecha
+                    # Handle different date formats
                     df_intervals['date'] = pd.to_datetime(
-                        df_intervals['date'], format='mixed')
-
-                # Asegurarnos de que el nombre de la columna es consistente
+                        df_intervals['date'], format='mixed')                # Ensure the column name is consistent
                 if 'interval' in df_intervals.columns:
                     df_intervals.rename(
                         columns={'interval': 'interval_in_seconds'}, inplace=True)
 
                 if 'interval_in_seconds' in df_intervals.columns:
-                    # Marcar intervalos en zonas estratégicas
+                    # Mark intervals in strategic zones
                     df_intervals['undercut_window'] = df_intervals['interval_in_seconds'] < 1.5
                     df_intervals['drs_window'] = df_intervals['interval_in_seconds'] < 1.0
 
                 return df_intervals
             except Exception as e:
-                print(f"Error al procesar datos: {e}")
-                print("Intentando procesar manualmente...")
+                print(f"Error processing data: {e}")
+                print("Trying to process manually...")
 
-                # Procesar manualmente sin usar pandas para datetime
+                # Process manually without using pandas for datetime
                 try:
                     intervals_data = json.loads(response.text)
                     df_intervals = pd.DataFrame(intervals_data)
 
-                    # Guardar fechas como strings para evitar problemas de formato
+                    # Save dates as strings to avoid format issues
                     if 'date' in df_intervals.columns:
-                        # Guardar como string
+                        # Save as string
                         df_intervals['date_str'] = df_intervals['date']
-                        # No convertimos a datetime para evitar errores
+                        # Don't convert to datetime to avoid errors
 
-                    # Asegurarnos de que el nombre de la columna es consistente
+                    # Ensure the column name is consistent
                     if 'interval' in df_intervals.columns:
                         df_intervals.rename(
                             columns={'interval': 'interval_in_seconds'}, inplace=True)
 
                     if 'interval_in_seconds' in df_intervals.columns:
-                        # Marcar intervalos en zonas estratégicas
+                        # Mark intervals in strategic zones
                         df_intervals['undercut_window'] = df_intervals['interval_in_seconds'] < 1.5
                         df_intervals['drs_window'] = df_intervals['interval_in_seconds'] < 1.0
 
                     print(
-                        f"✓ Procesamiento manual exitoso. Se obtuvieron {len(df_intervals)} registros.")
+                        f"✓ Manual processing successful. Got {len(df_intervals)} records.")
                     return df_intervals
                 except Exception as e2:
-                    print(f"Error en procesamiento manual: {e2}")
+                    print(f"Error in manual processing: {e2}")
                     return pd.DataFrame()
         else:
-            print("La respuesta está vacía")
+            print("Response is empty")
             return pd.DataFrame()
     except Exception as e:
-        print(f"Error al consultar OpenF1: {e}")
+        print(f"Error querying OpenF1: {e}")
         if 'response' in locals():
             print(
-                f"Código de estado: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
+                f"Status code: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
             print(
-                f"Primeros 500 caracteres de la respuesta: {response.text[:500] if hasattr(response, 'text') else 'N/A'}")
+                f"First 500 characters of response: {response.text[:500] if hasattr(response, 'text') else 'N/A'}")
         return pd.DataFrame()
 
 
 def extract_openf1_intervals(year, gp_name, max_interval=None):
     """
-    Función principal para extraer y guardar datos de intervalos de OpenF1.
+    Main function to extract and save OpenF1 interval data.
 
     Args:
-        year (int): Año de la carrera
-        gp_name (str): Nombre del Gran Premio
-        max_interval (float, optional): Filtrar intervalos menores a este valor (en segundos)
+        year (int): Race year
+        gp_name (str): Grand Prix name
+        max_interval (float, optional): Filter intervals smaller than this value (in seconds)
     """
     intervals_df = fetch_openf1_intervals(year, gp_name, max_interval)
 
     if not intervals_df.empty:
-        # Manejar tipos de datos mixtos en columnas - SOLUCIÓN AL ERROR
-        # Identificar y manejar columnas problemáticas con datos mixtos (como gap_to_leader)
+        # Handle mixed data types in columns - ERROR SOLUTION
+        # Identify and handle problematic columns with mixed data (like gap_to_leader)
         if 'gap_to_leader' in intervals_df.columns:
-            # Opción 1: Convertir toda la columna a string
+            # Option 1: Convert entire column to string
             intervals_df['gap_to_leader'] = intervals_df['gap_to_leader'].astype(
                 str)
 
-            # Opción 2 (alternativa): Crear columnas separadas para valores numéricos y categorías
-            # Permite análisis numérico posterior más fácil
+            # Option 2 (alternative): Create separate columns for numeric values and categories
+            # Allows easier subsequent numeric analysis
             intervals_df['gap_to_leader_numeric'] = pd.to_numeric(
                 intervals_df['gap_to_leader'], errors='coerce')
             intervals_df['is_lapped'] = intervals_df['gap_to_leader'].astype(
                 str).str.contains('LAP')
 
-        # Revisar otras columnas potencialmente problemáticas con tipos mixtos
+        # Review other potentially problematic columns with mixed types
         for col in intervals_df.columns:
             if intervals_df[col].dtype == 'object' and col != 'date' and col != 'date_str':
-                # Si no es una fecha, intentamos convertir a numérico o asegurar que es string
+                # If it's not a date, we try to convert to numeric or ensure it's string
                 try:
-                    # Intentamos convertir a numérico
+                    # Try to convert to numeric
                     intervals_df[col] = pd.to_numeric(intervals_df[col])
                 except:
-                    # Si falla, aseguramos que es string
+                    # If it fails, ensure it's string
                     intervals_df[col] = intervals_df[col].astype(str)
 
-        # Guardar datos en formato Parquet
+        # Save data in Parquet format
         output_path = f"data/raw/{gp_name}_{year}_openf1_intervals.parquet"
         intervals_df.to_parquet(output_path)
 
-        # Guardar también en CSV para mayor compatibilidad/diagnóstico
+        # Also save in CSV for greater compatibility/diagnosis
         csv_path = f"data/raw/{gp_name}_{year}_openf1_intervals.csv"
         intervals_df.to_csv(csv_path, index=False)
+        # Summary information
         print(f"Datos de respaldo guardados en CSV: {csv_path}")
-
-        # Información de resumen
-        print(f"Datos de intervalos guardados en {output_path}")
-        print(f"Total de registros: {len(intervals_df)}")
+        print(f"Interval data saved at {output_path}")
+        print(f"Total records: {len(intervals_df)}")
         if 'interval_in_seconds' in intervals_df.columns:
             print(
-                f"Rango de intervalos: {intervals_df['interval_in_seconds'].min():.2f}s - {intervals_df['interval_in_seconds'].max():.2f}s")
+                f"Interval range: {intervals_df['interval_in_seconds'].min():.2f}s - {intervals_df['interval_in_seconds'].max():.2f}s")
             undercut_opportunities = intervals_df['undercut_window'].sum()
             print(
-                f"Oportunidades de undercut (<1.5s): {undercut_opportunities} ({undercut_opportunities/len(intervals_df)*100:.1f}%)")
+                f"Undercut opportunities (<1.5s): {undercut_opportunities} ({undercut_opportunities/len(intervals_df)*100:.1f}%)")
 
         # Crear archivo de metadatos
         metadata = {
@@ -237,6 +234,6 @@ def extract_openf1_intervals(year, gp_name, max_interval=None):
 
 
 if __name__ == "__main__":
-    # Extraer datos de intervalos para el GP de España 2023
-    # Usando el session_key 9102 y filtrando intervalos menores a 1.75 segundos
+    # Extract interval data for the 2023 Spanish GP
+    # Using session_key 9102 and filtering intervals smaller than 1.75 seconds
     extract_openf1_intervals(2023, "Spain", max_interval=1.75)

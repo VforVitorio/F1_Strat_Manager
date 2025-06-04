@@ -1,6 +1,6 @@
 """
 
-Archivo de data augmentation para el conjunto de entrenamiento train del dataset de imágenes.
+Data augmentation file for the train training set of the image dataset.
 
 """
 
@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 import albumentations as A
 
-# Configuración de clases y parámetros
+# Class and parameter configuration
 CLASS_NAMES = [
     "Kick Sauber", "Racing Bulls", "Alpine", "Aston Martin",
     "Ferarri", "Haas", "Mclaren", "Mercedes", "Red Bull", "Williams"
@@ -112,20 +112,19 @@ def augment_image(img_path, label_path, output_img_path, output_label_path, clas
         print(f"Error procesando {img_path}: {str(e)}")
 
 
-def main():
-    # Configurar directorios
+def main():    # Configure directories
     train_images_dir = os.path.join(BASE_DIR, "train", "images")
     train_labels_dir = os.path.join(BASE_DIR, "train", "labels")
 
-    # Verificar directorios
+    # Verify directories
     if not os.path.exists(train_images_dir):
         raise FileNotFoundError(
-            f"Directorio no encontrado: {train_images_dir}")
+            f"Directory not found: {train_images_dir}")
     if not os.path.exists(train_labels_dir):
         raise FileNotFoundError(
-            f"Directorio no encontrado: {train_labels_dir}")
+            f"Directory not found: {train_labels_dir}")
 
-    # Organizar imágenes por clase
+    # Organize images by class
     class_files = {i: [] for i in range(len(CLASS_NAMES))}
 
     for filename in os.listdir(train_images_dir):
@@ -147,12 +146,12 @@ def main():
     for class_id, files in class_files.items():
         class_name = CLASS_NAMES[class_id]
         current_count = len(files)
-
         if current_count >= TARGET_PER_CLASS:
-            print(f"{class_name}: Suficientes imágenes ({current_count})")
+            print(f"{class_name}: Sufficient images ({current_count})")
             continue
 
-        print(f"{class_name}: Generando {TARGET_PER_CLASS - current_count} aumentos...")
+        print(
+            f"{class_name}: Generating {TARGET_PER_CLASS - current_count} augmentations...")
         for i in range(TARGET_PER_CLASS - current_count):
             src_img, src_label = random.choice(files)
             base_name = os.path.splitext(os.path.basename(src_img))[0]
