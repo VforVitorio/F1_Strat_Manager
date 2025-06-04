@@ -929,13 +929,18 @@ def analyze_all_drivers_with_real_radios(
     Returns:
         DataFrame with all recommendations
     """
+    import glob
+    from datetime import datetime
+    import fastf1
+    import re
+
     print(f"\n{'='*80}")
     print(f"ANALYZING ALL DRIVERS WITH REAL RADIOS FROM 2023 SPANISH GP")
     print(f"{'='*80}")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     # 1. Set up folder paths
-    base_dir = 'outputs'
+    base_dir = '../../outputs'
     radio_dir = os.path.join(base_dir, "week6", "radios")
     processed_dir = os.path.join(base_dir, "week6", "processed_radios")
 
@@ -1012,7 +1017,7 @@ def analyze_all_drivers_with_real_radios(
     # 7. Load gap data using FastF1
     try:
         # Setup FastF1 cache
-        fastf1.Cache.enable_cache('f1-strategy/f1_cache')
+        fastf1.Cache.enable_cache('../../f1-strategy/f1_cache')
 
         # Spanish GP 2023 details
         year = 2023
@@ -1149,9 +1154,18 @@ def analyze_all_drivers_with_real_radios(
                 driver_tire_data = tire_predictions[tire_predictions['DriverNumber']
                                                     == driver_number]
                 if not driver_tire_data.empty:
-                    driver_tire_predictions = driver_tire_data
+                    # ✅ NUEVO: Filtrar por vuelta actual si existe una columna adecuada
+                    if 'RaceLap' in driver_tire_data.columns:
+                        # Filtrar datos que sean relevantes para esta vuelta
+                        relevant_data = driver_tire_data[driver_tire_data['RaceLap'] <= lap]
+                        if not relevant_data.empty:
+                            driver_tire_predictions = relevant_data
+                        else:
+                            driver_tire_predictions = driver_tire_data
+                    else:
+                        driver_tire_predictions = driver_tire_data
                     print(
-                        f"  Using tire predictions ({len(driver_tire_data)} rows)")
+                        f"  Using tire predictions ({len(driver_tire_predictions)} rows) for lap {lap}")
 
             # Transform lap time predictions for this driver
             driver_lap_predictions = None
@@ -1170,9 +1184,9 @@ def analyze_all_drivers_with_real_radios(
                 lap_predictions=driver_lap_predictions,
                 gap_data=driver_gap_data,
                 radio_json_path=radio_json_path,
-                current_lap=lap,
+                current_lap=lap,  # ✅ CRITICAL: Passing the current lap
                 total_laps=total_laps,
-                debug=False
+                debug=True  # ✅ Enable debug to see what's happening
             )
 
             # Create rule engine
@@ -1281,7 +1295,6 @@ def analyze_all_drivers_with_real_radios(
                 rec['Team'] = team_id
 
                 # Add tire compound information (NEW)
-                rec['CompoundID'] = compound_id
                 rec['CompoundName'] = compound_names.get(
                     compound_id, 'Unknown') if compound_id is not None else 'Unknown'
 

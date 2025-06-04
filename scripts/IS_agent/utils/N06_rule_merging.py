@@ -929,6 +929,11 @@ def analyze_all_drivers_with_real_radios(
     Returns:
         DataFrame with all recommendations
     """
+    import glob
+    from datetime import datetime
+    import fastf1
+    import re
+
     print(f"\n{'='*80}")
     print(f"ANALYZING ALL DRIVERS WITH REAL RADIOS FROM 2023 SPANISH GP")
     print(f"{'='*80}")
@@ -1149,9 +1154,18 @@ def analyze_all_drivers_with_real_radios(
                 driver_tire_data = tire_predictions[tire_predictions['DriverNumber']
                                                     == driver_number]
                 if not driver_tire_data.empty:
-                    driver_tire_predictions = driver_tire_data
+                    # ✅ NUEVO: Filtrar por vuelta actual si existe una columna adecuada
+                    if 'RaceLap' in driver_tire_data.columns:
+                        # Filtrar datos que sean relevantes para esta vuelta
+                        relevant_data = driver_tire_data[driver_tire_data['RaceLap'] <= lap]
+                        if not relevant_data.empty:
+                            driver_tire_predictions = relevant_data
+                        else:
+                            driver_tire_predictions = driver_tire_data
+                    else:
+                        driver_tire_predictions = driver_tire_data
                     print(
-                        f"  Using tire predictions ({len(driver_tire_data)} rows)")
+                        f"  Using tire predictions ({len(driver_tire_predictions)} rows) for lap {lap}")
 
             # Transform lap time predictions for this driver
             driver_lap_predictions = None
@@ -1170,9 +1184,9 @@ def analyze_all_drivers_with_real_radios(
                 lap_predictions=driver_lap_predictions,
                 gap_data=driver_gap_data,
                 radio_json_path=radio_json_path,
-                current_lap=lap,
+                current_lap=lap,  # ✅ CRITICAL: Passing the current lap
                 total_laps=total_laps,
-                debug=False
+                debug=True  # ✅ Enable debug to see what's happening
             )
 
             # Create rule engine
@@ -1281,7 +1295,6 @@ def analyze_all_drivers_with_real_radios(
                 rec['Team'] = team_id
 
                 # Add tire compound information (NEW)
-                rec['CompoundID'] = compound_id
                 rec['CompoundName'] = compound_names.get(
                     compound_id, 'Unknown') if compound_id is not None else 'Unknown'
 
@@ -1332,41 +1345,6 @@ def analyze_all_drivers_with_real_radios(
     else:
         print("No recommendations generated")
         return pd.DataFrame()
-
-
-def run_example_analysis():
-    """
-    Example demonstrating the complete strategy analysis pipeline.
-
-    Uses the provided CSV files and a sample radio message to run
-    a full strategy analysis for a specific driver.
-    """
-    print("\n=== RUNNING EXAMPLE STRATEGY ANALYSIS ===")
-
-    # Define paths to data files
-    race_data_path = '../../outputs/week3/lap_prediction_data.csv'
-    models_path = '../../outputs/week5/models/'
-    # Separate path for lap model
-    lap_model_path = '../../outputs/week3/xgb_sequential_model.pkl'
-
-    # Sample radio message
-    radio_message = "Box this lap for softs, there's rain expected in 10 minutes"
-
-    # Driver to analyze (Lewis Hamilton)
-    driver_number = 44
-
-    # Run the analysis
-    recommendations = analyze_strategy(
-        driver_number=driver_number,
-        race_data_path=race_data_path,
-        models_path=models_path,
-        lap_model_path=lap_model_path,
-        radio_message=radio_message,
-        current_lap=20,  # Mid-race scenario
-        total_laps=66    # Typical F1 race length
-    )
-
-    return recommendations
 
 
 def run_all_drivers_analysis():
