@@ -271,7 +271,7 @@ def transform_all_facts(driver_number, tire_predictions=None, lap_predictions=No
     if tire_predictions is not None:
         try:
             tire_facts = transform_tire_predictions(
-                tire_predictions, driver_number)
+                tire_predictions, driver_number, current_lap)
             if tire_facts:
                 # Ensure values are valid for the Fact schema
                 if 'degradation' in tire_facts and tire_facts['degradation'] is not None:
