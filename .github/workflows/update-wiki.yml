@@ -530,6 +530,15 @@ jobs:
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
 
+
+      - name: Clean Wiki Directory (Remove Old Files)
+        run: |
+          # No borrar el .git (necesario para poder hacer push)
+          shopt -s extglob
+          cd wiki
+          rm -rf !(.git)
+          cd ..
+
       - name: Copy All Documentation to Wiki
         run: |
           # Verify we have files to copy
