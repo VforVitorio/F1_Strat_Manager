@@ -1,0 +1,449 @@
+name: Update GitHub Wiki from DeepWiki MCP
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  NODE_ENV: production
+  DEEPWIKI_PORT: 3000
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Clone DeepWiki MCP
+        run: |
+          git clone https://github.com/regenrek/deepwiki-mcp.git deepwiki-mcp
+
+      - name: Install & Build DeepWiki MCP
+        working-directory: deepwiki-mcp
+        run: |
+          npm ci
+          npm run build
+          ls -la bin/
+
+      - name: Start DeepWiki MCP Server
+        working-directory: deepwiki-mcp
+        run: |
+          npx mcp-deepwiki --http --port ${{ env.DEEPWIKI_PORT }} > ../deepwiki.log 2>&1 &
+          echo "Waiting for DeepWiki MCP..."
+          for i in {1..30}; do
+            curl -s http://localhost:${{ env.DEEPWIKI_PORT }}/mcp && break || sleep 2
+          done
+
+      - name: Prepare docs directory
+        run: |
+          rm -rf docs-md
+          mkdir docs-md
+
+      - name: Export full documentation
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"exportAll","params":{}}' \
+            -o docs-md/f1-strat-manager-complete.md
+
+      - name: Export "Overview" section
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":2,
+              "method":"exportSection",
+              "params":{"path":"01-overview"}
+            }' \
+            -o docs-md/01-overview.md
+
+      - name: Export "System Architecture" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":3,
+              "method":"exportSection",
+              "params":{"path":"01-01-system-architecture"}
+            }' \
+            -o docs-md/01-01-system-architecture.md
+
+      - name: Export "Installation and Setup" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":4,
+              "method":"exportSection",
+              "params":{"path":"01-02-installation-setup"}
+            }' \
+            -o docs-md/01-02-installation-setup.md
+
+      - name: Export "Streamlit Dashboard" section
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":5,
+              "method":"exportSection",
+              "params":{"path":"02-streamlit-dashboard"}
+            }' \
+            -o docs-md/02-streamlit-dashboard.md
+
+      - name: Export "Strategy Recommendations View" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":6,
+              "method":"exportSection",
+              "params":{"path":"02-01-strategy-recommendations-view"}
+            }' \
+            -o docs-md/02-01-strategy-recommendations-view.md
+
+      - name: Export "Gap Analysis View" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":7,
+              "method":"exportSection",
+              "params":{"path":"02-02-gap-analysis-view"}
+            }' \
+            -o docs-md/02-02-gap-analysis-view.md
+
+      - name: Export "Radio Analysis View" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":8,
+              "method":"exportSection",
+              "params":{"path":"02-03-radio-analysis-view"}
+            }' \
+            -o docs-md/02-03-radio-analysis-view.md
+
+      - name: Export "Time Predictions View" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":9,
+              "method":"exportSection",
+              "params":{"path":"02-04-time-predictions-view"}
+            }' \
+            -o docs-md/02-04-time-predictions-view.md
+
+      - name: Export "Strategy Chat Interface" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":10,
+              "method":"exportSection",
+              "params":{"path":"02-05-strategy-chat-interface"}
+            }' \
+            -o docs-md/02-05-strategy-chat-interface.md
+
+      - name: Export "Machine Learning Models" section
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":11,
+              "method":"exportSection",
+              "params":{"path":"03-machine-learning-models"}
+            }' \
+            -o docs-md/03-machine-learning-models.md
+
+      - name: Export "Lap Time Prediction" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":12,
+              "method":"exportSection",
+              "params":{"path":"03-01-lap-time-prediction"}
+            }' \
+            -o docs-md/03-01-lap-time-prediction.md
+
+      - name: Export "Tire Degradation Modeling" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":13,
+              "method":"exportSection",
+              "params":{"path":"03-02-tire-degradation-modeling"}
+            }' \
+            -o docs-md/03-02-tire-degradation-modeling.md
+
+      - name: Export "Vision-based Gap Calculation" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":14,
+              "method":"exportSection",
+              "params":{"path":"03-03-vision-based-gap-calculation"}
+            }' \
+            -o docs-md/03-03-vision-based-gap-calculation.md
+
+      - name: Export "NLP Pipeline" section
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":15,
+              "method":"exportSection",
+              "params":{"path":"04-nlp-pipeline"}
+            }' \
+            -o docs-md/04-nlp-pipeline.md
+
+      - name: Export "Radio Transcription" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":16,
+              "method":"exportSection",
+              "params":{"path":"04-01-radio-transcription"}
+            }' \
+            -o docs-md/04-01-radio-transcription.md
+
+      - name: Export "Sentiment and Intent Analysis" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":17,
+              "method":"exportSection",
+              "params":{"path":"04-02-sentiment-intent-analysis"}
+            }' \
+            -o docs-md/04-02-sentiment-intent-analysis.md
+
+      - name: Export "Named Entity Recognition" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":18,
+              "method":"exportSection",
+              "params":{"path":"04-03-named-entity-recognition"}
+            }' \
+            -o docs-md/04-03-named-entity-recognition.md
+
+      - name: Export "Expert System" section
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":19,
+              "method":"exportSection",
+              "params":{"path":"05-expert-system"}
+            }' \
+            -o docs-md/05-expert-system.md
+
+      - name: Export "Degradation Rules" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":20,
+              "method":"exportSection",
+              "params":{"path":"05-01-degradation-rules"}
+            }' \
+            -o docs-md/05-01-degradation-rules.md
+
+      - name: Export "Gap Analysis Rules" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":21,
+              "method":"exportSection",
+              "params":{"path":"05-02-gap-analysis-rules"}
+            }' \
+            -o docs-md/05-02-gap-analysis-rules.md
+
+      - name: Export "Radio Message Rules" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":22,
+              "method":"exportSection",
+              "params":{"path":"05-03-radio-message-rules"}
+            }' \
+            -o docs-md/05-03-radio-message-rules.md
+
+      - name: Export "Integrated Rule Engine" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":23,
+              "method":"exportSection",
+              "params":{"path":"05-04-integrated-rule-engine"}
+            }' \
+            -o docs-md/05-04-integrated-rule-engine.md
+
+      - name: Export "Developer Guide" section
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":24,
+              "method":"exportSection",
+              "params":{"path":"06-developer-guide"}
+            }' \
+            -o docs-md/06-developer-guide.md
+
+      - name: Export "API Reference" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":25,
+              "method":"exportSection",
+              "params":{"path":"06-01-api-reference"}
+            }' \
+            -o docs-md/06-01-api-reference.md
+
+      - name: Export "Integration Guide" subsection
+        run: |
+          curl -s -X POST http://localhost:${{ env.DEEPWIKI_PORT }}/mcp \
+            -H "Content-Type: application/json" \
+            -d '{
+              "jsonrpc":"2.0",
+              "id":26,
+              "method":"exportSection",
+              "params":{"path":"06-02-integration-guide"}
+            }' \
+            -o docs-md/06-02-integration-guide.md
+
+      - name: Remove current GitHub Wiki
+        run: |
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki
+          rm -rf wiki/*
+
+      - name: Copy All Documentation to Wiki
+        run: |
+          # Verify we have files to copy
+          if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
+            echo "Error: No markdown files to copy"
+            exit 1
+          fi
+          echo "Files to copy:"
+          ls -la docs-md/
+          # Ensure wiki directory exists
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
+            exit 1
+          fi
+          echo "Current wiki contents:"
+          ls -la wiki/
+          # Copy ALL markdown files to wiki
+          cp docs-md/*.md wiki/
+          # Create or update index page with hierarchical structure
+          cat > wiki/Home.md << 'EOF'
+          # Welcome to F1 Strategy Manager Wiki
+          This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
+          It is generated through DeepWiki, if you want to see also the figures of the documentation, please, navigate to [this link over here](https://deepwiki.com/VforVitorio/F1_Strat_Manager).
+          ## 📋 Complete Documentation
+          - **[📖 Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections organized hierarchically
+          ## 🗂️ Documentation Structure
+          ### 🔍 1. Overview
+          - **[Overview](01-overview)** - Project introduction and general information
+            - [System Architecture](01-01-system-architecture) - Overall system design and components
+            - [Installation and Setup](01-02-installation-setup) - Getting started guide
+          ### 📊 2. Streamlit Dashboard
+          - **[Streamlit Dashboard](02-streamlit-dashboard)** - Interactive web interface
+            - [Strategy Recommendations View](02-01-strategy-recommendations-view) - Strategic decision interface
+            - [Gap Analysis View](02-02-gap-analysis-view) - Real-time gap tracking
+            - [Radio Analysis View](02-03-radio-analysis-view) - Team radio insights
+            - [Time Predictions View](02-04-time-predictions-view) - Lap time forecasting
+            - [Strategy Chat Interface](02-05-strategy-chat-interface) - AI-powered strategy chat
+          ### 🤖 3. Machine Learning Models
+          - **[Machine Learning Models](03-machine-learning-models)** - AI/ML components
+            - [Lap Time Prediction](03-01-lap-time-prediction) - Predictive models for lap times
+            - [Tire Degradation Modeling](03-02-tire-degradation-modeling) - Tire performance analysis
+            - [Vision-based Gap Calculation](03-03-vision-based-gap-calculation) - Computer vision for gap detection
+          ### 🎤 4. NLP Pipeline
+          - **[NLP Pipeline](04-nlp-pipeline)** - Natural Language Processing components
+            - [Radio Transcription](04-01-radio-transcription) - Speech-to-text processing
+            - [Sentiment and Intent Analysis](04-02-sentiment-intent-analysis) - Emotional and intent recognition
+            - [Named Entity Recognition](04-03-named-entity-recognition) - Entity extraction from radio communications
+          ### ⚙️ 5. Expert System
+          - **[Expert System](05-expert-system)** - Rule-based decision engine
+            - [Degradation Rules](05-01-degradation-rules) - Tire degradation logic
+            - [Gap Analysis Rules](05-02-gap-analysis-rules) - Gap calculation rules
+            - [Radio Message Rules](05-03-radio-message-rules) - Communication analysis rules
+            - [Integrated Rule Engine](05-04-integrated-rule-engine) - Unified rule processing
+          ### 👨‍💻 6. Developer Guide
+          - **[Developer Guide](06-developer-guide)** - Technical documentation for developers
+            - [API Reference](06-01-api-reference) - Complete API documentation
+            - [Integration Guide](06-02-integration-guide) - How to integrate with external systems
+          ## 🏎️ Project Overview
+          The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support, combining:
+          - **🤖 Machine Learning Models** - Predictive analytics for lap times and tire performance
+          - **👁️ Computer Vision** - Automated gap calculation from video feeds
+          - **🎤 Natural Language Processing** - Radio communication analysis and insights
+          - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
+          - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
+          ---
+          *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
+          EOF
+          echo "Files copied to wiki:"
+          ls -la wiki/
+
+      - name: Commit and push to GitHub Wiki
+        working-directory: wiki
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Full wiki regenerate on ${{ github.sha }}"
+          git push
+
+      - name: Cleanup background processes
+        if: always()
+        run: |
+          # Kill any remaining background processes
+          pkill -f "mcp-deepwiki" || true
+          pkill -f "deepwiki" || true
+          echo "Background processes cleaned up"

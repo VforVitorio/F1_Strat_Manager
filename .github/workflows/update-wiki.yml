@@ -31,7 +31,14 @@ jobs:
       - name: Install & Build DeepWiki MCP
         working-directory: deepwiki-mcp
         run: |
-          npm ci
+          # Check if package-lock.json exists, if not use npm install
+          if [ -f package-lock.json ]; then
+            echo "Found package-lock.json, using npm ci"
+            npm ci
+          else
+            echo "No package-lock.json found, using npm install"
+            npm install
+          fi
           npm run build
           ls -la bin/
 
