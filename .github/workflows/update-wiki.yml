@@ -515,42 +515,20 @@ jobs:
               
               print("✅ Processed as plain text")
               
-          except Exception as e:              print(f"❌ Error processing content: {e}")
+          except Exception as e:
+              print(f"❌ Error processing content: {e}")
               sys.exit(1)
           EOF
-          
           echo "Final documentation files created:"
           ls -la docs-md/
           echo "Preview of main documentation:"
           head -30 docs-md/f1-strat-manager-complete.md
-
       - name: Checkout Wiki
         uses: actions/checkout@v3
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
-
-      - name: Clean and Prepare Wiki Directory
-        run: |
-          # Ensure wiki directory exists
-          if [ ! -d wiki ]; then
-            echo "Error: Wiki directory not found"
-            exit 1
-          fi
-          echo "Current wiki contents before cleanup:"
-          ls -la wiki/
-          
-          # Remove ALL existing markdown files from wiki (complete cleanup)
-          echo "🗑️ Removing all existing wiki content..."
-          find wiki/ -name "*.md" -type f -delete
-          
-          # Also remove any other documentation files that might exist (except .git)
-          find wiki/ -type f ! -path "wiki/.git/*" ! -name ".git*" -delete
-          
-          echo "✅ Wiki directory cleaned successfully"
-          echo "Wiki contents after cleanup:"
-          ls -la wiki/
 
       - name: Copy All Documentation to Wiki
         run: |
@@ -561,15 +539,15 @@ jobs:
           fi
           echo "Files to copy:"
           ls -la docs-md/
-          
-          # Copy ALL markdown files to wiki
-          echo "📁 Copying new documentation files to wiki..."
-          cp docs-md/*.md wiki/
-            echo "✅ Files copied successfully"
-          echo "Final wiki contents:"
+          # Ensure wiki directory exists
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
+            exit 1
+          fi
+          echo "Current wiki contents:"
           ls -la wiki/
-
-          # Create or update index page with hierarchical structure
+          # Copy ALL markdown files to wiki
+          cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
           This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
@@ -612,55 +590,26 @@ jobs:
           The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support, combining:
           - **🤖 Machine Learning Models** - Predictive analytics for lap times and tire performance
           - **👁️ Computer Vision** - Automated gap calculation from video feeds
-          - **🎤 Natural Language Processing** - Radio communication analysis and insights          - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
+          - **🎤 Natural Language Processing** - Radio communication analysis and insights
+          - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
           - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
           ---
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
           EOF
           echo "Files copied to wiki:"
           ls -la wiki/
-
       - name: Commit & Push changes
         working-directory: wiki
         run: |
-          echo "🔧 Configuring git..."
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          echo "📁 Current wiki directory contents:"
-          ls -la
-          
-          echo "📊 Git status before adding:"
-          git status
-          
-          # Add all files (including deletions and modifications)
-          echo "➕ Adding all files to git..."
-          git add -A
-          
-          echo "📊 Git status after adding:"
-          git status
-          
-          echo "📋 Staged changes:"
-          git diff --cached --name-status || echo "No staged changes detected by diff"
-          
-          # Check if there are any changes using multiple methods
-          if git status --porcelain | grep -q .; then
-            echo "✅ Changes detected by git status --porcelain, committing..."
-            git commit -m "🔄 Complete Wiki Refresh from DeepWiki - $(date '+%Y-%m-%d %H:%M') - All previous content replaced"
-            git push
-            echo "✅ Changes pushed successfully"
-          elif ! git diff --cached --quiet; then
-            echo "✅ Changes detected by git diff --cached, committing..."
-            git commit -m "🔄 Complete Wiki Refresh from DeepWiki - $(date '+%Y-%m-%d %H:%M') - All previous content replaced"
-            git push
-            echo "✅ Changes pushed successfully"
+          git add .
+          git add .
+          # Check if there are changes before committing
+          if git diff --quiet --staged; then
+            echo "No changes to commit"
           else
-            echo "⚠️ No changes detected by standard methods"
-            echo "🔄 Forcing commit to ensure wiki is updated..."
-            # Create a timestamp file to force a change
-            echo "Last updated: $(date)" > wiki-last-updated.txt
-            git add wiki-last-updated.txt
-            git commit -m "🔄 Force Wiki Update from DeepWiki - $(date '+%Y-%m-%d %H:%M') - Forced refresh"
+            git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
             git push
-            echo "✅ Forced update pushed successfully"
+            echo "Changes pushed successfully"
           fi
