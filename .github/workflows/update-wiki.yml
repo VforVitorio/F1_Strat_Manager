@@ -180,17 +180,11 @@ jobs:
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
-              # Eliminar bloque de navegación/índice DeepWiki completo al principio (menú, títulos, powered by, etc)
-              content = re.sub(r'^(?:Overview\n)?VforVitorio/F1_Strat_Manager\n\n?powered by\n\n?Devin\n\n?(?:Overview\n)?System Architecture\nInstallation and Setup\nStreamlit Dashboard\nStrategy Recommendations View\nGap Analysis View\nRadio Analysis View\nTime Predictions View\nStrategy Chat Interface\nMachine Learning Models\nLap Time Prediction\nTire Degradation Modeling\nVision-based Gap Calculation\nNLP Pipeline\nRadio Transcription\nSentiment and Intent Analysis\nNamed Entity Recognition\nExpert System\nDegradation Rules\nGap Analysis Rules\nRadio Message Rules\nIntegrated Rule Engine\nDeveloper Guide\nAPI Reference\nIntegration Guide\n?','', content, flags=re.MULTILINE)
+              # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
+              content = re.sub(r'^(?:[\s\S]{0,300}?)(?:github-actions\[bot\].*?revision\n)?(?:[\s\S]{0,300}?)(?:System Architecture|Overview|Streamlit Dashboard|Machine Learning Models|NLP Pipeline|Expert System|Developer Guide|Other Sections)[\s\S]+?(?=\n# |\n## |\n### |\n\Z)', '', content, flags=re.MULTILINE)
               # Eliminar sección '/' y sus repeticiones
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
               content = re.sub(r'^/?\n+', '', content, flags=re.MULTILINE)
-              # Eliminar menú 'Other Sections' y sus entradas
-              content = re.sub(r'### Other Sections\n([\s\S]*?)(?=\n### |\n---|\n# |\n\Z)', '', content, flags=re.MULTILINE)
-              content = re.sub(r'- \[/?Documentation\]\([^)]+\)\n', '', content)
-              content = re.sub(r'- \[/?private-repo\]\([^)]+\)\n', '', content)
-              content = re.sub(r'- \[Documentation\]\([^)]+\)\n', '', content)
-              content = re.sub(r'- \[/\]\([^)]+\)\n', '', content)
               # Remove DeepWiki UI elements
               content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
@@ -536,6 +530,23 @@ jobs:
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
 
+      - name: Clean and Prepare Wiki Directory
+        run: |
+          # Ensure wiki directory exists
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
+            exit 1
+          fi
+          echo "Current wiki contents before cleanup:"
+          ls -la wiki/
+          # Remove ALL existing markdown files from wiki
+          echo "🗑️ Removing all existing wiki content..."
+          find wiki/ -name "*.md" -type f -delete
+          # Also remove any other files that might exist (except .git)
+          find wiki/ -type f ! -path "wiki/.git/*" ! -name ".git*" -delete
+          echo "✅ Wiki directory cleaned successfully"
+          echo "Wiki contents after cleanup:"
+          ls -la wiki/
       - name: Copy All Documentation to Wiki
         run: |
           # Verify we have files to copy
@@ -545,14 +556,8 @@ jobs:
           fi
           echo "Files to copy:"
           ls -la docs-md/
-          # Ensure wiki directory exists
-          if [ ! -d wiki ]; then
-            echo "Error: Wiki directory not found"
-            exit 1
-          fi
-          echo "Current wiki contents:"
-          ls -la wiki/
           # Copy ALL markdown files to wiki
+          echo "📁 Copying new documentation files to wiki..."
           cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
@@ -615,7 +620,7 @@ jobs:
           if git diff --quiet --staged; then
             echo "No changes to commit"
           else
-            git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
+            git commit -m "🔄 Complete Wiki Refresh from DeepWiki - $(date '+%Y-%m-%d %H:%M') - All previous content replaced"
             git push
             echo "Changes pushed successfully"
           fi
