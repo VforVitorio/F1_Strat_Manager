@@ -4,15 +4,15 @@
 
 </div>
 
+**Revolutionizing strategic decision-making in Formula 1 through AI-powered models, computer vision, and expert systems. For a deeper insight, see the project's [paper here](documents/F1_Strategy_Manager_AI.pdf).**
+
 <p align="center">
   <img
     src="documents/banner/f1_strat_manager_banner.jpeg"
     alt="Banner VforVitorio"
-    style="width:75%; max-width:900px; aspect-ratio:21/9; border-radius:20px;"
+    style="width:85%; max-width:900px; aspect-ratio:21/9; border-radius:20px;"
   />
 </p>
-
-Revolutionizing strategic decision-making in Formula 1 through AI-powered models, computer vision, and expert systems. For a deeper insight, see the project's [paper here](documents/F1_Strategy_Manager_AI.pdf).
 
 ---
 
