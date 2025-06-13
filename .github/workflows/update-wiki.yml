@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -19,8 +19,7 @@ jobs:
         run: |
           git clone https://github.com/regenrek/deepwiki-mcp.git deepwiki-mcp
           cd deepwiki-mcp
-          git checkout HEAD~5 || git checkout main  # Try to use a previous stable version
-          npm install --legacy-peer-deps
+          npm install
       - name: Build DeepWiki MCP
         working-directory: deepwiki-mcp
         run: |
@@ -60,124 +59,52 @@ jobs:
             echo "Available files:"
             find . -name "*.mjs" -type f
             exit 1
-          fi          # Start service in background with better error handling
+          fi
+          # Start service in background
           node ./bin/cli.mjs --http --port 3000 > ../deepwiki.log 2>&1 &
           DEEPWIKI_PID=$!
           echo "DeepWiki PID: $DEEPWIKI_PID"
-
-          # Wait and verify service is available with longer timeout
-          echo "Waiting for service to start..."
-          for i in {1..60}; do
-            if curl -s --max-time 5 http://localhost:3000/mcp > /dev/null 2>&1; then
-              echo "DeepWiki MCP is available (attempt $i/60)"
+          # Wait and verify service is available
+          for i in {1..30}; do
+            if curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
+              echo "DeepWiki MCP is available"
               break
             fi
-            echo "Waiting for DeepWiki MCP to be available... attempt $i/60"
+            echo "Waiting for DeepWiki MCP to be available... attempt $i/30"
             sleep 2
-            
-            # Check if process is still running
-            if ! kill -0 $DEEPWIKI_PID 2>/dev/null; then
-              echo "Error: DeepWiki process died"
-              echo "Service logs:"
-              cat ../deepwiki.log
-              exit 1
-            fi
-          done          # Verify once more - check /mcp endpoint
-          if ! curl -s --max-time 5 http://localhost:3000/mcp > /dev/null 2>&1; then
-            echo "Error: DeepWiki MCP not available after 120 seconds"
+          done
+          # Verify once more - check /mcp endpoint
+          if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
+            echo "Error: DeepWiki MCP not available after 60 seconds"
             echo "Service logs:"
             cat ../deepwiki.log
             echo "Process status:"
             ps aux | grep node | grep -v grep || echo "Process not found"
-            
-            # Create a fallback documentation
-            echo "Creating fallback documentation..."
-            mkdir -p ../docs-md
-            cat > ../docs-md/f1-strat-manager-complete.md << 'FALLBACK_EOF'
-          # F1 Strategy Manager - Documentation
-
-          This is a fallback documentation generated when DeepWiki was not accessible.
-
-          ## Project Overview
-
-          The F1 Strategy Manager is an integrated AI-powered system for Formula 1 race strategy analysis and decision support.
-
-          ## Main Components
-
-          ### 1. Streamlit Dashboard
-          - Interactive web interface for real-time analysis
-          - Strategy recommendations and visualizations
-
-          ### 2. Machine Learning Models
-          - Lap time prediction models
-          - Tire degradation analysis
-          - Computer vision for gap calculation
-
-          ### 3. NLP Pipeline
-          - Radio transcription and analysis
-          - Sentiment and intent recognition
-
-          ### 4. Expert System
-          - Rule-based decision engine
-          - Strategic recommendations
-
-          For complete documentation, please visit: https://deepwiki.com/VforVitorio/F1_Strat_Manager
-          FALLBACK_EOF
-            echo "✅ Fallback documentation created"
-            
-            # Continue with wiki update using fallback
-            echo "Continuing with fallback documentation..."          else
-            echo "✅ Service is running properly"
+            exit 1
           fi
           # Verify process is running
           ps aux | grep node | grep -v grep
-
       - name: Export ALL Markdown from DeepWiki
         run: |
           mkdir -p docs-md
-
-          # Check if we have a fallback file already (service failed)
-          if [ -f docs-md/f1-strat-manager-complete.md ]; then
-            echo "Using fallback documentation (service failed to start)"
-            ls -la docs-md/
-            echo "Preview of fallback documentation:"
-            head -30 docs-md/f1-strat-manager-complete.md
-          else
-            # Verify service is available before making the call
-            if ! curl -s --max-time 5 http://localhost:3000/mcp > /dev/null 2>&1; then
-              echo "Error: Service not available before export"
-              echo "Service logs:"
-              cat deepwiki.log || echo "No logs found"
-              exit 1
-            fi
+          # Verify service is available before making the call
+          if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
+            echo "Error: Service not available before export"
+            echo "Service logs:"
+            cat deepwiki.log || echo "No logs found"
+            exit 1
+          fi
           # Test connectivity first
           echo "Testing service connectivity..."
-          curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' -v || echo "Tools list check failed"          # Validate DeepWiki URL accessibility
+          curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' -v || echo "Tools list check failed"
+          # Validate DeepWiki URL accessibility
           echo "Validating DeepWiki URL accessibility..."
           DEEPWIKI_URL="https://deepwiki.com/VforVitorio/F1_Strat_Manager"
-
-          # Try multiple approaches to check URL accessibility
-          echo "Testing URL with different methods..."
-
-          # Method 1: HEAD request
+          # Check if the URL is accessible
           if curl -s --head "$DEEPWIKI_URL" | head -n 1 | grep -q "200 OK"; then
-            echo "✅ DeepWiki URL is accessible via HEAD: $DEEPWIKI_URL"
-          # Method 2: GET request with timeout
-          elif curl -s --max-time 10 "$DEEPWIKI_URL" | grep -q "DeepWiki\|F1\|Strategy"; then
-            echo "✅ DeepWiki URL is accessible via GET: $DEEPWIKI_URL"
-          # Method 3: Try alternative URL formats
+            echo "✅ DeepWiki URL is accessible: $DEEPWIKI_URL"
           else
-            echo "⚠️ Warning: Primary URL might not be accessible: $DEEPWIKI_URL"
-            echo "Trying alternative URL formats..."
-            
-            # Try without https
-            ALT_URL1="http://deepwiki.com/VforVitorio/F1_Strat_Manager"
-            if curl -s --max-time 10 "$ALT_URL1" | grep -q "DeepWiki\|F1"; then
-              echo "✅ Alternative URL works: $ALT_URL1"
-              DEEPWIKI_URL="$ALT_URL1"
-            else
-              echo "⚠️ Alternative URLs also failing, proceeding with original URL"
-            fi
+            echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
           fi
           # Create JSON payload to get ALL pages (maxDepth: 1, mode: "pages")
           JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"pages"}},"id":1}'
@@ -189,10 +116,9 @@ jobs:
           else
             echo "❌ JSON payload is invalid"
             exit 1
-          fi          # Make the POST request to get ALL pages
+          fi
+          # Make the POST request to get ALL pages
           echo "Making POST request to get ALL DeepWiki pages..."
-
-          # First attempt: pages mode with maxDepth 1
           HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD" \
@@ -200,39 +126,9 @@ jobs:
             -w "%{http_code}" \
             -s)
           echo "HTTP status code: $HTTP_CODE"
-
           # Handle different HTTP response codes
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Success: All pages request completed successfully"
-            
-            # Check if response contains meaningful content
-            if [ -f docs-md/all-pages-raw.json ] && [ -s docs-md/all-pages-raw.json ]; then
-              CONTENT_LENGTH=$(wc -c < docs-md/all-pages-raw.json)
-              echo "Response file size: $CONTENT_LENGTH bytes"
-              
-              # Check if content is just loading message
-              if grep -q "Loading..." docs-md/all-pages-raw.json || [ "$CONTENT_LENGTH" -lt 200 ]; then
-                echo "⚠️ Warning: Response seems to contain loading message or is too short"
-                echo "Trying alternative approaches..."
-                
-                # Try aggregate mode
-                echo "Attempting aggregate mode..."
-                AGGREGATE_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"aggregate","verbose":true}},"id":1}'
-                
-                HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
-                  -H "Content-Type: application/json" \
-                  -d "$AGGREGATE_PAYLOAD" \
-                  -o docs-md/all-pages-raw.json \
-                  -w "%{http_code}" \
-                  -s)
-                
-                if [ "$HTTP_CODE" = "200" ]; then
-                  echo "✅ Aggregate mode succeeded"
-                else
-                  echo "⚠️ Aggregate mode also failed, continuing with original response"
-                fi
-              fi
-            fi
           else
             echo "❌ Error HTTP $HTTP_CODE"
             echo "Response content:"
@@ -265,13 +161,12 @@ jobs:
             echo "File content:"
             cat docs-md/all-pages-raw.json
             exit 1
-          fi          echo "✅ All pages response received successfully:"
+          fi
+          echo "✅ All pages response received successfully:"
           ls -la docs-md/
           echo "Response structure:"
           jq -r 'keys' docs-md/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
           head -c 500 docs-md/all-pages-raw.json
-          fi  # Close the else statement
-
       - name: Process and Split Multiple Pages
         run: |
           echo "Processing multiple pages from DeepWiki response..."
@@ -625,11 +520,11 @@ jobs:
               sys.exit(1)
           EOF
           echo "Final documentation files created:"
-          ls -la docs-md/          echo "Preview of main documentation:"
+          ls -la docs-md/
+          echo "Preview of main documentation:"
           head -30 docs-md/f1-strat-manager-complete.md
-
       - name: Checkout Wiki
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.WIKI_PAT }}
