@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+      - test
+      - dev
+  schedule:
+    # Runs every day at 2 AM UTC to force updates
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   update-wiki:
@@ -518,11 +524,11 @@ jobs:
           except Exception as e:
               print(f"❌ Error processing content: {e}")
               sys.exit(1)
-          EOF
-          echo "Final documentation files created:"
+          EOF          echo "Final documentation files created:"
           ls -la docs-md/
           echo "Preview of main documentation:"
           head -30 docs-md/f1-strat-manager-complete.md
+
       - name: Checkout Wiki
         uses: actions/checkout@v3
         with:
@@ -540,14 +546,17 @@ jobs:
           echo "Current wiki contents before cleanup:"
           ls -la wiki/
 
-          # Remove ALL existing markdown files from wiki
-          echo "🗑️ Removing all existing wiki content..."
-          find wiki/ -name "*.md" -type f -delete
+          # FORCE COMPLETE CLEANUP - Remove ALL existing markdown files from wiki
+          echo "🗑️ FORCE REMOVING all existing wiki content..."
+          find wiki/ -name "*.md" -type f -delete || true
 
           # Also remove any other files that might exist (except .git)
-          find wiki/ -type f ! -path "wiki/.git/*" ! -name ".git*" -delete
+          find wiki/ -type f ! -path "wiki/.git/*" ! -name ".git*" -delete || true
 
-          echo "✅ Wiki directory cleaned successfully"
+          # Ensure we start fresh - create empty directory structure
+          mkdir -p wiki/
+
+          echo "✅ Wiki directory FORCE cleaned successfully"
           echo "Wiki contents after cleanup:"
           ls -la wiki/
 
@@ -559,11 +568,11 @@ jobs:
             exit 1
           fi
           echo "Files to copy:"
-          ls -la docs-md/
+          ls -la docs-md/          # Copy ALL markdown files to wiki
+          echo "📁 FORCE copying ALL documentation files to wiki..."
+          cp docs-md/*.md wiki/
 
-          # Copy ALL markdown files to wiki
-          echo "📁 Copying new documentation files to wiki..."
-          cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
+          # Force create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
           This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
@@ -608,24 +617,39 @@ jobs:
           - **👁️ Computer Vision** - Automated gap calculation from video feeds
           - **🎤 Natural Language Processing** - Radio communication analysis and insights
           - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
-          - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
-          ---
+          - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis          ---
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
           EOF
           echo "Files copied to wiki:"
           ls -la wiki/
+
       - name: Commit & Push changes
         working-directory: wiki
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git add .
-          # Check if there are changes before committing
-          if git diff --quiet --staged; then
-            echo "No changes to commit"
+          
+          # Force add all files (including new ones)
+          git add -A
+          
+          # FORCE COMMIT - Always commit changes even if small
+          echo "🔄 FORCING complete wiki update..."
+          
+          # Create a timestamp for unique commit messages
+          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S UTC')
+          
+          # Check if there are any files to commit
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "⚠️ No changes detected, but forcing an empty commit to trigger update..."
+            git commit --allow-empty -m "🔄 FORCE Wiki Refresh - $TIMESTAMP - Complete documentation update"
           else
-            git commit -m "🔄 Complete Wiki Refresh from DeepWiki - $(date '+%Y-%m-%d %H:%M') - All previous content replaced"
-            git push
-            echo "Changes pushed successfully"
+            echo "✅ Changes detected, committing all modifications..."
+            git commit -m "🔄 FORCE Wiki Refresh - $TIMESTAMP - All previous content replaced with latest DeepWiki export"
           fi
+          
+          # Force push (this will overwrite any conflicts)
+          git push --force-with-lease
+          
+          echo "✅ Wiki FORCE updated successfully!"
+          echo "📊 Final wiki contents:"
+          ls -la .
