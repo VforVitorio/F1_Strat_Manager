@@ -4,12 +4,6 @@ on:
   push:
     branches:
       - main
-      - test
-      - dev
-  schedule:
-    # Runs every day at 2 AM UTC to force updates
-    - cron: '0 2 * * *'
-  workflow_dispatch: # Allow manual trigger
 
 jobs:
   update-wiki:
@@ -186,11 +180,17 @@ jobs:
           def clean_deepwiki_content(content):
               """Clean and format DeepWiki content for GitHub Wiki"""
               import re
-              # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
-              content = re.sub(r'^(?:[\s\S]{0,300}?)(?:github-actions\[bot\].*?revision\n)?(?:[\s\S]{0,300}?)(?:System Architecture|Overview|Streamlit Dashboard|Machine Learning Models|NLP Pipeline|Expert System|Developer Guide|Other Sections)[\s\S]+?(?=\n# |\n## |\n### |\n\Z)', '', content, flags=re.MULTILINE)
+              # Eliminar bloque de navegación/índice DeepWiki completo al principio (menú, títulos, powered by, etc)
+              content = re.sub(r'^(?:Overview\n)?VforVitorio/F1_Strat_Manager\n\n?powered by\n\n?Devin\n\n?(?:Overview\n)?System Architecture\nInstallation and Setup\nStreamlit Dashboard\nStrategy Recommendations View\nGap Analysis View\nRadio Analysis View\nTime Predictions View\nStrategy Chat Interface\nMachine Learning Models\nLap Time Prediction\nTire Degradation Modeling\nVision-based Gap Calculation\nNLP Pipeline\nRadio Transcription\nSentiment and Intent Analysis\nNamed Entity Recognition\nExpert System\nDegradation Rules\nGap Analysis Rules\nRadio Message Rules\nIntegrated Rule Engine\nDeveloper Guide\nAPI Reference\nIntegration Guide\n?','', content, flags=re.MULTILINE)
               # Eliminar sección '/' y sus repeticiones
               content = re.sub(r'^#? ?/?\n(?:Documentation\n)+', '', content, flags=re.MULTILINE)
               content = re.sub(r'^/?\n+', '', content, flags=re.MULTILINE)
+              # Eliminar menú 'Other Sections' y sus entradas
+              content = re.sub(r'### Other Sections\n([\s\S]*?)(?=\n### |\n---|\n# |\n\Z)', '', content, flags=re.MULTILINE)
+              content = re.sub(r'- \[/?Documentation\]\([^)]+\)\n', '', content)
+              content = re.sub(r'- \[/?private-repo\]\([^)]+\)\n', '', content)
+              content = re.sub(r'- \[Documentation\]\([^)]+\)\n', '', content)
+              content = re.sub(r'- \[/\]\([^)]+\)\n', '', content)
               # Remove DeepWiki UI elements
               content = re.sub(r'.*?DeepWiki.*?\n', '', content, flags=re.IGNORECASE)
               content = re.sub(r'.*?Powered by Devin.*?\n', '', content, flags=re.IGNORECASE)
@@ -520,7 +520,8 @@ jobs:
                   f.write(cleaned_content)
               
               print("✅ Processed as plain text")
-                except Exception as e:
+              
+          except Exception as e:
               print(f"❌ Error processing content: {e}")
               sys.exit(1)
           EOF
@@ -528,37 +529,12 @@ jobs:
           ls -la docs-md/
           echo "Preview of main documentation:"
           head -30 docs-md/f1-strat-manager-complete.md
-
       - name: Checkout Wiki
         uses: actions/checkout@v3
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
-
-      - name: Clean and Prepare Wiki Directory
-        run: |
-          # Ensure wiki directory exists
-          if [ ! -d wiki ]; then
-            echo "Error: Wiki directory not found"
-            exit 1
-          fi
-          echo "Current wiki contents before cleanup:"
-          ls -la wiki/
-
-          # FORCE COMPLETE CLEANUP - Remove ALL existing markdown files from wiki
-          echo "🗑️ FORCE REMOVING all existing wiki content..."
-          find wiki/ -name "*.md" -type f -delete || true
-
-          # Also remove any other files that might exist (except .git)
-          find wiki/ -type f ! -path "wiki/.git/*" ! -name ".git*" -delete || true
-
-          # Ensure we start fresh - create empty directory structure
-          mkdir -p wiki/
-
-          echo "✅ Wiki directory FORCE cleaned successfully"
-          echo "Wiki contents after cleanup:"
-          ls -la wiki/
 
       - name: Copy All Documentation to Wiki
         run: |
@@ -568,11 +544,16 @@ jobs:
             exit 1
           fi
           echo "Files to copy:"
-          ls -la docs-md/          # Copy ALL markdown files to wiki
-          echo "📁 FORCE copying ALL documentation files to wiki..."
-          cp docs-md/*.md wiki/
-
-          # Force create or update index page with hierarchical structure
+          ls -la docs-md/
+          # Ensure wiki directory exists
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
+            exit 1
+          fi
+          echo "Current wiki contents:"
+          ls -la wiki/
+          # Copy ALL markdown files to wiki
+          cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
           This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
@@ -617,39 +598,24 @@ jobs:
           - **👁️ Computer Vision** - Automated gap calculation from video feeds
           - **🎤 Natural Language Processing** - Radio communication analysis and insights
           - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
-          - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis          ---
+          - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
+          ---
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
           EOF
           echo "Files copied to wiki:"
           ls -la wiki/
-
       - name: Commit & Push changes
         working-directory: wiki
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Force add all files (including new ones)
-          git add -A
-          
-          # FORCE COMMIT - Always commit changes even if small
-          echo "🔄 FORCING complete wiki update..."
-          
-          # Create a timestamp for unique commit messages
-          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S UTC')
-          
-          # Check if there are any files to commit
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "⚠️ No changes detected, but forcing an empty commit to trigger update..."
-            git commit --allow-empty -m "🔄 FORCE Wiki Refresh - $TIMESTAMP - Complete documentation update"
+          git add .
+          git add .
+          # Check if there are changes before committing
+          if git diff --quiet --staged; then
+            echo "No changes to commit"
           else
-            echo "✅ Changes detected, committing all modifications..."
-            git commit -m "🔄 FORCE Wiki Refresh - $TIMESTAMP - All previous content replaced with latest DeepWiki export"
+            git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
+            git push
+            echo "Changes pushed successfully"
           fi
-          
-          # Force push (this will overwrite any conflicts)
-          git push --force-with-lease
-          
-          echo "✅ Wiki FORCE updated successfully!"
-          echo "📊 Final wiki contents:"
-          ls -la .
