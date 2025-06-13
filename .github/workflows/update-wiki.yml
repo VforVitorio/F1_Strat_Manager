@@ -539,18 +539,14 @@ jobs:
           fi
           echo "Current wiki contents before cleanup:"
           ls -la wiki/
-
           # Remove ALL existing markdown files from wiki
           echo "🗑️ Removing all existing wiki content..."
           find wiki/ -name "*.md" -type f -delete
-
           # Also remove any other files that might exist (except .git)
           find wiki/ -type f ! -path "wiki/.git/*" ! -name ".git*" -delete
-
           echo "✅ Wiki directory cleaned successfully"
           echo "Wiki contents after cleanup:"
           ls -la wiki/
-
       - name: Copy All Documentation to Wiki
         run: |
           # Verify we have files to copy
@@ -560,7 +556,6 @@ jobs:
           fi
           echo "Files to copy:"
           ls -la docs-md/
-
           # Copy ALL markdown files to wiki
           echo "📁 Copying new documentation files to wiki..."
           cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
