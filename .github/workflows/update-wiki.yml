@@ -530,23 +530,6 @@ jobs:
           token: ${{ secrets.WIKI_PAT }}
           path: wiki
 
-      - name: Clean and Prepare Wiki Directory
-        run: |
-          # Ensure wiki directory exists
-          if [ ! -d wiki ]; then
-            echo "Error: Wiki directory not found"
-            exit 1
-          fi
-          echo "Current wiki contents before cleanup:"
-          ls -la wiki/
-          # Remove ALL existing markdown files from wiki
-          echo "🗑️ Removing all existing wiki content..."
-          find wiki/ -name "*.md" -type f -delete
-          # Also remove any other files that might exist (except .git)
-          find wiki/ -type f ! -path "wiki/.git/*" ! -name ".git*" -delete
-          echo "✅ Wiki directory cleaned successfully"
-          echo "Wiki contents after cleanup:"
-          ls -la wiki/
       - name: Copy All Documentation to Wiki
         run: |
           # Verify we have files to copy
@@ -556,8 +539,14 @@ jobs:
           fi
           echo "Files to copy:"
           ls -la docs-md/
+          # Ensure wiki directory exists
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
+            exit 1
+          fi
+          echo "Current wiki contents:"
+          ls -la wiki/
           # Copy ALL markdown files to wiki
-          echo "📁 Copying new documentation files to wiki..."
           cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
           cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
@@ -620,7 +609,7 @@ jobs:
           if git diff --quiet --staged; then
             echo "No changes to commit"
           else
-            git commit -m "🔄 Complete Wiki Refresh from DeepWiki - $(date '+%Y-%m-%d %H:%M') - All previous content replaced"
+            git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
             git push
             echo "Changes pushed successfully"
           fi

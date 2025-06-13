@@ -120,3 +120,6 @@ streamlit run app/main.py
 ```
 
 > Each major module (NLP, Vision, ML) is in its own subfolder with Jupyter notebooks and utility scripts.
+
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/VforVitorio/F1_Strat_Manager)
