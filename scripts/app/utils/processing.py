@@ -68,7 +68,7 @@ except ImportError:
 
 def add_race_lap_column(df):
     """
-    Añade la columna 'LapNumber' calculando la vuelta real de carrera para cada piloto y stint.
+    Adds the 'LapNumber' column calculating the real race lap for each driver and stint.
     """
     # Obtener la longitud de cada stint por piloto
     max_age_by_stint = df.groupby(['DriverNumber', 'Stint'])[

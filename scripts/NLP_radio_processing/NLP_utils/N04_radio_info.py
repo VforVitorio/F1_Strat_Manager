@@ -120,6 +120,15 @@
 # ## Step 1: Import Necessary Libraries
 #
 
+import spacy
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+from sklearn.utils import compute_class_weight
+from torch.amp import GradScaler, autocast
+from torch.utils.data import TensorDataset
+from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AutoConfig, DebertaV2TokenizerFast, DebertaV2ForSequenceClassification
+from transformers import RobertaConfig
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -186,7 +195,7 @@ import datetime
 #     labeled_df.to_csv('../../outputs/week4/radio_clean/intent_labeled_data.csv', index=False)
 #     with output:
 #         print(f"Dataset saved! {len(labeled_df)} labeled messages.")
-        
+
 #         if len(labeled_df) > 0:
 #             # Show distribution of intents
 #             plt.figure(figsize=(10, 6))
@@ -199,31 +208,31 @@ import datetime
 # def display_current_message():
 #     with output:
 #         output.clear_output()
-        
+
 #         if current_index.value >= len(intent_df):
 #             current_index.value = len(intent_df) - 1
-            
+
 #         if current_index.value < 0:
 #             current_index.value = 0
-            
+
 #         idx = current_index.value
 #         print(f"Message {idx+1}/{len(intent_df)}:")
 #         print(f"\"{intent_df.iloc[idx]['message']}\"")
-        
+
 #         # Show current label if any
 #         current_intent = intent_df.iloc[idx]['intent']
 #         if current_intent:
 #             print(f"\nCurrent label: {current_intent}")
-        
+
 #         # Display intent category descriptions for reference
 #         print("\nIntent Categories:")
 #         print("ORDER: Direct instructions requiring action (Box this lap, Push now)")
 #         print("INFORMATION: Factual updates (Hamilton is 2 seconds behind)")
 #         print("QUESTION: Queries requiring driver input (How are the tyres feeling?)")
 #         print("WARNING: Alerts about external issues (Yellow flag in sector 2)")
-       
+
 #         print("PROBLEM: Driver-reported issues (Losing grip on the rear)")
-        
+
 #         # Count labeled messages
 #         labeled_count = (intent_df['intent'] != "").sum()
 #         print(f"\nProgress: {labeled_count}/{len(intent_df)} messages labeled ({labeled_count/len(intent_df)*100:.1f}%)")
@@ -240,7 +249,7 @@ import datetime
 # def on_prev_clicked(b):
 #     current_index.value -= 1
 #     display_current_message()
-    
+
 # def on_next_clicked(b):
 #     current_index.value += 1
 #     display_current_message()
@@ -250,10 +259,10 @@ import datetime
 # for intent in intent_categories:
 #     button = widgets.Button(
 #         description=intent,
-#         button_style='', 
+#         button_style='',
 #         layout=Layout(width='150px', height='40px')
 #     )
-    
+
 #     button.on_click(lambda b, intent=intent: on_intent_button_clicked(b, intent))
 #     intent_buttons.append(button)
 
@@ -282,7 +291,6 @@ import datetime
 # ######################### WARNING: ONLY UNCOMMENT FOR SAVING NEW LABELED DATA ###############################
 # save_button.on_click(lambda b: save_dataframe())
 # #############################################################################################################
-
 
 
 # # Create button rows
@@ -336,8 +344,8 @@ print(df.head())
 
 # Create numeric labels based on intent values
 intent_mapping = {
-    'INFORMATION': 0, 
-    'PROBLEM': 1, 
+    'INFORMATION': 0,
+    'PROBLEM': 1,
     'ORDER': 2,
     'WARNING': 3,
     'QUESTION': 4,
@@ -348,7 +356,8 @@ df['label'] = df['intent'].map(intent_mapping)
 
 # Check if we need to handle any missing mappings
 if df['label'].isna().sum() > 0:
-    print(f"\nWarning: {df['label'].isna().sum()} rows couldn't be mapped. Unique values in 'intent':")
+    print(
+        f"\nWarning: {df['label'].isna().sum()} rows couldn't be mapped. Unique values in 'intent':")
     print(df['intent'].unique())
 
 
@@ -356,7 +365,7 @@ if df['label'].isna().sum() > 0:
 #
 # `Same text as N03_bert_sentiment.ipynb`
 #
-# I´ll follow the same splits techniques during the project, making a training, validation and test dataset. 
+# I´ll follow the same splits techniques during the project, making a training, validation and test dataset.
 #
 # * *Train* will be 70% of the dataset.
 # * *Validation*: will be 15% of the dataset.
@@ -366,12 +375,10 @@ if df['label'].isna().sum() > 0:
 #
 #
 
-from transformers import RobertaConfig
-from transformers import AutoConfig, DebertaV2TokenizerFast, DebertaV2ForSequenceClassification
 
 ############ NOTE: uncomment and comment any of this blocks to see the metrics ###################
 
-###################### RUN 2 ####################3
+# RUN 2 ####################3
 
 
 # # Custom configuration for RoBERTa
@@ -384,8 +391,7 @@ from transformers import AutoConfig, DebertaV2TokenizerFast, DebertaV2ForSequenc
 # config.output_hidden_states = False   # Move to configuration
 
 
-
-# model_name = "roberta-large"  
+# model_name = "roberta-large"
 # tokenizer = RobertaTokenizer.from_pretrained(model_name)
 # model = RobertaForSequenceClassification.from_pretrained(
 #     'roberta-large',
@@ -411,10 +417,10 @@ model = DebertaV2ForSequenceClassification.from_pretrained(
 
 # Cell 4: Create the train/validation/test split
 train_texts, temp_texts, train_labels, temp_labels = train_test_split(
-    df['message'].values, 
-    df['label'].values, 
+    df['message'].values,
+    df['label'].values,
     test_size=0.3,  # 30% for val+test
-    random_state=42, 
+    random_state=42,
     stratify=df['label']
 )
 
@@ -435,13 +441,16 @@ print(f"Test set: {len(test_texts)} samples")
 
 # ### 3.2 Tokenizing: this part is also the same as the one in the N03 Notebook
 
-# #### 3.2.1 Analyzing message lengths 
+# #### 3.2.1 Analyzing message lengths
 
 # Cell 4.5: Analyze message lengths to set appropriate max_length
+
+
 def get_token_counts(texts):
     # Count tokens in each message
     token_counts = [len(tokenizer.encode(text)) for text in texts]
     return token_counts
+
 
 token_counts = get_token_counts(df['message'].values)
 
@@ -455,11 +464,9 @@ print(f"Maximum tokens in a message: {max_tokens}")
 print(f"97% of messages have {p97_tokens:.1f} tokens or fewer")
 
 
-
 # #### 3.2.2 Visualizing distributionof messages
 
 # Visualize distribution
-import matplotlib.pyplot as plt
 plt.figure(figsize=(10, 5))
 plt.hist(token_counts, bins=20)
 plt.axvline(x=p97_tokens, color='r', linestyle='--', label='97th percentile')
@@ -470,14 +477,15 @@ plt.legend()
 plt.show()
 
 # Set max_length based on analysis
-max_length = int(min(128, 2 * p97_tokens))  # Conservative value based on 97th percentile
+# Conservative value based on 97th percentile
+max_length = int(min(128, 2 * p97_tokens))
 print(f"Setting max_length to {max_length}")
 
 # #### 3.2.3 Tokenizing and making the encodings
 
 # Cell 5: Tokenize the data directly
 max_length = 128
-#batch_size = 16
+# batch_size = 16
 batch_size = 4
 # Tokenize training data
 train_encodings = tokenizer(
@@ -507,10 +515,7 @@ test_encodings = tokenizer(
 )
 
 
-
 # ### 3.3 Preparing the tokens for Pytorch
-
-from transformers import AdamW, get_linear_schedule_with_warmup
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -525,7 +530,6 @@ val_labels = torch.tensor(val_labels)
 test_labels = torch.tensor(test_labels)
 
 # Create TensorDatasets
-from torch.utils.data import TensorDataset
 
 train_dataset = TensorDataset(
     train_encodings['input_ids'],
@@ -546,17 +550,17 @@ test_dataset = TensorDataset(
 )
 
 
-
 # Create DataLoaders
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+train_dataloader = DataLoader(
+    train_dataset, batch_size=batch_size, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
 test_dataloader = DataLoader(test_dataset, batch_size=batch_size)
 
 print(f"Created DataLoaders with batch size: {batch_size}")
-print(f"Each batch contains: {next(iter(train_dataloader))[0].shape[0]} samples")
+print(
+    f"Each batch contains: {next(iter(train_dataloader))[0].shape[0]} samples")
 print(f"Input shape: {next(iter(train_dataloader))[0].shape}")
 
-from torch.amp import GradScaler, autocast
 scaler = GradScaler()
 
 
@@ -573,11 +577,11 @@ scaler = GradScaler()
 def flat_accuracy(preds, labels):
     """
     Computes accuracy by comparing predictions with labels.
-    
+
     Args:
         preds: Model prediction matrix (logits)
         labels: Vector of true labels
-    
+
     Returns:
         float: Percentage of correct predictions
     """
@@ -586,15 +590,13 @@ def flat_accuracy(preds, labels):
     return np.sum(pred_flat == labels_flat) / len(labels_flat)
 
 
-import datetime
-
 def format_time(elapsed):
     """
     Formats elapsed time into a readable format.
-    
+
     Args:
         elapsed: Time in seconds
-        
+
     Returns:
         str: Time formatted as HH:MM:SS
     """
@@ -610,7 +612,8 @@ best_val_accuracy = 0.0
 epochs = 12
 learning_rate = 1e-5  # A bet less for a bigger model
 weight_decay = 0.01
-warmup_steps = int(0.1 * len(train_dataloader) * epochs)  # 10% steps for warmup
+warmup_steps = int(0.1 * len(train_dataloader) *
+                   epochs)  # 10% steps for warmup
 
 # Total number of training steps
 total_steps = len(train_dataloader) * epochs
@@ -623,17 +626,17 @@ total_steps = len(train_dataloader) * epochs
 
 optimizer = AdamW(
     model.parameters(),
-    lr=2e-5,             # Probar una tasa más alta como 2e-5
+    lr=2e-5,             # Try a higher rate like 2e-5
     eps=1e-8,
-    weight_decay=0.05    # Aumentar weight decay para mejor regularización
+    weight_decay=0.05    # Increase weight decay for better regularization
 )
 
 # Set up the learning rate scheduler
-scheduler = get_linear_schedule_with_warmup(optimizer, 
-                                          num_warmup_steps=warmup_steps,
-                                          num_training_steps=total_steps)
+scheduler = get_linear_schedule_with_warmup(optimizer,
+                                            num_warmup_steps=warmup_steps,
+                                            num_training_steps=total_steps)
 # # Gradient accumulation for simulating bigger batch_size
-gradient_accumulation_steps = 4  
+gradient_accumulation_steps = 4
 # # This simulates an effective batch_size  16
 
 # ---
@@ -641,16 +644,17 @@ gradient_accumulation_steps = 4
 # ### 4.3 Class weights
 
 # Calculating the 6 class weights
-from sklearn.utils import compute_class_weight
 
 
 unique_labels = np.unique(train_labels.numpy())
-class_weights = compute_class_weight('balanced', classes=unique_labels, y=train_labels.numpy())
+class_weights = compute_class_weight(
+    'balanced', classes=unique_labels, y=train_labels.numpy())
 class_weights = torch.tensor(class_weights, dtype=torch.float).to(device)
 
 print("Class weights:")
 for i, weight in enumerate(class_weights):
-    intent_name = list(intent_mapping.keys())[list(intent_mapping.values()).index(i)]
+    intent_name = list(intent_mapping.keys())[
+        list(intent_mapping.values()).index(i)]
     print(f"Class {i} ({intent_name}): {weight:.4f}")
 
 # Loss function with weights
@@ -664,81 +668,83 @@ total_t0 = time.time()
 
 for epoch_i in range(epochs):
     print(f"\nEpoch {epoch_i + 1}/{epochs}")
-    
+
     # Training
     model.train()
     total_train_loss = 0
     t0 = time.time()
-    
+
     # Reset gradients at the beginning of each epoch
     optimizer.zero_grad()
-    
+
     for step, batch in enumerate(train_dataloader):
         # Unpack batch and move to device
         b_input_ids = batch[0].to(device)
         b_attention_mask = batch[1].to(device)
         b_labels = batch[2].to(device)
-    
+
         # Forward pass with mixed precision - corrected
         with autocast(device_type='cuda'):  # Specify 'cuda' as device_type
             outputs = model(b_input_ids, attention_mask=b_attention_mask)
             logits = outputs.logits
             loss = loss_fn(logits, b_labels)
             loss = loss / gradient_accumulation_steps
-        
+
         # Backward pass with mixed precision
         scaler.scale(loss).backward()
-        
+
         # Update total loss
         total_train_loss += loss.item() * gradient_accumulation_steps
-        
+
         # Update weights every gradient_accumulation_steps
         if (step + 1) % gradient_accumulation_steps == 0:
             # Gradient clipping
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            
+
             # Update parameters
             scaler.step(optimizer)
             scaler.update()
             scheduler.step()
             optimizer.zero_grad()
-    
+
     # Calculate average training loss
     avg_train_loss = total_train_loss / len(train_dataloader)
     print(f"  Training loss: {avg_train_loss:.4f}")
     print(f"  Training time: {format_time(time.time() - t0)}")
-    
+
     # Validation with mixed precision as well
     model.eval()
     val_accuracy = 0
     val_loss = 0
-    
+
     with torch.no_grad():
         for batch in val_dataloader:
             b_input_ids = batch[0].to(device)
             b_attention_mask = batch[1].to(device)
             b_labels = batch[2].to(device)
-            
+
             with autocast(device_type='cuda'):
                 outputs = model(b_input_ids, attention_mask=b_attention_mask)
                 logits = outputs.logits
                 loss = loss_fn(logits, b_labels)
-            
+
             val_loss += loss.item()
-            val_accuracy += flat_accuracy(logits.cpu().numpy(), b_labels.cpu().numpy())
-    
+            val_accuracy += flat_accuracy(logits.cpu().numpy(),
+                                          b_labels.cpu().numpy())
+
     avg_val_accuracy = val_accuracy / len(val_dataloader)
     avg_val_loss = val_loss / len(val_dataloader)
-    
+
     print(f"  Validation accuracy: {avg_val_accuracy:.4f}")
     print(f"  Validation loss: {avg_val_loss:.4f}")
-    
+
     # Save best model
     if avg_val_accuracy > best_val_accuracy:
         best_val_accuracy = avg_val_accuracy
-        #torch.save(model.state_dict(), '../../outputs/week4/models/best_roberta_large_intent_model.pt')
-        torch.save(model.state_dict(), '../../outputs/week4/models/best_deberta_large_intent_model.pt')
+        # torch.save(model.state_dict(), '../../outputs/week4/models/best_roberta_large_intent_model.pt')
+        torch.save(model.state_dict(
+        ), '../../outputs/week4/models/best_deberta_large_intent_model.pt')
         print(f"  Saved new best model with accuracy: {best_val_accuracy:.4f}")
 
 
@@ -746,7 +752,6 @@ for epoch_i in range(epochs):
 #
 # ## 5.Training metrics
 
-from sklearn.metrics import classification_report
 
 # Pick all predictions and labels
 all_preds = []
@@ -757,10 +762,10 @@ with torch.no_grad():
         b_input_ids = batch[0].to(device)
         b_attention_mask = batch[1].to(device)
         b_labels = batch[2].to(device)
-        
+
         outputs = model(b_input_ids, attention_mask=b_attention_mask)
         logits = outputs.logits
-        
+
         all_preds.extend(np.argmax(logits.cpu().numpy(), axis=1))
         all_labels.extend(b_labels.cpu().numpy())
 
@@ -778,20 +783,21 @@ model.eval()
 val_accuracy = 0
 val_loss = 0
 
-# En la parte de validación:
+# In the validation part:
 with torch.no_grad():
     for batch in val_dataloader:
         b_input_ids = batch[0].to(device)
         b_attention_mask = batch[1].to(device)
         b_labels = batch[2].to(device)
-        
-        with autocast(device_type='cuda'):  # Especificar 'cuda' como device_type
+
+        with autocast(device_type='cuda'):  # Specify 'cuda' as device_type
             outputs = model(b_input_ids, attention_mask=b_attention_mask)
             logits = outputs.logits
             loss = loss_fn(logits, b_labels)
-        
+
         val_loss += loss.item()
-        val_accuracy += flat_accuracy(logits.cpu().numpy(), b_labels.cpu().numpy())
+        val_accuracy += flat_accuracy(logits.cpu().numpy(),
+                                      b_labels.cpu().numpy())
 
 # Calculate averages
 avg_val_accuracy = val_accuracy / len(val_dataloader)
@@ -813,8 +819,9 @@ training_stats.append({
 # Save best model
 if avg_val_accuracy > best_val_accuracy:
     best_val_accuracy = avg_val_accuracy
-    #torch.save(model.state_dict(), '../../outputs/week4/models/best_roberta_intention_model.pt')
-    torch.save(model.state_dict(), '../../outputs/week4/models/best_deberta_intention_model.pt')
+    # torch.save(model.state_dict(), '../../outputs/week4/models/best_roberta_intention_model.pt')
+    torch.save(model.state_dict(),
+               '../../outputs/week4/models/best_deberta_intention_model.pt')
     print(f"  Saved new best model with accuracy: {best_val_accuracy:.4f}")
 
 print(f"Training complete! Total time: {format_time(time.time() - total_t0)}")
@@ -822,9 +829,6 @@ print(f"Best validation accuracy: {best_val_accuracy:.4f}")
 ######################################################################################################
 
 # After validation:
-from sklearn.metrics import confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 # Collect all predictions and labels
 all_preds = []
@@ -835,10 +839,10 @@ with torch.no_grad():
         b_input_ids = batch[0].to(device)
         b_attention_mask = batch[1].to(device)
         b_labels = batch[2].to(device)
-        
+
         outputs = model(b_input_ids, attention_mask=b_attention_mask)
         logits = outputs.logits
-        
+
         all_preds.extend(np.argmax(logits.cpu().numpy(), axis=1))
         all_labels.extend(b_labels.cpu().numpy())
 
@@ -862,15 +866,15 @@ print(classification_report(all_labels, all_preds, target_names=intent_names))
 
 # ---
 #
-# # 6. Results Summary of Intent Classifier 
+# # 6. Results Summary of Intent Classifier
 #
 # ## 6.1 FIRST RUN : RoBERTa-large
 #
-# **Best Validation Accuracy:** 57%  
-# **Weighted F1 Score:** 0.60  
+# **Best Validation Accuracy:** 57%
+# **Weighted F1 Score:** 0.60
 #
 #
-# ## Class Performance  
+# ## Class Performance
 #
 # | Class      | Precision | Recall | F1-Score |
 # |------------|-----------|--------|----------|
@@ -881,15 +885,15 @@ print(classification_report(all_labels, all_preds, target_names=intent_names))
 # | WARNING     | 0.31      | 0.80   | 0.44     |
 # | QUESTION    | 1.00      | 0.60   | 0.75     |
 #
-# ## Analysis  
+# ## Analysis
 #
-# The RoBERTa large model shows solid performance for a challenging multi-class classification task with significant class imbalance. With an overall accuracy of **57%** and a weighted F1 score of **0.60**, the model demonstrates good capability across most classes.  
+# The RoBERTa large model shows solid performance for a challenging multi-class classification task with significant class imbalance. With an overall accuracy of **57%** and a weighted F1 score of **0.60**, the model demonstrates good capability across most classes.
 #
-# ### Key observations:  
-# - **Strongest performance** on `QUESTION` (F1 = 0.75) and `PROBLEM` (F1 = 0.67) classes.  
-# - `WARNING` class shows **excellent recall** (0.80) but **lower precision** (0.31).  
+# ### Key observations:
+# - **Strongest performance** on `QUESTION` (F1 = 0.75) and `PROBLEM` (F1 = 0.67) classes.
+# - `WARNING` class shows **excellent recall** (0.80) but **lower precision** (0.31).
 #
-# --- 
+# ---
 #
 # ## 6.2 RUN 2: RoBERTa-large with STRATEGY deleted
 # ### Work Done:
@@ -959,12 +963,12 @@ print(classification_report(all_labels, all_preds, target_names=intent_names))
 # - **Improvements with DeBERTa:**
 #   - **INFORMATION class:** Significant improvement in F1 score (0.79 vs 0.72).
 #   - **WARNING class:** Substantial improvement (0.50 vs 0.40), which was previously one of the weakest classes.
-#   
+#
 # - **Trade-offs:**
 #   - **PROBLEM class:** Performance decreased with DeBERTa (0.71 vs 0.82).
 #   - **ORDER class:** Slight decrease (0.72 vs 0.77).
 #   - **QUESTION class:** Slight decrease (0.89 vs 0.94), but still very strong.
-#   
+#
 # - **Balance across classes:**
 #   - DeBERTa shows more balanced performance overall.
 #   - The lowest F1 score with DeBERTa is 0.50 (WARNING), compared to 0.40 in updated RoBERTa.
@@ -986,9 +990,9 @@ print(classification_report(all_labels, all_preds, target_names=intent_names))
 #
 # #### Therefore, I believe our **Roberta-large** model is the strongest one, so I will stick to it.
 #
-# ### **Disclaimer**: 
+# ### **Disclaimer**:
 #
-# Although I will use the roberta weights of `best_roberta_large_intent_model.pt`, the code will show the outputs of Deberta Model. To see the other metrics, please, uncomment and comment the correspondent cells. 
+# Although I will use the roberta weights of `best_roberta_large_intent_model.pt`, the code will show the outputs of Deberta Model. To see the other metrics, please, uncomment and comment the correspondent cells.
 #
 # Deberta weights are stored in `best_deberta_large_intent_model`.
 #
@@ -1034,7 +1038,6 @@ print(classification_report(all_labels, all_preds, target_names=intent_names))
 #
 # Spacy also can be trained on a GPU, significantly accelerating the process:
 
-import spacy
 
 # Verifying if spacy is using the GPU
 if spacy.prefer_gpu():
@@ -1055,8 +1058,8 @@ else:
 # df = pd.read_csv('../../outputs/week4/radio_clean/radio_filtered.csv')
 
 # # 2. Defining labels
-# labels = ["ACTION", "SITUATION", "INCIDENT", "STRATEGY_INSTRUCTION", 
-#           "POSITION_CHANGE", "PIT_CALL", "TRACK_CONDITION", 
+# labels = ["ACTION", "SITUATION", "INCIDENT", "STRATEGY_INSTRUCTION",
+#           "POSITION_CHANGE", "PIT_CALL", "TRACK_CONDITION",
 #           "TECHNICAL_ISSUE", "WEATHER"]
 
 # # 3. Creating the Annotator

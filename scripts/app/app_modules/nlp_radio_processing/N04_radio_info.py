@@ -627,9 +627,9 @@ total_steps = len(train_dataloader) * epochs
 
 optimizer = AdamW(
     model.parameters(),
-    lr=2e-5,             # Probar una tasa más alta como 2e-5
+    lr=2e-5,             # Try a higher rate like 2e-5
     eps=1e-8,
-    weight_decay=0.05    # Aumentar weight decay para mejor regularización
+    weight_decay=0.05    # Increase weight decay for better regularization
 )
 
 # Set up the learning rate scheduler
@@ -784,7 +784,7 @@ model.eval()
 val_accuracy = 0
 val_loss = 0
 
-# En la parte de validación:
+# In the validation part:
 with torch.no_grad():
     for batch in val_dataloader:
         b_input_ids = batch[0].to(device)
