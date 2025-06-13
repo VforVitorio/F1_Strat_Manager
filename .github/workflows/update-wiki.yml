@@ -5,14 +5,6 @@ on:
     branches:
       - main
 
-# Environment variables for cleaner workflow
-env:
-  DEEPWIKI_URL: "https://deepwiki.com/VforVitorio/F1_Strat_Manager"
-  DEEPWIKI_MCP_PORT: "3000"
-  IMAGE_DIR: "docs-md/images"
-  WIKI_DIR: "wiki"
-  DOCS_DIR: "docs-md"
-
 jobs:
   update-wiki:
     runs-on: ubuntu-latest
@@ -69,12 +61,12 @@ jobs:
             exit 1
           fi
           # Start service in background
-          node ./bin/cli.mjs --http --port ${{ env.DEEPWIKI_MCP_PORT }} > ../deepwiki.log 2>&1 &
+          node ./bin/cli.mjs --http --port 3000 > ../deepwiki.log 2>&1 &
           DEEPWIKI_PID=$!
           echo "DeepWiki PID: $DEEPWIKI_PID"
           # Wait and verify service is available
           for i in {1..30}; do
-            if curl -s http://localhost:${{ env.DEEPWIKI_MCP_PORT }}/mcp > /dev/null 2>&1; then
+            if curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
               echo "DeepWiki MCP is available"
               break
             fi
@@ -82,7 +74,7 @@ jobs:
             sleep 2
           done
           # Verify once more - check /mcp endpoint
-          if ! curl -s http://localhost:${{ env.DEEPWIKI_MCP_PORT }}/mcp > /dev/null 2>&1; then
+          if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: DeepWiki MCP not available after 60 seconds"
             echo "Service logs:"
             cat ../deepwiki.log
@@ -92,17 +84,11 @@ jobs:
           fi
           # Verify process is running
           ps aux | grep node | grep -v grep
-      - name: Create necessary directories
-        run: |
-          # Create directories for documentation and images
-          mkdir -p ${{ env.DOCS_DIR }}
-          mkdir -p ${{ env.IMAGE_DIR }}
-          echo "Created directories:"
-          ls -la
       - name: Export ALL Markdown from DeepWiki
         run: |
+          mkdir -p docs-md
           # Verify service is available before making the call
-          if ! curl -s http://localhost:${{ env.DEEPWIKI_MCP_PORT }}/mcp > /dev/null 2>&1; then
+          if ! curl -s http://localhost:3000/mcp > /dev/null 2>&1; then
             echo "Error: Service not available before export"
             echo "Service logs:"
             cat deepwiki.log || echo "No logs found"
@@ -110,17 +96,18 @@ jobs:
           fi
           # Test connectivity first
           echo "Testing service connectivity..."
-          curl -X POST http://localhost:${{ env.DEEPWIKI_MCP_PORT }}/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' -v || echo "Tools list check failed"
+          curl -X POST http://localhost:3000/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}' -v || echo "Tools list check failed"
           # Validate DeepWiki URL accessibility
           echo "Validating DeepWiki URL accessibility..."
+          DEEPWIKI_URL="https://deepwiki.com/VforVitorio/F1_Strat_Manager"
           # Check if the URL is accessible
-          if curl -s --head "${{ env.DEEPWIKI_URL }}" | head -n 1 | grep -q "200 OK"; then
-            echo "✅ DeepWiki URL is accessible: ${{ env.DEEPWIKI_URL }}"
+          if curl -s --head "$DEEPWIKI_URL" | head -n 1 | grep -q "200 OK"; then
+            echo "✅ DeepWiki URL is accessible: $DEEPWIKI_URL"
           else
-            echo "⚠️ Warning: DeepWiki URL might not be accessible: ${{ env.DEEPWIKI_URL }}"
+            echo "⚠️ Warning: DeepWiki URL might not be accessible: $DEEPWIKI_URL"
           fi
           # Create JSON payload to get ALL pages (maxDepth: 1, mode: "pages")
-          JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'${{ env.DEEPWIKI_URL }}'","maxDepth":1,"mode":"pages"}},"id":1}'
+          JSON_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"pages"}},"id":1}'
           echo "JSON-RPC 2.0 payload to send (ALL PAGES):"
           echo "$JSON_PAYLOAD" | jq . || echo "$JSON_PAYLOAD"
           # Validate JSON syntax
@@ -132,10 +119,10 @@ jobs:
           fi
           # Make the POST request to get ALL pages
           echo "Making POST request to get ALL DeepWiki pages..."
-          HTTP_CODE=$(curl -X POST http://localhost:${{ env.DEEPWIKI_MCP_PORT }}/mcp \
+          HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD" \
-            -o ${{ env.DOCS_DIR }}/all-pages-raw.json \
+            -o docs-md/all-pages-raw.json \
             -w "%{http_code}" \
             -s)
           echo "HTTP status code: $HTTP_CODE"
@@ -145,16 +132,16 @@ jobs:
           else
             echo "❌ Error HTTP $HTTP_CODE"
             echo "Response content:"
-            cat ${{ env.DOCS_DIR }}/all-pages-raw.json
+            cat docs-md/all-pages-raw.json
             
             # Try fallback with aggregate mode
             echo "Trying fallback with aggregate mode..."
-            FALLBACK_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'${{ env.DEEPWIKI_URL }}'","maxDepth":1,"mode":"aggregate"}},"id":1}'
+            FALLBACK_PAYLOAD='{"jsonrpc":"2.0","method":"tools/call","params":{"name":"deepwiki_fetch","arguments":{"url":"'$DEEPWIKI_URL'","maxDepth":1,"mode":"aggregate"}},"id":1}'
             
-            HTTP_CODE=$(curl -X POST http://localhost:${{ env.DEEPWIKI_MCP_PORT }}/mcp \
+            HTTP_CODE=$(curl -X POST http://localhost:3000/mcp \
               -H "Content-Type: application/json" \
               -d "$FALLBACK_PAYLOAD" \
-              -o ${{ env.DOCS_DIR }}/all-pages-raw.json \
+              -o docs-md/all-pages-raw.json \
               -w "%{http_code}" \
               -s)
             
@@ -165,440 +152,34 @@ jobs:
             echo "✅ Fallback method succeeded"
           fi
           # Verify file was created and is not empty
-          if [ ! -f ${{ env.DOCS_DIR }}/all-pages-raw.json ]; then
+          if [ ! -f docs-md/all-pages-raw.json ]; then
             echo "Error: Response file was not created"
             exit 1
           fi
-          if [ ! -s ${{ env.DOCS_DIR }}/all-pages-raw.json ]; then
+          if [ ! -s docs-md/all-pages-raw.json ]; then
             echo "Error: Response file is empty"
             echo "File content:"
-            cat ${{ env.DOCS_DIR }}/all-pages-raw.json
+            cat docs-md/all-pages-raw.json
             exit 1
           fi
           echo "✅ All pages response received successfully:"
-          ls -la ${{ env.DOCS_DIR }}/
+          ls -la docs-md/
           echo "Response structure:"
-          jq -r 'keys' ${{ env.DOCS_DIR }}/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
-          head -c 500 ${{ env.DOCS_DIR }}/all-pages-raw.json
-      - name: Install Required Dependencies
+          jq -r 'keys' docs-md/all-pages-raw.json || echo "Not valid JSON, showing first 500 chars:"
+          head -c 500 docs-md/all-pages-raw.json
+      - name: Process and Split Multiple Pages
         run: |
-          echo "Installing required tools for processing (including BeautifulSoup for robust HTML parsing)..."
-          sudo apt-get update && sudo apt-get install -y jq curl wget python3-pip
-          pip3 install beautifulsoup4 requests lxml
-          echo "✅ Dependencies installed including BeautifulSoup for HTML parsing"
-      - name: Create Enhanced Image Processing Helper Script
-        run: |
-          cat > image_processor.py << 'EOF'
-          import subprocess
+          echo "Processing multiple pages from DeepWiki response..."
+          # Install jq if not available
+          sudo apt-get update && sudo apt-get install -y jq          # Process the response with Python to handle multiple pages
+          python3 << 'EOF'
+          import json
+          import re
+          import sys
           import os
-          import urllib.parse
-          from pathlib import Path
-          from bs4 import BeautifulSoup
-          import requests
-          import re
-          def extract_svgs_from_web(page_url, image_dir, downloaded_svgs=None):
-              """
-              Extract SVG diagrams directly from DeepWiki web page.
-              This handles dynamically generated SVGs that don't appear in MCP API responses.
-              """
-              if downloaded_svgs is None:
-                  downloaded_svgs = {}
-              
-              print(f"🌐 Extracting SVGs from DeepWiki web page: {page_url}")
-              
-              try:
-                  # Setup headers to appear as a legitimate browser request
-                  headers = {
-                      'User-Agent': 'Mozilla/5.0 (compatible; GitHub-Actions-Bot; +https://github.com)',
-                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                      'Accept-Language': 'en-US,en;q=0.5',
-                      'Accept-Encoding': 'gzip, deflate',
-                      'DNT': '1',
-                      'Connection': 'keep-alive',
-                      'Upgrade-Insecure-Requests': '1',
-                  }
-                  
-                  # Make request to actual DeepWiki page
-                  print(f"  📡 Making request to: {page_url}")
-                  resp = requests.get(page_url, headers=headers, timeout=30)
-                  resp.raise_for_status()
-                  
-                  print(f"  ✅ Response received (status: {resp.status_code}, size: {len(resp.text)} chars)")
-                  
-                  # Parse HTML content
-                  soup = BeautifulSoup(resp.text, "html.parser")
-                  
-                  # Find all SVG elements
-                  svg_elements = soup.find_all("svg")
-                  print(f"  🔍 Found {len(svg_elements)} SVG elements in web page")
-                  
-                  if len(svg_elements) == 0:
-                      print("  ℹ️ No SVG elements found. This may be normal if the page has no diagrams.")
-                      return {}
-                  
-                  # Create image directory if it doesn't exist
-                  os.makedirs(image_dir, exist_ok=True)
-                  
-                  svg_files = {}
-                  svg_counter = 1
-                  
-                  for idx, svg in enumerate(svg_elements):
-                      try:
-                          # Generate descriptive filename
-                          svg_id = svg.get('id')
-                          svg_class = svg.get('class')
-                          svg_title = None
-                          
-                          # Try to find a title element within the SVG
-                          title_elem = svg.find('title')
-                          if title_elem:
-                              svg_title = title_elem.get_text().strip()
-                          
-                          # Generate filename based on available information
-                          if svg_id:
-                              svg_name = f"{svg_id}.svg"
-                          elif svg_title:
-                              # Clean title for filename
-                              clean_title = re.sub(r'[^\w\s-]', '', svg_title).strip()
-                              clean_title = re.sub(r'[-\s]+', '-', clean_title)
-                              svg_name = f"{clean_title[:30]}-{svg_counter}.svg"
-                              svg_counter += 1
-                          elif svg_class:
-                              class_name = svg_class[0] if isinstance(svg_class, list) else str(svg_class)
-                              svg_name = f"{class_name}-{svg_counter}.svg"
-                              svg_counter += 1
-                          else:
-                              svg_name = f"diagram-{svg_counter}.svg"
-                              svg_counter += 1
-                          
-                          # Ensure unique filename
-                          original_name = svg_name
-                          counter = 1
-                          while os.path.exists(os.path.join(image_dir, svg_name)):
-                              name_parts = original_name.rsplit('.', 1)
-                              svg_name = f"{name_parts[0]}-{counter}.{name_parts[1]}"
-                              counter += 1
-                          
-                          svg_path = os.path.join(image_dir, svg_name)
-                          
-                          # Clean and prepare SVG content
-                          svg_content = str(svg)
-                          
-                          # Add XML declaration if not present
-                          if not svg_content.startswith('<?xml'):
-                              svg_content = f'<?xml version="1.0" encoding="UTF-8"?>\n{svg_content}'
-                          
-                          # Save SVG file
-                          with open(svg_path, "w", encoding="utf-8") as f:
-                              f.write(svg_content)
-                          
-                          # Store mapping for markdown replacement
-                          relative_path = f"images/{svg_name}"
-                          alt_text = svg_title or f"SVG Diagram {idx+1}"
-                          
-                          # Use a unique key for SVG (since there's no src attribute like images)
-                          svg_key = f"svg-{idx}-{svg_id or 'no-id'}"
-                          svg_files[svg_key] = (relative_path, alt_text)
-                          downloaded_svgs[svg_key] = relative_path
-                          
-                          print(f"    ✅ Saved SVG: {svg_name} -> {relative_path}")
-                          print(f"       📝 Alt text: {alt_text}")
-                          
-                      except Exception as e:
-                          print(f"    ❌ Error processing SVG {idx+1}: {e}")
-                          continue
-                  
-                  print(f"  📊 SVG extraction summary: {len(svg_files)} SVGs successfully processed")
-                  return svg_files
-                  
-              except requests.exceptions.RequestException as e:
-                  print(f"  ❌ Network error extracting SVGs: {e}")
-                  return {}
-              except Exception as e:
-                  print(f"  ❌ Unexpected error extracting SVGs: {e}")
-                  return {}
-          def extract_and_download_images_with_soup(html_content, base_url, image_dir, downloaded_images):
-              """Extract image URLs from HTML using BeautifulSoup and download them"""
-              print(f"🔍 Processing HTML content for images (length: {len(html_content)} chars)...")
-              
-              # Parse HTML with BeautifulSoup - much more robust than regex
-              try:
-                  soup = BeautifulSoup(html_content, 'html.parser')
-              except Exception as e:
-                  print(f"❌ Error parsing HTML with BeautifulSoup: {e}")
-                  return {}
-              
-              # Find all img tags
-              img_tags = soup.find_all('img')
-              print(f"🖼️ Found {len(img_tags)} <img> tags in HTML")
-              
-              if len(img_tags) > 0:
-                  print("📝 Sample img tags found:")
-                  for i, img in enumerate(img_tags[:3]):  # Show first 3
-                      print(f"  {i+1}. {str(img)[:100]}...")
-              
-              downloaded_paths = {}
-              
-              for i, img_tag in enumerate(img_tags):
-                  src = img_tag.get('src')
-                  alt = img_tag.get('alt', '')
-                  
-                  if not src:
-                      print(f"⚠️ Skipping img tag {i+1}: no src attribute")
-                      continue
-                  
-                  # Skip if already downloaded
-                  if src in downloaded_images:
-                      downloaded_paths[src] = downloaded_images[src]
-                      print(f"♻️ Already downloaded: {src}")
-                      continue
-                  
-                  try:
-                      # Build absolute URL
-                      if src.startswith('http://') or src.startswith('https://'):
-                          full_url = src
-                      elif src.startswith('//'):
-                          full_url = 'https:' + src
-                      elif src.startswith('/'):
-                          # Extract base domain from base_url
-                          parsed = urllib.parse.urlparse(base_url)
-                          full_url = f"{parsed.scheme}://{parsed.netloc}{src}"
-                      else:
-                          # Relative URL
-                          full_url = urllib.parse.urljoin(base_url, src)
-                      
-                      print(f"🌐 Processing image {i+1}/{len(img_tags)}: {full_url}")
-                      
-                      # Generate descriptive filename
-                      url_path = urllib.parse.urlparse(full_url).path
-                      if url_path and url_path != '/':
-                          filename = os.path.basename(url_path)
-                          if not filename or '.' not in filename:
-                              # No extension, try to get from URL or use default
-                              filename = f"image_{i+1}.png"
-                      else:
-                          # Generate descriptive name from alt text or use default
-                          if alt:
-                              safe_alt = "".join(c for c in alt if c.isalnum() or c in (' ', '-', '_')).strip()
-                              safe_alt = safe_alt.replace(' ', '_')[:30]  # Limit length
-                              filename = f"{safe_alt}_{i+1}.png"
-                          else:
-                              filename = f"image_{i+1}.png"
-                      
-                      # Ensure unique filename
-                      base_name, ext = os.path.splitext(filename)
-                      if not ext:
-                          ext = '.png'  # Default extension
-                      counter = 1
-                      while os.path.exists(os.path.join(image_dir, filename)):
-                          filename = f"{base_name}_{counter}{ext}"
-                          counter += 1
-                      
-                      local_path = os.path.join(image_dir, filename)
-                      
-                      # Download using requests with proper headers
-                      success = download_image_with_requests(full_url, local_path)
-                      
-                      if success:
-                          # Store relative path for markdown
-                          relative_path = f"images/{filename}"
-                          downloaded_images[src] = relative_path
-                          downloaded_paths[src] = (relative_path, alt)
-                          print(f"✅ Downloaded: {filename} -> {relative_path}")
-                      else:
-                          print(f"❌ Failed to download: {full_url}")
-                          downloaded_paths[src] = (None, alt)
-                      
-                  except Exception as e:
-                      print(f"❌ Error processing image {src}: {e}")
-                      downloaded_paths[src] = (None, alt)
-              
-              print(f"📊 Image processing summary: {len(downloaded_paths)} total, {len([p for p in downloaded_paths.values() if p[0]])} successful downloads")
-              return downloaded_paths
-          def download_image_with_requests(url, dest_path):
-              """Download image using requests with proper error handling"""
-              try:
-                  # Create directory if it doesn't exist
-                  os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                  
-                  # Download with requests (more reliable than curl for this use case)
-                  headers = {
-                      'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions; +https://github.com)',
-                      'Accept': 'image/*,*/*;q=0.8',
-                      'Accept-Language': 'en-US,en;q=0.5',
-                      'Accept-Encoding': 'gzip, deflate',
-                      'DNT': '1',
-                      'Connection': 'keep-alive',
-                      'Upgrade-Insecure-Requests': '1',
-                  }
-                  
-                  response = requests.get(url, headers=headers, timeout=30, stream=True)
-                  response.raise_for_status()
-                  
-                  # Check if we actually got image content
-                  content_type = response.headers.get('content-type', '')
-                  if not content_type.startswith('image/'):
-                      print(f"⚠️ Warning: Content-Type is '{content_type}', may not be an image")
-                  
-                  # Write the image data
-                  with open(dest_path, 'wb') as f:
-                      for chunk in response.iter_content(chunk_size=8192):
-                          f.write(chunk)
-                  
-                  # Verify file was created and has content
-                  if os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
-                      file_size = os.path.getsize(dest_path)
-                      print(f"  📁 File saved: {os.path.basename(dest_path)} ({file_size} bytes)")
-                      return True
-                  else:
-                      print(f"  ❌ File not created or empty: {dest_path}")
-                      return False
-                      
-              except requests.exceptions.RequestException as e:
-                  print(f"  ❌ Request error: {e}")
-                  return False
-              except Exception as e:
-                  print(f"  ❌ Unexpected error: {e}")
-                  return False
-          def convert_html_to_markdown_with_images_and_svgs(html_content, image_paths, svg_paths):
-              """
-              Convert HTML to Markdown while replacing <img> tags with Markdown syntax
-              and inserting SVG diagrams at appropriate locations.
-              """
-              print(f"🔄 Converting HTML to Markdown with {len(image_paths)} image replacements and {len(svg_paths)} SVG insertions")
-              
-              # Parse HTML again for replacement
-              try:
-                  soup = BeautifulSoup(html_content, 'html.parser')
-              except Exception as e:
-                  print(f"❌ Error parsing HTML for conversion: {e}")
-                  return html_content
-              
-              # Replace each img tag with Markdown syntax
-              replacements_made = 0
-              for img_tag in soup.find_all('img'):
-                  src = img_tag.get('src')
-                  if src in image_paths:
-                      local_path, alt_text = image_paths[src]
-                      if local_path:
-                          # Create Markdown image syntax
-                          markdown_img = f"![{alt_text or 'Image'}]({local_path})"
-                          print(f"  🔄 Replacing <img> with: {markdown_img}")
-                      else:
-                          # Image couldn't be downloaded
-                          filename = os.path.basename(src) if src else 'unknown'
-                          markdown_img = f"[IMAGE NOT AVAILABLE: {filename}]"
-                          print(f"  ⚠️ Replacing with placeholder: {markdown_img}")
-                      
-                      # Replace the img tag in the soup
-                      img_tag.replace_with(markdown_img)
-                      replacements_made += 1
-              
-              # Convert back to string for SVG insertion
-              content_with_images = str(soup)
-              
-              # Insert SVG diagrams at strategic locations
-              svgs_inserted = 0
-              if svg_paths:
-                  print(f"  🎨 Inserting {len(svg_paths)} SVG diagrams into content...")
-                  
-                  # Find good insertion points (after headers, before sections)
-                  insertion_points = [
-                      "\n## System Architecture\n",
-                      "\n### Architecture Overview\n",
-                      "\n## Component Diagram\n", 
-                      "\n## Overview\n",
-                      "\n### System Components\n",
-                  ]
-                  
-                  svg_list = list(svg_paths.values())
-                  svg_idx = 0
-                  
-                  for point in insertion_points:
-                      if point in content_with_images and svg_idx < len(svg_list):
-                          local_path, alt_text = svg_list[svg_idx]
-                          svg_markdown = f"\n\n![{alt_text}]({local_path})\n\n"
-                          content_with_images = content_with_images.replace(
-                              point, 
-                              point + svg_markdown,
-                              1  # Only replace first occurrence
-                          )
-                          print(f"    ✅ Inserted SVG after: {point.strip()}")
-                          svgs_inserted += 1
-                          svg_idx += 1
-                  
-                  # If we still have SVGs, insert them at the beginning of main content
-                  while svg_idx < len(svg_list):
-                      local_path, alt_text = svg_list[svg_idx]
-                      svg_markdown = f"\n\n![{alt_text}]({local_path})\n\n"
-                      
-                      # Try to insert after the first header
-                      if "\n# " in content_with_images:
-                          parts = content_with_images.split("\n# ", 1)
-                          if len(parts) == 2:
-                              content_with_images = parts[0] + "\n# " + parts[1].split('\n', 1)[0] + svg_markdown + '\n' + parts[1].split('\n', 1)[1]
-                              print(f"    ✅ Inserted SVG after main header")
-                              svgs_inserted += 1
-                              svg_idx += 1
-                              break
-                      
-                      # Fallback: insert at the beginning
-                      content_with_images = svg_markdown + content_with_images
-                      print(f"    ✅ Inserted SVG at beginning")
-                      svgs_inserted += 1
-                      svg_idx += 1
-              
-              print(f"✅ Made {replacements_made} image replacements and {svgs_inserted} SVG insertions")
-              return content_with_images
-          # Legacy function names for backward compatibility
-          def extract_and_download_images(html_content, base_url, image_dir, downloaded_images):
-              """Legacy wrapper - now uses BeautifulSoup instead of regex"""
-              return extract_and_download_images_with_soup(html_content, base_url, image_dir, downloaded_images)
-          def convert_html_to_markdown_with_images(html_content, image_paths):
-              """Legacy wrapper - now handles both images and SVGs"""
-              return convert_html_to_markdown_with_images_and_svgs(html_content, image_paths, {})
-          EOF
-          echo "✅ Enhanced image processing helper created (now with SVG web scraping capability)"
-      - name: Create Content Processing Helper Script
-        run: |
-          cat > content_processor.py << 'EOF'
-          import re
-          from image_processor import (
-              extract_and_download_images_with_soup, 
-              convert_html_to_markdown_with_images_and_svgs,
-              extract_svgs_from_web
-          )
-          def clean_deepwiki_content(content, preserve_images=True, image_dir="", base_url="", downloaded_images={}, downloaded_svgs={}):
-              """
-              Clean and format DeepWiki content for GitHub Wiki.
-              Enhanced version that handles both images from API response and SVGs from web scraping.
-              """
-              
-              # Extract and download images FIRST using robust BeautifulSoup parsing
-              image_paths = {}
-              svg_paths = {}
-              
-              if preserve_images:
-                  print("🖼️ Starting image extraction and download process...")
-                  
-                  # Step 1: Extract images from API response content  
-                  image_paths = extract_and_download_images_with_soup(content, base_url, image_dir, downloaded_images)
-                  print(f"📊 Image extraction from API completed: {len(image_paths)} images processed")
-                  
-                  # Step 2: Extract SVGs from actual web page
-                  print("🎨 Starting SVG extraction from DeepWiki web page...")
-                  svg_paths = extract_svgs_from_web(base_url, image_dir, downloaded_svgs)
-                  print(f"📊 SVG extraction from web completed: {len(svg_paths)} SVGs processed")
-              
-              # Convert HTML to Markdown with both images and SVGs
-              if image_paths or svg_paths:
-                  print("🔄 Converting HTML to Markdown with image and SVG replacements...")
-                  content = convert_html_to_markdown_with_images_and_svgs(content, image_paths, svg_paths)
-                  print("✅ HTML to Markdown conversion completed")
-              else:
-                  print("ℹ️ No images or SVGs found, proceeding with text-only conversion")
-              
-              # Continue with existing cleaning logic...
+          def clean_deepwiki_content(content):
+              """Clean and format DeepWiki content for GitHub Wiki"""
+              import re
               # Eliminar bloque de navegación/índice al principio (menú DeepWiki)
               content = re.sub(r'^(?:[\s\S]{0,300}?)(?:github-actions\[bot\].*?revision\n)?(?:[\s\S]{0,300}?)(?:System Architecture|Overview|Streamlit Dashboard|Machine Learning Models|NLP Pipeline|Expert System|Developer Guide|Other Sections)[\s\S]+?(?=\n# |\n## |\n### |\n\Z)', '', content, flags=re.MULTILINE)
               # Eliminar sección '/' y sus repeticiones
@@ -640,7 +221,6 @@ jobs:
               content = content.strip()
               
               return content
-              
           def get_page_title_from_content(content):
               """Extract a clean title from content"""
               lines = content.split('\n')
@@ -669,12 +249,6 @@ jobs:
                       return f"unknown-section-{fallback_idx}"
                   return "unknown-section"
               return filename
-          EOF
-          echo "✅ Content processing helper created (now with enhanced image and SVG handling)"
-      - name: Create Section Categorization Helper Script
-        run: |
-          cat > section_categorizer.py << 'EOF'
-          from content_processor import safe_filename
           def categorize_section(title, fallback_idx=None):
               """Categoriza secciones según la jerarquía especificada"""
               title_lower = title.lower() if title else ''
@@ -740,34 +314,10 @@ jobs:
                   return ('sub', 'Overview', '01-01-system-architecture.md')
               elif any(keyword in title_lower for keyword in ['installation', 'setup', 'instalación']):
                   return ('sub', 'Overview', '01-02-installation-setup.md')
-              # Fallback seguro
-              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')
-          EOF
-          echo "✅ Section categorization helper created"
-      - name: Process DeepWiki Response and Extract Content with Enhanced Visual Support
-        run: |
-          echo "Processing multiple pages from DeepWiki response with enhanced image and SVG support..."
-          python3 << 'EOF'
-          import json
-          import sys
-          import os
-          import re
-          from pathlib import Path
-          from bs4 import BeautifulSoup
-          from content_processor import clean_deepwiki_content, get_page_title_from_content
-          from section_categorizer import categorize_section
-          # Environment variables
-          DOCS_DIR = os.environ.get('DOCS_DIR', 'docs-md')
-          IMAGE_DIR = os.environ.get('IMAGE_DIR', 'docs-md/images')
-          DEEPWIKI_URL = os.environ.get('DEEPWIKI_URL', 'https://deepwiki.com/VforVitorio/F1_Strat_Manager')
-          # Create image directory
-          Path(IMAGE_DIR).mkdir(parents=True, exist_ok=True)
-          # Track all downloaded images and SVGs globally
-          downloaded_images = {}
-          downloaded_svgs = {}
-          # Read the JSON response
+                # Fallback seguro
+              return ('misc', 'Other', f'99-{safe_filename(title, fallback_idx)}.md')# Read the JSON response
           try:
-              with open(f'{DOCS_DIR}/all-pages-raw.json', 'r', encoding='utf-8') as f:
+              with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
                   data = json.load(f)
               
               print(f"Response structure: {list(data.keys())}")
@@ -801,8 +351,7 @@ jobs:
                   'subsections': {},
                   'misc': []
               }
-              
-              # Process each page/section
+                # Process each page/section
               for i, content in enumerate(pages_content):
                   print(f"\nProcessing content section {i+1}...")
                   print(f"Content length: {len(content)} characters")
@@ -817,43 +366,13 @@ jobs:
                       print(f"Converting content to string for section {i+1}")
                       content = str(content)
                   
-                  # Debug: Check for images in raw content before cleaning using BeautifulSoup
-                  from bs4 import BeautifulSoup
-                  try:
-                      soup = BeautifulSoup(content, 'html.parser')
-                      img_tags = soup.find_all('img')
-                      total_imgs_before = len(img_tags)
-                      print(f"🖼️ Images found in raw content (BeautifulSoup): {total_imgs_before}")
-                      
-                      if total_imgs_before > 0:
-                          print("📝 Sample image tags found:")
-                          for j, img in enumerate(img_tags[:3]):  # Show first 3
-                              src = img.get('src', 'No src')
-                              alt = img.get('alt', 'No alt')
-                              print(f"  {j+1}. src='{src[:60]}...' alt='{alt[:30]}...'")
-                  except Exception as e:
-                      print(f"⚠️ Error parsing HTML for image preview: {e}")
-                      # Fallback to regex for basic counting
-                      img_check_patterns = [r'<img[^>]*>', r'!\[.*?\]\([^)]*\)']
-                      total_imgs_before = sum(len(re.findall(p, content, re.IGNORECASE)) for p in img_check_patterns)
-                      print(f"Images found in raw content (regex fallback): {total_imgs_before}")
-                  
-                  # Clean the content (with enhanced image and SVG support)
-                  print(f"🎨 Processing content with enhanced visual support...")
-                  cleaned_content = clean_deepwiki_content(
-                      content, 
-                      preserve_images=True, 
-                      image_dir=IMAGE_DIR, 
-                      base_url=DEEPWIKI_URL, 
-                      downloaded_images=downloaded_images,
-                      downloaded_svgs=downloaded_svgs  # Pass SVG tracking
-                  )
+                  # Clean the content
+                  cleaned_content = clean_deepwiki_content(content)
                   
                   if len(cleaned_content.strip()) < 50:  # Skip very short content
                       print(f"Skipping short content section {i+1}")
                       continue
-                  
-                  # Get title and categorize
+                    # Get title and categorize
                   title = get_page_title_from_content(cleaned_content)
                   # Validación de título vacío
                   if not title or len(title.strip()) == 0:
@@ -870,7 +389,7 @@ jobs:
                       cleaned_content = f'# {title}\n\n' + cleaned_content.strip()
                   
                   # Write individual file
-                  filepath = f'{DOCS_DIR}/{filename}'
+                  filepath = f'docs-md/{filename}'
                   with open(filepath, 'w', encoding='utf-8') as f:
                       f.write(cleaned_content)
                   
@@ -898,82 +417,8 @@ jobs:
                   
                   print(f"✅ Created: {filename} (Category: {section_type}, Parent: {parent_section})")
               
-              # Save organized content for next step
-              import pickle
-              with open('organized_content.pkl', 'wb') as f:
-                  pickle.dump(organized_content, f)
-              
-              # Save downloaded images and SVGs info
-              with open('downloaded_images.pkl', 'wb') as f:
-                  pickle.dump(downloaded_images, f)
-              
-              with open('downloaded_svgs.pkl', 'wb') as f:
-                  pickle.dump(downloaded_svgs, f)
-              
-              print(f"✅ Enhanced content processing completed")
-              print(f"📊 Final visual content summary:")
-              print(f"   - Images processed: {len(downloaded_images)}")
-              print(f"   - SVGs processed: {len(downloaded_svgs)}")
-              
-          except json.JSONDecodeError as e:
-              print(f"❌ Error parsing JSON: {e}")
-              print("Response might not be valid JSON, trying as plain text...")
-              
-              # Try to handle as plain text
-              with open(f'{DOCS_DIR}/all-pages-raw.json', 'r', encoding='utf-8') as f:
-                  content = f.read()
-              
-              print(f"Processing plain text content (length: {len(content)} chars)")
-              print("First 500 chars of content:")
-              print(content[:500])
-              
-              cleaned_content = clean_deepwiki_content(
-                  content, 
-                  preserve_images=True, 
-                  image_dir=IMAGE_DIR, 
-                  base_url=DEEPWIKI_URL, 
-                  downloaded_images=downloaded_images,
-                  downloaded_svgs=downloaded_svgs
-              )
-              
-              if not cleaned_content.strip().startswith('# '):
-                  cleaned_content = '# F1 Strategy Manager\n\n' + cleaned_content.strip()
-              
-              with open(f'{DOCS_DIR}/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
-                  f.write(cleaned_content)
-              
-              print("✅ Processed as plain text with enhanced visual support")
-              
-          except Exception as e:
-              print(f"❌ Error processing content: {e}")
-              sys.exit(1)
-          EOF
-      - name: Generate Comprehensive Documentation
-        run: |
-          echo "Creating structured comprehensive documentation..."
-          python3 << 'EOF'
-          import pickle
-          import re
-          import os
-          from pathlib import Path
-          # Environment variables
-          DOCS_DIR = os.environ.get('DOCS_DIR', 'docs-md')
-          IMAGE_DIR = os.environ.get('IMAGE_DIR', 'docs-md/images')
-          try:
-              # Load organized content
-              with open('organized_content.pkl', 'rb') as f:
-                  organized_content = pickle.load(f)
-              
-              # Load downloaded images and SVGs info
-              with open('downloaded_images.pkl', 'rb') as f:
-                  downloaded_images = pickle.load(f)
-              
-              try:
-                  with open('downloaded_svgs.pkl', 'rb') as f:
-                      downloaded_svgs = pickle.load(f)
-              except FileNotFoundError:
-                  downloaded_svgs = {}
-                  print("No SVG data file found, proceeding without SVGs")
+              # Create structured comprehensive documentation
+              print(f"\nCreating structured comprehensive documentation...")
               
               # Define the correct order of main sections
               section_order = [
@@ -987,12 +432,6 @@ jobs:
               
               main_content = "# F1 Strategy Manager - Complete Documentation\n\n"
               main_content += "This document contains the complete documentation for the F1 Strategy Manager project, organized in a hierarchical structure.\n\n"
-              
-              # Add visual content summary if we have any
-              total_visual_items = len(downloaded_images) + len(downloaded_svgs)
-              if total_visual_items > 0:
-                  main_content += f"📊 **Visual Content Summary**: This documentation includes {len(downloaded_images)} images and {len(downloaded_svgs)} SVG diagrams extracted from DeepWiki.\n\n"
-              
               main_content += "## Table of Contents\n\n"
               
               # Build table of contents
@@ -1043,7 +482,7 @@ jobs:
                   main_content += misc_item['content'] + "\n\n---\n\n"
               
               # Write main comprehensive file
-              with open(f'{DOCS_DIR}/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
+              with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
                   f.write(main_content)
               
               # Count total files
@@ -1058,110 +497,61 @@ jobs:
               print(f"  - Miscellaneous: {total_misc}")
               print(f"  - Total files: {total_files}")
               
-              # Report on downloaded visual content
-              print(f"\n✅ Downloaded visual content:")
-              print(f"  - Total images processed: {len(downloaded_images)}")
-              print(f"  - Total SVGs processed: {len(downloaded_svgs)}")
+          except json.JSONDecodeError as e:
+              print(f"❌ Error parsing JSON: {e}")
+              print("Response might not be valid JSON, trying as plain text...")
               
-              # Check actual files in directory
-              image_list = list(Path(IMAGE_DIR).glob('*'))
-              print(f"  - Visual files successfully saved: {len(image_list)}")
-              if image_list:
-                  print("  - Visual files:")
-                  for img in image_list[:10]:  # Show first 10
-                      file_size = img.stat().st_size if img.exists() else 0
-                      print(f"    - {img.name} ({file_size} bytes)")
-                  if len(image_list) > 10:
-                      print(f"    ... and {len(image_list) - 10} more")
+              # Try to handle as plain text
+              with open('docs-md/all-pages-raw.json', 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              cleaned_content = clean_deepwiki_content(content)
+              
+              if not cleaned_content.strip().startswith('# '):
+                  cleaned_content = '# F1 Strategy Manager\n\n' + cleaned_content.strip()
+              
+              with open('docs-md/f1-strat-manager-complete.md', 'w', encoding='utf-8') as f:
+                  f.write(cleaned_content)
+              
+              print("✅ Processed as plain text")
               
           except Exception as e:
-              print(f"❌ Error generating documentation: {e}")
-              import sys
+              print(f"❌ Error processing content: {e}")
               sys.exit(1)
           EOF
           echo "Final documentation files created:"
-          ls -la ${{ env.DOCS_DIR }}/
-          echo "Visual content downloaded:"
-          ls -la ${{ env.IMAGE_DIR }}/ || echo "No images directory found"
+          ls -la docs-md/
           echo "Preview of main documentation:"
-          head -30 ${{ env.DOCS_DIR }}/f1-strat-manager-complete.md
+          head -30 docs-md/f1-strat-manager-complete.md
       - name: Checkout Wiki
         uses: actions/checkout@v3
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.WIKI_PAT }}
-          path: ${{ env.WIKI_DIR }}
+          path: wiki
 
-      - name: Copy All Documentation and Visual Content to Wiki
+      - name: Copy All Documentation to Wiki
         run: |
           # Verify we have files to copy
-          if [ ! -d ${{ env.DOCS_DIR }} ] || [ -z "$(ls -A ${{ env.DOCS_DIR }}/*.md 2>/dev/null)" ]; then
-            echo "❌ Error: No markdown files to copy"
+          if [ ! -d docs-md ] || [ -z "$(ls -A docs-md/*.md 2>/dev/null)" ]; then
+            echo "Error: No markdown files to copy"
             exit 1
           fi
-          echo "📁 Files to copy:"
-          ls -la ${{ env.DOCS_DIR }}/
+          echo "Files to copy:"
+          ls -la docs-md/
           # Ensure wiki directory exists
-          if [ ! -d ${{ env.WIKI_DIR }} ]; then
-            echo "❌ Error: Wiki directory not found"
+          if [ ! -d wiki ]; then
+            echo "Error: Wiki directory not found"
             exit 1
           fi
-          echo "📂 Current wiki contents:"
-          ls -la ${{ env.WIKI_DIR }}/
+          echo "Current wiki contents:"
+          ls -la wiki/
           # Copy ALL markdown files to wiki
-          echo "📄 Copying Markdown files..."
-          cp ${{ env.DOCS_DIR }}/*.md ${{ env.WIKI_DIR }}/
-          MARKDOWN_COUNT=$(ls -1 ${{ env.DOCS_DIR }}/*.md | wc -l)
-          echo "✅ Copied $MARKDOWN_COUNT Markdown files"
-          # Copy visual content (images and SVGs) with enhanced logging and error handling
-          if [ -d "${{ env.IMAGE_DIR }}" ]; then
-            # Count all visual files (images and SVGs)
-            VISUAL_COUNT=$(find "${{ env.IMAGE_DIR }}" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" -o -name "*.webp" \) | wc -l)
-            
-            if [ $VISUAL_COUNT -gt 0 ]; then
-              echo "🎨 Found $VISUAL_COUNT visual files (images + SVGs) to copy..."
-              # Create images directory in wiki
-              mkdir -p ${{ env.WIKI_DIR }}/images
-              
-              # Copy all visual content preserving directory structure
-              echo "📋 Copying visual content to wiki/images/..."
-              cp -r ${{ env.IMAGE_DIR }}/* ${{ env.WIKI_DIR }}/images/ 2>/dev/null || {
-                echo "⚠️ Warning: Some visual files could not be copied"
-                # Try copying individual files instead
-                find "${{ env.IMAGE_DIR }}" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.svg" -o -name "*.webp" \) -exec cp {} ${{ env.WIKI_DIR }}/images/ \;
-              }
-              
-              # Verify visual content was copied
-              COPIED_COUNT=$(find "${{ env.WIKI_DIR }}/images/" -type f 2>/dev/null | wc -l)
-              echo "✅ Successfully copied $COPIED_COUNT visual files"
-              
-              if [ $COPIED_COUNT -gt 0 ]; then
-                echo "🎨 Visual content copied to wiki:"
-                
-                # Count different types
-                IMAGE_COUNT=$(find "${{ env.WIKI_DIR }}/images/" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" \) | wc -l)
-                SVG_COUNT=$(find "${{ env.WIKI_DIR }}/images/" -type f -name "*.svg" | wc -l)
-                
-                echo "  📊 Summary: $IMAGE_COUNT images + $SVG_COUNT SVGs = $COPIED_COUNT total visual files"
-                
-                # Show some examples
-                ls -la ${{ env.WIKI_DIR }}/images/ | head -10
-                if [ $COPIED_COUNT -gt 10 ]; then
-                  echo "   ... and $(($COPIED_COUNT - 10)) more visual files"
-                fi
-              fi
-            else
-              echo "ℹ️ No visual files found in ${{ env.IMAGE_DIR }}"
-            fi
-          else
-            echo "ℹ️ No visual content directory found (${{ env.IMAGE_DIR }})"
-          fi
-          # Create or update index page with hierarchical structure and visual content info
-          cat > ${{ env.WIKI_DIR }}/Home.md << 'EOF'
+          cp docs-md/*.md wiki/          # Create or update index page with hierarchical structure
+          cat > wiki/Home.md << 'EOF'
           # Welcome to F1 Strategy Manager Wiki
           This wiki contains comprehensive documentation for the F1 Strategy Manager project, organized in a hierarchical structure for easy navigation. 
-          It is generated through DeepWiki and includes both textual content and visual diagrams (images and SVGs) extracted from the source documentation.
-          **📖 Complete Documentation**: To see the full documentation with all figures and interactive elements, please visit [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager).
+          It is generated through DeepWiki, if you want to see also the figures of the documentation, please, navigate to [this link over here](https://deepwiki.com/VforVitorio/F1_Strat_Manager).
           ## 📋 Complete Documentation
           - **[📖 Complete Documentation](f1-strat-manager-complete)** - Full system documentation with all sections organized hierarchically
           ## 🗂️ Documentation Structure
@@ -1203,67 +593,23 @@ jobs:
           - **🎤 Natural Language Processing** - Radio communication analysis and insights
           - **⚙️ Rule-based Expert Systems** - Strategic recommendations based on F1 expertise
           - **📊 Interactive Streamlit Dashboard** - User-friendly web interface for real-time analysis
-          ## 🎨 Visual Content
-          This documentation includes enhanced visual content extraction:
-          - **📊 System Architecture Diagrams** - SVG diagrams showing component relationships
-          - **🖼️ Screenshots and Images** - Interface examples and workflow illustrations
-          - **📈 Charts and Graphs** - Performance metrics and analysis visualizations
-          *Note: Visual content is automatically extracted from DeepWiki using advanced web scraping techniques to ensure all diagrams and images are preserved in the wiki.*
           ---
           *📝 This documentation is automatically generated and updated from the project's DeepWiki documentation.*
-          *🎨 Images and SVG diagrams are included where available through enhanced extraction methods.*
-          *If any visual content appears missing, please check the [DeepWiki source](https://deepwiki.com/VforVitorio/F1_Strat_Manager).*
           EOF
-          echo "📂 Final wiki contents:"
-          ls -la ${{ env.WIKI_DIR }}/
+          echo "Files copied to wiki:"
+          ls -la wiki/
       - name: Commit & Push changes
-        working-directory: ${{ env.WIKI_DIR }}
+        working-directory: wiki
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
+          git add .
           # Check if there are changes before committing
           if git diff --quiet --staged; then
-            echo "ℹ️ No changes to commit"
+            echo "No changes to commit"
           else
-            # Count different types of files
-            IMAGE_COUNT=$(find . -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.gif" -o -name "*.webp" | wc -l)
-            SVG_COUNT=$(find . -name "*.svg" | wc -l)
-            MD_COUNT=$(find . -name "*.md" | wc -l)
-            TOTAL_VISUAL=$((IMAGE_COUNT + SVG_COUNT))
-            
-            # Build comprehensive commit message
-            COMMIT_MSG="🔄 Enhanced Wiki Update from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
-            COMMIT_MSG="$COMMIT_MSG"$'\n'"📄 Updated $MD_COUNT Markdown files with hierarchical documentation"
-            
-            if [ $TOTAL_VISUAL -gt 0 ]; then
-              COMMIT_MSG="$COMMIT_MSG"$'\n'"🎨 Includes $TOTAL_VISUAL visual files: $IMAGE_COUNT images + $SVG_COUNT SVGs"
-              COMMIT_MSG="$COMMIT_MSG"$'\n'"✨ Enhanced extraction: Images from API + SVGs from web scraping"
-            else
-              COMMIT_MSG="$COMMIT_MSG"$'\n'"ℹ️ No visual content found in this update"
-            fi
-            
-            COMMIT_MSG="$COMMIT_MSG"$'\n'$'\n'"🛠️ Technical improvements:"
-            COMMIT_MSG="$COMMIT_MSG"$'\n'"- BeautifulSoup-based HTML parsing for robust image extraction"
-            COMMIT_MSG="$COMMIT_MSG"$'\n'"- Direct web scraping for dynamically generated SVG diagrams"
-            COMMIT_MSG="$COMMIT_MSG"$'\n'"- Enhanced error handling and comprehensive logging"
-            
-            echo "📝 Commit message:"
-            echo "$COMMIT_MSG"
-            echo ""
-            
-            git commit -m "$COMMIT_MSG"
+            git commit -m "🔄 Update Complete Wiki from DeepWiki - $(date '+%Y-%m-%d %H:%M')"
             git push
-            echo "✅ Changes pushed successfully to wiki"
-            
-            # Final summary
-            echo ""
-            echo "🎉 Enhanced wiki update completed successfully!"
-            echo "📊 Final Summary:"
-            echo "  - Markdown files: $MD_COUNT"
-            echo "  - Images: $IMAGE_COUNT"
-            echo "  - SVGs: $SVG_COUNT"
-            echo "  - Total visual content: $TOTAL_VISUAL"
-            echo "  - Enhancement: BeautifulSoup HTML parsing + SVG web scraping"
-            echo "  - All visual content preserved and properly referenced in Markdown"
+            echo "Changes pushed successfully"
           fi
