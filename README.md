@@ -1,14 +1,32 @@
+<div align="center">
+
 # 🏎️ F1 Strategy Manager
 
-**Revolutionizing strategic decision-making in Formula 1 through AI-powered models, computer vision, and expert systems. For a deeper insight, see the project's [paper here](F1_Strategy_Manager_AI.pdf).**
+</div>
+
+**Revolutionizing strategic decision-making in Formula 1 through AI-powered models, computer vision, and expert systems. For a deeper insight, see the project's [paper here](documents/F1_Strategy_Manager_AI.pdf).**
+
+<p align="center">
+  <img
+    src="documents/banner/f1_strat_manager_banner.jpeg"
+    alt="Banner VforVitorio"
+    style="width:75%; max-width:900px; aspect-ratio:21/9; border-radius:20px;"
+  />
+</p>
+
+---
 
 ## 🚀 Project Overview
 
 In Formula 1, strategic decisions must be made within seconds while considering complex, dynamic variables like weather, tire wear, track position, and fuel. The **F1 Strategy Manager** project proposes a solution by integrating advanced predictive models and expert systems to support real-time strategy recommendations.
 
+---
+
 ## 🧠 Main Objective
 
 Develop an **intelligent strategy recommender** that, based on processed race data, can offer optimized strategic decisions to the team in real time.
+
+---
 
 ## 🧩 Project Structure
 
@@ -47,6 +65,8 @@ Develop an **intelligent strategy recommender** that, based on processed race da
   - Model interaction per section (Vision, NLP, ML)
   - Visual exploration and graphing
   - Chatbot Q&A via LLM for post-race reports and image analysis using Llama3.2-vision
+
+---
 
 ## 🖥️ Environment Setup & Usage
 
