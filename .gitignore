@@ -152,3 +152,4 @@ graph_wiki/
 # uv (Python package manager)
 # ===========================
 .uv-cache/
+.rtk
