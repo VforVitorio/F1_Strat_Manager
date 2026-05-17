@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "f1-strat-manager"
-version = "1.4.3"
+version = "1.5.0"
 description = "F1 StratLab — multi-agent race strategy intelligence system"
 authors = [{name = "Victor Vega Sobral", email = "victorvegasobral@gmail.com"}]
 readme = "README.md"

@@ -11,6 +11,31 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.5.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.4.3...v1.5.0) (2026-05-15)
+
+
+### Features
+
+* **agents:** N27 detects deployed Safety Car via RCM events and forces sc_prob=1.0 ([ea8ac95](https://github.com/VforVitorio/F1-StratLab/commit/ea8ac95f59d4ef6eb13f6800033c0ebe281a1e4e))
+* **agents:** N28 honors active Safety Car (banner prompt + STAY_OUT-&gt;PIT_NOW guard-rail) ([c19d887](https://github.com/VforVitorio/F1-StratLab/commit/c19d887d8485a092b39b0dab2ae5942815f68ecc))
+* **agents:** orchestrator threads RCM events to N27 and forces N28+N30 routing under SC ([497afb2](https://github.com/VforVitorio/F1-StratLab/commit/497afb2536ecfd5546ff3715f46c515c06c5eb99))
+* **arcade:** add RaceEventsPanel HUD card (Yellow/SC/VSC/Red flag pill with fade) ([e18c6af](https://github.com/VforVitorio/F1-StratLab/commit/e18c6af6374aeef3b4bb76ee899184e65e48b99c))
+* **arcade:** cache per-lap FastF1 TrackStatus on SessionData (cache v6) ([6f86554](https://github.com/VforVitorio/F1-StratLab/commit/6f8655416dfe35805af9ac41ef388ace6d8f7759))
+* **arcade:** pass sc_currently_active through MoE routing for parity with main orchestrator ([be5b127](https://github.com/VforVitorio/F1-StratLab/commit/be5b127c2302eb2a462447863122505e6c46e89d))
+* **arcade:** wire RaceEventsPanel into F1ArcadeView (anchored under leaderboard) ([cd1b6b5](https://github.com/VforVitorio/F1-StratLab/commit/cd1b6b5bb4e1da13aaee8e26a59de69850ca365c))
+
+
+### Bug Fixes
+
+* **arcade:** SimConnector waits for arcade playback before processing each lap ([e30778e](https://github.com/VforVitorio/F1-StratLab/commit/e30778ee05fc8442a415e3541244bfd4beacee94))
+* **arcade:** skip stale laps when arcade seeks ahead of the strategy loop ([0e5ec0e](https://github.com/VforVitorio/F1-StratLab/commit/0e5ec0e70985c59c79728ee7363b41a3ae3cd218))
+* **arcade:** wire arcade lap provider into SimConnector so pause stops the agent flow ([bb6ef56](https://github.com/VforVitorio/F1-StratLab/commit/bb6ef564000821eb15608a04f8e2e9b40ef76900))
+
+
+### Documentation
+
+* **multi-agent:** document RCM Safety Car override (N27 + N28 + routing) ([9a740dd](https://github.com/VforVitorio/F1-StratLab/commit/9a740ddd44e2cee934099a30bd6906ef09fa22bd))
+
 ## [1.4.3](https://github.com/VforVitorio/F1-StratLab/compare/v1.4.2...v1.4.3) (2026-05-14)
 
 
