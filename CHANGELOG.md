@@ -11,6 +11,14 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.5.1](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.0...v1.5.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* **ci:** key uv cache off pyproject.toml since uv.lock is gitignored ([7fafc9b](https://github.com/VforVitorio/F1-StratLab/commit/7fafc9b04345cb43df062195a9ac12358cb22153))
+* **ci:** set cache-dependency-glob on lint job too ([df90899](https://github.com/VforVitorio/F1-StratLab/commit/df908992d9ec2c515016a00fef73b6fd8daf4594))
+
 ## [1.5.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.4.3...v1.5.0) (2026-05-15)
 
 
