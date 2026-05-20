@@ -10,6 +10,7 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+      - "area: deps"
     ignore:
       # torch / torchvision are routed through CUDA-specific indexes in
       # pyproject.toml [tool.uv.sources]. Dependabot bumps would break the
@@ -46,4 +47,4 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
-      - "ci"
+      - "area: ci-cd"

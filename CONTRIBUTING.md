@@ -130,6 +130,32 @@ when a newer commit lands on the same ref. This was added after
 release-please's back-to-back PR refreshes piled 4+ runs into the queue
 at once and stranded them for 20+ minutes.
 
+### PR labels
+
+Every pull request gets auto-tagged with one or more `area:` labels by
+`.github/workflows/labeler.yml` (path-based via `actions/labeler@v5`).
+Dependabot PRs additionally get their label set by `dependabot.yml` so
+the tag is in place the moment the PR opens — no need to wait for the
+labeler workflow to run.
+
+| Label | Triggered by | Quick risk read |
+|---|---|---|
+| `area: codebase` | `src/`, `scripts/`, `notebooks/` | Default to careful review — touches product code |
+| `area: deps` | `pyproject.toml`, `uv.lock`, pip Dependabot | Low-medium; `test_dep_imports.py` is the safety net |
+| `area: ci-cd` | `.github/workflows/`, `.github/dependabot.yml`, `.github/labeler.yml`, GitHub Actions Dependabot | Low impact on product; max damage is breaking the pipeline |
+| `area: docs` | `docs/`, root `.md` files | Merge and forget |
+| `area: tests` | `tests/` | Low impact on shipping code; useful diff signal |
+
+PRs that combine labels (e.g. `area: codebase` + `area: deps`) get more
+attention than single-area PRs, since they couple a code change with a
+dependency move. The labeler workflow re-evaluates on each push, so
+labels stay in sync with the actual file diff over the life of the PR.
+
+To add a new label, create it via `gh label create "area: <name>" --color <hex>`
+first, then add a matching block to `.github/labeler.yml`. Labels do
+not auto-create — the workflow silently skips entries pointing to
+non-existent labels.
+
 ### Dependency-bump safety net
 
 `.github/dependabot.yml` opens weekly PRs whenever an upstream library
