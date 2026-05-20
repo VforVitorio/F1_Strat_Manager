@@ -131,7 +131,6 @@ docker-compose.override.yml
 *.tmp
 *.temp
 .cache/
-uv.lock
 
 # CatBoost writes per-training metadata here whenever .fit() runs without
 # allow_writing_files=False. The dep-imports test suppresses this, but
