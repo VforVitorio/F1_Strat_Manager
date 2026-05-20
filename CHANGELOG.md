@@ -11,6 +11,14 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.5.2](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.1...v1.5.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* **tests:** suppress catboost_info dir creation ([5a5b87d](https://github.com/VforVitorio/F1-StratLab/commit/5a5b87db1392df8e329ea2f37097d334f56ce095))
+* **tests:** suppress catboost_info dir creation on dep-imports test ([d49fa94](https://github.com/VforVitorio/F1-StratLab/commit/d49fa9446940fb3f988b2cc019371011b4ac5679))
+
 ## [1.5.1](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.0...v1.5.1) (2026-05-17)
 
 
