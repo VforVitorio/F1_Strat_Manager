@@ -121,8 +121,19 @@ Three parallel jobs run on every push and PR (`.github/workflows/ci.yml`):
 | `test` | `uv sync --all-extras` (full ML/voice/arcade stack) | `pytest -v` |
 
 All jobs share uv's wheel cache (`enable-cache: true`, keyed off
-`pyproject.toml` since `uv.lock` is gitignored), so only the first run
-after a `pyproject.toml` change pays the full download cost. Subsequent runs drop "Install dependencies" from ~60s to
+`uv.lock`), so the cache only invalidates when the resolved graph
+actually changes — cosmetic edits to `pyproject.toml` (re-ordering,
+tool config, comments) reuse the wheel store. Sync calls use
+`--frozen` to skip resolution and install the locked versions
+directly. The `typecheck` job additionally caches `.mypy_cache/` so
+incremental runs only re-check files whose hash has changed.
+
+**On `uv.lock`:** the lockfile IS committed. Bumping a dependency
+manually means running `uv lock` locally (or letting `uv add` /
+Dependabot do it for you) and committing the updated lockfile
+alongside the `pyproject.toml` change. CI runs `uv sync --frozen`,
+which fails when the lockfile and pyproject disagree — that is the
+intended early-warning when someone forgets to re-lock. Subsequent runs drop "Install dependencies" from ~60s to
 <10s.
 
 A `concurrency:` block at the top of the workflow cancels in-flight runs
