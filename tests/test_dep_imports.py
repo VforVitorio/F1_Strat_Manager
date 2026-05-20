@@ -163,7 +163,10 @@ def test_catboost_fit():
     rng = np.random.default_rng(0)
     X = rng.random((20, 3))
     y = (X[:, 0] > 0.5).astype(int)
-    model = CatBoostClassifier(iterations=5, verbose=False)
+    # allow_writing_files=False stops CatBoost from creating a
+    # ``catboost_info/`` directory next to the test run with per-fit
+    # logs. Without it, every pytest invocation pollutes the repo root.
+    model = CatBoostClassifier(iterations=5, verbose=False, allow_writing_files=False)
     model.fit(X, y)
     assert model.predict(X).shape == (20,)
 

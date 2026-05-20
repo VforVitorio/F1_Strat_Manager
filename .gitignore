@@ -133,6 +133,11 @@ docker-compose.override.yml
 .cache/
 uv.lock
 
+# CatBoost writes per-training metadata here whenever .fit() runs without
+# allow_writing_files=False. The dep-imports test suppresses this, but
+# any ad-hoc CatBoost run from a notebook / script will recreate it.
+catboost_info/
+
 # Notebook Python dumps (read-only knowledge base for Claude)
 .nb_py/
 

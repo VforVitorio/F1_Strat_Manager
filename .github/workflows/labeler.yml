@@ -1,0 +1,26 @@
+name: labeler
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+# pull_request_target runs in the context of the BASE branch (not the PR
+# head), which lets the workflow read repo secrets safely while still
+# applying labels to PRs from forks. The labeler action only needs read
+# access to changed-file metadata, never to PR source code.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+          # Re-evaluate from scratch on each sync so labels that no longer
+          # apply (e.g. a follow-up commit drops the only file touching
+          # docs/) get removed instead of sticking around forever.
+          sync-labels: true
