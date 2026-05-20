@@ -130,6 +130,30 @@ when a newer commit lands on the same ref. This was added after
 release-please's back-to-back PR refreshes piled 4+ runs into the queue
 at once and stranded them for 20+ minutes.
 
+### Dependency-bump safety net
+
+`.github/dependabot.yml` opens weekly PRs whenever an upstream library
+publishes a release that does not fit the upper bound declared in
+`pyproject.toml`. Two layers guard the project against silently
+accepting a bump that breaks something:
+
+1. **Major bumps blocked on core ML libs** — `numpy`, `pandas`,
+   `scikit-learn`, `lightgbm`, `xgboost`. Dependabot will still propose
+   minor and patch bumps; majors must be reviewed and applied manually.
+2. **`tests/test_dep_imports.py`** runs on every CI invocation (including
+   Dependabot PRs). It is organised in three tiers:
+   - **Tier 1** — exercises the actual API surface of the most critical
+     dependencies (fit/predict on a tiny matrix, parquet round-trips,
+     tokeniser encode/decode). Catches breaking changes that a plain
+     `import` would not see.
+   - **Tier 2** — parametrised plain-import smoke for every other
+     declared dependency. Catches binary / DLL / wheel breakage at
+     install time.
+   - **Tier 3** — pins specific API shapes that have bitten the project
+     before (`huggingface_hub.snapshot_download` kwargs, `langchain_core`
+     import paths, `np.bool_` alias). Grows whenever a new upstream
+     incident reveals a fragile call site.
+
 ## Issue templates
 
 File an issue via the GitHub UI. Three templates are available under
