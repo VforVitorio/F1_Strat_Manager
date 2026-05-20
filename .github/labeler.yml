@@ -1,0 +1,45 @@
+# actions/labeler v5 configuration.
+#
+# Each top-level key is a label name (it must already exist in the repo;
+# the workflow does not create labels, only applies them). The value is
+# a list of conditions evaluated against the files changed in the PR.
+#
+# We use ``changed-files`` with ``any-glob-to-any-file`` so a single file
+# matching any of the globs is enough to trigger the label — a PR that
+# touches src/ AND tests/ gets BOTH ``area: codebase`` and ``area: tests``.
+
+"area: codebase":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/**"
+          - "scripts/**"
+          - "notebooks/**"
+
+"area: deps":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pyproject.toml"
+          - "uv.lock"
+
+"area: ci-cd":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/dependabot.yml"
+          - ".github/labeler.yml"
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/*.md"
+          - "README.md"
+          - "CONTRIBUTING.md"
+          - "ARCHITECTURE.md"
+          - "INSTALL.md"
+          - "ROADMAP.md"
+
+"area: tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
