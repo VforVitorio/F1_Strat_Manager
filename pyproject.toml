@@ -91,7 +91,7 @@ dependencies = [
     # ===================
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.0",
-    "requests>=2.31.0",
+    "requests>=2.33.0",
     "tqdm>=4.65.0",
     "joblib>=1.5.3",
     "lightgbm>=4.6.0",
