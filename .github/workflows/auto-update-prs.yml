@@ -1,15 +1,20 @@
 name: auto-update-prs
 
-# Triggers whenever main or dev advances. The autoupdate action walks
-# all open PRs targeting the pushed branch, filters them by label, and
-# rebases the head branch on top of the new base commit. The rebase
-# triggers a fresh CI run on each touched PR.
+# Triggers whenever main or dev advances. Walks all open PRs labelled
+# area:deps or area:ci-cd (and not labelled do-not-rebase) and calls
+# the PR update-branch endpoint on each. The endpoint merges the new
+# base commit into the PR head, which triggers a fresh CI run.
 #
 # Without this workflow, Dependabot PRs (and any PR that piles up
-# behind a busy week) sit with the "This branch is out-of-date with the
-# base branch" notice and require a manual "Update branch" click. The
-# branch protection rule on main is `strict: true`, so out-of-date PRs
-# block merge until someone clicks that button.
+# behind a busy week) sit with the "This branch is out-of-date with
+# the base branch" notice and require a manual "Update branch" click.
+# The branch-protection rule on main is `strict: true`, so out-of-date
+# PRs block merge until someone clicks that button.
+#
+# Implementation note: we call the GitHub API directly via `gh api`
+# rather than depending on a third-party action like
+# chinthakagodawita/autoupdate, because pinning to a major tag (@v1)
+# proved unreliable and pinning to an exact SHA adds maintenance.
 
 on:
   push:
@@ -24,16 +29,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Update labelled PRs
-        uses: chinthakagodawita/autoupdate@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Only auto-update PRs tagged with one of the label values
-          # below. Keeps the action narrow: dependency bumps and CI
-          # tweaks rebase automatically, while a human-authored feature
-          # branch is left alone so the author controls the merge order.
-          PR_FILTER: "labelled"
-          PR_LABELS: "area: deps,area: ci-cd"
-          # Skip PRs in draft state — they are still being prepared and
-          # rebasing them just churns CI for no reason.
-          EXCLUDED_LABELS: "do-not-rebase"
-          MERGE_CONFLICT_ACTION: "ignore"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Collect PR numbers from both labels, dedupe so a PR tagged
+          # with both labels is only touched once. Restrict to PRs that
+          # actually target the branch we just pushed to; pushing to
+          # main should not rebase PRs targeting dev (a separate push
+          # event will handle those).
+          {
+            gh pr list --state open --base "$BASE_REF" \
+              --search 'label:"area: deps" -label:"do-not-rebase"' \
+              --json number --jq '.[].number'
+            gh pr list --state open --base "$BASE_REF" \
+              --search 'label:"area: ci-cd" -label:"do-not-rebase"' \
+              --json number --jq '.[].number'
+          } | sort -u > prs.txt
+
+          if [ ! -s prs.txt ]; then
+            echo "No labelled PRs targeting $BASE_REF need updating."
+            exit 0
+          fi
+
+          # update-branch returns 422 when the PR is already up to date
+          # or when there is a merge conflict. We tolerate both so one
+          # stuck PR never blocks the rest of the queue.
+          while read -r pr; do
+            echo "::group::Updating PR #$pr"
+            gh api -X PUT "repos/${GH_REPO}/pulls/${pr}/update-branch" \
+              --silent && echo "  ok" \
+                       || echo "  skipped (already up to date or conflict)"
+            echo "::endgroup::"
+          done < prs.txt
