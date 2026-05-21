@@ -98,7 +98,7 @@ dependencies = [
     "optuna>=4.7.0",
     "catboost>=1.2.10",
     "librosa>=0.11.0",
-    "nltk>=3.9.3",
+    "nltk>=3.9.4",
     "gliner>=0.2.25",
     "onnxruntime<1.24",
     "setfit>=1.1.3",
