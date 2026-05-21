@@ -1398,7 +1398,7 @@ requires-dist = [
     { name = "jiwer", specifier = ">=3.0.0" },
     { name = "joblib", specifier = ">=1.5.3" },
     { name = "jupyter", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.5.7" },
     { name = "jupytext", marker = "extra == 'dev'", specifier = ">=1.16.0" },
     { name = "kafka-python", specifier = ">=2.0.2" },
     { name = "langchain", specifier = ">=0.1.0" },
