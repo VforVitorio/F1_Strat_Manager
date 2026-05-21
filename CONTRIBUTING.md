@@ -167,6 +167,19 @@ first, then add a matching block to `.github/labeler.yml`. Labels do
 not auto-create — the workflow silently skips entries pointing to
 non-existent labels.
 
+### Auto-update of dependency PRs
+
+`.github/workflows/auto-update-prs.yml` watches every push to `main` and
+`dev` and rebases any open PR labelled `area: deps` or `area: ci-cd` on
+top of the new base commit. Combined with the branch-protection setting
+`required_status_checks.strict: true`, this removes the manual "Update
+branch" click that used to be needed every time a Dependabot PR fell
+out-of-date.
+
+Human-authored PRs are deliberately excluded from the filter so the
+author keeps control of the merge order. Add the `do-not-rebase` label
+on any PR you want the workflow to skip.
+
 ### Dependency-bump safety net
 
 `.github/dependabot.yml` opens weekly PRs whenever an upstream library
