@@ -1,0 +1,39 @@
+name: auto-update-prs
+
+# Triggers whenever main or dev advances. The autoupdate action walks
+# all open PRs targeting the pushed branch, filters them by label, and
+# rebases the head branch on top of the new base commit. The rebase
+# triggers a fresh CI run on each touched PR.
+#
+# Without this workflow, Dependabot PRs (and any PR that piles up
+# behind a busy week) sit with the "This branch is out-of-date with the
+# base branch" notice and require a manual "Update branch" click. The
+# branch protection rule on main is `strict: true`, so out-of-date PRs
+# block merge until someone clicks that button.
+
+on:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update labelled PRs
+        uses: chinthakagodawita/autoupdate@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only auto-update PRs tagged with one of the label values
+          # below. Keeps the action narrow: dependency bumps and CI
+          # tweaks rebase automatically, while a human-authored feature
+          # branch is left alone so the author controls the merge order.
+          PR_FILTER: "labelled"
+          PR_LABELS: "area: deps,area: ci-cd"
+          # Skip PRs in draft state — they are still being prepared and
+          # rebasing them just churns CI for no reason.
+          EXCLUDED_LABELS: "do-not-rebase"
+          MERGE_CONFLICT_ACTION: "ignore"
