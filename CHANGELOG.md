@@ -11,6 +11,13 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.5.4](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.3...v1.5.4) (2026-05-22)
+
+
+### Documentation
+
+* añade memoria del TFG y paper bajo documents/thesis/ ([16497cc](https://github.com/VforVitorio/F1-StratLab/commit/16497cc1c4d6379eeb755be28fd4389f10454412))
+
 ## [1.5.3](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.2...v1.5.3) (2026-05-21)
 
 
