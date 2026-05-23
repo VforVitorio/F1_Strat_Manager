@@ -11,6 +11,13 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.5.5](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.4...v1.5.5) (2026-05-23)
+
+
+### Documentation
+
+* **telemetry:** bump submodule to refreshed README (601fd23) ([195d4aa](https://github.com/VforVitorio/F1-StratLab/commit/195d4aa541de8317bdb98c2a13dbab3b16ae6096))
+
 ## [1.5.4](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.3...v1.5.4) (2026-05-22)
 
 
