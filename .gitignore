@@ -157,3 +157,5 @@ graph_wiki/
 # ===========================
 .uv-cache/
 .rtk
+# AI assistant project context (kept local)
+/CLAUDE.md

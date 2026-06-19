@@ -1,0 +1,63 @@
+name: Epic
+description: Group a set of related tasks under a common goal
+title: "[Epic]: "
+labels: ["epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Epics group related issues under a common goal. Use this template to plan large blocks of work (e.g. an ecosystem repo or a multi-notebook initiative).
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What do you want to achieve with this epic?
+      placeholder: "Build the radiogate F1 team-radio NLP corpus with auto-labelling and deception detection..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and motivation
+      description: Why does it matter? What high-level problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks / included issues
+      description: List of tasks or issues that make up this epic.
+      placeholder: |
+        - [ ] #12 — Auto-labelling pipeline
+        - [ ] #13 — Deception/bluffing classifier
+        - [ ] #14 — Publish dataset to Hugging Face
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Done criteria
+      description: How will we know this epic is complete?
+      placeholder: "All listed issues closed, tests pass, dataset published."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Roadmap phase
+      description: See ROADMAP.md / FUTURE.md for the phase map.
+      options:
+        - "Core / maintenance (this repo)"
+        - "Fase 0 — extract training to src/strategy/training/"
+        - "Fase 1 — data/NLP corpora (radiogate, f1-domain-corpus)"
+        - "Fase 2 — models (gridmind LoRA, sentiment)"
+        - "Fase 3 — pitlab MLOps studio"
+        - "Fase 4 — 2026 regulation adaptation"
+        - "Fase 5 — live (WebSocket + box-bot)"
+    validations:
+      required: true

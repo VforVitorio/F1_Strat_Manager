@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: General questions
+    url: https://github.com/VforVitorio/F1-StratLab/discussions
+    about: For questions that are not bugs, feature requests or data issues, use Discussions.
+  - name: Documentation
+    url: https://docs.f1stratlab.com/
+    about: Read the full docs before filing — your question may already be answered.
