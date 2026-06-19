@@ -1,6 +1,6 @@
 # Thesis results
 
-Visual and numeric outputs referenced by chapter 5 of the TFG thesis. Every figure on this page is regenerated automatically from the notebooks under `notebooks/agents/` so it always tracks the latest model artefacts.
+**This page reports the headline benchmark results for F1 StratLab — the accuracy and latency of its seven ML models and six sub-agents**, as referenced in chapter 5 of the TFG thesis. Every figure is regenerated automatically from the notebooks under `notebooks/agents/`, so it always tracks the latest model artefacts.
 
 ## Threshold sweeps
 

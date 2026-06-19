@@ -9,8 +9,14 @@ function parseHash() {
   // Special: graph
   if (h === "#/graph") return { slug: null, openGraph: true, heading: null };
   const m = h.match(/^#\/([a-z0-9-]+)(?:#(.+))?$/);
-  if (!m) return { slug: "home", openGraph: false, heading: null };
-  return { slug: m[1], openGraph: false, heading: m[2] || null };
+  if (m) return { slug: m[1], openGraph: false, heading: m[2] || null };
+  // No hash route: fall back to the real path so prerendered URLs like
+  // /architecture/ render the right page on a direct visit (not home).
+  const p = location.pathname.match(/^\/([a-z0-9-]+)\/?$/);
+  if (p && window.PAGE_MAP && window.PAGE_MAP[p[1]]) {
+    return { slug: p[1], openGraph: false, heading: null };
+  }
+  return { slug: "home", openGraph: false, heading: null };
 }
 
 function App() {
