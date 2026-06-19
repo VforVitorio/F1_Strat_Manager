@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "scripts/prerender_docs.mjs"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -31,6 +32,20 @@ jobs:
           # Add a .nojekyll marker so GitHub Pages does not run Jekyll on the
           # output (we ship raw HTML + JSX + CSS that should be served as-is).
           touch _site/.nojekyll
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Prerender doc pages (crawlable HTML + real-URL sitemap + llms-full)
+        # Renders each docs/pages/*.md to a real /<slug>/index.html with per-page
+        # meta + JSON-LD so AI crawlers and Google see full content at real URLs
+        # (the SPA still hydrates over it). Must run BEFORE the version sed so the
+        # generated HTML also gets __DOCS_VERSION__ replaced.
+        run: |
+          npm install marked@^12 --no-save --no-fund --no-audit
+          node scripts/prerender_docs.mjs docs _site
 
       - name: Inject current release version
         run: |
