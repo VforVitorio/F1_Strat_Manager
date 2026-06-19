@@ -269,7 +269,9 @@ window.loadPage = async function loadPage(slug) {
   if (window.PAGE_CACHE[slug]) return window.PAGE_CACHE[slug];
   const page = window.PAGE_MAP[slug];
   if (!page) return null;
-  const res = await fetch(page.file + "?v=2");
+  // Absolute path so the fetch works from prerendered routes like /architecture/
+  // (a relative "pages/..." would resolve against the subpath and 404).
+  const res = await fetch("/" + page.file + "?v=2");
   if (!res.ok) return null;
   const text = await res.text();
   window.PAGE_CACHE[slug] = text;
