@@ -3,6 +3,21 @@
 Short guide for anyone cloning the TFG to experiment, fix a bug, or
 propose a change.
 
+## Branching model
+
+Three long-lived branches, in increasing order of stability:
+
+| Branch | Meaning |
+|---|---|
+| `test` | Active development — day-to-day work lands here first. |
+| `dev`  | Good but not-yet-stable — the integration / promotion target. |
+| `main` | Ultra-stable, release-only — release-please tags from here. |
+
+**For any change: branch off (`feat/…`, `fix/…`, `docs/…`) and open a pull
+request against `dev`.** Never commit straight to `main` — it is
+release-only. Promotion flows `feature → dev → main`. Delete the branch
+after merge.
+
 ## Development setup
 
 ```bash
@@ -105,8 +120,8 @@ these safeguards trigger there. They are no-ops on POSIX.
       bump the submodule pointer in the parent repo.
 - [ ] `ROADMAP.md` and the relevant `docs/` file updated when behaviour
       changes.
-- [ ] One logical change per commit; imperative subject line; no
-      co-authored trailers unless you actually pair-programmed.
+- [ ] One logical change per commit; imperative subject line; **no
+      `Co-Authored-By` or AI-attribution trailers, ever.**
 - [ ] If you added a new sub-agent output, update
       `docs/agents-api-reference.md`.
 

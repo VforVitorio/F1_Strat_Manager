@@ -632,5 +632,21 @@ Code freeze of the TFG software. Consolidates the interfaces closed in v0.12.0 (
 
 ---
 
-**Last Updated:** April 22, 2026
-**Version:** 1.10 (post-v1.0.0: roadmap corrected to reflect real Git tag chronology)
+## Post-TFG — F1 StratLab ecosystem (planned, not committed scope)
+
+Beyond v1.0.0, F1 StratLab is planned to grow from a single repo into an **ecosystem** of dedicated public repositories plus Hugging Face artifacts (under the `f1stratlab` org). High-level only here; detailed planning is kept outside the public roadmap.
+
+| Initiative | Repo | What it adds |
+|---|---|---|
+| LLM LoRA | `gridmind` | Unsloth LoRA fine-tune of a Gemma-family LLM on an F1 text corpus (`f1stratlab/f1-domain-corpus`) for F1-specific strategy reasoning. |
+| Race-time bot | `box-bot` | Automated X/Twitter account narrating the orchestrator live during a GP. |
+| Radio NLP | `radiogate` | Large-scale F1 team-radio NLP corpus (`f1stratlab/f1-team-radio-corpus`) with auto-labelling and a novel deception/bluffing signal. |
+| MLOps studio | `pitlab` | Button-driven data-engineering + retraining dashboard (download → merge → inspect → retrain), clustering-aware, progressive per-GP. |
+| Real-time + 2026 | core | Live OpenF1 WebSocket ingestion + retraining with FP/Qualy/Sprint + history; adaptation to the 2026 technical/sporting regulation. |
+
+These map to the eight future-work lines in the thesis ([`documents/thesis/`](documents/thesis/)). Each non-core repo, since its name does not contain "f1stratlab", states explicitly in its README/description that it is part of the F1 StratLab ecosystem.
+
+---
+
+**Last Updated:** June 12, 2026
+**Version:** 1.11 (post-v1.0.0: added post-TFG ecosystem section)
