@@ -49,7 +49,7 @@ dependencies = [
     "experta>=1.9.4",
     # frozendict: install manually after (>=2.4.0 for Python 3.10+)
     "langgraph>=1.0.10rc1",
-    "langchain>=0.1.0",
+    "langchain>=1.3.9",
     # ===================
     # COMPUTER VISION
     # ===================
