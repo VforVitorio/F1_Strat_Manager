@@ -6,7 +6,7 @@ The project integrates several ML stacks — XGBoost/LightGBM for race strategy 
 
 The current development phase (N25–N31) replaces the legacy Experta rule engine with a **LangGraph multi-agent architecture**: specialised sub-agents (pace, tyre, overtake, safety car, pit strategy, radio NLP, regulation RAG) coordinate under a Supervisor Orchestrator.
 
-> For full documentation see the [README](README.md) and the [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager). For the project paper: [F1_Strategy_Manager_AI.pdf](documents/docs_legacy_strat_manager/F1_Strategy_Manager_AI.pdf).
+> For full documentation see the [README](README.md) and the [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager). For the deep reference (methodology, metrics, design rationale): the **TFG thesis + IEEE technical report** in [`documents/thesis/`](documents/thesis/). Legacy paper: [F1_Strategy_Manager_AI.pdf](documents/docs_legacy_strat_manager/F1_Strategy_Manager_AI.pdf).
 
 Notebooks are the primary development artefact. `src/` modules are extracted from notebooks only when they need to be imported by other notebooks or the telemetry app.
 
@@ -98,7 +98,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | [N30_rag_agent.ipynb](notebooks/agents/N30_rag_agent.ipynb)   | RAG Agent — retrieval-augmented generation over FIA Sporting and Technical Regulations (2023-2025) via local Qdrant; returns structured `RegulationContext` objects with article references |
 | [N34_radio_runner_smoke.ipynb](notebooks/agents/N34_radio_runner_smoke.ipynb) | Radio runner smoke test — end-to-end validation of `src/nlp/radio_runner.py`: cache hit/miss, per-lap radio distribution, transcript sanity, and N29 round-trip via `run_radio_agent_from_state` on Bahrain 2025 (28 radios + 76 RCMs, lap 4 emits a PROBLEM alert) |
 
-> Notebooks N26 (Tire), N27 (Race Situation), N28 (Pit Strategy), N29 (Radio), and N31 (Orchestrator) are planned but not yet developed.
+> The full multi-agent system (N25–N31) is **complete**. The importable agent + orchestrator modules live in [`src/agents/`](src/agents/) (each exposes `run_*_agent_from_state`). Notebooks N26–N29, N31, plus N33 (decision thresholds + calibration benchmarks) and N34 (radio runner smoke) are under `notebooks/agents/`.
 
 ---
 
@@ -111,12 +111,24 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | [src/rag/retriever.py](src/rag/retriever.py)   | `RagRetriever` class (Qdrant client + BGE-M3 encoder) and `query_rag_tool` LangChain tool; requires the index built by `scripts/build_rag_index.py` |
 | [src/rag/\_\_init\_\_.py](src/rag/__init__.py) | Package init                                                                                                                                        |
 
-### `src/agents/` (legacy)
+### `src/agents/`
+
+**Production multi-agent system** (N25–N31): `pace_agent.py`, `tire_agent.py`, `race_situation_agent.py`, `pit_strategy_agent.py`, `radio_agent.py`, `rag_agent.py`, `strategy_orchestrator.py` — each exposes a `run_*_agent_from_state(lap_state)` entry point consumed by the CLI, Arcade and Streamlit surfaces.
+
+The two files below are the **legacy** `experta` rule engine, kept for reference (superseded by the LangGraph agents above):
 
 | File                                                         | Description                                                                                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | [src/agents/base_agent.py](src/agents/base_agent.py)         | `Fact` subclasses (`TelemetryFact`, `DegradationFact`, `GapFact`, `RadioFact`, `RaceStatusFact`) for the `experta` rule engine |
-| [src/agents/strategy_agent.py](src/agents/strategy_agent.py) | Legacy rule-based Strategy Agent integrating tire / lap time / radio / gap rule sets via `experta`; will be replaced after N31 |
+| [src/agents/strategy_agent.py](src/agents/strategy_agent.py) | Legacy rule-based Strategy Agent integrating tire / lap time / radio / gap rule sets via `experta` (superseded by N31)         |
+
+### `src/simulation/` and `src/arcade/`
+
+| File | Description |
+| ---- | ----------- |
+| [src/simulation/race_state_manager.py](src/simulation/race_state_manager.py) | `RaceStateManager` — builds the per-lap `lap_state` dict (single-driver telemetry + timing-only rivals) consumed by all agents |
+| [src/simulation/replay_engine.py](src/simulation/replay_engine.py) | `RaceReplayEngine` — iterates a race parquet lap by lap, yielding `lap_state` (same contract for replay or a future live feed) |
+| [src/arcade/](src/arcade/) | 2D pyglet replay + PySide6 strategy dashboard + `stream.py` TCP broadcast to the dashboard subprocess |
 
 ### `src/nlp/` (legacy)
 

@@ -89,6 +89,7 @@ This project is part of a broader F1 AI suite:
 - [F1 Telemetry Manager](https://github.com/VforVitorio/F1_Telemetry_Manager) — FastAPI backend + Streamlit post-race UI, vendored here under [`src/telemetry/`](src/telemetry/) as a git submodule
 - [F1 AI Team Detection](https://github.com/VforVitorio/F1_AI_team_detection) — YOLOv12 team identification from race footage
 - [F1 Strategy Dataset (Hugging Face)](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset) — trained weights and processed race data
+- [Thesis + IEEE technical report](documents/thesis/) — the full TFG memoria and IEEE report (deep methodology, metrics, design rationale)
 
 ## About
 
