@@ -11,6 +11,29 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.5.5](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.4...v1.5.5) (2026-05-23)
+
+
+### Documentation
+
+* **telemetry:** bump submodule to refreshed README (601fd23) ([195d4aa](https://github.com/VforVitorio/F1-StratLab/commit/195d4aa541de8317bdb98c2a13dbab3b16ae6096))
+
+## [1.5.4](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.3...v1.5.4) (2026-05-22)
+
+
+### Documentation
+
+* añade memoria del TFG y paper bajo documents/thesis/ ([16497cc](https://github.com/VforVitorio/F1-StratLab/commit/16497cc1c4d6379eeb755be28fd4389f10454412))
+
+## [1.5.3](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.2...v1.5.3) (2026-05-21)
+
+
+### Bug Fixes
+
+* **ci:** replace autoupdate action with direct gh api call ([810b9b0](https://github.com/VforVitorio/F1-StratLab/commit/810b9b0f250daab415b9f75d22f35cd1f73d74f3))
+* **ci:** replace autoupdate action with direct gh api call ([5a89b6e](https://github.com/VforVitorio/F1-StratLab/commit/5a89b6efc2d5fd09a210e7a098a6960f887524c5))
+* **ci:** replace autoupdate action with direct gh api call ([a175266](https://github.com/VforVitorio/F1-StratLab/commit/a1752661d82730f7e3befea8097a81ac68205b47))
+
 ## [1.5.2](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.1...v1.5.2) (2026-05-20)
 
 

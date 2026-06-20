@@ -96,7 +96,7 @@ jobs:
       # pyproject.toml (mypy config) and every file under src/rag/ so the
       # cache invalidates whenever the analysed surface actually moves.
       - name: Cache mypy
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .mypy_cache
           key: mypy-${{ runner.os }}-${{ hashFiles('pyproject.toml', 'src/rag/**') }}
