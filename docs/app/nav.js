@@ -188,6 +188,15 @@ window.PAGES = [
     tags: ["overview"],
   },
   {
+    slug: "roadmap",
+    title: "Roadmap",
+    section: "Development",
+    file: "pages/roadmap.md",
+    description: "Full project timeline: every shipped version plus planned milestones and the side-repo ecosystem.",
+    eyebrow: "Timeline",
+    tags: ["overview", "release"],
+  },
+  {
     slug: "changelog",
     title: "Changelog",
     section: "Development",
