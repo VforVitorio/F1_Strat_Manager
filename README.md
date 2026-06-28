@@ -8,7 +8,7 @@
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red)](https://streamlit.io/) [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)](https://pytorch.org/) [![FastF1](https://img.shields.io/badge/FastF1-3.1%2B-red)](https://github.com/theOehrly/Fast-F1) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/VforVitorio/F1-StratLab)
 
-F1 StratLab orchestrates seven ML models and a LangGraph multi-agent system to produce real-time Formula 1 strategy recommendations — from lap time prediction to tire degradation, radio NLP, and RAG over FIA regulations.
+F1 StratLab orchestrates seven ML models and a LangGraph multi-agent system to produce real-time Formula 1 strategy recommendations: from lap time prediction to tire degradation, radio NLP, and RAG over FIA regulations.
 
 **Documentation: [https://docs.f1stratlab.com/](https://docs.f1stratlab.com/)**
 
@@ -23,12 +23,12 @@ F1 StratLab orchestrates seven ML models and a LangGraph multi-agent system to p
 </div>
 
 <div align="center">
-  <img src="docs/assets/demo/arcade-demo.gif" alt="F1 StratLab arcade demo — 2D race replay, strategy dashboard and live telemetry" width="820"/>
+  <img src="docs/assets/demo/arcade-demo.gif" alt="F1 StratLab arcade demo: 2D race replay, strategy dashboard and live telemetry" width="820"/>
 </div>
 
 <div align="center">
 
-🏆 **Final Degree Project — completed June 2026 · graded 10/10 with Distinction (Matrícula de Honor) · unanimously recommended by the tribunal for publication as a research article.**
+🏆 **Final Degree Project, completed June 2026 · graded 10/10 with Distinction (Matrícula de Honor) · unanimously recommended by the tribunal for publication as a research article.**
 
 [![Latest release](https://img.shields.io/github/v/release/VforVitorio/F1-StratLab?label=release&color=6c5ce7)](https://github.com/VforVitorio/F1-StratLab/releases/latest)
 
@@ -52,7 +52,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the one-page topology and [`docs/`]
 
 ## How to run
 
-**CLI** — install the wheel, then launch the interactive wizard (banner + arrow-key pickers):
+**CLI**: install the wheel, then launch the interactive wizard (banner + arrow-key pickers):
 
 ```bash
 uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
@@ -61,14 +61,14 @@ f1-strat
 
 For a scripted, no-menu run use `f1-sim <gp_name> <driver> <team> --year <yyyy>` instead.
 
-**Arcade** — same install drops `f1-arcade` on PATH:
+**Arcade**: same install drops `f1-arcade` on PATH:
 
 ```bash
 uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
 f1-arcade
 ```
 
-**Streamlit** — clone and bring the stack up with Docker:
+**Streamlit**: clone and bring the stack up with Docker:
 
 ```bash
 git clone https://github.com/VforVitorio/F1-StratLab.git && cd F1-StratLab
@@ -79,15 +79,15 @@ Requires Python 3.10 / 3.11 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudi
 
 ## Project layout
 
-- [`src/arcade/`](src/arcade/) — 2D race replay (pyglet) + PySide6 strategy dashboard
-- [`src/agents/`](src/agents/) — multi-agent orchestrator (N25 → N31)
-- [`src/simulation/`](src/simulation/) — `RaceReplayEngine` + `RaceStateManager`
-- [`src/telemetry/`](src/telemetry/) — FastAPI backend + Streamlit post-race UI (git submodule)
-- [`src/nlp/`](src/nlp/) — radio transcription + sentiment/intent/NER pipeline
-- [`src/rag/`](src/rag/) — Qdrant retriever over FIA sporting regulations
-- [`src/f1_strat_manager/`](src/f1_strat_manager/) — CLI infrastructure (data bootstrap, GP slug resolver)
-- [`scripts/`](scripts/) — CLI entry points and maintenance tools
-- [`docs/`](docs/) — architecture, API reference, arcade guides, draw.io diagrams
+- [`src/arcade/`](src/arcade/): 2D race replay (pyglet) + PySide6 strategy dashboard
+- [`src/agents/`](src/agents/): multi-agent orchestrator (N25 → N31)
+- [`src/simulation/`](src/simulation/): `RaceReplayEngine` + `RaceStateManager`
+- [`src/telemetry/`](src/telemetry/): FastAPI backend + Streamlit post-race UI (git submodule)
+- [`src/nlp/`](src/nlp/): radio transcription + sentiment/intent/NER pipeline
+- [`src/rag/`](src/rag/): Qdrant retriever over FIA sporting regulations
+- [`src/f1_strat_manager/`](src/f1_strat_manager/): CLI infrastructure (data bootstrap, GP slug resolver)
+- [`scripts/`](scripts/): CLI entry points and maintenance tools
+- [`docs/`](docs/): architecture, API reference, arcade guides, draw.io diagrams
 
 ## Contributing
 
@@ -97,16 +97,16 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, code-style rules, and th
 
 This project is part of a broader F1 AI suite:
 
-- [F1 StratLab (this repo)](https://github.com/VforVitorio/F1-StratLab) — strategy engine
-- [F1 Telemetry Manager](https://github.com/VforVitorio/F1_Telemetry_Manager) — FastAPI backend + Streamlit post-race UI, vendored here under [`src/telemetry/`](src/telemetry/) as a git submodule
-- [F1 AI Team Detection](https://github.com/VforVitorio/F1_AI_team_detection) — YOLOv12 team identification from race footage
-- [F1 Strategy Dataset (Hugging Face)](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset) — trained weights and processed race data
-- [Thesis + IEEE technical report](documents/thesis/) — the full TFG memoria and IEEE report (deep methodology, metrics, design rationale)
+- [F1 StratLab (this repo)](https://github.com/VforVitorio/F1-StratLab): strategy engine
+- [F1 Telemetry Manager](https://github.com/VforVitorio/F1_Telemetry_Manager): FastAPI backend + Streamlit post-race UI, vendored here under [`src/telemetry/`](src/telemetry/) as a git submodule
+- [F1 AI Team Detection](https://github.com/VforVitorio/F1_AI_team_detection): YOLOv12 team identification from race footage
+- [F1 Strategy Dataset (Hugging Face)](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset): trained weights and processed race data
+- [Thesis + IEEE technical report](documents/thesis/): the full TFG memoria and IEEE report (deep methodology, metrics, design rationale)
 
 ## About
 
-**Final Degree Project (Trabajo Fin de Grado)** — Fourth year, Grado en Ingeniería de Sistemas Inteligentes. Feedback, suggestions and contributions are welcome via the issue templates.
+**Final Degree Project (Trabajo Fin de Grado)**, Fourth year, Grado en Ingeniería de Sistemas Inteligentes. Feedback, suggestions and contributions are welcome via the issue templates.
 
 ---
 
-> **Disclaimer — no copyright infringement intended.** Formula 1, F1, and related marks are trademarks of Formula One Licensing B.V. and are used here for reference only. All race data is sourced from public APIs (FastF1, OpenF1) and is used strictly for educational and non-commercial purposes. This project is not affiliated with, endorsed by, or in any way officially connected to Formula 1, the FIA, or any F1 team.
+> **Disclaimer: no copyright infringement intended.** Formula 1, F1, and related marks are trademarks of Formula One Licensing B.V. and are used here for reference only. All race data is sourced from public APIs (FastF1, OpenF1) and is used strictly for educational and non-commercial purposes. This project is not affiliated with, endorsed by, or in any way officially connected to Formula 1, the FIA, or any F1 team.
