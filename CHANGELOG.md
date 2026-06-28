@@ -11,6 +11,34 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.5...v1.6.0) (2026-06-28)
+
+
+### Features
+
+* **docs:** add GEO quick wins (llms.txt, JSON-LD, AI robots, prod React) ([133c66f](https://github.com/VforVitorio/F1-StratLab/commit/133c66fb51d9989a82a6a602f5b11ff1b46ecc48)), closes [#117](https://github.com/VforVitorio/F1-StratLab/issues/117)
+* **docs:** GEO quick wins — llms.txt, JSON-LD, AI robots, prod React ([ae5a9fd](https://github.com/VforVitorio/F1-StratLab/commit/ae5a9fd7e5ff36132bd223ac9ec0637b20c6d8d6))
+* **docs:** prerender pages to crawlable HTML + real-URL sitemap ([e6d2bfc](https://github.com/VforVitorio/F1-StratLab/commit/e6d2bfcc6293b89fe5740d87e876cb58ea8218bf))
+* **docs:** prerender pages to crawlable HTML with real URLs ([b06ea02](https://github.com/VforVitorio/F1-StratLab/commit/b06ea02ecd6cca8484caa4bd36a3378e75a49cd7)), closes [#118](https://github.com/VforVitorio/F1-StratLab/issues/118)
+
+
+### Bug Fixes
+
+* **ci:** use GITHUB_TOKEN for release-please instead of expired PAT ([e6e6cea](https://github.com/VforVitorio/F1-StratLab/commit/e6e6cea7b42c489c7ef4ab6ba5a10298e77faa92))
+* **ci:** use GITHUB_TOKEN for release-please instead of expired PAT ([605eb97](https://github.com/VforVitorio/F1-StratLab/commit/605eb9716d4c30dfca7b6cbdd555a33a99f20984))
+
+
+### Documentation
+
+* add arcade demo, TFG distinction note, and next-core-releases roadmap ([78e8386](https://github.com/VforVitorio/F1-StratLab/commit/78e8386b53a7be8ed9c30a59487b210734370e8d))
+* add full project timeline roadmap page ([cc39dd3](https://github.com/VforVitorio/F1-StratLab/commit/cc39dd3e1b5a01198b632f9cd1a31a1b1979d671))
+* **content:** add definitional leads, FAQ and routing-rule prose for AI citability ([d01b7c9](https://github.com/VforVitorio/F1-StratLab/commit/d01b7c96ef46f18a3895948d033c4ab6a072803f)), closes [#120](https://github.com/VforVitorio/F1-StratLab/issues/120)
+* **content:** definitional leads + FAQ + routing-rule prose (citability) ([cf92cd7](https://github.com/VforVitorio/F1-StratLab/commit/cf92cd7d06c9fb68af1d5c4465357fc37109934e))
+* embed CLI, Arcade and Streamlit demo gifs and add the demo videos to docs/assets/demo ([7678b57](https://github.com/VforVitorio/F1-StratLab/commit/7678b577220d1e451c8fdd48abf4cf101383d1e8))
+* link the landing demo carousel from the README hero ([f2d14a9](https://github.com/VforVitorio/F1-StratLab/commit/f2d14a934190ebbd23a852f362a9e2c0044178fe))
+* remove em-dashes from README and ROADMAP prose ([5086e58](https://github.com/VforVitorio/F1-StratLab/commit/5086e58d19ba8f1ab8afcc891b3e4d959723083e))
+* update README, CONTRIBUTING, INDEX and ROADMAP; add TFG thesis and IEEE report PDFs ([5a9371c](https://github.com/VforVitorio/F1-StratLab/commit/5a9371cc27f2c766a2f6c54ba6b013bd5e17abce))
+
 ## [1.5.5](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.4...v1.5.5) (2026-05-23)
 
 
