@@ -22,6 +22,18 @@ F1 StratLab orchestrates seven ML models and a LangGraph multi-agent system to p
   </a>
 </div>
 
+<div align="center">
+  <img src="docs/assets/demo/arcade-demo.gif" alt="F1 StratLab arcade demo — 2D race replay, strategy dashboard and live telemetry" width="820"/>
+</div>
+
+<div align="center">
+
+🏆 **Final Degree Project — completed June 2026 · graded 10/10 with Distinction (Matrícula de Honor) · unanimously recommended by the tribunal for publication as a research article.**
+
+[![Latest release](https://img.shields.io/github/v/release/VforVitorio/F1-StratLab?label=release&color=6c5ce7)](https://github.com/VforVitorio/F1-StratLab/releases/latest)
+
+</div>
+
 ---
 
 ## What it is

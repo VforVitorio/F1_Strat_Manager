@@ -632,9 +632,25 @@ Code freeze of the TFG software. Consolidates the interfaces closed in v0.12.0 (
 
 ---
 
+## Next core releases (planned milestones)
+
+Post-v1.5.x core milestones, in order. Versions are targets, not commitments — directions, not deadlines. Tracked as GitHub milestones on the repo.
+
+| Version | Milestone | What it adds |
+|---|---|---|
+| **v1.6.0** | Modern frontend | Replace the Streamlit UI with a faster React/Vite stack; the FastAPI backend stays. A presentation-layer swap, not a functional rewrite — menus and flows stay the same. |
+| **v1.7.0** | Rival Agent | A new, additive LangGraph node that predicts each nearby rival's next strategic move — pit window, compound, undercut/overcut — and feeds it to the orchestrator. Recommendations move from reactive to anticipatory. The six existing agents are untouched. |
+| **v1.8.0** | Live race inference | Real-time ingestion over the OpenF1 WebSocket (the `lap_state` contract is unchanged, so agents and orchestrator don't change), plus adaptation to the 2026 technical/sporting regulation (re-cluster, re-label compounds, drift monitoring). |
+
+### Rival Agent — the anticipatory turn (v1.7.0)
+
+Today the system reasons about our own car and treats rivals as scenery; a good pit wall decides by anticipating the cars around it. The Rival Agent closes that gap. It reuses the existing two-driver mode (which already loads a rival's public telemetry next to ours), tire age, gap, track position and history to predict what the cars in our fight will do next. Ground truth is reconstructed from real 2024–2025 pit stops cross-referenced with telemetry; the agent is validated by ablation (with/without) against the real outcome and the actual pit-wall decision on the Grands Prix already validated in the thesis. Supporting building blocks: a rival next-move classifier, a lap-by-lap rival sequence model, situation/profile clustering with anomaly detection, a scaled pit-stop ground-truth pipeline, a neural surrogate of the Monte Carlo simulator, an RL pit-stop benchmark, and analogous-race-state retrieval.
+
+Beyond these core releases, the project grows into a multi-repo ecosystem:
+
 ## Post-TFG — F1 StratLab ecosystem (planned, not committed scope)
 
-Beyond v1.0.0, F1 StratLab is planned to grow from a single repo into an **ecosystem** of dedicated public repositories plus Hugging Face artifacts (under the `f1stratlab` org). High-level only here; detailed planning is kept outside the public roadmap.
+Beyond the core releases above, F1 StratLab is planned to grow from a single repo into an **ecosystem** of dedicated public repositories plus Hugging Face artifacts (under the `f1stratlab` org). High-level only here; detailed planning is kept outside the public roadmap.
 
 | Initiative | Repo | What it adds |
 |---|---|---|
@@ -648,5 +664,5 @@ These map to the eight future-work lines in the thesis ([`documents/thesis/`](do
 
 ---
 
-**Last Updated:** June 12, 2026
-**Version:** 1.11 (post-v1.0.0: added post-TFG ecosystem section)
+**Last Updated:** June 28, 2026
+**Version:** 1.12 (added next-core-releases milestones v1.6.0–v1.8.0 + Rival Agent)
