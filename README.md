@@ -27,6 +27,10 @@ F1 StratLab orchestrates seven ML models and a LangGraph multi-agent system to p
 </div>
 
 <div align="center">
+  <sub>▶ See the <strong>CLI</strong>, <strong>Arcade</strong> and <strong>Streamlit</strong> demos in action on the <a href="https://vforvitorio.github.io/f1stratlab-web/#demo-carousel">landing page</a>.</sub>
+</div>
+
+<div align="center">
 
 🏆 **Final Degree Project, completed June 2026 · graded 10/10 with Distinction (Matrícula de Honor) · unanimously recommended by the tribunal for publication as a research article.**
 
