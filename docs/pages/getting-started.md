@@ -4,6 +4,12 @@
 
 Three ways to get F1 StratLab running on your machine, from fastest to deepest.
 
+<p align="center">
+  <img src="/assets/demo/cli-demo.gif" alt="F1 StratLab CLI wizard in action" width="760"/>
+  <br/>
+  <sub>The <code>f1-strat</code> interactive wizard: pick the GP, drivers and provider, then watch the live inference panel.</sub>
+</p>
+
 ## 1. Install the latest wheel
 
 The quickest path. Installs the latest release into your current environment without cloning the repo.

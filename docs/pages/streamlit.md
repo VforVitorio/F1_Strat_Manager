@@ -6,6 +6,12 @@ The frontend is a multi-page Streamlit application at `src/telemetry/frontend/`.
 
 Entry point: `frontend/app/main.py`.
 
+<p align="center">
+  <img src="/assets/demo/streamlit-demo.gif" alt="F1 StratLab Streamlit app in action" width="760"/>
+  <br/>
+  <sub>The Streamlit strategy advisor and chat, running against the FastAPI backend.</sub>
+</p>
+
 ## Page map
 
 | Page | File | Description |
