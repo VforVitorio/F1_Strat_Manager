@@ -14,6 +14,12 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
 
+/* FOUC guard: hide the prerendered placeholder for JS users until the React app
+   mounts over #root and replaces it. The inline script in index.html adds .js
+   to <html> (and removes it after 3s as a safety net); crawlers without JS
+   never get .js, so they keep the prerendered content visible. */
+html.js .prerender-content { display: none; }
+
 /* Atmosphere — a single faint halo at top + faint grid wash */
 body::before {
   content: "";
