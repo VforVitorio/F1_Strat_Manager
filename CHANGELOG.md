@@ -11,6 +11,32 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.1](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.0...v1.6.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* **docs:** accessibility (WCAG AA) pass on the docs site ([1577d9a](https://github.com/VforVitorio/F1-StratLab/commit/1577d9a3f9ea6b6320a760e738a0626dc72e83cd))
+* **docs:** correct the docs-maintenance framework label ([3645987](https://github.com/VforVitorio/F1-StratLab/commit/36459876c26013d30be1e530f0b17855cbd3a2cf))
+* **docs:** hide prerendered placeholder until React mounts ([9dec895](https://github.com/VforVitorio/F1-StratLab/commit/9dec8956580b8b5b19cabff401575617e2829fb3))
+* **docs:** hide prerendered placeholder until React mounts (no FOUC) ([cda4da0](https://github.com/VforVitorio/F1-StratLab/commit/cda4da0e5df055a800f829068516a6ebd313a622))
+* **docs:** Sprint 2 - accessibility (WCAG AA) ([b5c53da](https://github.com/VforVitorio/F1-StratLab/commit/b5c53da795d796e4aff3ba55b74ad397bf18aaa1))
+* **docs:** Sprint 3 - correct docs-maintenance framework label ([15c55ff](https://github.com/VforVitorio/F1-StratLab/commit/15c55ffb255b9f94b8e193a08150601bcbacc5e3))
+
+
+### Performance
+
+* **docs:** drop @babel/standalone, load app as plain scripts ([75b4a10](https://github.com/VforVitorio/F1-StratLab/commit/75b4a108cf64b56a21ec7067cb818b15ada917b5))
+* **docs:** drop @babel/standalone, load app as plain scripts ([e448bae](https://github.com/VforVitorio/F1-StratLab/commit/e448bae8be0f6ada4ffce8c774f892eae86239c8)), closes [#136](https://github.com/VforVitorio/F1-StratLab/issues/136)
+* **docs:** optimize demo media and page load ([6590db2](https://github.com/VforVitorio/F1-StratLab/commit/6590db246559c52678db44dc495eb724fca7e528))
+* **docs:** Sprint 1 - performance & load ([5687206](https://github.com/VforVitorio/F1-StratLab/commit/568720685552b17470161a4bb55b6a4f15ff06fd))
+
+
+### Documentation
+
+* describe the real React stack, drop MkDocs references ([c944640](https://github.com/VforVitorio/F1-StratLab/commit/c944640d56204b993a238d8db9abfdba4397ab80))
+* describe the real React stack, drop MkDocs references ([9b781d4](https://github.com/VforVitorio/F1-StratLab/commit/9b781d48b64c5e5bbbf0a6e752ce85016180407a)), closes [#156](https://github.com/VforVitorio/F1-StratLab/issues/156)
+
 ## [1.6.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.5.5...v1.6.0) (2026-06-28)
 
 
