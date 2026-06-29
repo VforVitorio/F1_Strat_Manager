@@ -2145,3 +2145,45 @@ body::after {
     break-inside: avoid;
   }
 }
+
+/* =========================================================
+   ACCESSIBILITY
+   ========================================================= */
+
+/* Visible keyboard focus on every interactive element (WCAG 2.4.11).
+   :focus-visible only fires for keyboard nav, so mouse users keep the softer
+   component focus styles while keyboard users get a solid ring. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--purple-400);
+  outline-offset: 2px;
+}
+
+/* Visually-hidden text for screen readers (e.g. "opens in new tab"). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Honour prefers-reduced-motion: collapse animations/transitions and drop
+   smooth scroll. The autoplay demo videos are paused separately in markdown.jsx
+   (CSS cannot stop video playback). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
