@@ -2,7 +2,8 @@
 // Components: TopNav, Sidebar, TOC, Search, Footer
 // =========================================================
 
-const { useState, useEffect, useRef, useMemo } = React;
+// var (not const): shared global scope across app scripts, no modules — see markdown.js.
+var { useState, useEffect, useRef, useMemo } = React;
 
 // ---------- Icons (inline SVG, lucide-style) ----------
 function Icon({ name, ...props }) {
@@ -489,7 +490,7 @@ function DocsFooter({ onNav }) {
       ),
       React.createElement("div", { className: "docs-footer-legal" },
         React.createElement("span", null, "© 2026 · VforVitorio · F1 StratLab"),
-        React.createElement("span", null, "v__DOCS_VERSION__ · React + Babel · deployed to gh-pages by GitHub Actions"),
+        React.createElement("span", null, "v__DOCS_VERSION__ · React · deployed to gh-pages by GitHub Actions"),
       ),
     ),
   );

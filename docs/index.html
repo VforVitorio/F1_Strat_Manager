@@ -106,7 +106,6 @@
   <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
   <!-- Markdown + diagrams + syntax highlighting -->
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
@@ -119,13 +118,14 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
 
-  <!-- App -->
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
   <script src="app/nav.js?v=8"></script>
-  <script type="text/babel" data-presets="env,react" src="app/markdown.jsx?v=4"></script>
-  <script type="text/babel" data-presets="env,react" src="app/components.jsx?v=8"></script>
-  <script type="text/babel" data-presets="env,react" src="app/graph.jsx?v=7"></script>
-  <script type="text/babel" data-presets="env,react" src="app/home.jsx?v=6"></script>
-  <script type="text/babel" data-presets="env,react" src="app/main.jsx?v=6"></script>
+  <script src="app/markdown.js?v=5"></script>
+  <script src="app/components.js?v=9"></script>
+  <script src="app/graph.js?v=8"></script>
+  <script src="app/home.js?v=7"></script>
+  <script src="app/main.js?v=7"></script>
 
   <!-- Cloudflare Web Analytics -->
   <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>

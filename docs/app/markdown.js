@@ -5,7 +5,10 @@
 //   - Prism (loaded in index.html) for syntax highlighting
 // =========================================================
 
-const { useEffect, useRef, useState } = React;
+// var (not const): these app scripts load in shared global scope without a
+// module system, so the React-hook destructuring repeats across files. var
+// tolerates the redeclaration; const would throw once Babel's transform is gone.
+var { useEffect, useRef, useState } = React;
 
 // Configure marked
 function configureMarked() {
