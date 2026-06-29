@@ -44,9 +44,16 @@ function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // Eager-load all pages so search has content & the graph has real page edges
+  // Prefetch every page (search index + graph edges) once the first paint is
+  // done, so it never competes with the page the reader actually opened.
   useEffect(() => {
-    window.loadAllPages().then(() => setPagesReady(true));
+    const prefetch = () => window.loadAllPages().then(() => setPagesReady(true));
+    const idle = window.requestIdleCallback;
+    const id = idle ? idle(prefetch) : setTimeout(prefetch, 1000);
+    return () => {
+      if (idle) window.cancelIdleCallback(id);
+      else clearTimeout(id);
+    };
   }, []);
 
   // Nav helper

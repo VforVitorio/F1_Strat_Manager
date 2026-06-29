@@ -5,7 +5,7 @@
 Three ways to get F1 StratLab running on your machine, from fastest to deepest.
 
 <p align="center">
-  <img src="/assets/demo/cli-demo.gif" alt="F1 StratLab CLI wizard in action" width="760"/>
+  <video src="/assets/demo/cli-demo.mp4" poster="/assets/demo/cli-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab CLI wizard in action"></video>
   <br/>
   <sub>The <code>f1-strat</code> interactive wizard: pick the GP, drivers and provider, then watch the live inference panel.</sub>
 </p>
