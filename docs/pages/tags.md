@@ -48,7 +48,6 @@ Tags that appear on a single page are listed under **Other** at the end.
 | `git` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd) |
 | `release` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd) |
 | `github-actions` | [Docs maintenance](#/docs-maintenance), [CI/CD pipeline](#/ci-cd) |
-| `mkdocs` | [Docs maintenance](#/docs-maintenance), [CI/CD pipeline](#/ci-cd) |
 
 ## Data
 
