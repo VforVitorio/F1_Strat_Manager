@@ -7,7 +7,8 @@
 //   - Modes: 'overlay' (fullscreen) or 'mini' (embedded teaser)
 // =========================================================
 
-const { useEffect, useRef, useState } = React;
+// var (not const): shared global scope across app scripts, no modules — see markdown.js.
+var { useEffect, useRef, useState } = React;
 
 function buildSimulation(graph, w, h) {
   const all = graph.nodes;

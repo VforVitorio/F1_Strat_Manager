@@ -2,7 +2,8 @@
 // App entry — router, layout, top-level state
 // =========================================================
 
-const { useState, useEffect, useCallback } = React;
+// var (not const): shared global scope across app scripts, no modules — see markdown.js.
+var { useState, useEffect, useCallback } = React;
 
 function parseHash() {
   const h = location.hash;
