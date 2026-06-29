@@ -25,7 +25,7 @@ graph TD
 | `dev` | Integration branch | Merge commits from PRs originating on `test` |
 | `test` | Active development branch | Developers, frequently |
 | `legacy_version` | Historical snapshot | Nobody. Frozen |
-| `gh-pages` | Build output of `mkdocs gh-deploy` | The `docs.yml` workflow |
+| `gh-pages` | Published output of the `docs.yml` React SPA deploy | The `docs.yml` workflow |
 | `release-please--...` | Auto-managed by the release-please bot | The release-please GitHub Action |
 
 The default flow is `feature → test → dev → main`. Hotfixes go via a `chore/...` or `fix/...` branch straight to `main`.
@@ -64,9 +64,9 @@ jobs:
 
 ### `.github/workflows/docs.yml`
 
-Triggered on push to `main` only when one of the following paths changes: `docs/**`, `documents/images/**`, `mkdocs.yml`, `requirements-docs.txt`, or the workflow file itself.
+Triggered on push to `main` only when one of the following paths changes: `docs/**`, `scripts/prerender_docs.mjs`, or the workflow file itself.
 
-A single job runs `actions/checkout@v4 → actions/setup-python@v5 (3.12) → pip install -r requirements-docs.txt → mkdocs gh-deploy --force --clean --verbose`.
+A single job stages `docs/` into `_site/`, installs `marked` via `npm install`, then runs `node scripts/prerender_docs.mjs docs _site` to render each `docs/pages/*.md` into a crawlable `/<slug>/index.html` and generate `sitemap.xml`, `llms-full.txt`, and `404.html`. After injecting the release version from `pyproject.toml` (replacing the `__DOCS_VERSION__` placeholder), it publishes `_site` to the `gh-pages` branch via `peaceiris/actions-gh-pages@v4`.
 
 Concurrency is scoped to `docs-${{ github.ref }}` with `cancel-in-progress: true`, so two consecutive pushes to `main` will not stack two deploys.
 
@@ -119,11 +119,11 @@ The ignore list exists for hard technical reasons:
 
 ## Documentation deployment
 
-The docs site at [docs.f1stratlab.com](https://docs.f1stratlab.com/) is built from `docs/` with `mkdocs-material` and deployed to the `gh-pages` branch.
+The docs site at [docs.f1stratlab.com](https://docs.f1stratlab.com/) is a React SPA (plain `React.createElement`, no build step) served from the `docs/` directory and deployed to the `gh-pages` branch by `docs.yml`.
 
 ### The Pages source-mode trap
 
-GitHub Pages can read its content either from a workflow artefact or from a branch. F1 StratLab uses the branch mode pointing at `gh-pages` because `mkdocs gh-deploy` pushes a branch, not an artefact. If a future docs deploy succeeds in CI but the live site shows stale content, check this setting first:
+GitHub Pages can read its content either from a workflow artefact or from a branch. F1 StratLab uses the branch mode pointing at `gh-pages` because `peaceiris/actions-gh-pages` pushes to that branch directly. If a future docs deploy succeeds in CI but the live site shows stale content, check this setting first:
 
 ```bash
 gh api -X PUT repos/VforVitorio/F1-StratLab/pages \
