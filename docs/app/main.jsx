@@ -114,6 +114,7 @@ function App() {
       onNav: navTo,
       onOpenGraph: () => openGraph(),
       onToggleSidebar: () => setSidebarOpen(o => !o),
+      sidebarOpen,
     }),
     React.createElement("div", { className: "shell" + (isHome ? " shell-no-toc" : "") },
       React.createElement(window.Sidebar, {
