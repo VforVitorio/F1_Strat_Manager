@@ -526,6 +526,15 @@ body::after {
   font-weight: 500;
 }
 
+/* Media — keep images and demo videos inside the content column on mobile.
+   The embeds carry an intrinsic width="760"; without this they overflow on
+   narrow viewports. Also closes the responsive image-overflow finding (#147). */
+.article img,
+.article video {
+  max-width: 100%;
+  height: auto;
+}
+
 /* Tables */
 .article table {
   width: 100%;
