@@ -165,8 +165,8 @@ window.PAGES = [
     title: "Docs maintenance",
     section: "Development",
     file: "pages/docs-maintenance.md",
-    description: "How this MkDocs site is built and deployed.",
-    eyebrow: "MkDocs",
+    description: "How this React + Babel docs site is built and deployed.",
+    eyebrow: "React + Babel",
     tags: ["dev", "mkdocs", "github-actions"],
   },
   {
