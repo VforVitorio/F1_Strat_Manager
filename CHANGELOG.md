@@ -11,6 +11,16 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.2](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.1...v1.6.2) (2026-07-04)
+
+
+### Documentation
+
+* **audits:** add backend, loading and core-compute audit plans ([0b628f2](https://github.com/VforVitorio/F1-StratLab/commit/0b628f2904de4aa69fc010f3bcbfd44e2a140be0))
+* **audits:** add testing and QA strategy audit plan ([ff4d30e](https://github.com/VforVitorio/F1-StratLab/commit/ff4d30ebea85bf7bb05862a291f0c11cf2cce91d))
+* **audits:** P1, P2 and P2b audit plans ([dc90de9](https://github.com/VforVitorio/F1-StratLab/commit/dc90de966b9b3f88142dd30818671f54b63a8f8f))
+* **audits:** testing and QA strategy audit + tests/fixtures carve-out ([bfb9d0f](https://github.com/VforVitorio/F1-StratLab/commit/bfb9d0fb42bbb10a8c9a74071ccc44f0eca89a9e))
+
 ## [1.6.1](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.0...v1.6.1) (2026-06-29)
 
 
