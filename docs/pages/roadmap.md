@@ -220,9 +220,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.1 to v0.5</span>
-      <span class="rl-date">May 2025</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.1 to v0.5</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>May 2025</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Legacy integration and project setup</p>
     <p class="rl-summary">Third-year coursework iteration. Integrated the F1_Telemetry_Manager submodule, established the modular repository layout (<code>src/</code>, <code>notebooks/</code>, <code>data/</code>, <code>legacy/</code>), and verified seven FastAPI endpoint categories. A <code>legacy_version</code> branch preserves this work; active TFG development starts at v0.6.</p>
@@ -239,9 +239,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.6.0</span>
-      <span class="rl-date">2026-02-12</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.6.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-02-12</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Data engineering pipeline</p>
     <p class="rl-summary">End-to-end pipeline from raw FastF1 telemetry to a clean, feature-rich dataset. Circuit clustering (K-Means k=4, 25 circuits), 48-column feature set over ~45,000 clean racing laps, and 2025 saved as a held-out test set. Dataset published to Hugging Face Hub.</p>
@@ -257,9 +257,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.7.0</span>
-      <span class="rl-date">2026-03-05</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.7.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-03-05</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">ML foundation: lap time and tire degradation</p>
     <p class="rl-summary">First two production ML models. XGBoost delta-lap-time predictor (N06) and a Temporal Convolutional Network for tire degradation with MC Dropout uncertainty (N07-N10, per-compound fine-tuning on SOFT / MEDIUM / HARD).</p>
@@ -274,9 +274,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.8.0 + v0.8.1</span>
-      <span class="rl-date">2026-03-13</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.8.0 + v0.8.1</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-03-13</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Extended ML models: overtake, safety car, pit stop, undercut</p>
     <p class="rl-summary">Four additional predictors. LightGBM overtake classifier on 28,494 labeled pairs (N11-N12), soft safety-car prior (N13-N14), HistGBT quantile regression for pit duration (N15), and LightGBM undercut success scorer (N16). The Causal TCN alternative (N12B) archived as a documented negative result.</p>
@@ -293,9 +293,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.8.2</span>
-      <span class="rl-date">2026-03-22</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.8.2</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-03-22</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">NLP radio processing pipeline</p>
     <p class="rl-summary">Full team-radio NLP stack. Whisper ASR (N18), RoBERTa sentiment (N20, 87.5% accuracy), SetFit intent classification (N21, 5 classes), BERT-large NER for F1 entities (N22), deterministic RCM parser (N23). Unified inference entry point in N24 at GPU P95 latency of 59.4 ms.</p>
@@ -316,9 +316,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.9.0</span>
-      <span class="rl-date">2026-03-17</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.9.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-03-17</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">src/ extraction, CLI simulation, radio corpus</p>
     <p class="rl-summary">Seven agent entry points extracted to importable <code>src/agents/</code> modules. Headless CLI simulation (<code>f1-sim</code>) with Rich Live rendering and no-LLM mode. OpenF1 radio corpus pipeline (529 MP3s, 48 parquets) with Whisper JSON cache. Lazy Hugging Face data download on first run.</p>
@@ -329,9 +329,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.10.0</span>
-      <span class="rl-date">2026-03-22</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.10.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-03-22</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Multi-agent system: N25 to N31</p>
     <p class="rl-summary">Seven LangGraph ReAct agents coordinated by a three-layer Strategy Orchestrator: MoE-style dynamic routing, Monte Carlo simulation over 500 samples ranking four strategy candidates by risk-adjusted expected outcome, and LLM synthesis producing a 14-field <code>StrategyRecommendation</code>. Bahrain 2025 end-to-end demo.</p>
@@ -347,9 +347,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.11.0</span>
-      <span class="rl-date">2026-03-30</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.11.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-03-30</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">RAG system over FIA regulations</p>
     <p class="rl-summary">Retrieval-augmented generation grounding strategic decisions in FIA Sporting Regulations 2023-2025. BGE-M3 embeddings (1024-dim), Qdrant local vector store, 2,279 indexed chunks. Exposed as the <code>query_rag_tool</code> LangChain tool imported by the orchestrator.</p>
@@ -365,9 +365,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.1.1</span>
-      <span class="rl-date">2026-04-09</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.1.1</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-04-09</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">R1: CLI wheel release</p>
     <p class="rl-summary">First distribution artifact. Wheel <code>f1_strat_manager-0.1.1-py3-none-any.whl</code> on GitHub Releases. Both <code>f1-strat</code> and <code>f1-sim</code> entry points verified. Installable via <code>uv tool install git+&lt;repo&gt;</code>.</p>
@@ -378,9 +378,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v0.12.0</span>
-      <span class="rl-date">2026-04-15</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v0.12.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-04-15</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Interfaces and distribution: FastAPI, Streamlit, Arcade</p>
     <p class="rl-summary">Wired the multi-agent system into the FastAPI backend and FastMCP. Streamlit pages for race analysis and live strategy cards with inline Plotly charts. Arcade MVP: three windows from one command (pyglet 2D replay, PySide6 strategy dashboard, live telemetry grid). Voice chat rewritten with Whisper ASR and edge-tts.</p>
@@ -402,9 +402,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v1.0.0</span>
-      <span class="rl-date">2026-04-20</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v1.0.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-04-20</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Final release: code freeze and three-surface distribution</p>
     <p class="rl-summary">First stable release. Consolidates the Arcade MVP, the full seven-model ML stack, and N25-N31 with FIA RAG into a single tagged production release. Three install paths: CLI wheel, <code>f1-arcade</code> via <code>uv tool install</code>, and Streamlit + FastAPI Docker Compose.</p>
@@ -415,9 +415,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v1.1.0</span>
-      <span class="rl-date">2026-05-11</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v1.1.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-05-11</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Benchmark suite and thesis evaluation</p>
     <p class="rl-summary">Four standalone benchmark scripts covering pace, Whisper latency, six sub-agent latency, and the NLP pipeline on CPU and GPU. N33 precision-recall sweeps for overtake, safety car, and undercut models. N30B RAG benchmark comparing BGE-M3 variants over 15 ground-truth queries. Full English localization of strategy notebooks.</p>
@@ -428,9 +428,9 @@
   <div class="rl-dot done"></div>
   <div class="rl-card">
     <div class="rl-header">
-      <span class="rl-version">v1.2.0 to v1.3.1</span>
-      <span class="rl-date">2026-05-12</span>
-      <span class="rl-badge done-badge">Shipped</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v1.2.0 to v1.3.1</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-05-12</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Documentation site launch and custom domain</p>
     <p class="rl-summary">React + Babel docs site published under <code>docs.f1stratlab.com</code>. Full architecture pages, agent API reference, arcade quick-start, CI/CD narrative, and graph-based page discovery. Five drawio architecture diagrams. Brand theme aligned with the F1 StratLab purple palette.</p>
@@ -447,8 +447,8 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version">v1.6.0</span>
-      <span class="rl-badge planned-badge">Planned</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v1.6.0</span>
+      <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Modern frontend</p>
     <p class="rl-summary">React / Vite UI replaces Streamlit. The FastAPI backend stays unchanged. A presentation-layer swap: menus, flows, and all agent endpoints remain the same; only the client is rewritten for faster load times and a production-grade SPA experience.</p>
@@ -459,8 +459,8 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version">v1.7.0</span>
-      <span class="rl-badge planned-badge">Planned</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v1.7.0</span>
+      <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Rival Agent: anticipate each rival's next move</p>
     <p class="rl-summary">A new, additive LangGraph node that predicts each nearby rival's next strategic move (pit window, compound, undercut / overcut) and feeds it to the orchestrator. Recommendations move from reactive to anticipatory. The six existing agents are untouched. Validated by ablation against real 2024-2025 pit-stop outcomes.</p>
@@ -471,8 +471,8 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version">v1.8.0</span>
-      <span class="rl-badge planned-badge">Planned</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v1.8.0</span>
+      <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Live race inference and 2026 regulation adaptation</p>
     <p class="rl-summary">Real-time OpenF1 WebSocket ingestion. The <code>lap_state</code> contract is unchanged, so agents and the orchestrator do not change. Adaptation to the 2026 technical and sporting regulation: re-cluster circuits, re-label compounds, add drift monitoring.</p>

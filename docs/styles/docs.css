@@ -14,6 +14,12 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
 
+/* FOUC guard: hide the prerendered placeholder for JS users until the React app
+   mounts over #root and replaces it. The inline script in index.html adds .js
+   to <html> (and removes it after 3s as a safety net); crawlers without JS
+   never get .js, so they keep the prerendered content visible. */
+html.js .prerender-content { display: none; }
+
 /* Atmosphere — a single faint halo at top + faint grid wash */
 body::before {
   content: "";
@@ -524,6 +530,15 @@ body::after {
   padding: 1px 6px;
   border-radius: 5px;
   font-weight: 500;
+}
+
+/* Media — keep images and demo videos inside the content column on mobile.
+   The embeds carry an intrinsic width="760"; without this they overflow on
+   narrow viewports. Also closes the responsive image-overflow finding (#147). */
+.article img,
+.article video {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Tables */
@@ -2134,5 +2149,47 @@ body::after {
   figure {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY
+   ========================================================= */
+
+/* Visible keyboard focus on every interactive element (WCAG 2.4.11).
+   :focus-visible only fires for keyboard nav, so mouse users keep the softer
+   component focus styles while keyboard users get a solid ring. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--purple-400);
+  outline-offset: 2px;
+}
+
+/* Visually-hidden text for screen readers (e.g. "opens in new tab"). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Honour prefers-reduced-motion: collapse animations/transitions and drop
+   smooth scroll. The autoplay demo videos are paused separately in markdown.jsx
+   (CSS cannot stop video playback). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

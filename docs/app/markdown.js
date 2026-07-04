@@ -5,7 +5,10 @@
 //   - Prism (loaded in index.html) for syntax highlighting
 // =========================================================
 
-const { useEffect, useRef, useState } = React;
+// var (not const): these app scripts load in shared global scope without a
+// module system, so the React-hook destructuring repeats across files. var
+// tolerates the redeclaration; const would throw once Babel's transform is gone.
+var { useEffect, useRef, useState } = React;
 
 // Configure marked
 function configureMarked() {
@@ -49,7 +52,7 @@ function configureMarked() {
       return `<a href="${href}"${titleAttr} data-internal>${text}</a>`;
     }
     if (href.startsWith("http") && !href.includes(location.host)) {
-      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text} <svg style="display:inline;vertical-align:-1px;width:10px;height:10px;opacity:0.6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg></a>`;
+      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text} <svg aria-hidden="true" focusable="false" style="display:inline;vertical-align:-1px;width:10px;height:10px;opacity:0.6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg><span class="sr-only"> (opens in new tab)</span></a>`;
     }
     return `<a href="${href}"${titleAttr}>${text}</a>`;
   };
@@ -183,6 +186,16 @@ function MarkdownArticle({ slug, onTOC }) {
     if (!containerRef.current || !html) return;
     const root = containerRef.current;
     renderMermaidBlocks(root);
+
+    // Reduced motion: the demo videos autoplay/loop, so for users who opt out
+    // of motion we pause them and expose controls (WCAG 2.2.2 / 2.3.3).
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      root.querySelectorAll("video[autoplay]").forEach(v => {
+        v.removeAttribute("autoplay");
+        v.setAttribute("controls", "");
+        v.pause();
+      });
+    }
 
     // Copy buttons
     root.querySelectorAll("[data-copy]").forEach(btn => {

@@ -2,7 +2,8 @@
 // Components: TopNav, Sidebar, TOC, Search, Footer
 // =========================================================
 
-const { useState, useEffect, useRef, useMemo } = React;
+// var (not const): shared global scope across app scripts, no modules — see markdown.js.
+var { useState, useEffect, useRef, useMemo } = React;
 
 // ---------- Icons (inline SVG, lucide-style) ----------
 function Icon({ name, ...props }) {
@@ -147,6 +148,12 @@ function Search({ onPick }) {
       className: "search-input",
       placeholder: "Search docs or #tag…",
       value: q,
+      role: "combobox",
+      "aria-label": "Search documentation",
+      "aria-autocomplete": "list",
+      "aria-expanded": showResults && results.length > 0,
+      "aria-controls": "search-listbox",
+      "aria-activedescendant": showResults && results[active] ? "search-opt-" + active : undefined,
       onChange: e => { setQ(e.target.value); setActive(0); },
       onFocus: () => setFocused(true),
       onBlur: () => setTimeout(() => setFocused(false), 120),
@@ -177,16 +184,21 @@ function Search({ onPick }) {
       ),
       results.length === 0
         ? (tagSuggestions.length === 0 && React.createElement("div", { className: "search-empty" }, "No matches"))
-        : results.map((r, i) =>
-            React.createElement("a", {
-              key: r.page.slug,
-              className: "search-result" + (i === active ? " active" : ""),
-              onMouseDown: e => { e.preventDefault(); pick(r.page); },
-              onMouseEnter: () => setActive(i),
-            },
-              React.createElement("div", { className: "search-result-title" }, highlight(r.page.title)),
-              React.createElement("div", { className: "search-result-meta" }, r.page.section + "  ·  /" + r.page.slug),
-              React.createElement("div", { className: "search-result-snippet" }, highlight(r.snippet)),
+        : React.createElement("div", { id: "search-listbox", role: "listbox", "aria-label": "Search results" },
+            results.map((r, i) =>
+              React.createElement("a", {
+                key: r.page.slug,
+                id: "search-opt-" + i,
+                role: "option",
+                "aria-selected": i === active,
+                className: "search-result" + (i === active ? " active" : ""),
+                onMouseDown: e => { e.preventDefault(); pick(r.page); },
+                onMouseEnter: () => setActive(i),
+              },
+                React.createElement("div", { className: "search-result-title" }, highlight(r.page.title)),
+                React.createElement("div", { className: "search-result-meta" }, r.page.section + "  ·  /" + r.page.slug),
+                React.createElement("div", { className: "search-result-snippet" }, highlight(r.snippet)),
+              )
             )
           )
     ),
@@ -195,14 +207,16 @@ function Search({ onPick }) {
 window.Search = Search;
 
 // ---------- TopNav ----------
-function TopNav({ onNav, onOpenGraph, onToggleSidebar }) {
+function TopNav({ onNav, onOpenGraph, onToggleSidebar, sidebarOpen }) {
   return React.createElement("nav", { className: "topnav" },
     React.createElement("div", { className: "topnav-inner" },
       React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
         React.createElement("button", {
           className: "mobile-toggle",
           onClick: onToggleSidebar,
-          "aria-label": "Toggle nav",
+          "aria-label": "Toggle navigation menu",
+          "aria-expanded": !!sidebarOpen,
+          "aria-controls": "site-sidebar",
         }, React.createElement(Icon, { name: "menu" })),
         React.createElement("a", {
           className: "brand",
@@ -220,6 +234,7 @@ function TopNav({ onNav, onOpenGraph, onToggleSidebar }) {
           className: "nav-pill",
           onClick: onOpenGraph,
           title: "Open graph view",
+          "aria-label": "Open graph view",
         },
           React.createElement(Icon, { name: "graph" }),
           React.createElement("span", null, "Graph"),
@@ -229,6 +244,7 @@ function TopNav({ onNav, onOpenGraph, onToggleSidebar }) {
           href: "https://f1stratlab.com/",
           target: "_blank", rel: "noopener noreferrer",
           title: "Public landing site",
+          "aria-label": "Landing site (opens in new tab)",
         },
           React.createElement(Icon, { name: "globe" }),
           React.createElement("span", null, "Landing"),
@@ -237,6 +253,7 @@ function TopNav({ onNav, onOpenGraph, onToggleSidebar }) {
           className: "nav-pill",
           href: "https://deepwiki.com/VforVitorio/F1-StratLab",
           target: "_blank", rel: "noopener noreferrer",
+          "aria-label": "DeepWiki (opens in new tab)",
         },
           React.createElement(Icon, { name: "book" }),
           React.createElement("span", null, "DeepWiki"),
@@ -245,6 +262,7 @@ function TopNav({ onNav, onOpenGraph, onToggleSidebar }) {
           className: "nav-pill primary",
           href: "https://github.com/VforVitorio/F1-StratLab",
           target: "_blank", rel: "noopener noreferrer",
+          "aria-label": "GitHub repository (opens in new tab)",
         },
           React.createElement(Icon, { name: "github" }),
           React.createElement("span", null, "GitHub"),
@@ -284,7 +302,7 @@ function Sidebar({ activeSlug, onNav, open, onClose }) {
       onClick: () => onClose && onClose(),
       "aria-hidden": "true",
     }),
-    React.createElement("aside", { className: "sidebar" + (open ? " open" : "") },
+    React.createElement("aside", { id: "site-sidebar", "aria-label": "Site navigation", className: "sidebar" + (open ? " open" : "") },
       window.SECTIONS.map(sec =>
         React.createElement("div", { key: sec, className: "sidebar-section" },
           React.createElement("div", { className: "sidebar-section-title" }, sec),
@@ -338,9 +356,9 @@ function TOC({ items }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, [items]);
 
-  if (!items || items.length === 0) return React.createElement("aside", { className: "toc" });
+  if (!items || items.length === 0) return null;
 
-  return React.createElement("aside", { className: "toc" },
+  return React.createElement("aside", { className: "toc", "aria-label": "On this page" },
     React.createElement("div", { className: "toc-title" }, "On this page"),
     React.createElement("ul", { className: "toc-list" },
       items.map(it =>
@@ -450,29 +468,29 @@ function DocsFooter({ onNav }) {
         ),
         React.createElement("div", { className: "docs-footer-col" },
           React.createElement("div", { className: "docs-footer-col-title" }, "Project"),
-          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab", target: "_blank" }, "GitHub"),
-          React.createElement("a", { href: "https://deepwiki.com/VforVitorio/F1-StratLab", target: "_blank" }, "DeepWiki"),
-          React.createElement("a", { href: "https://f1stratlab.com/", target: "_blank" }, "Landing site"),
-          React.createElement("a", { href: "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset", target: "_blank" }, "HF dataset"),
+          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab", target: "_blank", rel: "noopener noreferrer" }, "GitHub"),
+          React.createElement("a", { href: "https://deepwiki.com/VforVitorio/F1-StratLab", target: "_blank", rel: "noopener noreferrer" }, "DeepWiki"),
+          React.createElement("a", { href: "https://f1stratlab.com/", target: "_blank", rel: "noopener noreferrer" }, "Landing site"),
+          React.createElement("a", { href: "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset", target: "_blank", rel: "noopener noreferrer" }, "HF dataset"),
         ),
         React.createElement("div", { className: "docs-footer-col" },
           React.createElement("div", { className: "docs-footer-col-title" }, "Release"),
-          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab/releases", target: "_blank" }, "Releases"),
-          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md", target: "_blank" }, "Changelog"),
-          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab/blob/main/LICENSE", target: "_blank" }, "Apache-2.0 License"),
+          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab/releases", target: "_blank", rel: "noopener noreferrer" }, "Releases"),
+          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md", target: "_blank", rel: "noopener noreferrer" }, "Changelog"),
+          React.createElement("a", { href: "https://github.com/VforVitorio/F1-StratLab/blob/main/LICENSE", target: "_blank", rel: "noopener noreferrer" }, "Apache-2.0 License"),
         ),
         React.createElement("div", { className: "docs-footer-col" },
           React.createElement("div", { className: "docs-footer-col-title" }, "Connect"),
           React.createElement("a", { href: "#/meet-the-author", onClick: e => { e.preventDefault(); onNav("meet-the-author"); } }, "Meet the author"),
-          React.createElement("a", { href: "https://github.com/VforVitorio", target: "_blank" }, "GitHub profile"),
-          React.createElement("a", { href: "https://www.linkedin.com/in/victorvegasobral/", target: "_blank" }, "LinkedIn"),
-          React.createElement("a", { href: "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset", target: "_blank" }, "HF dataset"),
-          React.createElement("a", { href: "https://victorvegasobral.com", target: "_blank" }, "Portfolio"),
+          React.createElement("a", { href: "https://github.com/VforVitorio", target: "_blank", rel: "noopener noreferrer" }, "GitHub profile"),
+          React.createElement("a", { href: "https://www.linkedin.com/in/victorvegasobral/", target: "_blank", rel: "noopener noreferrer" }, "LinkedIn"),
+          React.createElement("a", { href: "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset", target: "_blank", rel: "noopener noreferrer" }, "HF dataset"),
+          React.createElement("a", { href: "https://victorvegasobral.com", target: "_blank", rel: "noopener noreferrer" }, "Portfolio"),
         ),
       ),
       React.createElement("div", { className: "docs-footer-legal" },
         React.createElement("span", null, "© 2026 · VforVitorio · F1 StratLab"),
-        React.createElement("span", null, "v__DOCS_VERSION__ · React + Babel · deployed to gh-pages by GitHub Actions"),
+        React.createElement("span", null, "v__DOCS_VERSION__ · React · deployed to gh-pages by GitHub Actions"),
       ),
     ),
   );

@@ -2,7 +2,8 @@
 // App entry — router, layout, top-level state
 // =========================================================
 
-const { useState, useEffect, useCallback } = React;
+// var (not const): shared global scope across app scripts, no modules — see markdown.js.
+var { useState, useEffect, useCallback } = React;
 
 function parseHash() {
   const h = location.hash;
@@ -44,9 +45,16 @@ function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // Eager-load all pages so search has content & the graph has real page edges
+  // Prefetch every page (search index + graph edges) once the first paint is
+  // done, so it never competes with the page the reader actually opened.
   useEffect(() => {
-    window.loadAllPages().then(() => setPagesReady(true));
+    const prefetch = () => window.loadAllPages().then(() => setPagesReady(true));
+    const idle = window.requestIdleCallback;
+    const id = idle ? idle(prefetch) : setTimeout(prefetch, 1000);
+    return () => {
+      if (idle) window.cancelIdleCallback(id);
+      else clearTimeout(id);
+    };
   }, []);
 
   // Nav helper
@@ -107,6 +115,7 @@ function App() {
       onNav: navTo,
       onOpenGraph: () => openGraph(),
       onToggleSidebar: () => setSidebarOpen(o => !o),
+      sidebarOpen,
     }),
     React.createElement("div", { className: "shell" + (isHome ? " shell-no-toc" : "") },
       React.createElement(window.Sidebar, {

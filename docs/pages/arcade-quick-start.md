@@ -5,7 +5,7 @@
 One command launches everything: the arcade replay window (pyglet), the strategy dashboard (PySide6), and the telemetry window (PySide6). The arcade process owns the simulation loop and broadcasts merged state on a local TCP port; the dashboard subprocess subscribes and renders.
 
 <p align="center">
-  <img src="/assets/demo/arcade-demo.gif" alt="F1 StratLab arcade replay in action" width="760"/>
+  <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab arcade replay in action"></video>
   <br/>
   <sub>The three-window arcade: 2D replay, strategy dashboard and live telemetry, all in sync.</sub>
 </p>

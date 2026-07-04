@@ -18,7 +18,13 @@ jobs:
       - id: release
         uses: googleapis/release-please-action@v5
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          # ponytail: use the built-in GITHUB_TOKEN, not a PAT. `main` has no
+          # required status checks, so a PAT (whose only benefit is making the
+          # release PR trigger CI) buys nothing here. An expired RELEASE_PLEASE_TOKEN
+          # secret is still truthy, so `|| GITHUB_TOKEN` does NOT fall back — it
+          # fails with "Bad credentials". Bring the PAT back only if main starts
+          # requiring checks on the release PR.
+          token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
