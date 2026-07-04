@@ -35,6 +35,13 @@ data/rag/qdrant_local/**/*
 models/
 f1_cache/
 
+# Test fixtures — tiny (< 150 KB) versioned data is allowed in git ON PURPOSE.
+# Explicit carve-out from the "data and models live on Hugging Face, not git" rule, so the
+# engine and contract test tiers have deterministic inputs (mini race parquet, .sse transcripts,
+# canned lap_states, RAG mini-collection). Keep each fixture small; large assets stay on HF.
+!/tests/fixtures/
+!/tests/fixtures/**
+
 # ===========================
 # Notebooks
 # ===========================
