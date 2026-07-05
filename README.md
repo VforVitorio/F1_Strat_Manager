@@ -8,7 +8,7 @@
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red)](https://streamlit.io/) [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)](https://pytorch.org/) [![FastF1](https://img.shields.io/badge/FastF1-3.1%2B-red)](https://github.com/theOehrly/Fast-F1) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/VforVitorio/F1-StratLab)
 
-F1 StratLab orchestrates seven ML models and a LangGraph multi-agent system to produce real-time Formula 1 strategy recommendations: from lap time prediction to tire degradation, radio NLP, and RAG over FIA regulations.
+F1 StratLab is an open-source multi-agent AI platform for Formula 1 race replay and real-time strategy simulation. Replay a full race lap by lap in an interactive 2D interface and watch six specialised agents and an orchestrator work out an explainable strategy for every lap, covering tire wear, lap time, race situation, pit windows, team radio, and FIA regulations.
 
 **Documentation: [https://docs.f1stratlab.com/](https://docs.f1stratlab.com/)**
 
@@ -42,9 +42,20 @@ F1 StratLab orchestrates seven ML models and a LangGraph multi-agent system to p
 
 ## What it is
 
-In Formula 1, strategic decisions must be made within seconds while juggling weather, tire wear, track position, and fuel. **F1 StratLab** packages a multi-agent AI system (seven specialised agents coordinated by an orchestrator) plus a 2D race replay and a post-race analytics UI into a single repository. Data comes from FastF1 and OpenF1; models span XGBoost, TCN + MC Dropout, LightGBM, RoBERTa / SetFit / BERT-large, Whisper, and FIA RAG over Qdrant.
+In Formula 1, strategic decisions must be made within seconds while juggling weather, tire wear, track position, and fuel. **F1 StratLab** packages a multi-agent AI system (six specialised agents coordinated by an orchestrator) plus a 2D race replay and a post-race analytics UI into a single repository. Data comes from FastF1 and OpenF1; models span XGBoost, TCN + MC Dropout, LightGBM, RoBERTa / SetFit / BERT-large, Whisper, and FIA RAG over Qdrant.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the one-page topology and [`docs/`](docs/) for the deep dives.
+
+## Features
+
+- Lap-by-lap 2D race replay of a Grand Prix, in real time
+- Six specialised strategy agents (pace, tire, race situation, pit, radio, regulations) plus a Monte Carlo orchestrator
+- Explainable output: every recommendation exposes each agent's reasoning
+- Team-radio transcription and NLP (Whisper, RoBERTa, SetFit, BERT-large)
+- Retrieval over the FIA sporting regulations (Qdrant + BGE-M3)
+- Live telemetry windows and post-race analytics
+- Natural-language chat over a finished race
+- Three ways to run it: CLI, Arcade, and Streamlit
 
 ## Three surfaces, one codebase
 
