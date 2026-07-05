@@ -42,6 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -54,8 +56,18 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --frozen
 
+      # Guard against a refactor silently dropping the suite to a handful of
+      # tests (broken import, accidental mass-skip). Collection counts nodes
+      # regardless of skip, so the floor is stable even though most tests are
+      # data-gated on CI runners (Testing audit T-4).
+      - name: Collected-count floor
+        run: |
+          n=$(uv run pytest --co -q | grep -c "::" || true)
+          echo "collected $n test nodes"
+          test "$n" -ge 40
+
       - name: Run tests
-        run: uv run pytest -v
+        run: uv run pytest -v --cov=src --cov-report=term-missing
 
   lint:
     name: lint

@@ -77,8 +77,8 @@ def test_simulate_race_emits_start_lap_summary():
     no LLM backend is required. Validates the exact ordering contract the
     SSE endpoint relies on: consumers (Arcade, curl probes) cannot lock the
     layout until ``start`` arrives, and cannot finalise stats until
-    ``summary`` arrives. Intermediate ``error`` events are tolerated but the
-    closing frame must always be the summary.
+    ``summary`` arrives. The happy path must emit ZERO ``error`` frames (this
+    guards the ``--no-llm`` class of bug, #166) and close with the summary.
     """
     _ensure_backend_on_path()
     from backend.services.simulation import SimConfig, simulate_race
@@ -103,6 +103,15 @@ def test_simulate_race_emits_start_lap_summary():
 
     lap_events = [e for e in events if e["type"] == "lap"]
     assert len(lap_events) >= 1, "expected at least one lap event in 3-lap window"
+
+    # The no-LLM happy path must not degrade to error frames. Tightened from the
+    # old "errors tolerated" contract: a per-lap crash here is exactly the
+    # --no-llm class of bug (#166) this test now guards against.
+    error_events = [e for e in events if e["type"] == "error"]
+    assert not error_events, (
+        f"no-LLM happy path emitted {len(error_events)} error frame(s) "
+        f"(--no-llm class, #166): {error_events[:2]}"
+    )
 
     # Spot-check the LapDecision schema on the first lap payload.
     first_lap = lap_events[0]["data"]

@@ -206,3 +206,13 @@ exclude = ["legacy/", ".nb_py/", "notebooks/", "src/agents/", "src/nlp/", "src/d
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
+# -ra prints a summary of skips/xfails so CI shows the data/gpu/llm-gated tests
+# instead of silently swallowing them (Testing audit T-4).
+addopts = "-ra"
+markers = [
+    "unit: pure hermetic unit test (no data, network, GPU, or LLM)",
+    "contract: API/schema/SSE contract test (hermetic, fixture-backed)",
+    "data: requires the HF dataset/model weights (skipped on CI runners)",
+    "gpu: requires CUDA",
+    "llm: requires a live or stubbed LLM backend",
+]
