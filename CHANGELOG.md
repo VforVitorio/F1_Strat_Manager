@@ -11,6 +11,14 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.3](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.2...v1.6.3) (2026-07-05)
+
+
+### Documentation
+
+* add 2026-regulation concept-drift readiness audit ([36148d6](https://github.com/VforVitorio/F1-StratLab/commit/36148d645504a9a492e54c8b23c731b72d3d302a))
+* add 2026-regulation concept-drift readiness audit ([c708b8e](https://github.com/VforVitorio/F1-StratLab/commit/c708b8ec58e270c35c35fbb2d36ab751ca77be71))
+
 ## [1.6.2](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.1...v1.6.2) (2026-07-04)
 
 
