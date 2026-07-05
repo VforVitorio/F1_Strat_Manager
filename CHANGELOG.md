@@ -11,6 +11,15 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.4](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.3...v1.6.4) (2026-07-05)
+
+
+### Documentation
+
+* **audits:** add arcade, ML-eval and docs-accuracy audit plans ([dd390bd](https://github.com/VforVitorio/F1-StratLab/commit/dd390bd67d9ec68abd1d1e6540e146614a6b2a73))
+* **audits:** add arcade, ML-eval and docs-accuracy audit plans ([caf4347](https://github.com/VforVitorio/F1-StratLab/commit/caf4347365528f1d879e00d4be4eea77e2f95f2e))
+* **audits:** promote arcade, ML-eval and docs-accuracy audit plans ([574acca](https://github.com/VforVitorio/F1-StratLab/commit/574accaf25fc48c2032ca56a5ea2517d08f888f0))
+
 ## [1.6.3](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.2...v1.6.3) (2026-07-05)
 
 
