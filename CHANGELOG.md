@@ -11,6 +11,22 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.5](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.4...v1.6.5) (2026-07-05)
+
+
+### Documentation
+
+* **audits:** add P4 CLI surface audit plan ([fef83ab](https://github.com/VforVitorio/F1-StratLab/commit/fef83abb1762a2a48edf0767bc440d19431976e0))
+* **audits:** add P4 CLI surface audit plan ([7a4da77](https://github.com/VforVitorio/F1-StratLab/commit/7a4da7735f6be4f5f2b38a3434fa7d7223175e73))
+* **audits:** add P5 data-engineering audit plan ([5679490](https://github.com/VforVitorio/F1-StratLab/commit/5679490e6332d036cda3555766b3980c4c3816b4))
+* **audits:** add P5 data-engineering audit plan ([dcda30c](https://github.com/VforVitorio/F1-StratLab/commit/dcda30cc6384b408716e0ca949a7ac0bac96aebd))
+* **audits:** add security & prompt-injection audit plan ([0be2ce9](https://github.com/VforVitorio/F1-StratLab/commit/0be2ce9cfb86bb994882caa34a11b7ad31cabd31))
+* **audits:** add security & prompt-injection audit plan ([4fe8094](https://github.com/VforVitorio/F1-StratLab/commit/4fe8094e8b33e234bbfc7310d1f4597a66b0ff39))
+* **audits:** promote P4 CLI audit plan to main ([9882b45](https://github.com/VforVitorio/F1-StratLab/commit/9882b45be37cb800f0639e82780312e3126a13e2))
+* **audits:** promote P5 data-engineering audit plan to main ([b774014](https://github.com/VforVitorio/F1-StratLab/commit/b774014ac04d8111ecb8c4fd33f8850e0dce79f2))
+* **audits:** promote security audit plan to main ([af3b2ef](https://github.com/VforVitorio/F1-StratLab/commit/af3b2eff1adf2db5fb0881fdc48862b5a77bdde0))
+* **readme:** lead with product value and fix agent count ([05212ef](https://github.com/VforVitorio/F1-StratLab/commit/05212ef533176b8c860ac7222ceb9bf87a269cd7))
+
 ## [1.6.4](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.3...v1.6.4) (2026-07-05)
 
 
