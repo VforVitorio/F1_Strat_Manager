@@ -11,6 +11,45 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.6](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.5...v1.6.6) (2026-07-07)
+
+
+### Documentation
+
+* **audits:** add DevEx contributor-setup audit plan ([3c5c0b3](https://github.com/VforVitorio/F1-StratLab/commit/3c5c0b3994406bdd6ee13421b7d1b40faca53d99))
+* **audits:** add DevEx contributor-setup audit plan ([b832509](https://github.com/VforVitorio/F1-StratLab/commit/b832509dbeaced3dae1c06f13396e3773f7bfbaf))
+* **audits:** add LLM cost & latency audit plan ([7417c75](https://github.com/VforVitorio/F1-StratLab/commit/7417c757b3764011b7e04793faae09375e44a5d4))
+* **audits:** add LLM cost & latency audit plan ([2266a41](https://github.com/VforVitorio/F1-StratLab/commit/2266a414b007a0c55a42aebce48c97cfb14a7449))
+* **audits:** add NLP / team-radio pipeline audit plan ([2990a50](https://github.com/VforVitorio/F1-StratLab/commit/2990a501f88f919b0fcfcecf0a4ded7dc2889d45))
+* **audits:** add NLP / team-radio pipeline audit plan ([f26661d](https://github.com/VforVitorio/F1-StratLab/commit/f26661da6ba605db8d94ce0f3d71bed2e61c654b))
+* **audits:** add packaging, release & CI/CD audit plan ([a04f65e](https://github.com/VforVitorio/F1-StratLab/commit/a04f65ee2c74daef6db039bef9f1c1c492f97292))
+* **audits:** add packaging, release & CI/CD audit plan ([59d9e0b](https://github.com/VforVitorio/F1-StratLab/commit/59d9e0bf90a01bdbe61fc51e257588f0090967e5))
+* **audits:** promote DevEx audit plan to main ([e85f4db](https://github.com/VforVitorio/F1-StratLab/commit/e85f4db3020dee12dd447767a7243609c38fc262))
+* **audits:** promote LLM cost & latency audit plan to main ([7bc8481](https://github.com/VforVitorio/F1-StratLab/commit/7bc8481df48c199717e5dc78a49c2d59d5cabc10))
+* **audits:** promote NLP / team-radio pipeline audit to main ([7e256fe](https://github.com/VforVitorio/F1-StratLab/commit/7e256feec7d3d2de08c09506fa70c1f5443bee2a))
+* **audits:** promote packaging & CI/CD audit plan to main ([a6ff04f](https://github.com/VforVitorio/F1-StratLab/commit/a6ff04f721c5dafc269857ff5c739daa85c2319c))
+* **research:** add ecosystem repo-integration architecture note ([d40b6ea](https://github.com/VforVitorio/F1-StratLab/commit/d40b6eae1bafe9168eb6994ddcc3f918af9c1ad3))
+* **research:** add ecosystem repo-integration architecture note ([b51bf97](https://github.com/VforVitorio/F1-StratLab/commit/b51bf971d74d1f836f07eaac32c0d1ddd36780e5))
+* **research:** add gridmind LoRA design ([7c2cb54](https://github.com/VforVitorio/F1-StratLab/commit/7c2cb5438606d863215a887b211e12ff9f344864))
+* **research:** add gridmind LoRA design ([5068343](https://github.com/VforVitorio/F1-StratLab/commit/50683433dfdb6935ef508a1a01c918bf80e5a043))
+* **research:** add pit-wall realism + telemetry-surface design ([db7fb44](https://github.com/VforVitorio/F1-StratLab/commit/db7fb44cb25d51b6dcdc2d9abba4e3947ac57452))
+* **research:** add pit-wall realism + telemetry-surface design ([ad8dfc2](https://github.com/VforVitorio/F1-StratLab/commit/ad8dfc2337d2755a3874e26b1145a4744fae0cd8))
+* **research:** add pitlab Studio design ([3302648](https://github.com/VforVitorio/F1-StratLab/commit/33026484ac8fbe53cc9dc073129e3158bb8399bd))
+* **research:** add pitlab Studio design ([2ae226b](https://github.com/VforVitorio/F1-StratLab/commit/2ae226b6be7eff29cf3fe314c3e48c8abdd2c75d))
+* **research:** add radiogate deception + auto-labeling design ([6a53ffe](https://github.com/VforVitorio/F1-StratLab/commit/6a53ffed92e81e9d1640a4d1fa6f08b0309fe373))
+* **research:** add radiogate deception + auto-labeling design ([1e11430](https://github.com/VforVitorio/F1-StratLab/commit/1e11430f2421bc9ca3aca9c1b761d5ac679948f5))
+* **research:** add real-time OpenF1 consumer design ([5b659ff](https://github.com/VforVitorio/F1-StratLab/commit/5b659ff8a83ab8e582cb5782497d1efa50d85daa))
+* **research:** add real-time OpenF1 consumer design ([faf2937](https://github.com/VforVitorio/F1-StratLab/commit/faf2937dfc562c0687538faab2894cddeaa872dd))
+* **research:** add Rival Agent TFM design ([b458d08](https://github.com/VforVitorio/F1-StratLab/commit/b458d0890f5561b66c9f4bce86144cf6a0a26780))
+* **research:** add Rival Agent TFM design ([4bcd4ea](https://github.com/VforVitorio/F1-StratLab/commit/4bcd4ea32ef0f2ab1f61581fa96b76d93f65bf27))
+* **research:** promote ecosystem repo-integration note to main ([3af311b](https://github.com/VforVitorio/F1-StratLab/commit/3af311b997289378167cc41d27a9f2f28d5bd2be))
+* **research:** promote gridmind LoRA design to main ([373fab9](https://github.com/VforVitorio/F1-StratLab/commit/373fab9fe5faf29af68efca94602eaba9411dcd9))
+* **research:** promote pit-wall realism + telemetry-surface design to main ([8e12e15](https://github.com/VforVitorio/F1-StratLab/commit/8e12e15dd81518d9f0085ed362a002d6c7b43c38))
+* **research:** promote pitlab Studio design to main ([72b3e5e](https://github.com/VforVitorio/F1-StratLab/commit/72b3e5eb8767cff826fa98b4fc64bf8de7c5ed3b))
+* **research:** promote radiogate design to main ([4113ff0](https://github.com/VforVitorio/F1-StratLab/commit/4113ff0d381fe29a3ebf42faaa0da0233032eb1b))
+* **research:** promote real-time OpenF1 consumer design to main ([b220ed1](https://github.com/VforVitorio/F1-StratLab/commit/b220ed1eeb0692bb854fcc73d0bb996f4876f8ae))
+* **research:** promote Rival Agent TFM design to main ([7a314f5](https://github.com/VforVitorio/F1-StratLab/commit/7a314f5e13789b64c738b70117b2f611b8e0cf8a))
+
 ## [1.6.5](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.4...v1.6.5) (2026-07-05)
 
 
