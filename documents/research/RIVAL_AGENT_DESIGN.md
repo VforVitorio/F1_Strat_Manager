@@ -448,6 +448,13 @@ Two honest clarifications the TFM text must make:
   the same code is correct when the input is a live feed where the column does not
   exist. This "derive, do not read" rule is the single most important implementation
   discipline for observability honesty.
+- **Rival raw car telemetry (throttle/brake/ERS/speed traces) is broadcast-tier, not
+  timing-screen-tier.** FastF1 exposes it because it comes from the world TV feed, so a
+  replay/analysis surface (the Arcade H2H view) may legitimately DISPLAY it, but it is
+  NOT on the live timing screen a pit wall reads in real time and it is NOT part of the
+  derived-observable ladder above. The Rival Agent's v1 feature set therefore EXCLUDES
+  rival raw telemetry traces; they stay display-only. (Reconciles with the pit-wall
+  audit's "observed-broadcast" tier, `documents/research/PITWALL_REALISM_AND_TELEMETRY_SURFACE.md`.)
 
 ### 4.2 Uncertainty representation
 
