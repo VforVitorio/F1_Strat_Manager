@@ -11,6 +11,18 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.7](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.6...v1.6.7) (2026-07-07)
+
+
+### Documentation
+
+* **audits:** add cross-audit implementation roadmap ([3e42914](https://github.com/VforVitorio/F1-StratLab/commit/3e42914a3b5687a16a52b8c31cbaa3aa892eafb8))
+* **audits:** add cross-audit implementation roadmap ([2852af5](https://github.com/VforVitorio/F1-StratLab/commit/2852af5d4728259137722c2f283fb35cd1b71a79))
+* **audits:** promote cross-audit implementation roadmap to main ([cec6297](https://github.com/VforVitorio/F1-StratLab/commit/cec6297e03323e32bb73989cab2ddea6585d9040))
+* **research:** add box-bot multi-platform design ([7739201](https://github.com/VforVitorio/F1-StratLab/commit/77392014faa16c155f00f4cdc03a54c45287e1d2))
+* **research:** add box-bot multi-platform design ([6677167](https://github.com/VforVitorio/F1-StratLab/commit/6677167c3bd3ce8630e0f5b731e0df661ec0743e))
+* **research:** promote box-bot design to main ([793afd7](https://github.com/VforVitorio/F1-StratLab/commit/793afd75eab7c691d672571e02521e018d598258))
+
 ## [1.6.6](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.5...v1.6.6) (2026-07-07)
 
 
