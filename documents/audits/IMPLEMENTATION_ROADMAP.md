@@ -1,6 +1,6 @@
 # F1 StratLab - Cross-audit implementation roadmap
 
-This document sequences the findings from the **15 Fable code audits** and the **8 research/design docs** into an executable sprint plan. It is the "what to do with all those audits" map: it resolves cross-audit dependencies, groups the fix-once-unblocks-many work, and applies Víctor's priority directive. It does not restate each finding (those live in the audit docs under `documents/audits/` + `documents/research/`, and are digested in the Claude-side memory `project_audit_findings_digest`). Every item points to its GitHub epic / sub-issue.
+This document sequences the findings from the **16 Fable code audits** and the **10 research/design docs** into an executable sprint plan. It is the "what to do with all those audits" map: it resolves cross-audit dependencies, groups the fix-once-unblocks-many work, and applies Víctor's priority directive. It does not restate each finding (those live in the audit docs under `documents/audits/` + `documents/research/`, and are digested in the Claude-side memory `project_audit_findings_digest`). Every item points to its GitHub epic / sub-issue.
 
 Authored 2026-07-07 (Claude, no Fable). Sprint 1 (Foundations) is already done.
 
@@ -11,6 +11,20 @@ Authored 2026-07-07 (Claude, no Fable). Sprint 1 (Foundations) is already done.
 **MIGRATION (frontend #25 + pit-wall #281) + AJUSTES/MEJORAS (audit fixes) come BEFORE any NEW features/repos/agents** (radiogate, gridmind, box-bot, Rival Agent build, real-time consumer, pitlab). Migration and fixes first; new features last.
 
 One deadline overrides pure ordering: the **IEEE paper + AEPIA award (cierre 31-jul-2026)** need the eval/metrics work done early, so the paper-critical track (ML-eval Ph1-2 + Docs metric reconcile) runs near the front even though it is "validation," not "migration."
+
+---
+
+## 0b. Reconciliation update (2026-07-07, from `PROGRAM_COMPLETENESS_REVIEW.md`)
+
+A closing red-team pass found this roadmap was written before the last three docs landed. Deltas that govern the sprints below:
+
+- **Count**: the program is **16 code audits + 10 designs** (not 15 + 8). Landed after this roadmap: the **RAG audit** (epic #318, sub #319-323), **ECOSYSTEM_DATA_CONTRACTS**, **AGENT_ORCHESTRATION_FLOW**. The **P1 Backend** audit doc lives in the submodule (`src/telemetry/docs/audits/AUDIT_P1_BACKEND.md`), not `documents/audits/`.
+- **Paper track decoupled (deadline fix)**: ML-eval #207 (leakage) + Docs #213 (metric reconcile) + NR-08 need only the **eval harness**, NOT the shared engine. Run the Sprint-3 paper track **in parallel with / not blocked by** Sprint 2 - AEPIA closes 31-jul and the shared-engine refactor is the riskiest single item. NR-08 is a **do-first** 5-minute check, not "opportunistic". ML-eval E-01 needs an explicit scope call (minimal multi-race protocol now for the paper vs full protocol later as the TFM baseline).
+- **Goldens have ONE owner**: **Testing #182** owns the golden fixtures; ML-eval #206 and the agent-flow v2 parity gate **consume** them, they do not create parallel goldens.
+- **Shared engine = the v2 graph**: Sprint 2's shared-engine extraction follows the `AGENT_ORCHESTRATION_FLOW.md` additive `StateGraph` design (multi-agent architecture kept intact), coding against the fixed `ECOSYSTEM_DATA_CONTRACTS.md` schemas.
+- **RAG #318 into the sprints**: RAG Phase 3 (eval) folds into the Sprint-3 shared eval harness; RAG-01/RAG-02 (season scoping + grounding) into Sprint 4 (data integrity).
+- **Two coverage gaps to own** (not yet audited): the **voice stack** has no audit owner; and the **legal/ToS posture of the already-published HF dataset** (incl. the 529 radio MP3s radiogate said to revisit) needs a call before scaling.
+- **Two 5-minute checks first** (verify-before-implement): NR-08 (SetFit `predict_proba` column order) and the P2b torch-thread-safety test that gates the parallel-fan-out latency win.
 
 ---
 
