@@ -129,7 +129,7 @@ After install, a quick sanity:
 
 ```bash
 # CLI path — runs one lap with no LLM spend
-f1-sim VER Melbourne "Red Bull Racing" --year 2025 --no-llm --lap-range 1 1
+f1-sim Melbourne VER "Red Bull Racing" --year 2025 --no-llm --laps 1-1
 
 # Arcade path — opens the replay with strategy pipeline warmup
 f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --strategy
