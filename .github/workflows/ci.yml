@@ -41,11 +41,32 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     steps:
+      # checkout MUST run before paths-filter: on `push` events the filter
+      # falls back to `git diff` and needs the repo + history (fetch-depth:0).
       - uses: actions/checkout@v7
         with:
           submodules: true
+          fetch-depth: 0
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            backend:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+              - 'src/telemetry'
+
+      - name: Skip — no backend/test/dependency changes
+        if: steps.changes.outputs.backend != 'true'
+        run: echo "No backend/test/dependency changes; skipping pytest."
 
       - name: Install uv
+        if: steps.changes.outputs.backend == 'true'
         uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
@@ -54,6 +75,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.changes.outputs.backend == 'true'
         run: uv sync --all-extras --frozen
 
       # Guard against a refactor silently dropping the suite to a handful of
@@ -61,12 +83,14 @@ jobs:
       # regardless of skip, so the floor is stable even though most tests are
       # data-gated on CI runners (Testing audit T-4).
       - name: Collected-count floor
+        if: steps.changes.outputs.backend == 'true'
         run: |
           n=$(uv run pytest --co -q | grep -c "::" || true)
           echo "collected $n test nodes"
           test "$n" -ge 40
 
       - name: Run tests
+        if: steps.changes.outputs.backend == 'true'
         run: uv run pytest -v --cov=src --cov-report=term-missing
 
   lint:
@@ -91,9 +115,31 @@ jobs:
     name: typecheck
     runs-on: ubuntu-latest
     steps:
+      # checkout MUST run before paths-filter: on `push` events the filter
+      # falls back to `git diff` and needs the repo + history (fetch-depth:0).
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            backend:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+              - 'src/telemetry'
+
+      - name: Skip — no backend/test/dependency changes
+        if: steps.changes.outputs.backend != 'true'
+        run: echo "No backend/test/dependency changes; skipping mypy."
 
       - name: Install uv
+        if: steps.changes.outputs.backend == 'true'
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -101,6 +147,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.changes.outputs.backend == 'true'
         run: uv sync --extra dev --frozen
 
       # Mypy is incremental: re-runs only re-analyse files whose source
@@ -108,6 +155,7 @@ jobs:
       # pyproject.toml (mypy config) and every file under src/rag/ so the
       # cache invalidates whenever the analysed surface actually moves.
       - name: Cache mypy
+        if: steps.changes.outputs.backend == 'true'
         uses: actions/cache@v6
         with:
           path: .mypy_cache
@@ -116,4 +164,5 @@ jobs:
             mypy-${{ runner.os }}-
 
       - name: Mypy
+        if: steps.changes.outputs.backend == 'true'
         run: uv run mypy src/rag/
