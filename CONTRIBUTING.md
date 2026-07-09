@@ -31,7 +31,7 @@ cp .env.example .env                         # add OPENAI_API_KEY here
 Run once to pre-populate the data cache on first launch:
 
 ```bash
-python -c "from f1_strat_manager.data_cache import ensure_setup; ensure_setup(show_progress=True)"
+python -c "from src.f1_strat_manager.data_cache import ensure_setup; ensure_setup(show_progress=True)"
 ```
 
 Three entry points after install (`pyproject.toml::[project.scripts]`):
