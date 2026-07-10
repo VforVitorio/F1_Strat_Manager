@@ -11,6 +11,30 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.6.8](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.7...v1.6.8) (2026-07-09)
+
+
+### Documentation
+
+* **audits:** add program completeness review + reconcile roadmap and Rival design ([d4bdb4e](https://github.com/VforVitorio/F1-StratLab/commit/d4bdb4e29c8c636b82ace36615a4220a79348dec))
+* **audits:** add RAG layer audit plan ([b747de6](https://github.com/VforVitorio/F1-StratLab/commit/b747de6f8a89be0a9e382b9f47e7c59d517485ea))
+* **audits:** add RAG layer audit plan ([3603e73](https://github.com/VforVitorio/F1-StratLab/commit/3603e73f4391937fa7b0b59e55f193e0ed360def))
+* **audits:** add voice stack audit plan ([e6594af](https://github.com/VforVitorio/F1-StratLab/commit/e6594aff61e1bc79f85637ba9f75cf3e9f364d8b))
+* **audits:** add voice stack audit plan ([e61356e](https://github.com/VforVitorio/F1-StratLab/commit/e61356e927f0b41f50a2ad7f41c67d54a09827a6))
+* **audits:** program completeness review + roadmap/Rival reconciliation ([d41e957](https://github.com/VforVitorio/F1-StratLab/commit/d41e957bb083d8800f212c12bd7f38bdeb7f72a1))
+* **audits:** promote program completeness review + reconciliation to main ([c7409c1](https://github.com/VforVitorio/F1-StratLab/commit/c7409c1a4d3daaa6cfcd84045eb22c65caea682b))
+* **audits:** promote RAG layer audit to main ([1366f8c](https://github.com/VforVitorio/F1-StratLab/commit/1366f8c43ee4064390d0c3e2563dccedd247b92b))
+* **audits:** promote voice stack audit to main ([51527f3](https://github.com/VforVitorio/F1-StratLab/commit/51527f37bb296bf058714e2f27e64ae8dc7f5021))
+* fix broken copy-paste commands (promote to main) ([2b07e22](https://github.com/VforVitorio/F1-StratLab/commit/2b07e229d9b7cb4f2cd6ed567949d3b0e966a932))
+* fix broken copy-paste commands in README/INSTALL/CONTRIBUTING ([5a7783b](https://github.com/VforVitorio/F1-StratLab/commit/5a7783be3e5072e013cc3ad65ccb82b66f88d4ac))
+* fix broken copy-paste commands in README/INSTALL/CONTRIBUTING ([be4f058](https://github.com/VforVitorio/F1-StratLab/commit/be4f05847ff0af136cc9cd291e03bb87e1e12c16)), closes [#212](https://github.com/VforVitorio/F1-StratLab/issues/212)
+* **research:** add agent-orchestration-flow design ([e18c4d6](https://github.com/VforVitorio/F1-StratLab/commit/e18c4d60b0814391c00b5f9098dfdcac2d8141bb))
+* **research:** add agent-orchestration-flow design ([2a9d691](https://github.com/VforVitorio/F1-StratLab/commit/2a9d691c491319e65d1a617ff222935b26c37c07))
+* **research:** add ecosystem data-contracts spec ([4bc37ba](https://github.com/VforVitorio/F1-StratLab/commit/4bc37ba50e0d01eb7c817fed61b4755db9c7233d))
+* **research:** add ecosystem data-contracts spec ([7b2c38e](https://github.com/VforVitorio/F1-StratLab/commit/7b2c38e0b8236741cdaf611ab7b2d030328896aa))
+* **research:** promote agent-orchestration-flow design to main ([f5b61f4](https://github.com/VforVitorio/F1-StratLab/commit/f5b61f420224da15a752e56acdabad423f8da7eb))
+* **research:** promote ecosystem data-contracts spec to main ([f8e7303](https://github.com/VforVitorio/F1-StratLab/commit/f8e7303082dcceed77c169a324dad4a01d308805))
+
 ## [1.6.7](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.6...v1.6.7) (2026-07-07)
 
 
