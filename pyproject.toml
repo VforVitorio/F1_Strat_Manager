@@ -141,12 +141,14 @@ voice = [
 where = ["."]
 include = ["src*", "scripts*"]
 
-# ── uv: PyTorch CUDA wheel routing ────────────────────────────────────────
+# ── uv: PyTorch wheel routing ─────────────────────────────────────────────
 # `uv sync` reads these blocks and pulls torch / torchvision from the right
-# index per platform: cu128 on Windows + Linux (NVIDIA RTX 40/50 series),
-# CPU on macOS (no CUDA). Plain pip ignores these tables, so pip users still
-# need to install torch manually with the matching wheel before `pip install -e .`.
-# Override CUDA version by editing the URL or adding a new [[tool.uv.index]] block.
+# index per platform: cu128 on Windows only (the dev/training box, NVIDIA RTX
+# 40/50 series), CPU everywhere else. Linux/macOS resolve to CPU wheels so CI
+# runners and CPU-only Linux installs stop downloading ~5 GB of unused CUDA
+# libraries (DevEx audit #251); a Linux GPU box can opt back into cu128 by
+# editing the markers. Plain pip ignores these tables, so pip users still need
+# to install torch manually with the matching wheel before `pip install -e .`.
 [[tool.uv.index]]
 name     = "pytorch-cu128"
 url      = "https://download.pytorch.org/whl/cu128"
@@ -159,12 +161,12 @@ explicit = true
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cpu",   marker = "sys_platform == 'darwin'" },
-    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu",   marker = "sys_platform != 'win32'" },
 ]
 torchvision = [
-    { index = "pytorch-cpu",   marker = "sys_platform == 'darwin'" },
-    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu",   marker = "sys_platform != 'win32'" },
 ]
 
 [tool.setuptools.package-data]
