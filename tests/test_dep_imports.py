@@ -224,11 +224,22 @@ def test_tiktoken_encoding_roundtrip():
 
     Used by the chat token-budget guard; a bump that drops the encoding
     name or changes the encode signature would silently break trimming.
+
+    ``get_encoding`` fetches the vocab over HTTP on a cold cache, so an
+    upstream outage (openaipublic 503) must skip - not fail - the branch
+    (PK-09 #296). A genuine contract break (unknown encoding name ->
+    ValueError) still fails; only network errors are skipped.
     """
     pytest.importorskip("tiktoken")
     import tiktoken
 
-    enc = tiktoken.get_encoding("cl100k_base")
+    try:
+        enc = tiktoken.get_encoding("cl100k_base")
+    except ValueError:
+        raise  # unknown encoding name = a real contract regression; must fail
+    except Exception as exc:  # noqa: BLE001 - cold-cache vocab fetch is network-bound; an upstream outage must skip, not red the branch
+        pytest.skip(f"tiktoken vocab fetch failed (environment/network): {exc}")
+
     tokens = enc.encode("hello world")
     assert len(tokens) >= 1
     assert enc.decode(tokens) == "hello world"
