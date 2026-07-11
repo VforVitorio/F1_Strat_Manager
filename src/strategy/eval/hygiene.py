@@ -13,11 +13,14 @@ the 2025 test set, so they inflate only the OPERATING-POINT metrics
 (precision/recall/F1 at that threshold). The threshold-FREE headline numbers the
 paper actually reports - AUC-PR and AUC-ROC - are computed from probabilities
 and are unaffected, so they clear. This module re-selects the overtake threshold
-on val-2024 (the honest split) to show the operating-point delta, and does the
-same for the safety-car threshold (#363) - where the correction collapses because
-val-2024 is SC-positive-sparse, evidence the leaked operating point was
-test-overfit. The SC target window cannot be retro-selected (only the 3-lap model
-is persisted), so its AUC-PR keeps an explicit test-window-selected caveat.
+on 2024 to show the operating-point delta, and does the same for the safety-car
+threshold (#363). CAVEAT: 2024 is IN the train set for both N12 and N14 (they
+train on 2023+2024; 2024 was only Optuna inner-val), so these re-selections are
+in-train, not held-out. For overtake the memorization is mild (28k pairs), so the
+threshold is a reasonable operating point; for SC it collapses on test, exposing
+that N14 has NO honest validation split for an operating threshold (report SC
+threshold-free). The SC target window cannot be retro-selected (only the 3-lap
+model is persisted), so its AUC-PR keeps an explicit test-window-selected caveat.
 """
 
 from __future__ import annotations
@@ -87,17 +90,29 @@ def audit_findings() -> list[ProvenanceEntry]:
             "threshold",
             "safety_car",
             CONTAMINATED,
-            "argmax-F2 threshold AND the best target-window both on the 2025 test set",
+            "argmax-F2 threshold AND the target-window both selected on the 2025 test set",
             "N14_sc_model.ipynb (PR-curve + window-comparison cells)",
-            "threshold -> operating-point optimistic; window chosen by max-lift on test -> the headline "
-            "AUC-PR 0.0723 is itself optimistic (a max over 3 candidates on test), NOT clean",
+            "threshold -> operating-point optimistic; the window was chosen by max-LIFT on test "
+            "(3-lap lift 1.673x). The reported AUC-PR 0.0723 is in fact the LOWEST of the three windows "
+            "(0.0723/0.0987/0.1165), not a max - the test-selection bias is on the lift, so the headline "
+            "keeps a test-window-selected caveat, not an inflated-AUC claim",
+        ),
+        ProvenanceEntry(
+            "sc Platt calibrator",
+            "calibrator",
+            "safety_car",
+            UNDERDOCUMENTED,
+            "fit on 2024 probabilities, but 2024 is IN the train set (config fitted_on='val_2024' is misleading)",
+            "N14_sc_model.ipynb (calibration cell)",
+            "resubstitution fit; measured impact low (test ECE 0.0347 < 0.05, AUC-PR invariant under a "
+            "monotone Platt map) but a provenance audit must record it",
         ),
         ProvenanceEntry(
             "best_threshold=0.522",
             "threshold",
             "undercut",
             CLEAN,
-            "argmax-F1 on the calibrated val-2024 split",
+            "argmax-F1 on the calibrated val-2024 split (verified CLEAN in the #207 adversarial pass)",
             'N16_undercut.ipynb ("Threshold on calibrated val 2024")',
             "textbook-correct; the 2025 test set is only applied afterwards",
         ),
@@ -173,14 +188,16 @@ def _operating_point(y: np.ndarray, proba: np.ndarray, threshold: float) -> dict
 
 
 def correct_overtake_threshold() -> dict[str, Any] | None:
-    """Re-select the overtake threshold on val-2024 and show the operating-point delta.
+    """Re-select the overtake threshold on 2024 and show the operating-point delta.
 
     The E-02 correction for the worst contaminated item: pick the threshold by
-    argmax-F1 on the 2024 validation slice (never touching test), then report its
-    operating point on the 2025 test set next to the leaked 0.7976's operating
-    point on the same test set. The leaked threshold's F1 is maximal on test by
-    construction (it was fit there); the corrected threshold's F1 is the honest
-    number. Returns ``None`` if the holdout is absent.
+    argmax-F1 on the 2024 slice, then report its operating point on the 2025 test
+    set next to the leaked 0.7976's operating point on the same test set. CAVEAT:
+    2024 is IN N12's train set (2023+2024; 2024 was only Optuna inner-val), so
+    this re-selection is in-train, not a held-out val - but with ~28k pairs the
+    memorization is mild, so the re-selected threshold is a reasonable operating
+    point (unlike SC, which collapses). The leaked threshold's F1 is maximal on
+    test by construction (it was fit there). Returns ``None`` if absent.
     """
     val = load_overtake_predictions(year=2024)
     test = load_overtake_predictions(year=2025)
@@ -202,20 +219,22 @@ def correct_overtake_threshold() -> dict[str, Any] | None:
         "corrected_test_operating_point": _operating_point(
             y_test, proba_test_raw, corrected_threshold
         ),
-        "note": "threshold selected on val-2024; both operating points evaluated on the 2025 test set",
+        "note": "threshold selected on 2024 (in-train; 2024 is part of N12's 2023+2024 train set, "
+        "mild memorization at ~28k pairs); both operating points evaluated on the 2025 test set",
     }
 
 
 def correct_sc_threshold() -> dict[str, Any] | None:
-    """Re-select the SC operating threshold on val-2024 (argmax-F2) and show the delta.
+    """Try to re-select the SC threshold on 2024 - and expose that no honest split exists.
 
     The SC threshold 0.2335 was argmax-F2 on test-2025 (pre-calibration, N14
-    Step 5), so the correction sweeps F2 on the 2024 validation raw scores and
-    reports its test operating point next to the leaked one. IMPORTANT: val-2024
-    carries very few SC-positive laps, so the val-selected threshold is
-    high-variance - a degenerate corrected operating point is itself the finding
-    (the leaked operating point was a product of test overfitting and does not
-    reproduce off-test). Returns ``None`` if the holdout is absent.
+    Step 5). CRITICAL: N14 trains on 2023+2024 and tests on 2025, so it has NO
+    held-out validation split. This sweeps F2 on 2024, but 2024 is IN the train
+    set, so the re-selection is IN-TRAIN (resubstitution): it lands on the
+    train-memorization boundary (~0.6358, where 2024's few positives sit) and
+    collapses to F2 0.0 on test. The collapse does NOT prove 0.2335 was
+    test-overfit - it demonstrates that no honest operating threshold exists
+    without a fresh val split or retraining. Returns ``None`` if absent.
     """
     from src.strategy.eval.calibration import load_sc_predictions
 
@@ -233,17 +252,18 @@ def correct_sc_threshold() -> dict[str, Any] | None:
     return {
         "leaked_threshold": _LEAKED_SC_THRESHOLD,
         "corrected_threshold": round(corrected_threshold, 4),
-        "val_positive_count": int(y_val.sum()),
-        "val_size": int(len(y_val)),
+        "in_train_2024_positive_count": int(y_val.sum()),
+        "in_train_2024_size": int(len(y_val)),
         "leaked_test_operating_point": _operating_point(
             y_test, proba_test_raw, _LEAKED_SC_THRESHOLD
         ),
         "corrected_test_operating_point": _operating_point(
             y_test, proba_test_raw, corrected_threshold
         ),
-        "note": "F2 threshold selected on val-2024 raw scores; both operating points on 2025 test. "
-        "val-2024 has few SC positives so the corrected point is high-variance - the collapse is the "
-        "evidence that the leaked operating point was test-overfit",
+        "note": "the F2 threshold 'selected on 2024' is IN-TRAIN (2024 is a subset of the 2023+2024 "
+        "train set), NOT a held-out split; it lands on the train-memorization boundary and collapses "
+        "on test. This shows N14 has no honest validation split for an operating threshold - the paper "
+        "should report SC threshold-free, not re-select an operating point",
     }
 
 
@@ -274,7 +294,7 @@ def sc_window_sensitivity() -> dict[str, Any] | None:
     per_window = {}
     for target in _SC_TARGETS:
         per_window[target] = {
-            "val_2024_auc_pr": round(
+            "in_train_2024_auc_pr": round(
                 float(average_precision_score(val_frame[target].astype(int), val_proba)), 4
             ),
             "test_2025_auc_pr": round(
@@ -286,9 +306,10 @@ def sc_window_sensitivity() -> dict[str, Any] | None:
         "per_window_auc_pr": per_window,
         "retro_selectable": False,
         "note": "only the 3-lap model is persisted; the 5/7-lap models needed to re-select the window "
-        "on val are not on disk (retraining out of scope). The reported SC AUC-PR 0.0723 keeps the "
-        "caveat that its window was test-selected; the table is single-model sensitivity, not the "
-        "original 3-model selection",
+        "are not on disk (retraining out of scope). The 2024 column is IN-TRAIN (2024 subset of "
+        "train), so its high AUC-PR (0.88) is resubstitution, NOT validation - it only shows the metric "
+        "is window-unstable. The reported SC AUC-PR 0.0723 keeps its test-window-selected caveat; this "
+        "is single-model sensitivity, not the original 3-model selection",
     }
 
 
@@ -303,7 +324,7 @@ def _render_overtake_correction(correction: dict[str, Any] | None) -> list[str]:
         *lines,
         f"- leaked threshold {correction['leaked_threshold']} (selected on test): "
         f"P {leaked['precision']} / R {leaked['recall']} / F1 {leaked['f1']} on 2025 test",
-        f"- corrected threshold {correction['corrected_threshold']} (selected on val-2024): "
+        f"- corrected threshold {correction['corrected_threshold']} (selected on 2024, in-train): "
         f"P {fixed['precision']} / R {fixed['recall']} / F1 {fixed['f1']} on 2025 test",
         f"- {correction['note']}",
     ]
@@ -320,8 +341,8 @@ def _render_sc_correction(correction: dict[str, Any] | None) -> list[str]:
         *lines,
         f"- leaked threshold {correction['leaked_threshold']} (F2 on test): "
         f"P {leaked['precision']} / R {leaked['recall']} / F2 {leaked['f2']} on 2025 test",
-        f"- corrected threshold {correction['corrected_threshold']} (F2 on val-2024, "
-        f"{correction['val_positive_count']}/{correction['val_size']} positive): "
+        f"- 'corrected' threshold {correction['corrected_threshold']} (F2 on 2024, IN-TRAIN, "
+        f"{correction['in_train_2024_positive_count']}/{correction['in_train_2024_size']} positive): "
         f"P {fixed['precision']} / R {fixed['recall']} / F2 {fixed['f2']} on 2025 test",
         f"- {correction['note']}",
     ]
@@ -333,11 +354,11 @@ def _render_sc_window(window: dict[str, Any] | None) -> list[str]:
     if window is None:
         return [*lines, "- holdout absent on disk; sensitivity not computed this run"]
     lines += [
-        "| window | val-2024 AUC-PR | test-2025 AUC-PR |",
+        "| window | 2024 AUC-PR (in-train) | test-2025 AUC-PR |",
         "|---|---|---|",
     ]
     for target, aucs in window["per_window_auc_pr"].items():
-        lines.append(f"| {target} | {aucs['val_2024_auc_pr']} | {aucs['test_2025_auc_pr']} |")
+        lines.append(f"| {target} | {aucs['in_train_2024_auc_pr']} | {aucs['test_2025_auc_pr']} |")
     return [*lines, "", f"- {window['note']}"]
 
 
@@ -370,17 +391,22 @@ def _render(
         f"- {len(contaminated)} contaminated items (overtake threshold; safety-car threshold + window). "
         "All other thresholds and aggregate features are clean or non-target.",
         "- **Overtake headline clears**: AUC-PR 0.5491 / AUC-ROC 0.8758 are threshold-free and involve no "
-        "window selection; the threshold leakage touches only their operating point, corrected above.",
-        "- **Safety-car operating threshold is NOT robustly recoverable**: re-selecting on val-2024 "
-        "collapses the operating point (val-2024 has too few SC positives), which is itself the evidence "
-        "that the leaked 0.2335 was test-overfit. The paper should report SC threshold-free and not claim "
-        "a fixed operating threshold.",
-        "- **Safety-car window cannot be retro-selected**: only the 3-lap model is persisted, so the "
-        "{3,5,7}-lap window selected on test-2025 cannot be honestly re-chosen without retraining the "
-        "5/7-lap models. The reported SC AUC-PR 0.0723 therefore keeps an explicit test-window-selected "
-        "caveat.",
+        "window selection; the threshold leakage touches only their operating point. NOTE the overtake "
+        "'correction' below is also in-train (N12 trains final on 2023+2024, 2024 was only Optuna "
+        "inner-val), but with 28k pairs the memorization is mild, so its re-selected threshold is a "
+        "reasonable operating point rather than a collapse.",
+        "- **Safety-car has NO honest validation split**: N14 trains on 2023+2024 and tests on 2025, so "
+        "there is no held-out split to re-select an operating threshold on. Re-selecting on 2024 is "
+        "in-train (resubstitution) and collapses on test - evidence that an honest SC operating threshold "
+        "does not exist without a fresh val split or retraining, NOT that 0.2335 was specifically "
+        "test-overfit. The paper should report SC threshold-free.",
+        "- **Safety-car window cannot be retro-selected**: only the 3-lap model is persisted, and the "
+        "window was originally chosen by max-lift on test-2025, so it cannot be honestly re-chosen "
+        "without retraining the 5/7-lap models. The reported SC AUC-PR 0.0723 (the lowest of the three "
+        "windows) keeps an explicit test-window-selected caveat.",
         "- **Remaining action before freeze**: pin a year filter in N03 `load_all_races` to close the "
-        "circuit_cluster underdocumentation.",
+        "circuit_cluster underdocumentation; and give SC/overtake a real held-out val split (or nested "
+        "CV) if a defensible operating threshold is ever needed.",
         "- Every other headline (undercut 0.6739, pit 0.487, pace 0.4104, tire 0.7078, sentiment 0.84) is "
         "unaffected by these findings.",
     ]

@@ -59,7 +59,7 @@ def test_sc_threshold_correction_does_not_beat_test_fit():
 
     correction = correct_sc_threshold()
     assert correction is not None
-    assert correction["val_positive_count"] >= 0
+    assert correction["in_train_2024_positive_count"] >= 0
     leaked_f2 = correction["leaked_test_operating_point"]["f2"]
     corrected_f2 = correction["corrected_test_operating_point"]["f2"]
     assert corrected_f2 <= leaked_f2 + 1e-9
