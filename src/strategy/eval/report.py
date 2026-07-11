@@ -1,0 +1,167 @@
+"""E-15 provenance-header contract shared by every eval report.
+
+Every report the harness emits (metrics registry, calibration, regeneration)
+carries the same header so any number can be traced back to the exact
+artifacts, dataset snapshot, regulation era and harness version that produced
+it. Without this stamp a 2026 retraining makes every old report ambiguous
+(which model? which season? which code?).
+
+WHERE TO CHANGE IF THE PROVENANCE CONTRACT CHANGES:
+- add a field to ``ReportHeader`` + set it in ``build_header``; every report
+  writer downstream picks it up for free (registry.py, calibration.py, ...).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from src.f1_strat_manager.data_cache import _find_repo_root
+
+SCHEMA_VERSION = "1"
+ERA_TAG = "2022-2025"  # regulation era these numbers are valid for
+
+
+def _harness_sha() -> str:
+    """Short git SHA of the repo the harness runs from, or ``unknown``.
+
+    Returns ``unknown`` when running outside a checkout (e.g. an installed
+    tool venv) so a report is never blocked on git being available.
+    """
+    repo = _find_repo_root()
+    if repo is None:
+        return "unknown"
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+        return out.stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return "unknown"
+
+
+def artifact_hash(path: Path) -> str:
+    """First 12 hex chars of the SHA-256 of a model artifact.
+
+    Short enough to stay readable inside a committed markdown header, long
+    enough to pin an artifact version unambiguously in practice.
+    """
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return digest[:12]
+
+
+@dataclass
+class ReportHeader:
+    """Provenance stamp attached to every eval report (E-15).
+
+    Invariants:
+    - ``harness_sha`` pins the code; ``artifacts`` pins the model weights;
+      together they make a report reproducible.
+    - ``generated_at`` is provenance only and is NOT part of report equality
+      (two runs of the same code on the same data are "equal" bar the clock).
+    - ``llm`` is ``none`` for pure-ML reports; NLP/orchestrator reports that
+      call a model record ``provider/model/version`` (never Anthropic).
+    """
+
+    harness_sha: str
+    dataset: str
+    seed_policy: str
+    era_tag: str = ERA_TAG
+    llm: str = "none"
+    schema_version: str = SCHEMA_VERSION
+    generated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds")
+    )
+    artifacts: dict[str, str] = field(default_factory=dict)
+
+
+def build_header(
+    *,
+    dataset: str,
+    seed_policy: str = "deterministic",
+    llm: str = "none",
+    artifacts: dict[str, Path] | None = None,
+) -> ReportHeader:
+    """Assemble a report header, hashing each artifact path that exists.
+
+    Missing artifact paths are skipped rather than raising, so a partial
+    install still produces a report (with a shorter artifact list) instead of
+    crashing the whole run.
+    """
+    hashed = {
+        name: artifact_hash(path) for name, path in (artifacts or {}).items() if Path(path).exists()
+    }
+    return ReportHeader(
+        harness_sha=_harness_sha(),
+        dataset=dataset,
+        seed_policy=seed_policy,
+        llm=llm,
+        artifacts=hashed,
+    )
+
+
+def eval_reports_dir() -> Path:
+    """``documents/eval_reports/`` (created on demand): committed, diffable.
+
+    Falls back to a user-cache directory when running outside a checkout so
+    the writer never fails; in that mode the reports simply are not version
+    controlled.
+    """
+    repo = _find_repo_root()
+    base = (
+        (repo / "documents" / "eval_reports")
+        if repo
+        else (Path.home() / ".f1-strat" / "eval_reports")
+    )
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def write_report(
+    name: str,
+    header: ReportHeader,
+    table_md: str,
+    payload: dict[str, Any],
+) -> tuple[Path, Path]:
+    """Write a report as a diffable markdown table + a machine-readable JSON.
+
+    The markdown is the human / paper-facing citable artifact; the JSON is
+    what downstream consumers (#213 docs reconciliation, #304 NLP harness,
+    the golden tests) read so they never have to re-parse prose.
+
+    Returns the ``(markdown_path, json_path)`` pair.
+    """
+    out = eval_reports_dir()
+    md_path = out / f"{name}.md"
+    json_path = out / f"{name}.json"
+    md_path.write_text(_render_md(name, header, table_md), encoding="utf-8")
+    json_path.write_text(
+        json.dumps({"header": asdict(header), **payload}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return md_path, json_path
+
+
+def _render_md(name: str, header: ReportHeader, table_md: str) -> str:
+    """Render a report: title, provenance header block, then the table body."""
+    artifacts = ", ".join(f"{k}=`{v}`" for k, v in header.artifacts.items()) or "—"
+    lines = [
+        f"# {name}",
+        "",
+        f"- harness `{header.harness_sha}` · schema v{header.schema_version} · generated {header.generated_at}",
+        f"- era {header.era_tag} · dataset {header.dataset} · seed {header.seed_policy} · llm {header.llm}",
+        f"- artifacts: {artifacts}",
+        "",
+        table_md,
+        "",
+    ]
+    return "\n".join(lines)

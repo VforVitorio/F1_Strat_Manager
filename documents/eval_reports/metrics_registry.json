@@ -1,0 +1,118 @@
+{
+  "header": {
+    "harness_sha": "91b98d3",
+    "dataset": "model_configs + thesis Tabla 6.1",
+    "seed_policy": "deterministic",
+    "era_tag": "2022-2025",
+    "llm": "none",
+    "schema_version": "1",
+    "generated_at": "2026-07-11T15:07:44+00:00",
+    "artifacts": {
+      "overtake_cfg": "f72ef54ebbc8",
+      "undercut_cfg": "b0250c8522a2",
+      "pit_cfg": "41dd673a93fb",
+      "sc_cfg": "4691fb9c30c1"
+    }
+  },
+  "entries": [
+    {
+      "model": "overtake",
+      "family": "classification",
+      "metric": "auc_pr_test",
+      "value": 0.5491,
+      "threshold": 0.7976,
+      "split": "train [2023, 2024] / test 2025",
+      "source": "config: overtake_probability/model_config.json",
+      "canonical": true,
+      "note": "LightGBM + Platt(val 2024); auc_roc 0.8758"
+    },
+    {
+      "model": "undercut",
+      "family": "classification",
+      "metric": "auc_pr_test",
+      "value": 0.6739,
+      "threshold": 0.522,
+      "split": "train [2023, 2024] / test 2025",
+      "source": "config: pit_prediction/model_config_undercut_v1.json",
+      "canonical": true,
+      "note": "LightGBM + Platt(val 2024); baseline_pr 0.3452"
+    },
+    {
+      "model": "pit_duration",
+      "family": "quantile",
+      "metric": "p50_mae_test_s",
+      "value": 0.487,
+      "threshold": null,
+      "split": "train [2023, 2024] / test 2025",
+      "source": "config: pit_prediction/model_config.json",
+      "canonical": true,
+      "note": "HistGBT P05/P50/P95; baseline_mae 1.677; P05-P95 coverage 0.7047 vs 0.90 nominal (see calibration report)"
+    },
+    {
+      "model": "safety_car",
+      "family": "classification",
+      "metric": "auc_pr_test",
+      "value": 0.0723,
+      "threshold": 0.2335,
+      "split": "train [2023, 2024] / test 2025",
+      "source": "config: safety_car_probability/feature_list_v1.json",
+      "canonical": true,
+      "note": "LightGBM + Platt(val 2024); baseline 0.0432; 3-lap lift 1.673; target sc_within_3_laps"
+    },
+    {
+      "model": "pace",
+      "family": "regression",
+      "metric": "mae_test_s",
+      "value": 0.4104,
+      "threshold": null,
+      "split": "test 2025",
+      "source": "thesis Tabla 6.1 (final)",
+      "canonical": true,
+      "note": "XGBoost delta lap time; split provenance pending (#207)"
+    },
+    {
+      "model": "pace",
+      "family": "regression",
+      "metric": "mae_test_s",
+      "value": 0.392,
+      "threshold": null,
+      "split": "test 2025",
+      "source": "notebook N06 (superseded)",
+      "canonical": false,
+      "note": "notebook-era value; superseded by thesis-final 0.4104"
+    },
+    {
+      "model": "tire_degradation",
+      "family": "regression",
+      "metric": "mae_test_s",
+      "value": 0.7078,
+      "threshold": null,
+      "split": "test 2025",
+      "source": "thesis Tabla 6.1 (global)",
+      "canonical": true,
+      "note": "TireDegTCN; per-compound best C2 0.5501s; missed R2 target; split provenance pending (#207)"
+    },
+    {
+      "model": "sentiment",
+      "family": "nlp",
+      "metric": "accuracy",
+      "value": 0.84,
+      "threshold": null,
+      "split": "held-out radio set",
+      "source": "thesis Tabla 6.1 (final)",
+      "canonical": true,
+      "note": "RoBERTa; macro-F1 0.75; NLP harness in #304"
+    },
+    {
+      "model": "sentiment",
+      "family": "nlp",
+      "metric": "accuracy",
+      "value": 0.875,
+      "threshold": null,
+      "split": "held-out radio set",
+      "source": "published-era (superseded)",
+      "canonical": false,
+      "note": "87.5% published; superseded by thesis-final 0.84"
+    }
+  ]
+}

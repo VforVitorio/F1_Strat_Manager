@@ -1,0 +1,90 @@
+{
+  "header": {
+    "harness_sha": "91b98d3",
+    "dataset": "2025 holdout + frozen calibration artifacts",
+    "seed_policy": "deterministic",
+    "era_tag": "2022-2025",
+    "llm": "none",
+    "schema_version": "1",
+    "generated_at": "2026-07-11T15:07:21+00:00",
+    "artifacts": {
+      "overtake_model": "cbb9d0eb0beb",
+      "pit_cfg": "41dd673a93fb",
+      "tcn_mc_calib": "e03a170f6de4"
+    }
+  },
+  "results": [
+    {
+      "model": "overtake",
+      "metric": "brier_calibrated",
+      "value": 0.05199088812235834,
+      "nominal": null,
+      "status": "ok",
+      "detail": "n=10217; brier raw 0.1304 -> cal 0.0520 (Platt val-2024)"
+    },
+    {
+      "model": "overtake",
+      "metric": "ece_calibrated",
+      "value": 0.03191338187300733,
+      "nominal": 0.05,
+      "status": "ok",
+      "detail": "n=10217; 10-bin equal-width"
+    },
+    {
+      "model": "pit_duration",
+      "metric": "p05_p95_coverage",
+      "value": 0.7047,
+      "nominal": 0.9,
+      "status": "drift",
+      "detail": "config-declared (recompute pending N15 holdout); 0.7047 vs 0.90 nominal"
+    },
+    {
+      "model": "tire_degradation[C2]",
+      "metric": "mc_mean_sigma_s",
+      "value": 0.1244,
+      "nominal": null,
+      "status": "ok",
+      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+    },
+    {
+      "model": "tire_degradation[C4]",
+      "metric": "mc_mean_sigma_s",
+      "value": 0.1504,
+      "nominal": null,
+      "status": "ok",
+      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+    },
+    {
+      "model": "tire_degradation[C5]",
+      "metric": "mc_mean_sigma_s",
+      "value": 0.1549,
+      "nominal": null,
+      "status": "ok",
+      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+    },
+    {
+      "model": "tire_degradation[C6]",
+      "metric": "mc_mean_sigma_s",
+      "value": 0.2621,
+      "nominal": null,
+      "status": "ok",
+      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+    },
+    {
+      "model": "safety_car",
+      "metric": "ece_calibrated",
+      "value": null,
+      "nominal": 0.05,
+      "status": "pending",
+      "detail": "engineered features (lap_time_*_z, anomaly_and_yellow, lap1_chaos) absent from sc_labeled holdout (#207)"
+    },
+    {
+      "model": "undercut",
+      "metric": "ece_calibrated",
+      "value": null,
+      "nominal": 0.05,
+      "status": "pending",
+      "detail": "historical aggregates circuit_undercut_rate/team_x_undercut_rate absent from holdout (#207)"
+    }
+  ]
+}
