@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "1651c3b",
+    "harness_sha": "998a800",
     "dataset": "2025 holdout vs published model_configs",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T18:43:51+00:00",
+    "generated_at": "2026-07-11T19:08:24+00:00",
     "artifacts": {
       "overtake_model": "cbb9d0eb0beb"
     }
@@ -56,9 +56,9 @@
       "model": "tire_degradation",
       "metric": "mae_test_s",
       "published": 0.7078,
-      "reproduced": null,
-      "status": "pending",
-      "detail": "TCN MC forward pass not run this phase (see calibration MC-sigma)"
+      "reproduced": 0.7077692747116089,
+      "status": "reproduced",
+      "detail": "n=20284 seqs; global Model A; |delta| 0.0000 vs tol 0.01"
     }
   ]
 }
