@@ -97,7 +97,7 @@ Developed and trained the first two ML models: lap time prediction (XGBoost) and
 - [X] XGBoost delta-lap-time model with circuit clustering features
 - [X] Hyperparameter tuning via GridSearch / cross-validation
 - [X] Model exported to `data/models/lap_time/`
-- [X] Target: MAE <0.5s. **Achieved: MAE 0.392s on 2025 test data** ✅
+- [X] Target: MAE <0.5s. **Achieved: MAE 0.4104s on 2025 test data** ✅
 
 **Tire Degradation Predictor (N07–N10):**
 
@@ -107,14 +107,14 @@ Developed and trained the first two ML models: lap time prediction (XGBoost) and
 - [X] MC Dropout for uncertainty quantification (N=50 forward passes)
 - [X] Calibration JSON exported alongside model weights
 - [X] Model exported to `data/models/tire_degradation/`
-- [ ] Target R² >0.85: *pending formal evaluation on 2025 holdout*
+- [X] Target R² >0.85: **missed**. Final tire-deg MAE 0.7078s on 2025 holdout (best compound C2 0.5501s)
 
 **Important Note - Tire Compound Mapping:**
 Current data (FastF1/OpenF1) only provides relative compound names (SOFT/MEDIUM/HARD) per race. For accurate degradation predictions, actual Pirelli compounds (C1-C5) are critical since the same "MEDIUM" can be C2 (harder) or C4 (softer) depending on circuit. Future enhancement: manual mapping from [Pirelli press releases](https://press.pirelli.com) into `data/tire_compounds_by_race.json`.
 
 **Success Metrics:**
 
-- [X] Lap Time: MAE 0.392s on 2025 (target <0.5s ✅ / stretch <0.3s ⬜)
+- [X] Lap Time: MAE 0.4104s on 2025 (target <0.5s ✅ / stretch <0.3s ⬜)
 - [X] Tire Degradation model operational with MC Dropout uncertainty
 - [X] All experiments documented in notebooks/strategy/
 
@@ -248,7 +248,7 @@ N24 Race Control Messages → structured SC/VSC/flags/penalties
 **N20: RoBERTa Sentiment Fine-tuning:**
 
 - [X] Fine-tuned `roberta-base`: 3-class sentiment on labeled radio messages
-- [X] **Achieved: 87.5% test accuracy** ✅
+- [X] **Achieved: 0.84 test accuracy (macro-F1 0.75)** ✅
 - [X] Export: model state dict to `data/models/nlp/`
 - [X] Notebook: `notebooks/nlp/N20_bert_sentiment.ipynb`
 
@@ -277,7 +277,7 @@ N24 Race Control Messages → structured SC/VSC/flags/penalties
 
 **Success Metrics:**
 
-- [X] N20 RoBERTa Sentiment: 87.5% test accuracy ✅
+- [X] N20 RoBERTa Sentiment: 0.84 test accuracy (macro-F1 0.75) ✅
 - [X] N21 Intent: SetFit 5-class classifier operational ✅
 - [X] N22 NER: F1 = 0.42 (short-text constraint documented) ✅
 - [X] N24 Pipeline: GPU P95 latency 59.4 ms (target <500 ms ✅)
@@ -580,10 +580,10 @@ Code freeze of the TFG software. Consolidates the interfaces closed in v0.12.0 (
 | ------- | ------------ | ----------------------------- | ---------------------------------------------------------------------------------- | ------ |
 | v0.5    | 2025-05-23   | Legacy Integration Complete   | Legacy codebase frozen, `legacy_version` branch preserved                          | ✅     |
 | v0.6    | 2026-02-12   | Data Engineering Complete     | 4 clusters, 45k laps, 2025 held-out, HuggingFace published                         | ✅     |
-| v0.7    | 2026-03-05   | Base Models Complete          | Lap Time MAE 0.392s ✅ / Tire Deg TCN + MC Dropout ✅                               | ✅     |
+| v0.7    | 2026-03-05   | Base Models Complete          | Lap Time MAE 0.4104s ✅ / Tire Deg TCN + MC Dropout ✅                              | ✅     |
 | v0.8.1  | 2026-03-13   | Extended ML Models            | Overtake ✅ / SC ✅ / N15 MAE 0.487s / N16 AUC-ROC 0.7708 / N12B archived           | ✅     |
 | v0.9    | 2026-03-17   | src/ Extraction + CLI + Radio | 7 agents extracted, CLI sim, radio corpus, HF lazy download, guard-rails           | ✅     |
-| v0.8.2  | 2026-03-22   | NLP Radio Pipeline            | N17–N24: RoBERTa 87.5% / SetFit intent / BERT NER / pipeline P95 59.4ms            | ✅     |
+| v0.8.2  | 2026-03-22   | NLP Radio Pipeline            | N17–N24: RoBERTa 0.84 acc / SetFit intent / BERT NER / pipeline P95 59.4ms         | ✅     |
 | v0.10   | 2026-03-22   | Multi-Agent Operational       | N25–N31 all complete, Bahrain 2025 end-to-end demo ✅                              | ✅     |
 | v0.11   | 2026-03-30   | RAG Integrated                | 2,279 chunks indexed, BGE-M3, `src/rag/` module complete                           | ✅     |
 | v0.1.1  | 2026-04-09   | R1 CLI Wheel Release          | Tagged wheel on GitHub Releases, `uv tool install git+` works                      | ✅     |
@@ -609,8 +609,8 @@ Code freeze of the TFG software. Consolidates the interfaces closed in v0.12.0 (
 
 **ML Models:**
 
-- Lap Time: target MAE <0.3s. **Achieved MAE 0.392s** (within <0.5s tolerance ✅)
-- Tire Degradation: target R² >0.85. *Pending formal holdout evaluation*
+- Lap Time: target MAE <0.3s. **Achieved MAE 0.4104s** (within <0.5s tolerance ✅)
+- Tire Degradation: target R² >0.85. **Missed**. MAE 0.7078s on 2025 holdout (best compound C2 0.5501s)
 - Sector Time: **descoped**
 - Overtake Probability: target AUC-PR >0.50. **Achieved AUC-PR 0.5491, AUC-ROC 0.8758** ✅
 - Safety Car Probability: reframed as soft prior. **Achieved AUC-PR 0.0723 (lift 1.67×), AUC-ROC 0.6411** ✅
