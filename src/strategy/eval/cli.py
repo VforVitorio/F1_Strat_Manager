@@ -9,7 +9,8 @@ one-line summary of where it landed and what it flagged.
     f1-eval models         # reproduce headline numbers vs the model_configs
     f1-eval hygiene        # E-02 threshold provenance + leakage verdicts (#207)
     f1-eval nlp            # NLP per-stage eval: sentiment + gated stages (#304)
-    f1-eval all            # every report
+    f1-eval alert-llm      # PROXY alert precision via an LLM judge (#304; spends API calls)
+    f1-eval all            # every report EXCEPT alert-llm (opt-in: it spends API calls)
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 from typing import Any, Callable
 
+from src.strategy.eval.alert_llm import build_alert_llm_report
 from src.strategy.eval.calibration import build_calibration_report
 from src.strategy.eval.hygiene import build_hygiene_report
 from src.strategy.eval.nlp import build_nlp_report
@@ -59,7 +61,17 @@ def _run_hygiene() -> None:
 
 def _run_nlp() -> None:
     payload = build_nlp_report()
-    print("nlp " + _summarise(payload, "results", ("delta", "blocked", "pending")))
+    print("nlp " + _summarise(payload, "results", ("flagged", "delta", "blocked", "pending")))
+
+
+def _run_alert_llm() -> None:
+    payload = build_alert_llm_report()
+    result = payload["result"]
+    precision = "-" if result["proxy_precision"] is None else f"{result['proxy_precision']:.4f}"
+    print(
+        f"alert-llm -> {payload['md_path']} (proxy precision {precision} over "
+        f"{result['predicted_alerts']} predicted alerts; PROXY - needs human review)"
+    )
 
 
 _COMMANDS: dict[str, Callable[[], None]] = {
@@ -78,10 +90,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "command",
-        choices=[*_COMMANDS, "all"],
+        choices=[*_COMMANDS, "alert-llm", "all"],
         help="which report to regenerate",
     )
     args = parser.parse_args(argv)
+
+    # alert-llm is opt-in only: it spends API calls, so `all` never runs it.
+    if args.command == "alert-llm":
+        _run_alert_llm()
+        return 0
 
     commands = _COMMANDS.values() if args.command == "all" else [_COMMANDS[args.command]]
     for run in commands:

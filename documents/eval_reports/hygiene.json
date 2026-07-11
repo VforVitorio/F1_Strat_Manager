@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "50b7ecf",
-    "dataset": "notebooks/strategy audit + 2024/2025 overtake holdout",
+    "harness_sha": "c1af9c1",
+    "dataset": "notebooks/strategy audit + 2024/2025 overtake & SC holdouts",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T15:29:09+00:00",
+    "generated_at": "2026-07-11T17:25:07+00:00",
     "artifacts": {}
   },
   "findings": [
@@ -24,18 +24,27 @@
       "kind": "threshold",
       "model": "safety_car",
       "verdict": "contaminated",
-      "selection": "argmax-F2 threshold AND the best target-window both on the 2025 test set",
+      "selection": "argmax-F2 threshold AND the target-window both selected on the 2025 test set",
       "evidence": "N14_sc_model.ipynb (PR-curve + window-comparison cells)",
-      "impact": "threshold -> operating-point optimistic; window chosen by max-lift on test -> the headline AUC-PR 0.0723 is itself optimistic (a max over 3 candidates on test), NOT clean"
+      "impact": "threshold -> operating-point optimistic; the window was chosen by max-LIFT on test (3-lap lift 1.673x). The reported AUC-PR 0.0723 is in fact the LOWEST of the three windows (0.0723/0.0987/0.1165), not a max - the test-selection bias is on the lift, so the headline keeps a test-window-selected caveat, not an inflated-AUC claim"
+    },
+    {
+      "item": "sc Platt calibrator",
+      "kind": "calibrator",
+      "model": "safety_car",
+      "verdict": "underdocumented",
+      "selection": "fit on 2024 probabilities, but 2024 is IN the train set (config fitted_on='val_2024' is misleading)",
+      "evidence": "N14_sc_model.ipynb (calibration cell)",
+      "impact": "resubstitution fit; measured impact low (test ECE 0.0347 < 0.05, AUC-PR invariant under a monotone Platt map). Singled out because its config label fitted_on='val_2024' is misleading; overtake/undercut Platt are also 2024-in-train but not mislabeled"
     },
     {
       "item": "best_threshold=0.522",
       "kind": "threshold",
       "model": "undercut",
       "verdict": "clean",
-      "selection": "argmax-F1 on the calibrated val-2024 split",
+      "selection": "argmax-F1 on 2024 in-train (2024 is part of N16's 2023+2024 train set, same structure as overtake; mild, 143 positives / base 0.413) - but NEVER selected on test-2025",
       "evidence": "N16_undercut.ipynb (\"Threshold on calibrated val 2024\")",
-      "impact": "textbook-correct; the 2025 test set is only applied afterwards"
+      "impact": "CLEAN on the test-contamination axis this audit measures: the threshold never saw test (unlike overtake 0.7976 / SC 0.2335). 2024 is not a held-out val split, but with 143 positives it does not collapse (unlike SC); the headline 0.6739 is threshold-free anyway"
     },
     {
       "item": "circuit_sc_rate",
@@ -89,13 +98,53 @@
     "leaked_test_operating_point": {
       "precision": 0.5018,
       "recall": 0.5556,
-      "f1": 0.5273
+      "f1": 0.5273,
+      "f2": 0.5439
     },
     "corrected_test_operating_point": {
       "precision": 0.4583,
       "recall": 0.5827,
-      "f1": 0.5131
+      "f1": 0.5131,
+      "f2": 0.5527
     },
-    "note": "threshold selected on val-2024; both operating points evaluated on the 2025 test set"
+    "note": "threshold selected on 2024 (in-train; 2024 is part of N12's 2023+2024 train set, mild memorization at ~28k pairs); both operating points evaluated on the 2025 test set"
+  },
+  "sc_correction": {
+    "leaked_threshold": 0.2335,
+    "corrected_threshold": 0.6358,
+    "in_train_2024_positive_count": 19,
+    "in_train_2024_size": 1042,
+    "leaked_test_operating_point": {
+      "precision": 0.0797,
+      "recall": 0.5581,
+      "f1": 0.1395,
+      "f2": 0.2537
+    },
+    "corrected_test_operating_point": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "f2": 0.0
+    },
+    "note": "the F2 threshold 'selected on 2024' is IN-TRAIN (2024 is a subset of the 2023+2024 train set), NOT a held-out split; it lands on the train-memorization boundary and collapses on test. This shows N14 has no honest validation split for an operating threshold - the paper should report SC threshold-free, not re-select an operating point"
+  },
+  "sc_window_sensitivity": {
+    "persisted_model_target": "sc_within_3_laps",
+    "per_window_auc_pr": {
+      "sc_within_3_laps": {
+        "in_train_2024_auc_pr": 0.8817,
+        "test_2025_auc_pr": 0.0723
+      },
+      "sc_within_5_laps": {
+        "in_train_2024_auc_pr": 0.6912,
+        "test_2025_auc_pr": 0.1054
+      },
+      "sc_within_7_laps": {
+        "in_train_2024_auc_pr": 0.6257,
+        "test_2025_auc_pr": 0.1323
+      }
+    },
+    "retro_selectable": false,
+    "note": "only the 3-lap model is persisted; the 5/7-lap models needed to re-select the window are not on disk (retraining out of scope). The 2024 column is IN-TRAIN (2024 subset of train), so its high AUC-PR (0.88) is resubstitution, NOT validation - it only shows the metric is window-unstable. The reported SC AUC-PR 0.0723 keeps its test-window-selected caveat; this is single-model sensitivity, not the original 3-model selection"
   }
 }

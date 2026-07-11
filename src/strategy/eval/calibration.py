@@ -12,16 +12,16 @@ Scope this phase (#206):
 - **pit_duration** - the P05-P95 quantile coverage, flagged as drift vs the
   0.90 nominal.
 - **tire_degradation** - the deployed MC-Dropout sigma per compound.
-- **safety_car / undercut** - recompute from scratch is blocked on-disk (SC
-  needs 5 engineered features - lap_time_*_z, anomaly_and_yellow, lap1_chaos -
-  absent from the holdout; undercut historical aggregates absent too) so they
-  are reported as ``pending`` rather than hidden - Phase-2 (#207) territory.
-  Their headline numbers are still config-sourced in the registry.
+- **safety_car / undercut** - recomputed on the 2025 holdout by rebuilding their
+  engineered features in-memory (SC: the 5 derived features from N14 Step 2;
+  undercut: the two train-fit target encodings from N16 Step 3), the same
+  ``_add_overtake_features`` pattern. Both reproduce their published AUC-PR
+  exactly (#364).
 
-ponytail: pit coverage + the MC sigma are read from frozen artifacts, not
-re-run from a holdout (``pit_labeled`` is empty on disk; the MC pass needs a
-torch forward pass x N). Upgrade path when the holdouts land: recompute both
-from data, the same way N33 Section D already does for the TCN.
+ponytail: the MC sigma is read from the frozen calibration JSON, not re-run (the
+MC pass needs a torch forward pass x N). pit coverage is now recomputed from the
+raw-laps holdout (#364, ``pit_holdout``). Upgrade path for MC: recompute from
+data, the same way N33 Section D already does for the TCN.
 """
 
 from __future__ import annotations
@@ -61,6 +61,16 @@ _OVERTAKE_FEATURES = [
 ]
 _OVERTAKE_CAT = ["compound_x", "compound_y", "circuit_cluster"]
 _OVERTAKE_PAIR_KEYS = ["Year", "GP_Name", "driver_x", "driver_y"]
+
+# SC + undercut recompute: the model feature lists are read from disk; the
+# engineered features are rebuilt in-memory from the base parquet, the same
+# pattern _add_overtake_features uses.
+_SC_DIR = "safety_car_probability"
+_SC_LAPTIME_Z_COLS = ["lap_time_mean", "lap_time_std", "lap_time_min"]  # per-race z-scored
+_SC_TARGETS = ("sc_within_3_laps", "sc_within_5_laps", "sc_within_7_laps")
+_UNDERCUT_DIR = "pit_prediction"
+_UNDERCUT_TRAIN_YEARS = (2023, 2024)
+_UNDERCUT_TARGET = "undercut_success"
 
 
 @dataclass
@@ -159,6 +169,136 @@ def load_overtake_predictions(year: int = 2025) -> tuple[np.ndarray, np.ndarray,
     return y, proba_raw, proba_cal
 
 
+def _add_sc_features(df: "Any") -> "Any":
+    """Rebuild the SC model's engineered features in-memory (N14 Step 2, verbatim).
+
+    The persisted sc_labeled parquet stores base columns; the model consumes 5
+    derived features - per-race z-scores of lap_time_{mean,std,min} plus the
+    anomaly_and_yellow and lap1_chaos interactions - rebuilt here exactly as N14
+    did (per-race median imputation first, then z-scores, then weather fill), or
+    the LightGBM sees a different feature space and the number moves.
+
+    --- WHERE TO CHANGE IF THE SC FEATURES CHANGE ---
+    notebooks/strategy/sc_probability/N14_sc_model.ipynb (Step 2) is the source
+    of truth; mirror any edit here.
+    """
+    df = df.copy()
+    race_key = "race_id" if "race_id" in df.columns else "event_name"
+    for col in ["lap_time_mean", "lap_time_std", "lap_time_min", "lap_time_cv", "lap_time_trend_5"]:
+        if col in df.columns:
+            per_race_median = df.groupby(race_key)[col].transform("median")
+            df[col] = df[col].fillna(per_race_median).fillna(df[col].median())
+    for col in _SC_LAPTIME_Z_COLS:
+        if col in df.columns:
+            race_mu = df.groupby(race_key)[col].transform("mean")
+            race_sigma = df.groupby(race_key)[col].transform("std").clip(lower=0.01)
+            df[f"{col}_z"] = (df[col] - race_mu) / race_sigma
+    for col in ["track_temp", "air_temp", "humidity", "track_temp_delta"]:
+        if col in df.columns:
+            df[col] = df.groupby(race_key)[col].transform(lambda s: s.ffill().bfill())
+            df[col] = df[col].fillna(df[col].median())
+    has_anomaly = {"driver_anomaly_hard_count", "yellow_escalation_count"} <= set(df.columns)
+    df["anomaly_and_yellow"] = (
+        ((df["driver_anomaly_hard_count"] > 0) & (df["yellow_escalation_count"] > 0)).astype(int)
+        if has_anomaly
+        else 0
+    )
+    has_lap1 = {"is_lap1", "n_drivers_delta"} <= set(df.columns)
+    df["lap1_chaos"] = (df["is_lap1"] * df["n_drivers_delta"].abs()).astype(int) if has_lap1 else 0
+    return df
+
+
+def _sc_frame_and_proba(year: int) -> tuple["Any", np.ndarray, np.ndarray] | None:
+    """Load the SC year-slice with engineered features + model probabilities.
+
+    Returns ``(df_slice, proba_raw, proba_cal)`` or ``None``. Shared seam: the
+    calibration recompute (3-lap target) and the #363 threshold/window correction
+    both need the same slice + model output, so the load lives here once. The
+    feature order is read from the model's ``feature_list_v1.json``.
+    """
+    import json
+
+    import joblib
+    import pandas as pd
+
+    model_dir = get_models_root() / _SC_DIR
+    parquet = get_data_root() / "processed" / "sc_labeled" / "sc_labeled_2023_2025.parquet"
+    model_path = model_dir / "lgbm_sc_v1.pkl"
+    calib_path = model_dir / "calibrator_sc_v1.pkl"
+    feature_list_path = model_dir / "feature_list_v1.json"
+    if not all(p.exists() for p in (parquet, model_path, calib_path, feature_list_path)):
+        return None
+
+    features = json.loads(feature_list_path.read_text(encoding="utf-8"))["features"]
+    df = _add_sc_features(pd.read_parquet(parquet))
+    df_slice = df[df["year"] == year].copy()
+    model = joblib.load(model_path)
+    calibrator = joblib.load(calib_path)
+    proba_raw = model.predict_proba(df_slice[features])[:, 1]
+    proba_cal = calibrator.predict_proba(proba_raw.reshape(-1, 1))[:, 1]
+    return df_slice, proba_raw, proba_cal
+
+
+def load_sc_predictions(
+    year: int = 2025, target: str = "sc_within_3_laps"
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """``(y, proba_raw, proba_cal)`` for a SC target window, or ``None`` if artifacts absent.
+
+    ``year`` selects the season slice (2025 = test, 2024 = validation for the
+    #363 threshold re-selection); ``target`` selects the SC window (3/5/7 laps),
+    which the #363 window correction sweeps.
+    """
+    loaded = _sc_frame_and_proba(year)
+    if loaded is None:
+        return None
+    df_slice, proba_raw, proba_cal = loaded
+    y = df_slice[target].astype(int).to_numpy()
+    return y, proba_raw, proba_cal
+
+
+def load_undercut_predictions(
+    year: int = 2025,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """``(y, proba_raw, proba_cal)`` for the undercut holdout with train-fit target encodings.
+
+    The two aggregate features (circuit_undercut_rate, team_x_undercut_rate) are
+    target encodings fit on the 2023-2024 train slice and applied to the requested
+    year (N16 Step 3), so the split precedes the encoding and no train<-test leak
+    occurs. Returns ``None`` when the artifacts or holdout are absent.
+    """
+    import json
+
+    import joblib
+    import pandas as pd
+
+    model_dir = get_models_root() / _UNDERCUT_DIR
+    parquet = get_data_root() / "processed" / "undercut_labeled" / "undercut_clean.parquet"
+    model_path = model_dir / "lgbm_undercut_v1.pkl"
+    calib_path = model_dir / "calibrator_undercut_v1.pkl"
+    cfg_path = model_dir / "model_config_undercut_v1.json"
+    if not all(p.exists() for p in (parquet, model_path, calib_path, cfg_path)):
+        return None
+
+    features = json.loads(cfg_path.read_text(encoding="utf-8"))["features"]
+    df = pd.read_parquet(parquet)
+    train = df[df["Year"].isin(_UNDERCUT_TRAIN_YEARS)]
+    target_slice = df[df["Year"] == year].copy()
+    for group_col, feat in (
+        ("circuit_key", "circuit_undercut_rate"),
+        ("Team_X", "team_x_undercut_rate"),
+    ):
+        encoding = train.groupby(group_col)[_UNDERCUT_TARGET].mean()
+        fallback = train[_UNDERCUT_TARGET].mean()
+        target_slice[feat] = target_slice[group_col].map(encoding).fillna(fallback)
+
+    model = joblib.load(model_path)
+    calibrator = joblib.load(calib_path)
+    proba_raw = model.predict_proba(target_slice[features])[:, 1]
+    proba_cal = calibrator.predict_proba(proba_raw.reshape(-1, 1))[:, 1]
+    y = target_slice[_UNDERCUT_TARGET].astype(int).to_numpy()
+    return y, proba_raw, proba_cal
+
+
 def _overtake_calibration() -> list[CalibrationResult]:
     """Recompute Brier + ECE for the overtake classifier on the 2025 holdout.
 
@@ -195,14 +335,33 @@ def _overtake_calibration() -> list[CalibrationResult]:
 
 
 def _pit_quantile_coverage() -> list[CalibrationResult]:
-    """Surface the pit P05-P95 empirical coverage and flag it vs nominal.
+    """Recompute the pit P05-P95 empirical coverage on the regenerated N15 holdout.
 
-    ponytail: read from the frozen ``model_config`` (the value is published
-    there) rather than re-run - ``pit_labeled`` is empty on disk so there is no
-    holdout to predict on. Upgrade path: recompute empirical coverage from the
-    hist_pit P05/P95 models over the N15 holdout once it lands. This is the
-    retro-validation target: the harness must surface the known 0.7047 break.
+    Coverage = fraction of test physical_stop_est falling inside [P05, P95]. This
+    is the retro-validation target: the harness must surface the known ~0.70
+    break vs the 0.90 nominal. Falls back to the config-declared value when the
+    raw laps or models are absent (#364 rebuilds the holdout from raw laps).
     """
+    from src.strategy.eval.pit_holdout import load_pit_holdout
+
+    loaded = load_pit_holdout()
+    if loaded is not None:
+        test_slice, models, features = loaded
+        x = test_slice[features]
+        lower = models["p05"].predict(x)
+        upper = models["p95"].predict(x)
+        actual = test_slice["physical_stop_est"].to_numpy()
+        coverage = float(((actual >= lower) & (actual <= upper)).mean())
+        status = "drift" if coverage < NOMINAL_COVERAGE else "ok"
+        detail = (
+            f"n={len(actual)}; empirical P05-P95 coverage recomputed on the regenerated N15 holdout"
+        )
+        return [
+            CalibrationResult(
+                "pit_duration", "p05_p95_coverage", coverage, NOMINAL_COVERAGE, status, detail
+            )
+        ]
+
     cfg_path = get_models_root() / "pit_prediction" / "model_config.json"
     if not cfg_path.exists():
         return [
@@ -212,14 +371,14 @@ def _pit_quantile_coverage() -> list[CalibrationResult]:
                 None,
                 NOMINAL_COVERAGE,
                 "pending",
-                "model_config absent",
+                "raw laps + model_config absent",
             )
         ]
 
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     coverage = float(cfg["eval"]["p05_p95_coverage_test"])
     status = "drift" if coverage < NOMINAL_COVERAGE else "ok"
-    detail = f"config-declared (recompute pending N15 holdout); {coverage:.4f} vs {NOMINAL_COVERAGE:.2f} nominal"
+    detail = f"config-declared (raw laps absent for recompute); {coverage:.4f} vs {NOMINAL_COVERAGE:.2f} nominal"
     return [
         CalibrationResult(
             "pit_duration", "p05_p95_coverage", coverage, NOMINAL_COVERAGE, status, detail
@@ -260,28 +419,46 @@ def _tcn_mc_sigma() -> list[CalibrationResult]:
     return results
 
 
-def _pending_classifiers() -> list[CalibrationResult]:
-    """Honest deltas for the two classifiers that cannot recompute on-disk.
+def _classifier_calibration(model_name: str, loader: "Any") -> list[CalibrationResult]:
+    """Brier + ECE on the 2025 holdout for a binary classifier via its loader.
 
-    Recording the blocker (not a fabricated number) is the point: both blockers
-    are precisely what Phase-2 provenance work (#207) resolves.
+    Generic over safety_car / undercut: both rebuild their engineered features
+    in-memory (the loaders in this module) and report the calibrated Brier + ECE,
+    the same quantities ``_overtake_calibration`` reports for overtake. Returns a
+    ``pending`` row when the loader cannot find its artifacts.
     """
+    loaded = loader()
+    if loaded is None:
+        return [
+            CalibrationResult(
+                model_name,
+                "ece_calibrated",
+                None,
+                ECE_DRIFT,
+                "pending",
+                "artifacts or holdout absent on disk",
+            )
+        ]
+    y, _proba_raw, proba_cal = loaded
+    brier_cal = float(np.mean((proba_cal - y) ** 2))
+    ece_cal = _ece(y, proba_cal)
+    status = "drift" if ece_cal > ECE_DRIFT else "ok"
     return [
         CalibrationResult(
-            "safety_car",
-            "ece_calibrated",
+            model_name,
+            "brier_calibrated",
+            brier_cal,
             None,
-            ECE_DRIFT,
-            "pending",
-            "engineered features (lap_time_*_z, anomaly_and_yellow, lap1_chaos) absent from sc_labeled holdout (#207)",
+            "ok",
+            f"n={len(y)}; recomputed on 2025 holdout",
         ),
         CalibrationResult(
-            "undercut",
+            model_name,
             "ece_calibrated",
-            None,
+            ece_cal,
             ECE_DRIFT,
-            "pending",
-            "historical aggregates circuit_undercut_rate/team_x_undercut_rate absent from holdout (#207)",
+            status,
+            f"n={len(y)}; {ECE_BINS}-bin equal-width",
         ),
     ]
 
@@ -290,9 +467,10 @@ def collect_results() -> list[CalibrationResult]:
     """All calibration results across the predictors."""
     return [
         *_overtake_calibration(),
+        *_classifier_calibration("safety_car", load_sc_predictions),
+        *_classifier_calibration("undercut", load_undercut_predictions),
         *_pit_quantile_coverage(),
         *_tcn_mc_sigma(),
-        *_pending_classifiers(),
     ]
 
 

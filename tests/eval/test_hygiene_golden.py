@@ -46,3 +46,39 @@ def test_overtake_threshold_correction_is_honest():
     assert corrected_f1 <= leaked_f1 + 1e-9, (
         "leaked threshold was fit on test, so its F1 is maximal there"
     )
+
+
+@pytest.mark.data
+@pytest.mark.skipif(
+    not (ROOT / "data" / "models" / "safety_car_probability" / "lgbm_sc_v1.pkl").exists(),
+    reason="SC model absent (CI runner without weights)",
+)
+def test_sc_threshold_correction_does_not_beat_test_fit():
+    """The val-selected SC F2 cannot exceed the leaked (test-fit) F2 on test."""
+    from src.strategy.eval.hygiene import correct_sc_threshold
+
+    correction = correct_sc_threshold()
+    assert correction is not None
+    assert correction["in_train_2024_positive_count"] >= 0
+    leaked_f2 = correction["leaked_test_operating_point"]["f2"]
+    corrected_f2 = correction["corrected_test_operating_point"]["f2"]
+    assert corrected_f2 <= leaked_f2 + 1e-9
+
+
+@pytest.mark.data
+@pytest.mark.skipif(
+    not (ROOT / "data" / "models" / "safety_car_probability" / "lgbm_sc_v1.pkl").exists(),
+    reason="SC model absent (CI runner without weights)",
+)
+def test_sc_window_is_not_retro_selectable():
+    """Only the 3-lap SC model is persisted, so the window cannot be re-selected."""
+    from src.strategy.eval.hygiene import sc_window_sensitivity
+
+    window = sc_window_sensitivity()
+    assert window is not None
+    assert window["retro_selectable"] is False
+    assert set(window["per_window_auc_pr"]) == {
+        "sc_within_3_laps",
+        "sc_within_5_laps",
+        "sc_within_7_laps",
+    }

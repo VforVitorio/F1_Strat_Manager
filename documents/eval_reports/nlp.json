@@ -1,14 +1,16 @@
 {
   "header": {
-    "harness_sha": "5f1f29d",
-    "dataset": "radio_labeled_data.csv (fixed set)",
+    "harness_sha": "bc0350d",
+    "dataset": "radio + intent labeled CSVs, entity annotations, 2025 RCM corpus",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T15:38:36+00:00",
+    "generated_at": "2026-07-11T16:38:31+00:00",
     "artifacts": {
-      "roberta_sentiment": "d7d0ada739c6"
+      "roberta_sentiment": "d7d0ada739c6",
+      "intent_head": "7c995ba21bc0",
+      "ner_bert_bio": "9e60de9bf538"
     }
   },
   "results": [
@@ -31,34 +33,66 @@
     {
       "stage": "intent",
       "metric": "accuracy",
-      "value": null,
+      "value": 0.8885,
       "reference": null,
-      "status": "blocked",
-      "detail": "setfit does not import under transformers 5.3.0 (#303); stage cannot run"
+      "status": "reproduced",
+      "detail": "n=529; full labeled set (train+test); optimistic vs the published 0.5934 test weighted-F1"
     },
     {
-      "stage": "ner",
-      "metric": "entity_f1",
-      "value": null,
+      "stage": "intent",
+      "metric": "macro_f1",
+      "value": 0.8922,
       "reference": null,
-      "status": "pending",
-      "detail": "GLiNER/BERT reconstruction not wired this phase"
+      "status": "reproduced",
+      "detail": "n=529; 5-class, no anchor"
     },
     {
-      "stage": "rcm",
-      "metric": "accuracy",
-      "value": null,
-      "reference": null,
-      "status": "pending",
-      "detail": "RCM classifier reconstruction not wired this phase"
+      "stage": "intent",
+      "metric": "weighted_f1",
+      "value": 0.8881,
+      "reference": 0.5934,
+      "status": "delta",
+      "detail": "n=529; vs deployed test weighted-F1 (full-set optimistic)"
     },
     {
       "stage": "alert_precision",
       "metric": "precision",
-      "value": null,
+      "value": 0.9185,
       "reference": null,
-      "status": "pending",
-      "detail": "no labeled alert ground-truth on disk (the MoE-routing metric #304 targets; data-collection task)"
+      "status": "reproduced",
+      "detail": "n=529 (145 gold alerts); radio PROBLEM/WARNING channel from hand-labeled gold intent; R 0.855/F1 0.886; full-set optimistic"
+    },
+    {
+      "stage": "intent",
+      "metric": "predict_proba_order",
+      "value": 1.0,
+      "reference": 1.0,
+      "status": "reproduced",
+      "detail": "head.classes_=[0, 1, 2, 3, 4] map to intent_names via intent_mapping; 5/5 columns aligned (no swap)"
+    },
+    {
+      "stage": "ner",
+      "metric": "entity_f1",
+      "value": 0.4248,
+      "reference": 0.4151,
+      "status": "reproduced",
+      "detail": "n=529; micro entity-F1 (P 0.304/R 0.704); full-set optimistic; 4 dead classes flagged separately"
+    },
+    {
+      "stage": "rcm",
+      "metric": "coverage",
+      "value": 0.9868,
+      "reference": null,
+      "status": "reproduced",
+      "detail": "n=1515 across 24 2025 races; per-category [Drs 1.000, Flag 1.000, Other 0.971, SafetyCar 1.000]; vs config Flag 1.0/Other 0.928/Drs 1.0/SafetyCar 1.0 (N23 sample differs)"
+    },
+    {
+      "stage": "ner",
+      "metric": "dead_classes",
+      "value": 4.0,
+      "reference": 0.0,
+      "status": "flagged",
+      "detail": "4 entity types with frozen-eval B-F1 < 0.15 (situation, incident, strategy instruction, track condition); suppressed as untrustworthy, re-measured in #304"
     }
   ]
 }

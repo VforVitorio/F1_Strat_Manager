@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "91b98d3",
+    "harness_sha": "e1ee603",
     "dataset": "2025 holdout + frozen calibration artifacts",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T15:07:21+00:00",
+    "generated_at": "2026-07-11T17:31:05+00:00",
     "artifacts": {
       "overtake_model": "cbb9d0eb0beb",
       "pit_cfg": "41dd673a93fb",
@@ -31,12 +31,44 @@
       "detail": "n=10217; 10-bin equal-width"
     },
     {
+      "model": "safety_car",
+      "metric": "brier_calibrated",
+      "value": 0.04264973919444633,
+      "nominal": null,
+      "status": "ok",
+      "detail": "n=995; recomputed on 2025 holdout"
+    },
+    {
+      "model": "safety_car",
+      "metric": "ece_calibrated",
+      "value": 0.03471279476464329,
+      "nominal": 0.05,
+      "status": "ok",
+      "detail": "n=995; 10-bin equal-width"
+    },
+    {
+      "model": "undercut",
+      "metric": "brier_calibrated",
+      "value": 0.19295681891254568,
+      "nominal": null,
+      "status": "ok",
+      "detail": "n=252; recomputed on 2025 holdout"
+    },
+    {
+      "model": "undercut",
+      "metric": "ece_calibrated",
+      "value": 0.1303142864225645,
+      "nominal": 0.05,
+      "status": "drift",
+      "detail": "n=252; 10-bin equal-width"
+    },
+    {
       "model": "pit_duration",
       "metric": "p05_p95_coverage",
-      "value": 0.7047,
+      "value": 0.7023809523809523,
       "nominal": 0.9,
       "status": "drift",
-      "detail": "config-declared (recompute pending N15 holdout); 0.7047 vs 0.90 nominal"
+      "detail": "n=252; empirical P05-P95 coverage recomputed on the regenerated N15 holdout"
     },
     {
       "model": "tire_degradation[C2]",
@@ -69,22 +101,6 @@
       "nominal": null,
       "status": "ok",
       "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
-    },
-    {
-      "model": "safety_car",
-      "metric": "ece_calibrated",
-      "value": null,
-      "nominal": 0.05,
-      "status": "pending",
-      "detail": "engineered features (lap_time_*_z, anomaly_and_yellow, lap1_chaos) absent from sc_labeled holdout (#207)"
-    },
-    {
-      "model": "undercut",
-      "metric": "ece_calibrated",
-      "value": null,
-      "nominal": 0.05,
-      "status": "pending",
-      "detail": "historical aggregates circuit_undercut_rate/team_x_undercut_rate absent from holdout (#207)"
     }
   ]
 }

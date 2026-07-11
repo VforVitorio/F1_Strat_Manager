@@ -1,0 +1,19 @@
+{
+  "header": {
+    "harness_sha": "b727baa",
+    "dataset": "radios_raw.csv unlabeled subset",
+    "seed_policy": "deterministic",
+    "era_tag": "2022-2025",
+    "llm": "openai/gpt-4.1-mini",
+    "schema_version": "1",
+    "generated_at": "2026-07-11T17:47:16+00:00",
+    "artifacts": {}
+  },
+  "result": {
+    "sample_size": 80,
+    "predicted_alerts": 16,
+    "judged_true": 0,
+    "proxy_precision": 0.0,
+    "detail": "PROXY: 0/16 predicted alerts judged genuine by gpt-4.1-mini; LLM labels are not ground truth - needs human review before any paper claim"
+  }
+}
