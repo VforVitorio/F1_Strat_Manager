@@ -152,9 +152,16 @@ def audit_findings() -> list[ProvenanceEntry]:
             "aggregate_feature",
             "overtake/safety_car/laptime",
             UNDERDOCUMENTED,
-            "k-means fit window not year-restricted in code; 2025 holdout is intent-only",
-            "N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final)",
-            "mild NON-target risk (unsupervised geometry bucket); pin a year filter to close",
+            "load_all_races scans every year dir, so the k-means fit window is not "
+            "year-restricted in code; but the DEPLOYED 2025 clusters are assigned by "
+            "applying the frozen scaler+k-means with NO refit (N03 assign_clusters_2025)",
+            "N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final / assign_clusters_2025)",
+            "RESOLVED as accepted non-target: circuit_cluster is an unsupervised geometry "
+            "bucket (track shape/speed/deg aggregates), so it carries no target label - a "
+            "circuit's layout is known before its race. The 2025 assignment uses the frozen "
+            "model (no refit), so no test-season target leaks. N03 is untouchable, so the "
+            "training-time year filter stays a documented limitation, not a code fix; the "
+            "overtake/SC/laptime headlines that use Cluster are unaffected",
         ),
         ProvenanceEntry(
             "year_circuit_median / team_pace_rank",
@@ -408,9 +415,15 @@ def _render(
         "window was originally chosen by max-lift on test-2025, so it cannot be honestly re-chosen "
         "without retraining the 5/7-lap models. The reported SC AUC-PR 0.0723 (the lowest of the three "
         "windows) keeps an explicit test-window-selected caveat.",
-        "- **Remaining action before freeze**: pin a year filter in N03 `load_all_races` to close the "
-        "circuit_cluster underdocumentation; and give SC/overtake a real held-out val split (or nested "
-        "CV) if a defensible operating threshold is ever needed.",
+        "- **circuit_cluster - RESOLVED (accepted non-target)**: it is an unsupervised k-means bucket over "
+        "circuit geometry, so it carries no target label (a track's layout is known pre-race), and the "
+        "deployed 2025 clusters are assigned by applying the frozen model with no refit (N03 "
+        "`assign_clusters_2025`). N03 is untouchable, so the training-time year filter is a documented "
+        "limitation rather than a code fix; the overtake/SC/laptime headlines that use Cluster are "
+        "unaffected.",
+        "- **Recommendation before freeze (not executed - no retrain)**: give SC/overtake a real held-out "
+        "validation split (or nested CV) if a defensible operating threshold is ever needed. The paper "
+        "reports both threshold-free (their headline AUC-PR/AUC-ROC are unaffected).",
         "- Every other headline (undercut 0.6739, pit 0.487, pace 0.4104, tire 0.7078, sentiment 0.84) is "
         "unaffected by these findings.",
     ]

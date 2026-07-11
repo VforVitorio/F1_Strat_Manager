@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "c1af9c1",
+    "harness_sha": "8ce8653",
     "dataset": "notebooks/strategy audit + 2024/2025 overtake & SC holdouts",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T17:25:07+00:00",
+    "generated_at": "2026-07-11T19:19:34+00:00",
     "artifacts": {}
   },
   "findings": [
@@ -78,9 +78,9 @@
       "kind": "aggregate_feature",
       "model": "overtake/safety_car/laptime",
       "verdict": "underdocumented",
-      "selection": "k-means fit window not year-restricted in code; 2025 holdout is intent-only",
-      "evidence": "N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final)",
-      "impact": "mild NON-target risk (unsupervised geometry bucket); pin a year filter to close"
+      "selection": "load_all_races scans every year dir, so the k-means fit window is not year-restricted in code; but the DEPLOYED 2025 clusters are assigned by applying the frozen scaler+k-means with NO refit (N03 assign_clusters_2025)",
+      "evidence": "N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final / assign_clusters_2025)",
+      "impact": "RESOLVED as accepted non-target: circuit_cluster is an unsupervised geometry bucket (track shape/speed/deg aggregates), so it carries no target label - a circuit's layout is known before its race. The 2025 assignment uses the frozen model (no refit), so no test-season target leaks. N03 is untouchable, so the training-time year filter stays a documented limitation, not a code fix; the overtake/SC/laptime headlines that use Cluster are unaffected"
     },
     {
       "item": "year_circuit_median / team_pace_rank",

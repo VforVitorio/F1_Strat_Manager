@@ -1,6 +1,6 @@
 # hygiene
 
-- harness `c1af9c1` · schema v1 · generated 2026-07-11T17:25:07+00:00
+- harness `8ce8653` · schema v1 · generated 2026-07-11T19:19:34+00:00
 - era 2022-2025 · dataset notebooks/strategy audit + 2024/2025 overtake & SC holdouts · seed deterministic · llm none
 - artifacts: —
 
@@ -9,7 +9,7 @@
 | optimal_threshold=0.7976 | threshold | overtake | **contaminated** | argmax-F1 on the 2025 test set | N12_overtake_model.ipynb (threshold-analysis / step-5 cell) |
 | best_threshold=0.2335 + 3/5/7-lap window | threshold | safety_car | **contaminated** | argmax-F2 threshold AND the target-window both selected on the 2025 test set | N14_sc_model.ipynb (PR-curve + window-comparison cells) |
 | sc Platt calibrator | calibrator | safety_car | **underdocumented** | fit on 2024 probabilities, but 2024 is IN the train set (config fitted_on='val_2024' is misleading) | N14_sc_model.ipynb (calibration cell) |
-| circuit_cluster (k-means) | aggregate_feature | overtake/safety_car/laptime | **underdocumented** | k-means fit window not year-restricted in code; 2025 holdout is intent-only | N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final) |
+| circuit_cluster (k-means) | aggregate_feature | overtake/safety_car/laptime | **underdocumented** | load_all_races scans every year dir, so the k-means fit window is not year-restricted in code; but the DEPLOYED 2025 clusters are assigned by applying the frozen scaler+k-means with NO refit (N03 assign_clusters_2025) | N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final / assign_clusters_2025) |
 | best_threshold=0.522 | threshold | undercut | **clean** | argmax-F1 on 2024 in-train (2024 is part of N16's 2023+2024 train set, same structure as overtake; mild, 143 positives / base 0.413) - but NEVER selected on test-2025 | N16_undercut.ipynb ("Threshold on calibrated val 2024") |
 | circuit_sc_rate | aggregate_feature | safety_car | **clean** | past-season only (year < yr); 2023 rows get a fixed SC_PRIOR=0.15 | N13_sc_eda.ipynb (compute_circuit_sc_rate) |
 | team_year_median | aggregate_feature | pit_duration | **clean** | lookup fit on train only, applied to test with recent-year fallback | N15_pit_duration.ipynb (add_team_year_median) |
@@ -44,5 +44,6 @@
 - **Overtake headline clears**: AUC-PR 0.5491 / AUC-ROC 0.8758 are threshold-free and involve no window selection; the threshold leakage touches only their operating point. NOTE the overtake 'correction' below is also in-train (N12 trains final on 2023+2024, 2024 was only Optuna inner-val), but with 28k pairs the memorization is mild, so its re-selected threshold is a reasonable operating point rather than a collapse.
 - **Safety-car has NO honest validation split**: N14 trains on 2023+2024 and tests on 2025, so there is no held-out split to re-select an operating threshold on. Re-selecting on 2024 is in-train (resubstitution) and collapses on test - evidence that an honest SC operating threshold does not exist without a fresh val split or retraining, NOT that 0.2335 was specifically test-overfit. The paper should report SC threshold-free.
 - **Safety-car window cannot be retro-selected**: only the 3-lap model is persisted, and the window was originally chosen by max-lift on test-2025, so it cannot be honestly re-chosen without retraining the 5/7-lap models. The reported SC AUC-PR 0.0723 (the lowest of the three windows) keeps an explicit test-window-selected caveat.
-- **Remaining action before freeze**: pin a year filter in N03 `load_all_races` to close the circuit_cluster underdocumentation; and give SC/overtake a real held-out val split (or nested CV) if a defensible operating threshold is ever needed.
+- **circuit_cluster - RESOLVED (accepted non-target)**: it is an unsupervised k-means bucket over circuit geometry, so it carries no target label (a track's layout is known pre-race), and the deployed 2025 clusters are assigned by applying the frozen model with no refit (N03 `assign_clusters_2025`). N03 is untouchable, so the training-time year filter is a documented limitation rather than a code fix; the overtake/SC/laptime headlines that use Cluster are unaffected.
+- **Recommendation before freeze (not executed - no retrain)**: give SC/overtake a real held-out validation split (or nested CV) if a defensible operating threshold is ever needed. The paper reports both threshold-free (their headline AUC-PR/AUC-ROC are unaffected).
 - Every other headline (undercut 0.6739, pit 0.487, pace 0.4104, tire 0.7078, sentiment 0.84) is unaffected by these findings.
