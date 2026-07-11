@@ -11,6 +11,16 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.7.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.8...v1.7.0) (2026-07-11)
+
+
+### Features
+
+* **strategy:** add no-llm engine profile (fixes the --no-llm crash) ([f32e38b](https://github.com/VforVitorio/F1-StratLab/commit/f32e38b32acbca0a21defcc569a9aba32433d083))
+* **strategy:** add shared inference engine (rich profile) + arcade delegate ([43c2717](https://github.com/VforVitorio/F1-StratLab/commit/43c271741cf400496280a84cbec1efce6685b401))
+* **strategy:** no-llm engine profile (fixes the --no-llm crash, [#166](https://github.com/VforVitorio/F1-StratLab/issues/166)) ([91b98d3](https://github.com/VforVitorio/F1-StratLab/commit/91b98d3274c0027d3c846ebffcac79a09923f1a7))
+* **strategy:** shared inference engine (rich profile) + arcade delegate ([0e1b793](https://github.com/VforVitorio/F1-StratLab/commit/0e1b793e1a60a637870aa972bad446937a2c7a03))
+
 ## [1.6.8](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.7...v1.6.8) (2026-07-09)
 
 
