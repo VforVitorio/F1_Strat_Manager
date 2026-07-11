@@ -1,14 +1,15 @@
 {
   "header": {
-    "harness_sha": "5f1f29d",
-    "dataset": "radio_labeled_data.csv (fixed set)",
+    "harness_sha": "1c8ff7c",
+    "dataset": "radio_labeled_data.csv + intent_labeled_data.csv (fixed sets)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T15:38:36+00:00",
+    "generated_at": "2026-07-11T16:13:28+00:00",
     "artifacts": {
-      "roberta_sentiment": "d7d0ada739c6"
+      "roberta_sentiment": "d7d0ada739c6",
+      "intent_head": "7c995ba21bc0"
     }
   },
   "results": [
@@ -31,10 +32,42 @@
     {
       "stage": "intent",
       "metric": "accuracy",
-      "value": null,
+      "value": 0.8885,
       "reference": null,
-      "status": "blocked",
-      "detail": "setfit does not import under transformers 5.3.0 (#303); stage cannot run"
+      "status": "reproduced",
+      "detail": "n=529; full labeled set (train+test); optimistic vs the published 0.5934 test weighted-F1"
+    },
+    {
+      "stage": "intent",
+      "metric": "macro_f1",
+      "value": 0.8922,
+      "reference": null,
+      "status": "reproduced",
+      "detail": "n=529; 5-class, no anchor"
+    },
+    {
+      "stage": "intent",
+      "metric": "weighted_f1",
+      "value": 0.8881,
+      "reference": 0.5934,
+      "status": "delta",
+      "detail": "n=529; vs deployed test weighted-F1 (full-set optimistic)"
+    },
+    {
+      "stage": "intent",
+      "metric": "predict_proba_order",
+      "value": 1.0,
+      "reference": 1.0,
+      "status": "reproduced",
+      "detail": "head.classes_=[0, 1, 2, 3, 4] map to intent_names via intent_mapping; 5/5 columns aligned (no swap)"
+    },
+    {
+      "stage": "ner",
+      "metric": "dead_classes",
+      "value": 4.0,
+      "reference": 0.0,
+      "status": "flagged",
+      "detail": "4 entity types with frozen-eval B-F1 < 0.15 (situation, incident, strategy instruction, track condition); suppressed as untrustworthy, re-measured in #304"
     },
     {
       "stage": "ner",
@@ -42,7 +75,7 @@
       "value": null,
       "reference": null,
       "status": "pending",
-      "detail": "GLiNER/BERT reconstruction not wired this phase"
+      "detail": "BERT-bio entity-level F1 reproduction not wired this phase (#304)"
     },
     {
       "stage": "rcm",
@@ -50,7 +83,7 @@
       "value": null,
       "reference": null,
       "status": "pending",
-      "detail": "RCM classifier reconstruction not wired this phase"
+      "detail": "RCM parser reproduction not wired this phase (#304)"
     },
     {
       "stage": "alert_precision",
@@ -58,7 +91,7 @@
       "value": null,
       "reference": null,
       "status": "pending",
-      "detail": "no labeled alert ground-truth on disk (the MoE-routing metric #304 targets; data-collection task)"
+      "detail": "no labeled alert ground-truth on disk (the MoE-routing metric #304 targets; data task)"
     }
   ]
 }
