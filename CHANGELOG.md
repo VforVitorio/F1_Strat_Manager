@@ -11,6 +11,46 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.8.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.7.0...v1.8.0) (2026-07-11)
+
+
+### Features
+
+* **eval:** add LLM-judge alert-precision module over unlabeled radios ([b727baa](https://github.com/VforVitorio/F1-StratLab/commit/b727baabba5304fa55eac99df2b03e0a8de06812))
+* **eval:** add metrics-registry + calibration harness (f1-eval) ([c08780d](https://github.com/VforVitorio/F1-StratLab/commit/c08780d1373fe265496a86e6d38a997ac7c3e8e7)), closes [#206](https://github.com/VforVitorio/F1-StratLab/issues/206)
+* **eval:** add NLP per-stage eval harness (f1-eval nlp) ([dbf76b1](https://github.com/VforVitorio/F1-StratLab/commit/dbf76b18bf303989a5e3fe3da52c7b323b3ae56a)), closes [#304](https://github.com/VforVitorio/F1-StratLab/issues/304)
+* **eval:** add threshold-provenance + leakage hygiene report (f1-eval hygiene) ([3788167](https://github.com/VforVitorio/F1-StratLab/commit/37881672650ba14404faf7d56a45ec83e62d224f)), closes [#207](https://github.com/VforVitorio/F1-StratLab/issues/207)
+* **eval:** compute radio alert precision from gold intent labels ([16bd305](https://github.com/VforVitorio/F1-StratLab/commit/16bd305ed7bc2ea0d35277dd2bafd10e4ed67cc1)), closes [#304](https://github.com/VforVitorio/F1-StratLab/issues/304)
+* **eval:** LLM-judge alert precision over unlabeled radios ([#304](https://github.com/VforVitorio/F1-StratLab/issues/304) follow-up) ([1651c3b](https://github.com/VforVitorio/F1-StratLab/commit/1651c3bbb51406c66206896eae7623e8f3ab6671))
+* **eval:** ML metrics-registry + calibration harness (f1-eval, [#206](https://github.com/VforVitorio/F1-StratLab/issues/206)) ([380f1d7](https://github.com/VforVitorio/F1-StratLab/commit/380f1d766e4e99f08af9cf2eb176665ce714f9c7))
+* **eval:** NLP per-stage eval harness (f1-eval nlp, [#304](https://github.com/VforVitorio/F1-StratLab/issues/304)) ([1c8ff7c](https://github.com/VforVitorio/F1-StratLab/commit/1c8ff7c850c54c613b54b72e7f0bd55b6b2dfbaa))
+* **eval:** radio alert precision from gold labels (closes [#304](https://github.com/VforVitorio/F1-StratLab/issues/304)) ([da1db0c](https://github.com/VforVitorio/F1-StratLab/commit/da1db0c6f51d8419734756f9ddd828c979c71546))
+* **eval:** recompute SC + undercut calibration + AUC-PR (part of [#364](https://github.com/VforVitorio/F1-StratLab/issues/364)) ([5c97461](https://github.com/VforVitorio/F1-StratLab/commit/5c974617f201bfb215d6525866fb494ecbb0428a))
+* **eval:** recompute SC + undercut calibration and AUC-PR from in-memory holdouts ([7365b50](https://github.com/VforVitorio/F1-StratLab/commit/7365b5074a544f7deb02a2d0f0592b078aa660b9)), closes [#364](https://github.com/VforVitorio/F1-StratLab/issues/364)
+* **eval:** regenerate pit holdout from raw laps (closes [#364](https://github.com/VforVitorio/F1-StratLab/issues/364)) ([d66ddae](https://github.com/VforVitorio/F1-StratLab/commit/d66ddae72a9cfd873348bc6c8541ca5b82ced2b8))
+* **eval:** regenerate pit holdout from raw laps + recompute coverage and MAE ([ccc213d](https://github.com/VforVitorio/F1-StratLab/commit/ccc213d069e8d1f47056d8207652f211b0fe29fb)), closes [#364](https://github.com/VforVitorio/F1-StratLab/issues/364)
+* **eval:** reproduce intent setfit-free + [#303](https://github.com/VforVitorio/F1-StratLab/issues/303) NLP hygiene verdicts ([6bc5413](https://github.com/VforVitorio/F1-StratLab/commit/6bc54135a8c9d08ebaa5f048013e1b8e3a916c60))
+* **eval:** reproduce intent setfit-free and record [#303](https://github.com/VforVitorio/F1-StratLab/issues/303) NLP hygiene verdicts ([275c487](https://github.com/VforVitorio/F1-StratLab/commit/275c487a456c45c61b1371504f668df8f5dd0d35))
+* **eval:** reproduce NER entity-F1 + RCM coverage ([#304](https://github.com/VforVitorio/F1-StratLab/issues/304)) ([bc0350d](https://github.com/VforVitorio/F1-StratLab/commit/bc0350d62d13d0f4b7673a389af949e07dfca58b))
+* **eval:** reproduce NER entity-F1 and RCM coverage in the NLP harness ([1efb133](https://github.com/VforVitorio/F1-StratLab/commit/1efb1331d8ddef3efef70dcdd23631a3ef71268d)), closes [#304](https://github.com/VforVitorio/F1-StratLab/issues/304)
+* **eval:** threshold-provenance + leakage hygiene report ([#207](https://github.com/VforVitorio/F1-StratLab/issues/207)) ([5f1f29d](https://github.com/VforVitorio/F1-StratLab/commit/5f1f29d8ab7bdd6499f098c8e1fcef3d675838fd))
+* **eval:** wire f1-eval alert-llm + report the unlabeled-corpus finding ([1e9fed1](https://github.com/VforVitorio/F1-StratLab/commit/1e9fed178ba2e25582f673a1083d1aebd65e978f)), closes [#304](https://github.com/VforVitorio/F1-StratLab/issues/304)
+
+
+### Bug Fixes
+
+* **eval:** align undercut provenance wording with in-train relabeling (Fable re-verify) ([54e5d42](https://github.com/VforVitorio/F1-StratLab/commit/54e5d42ff757467a4e478f29e9b97b70dcf722ca))
+* **eval:** correct SC operating threshold + window on honest splits ([#363](https://github.com/VforVitorio/F1-StratLab/issues/363)) ([1275101](https://github.com/VforVitorio/F1-StratLab/commit/12751013815c02b4242a50e6465321c77c6d7d37))
+* **eval:** correct SC threshold + window on honest splits (closes [#363](https://github.com/VforVitorio/F1-StratLab/issues/363)) ([e1ee603](https://github.com/VforVitorio/F1-StratLab/commit/e1ee60386b5b91feddde03cc35ea280f20fc6803))
+* **eval:** relabel SC/overtake threshold corrections as in-train (Fable gate) ([c38c94e](https://github.com/VforVitorio/F1-StratLab/commit/c38c94e9fe9641711d99ecb31211f91e33379e9c))
+
+
+### Documentation
+
+* **eval:** regenerate hygiene report with in-train relabeling + correct provenance stamp ([c1af9c1](https://github.com/VforVitorio/F1-StratLab/commit/c1af9c1f84576137cef35a08d7be5dede9f465f6))
+* **roadmap:** reconcile published metrics to thesis/IEEE finals ([2758ec5](https://github.com/VforVitorio/F1-StratLab/commit/2758ec524c37cc79bf3f7a9bc315d5cf058a8bca))
+* **roadmap:** reconcile published metrics to thesis/IEEE finals ([#213](https://github.com/VforVitorio/F1-StratLab/issues/213)) ([50b7ecf](https://github.com/VforVitorio/F1-StratLab/commit/50b7ecfc01681dec372b1bcdeb20f8d0c90bd30d))
+
 ## [1.7.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.6.8...v1.7.0) (2026-07-11)
 
 
