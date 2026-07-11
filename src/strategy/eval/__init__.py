@@ -14,6 +14,7 @@ Public API:
 """
 
 from src.strategy.eval.calibration import build_calibration_report
+from src.strategy.eval.hygiene import build_hygiene_report
 from src.strategy.eval.registry import build_registry, load_registry
 from src.strategy.eval.reproduce import build_reproduction_report
 
@@ -22,4 +23,5 @@ __all__ = [
     "load_registry",
     "build_calibration_report",
     "build_reproduction_report",
+    "build_hygiene_report",
 ]

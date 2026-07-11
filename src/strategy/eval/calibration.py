@@ -123,8 +123,11 @@ def _add_overtake_features(df: "Any") -> "Any":
     return df
 
 
-def load_overtake_predictions() -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-    """Load the overtake 2025 holdout and return ``(y, proba_raw, proba_cal)``.
+def load_overtake_predictions(year: int = 2025) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """Load an overtake season holdout (default 2025 test) -> ``(y, proba_raw, proba_cal)``.
+
+    ``year`` selects the season slice: 2025 = test (calibration/reproduction),
+    2024 = validation (the #207 hygiene threshold re-selection).
 
     Shared seam: both the calibration metrics here and the headline-metric
     reproduction (``reproduce.py``) need the same holdout + model + calibrator,
@@ -145,7 +148,7 @@ def load_overtake_predictions() -> tuple[np.ndarray, np.ndarray, np.ndarray] | N
         return None
 
     df = _add_overtake_features(pd.read_parquet(parquet))
-    test = df[df["Year"] == 2025].copy()
+    test = df[df["Year"] == year].copy()
     model = joblib.load(model_path)
     calibrator = joblib.load(calib_path)
 
