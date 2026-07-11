@@ -28,7 +28,10 @@ Stage status this phase:
 - **rcm** - the N23 rule-based classifier is ported into the harness and run
   over the persisted 2025 RCM corpus; coverage (1 - OTHER-rate) per category vs
   the frozen config (#304).
-- **alert precision** - pending a labeled alert ground-truth set (#304 phase 3).
+- **alert precision** - the MoE-routing signal the audit names: a radio alert is
+  raised when the predicted intent is PROBLEM/WARNING. The intent set is
+  hand-labeled, so the alert ground truth already exists; precision is real, not
+  an LLM proxy (#304).
 """
 
 from __future__ import annotations
@@ -53,6 +56,7 @@ _NER_HEADLINE_F1 = 0.4151  # frozen bert_large_conll03_bio entity-F1 (model_conf
 _NER_MAX_LEN = 128  # must match the N22 training config
 _DEAD_NER_F1 = 0.15  # entity types with frozen-eval B-F1 below this are flagged dead (NR-07)
 _RCM_CORPUS_GLOB = "race_radios/2025/*/rcm.parquet"  # persisted FastF1 RCM corpus
+_ALERT_INTENTS = ("PROBLEM", "WARNING")  # radio_agent.CFG.alert_intents (the alert channel)
 
 
 @dataclass
@@ -203,21 +207,43 @@ def _load_intent_setfit_free() -> tuple[Any, Any, dict[int, str]] | None:
     return st, head, idx_to_name
 
 
-def reproduce_intent() -> list[StageResult]:
+def _intent_predictions() -> tuple[list[str], list[str]] | None:
+    """``(y_true, preds)`` for the intent labeled set, computed once (setfit-free).
+
+    Shared by ``reproduce_intent`` and ``reproduce_alert_precision`` so the
+    568 MB encoder loads and encodes the 529 messages a single time per report.
+    Returns ``None`` when the model or CSV is absent.
+    """
+    import pandas as pd
+
+    loaded = _load_intent_setfit_free()
+    labeled = get_data_root() / "processed" / "radio_nlp" / "intent_labeled_data.csv"
+    if loaded is None or not labeled.exists():
+        return None
+
+    st, head, idx_to_name = loaded
+    df = pd.read_csv(labeled)
+    texts = df["message"].astype(str).tolist()
+    y_true = df["intent"].tolist()
+    preds = [idx_to_name[int(c)] for c in head.predict(st.encode(texts, show_progress_bar=False))]
+    return y_true, preds
+
+
+def reproduce_intent(predictions: tuple[list[str], list[str]] | None = None) -> list[StageResult]:
     """Reproduce intent accuracy + macro/weighted-F1 on the fixed labeled set.
 
     Setfit-free (see ``_load_intent_setfit_free``). The labeled CSV is the full
     train+test set, so the numbers run optimistic vs the deployed model's
     published test weighted-F1 (0.5934); the held-out split is not pinned on
     disk. Only ``weighted_f1`` has a published anchor; accuracy + macro-F1 are
-    new measurements with no thesis reference. Returns a ``pending`` row when the
-    artifacts or CSV are absent.
+    new measurements with no thesis reference. ``predictions`` may be supplied to
+    reuse a shared inference pass; otherwise it is computed. Returns a
+    ``pending`` row when the artifacts or CSV are absent.
     """
     from sklearn.metrics import accuracy_score, f1_score
 
-    loaded = _load_intent_setfit_free()
-    labeled = get_data_root() / "processed" / "radio_nlp" / "intent_labeled_data.csv"
-    if loaded is None or not labeled.exists():
+    data = predictions if predictions is not None else _intent_predictions()
+    if data is None:
         return [
             StageResult(
                 "intent",
@@ -229,15 +255,7 @@ def reproduce_intent() -> list[StageResult]:
             )
         ]
 
-    import pandas as pd
-
-    st, head, idx_to_name = loaded
-    df = pd.read_csv(labeled)
-    texts = df["message"].astype(str).tolist()
-    y_true = df["intent"].tolist()
-    embeddings = st.encode(texts, show_progress_bar=False)
-    preds = [idx_to_name[int(c)] for c in head.predict(embeddings)]
-
+    y_true, preds = data
     accuracy = float(accuracy_score(y_true, preds))
     macro_f1 = float(f1_score(y_true, preds, average="macro"))
     weighted_f1 = float(f1_score(y_true, preds, average="weighted"))
@@ -263,6 +281,50 @@ def reproduce_intent() -> list[StageResult]:
             _status(weighted_f1, _INTENT_PUBLISHED_WEIGHTED_F1),
             f"n={n}; vs deployed test weighted-F1 (full-set optimistic)",
         ),
+    ]
+
+
+def reproduce_alert_precision(
+    predictions: tuple[list[str], list[str]] | None = None,
+) -> list[StageResult]:
+    """Precision of the radio alert channel (intent in PROBLEM/WARNING), from gold labels.
+
+    This is the MoE-routing signal the audit (#304) names as "never measured":
+    ``radio_agent`` raises a radio alert exactly when the predicted intent is in
+    ``CFG.alert_intents`` (PROBLEM, WARNING). The intent CSV is hand-labeled, so
+    the alert ground truth already exists - a real precision, not an LLM proxy.
+    Full-set (train+test), so it runs optimistic vs a held-out split (not pinned
+    on disk), the same caveat as the other stages. Returns a ``pending`` row when
+    the model or CSV is absent.
+    """
+    from sklearn.metrics import f1_score, precision_score, recall_score
+
+    data = predictions if predictions is not None else _intent_predictions()
+    if data is None:
+        return [
+            StageResult(
+                "alert_precision",
+                "precision",
+                None,
+                None,
+                "pending",
+                "intent model or intent_labeled_data.csv absent",
+            )
+        ]
+
+    y_true, preds = data
+    gold_alert = [1 if label in _ALERT_INTENTS else 0 for label in y_true]
+    pred_alert = [1 if label in _ALERT_INTENTS else 0 for label in preds]
+    precision = float(precision_score(gold_alert, pred_alert, zero_division=0))
+    recall = float(recall_score(gold_alert, pred_alert, zero_division=0))
+    f1 = float(f1_score(gold_alert, pred_alert, zero_division=0))
+    n_alerts = sum(gold_alert)
+    detail = (
+        f"n={len(y_true)} ({n_alerts} gold alerts); radio PROBLEM/WARNING channel from hand-labeled "
+        f"gold intent; R {recall:.3f}/F1 {f1:.3f}; full-set optimistic"
+    )
+    return [
+        StageResult("alert_precision", "precision", round(precision, 4), None, "reproduced", detail)
     ]
 
 
@@ -672,25 +734,21 @@ def _status(value: float, reference: float) -> str:
 
 
 def _gated_stages() -> list[StageResult]:
-    """The stages that cannot run this phase, each with its exact blocker (#304)."""
-    return [
-        StageResult(
-            "alert_precision",
-            "precision",
-            None,
-            None,
-            "pending",
-            "no labeled alert ground-truth on disk (the MoE-routing metric #304 targets; data task)",
-        ),
-    ]
+    """Stages that cannot run this phase. Empty after #304: every NLP stage now reproduces.
+
+    Kept as the documented extension point for a future gated NLP metric.
+    """
+    return []
 
 
 def collect_results() -> list[StageResult]:
     """All NLP stage results: reproduced stages, the #303 hygiene verdicts, then gated stages."""
+    intent_predictions = _intent_predictions()
     _dead, dead_row = dead_ner_classes()
     return [
         *reproduce_sentiment(),
-        *reproduce_intent(),
+        *reproduce_intent(intent_predictions),
+        *reproduce_alert_precision(intent_predictions),
         verify_intent_column_order(),
         *reproduce_ner(),
         *reproduce_rcm(),
