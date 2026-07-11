@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "da1db0c",
+    "harness_sha": "e1ee603",
     "dataset": "2025 holdout vs published model_configs",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T16:52:50+00:00",
+    "generated_at": "2026-07-11T17:31:11+00:00",
     "artifacts": {
       "overtake_model": "cbb9d0eb0beb"
     }
@@ -40,9 +40,9 @@
       "model": "pit_duration",
       "metric": "p50_mae_test_s",
       "published": 0.487,
-      "reproduced": null,
-      "status": "pending",
-      "detail": "pit_labeled holdout empty on disk; regen from raw tracked in #364"
+      "reproduced": 0.48934217309932837,
+      "status": "reproduced",
+      "detail": "n=252; |delta| 0.0023 vs tol 0.01"
     },
     {
       "model": "pace",

@@ -13,6 +13,9 @@ import pytest
 ROOT = Path(__file__).parent.parent.parent
 _HAS_SC = (ROOT / "data" / "models" / "safety_car_probability" / "lgbm_sc_v1.pkl").exists()
 _HAS_UNDERCUT = (ROOT / "data" / "models" / "pit_prediction" / "lgbm_undercut_v1.pkl").exists()
+_HAS_PIT = (ROOT / "data" / "models" / "pit_prediction" / "hist_pit_p50_v1.pkl").exists() and bool(
+    list((ROOT / "data" / "raw").glob("*/*/laps.parquet"))
+)
 
 
 @pytest.mark.data
@@ -48,3 +51,14 @@ def test_undercut_auc_pr_reproduces_exactly():
     result = _undercut_auc_pr()
     assert result.status == "reproduced"
     assert result.reproduced is not None and abs(result.reproduced - 0.6739) < 0.01
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not _HAS_PIT, reason="pit models or raw laps absent (CI runner without data)")
+def test_pit_p50_mae_reproduces_from_raw_laps():
+    """The pit holdout rebuilt from raw laps reproduces the 0.487 P50 MAE within tolerance."""
+    from src.strategy.eval.reproduce import _pit_p50_mae
+
+    result = _pit_p50_mae()
+    assert result.status == "reproduced"
+    assert result.reproduced is not None and abs(result.reproduced - 0.487) < 0.01

@@ -18,10 +18,10 @@ Scope this phase (#206):
   ``_add_overtake_features`` pattern. Both reproduce their published AUC-PR
   exactly (#364).
 
-ponytail: pit coverage + the MC sigma are read from frozen artifacts, not
-re-run from a holdout (``pit_labeled`` is empty on disk; the MC pass needs a
-torch forward pass x N). Upgrade path when the holdouts land: recompute both
-from data, the same way N33 Section D already does for the TCN.
+ponytail: the MC sigma is read from the frozen calibration JSON, not re-run (the
+MC pass needs a torch forward pass x N). pit coverage is now recomputed from the
+raw-laps holdout (#364, ``pit_holdout``). Upgrade path for MC: recompute from
+data, the same way N33 Section D already does for the TCN.
 """
 
 from __future__ import annotations
@@ -335,14 +335,33 @@ def _overtake_calibration() -> list[CalibrationResult]:
 
 
 def _pit_quantile_coverage() -> list[CalibrationResult]:
-    """Surface the pit P05-P95 empirical coverage and flag it vs nominal.
+    """Recompute the pit P05-P95 empirical coverage on the regenerated N15 holdout.
 
-    ponytail: read from the frozen ``model_config`` (the value is published
-    there) rather than re-run - ``pit_labeled`` is empty on disk so there is no
-    holdout to predict on. Upgrade path: recompute empirical coverage from the
-    hist_pit P05/P95 models over the N15 holdout once it lands. This is the
-    retro-validation target: the harness must surface the known 0.7047 break.
+    Coverage = fraction of test physical_stop_est falling inside [P05, P95]. This
+    is the retro-validation target: the harness must surface the known ~0.70
+    break vs the 0.90 nominal. Falls back to the config-declared value when the
+    raw laps or models are absent (#364 rebuilds the holdout from raw laps).
     """
+    from src.strategy.eval.pit_holdout import load_pit_holdout
+
+    loaded = load_pit_holdout()
+    if loaded is not None:
+        test_slice, models, features = loaded
+        x = test_slice[features]
+        lower = models["p05"].predict(x)
+        upper = models["p95"].predict(x)
+        actual = test_slice["physical_stop_est"].to_numpy()
+        coverage = float(((actual >= lower) & (actual <= upper)).mean())
+        status = "drift" if coverage < NOMINAL_COVERAGE else "ok"
+        detail = (
+            f"n={len(actual)}; empirical P05-P95 coverage recomputed on the regenerated N15 holdout"
+        )
+        return [
+            CalibrationResult(
+                "pit_duration", "p05_p95_coverage", coverage, NOMINAL_COVERAGE, status, detail
+            )
+        ]
+
     cfg_path = get_models_root() / "pit_prediction" / "model_config.json"
     if not cfg_path.exists():
         return [
@@ -352,14 +371,14 @@ def _pit_quantile_coverage() -> list[CalibrationResult]:
                 None,
                 NOMINAL_COVERAGE,
                 "pending",
-                "model_config absent",
+                "raw laps + model_config absent",
             )
         ]
 
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     coverage = float(cfg["eval"]["p05_p95_coverage_test"])
     status = "drift" if coverage < NOMINAL_COVERAGE else "ok"
-    detail = f"config-declared (recompute pending N15 holdout); {coverage:.4f} vs {NOMINAL_COVERAGE:.2f} nominal"
+    detail = f"config-declared (raw laps absent for recompute); {coverage:.4f} vs {NOMINAL_COVERAGE:.2f} nominal"
     return [
         CalibrationResult(
             "pit_duration", "p05_p95_coverage", coverage, NOMINAL_COVERAGE, status, detail
