@@ -21,13 +21,11 @@ _HAS_NER_MODEL = (
 _HAS_RCM_CORPUS = bool(list((ROOT / "data" / "processed").glob("race_radios/2025/*/rcm.parquet")))
 
 
-def test_nlp_gated_stages_are_pending_after_304():
-    """After #304 only alert precision stays gated (NER, RCM, intent all run)."""
+def test_no_nlp_stage_is_gated_after_304():
+    """After #304 every NLP stage reproduces; nothing stays gated."""
     from src.strategy.eval.nlp import _gated_stages
 
-    by_stage = {r.stage: r for r in _gated_stages()}
-    assert set(by_stage) == {"alert_precision"}
-    assert by_stage["alert_precision"].status == "pending"
+    assert _gated_stages() == []
 
 
 def test_rcm_classifier_maps_known_events():
@@ -79,6 +77,17 @@ def test_intent_reproduction_is_sane():
     assert rows["accuracy"].status != "pending"
     assert rows["accuracy"].value is not None and rows["accuracy"].value > 0.5
     assert "weighted_f1" in rows
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent model absent (CI runner without weights)")
+def test_alert_precision_from_gold_is_high():
+    """Alert precision (intent PROBLEM/WARNING) is real (gold-derived) and clears 0.8."""
+    from src.strategy.eval.nlp import reproduce_alert_precision
+
+    rows = {r.metric: r for r in reproduce_alert_precision()}
+    assert rows["precision"].status == "reproduced"
+    assert rows["precision"].value is not None and rows["precision"].value > 0.8
 
 
 @pytest.mark.data
