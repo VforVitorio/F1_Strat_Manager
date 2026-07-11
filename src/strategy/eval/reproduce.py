@@ -139,6 +139,47 @@ def _undercut_auc_pr() -> ReproResult:
     )
 
 
+_PIT_PUBLISHED_P50_MAE = 0.487  # registry headline (N15 P50 physical-stop MAE, s)
+
+
+def _pit_p50_mae() -> ReproResult:
+    """Re-derive the pit P50 MAE on the holdout rebuilt from raw laps (#364).
+
+    ``pit_labeled`` is empty on disk, so the holdout is regenerated from the raw
+    laps by ``pit_holdout.load_pit_holdout``. MAE of the P50 quantile prediction
+    vs physical_stop_est on the 2025 slice.
+    """
+    from src.strategy.eval.pit_holdout import load_pit_holdout
+
+    loaded = load_pit_holdout()
+    if loaded is None:
+        return ReproResult(
+            "pit_duration",
+            "p50_mae_test_s",
+            _PIT_PUBLISHED_P50_MAE,
+            None,
+            "pending",
+            "raw laps or pit models absent on disk",
+        )
+
+    import numpy as np
+
+    test_slice, models, features = loaded
+    predicted = models["p50"].predict(test_slice[features])
+    actual = test_slice["physical_stop_est"].to_numpy()
+    reproduced = float(np.mean(np.abs(predicted - actual)))
+    delta = abs(reproduced - _PIT_PUBLISHED_P50_MAE)
+    status = "reproduced" if delta <= TOLERANCE else "delta"
+    return ReproResult(
+        "pit_duration",
+        "p50_mae_test_s",
+        _PIT_PUBLISHED_P50_MAE,
+        reproduced,
+        status,
+        f"n={len(actual)}; |delta| {delta:.4f} vs tol {TOLERANCE}",
+    )
+
+
 def _pending_metrics() -> list[ReproResult]:
     """Headline numbers not yet re-derived on-disk (pit holdout regen + pace/tire).
 
@@ -146,14 +187,6 @@ def _pending_metrics() -> list[ReproResult]:
     reproduction report and the calibration report agree on why.
     """
     return [
-        ReproResult(
-            "pit_duration",
-            "p50_mae_test_s",
-            0.487,
-            None,
-            "pending",
-            "pit_labeled holdout empty on disk; regen from raw tracked in #364",
-        ),
         ReproResult(
             "pace",
             "mae_test_s",
@@ -175,7 +208,13 @@ def _pending_metrics() -> list[ReproResult]:
 
 def collect_results() -> list[ReproResult]:
     """All reproduction checks, reproduced/delta rows first."""
-    results = [_overtake_auc_pr(), _sc_auc_pr(), _undercut_auc_pr(), *_pending_metrics()]
+    results = [
+        _overtake_auc_pr(),
+        _sc_auc_pr(),
+        _undercut_auc_pr(),
+        _pit_p50_mae(),
+        *_pending_metrics(),
+    ]
     order = {"delta": 0, "reproduced": 1, "pending": 2}
     return sorted(results, key=lambda r: order.get(r.status, 3))
 
