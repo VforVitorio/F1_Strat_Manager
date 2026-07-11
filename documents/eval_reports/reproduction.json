@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "91b98d3",
+    "harness_sha": "da1db0c",
     "dataset": "2025 holdout vs published model_configs",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T15:07:22+00:00",
+    "generated_at": "2026-07-11T16:52:50+00:00",
     "artifacts": {
       "overtake_model": "cbb9d0eb0beb"
     }
@@ -21,12 +21,20 @@
       "detail": "|delta| 0.0000 vs tol 0.01"
     },
     {
+      "model": "safety_car",
+      "metric": "auc_pr_test",
+      "published": 0.0723,
+      "reproduced": 0.07228992613666717,
+      "status": "reproduced",
+      "detail": "|delta| 0.0000 vs tol 0.01"
+    },
+    {
       "model": "undercut",
       "metric": "auc_pr_test",
       "published": 0.6739,
-      "reproduced": null,
-      "status": "pending",
-      "detail": "historical aggregates circuit_undercut_rate/team_x_undercut_rate absent from holdout (#207)"
+      "reproduced": 0.6738805047752813,
+      "status": "reproduced",
+      "detail": "|delta| 0.0000 vs tol 0.01"
     },
     {
       "model": "pit_duration",
@@ -34,15 +42,7 @@
       "published": 0.487,
       "reproduced": null,
       "status": "pending",
-      "detail": "pit_labeled holdout empty on disk (#207)"
-    },
-    {
-      "model": "safety_car",
-      "metric": "auc_pr_test",
-      "published": 0.0723,
-      "reproduced": null,
-      "status": "pending",
-      "detail": "engineered features (lap_time_*_z, anomaly_and_yellow, lap1_chaos) absent from holdout (#207)"
+      "detail": "pit_labeled holdout empty on disk; regen from raw tracked in #364"
     },
     {
       "model": "pace",
