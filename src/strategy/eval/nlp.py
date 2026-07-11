@@ -22,8 +22,13 @@ Stage status this phase:
   would mean a live bug). ``src/agents`` is untouchable; the harness only records
   the verdict.
 - **NR-07** (dead NER classes) - entity types the frozen NER eval predicts at
-  ~0 B-F1 are flagged untrustworthy; the #304 NER stage re-measures them.
-- **NER F1 / RCM / alert precision** - pending (#304 phases).
+  ~0 B-F1 are flagged untrustworthy, separately from the NER score below.
+- **ner** (BERT-bio) - entity-level micro-F1 reproduced with seqeval over the
+  annotation set, vs the frozen 0.4151 headline (#304).
+- **rcm** - the N23 rule-based classifier is ported into the harness and run
+  over the persisted 2025 RCM corpus; coverage (1 - OTHER-rate) per category vs
+  the frozen config (#304).
+- **alert precision** - pending a labeled alert ground-truth set (#304 phase 3).
 """
 
 from __future__ import annotations
@@ -43,7 +48,11 @@ _TOLERANCE = 0.03
 _SENTIMENT_BATCH = 32
 _INTENT_DIR = "intent_setfit_modernbert_v1"
 _NER_DIR = "ner_v1"
+_NER_PROD_MODEL = "bert_bio_v1"  # production NER model under ner_v1/
+_NER_HEADLINE_F1 = 0.4151  # frozen bert_large_conll03_bio entity-F1 (model_config)
+_NER_MAX_LEN = 128  # must match the N22 training config
 _DEAD_NER_F1 = 0.15  # entity types with frozen-eval B-F1 below this are flagged dead (NR-07)
+_RCM_CORPUS_GLOB = "race_radios/2025/*/rcm.parquet"  # persisted FastF1 RCM corpus
 
 
 @dataclass
@@ -336,6 +345,327 @@ def dead_ner_classes() -> tuple[list[str], StageResult]:
     return dead, StageResult("ner", "dead_classes", float(len(dead)), 0.0, "flagged", detail)
 
 
+def _load_ner_model() -> tuple[Any, Any, dict[int, str], str] | None:
+    """Load the production BERT-bio NER model (additive replica of radio_agent).
+
+    Mirrors ``radio_agent._load_ner_model`` but stays in the harness because
+    importing ``src.agents`` loads every NLP model at import time. The
+    checkpoint's classifier head is 19-label BIO; ``from_pretrained`` warns about
+    the base model's 9-label head, then ``load_state_dict`` overwrites it with
+    the trained weights. Returns ``(tokenizer, model, id2label, device)`` or
+    ``None`` when the artifacts are absent.
+    """
+    import torch
+    from transformers import AutoTokenizer, BertForTokenClassification
+
+    ner_dir = get_models_root() / "nlp" / _NER_DIR / _NER_PROD_MODEL
+    cfg_path = ner_dir / "model_config.json"
+    state_path = ner_dir / "bert_bio_state_dict.pt"
+    if not (cfg_path.exists() and state_path.exists()):
+        return None
+
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    label2id = cfg["label2id"]
+    id2label = {int(k): v for k, v in cfg["id2label"].items()}
+    base = cfg.get("model_name", "dbmdz/bert-large-cased-finetuned-conll03-english")
+    tokenizer = AutoTokenizer.from_pretrained(str(ner_dir), use_fast=True)
+    model = BertForTokenClassification.from_pretrained(
+        base, num_labels=len(label2id), ignore_mismatched_sizes=True
+    )
+    model.load_state_dict(torch.load(state_path, map_location="cpu", weights_only=False))
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device).eval()
+    return tokenizer, model, id2label, device
+
+
+def _ner_predicted_tags(
+    words: list[str], tokenizer: Any, model: Any, id2label: dict[int, str], device: str
+) -> list[str]:
+    """Word-level BIO tags for a pre-split word list (replica of the radio_agent decode).
+
+    Keeps only the first subword tag per word, mirroring
+    ``radio_agent._decode_word_tags`` so the harness scores the exact tags the
+    production pipeline would emit.
+    """
+    import torch
+
+    enc = tokenizer(
+        words,
+        is_split_into_words=True,
+        add_special_tokens=True,
+        max_length=_NER_MAX_LEN,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    )
+    word_ids = enc.word_ids(batch_index=0)
+    with torch.no_grad():
+        logits = (
+            model(
+                input_ids=enc["input_ids"].to(device),
+                attention_mask=enc["attention_mask"].to(device),
+            )
+            .logits[0]
+            .cpu()
+        )
+    predicted_ids = logits.argmax(dim=-1).tolist()
+    first_tag_per_word: dict[int, str] = {}
+    for token_i, word_i in enumerate(word_ids):
+        if word_i is not None and word_i not in first_tag_per_word:
+            first_tag_per_word[word_i] = id2label.get(predicted_ids[token_i], "O")
+    return [first_tag_per_word.get(i, "O") for i in range(len(words))]
+
+
+def _gold_bio_tags(text: str, entities: list) -> tuple[list[str], list[str]]:
+    """Convert char-offset gold entities to word-level BIO over ``text.split()``.
+
+    ``predict_entities`` splits on whitespace, so the gold tags must use the same
+    word boundaries to line up with the model's per-word predictions. A word is
+    tagged with an entity when its character span overlaps the gold span (B- on
+    the first overlapping word, I- after). Returns ``(words, gold_tags)``.
+    """
+    words = text.split()
+    offsets = []
+    cursor = 0
+    for word in words:
+        start = text.index(word, cursor)
+        offsets.append((start, start + len(word)))
+        cursor = start + len(word)
+
+    tags = ["O"] * len(words)
+    for entity in entities:
+        if not (isinstance(entity, (list, tuple)) and len(entity) == 3):
+            continue
+        char_start, char_end, label = entity
+        opening = True
+        for word_i, (word_start, word_end) in enumerate(offsets):
+            if word_start < char_end and word_end > char_start:
+                tags[word_i] = ("B-" if opening else "I-") + str(label)
+                opening = False
+    return words, tags
+
+
+def _iter_ner_annotations() -> list[tuple[str, list]]:
+    """``(text, gold_entities)`` pairs from the annotation set (radio_message as text).
+
+    Records whose ``annotations`` payload is malformed keep their text with an
+    empty gold set, so they still contribute to precision (a spurious prediction
+    on a no-entity message is a false positive).
+    """
+    path = get_data_root() / "processed" / "radio_nlp" / "f1_radio_entity_annotations.json"
+    if not path.exists():
+        return []
+    records = json.loads(path.read_text(encoding="utf-8"))
+    pairs = []
+    for record in records:
+        text = str(record.get("radio_message", ""))
+        annotation = record.get("annotations")
+        well_formed = (
+            isinstance(annotation, list)
+            and len(annotation) == 2
+            and isinstance(annotation[1], dict)
+        )
+        entities = annotation[1].get("entities", []) if well_formed else []
+        if text.strip():
+            pairs.append((text, entities))
+    return pairs
+
+
+def reproduce_ner() -> list[StageResult]:
+    """Reproduce BERT-bio entity-level micro-F1 on the annotation set (seqeval).
+
+    Full-set score (train+test), so it runs slightly optimistic vs the frozen
+    0.4151 headline; the 4 NR-07 dead classes stay in the score but are flagged
+    separately. Returns a ``pending`` row when the model or annotations are
+    absent.
+    """
+    from seqeval.metrics import f1_score, precision_score, recall_score
+
+    loaded = _load_ner_model()
+    pairs = _iter_ner_annotations()
+    if loaded is None or not pairs:
+        return [
+            StageResult(
+                "ner",
+                "entity_f1",
+                None,
+                _NER_HEADLINE_F1,
+                "pending",
+                "ner model or annotations absent",
+            )
+        ]
+
+    tokenizer, model, id2label, device = loaded
+    gold_seqs, pred_seqs = [], []
+    for text, entities in pairs:
+        words, gold = _gold_bio_tags(text, entities)
+        if not words:
+            continue
+        gold_seqs.append(gold)
+        pred_seqs.append(_ner_predicted_tags(words, tokenizer, model, id2label, device))
+
+    micro_f1 = float(f1_score(gold_seqs, pred_seqs))
+    precision = float(precision_score(gold_seqs, pred_seqs))
+    recall = float(recall_score(gold_seqs, pred_seqs))
+    dead, _ = dead_ner_classes()
+    detail = (
+        f"n={len(gold_seqs)}; micro entity-F1 (P {precision:.3f}/R {recall:.3f}); full-set optimistic; "
+        f"{len(dead)} dead classes flagged separately"
+    )
+    return [
+        StageResult(
+            "ner",
+            "entity_f1",
+            round(micro_f1, 4),
+            _NER_HEADLINE_F1,
+            _status(micro_f1, _NER_HEADLINE_F1),
+            detail,
+        )
+    ]
+
+
+def _classify_rcm_event(category: str, flag: Any, scope: Any, sector: Any, message: str) -> str:
+    """Rule-based RCM event classifier ported from N23 (``_classify_event``).
+
+    Reads the persisted lowercase RCM schema (category/flag/scope/sector/
+    message). The branch logic is identical to the N23 notebook parser and the
+    inlined ``radio_agent`` copy; only the field access is adapted to the
+    on-disk column names. Kept in the harness because importing ``radio_agent``
+    loads every NLP model.
+
+    --- WHERE TO CHANGE IF THE PARSER CHANGES ---
+    ``notebooks/nlp/N23_rcm_parser.ipynb`` (_classify_event) is the source of
+    truth; mirror any edit there into this port and the radio_agent copy.
+    """
+    import pandas as pd
+
+    cat = str(category).strip()
+    flag_up = str(flag).strip().upper()
+    msg = str(message).upper()
+
+    if cat == "SafetyCar":
+        if "VIRTUAL" in msg:
+            return (
+                "VIRTUAL_SAFETY_CAR_DEPLOYED" if "DEPLOYED" in msg else "VIRTUAL_SAFETY_CAR_ENDING"
+            )
+        if "DEPLOYED" in msg:
+            return "SAFETY_CAR_DEPLOYED"
+        if "PIT LANE" in msg or "IN THIS LAP" in msg:
+            return "SAFETY_CAR_IN_PIT_LANE"
+        if "ENDING" in msg or "WITHDRAWN" in msg:
+            return "SAFETY_CAR_ENDING"
+        return "OTHER"
+
+    if cat == "Flag":
+        if flag_up == "CHEQUERED" or "CHEQUERED" in msg:
+            return "CHEQUERED_FLAG"
+        if flag_up == "BLUE":
+            return "BLUE_FLAG"
+        if flag_up == "BLACK AND WHITE":
+            return "BLACK_AND_WHITE_FLAG"
+        if flag_up in ("VIRTUAL_SAFETY_CAR", "VSC"):
+            return "VIRTUAL_SAFETY_CAR_DEPLOYED"
+        if flag_up == "SAFETY_CAR":
+            return "SAFETY_CAR_DEPLOYED"
+        if flag_up == "RED" or "RED FLAG" in msg:
+            return "RED_FLAG"
+        if flag_up == "GREEN" or "GREEN FLAG" in msg:
+            return "GREEN_FLAG"
+        if flag_up == "CLEAR":
+            return "CLEAR_FLAG"
+        if flag_up in ("YELLOW", "DOUBLE YELLOW"):
+            if str(scope).strip() == "Sector" or pd.notna(sector):
+                return "YELLOW_FLAG_SECTOR"
+            return "YELLOW_FLAG"
+        return "OTHER"
+
+    if cat == "Drs":
+        return "DRS_ENABLED" if "ENABLED" in msg else "DRS_DISABLED"
+
+    if cat == "CarEvent":
+        if "RETIRED" in msg or "ABANDON" in msg:
+            return "CAR_RETIRED"
+        if "COLLISION" in msg or "CONTACT" in msg:
+            return "CAR_COLLISION"
+        if "MECHANICAL" in msg or "ENGINE" in msg or "GEARBOX" in msg:
+            return "CAR_MECHANICAL"
+        return "OTHER"
+
+    if cat == "Other":
+        if "DRS ENABLED" in msg:
+            return "DRS_ENABLED"
+        if "DRS DISABLED" in msg:
+            return "DRS_DISABLED"
+        if (
+            "TRACK LIMITS" in msg
+            or "TIME DELETED" in msg
+            or "LAP DELETED" in msg
+            or "DELETED" in msg
+        ):
+            return "LAP_DELETED"
+        if "UNDER INVESTIGATION" in msg or "FIA STEWARDS" in msg or "NOTED" in msg:
+            return "INVESTIGATION"
+        if "PENALTY" in msg or ("TIME" in msg and "SECOND" in msg):
+            return "TIME_PENALTY"
+        if "PIT EXIT" in msg or "PIT LANE" in msg:
+            return "PIT_EXIT"
+        track_surface = "TRACK" in msg and (
+            "CONDITION" in msg or "SLIPPERY" in msg or "SURFACE" in msg
+        )
+        other_surface = any(k in msg for k in ("DEBRIS", "FLUID", "LOW GRIP", "RAIN", "AWNING"))
+        if track_surface or other_surface:
+            return "TRACK_CONDITION"
+        if "LAPPED" in msg and "OVERTAKE" in msg:
+            return "LAPPED_CARS_OVERTAKE"
+        if "ALL CARS MAY OVERTAKE" in msg:
+            return "SAFETY_CAR_ENDING"
+        return "OTHER"
+
+    return "OTHER"
+
+
+def reproduce_rcm() -> list[StageResult]:
+    """Reproduce the RCM parser coverage (1 - OTHER-rate) per FastF1 category.
+
+    Runs the ported rule-based classifier over the persisted 2025 RCM corpus and
+    reports overall + per-category coverage against the frozen config
+    (Flag 1.0 / Other 0.928 / Drs 1.0 / SafetyCar 1.0). The corpus (all 2025
+    races) differs from the N23 sample, so the numbers are close but not
+    identical. Returns a ``pending`` row when the corpus is absent.
+    """
+    from collections import Counter
+
+    import pandas as pd
+
+    corpus = sorted((get_data_root() / "processed").glob(_RCM_CORPUS_GLOB))
+    if not corpus:
+        return [
+            StageResult("rcm", "coverage", None, None, "pending", "2025 rcm corpus absent on disk")
+        ]
+
+    total: Counter = Counter()
+    other: Counter = Counter()
+    for path in corpus:
+        df = pd.read_parquet(path)
+        for _, row in df.iterrows():
+            category = str(row["category"]).strip()
+            event = _classify_rcm_event(
+                row["category"], row["flag"], row["scope"], row["sector"], row["message"]
+            )
+            total[category] += 1
+            if event == "OTHER":
+                other[category] += 1
+
+    n = sum(total.values())
+    coverage = 1 - sum(other.values()) / n
+    per_category = ", ".join(f"{cat} {1 - other[cat] / total[cat]:.3f}" for cat in sorted(total))
+    detail = (
+        f"n={n} across {len(corpus)} 2025 races; per-category [{per_category}]; "
+        "vs config Flag 1.0/Other 0.928/Drs 1.0/SafetyCar 1.0 (N23 sample differs)"
+    )
+    return [StageResult("rcm", "coverage", round(coverage, 4), None, "reproduced", detail)]
+
+
 def _status(value: float, reference: float) -> str:
     """``reproduced`` when within tolerance of the reference number, else ``delta``."""
     return "reproduced" if abs(value - reference) <= _TOLERANCE else "delta"
@@ -344,22 +674,6 @@ def _status(value: float, reference: float) -> str:
 def _gated_stages() -> list[StageResult]:
     """The stages that cannot run this phase, each with its exact blocker (#304)."""
     return [
-        StageResult(
-            "ner",
-            "entity_f1",
-            None,
-            None,
-            "pending",
-            "BERT-bio entity-level F1 reproduction not wired this phase (#304)",
-        ),
-        StageResult(
-            "rcm",
-            "accuracy",
-            None,
-            None,
-            "pending",
-            "RCM parser reproduction not wired this phase (#304)",
-        ),
         StageResult(
             "alert_precision",
             "precision",
@@ -378,6 +692,8 @@ def collect_results() -> list[StageResult]:
         *reproduce_sentiment(),
         *reproduce_intent(),
         verify_intent_column_order(),
+        *reproduce_ner(),
+        *reproduce_rcm(),
         dead_row,
         *_gated_stages(),
     ]
@@ -407,9 +723,11 @@ def build_nlp_report() -> dict[str, Any]:
         / "sentiment_classifier_v1"
         / "best_roberta_sentiment.ckpt",
         "intent_head": models / "nlp" / _INTENT_DIR / "model_head.pkl",
+        "ner_bert_bio": models / "nlp" / _NER_DIR / _NER_PROD_MODEL / "bert_bio_state_dict.pt",
     }
     header = build_header(
-        dataset="radio_labeled_data.csv + intent_labeled_data.csv (fixed sets)", artifacts=artifacts
+        dataset="radio + intent labeled CSVs, entity annotations, 2025 RCM corpus",
+        artifacts=artifacts,
     )
     payload = {"results": [asdict(r) for r in results]}
     md_path, json_path = write_report(NLP_NAME, header, _render(results), payload)

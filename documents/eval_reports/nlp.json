@@ -1,15 +1,16 @@
 {
   "header": {
-    "harness_sha": "1c8ff7c",
-    "dataset": "radio_labeled_data.csv + intent_labeled_data.csv (fixed sets)",
+    "harness_sha": "6bc5413",
+    "dataset": "radio + intent labeled CSVs, entity annotations, 2025 RCM corpus",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T16:13:28+00:00",
+    "generated_at": "2026-07-11T16:31:09+00:00",
     "artifacts": {
       "roberta_sentiment": "d7d0ada739c6",
-      "intent_head": "7c995ba21bc0"
+      "intent_head": "7c995ba21bc0",
+      "ner_bert_bio": "9e60de9bf538"
     }
   },
   "results": [
@@ -63,27 +64,27 @@
     },
     {
       "stage": "ner",
+      "metric": "entity_f1",
+      "value": 0.4248,
+      "reference": 0.4151,
+      "status": "reproduced",
+      "detail": "n=529; micro entity-F1 (P 0.304/R 0.704); full-set optimistic; 4 dead classes flagged separately"
+    },
+    {
+      "stage": "rcm",
+      "metric": "coverage",
+      "value": 0.9868,
+      "reference": null,
+      "status": "reproduced",
+      "detail": "n=1515 across 24 2025 races; per-category [Drs 1.000, Flag 1.000, Other 0.971, SafetyCar 1.000]; vs config Flag 1.0/Other 0.928/Drs 1.0/SafetyCar 1.0 (N23 sample differs)"
+    },
+    {
+      "stage": "ner",
       "metric": "dead_classes",
       "value": 4.0,
       "reference": 0.0,
       "status": "flagged",
       "detail": "4 entity types with frozen-eval B-F1 < 0.15 (situation, incident, strategy instruction, track condition); suppressed as untrustworthy, re-measured in #304"
-    },
-    {
-      "stage": "ner",
-      "metric": "entity_f1",
-      "value": null,
-      "reference": null,
-      "status": "pending",
-      "detail": "BERT-bio entity-level F1 reproduction not wired this phase (#304)"
-    },
-    {
-      "stage": "rcm",
-      "metric": "accuracy",
-      "value": null,
-      "reference": null,
-      "status": "pending",
-      "detail": "RCM parser reproduction not wired this phase (#304)"
     },
     {
       "stage": "alert_precision",

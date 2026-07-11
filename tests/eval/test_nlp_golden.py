@@ -15,16 +15,47 @@ ROOT = Path(__file__).parent.parent.parent
 _INTENT_DIR = ROOT / "data" / "models" / "nlp" / "intent_setfit_modernbert_v1"
 _HAS_INTENT_HEAD = (_INTENT_DIR / "model_head.pkl").exists()
 _HAS_NER_CFG = (ROOT / "data" / "models" / "nlp" / "ner_v1" / "model_config.json").exists()
+_HAS_NER_MODEL = (
+    ROOT / "data" / "models" / "nlp" / "ner_v1" / "bert_bio_v1" / "bert_bio_state_dict.pt"
+).exists()
+_HAS_RCM_CORPUS = bool(list((ROOT / "data" / "processed").glob("race_radios/2025/*/rcm.parquet")))
 
 
-def test_nlp_gated_stages_are_pending_after_303():
-    """After #303 only NER F1, RCM and alert precision stay gated; intent is not."""
+def test_nlp_gated_stages_are_pending_after_304():
+    """After #304 only alert precision stays gated (NER, RCM, intent all run)."""
     from src.strategy.eval.nlp import _gated_stages
 
     by_stage = {r.stage: r for r in _gated_stages()}
-    assert set(by_stage) == {"ner", "rcm", "alert_precision"}
-    assert all(r.status == "pending" for r in by_stage.values())
-    assert "303" in by_stage["ner"].detail or "#304" in by_stage["ner"].detail
+    assert set(by_stage) == {"alert_precision"}
+    assert by_stage["alert_precision"].status == "pending"
+
+
+def test_rcm_classifier_maps_known_events():
+    """Hermetic: the ported N23 rule-based classifier maps representative rows."""
+    from src.strategy.eval.nlp import _classify_rcm_event
+
+    assert (
+        _classify_rcm_event("SafetyCar", "", None, None, "SAFETY CAR DEPLOYED")
+        == "SAFETY_CAR_DEPLOYED"
+    )
+    assert _classify_rcm_event("Flag", "BLUE", None, None, "WAVED BLUE FLAG") == "BLUE_FLAG"
+    assert _classify_rcm_event("Drs", "", None, None, "DRS ENABLED") == "DRS_ENABLED"
+    yellow_sector = _classify_rcm_event(
+        "Flag", "DOUBLE YELLOW", "Sector", 20, "DOUBLE YELLOW SECTOR 20"
+    )
+    assert yellow_sector == "YELLOW_FLAG_SECTOR"
+    assert _classify_rcm_event("Other", "", None, None, "SOMETHING UNMAPPED") == "OTHER"
+
+
+def test_gold_bio_tags_align_to_split_words():
+    """Hermetic: char-offset gold entities become word-level BIO over text.split()."""
+    from src.strategy.eval.nlp import _gold_bio_tags
+
+    text = "Box now Hamilton"
+    # "Hamilton" starts at char 8
+    words, tags = _gold_bio_tags(text, [[8, 16, "ACTION"]])
+    assert words == ["Box", "now", "Hamilton"]
+    assert tags == ["O", "O", "B-ACTION"]
 
 
 @pytest.mark.data
@@ -60,3 +91,25 @@ def test_dead_ner_classes_flags_zero_f1_types():
     assert row.status == "flagged"
     assert row.value == float(len(dead))
     assert len(dead) >= 1
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not _HAS_NER_MODEL, reason="ner weights absent (CI runner without weights)")
+def test_ner_entity_f1_reproduces_headline():
+    """Entity micro-F1 reproduces the frozen 0.4151 headline within tolerance (full-set optimistic)."""
+    from src.strategy.eval.nlp import reproduce_ner
+
+    rows = {r.metric: r for r in reproduce_ner()}
+    assert rows["entity_f1"].status == "reproduced"
+    assert rows["entity_f1"].value is not None and 0.3 < rows["entity_f1"].value < 0.6
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not _HAS_RCM_CORPUS, reason="2025 rcm corpus absent (CI runner without data)")
+def test_rcm_coverage_is_high():
+    """The ported parser leaves few OTHER events; overall coverage clears 0.9."""
+    from src.strategy.eval.nlp import reproduce_rcm
+
+    rows = {r.metric: r for r in reproduce_rcm()}
+    assert rows["coverage"].status == "reproduced"
+    assert rows["coverage"].value is not None and rows["coverage"].value > 0.9
