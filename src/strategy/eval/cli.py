@@ -7,7 +7,8 @@ one-line summary of where it landed and what it flagged.
     f1-eval registry       # E-08 consolidated metrics table
     f1-eval calibration    # E-03 reliability/Brier/ECE + quantile coverage
     f1-eval models         # reproduce headline numbers vs the model_configs
-    f1-eval all            # all three
+    f1-eval hygiene        # E-02 threshold provenance + leakage verdicts (#207)
+    f1-eval all            # all four
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import argparse
 from typing import Any, Callable
 
 from src.strategy.eval.calibration import build_calibration_report
+from src.strategy.eval.hygiene import build_hygiene_report
 from src.strategy.eval.registry import build_registry
 from src.strategy.eval.reproduce import build_reproduction_report
 
@@ -46,10 +48,18 @@ def _run_models() -> None:
     print("models " + _summarise(payload, "results", ("delta", "pending")))
 
 
+def _run_hygiene() -> None:
+    payload = build_hygiene_report()
+    findings = payload.get("findings", [])
+    flagged = [f for f in findings if f.get("verdict") in ("contaminated", "underdocumented")]
+    print(f"hygiene -> {payload['md_path']} ({len(findings)} items; {len(flagged)} flagged)")
+
+
 _COMMANDS: dict[str, Callable[[], None]] = {
     "registry": _run_registry,
     "calibration": _run_calibration,
     "models": _run_models,
+    "hygiene": _run_hygiene,
 }
 
 

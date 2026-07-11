@@ -1,0 +1,101 @@
+{
+  "header": {
+    "harness_sha": "50b7ecf",
+    "dataset": "notebooks/strategy audit + 2024/2025 overtake holdout",
+    "seed_policy": "deterministic",
+    "era_tag": "2022-2025",
+    "llm": "none",
+    "schema_version": "1",
+    "generated_at": "2026-07-11T15:29:09+00:00",
+    "artifacts": {}
+  },
+  "findings": [
+    {
+      "item": "optimal_threshold=0.7976",
+      "kind": "threshold",
+      "model": "overtake",
+      "verdict": "contaminated",
+      "selection": "argmax-F1 on the 2025 test set",
+      "evidence": "N12_overtake_model.ipynb (threshold-analysis / step-5 cell)",
+      "impact": "operating-point P/R/F1 optimistic; AUC-PR 0.5491 / AUC-ROC 0.8758 unaffected (threshold-free)"
+    },
+    {
+      "item": "best_threshold=0.2335 + 3/5/7-lap window",
+      "kind": "threshold",
+      "model": "safety_car",
+      "verdict": "contaminated",
+      "selection": "argmax-F2 threshold AND the best target-window both on the 2025 test set",
+      "evidence": "N14_sc_model.ipynb (PR-curve + window-comparison cells)",
+      "impact": "threshold -> operating-point optimistic; window chosen by max-lift on test -> the headline AUC-PR 0.0723 is itself optimistic (a max over 3 candidates on test), NOT clean"
+    },
+    {
+      "item": "best_threshold=0.522",
+      "kind": "threshold",
+      "model": "undercut",
+      "verdict": "clean",
+      "selection": "argmax-F1 on the calibrated val-2024 split",
+      "evidence": "N16_undercut.ipynb (\"Threshold on calibrated val 2024\")",
+      "impact": "textbook-correct; the 2025 test set is only applied afterwards"
+    },
+    {
+      "item": "circuit_sc_rate",
+      "kind": "aggregate_feature",
+      "model": "safety_car",
+      "verdict": "clean",
+      "selection": "past-season only (year < yr); 2023 rows get a fixed SC_PRIOR=0.15",
+      "evidence": "N13_sc_eda.ipynb (compute_circuit_sc_rate)",
+      "impact": "no test-2025 in its own aggregate"
+    },
+    {
+      "item": "team_year_median",
+      "kind": "aggregate_feature",
+      "model": "pit_duration",
+      "verdict": "clean",
+      "selection": "lookup fit on train only, applied to test with recent-year fallback",
+      "evidence": "N15_pit_duration.ipynb (add_team_year_median)",
+      "impact": "companion circuit_traversal / baseline are likewise train-fit"
+    },
+    {
+      "item": "circuit_undercut_rate + team_x_undercut_rate",
+      "kind": "aggregate_feature",
+      "model": "undercut",
+      "verdict": "clean",
+      "selection": "target encoding fit on train only, train-mean fallback on test",
+      "evidence": "N16_undercut.ipynb (compute_target_encoding)",
+      "impact": "split precedes the encoding; no train<-test leak"
+    },
+    {
+      "item": "circuit_cluster (k-means)",
+      "kind": "aggregate_feature",
+      "model": "overtake/safety_car/laptime",
+      "verdict": "underdocumented",
+      "selection": "k-means fit window not year-restricted in code; 2025 holdout is intent-only",
+      "evidence": "N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final)",
+      "impact": "mild NON-target risk (unsupervised geometry bucket); pin a year filter to close"
+    },
+    {
+      "item": "year_circuit_median / team_pace_rank",
+      "kind": "aggregate_feature",
+      "model": "laptime",
+      "verdict": "clean",
+      "selection": "within-session per-year aggregates; flagged LEAKY and removed from the reported model",
+      "evidence": "N06_laptime_model.ipynb (add_context_features / FEATURES_PROD)",
+      "impact": "not in the reported IEEE delta model; 2025 held out until final eval"
+    }
+  ],
+  "overtake_correction": {
+    "leaked_threshold": 0.7976,
+    "corrected_threshold": 0.7626,
+    "leaked_test_operating_point": {
+      "precision": 0.5018,
+      "recall": 0.5556,
+      "f1": 0.5273
+    },
+    "corrected_test_operating_point": {
+      "precision": 0.4583,
+      "recall": 0.5827,
+      "f1": 0.5131
+    },
+    "note": "threshold selected on val-2024; both operating points evaluated on the 2025 test set"
+  }
+}
