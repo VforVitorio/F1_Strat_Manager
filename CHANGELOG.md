@@ -11,6 +11,28 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.9.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.8.0...v1.9.0) (2026-07-11)
+
+
+### Features
+
+* **eval:** reproduce the pace MAE 0.4104 from the featured-laps holdout ([2a2c982](https://github.com/VforVitorio/F1-StratLab/commit/2a2c9827e46e093d35ba426b1e839de395116f0f))
+* **eval:** reproduce the pace MAE 0.4104 from the featured-laps holdout ([998a800](https://github.com/VforVitorio/F1-StratLab/commit/998a800afb838208be17a7469763c614a5513561))
+* **eval:** reproduce the tire MAE 0.7078 and validate the MC-Dropout sigma ([8ce8653](https://github.com/VforVitorio/F1-StratLab/commit/8ce8653dfb4f8cc6e80fc2be00c45443ac030976))
+* **eval:** reproduce the tire MAE 0.7078 and validate the MC-Dropout sigma ([762b030](https://github.com/VforVitorio/F1-StratLab/commit/762b03068d4b709d00447b81621bbc966c2cd720))
+
+
+### Bug Fixes
+
+* **eval:** correct the circuit_cluster hygiene verdict to a real coarse leak ([4328f95](https://github.com/VforVitorio/F1-StratLab/commit/4328f9550be402a68f7383c1aa9ea8d52abf4335))
+* **eval:** correct the circuit_cluster hygiene verdict to a real coarse leak ([679208e](https://github.com/VforVitorio/F1-StratLab/commit/679208e70952540f2238e491235d0e7412571e32))
+
+
+### Documentation
+
+* **eval:** resolve the circuit_cluster hygiene item as an accepted non-target limitation ([33ff301](https://github.com/VforVitorio/F1-StratLab/commit/33ff301fdf756c6870bee2a7e8eaf4c854afdf3e))
+* **eval:** resolve the circuit_cluster hygiene item as an accepted non-target limitation ([c72c9fe](https://github.com/VforVitorio/F1-StratLab/commit/c72c9fe35e4155f21459bceac7f6f39a8e5e46a2))
+
 ## [1.8.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.7.0...v1.8.0) (2026-07-11)
 
 
