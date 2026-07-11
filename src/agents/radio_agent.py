@@ -793,6 +793,8 @@ def _get_radio_llm():
             base_llm = ChatOpenAI(
                 model=CFG.model_name,
                 temperature=0.0,
+                timeout=120,
+                max_retries=1,
             )
         else:
             base_llm = ChatOpenAI(
@@ -801,6 +803,8 @@ def _get_radio_llm():
                 api_key="lm-studio",
                 temperature=0.0,
                 model_kwargs={"parallel_tool_calls": False},
+                timeout=120,
+                max_retries=1,
             )
         _structured_llm = base_llm.with_structured_output(RadioSynthesis)
     return _structured_llm

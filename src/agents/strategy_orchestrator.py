@@ -135,7 +135,7 @@ def _get_orchestrator_llm():
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
         if provider == "openai":
             # No parallel_tool_calls — OpenAI rejects it when no tools are specified
-            llm = ChatOpenAI(model=CFG.model_name, temperature=CFG.temperature)
+            llm = ChatOpenAI(model=CFG.model_name, temperature=CFG.temperature, timeout=120, max_retries=1)
         else:
             llm = ChatOpenAI(
                 model=CFG.model_name,
@@ -143,6 +143,8 @@ def _get_orchestrator_llm():
                 api_key="lm-studio",
                 temperature=CFG.temperature,
                 model_kwargs={"parallel_tool_calls": False},
+                timeout=120,
+                max_retries=1,
             )
         # _LLMSynthesis only has the 3 fields the LLM actually fills —
         # scenario_scores (dict) and regulation_context are attached in code after.

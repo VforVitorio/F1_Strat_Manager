@@ -990,9 +990,11 @@ class TireAgent:
                 base_url=base_url,
                 api_key=api_key,
                 temperature=0,
+                timeout=120,
+                max_retries=1,
             )
         else:
-            llm = ChatOpenAI(model=model_name, temperature=0)
+            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=1)
 
         self._react_agent = create_agent(
             model=llm,
