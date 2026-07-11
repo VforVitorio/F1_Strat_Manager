@@ -1,0 +1,64 @@
+{
+  "header": {
+    "harness_sha": "5f1f29d",
+    "dataset": "radio_labeled_data.csv (fixed set)",
+    "seed_policy": "deterministic",
+    "era_tag": "2022-2025",
+    "llm": "none",
+    "schema_version": "1",
+    "generated_at": "2026-07-11T15:38:36+00:00",
+    "artifacts": {
+      "roberta_sentiment": "d7d0ada739c6"
+    }
+  },
+  "results": [
+    {
+      "stage": "sentiment",
+      "metric": "accuracy",
+      "value": 0.9415,
+      "reference": 0.84,
+      "status": "delta",
+      "detail": "n=530; full labeled set (train+test); optimistic vs the held-out 0.84 (split not pinned on disk)"
+    },
+    {
+      "stage": "sentiment",
+      "metric": "macro_f1",
+      "value": 0.9153,
+      "reference": 0.75,
+      "status": "delta",
+      "detail": "n=530; 3-class"
+    },
+    {
+      "stage": "intent",
+      "metric": "accuracy",
+      "value": null,
+      "reference": null,
+      "status": "blocked",
+      "detail": "setfit does not import under transformers 5.3.0 (#303); stage cannot run"
+    },
+    {
+      "stage": "ner",
+      "metric": "entity_f1",
+      "value": null,
+      "reference": null,
+      "status": "pending",
+      "detail": "GLiNER/BERT reconstruction not wired this phase"
+    },
+    {
+      "stage": "rcm",
+      "metric": "accuracy",
+      "value": null,
+      "reference": null,
+      "status": "pending",
+      "detail": "RCM classifier reconstruction not wired this phase"
+    },
+    {
+      "stage": "alert_precision",
+      "metric": "precision",
+      "value": null,
+      "reference": null,
+      "status": "pending",
+      "detail": "no labeled alert ground-truth on disk (the MoE-routing metric #304 targets; data-collection task)"
+    }
+  ]
+}
