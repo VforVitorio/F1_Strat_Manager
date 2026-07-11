@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "e1ee603",
+    "harness_sha": "998a800",
     "dataset": "2025 holdout + frozen calibration artifacts",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T17:31:05+00:00",
+    "generated_at": "2026-07-11T19:14:07+00:00",
     "artifacts": {
       "overtake_model": "cbb9d0eb0beb",
       "pit_cfg": "41dd673a93fb",
@@ -76,7 +76,7 @@
       "value": 0.1244,
       "nominal": null,
       "status": "ok",
-      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+      "detail": "stored epistemic sigma (single 2025 stint, unseeded MC; N10 Step 16)"
     },
     {
       "model": "tire_degradation[C4]",
@@ -84,7 +84,7 @@
       "value": 0.1504,
       "nominal": null,
       "status": "ok",
-      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+      "detail": "stored epistemic sigma (single 2025 stint, unseeded MC; N10 Step 16)"
     },
     {
       "model": "tire_degradation[C5]",
@@ -92,7 +92,7 @@
       "value": 0.1549,
       "nominal": null,
       "status": "ok",
-      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+      "detail": "stored epistemic sigma (single 2025 stint, unseeded MC; N10 Step 16)"
     },
     {
       "model": "tire_degradation[C6]",
@@ -100,7 +100,15 @@
       "value": 0.2621,
       "nominal": null,
       "status": "ok",
-      "detail": "deployed epistemic sigma; empirical coverage wired-pending (N33-D)"
+      "detail": "stored epistemic sigma (single 2025 stint, unseeded MC; N10 Step 16)"
+    },
+    {
+      "model": "tire_degradation",
+      "metric": "mc_mean_sigma_s_global",
+      "value": 0.152372528972539,
+      "nominal": null,
+      "status": "ok",
+      "detail": "seeded MC (N=50) over the full 2025 test set; stored per-compound mean 0.1729 s (same order of magnitude)"
     }
   ]
 }
