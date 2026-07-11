@@ -56,9 +56,13 @@ def _make_judge_llm() -> Any:
 
     Mirrors the provider switch in ``radio_agent`` so the harness reaches the same
     backend the agents use. Temperature 0 for as-deterministic-as-possible verdicts.
+    Loads ``.env`` so OPENAI_API_KEY / F1_LLM_PROVIDER are available when invoked
+    outside the CLI that normally loads them.
     """
+    from dotenv import find_dotenv, load_dotenv
     from langchain_openai import ChatOpenAI
 
+    load_dotenv(find_dotenv())
     provider = os.environ.get("F1_LLM_PROVIDER", "openai")
     if provider == "lmstudio":
         return ChatOpenAI(
@@ -71,7 +75,12 @@ def _make_judge_llm() -> Any:
 
 
 def _unlabeled_radios(sample_size: int) -> list[str] | None:
-    """The first ``sample_size`` radios (sorted, deterministic) absent from the intent set."""
+    """The first ``sample_size`` radios (CSV order, deduped) absent from the intent set.
+
+    CAVEAT: the radios NOT in the hand-labeled intent set are largely the ones
+    that were EXCLUDED from labeling because they are low-quality / garbled
+    Whisper transcripts, so this subset is not representative of clean radio.
+    """
     import pandas as pd
 
     raw_path = get_data_root() / "processed" / "radio_nlp" / "radios_raw.csv"
@@ -79,9 +88,12 @@ def _unlabeled_radios(sample_size: int) -> list[str] | None:
     if not (raw_path.exists() and labeled_path.exists()):
         return None
 
-    labeled = set(pd.read_csv(labeled_path)["message"].astype(str))
-    raw = pd.read_csv(raw_path)["text"].astype(str)
-    unlabeled = sorted(t for t in raw if t.strip() and t not in labeled)
+    seen = set(pd.read_csv(labeled_path)["message"].astype(str))
+    unlabeled = []
+    for text in pd.read_csv(raw_path)["text"].astype(str):
+        if text.strip() and text not in seen:
+            seen.add(text)  # dedupe against both the labeled set and earlier picks
+            unlabeled.append(text)
     return unlabeled[:sample_size]
 
 
@@ -121,7 +133,9 @@ def run_alert_precision_llm(sample_size: int = _DEFAULT_SAMPLE) -> AlertLLMResul
         llm = _make_judge_llm()
         verdicts = [_judge(llm, text) for text in alerts]
     except Exception as exc:  # noqa: BLE001 - any LLM/transport failure degrades to a note
-        return AlertLLMResult(len(texts), len(alerts), 0, None, f"LLM judge unavailable: {type(exc).__name__}")
+        return AlertLLMResult(
+            len(texts), len(alerts), 0, None, f"LLM judge unavailable: {type(exc).__name__}"
+        )
 
     judged_true = sum(verdicts)
     precision = judged_true / len(alerts)
@@ -148,6 +162,12 @@ def _render(result: AlertLLMResult) -> str:
             f"| proxy precision | {precision} |",
             "",
             result.detail,
+            "",
+            "**Finding**: the unlabeled radios are dominated by garbled Whisper transcripts (the "
+            "subset excluded from hand-labeling), so this proxy reflects transcript noise, not alert "
+            "precision - a low value here is expected and NOT informative. Use the gold-based alert "
+            "precision (0.9185, nlp report) for the paper; a meaningful LLM-judge would need a "
+            "curated unlabeled set.",
         ]
     )
 
@@ -161,4 +181,9 @@ def build_alert_llm_report() -> dict[str, Any]:
     )
     payload = {"result": asdict(result)}
     md_path, json_path = write_report(ALERT_LLM_NAME, header, _render(result), payload)
-    return {"header": asdict(header), "md_path": str(md_path), "json_path": str(json_path), **payload}
+    return {
+        "header": asdict(header),
+        "md_path": str(md_path),
+        "json_path": str(json_path),
+        **payload,
+    }
