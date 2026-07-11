@@ -830,9 +830,11 @@ class PitStrategyAgent:
                 temperature=0,
                 model_kwargs={'parallel_tool_calls': False},
                 disable_streaming=True,
+                timeout=120,
+                max_retries=1,
             )
         else:
-            llm = ChatOpenAI(model=model_name, temperature=0)
+            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=1)
 
         self._react_agent = create_agent(
             llm, self._tools, system_prompt=_PIT_STRATEGY_SYSTEM_PROMPT

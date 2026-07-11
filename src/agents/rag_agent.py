@@ -148,7 +148,7 @@ def get_rag_react_agent():
         import os
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
         if provider == "openai":
-            llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
+            llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0, timeout=120, max_retries=1)
         else:
             llm = ChatOpenAI(
                 model="gpt-4.1-mini",
@@ -156,6 +156,8 @@ def get_rag_react_agent():
                 api_key="lm-studio",
                 temperature=0,
                 model_kwargs={"parallel_tool_calls": False},
+                timeout=120,
+                max_retries=1,
             )
         _rag_agent = create_agent(
             model=llm,
