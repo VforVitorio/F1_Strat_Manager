@@ -264,7 +264,7 @@
     <p class="rl-title">ML foundation: lap time and tire degradation</p>
     <p class="rl-summary">First two production ML models. XGBoost delta-lap-time predictor (N06) and a Temporal Convolutional Network for tire degradation with MC Dropout uncertainty (N07-N10, per-compound fine-tuning on SOFT / MEDIUM / HARD).</p>
     <div class="rl-metrics">
-      <span class="rl-metric">MAE 0.392 s</span>
+      <span class="rl-metric">MAE 0.4104 s</span>
       <span class="rl-metric">MC Dropout N=50</span>
     </div>
   </div>
@@ -298,9 +298,9 @@
       <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">NLP radio processing pipeline</p>
-    <p class="rl-summary">Full team-radio NLP stack. Whisper ASR (N18), RoBERTa sentiment (N20, 87.5% accuracy), SetFit intent classification (N21, 5 classes), BERT-large NER for F1 entities (N22), deterministic RCM parser (N23). Unified inference entry point in N24 at GPU P95 latency of 59.4 ms.</p>
+    <p class="rl-summary">Full team-radio NLP stack. Whisper ASR (N18), RoBERTa sentiment (N20, 0.84 accuracy), SetFit intent classification (N21, 5 classes), BERT-large NER for F1 entities (N22), deterministic RCM parser (N23). Unified inference entry point in N24 at GPU P95 latency of 59.4 ms.</p>
     <div class="rl-metrics">
-      <span class="rl-metric">Sentiment 87.5%</span>
+      <span class="rl-metric">Sentiment 0.84</span>
       <span class="rl-metric">P95 59.4 ms GPU</span>
     </div>
   </div>
