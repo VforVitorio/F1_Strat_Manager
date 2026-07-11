@@ -6,9 +6,10 @@ the on-disk data does not support a clean re-derivation, it documents the delta
 explicitly rather than inventing a number - which is the deliverable's own
 "reproduces every headline number within tolerance, or documents the delta".
 
-This phase only overtake AUC-PR reproduces cleanly (its holdout + derived
-features are fully reconstructable). The rest are blocked on the same on-disk
-gaps the calibration report names, and are handed to Phase 2 (#207).
+Reproduced on-disk: overtake / safety_car / undercut AUC-PR (in-memory feature
+rebuild), pit P50 MAE (raw-laps regen), pace MAE (featured-laps rebuild of the
+N06 delta model), and tire MAE (TCN forward pass over the rebuilt 2025
+sequences). Every headline number now re-derives from the frozen artifacts.
 """
 
 from __future__ import annotations
@@ -180,30 +181,83 @@ def _pit_p50_mae() -> ReproResult:
     )
 
 
-def _pending_metrics() -> list[ReproResult]:
-    """Headline numbers not yet re-derived on-disk (pit holdout regen + pace/tire).
+_PACE_PUBLISHED_MAE = 0.4104  # thesis-final N06 delta-model absolute-lap MAE (s)
 
-    Each carries the same blocker its calibration/registry entry names, so the
-    reproduction report and the calibration report agree on why.
+
+def _pace_mae() -> ReproResult:
+    """Re-derive the pace MAE on the 2025 holdout rebuilt in-memory from the featured laps.
+
+    The N06 delta model predicts ``LapTime_Delta``; the reported MAE is on the
+    reconstructed absolute lap time (``Prev_LapTime + delta`` vs ``LapTime_s``).
+    ``pace_holdout.load_pace_predictions`` re-applies the two N06 feature steps
+    and scores the frozen model, so no leaky session feature enters.
     """
-    return [
-        ReproResult(
+    from src.strategy.eval.pace_holdout import load_pace_predictions
+
+    loaded = load_pace_predictions()
+    if loaded is None:
+        return ReproResult(
             "pace",
             "mae_test_s",
-            0.4104,
+            _PACE_PUBLISHED_MAE,
             None,
             "pending",
-            "laptime holdout feature build not wired this phase",
-        ),
-        ReproResult(
+            "featured laptime holdout or delta model absent on disk",
+        )
+
+    import numpy as np
+
+    y_true, y_pred = loaded
+    reproduced = float(np.mean(np.abs(y_pred - y_true)))
+    delta = abs(reproduced - _PACE_PUBLISHED_MAE)
+    status = "reproduced" if delta <= TOLERANCE else "delta"
+    return ReproResult(
+        "pace",
+        "mae_test_s",
+        _PACE_PUBLISHED_MAE,
+        reproduced,
+        status,
+        f"n={len(y_true)}; |delta| {delta:.4f} vs tol {TOLERANCE}",
+    )
+
+
+_TIRE_PUBLISHED_MAE = 0.7078  # thesis-final N09 global Model A test MAE (s), cumulative deg
+
+
+def _tire_mae() -> ReproResult:
+    """Re-derive the tire MAE on the 2025 holdout rebuilt from the featured laps.
+
+    The headline 0.7078 is the global TireDegTCN (Model A) evaluated on all 2025
+    test sequences (per-compound best is C2 fine-tuned at 0.5501). A deterministic
+    ``model.eval()`` forward pass over the rebuilt sequences reproduces it.
+    """
+    from src.strategy.eval.tire_holdout import load_tire_predictions
+
+    loaded = load_tire_predictions()
+    if loaded is None:
+        return ReproResult(
             "tire_degradation",
             "mae_test_s",
-            0.7078,
+            _TIRE_PUBLISHED_MAE,
             None,
             "pending",
-            "TCN MC forward pass not run this phase (see calibration MC-sigma)",
-        ),
-    ]
+            "tire model bundle or featured holdout absent on disk",
+        )
+
+    import numpy as np
+
+    y_true, y_pred = loaded
+    reproduced = float(np.mean(np.abs(y_pred - y_true)))
+    delta = abs(reproduced - _TIRE_PUBLISHED_MAE)
+    status = "reproduced" if delta <= TOLERANCE else "delta"
+    return ReproResult(
+        "tire_degradation",
+        "mae_test_s",
+        _TIRE_PUBLISHED_MAE,
+        reproduced,
+        status,
+        f"n={len(y_true)} seqs; global Model A; |delta| {delta:.4f} vs tol {TOLERANCE}",
+    )
 
 
 def collect_results() -> list[ReproResult]:
@@ -213,7 +267,8 @@ def collect_results() -> list[ReproResult]:
         _sc_auc_pr(),
         _undercut_auc_pr(),
         _pit_p50_mae(),
-        *_pending_metrics(),
+        _pace_mae(),
+        _tire_mae(),
     ]
     order = {"delta": 0, "reproduced": 1, "pending": 2}
     return sorted(results, key=lambda r: order.get(r.status, 3))

@@ -150,11 +150,24 @@ def audit_findings() -> list[ProvenanceEntry]:
         ProvenanceEntry(
             "circuit_cluster (k-means)",
             "aggregate_feature",
-            "overtake/safety_car/laptime",
+            "overtake/safety_car/laptime/tire",
             UNDERDOCUMENTED,
-            "k-means fit window not year-restricted in code; 2025 holdout is intent-only",
-            "N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final)",
-            "mild NON-target risk (unsupervised geometry bucket); pin a year filter to close",
+            "load_all_races scans every year dir and the k-means was fit over the pooled "
+            "2023-2025 set (N03 cell 6 output 'Successfully loaded 71 GPs'; the deployed "
+            "circuit_clusters_k4.parquet contains the 2025-only alias 'Miami Gardens'). Its "
+            "inputs are per-circuit OUTCOME aggregates (mean_laptime, degradation_rate, "
+            "mean_sector_speed), not pre-race geometry",
+            "N03_circuit_clustering.ipynb (load_all_races / drop_redundant_features / fit_kmeans_final)",
+            "REAL but coarse test-season leak (corrects an earlier 'no leak' over-claim, caught "
+            "by the Fable gate): Cluster is a 4-way (2-bit) bucket over ~25 circuits encoding "
+            "2023-2025 aggregates that include mean_laptime - an aggregate of the pace target "
+            "itself - so it is NOT target-free. It is deployed via N04's static fit-time 71-GP "
+            "lookup, not a clean 2023-24 frozen model. Scope: every model using Cluster / "
+            "lap_time_vs_cluster_mean / mean_sector_speed (overtake, SC, laptime AND tire Model "
+            "A). Materiality is bounded (2-bit quantization over stable circuit character; the "
+            "delta pace target absorbs per-circuit constants) but NOT yet measured - the "
+            "demonstration (refit k-means 2023-24-only, count 2025 label flips) is deferred to "
+            "#376. N03 is untouchable, so no code fix here",
         ),
         ProvenanceEntry(
             "year_circuit_median / team_pace_rank",
@@ -408,9 +421,18 @@ def _render(
         "window was originally chosen by max-lift on test-2025, so it cannot be honestly re-chosen "
         "without retraining the 5/7-lap models. The reported SC AUC-PR 0.0723 (the lowest of the three "
         "windows) keeps an explicit test-window-selected caveat.",
-        "- **Remaining action before freeze**: pin a year filter in N03 `load_all_races` to close the "
-        "circuit_cluster underdocumentation; and give SC/overtake a real held-out val split (or nested "
-        "CV) if a defensible operating threshold is ever needed.",
+        "- **circuit_cluster - REAL but coarse test-season leak (Fable gate correction)**: an earlier draft "
+        "called this 'no leak'; that was wrong. The k-means fit pooled 2023-2025 (N03 'Successfully loaded "
+        "71 GPs'; the deployed cluster table contains the 2025-only 'Miami Gardens'), and its inputs "
+        "include `mean_laptime` - an aggregate of the pace target itself - so `Cluster` is not target-free. "
+        "It is a 4-way (2-bit) bucket over ~25 circuits, deployed via N04's static fit-time lookup, and it "
+        "feeds overtake, SC, laptime AND tire (Model A). Materiality is bounded (2-bit quantization over "
+        "stable circuit character; the delta pace target absorbs per-circuit constants) but NOT yet "
+        "measured; the demonstration (refit k-means 2023-24-only, count 2025 label flips) is deferred to "
+        "#376. N03 is untouchable, so no code fix.",
+        "- **Recommendation before freeze (not executed - no retrain)**: give SC/overtake a real held-out "
+        "validation split (or nested CV) if a defensible operating threshold is ever needed. The paper "
+        "reports both threshold-free (their headline AUC-PR/AUC-ROC are unaffected).",
         "- Every other headline (undercut 0.6739, pit 0.487, pace 0.4104, tire 0.7078, sentiment 0.84) is "
         "unaffected by these findings.",
     ]

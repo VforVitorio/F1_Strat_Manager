@@ -16,6 +16,12 @@ _HAS_UNDERCUT = (ROOT / "data" / "models" / "pit_prediction" / "lgbm_undercut_v1
 _HAS_PIT = (ROOT / "data" / "models" / "pit_prediction" / "hist_pit_p50_v1.pkl").exists() and bool(
     list((ROOT / "data" / "raw").glob("*/*/laps.parquet"))
 )
+_HAS_PACE = (ROOT / "data" / "models" / "lap_time" / "xgb_laptime_delta_final.json").exists() and (
+    ROOT / "data" / "processed" / "laps_featured_2025.parquet"
+).exists()
+_HAS_TIRE = (ROOT / "data" / "models" / "tire_degradation" / "tiredeg_modelA_v4.pt").exists() and (
+    ROOT / "data" / "processed" / "laps_tiredeg.parquet"
+).exists()
 
 
 @pytest.mark.data
@@ -62,3 +68,44 @@ def test_pit_p50_mae_reproduces_from_raw_laps():
     result = _pit_p50_mae()
     assert result.status == "reproduced"
     assert result.reproduced is not None and abs(result.reproduced - 0.487) < 0.01
+
+
+@pytest.mark.data
+@pytest.mark.skipif(
+    not _HAS_PACE, reason="pace model or featured laps absent (CI runner without data)"
+)
+def test_pace_mae_reproduces_from_featured_laps():
+    """The pace holdout rebuilt in-memory reproduces the 0.4104 delta-model MAE within tolerance."""
+    from src.strategy.eval.reproduce import _pace_mae
+
+    result = _pace_mae()
+    assert result.status == "reproduced"
+    assert result.reproduced is not None and abs(result.reproduced - 0.4104) < 0.01
+
+
+@pytest.mark.data
+@pytest.mark.skipif(
+    not _HAS_TIRE, reason="tire model or featured laps absent (CI runner without data)"
+)
+def test_tire_mae_reproduces_from_featured_laps():
+    """The tire holdout rebuilt in-memory reproduces the 0.7078 global-model MAE within tolerance."""
+    from src.strategy.eval.reproduce import _tire_mae
+
+    result = _tire_mae()
+    assert result.status == "reproduced"
+    assert result.reproduced is not None and abs(result.reproduced - 0.7078) < 0.01
+
+
+@pytest.mark.data
+@pytest.mark.skipif(
+    not _HAS_TIRE, reason="tire model or featured laps absent (CI runner without data)"
+)
+def test_tire_mc_sigma_is_seeded_and_sane():
+    """The global MC-Dropout sigma is reproducible across calls and in a plausible band."""
+    from src.strategy.eval.tire_holdout import mc_dropout_global_sigma
+
+    sigma_a = mc_dropout_global_sigma(n_mc=10, seed=42)
+    sigma_b = mc_dropout_global_sigma(n_mc=10, seed=42)
+    assert sigma_a is not None
+    assert sigma_a == sigma_b  # seeded -> deterministic
+    assert 0.01 < sigma_a < 1.0  # epistemic band, same order as the stored ~0.12-0.26 s
