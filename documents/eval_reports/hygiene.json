@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "c38c94e",
+    "harness_sha": "c1af9c1",
     "dataset": "notebooks/strategy audit + 2024/2025 overtake & SC holdouts",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T17:16:32+00:00",
+    "generated_at": "2026-07-11T17:25:07+00:00",
     "artifacts": {}
   },
   "findings": [
@@ -35,16 +35,16 @@
       "verdict": "underdocumented",
       "selection": "fit on 2024 probabilities, but 2024 is IN the train set (config fitted_on='val_2024' is misleading)",
       "evidence": "N14_sc_model.ipynb (calibration cell)",
-      "impact": "resubstitution fit; measured impact low (test ECE 0.0347 < 0.05, AUC-PR invariant under a monotone Platt map) but a provenance audit must record it"
+      "impact": "resubstitution fit; measured impact low (test ECE 0.0347 < 0.05, AUC-PR invariant under a monotone Platt map). Singled out because its config label fitted_on='val_2024' is misleading; overtake/undercut Platt are also 2024-in-train but not mislabeled"
     },
     {
       "item": "best_threshold=0.522",
       "kind": "threshold",
       "model": "undercut",
       "verdict": "clean",
-      "selection": "argmax-F1 on the calibrated val-2024 split (verified CLEAN in the #207 adversarial pass)",
+      "selection": "argmax-F1 on 2024 in-train (2024 is part of N16's 2023+2024 train set, same structure as overtake; mild, 143 positives / base 0.413) - but NEVER selected on test-2025",
       "evidence": "N16_undercut.ipynb (\"Threshold on calibrated val 2024\")",
-      "impact": "textbook-correct; the 2025 test set is only applied afterwards"
+      "impact": "CLEAN on the test-contamination axis this audit measures: the threshold never saw test (unlike overtake 0.7976 / SC 0.2335). 2024 is not a held-out val split, but with 143 positives it does not collapse (unlike SC); the headline 0.6739 is threshold-free anyway"
     },
     {
       "item": "circuit_sc_rate",

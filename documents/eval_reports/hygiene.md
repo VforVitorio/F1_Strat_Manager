@@ -1,6 +1,6 @@
 # hygiene
 
-- harness `c38c94e` · schema v1 · generated 2026-07-11T17:16:32+00:00
+- harness `c1af9c1` · schema v1 · generated 2026-07-11T17:25:07+00:00
 - era 2022-2025 · dataset notebooks/strategy audit + 2024/2025 overtake & SC holdouts · seed deterministic · llm none
 - artifacts: —
 
@@ -10,7 +10,7 @@
 | best_threshold=0.2335 + 3/5/7-lap window | threshold | safety_car | **contaminated** | argmax-F2 threshold AND the target-window both selected on the 2025 test set | N14_sc_model.ipynb (PR-curve + window-comparison cells) |
 | sc Platt calibrator | calibrator | safety_car | **underdocumented** | fit on 2024 probabilities, but 2024 is IN the train set (config fitted_on='val_2024' is misleading) | N14_sc_model.ipynb (calibration cell) |
 | circuit_cluster (k-means) | aggregate_feature | overtake/safety_car/laptime | **underdocumented** | k-means fit window not year-restricted in code; 2025 holdout is intent-only | N03_circuit_clustering.ipynb (load_all_races / fit_kmeans_final) |
-| best_threshold=0.522 | threshold | undercut | **clean** | argmax-F1 on the calibrated val-2024 split (verified CLEAN in the #207 adversarial pass) | N16_undercut.ipynb ("Threshold on calibrated val 2024") |
+| best_threshold=0.522 | threshold | undercut | **clean** | argmax-F1 on 2024 in-train (2024 is part of N16's 2023+2024 train set, same structure as overtake; mild, 143 positives / base 0.413) - but NEVER selected on test-2025 | N16_undercut.ipynb ("Threshold on calibrated val 2024") |
 | circuit_sc_rate | aggregate_feature | safety_car | **clean** | past-season only (year < yr); 2023 rows get a fixed SC_PRIOR=0.15 | N13_sc_eda.ipynb (compute_circuit_sc_rate) |
 | team_year_median | aggregate_feature | pit_duration | **clean** | lookup fit on train only, applied to test with recent-year fallback | N15_pit_duration.ipynb (add_team_year_median) |
 | circuit_undercut_rate + team_x_undercut_rate | aggregate_feature | undercut | **clean** | target encoding fit on train only, train-mean fallback on test | N16_undercut.ipynb (compute_target_encoding) |

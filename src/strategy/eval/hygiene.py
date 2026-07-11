@@ -105,16 +105,20 @@ def audit_findings() -> list[ProvenanceEntry]:
             "fit on 2024 probabilities, but 2024 is IN the train set (config fitted_on='val_2024' is misleading)",
             "N14_sc_model.ipynb (calibration cell)",
             "resubstitution fit; measured impact low (test ECE 0.0347 < 0.05, AUC-PR invariant under a "
-            "monotone Platt map) but a provenance audit must record it",
+            "monotone Platt map). Singled out because its config label fitted_on='val_2024' is "
+            "misleading; overtake/undercut Platt are also 2024-in-train but not mislabeled",
         ),
         ProvenanceEntry(
             "best_threshold=0.522",
             "threshold",
             "undercut",
             CLEAN,
-            "argmax-F1 on the calibrated val-2024 split (verified CLEAN in the #207 adversarial pass)",
+            "argmax-F1 on 2024 in-train (2024 is part of N16's 2023+2024 train set, same structure as "
+            "overtake; mild, 143 positives / base 0.413) - but NEVER selected on test-2025",
             'N16_undercut.ipynb ("Threshold on calibrated val 2024")',
-            "textbook-correct; the 2025 test set is only applied afterwards",
+            "CLEAN on the test-contamination axis this audit measures: the threshold never saw test "
+            "(unlike overtake 0.7976 / SC 0.2335). 2024 is not a held-out val split, but with 143 "
+            "positives it does not collapse (unlike SC); the headline 0.6739 is threshold-free anyway",
         ),
         ProvenanceEntry(
             "circuit_sc_rate",
@@ -270,11 +274,11 @@ def correct_sc_threshold() -> dict[str, Any] | None:
 def sc_window_sensitivity() -> dict[str, Any] | None:
     """Show the SC target window (3/5/7) cannot be honestly retro-selected, and caveat it.
 
-    N14 chose the window by comparing three separately-trained models on
-    test-2025 (the leak); only the winning 3-lap model is persisted, so the
-    window CANNOT be re-selected on val without retraining the 5/7-lap models
-    (out of scope). As supporting evidence this reports the persisted 3-lap
-    model's AUC-PR against each target window on val-2024 vs test-2025 - a
+    N14 chose the window by comparing three separately-trained models by max-lift
+    on test-2025 (the leak); only the winning 3-lap model is persisted, so the
+    window CANNOT be re-selected without retraining the 5/7-lap models (out of
+    scope). As supporting evidence this reports the persisted 3-lap model's AUC-PR
+    against each target window on 2024 (IN-TRAIN, resubstitution) vs test-2025 - a
     single-model sensitivity check, NOT the original 3-model selection - which
     shows the metric is window-unstable. The paper's honest position: report the
     threshold-free AUC-PR WITH the caveat that its window was test-selected.
