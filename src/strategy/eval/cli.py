@@ -59,7 +59,7 @@ def _run_hygiene() -> None:
 
 def _run_nlp() -> None:
     payload = build_nlp_report()
-    print("nlp " + _summarise(payload, "results", ("delta", "blocked", "pending")))
+    print("nlp " + _summarise(payload, "results", ("flagged", "delta", "blocked", "pending")))
 
 
 _COMMANDS: dict[str, Callable[[], None]] = {
