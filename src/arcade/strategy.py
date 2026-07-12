@@ -604,6 +604,11 @@ _ALERT_SEVERITY: dict[str, int] = {
     "VIRTUAL_SAFETY_CAR": 2,
     "VSC": 2,
     "YELLOW_FLAG": 2,
+    # A sector yellow is the same danger tier as a full-track yellow, and it is
+    # the form DOUBLE YELLOW resolves to (radio_agent folds DOUBLE YELLOW into the
+    # YELLOW branch → YELLOW_FLAG_SECTOR). Without this key the banner fell back to
+    # severity 0 (dim), hiding the highest-danger local flag (#398 follow-up).
+    "YELLOW_FLAG_SECTOR": 2,
     "PROBLEM": 1,
     "WARNING": 1,
 }
