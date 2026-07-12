@@ -19,6 +19,7 @@ all consume the same ``lap_state`` dict contract.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -26,6 +27,7 @@ from typing import Any
 
 import pandas as pd
 
+from src.simulation.data_validation import DataValidationError, warn_low_quality_laps
 from src.simulation.race_state_manager import RaceStateManager
 
 
@@ -65,12 +67,27 @@ class RaceReplayEngine:
         """
         race_dir = Path(race_dir)
 
-        laps_df = pd.read_parquet(race_dir / "laps.parquet")
+        # Guard the read so a missing/corrupt parquet fails with a sourced error
+        # instead of a raw pyarrow/OS traceback; the required-column contract is
+        # then enforced in RaceStateManager. (F-02)
+        laps_path = race_dir / "laps.parquet"
+        try:
+            laps_df = pd.read_parquet(laps_path)
+        except Exception as exc:  # noqa: BLE001 - any read failure is a load-boundary error
+            raise DataValidationError(f"{laps_path}: cannot read laps parquet ({exc}).") from exc
+        warn_low_quality_laps(laps_df, source=str(laps_path))
 
         self._weather_df: pd.DataFrame | None = None
         weather_path = race_dir / "weather.parquet"
         if weather_path.exists():
-            self._weather_df = pd.read_parquet(weather_path)
+            try:
+                self._weather_df = pd.read_parquet(weather_path)
+            except Exception as exc:  # noqa: BLE001 - weather is optional; degrade, don't abort
+                print(
+                    f"[warn] {weather_path}: cannot read weather parquet ({exc}); "
+                    "continuing without weather.",
+                    file=sys.stderr,
+                )
 
         gp_name, year = self._parse_meta(race_dir)
 
@@ -96,6 +113,13 @@ class RaceReplayEngine:
             with open(meta_path) as f:
                 meta = json.load(f)
             return meta.get("gp_name", race_dir.name), int(meta.get("year", 2025))
+        # No metadata.json: warn loudly instead of silently assuming 2025 - a
+        # wrong year mis-selects circuit-aware thresholds and season config. (F-02)
+        print(
+            f"[warn] {meta_path} absent; falling back to gp_name={race_dir.name!r}, "
+            "year=2025 (circuit thresholds + season may be wrong).",
+            file=sys.stderr,
+        )
         return race_dir.name, 2025
 
     def replay(self) -> Iterator[dict[str, Any]]:
