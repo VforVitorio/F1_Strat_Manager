@@ -1,0 +1,29 @@
+name: gitleaks
+
+# Secret scanning of the repo history + PR diffs. Complements GitHub-native
+# secret scanning / push protection (which are already on) with an explicit,
+# reproducible check. GITLEAKS_LICENSE is only required for GitHub orgs; this
+# is a personal public repo, so no license secret is needed.
+on:
+  push:
+    branches: [main, dev, test]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history so the scan sees every commit
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
