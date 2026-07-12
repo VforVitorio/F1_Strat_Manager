@@ -11,6 +11,14 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.10.1](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.0...v1.10.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* **cli:** wire the simulation CLI to the shared inference engine ([#236](https://github.com/VforVitorio/F1-StratLab/issues/236)) ([32dcc4b](https://github.com/VforVitorio/F1-StratLab/commit/32dcc4b38a71afd31debf7bccb4359b76a911c2f))
+* **cli:** wire the simulation CLI to the shared inference engine ([#236](https://github.com/VforVitorio/F1-StratLab/issues/236)) ([0694299](https://github.com/VforVitorio/F1-StratLab/commit/06942991dfbd31521ff087841fb2e95754132bf0))
+
 ## [1.10.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.9.0...v1.10.0) (2026-07-11)
 
 
