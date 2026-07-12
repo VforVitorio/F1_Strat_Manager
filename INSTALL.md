@@ -21,6 +21,11 @@ prerequisites are on the machine.
   (recommended) or plain `pip`. `uv` resolves the CUDA-specific PyTorch
   wheel automatically via the `[tool.uv.sources]` table in
   `pyproject.toml`.
+- **First-run budget**: models and race data download lazily from Hugging
+  Face on first use (~7-8 GB over a session; keep ~15-20 GB free disk). The
+  first launch also spends ~30 s warming imports before the first panel
+  paints, and the first GP replay may fetch an extra ~1.5 GB Whisper
+  checkpoint. Subsequent runs read a warm cache and start fast.
 
 ---
 
@@ -78,10 +83,17 @@ controls legend, troubleshooting and window tour.
 ## Streamlit — post-race analysis UI (backend + frontend)
 
 ```bash
-git clone https://github.com/VforVitorio/F1_Strat_Manager.git
+git clone --recurse-submodules https://github.com/VforVitorio/F1_Strat_Manager.git
 cd F1_Strat_Manager
+cp .env.example .env          # add OPENAI_API_KEY, or set F1_LLM_PROVIDER=lmstudio
 docker compose up
 ```
+
+`--recurse-submodules` is required: both containers build from `src/telemetry`,
+which is empty without it. `cp .env.example .env` is required too — Compose
+aborts with "env file ./.env not found" otherwise. The backend also serves race
+data from a **read-only** `./data` mount, so seed `data/` on the host first (see
+[Data bootstrap](#data-bootstrap)) or the data endpoints return 404.
 
 Opens:
 
@@ -120,6 +132,15 @@ first run; a warm cache is zero-cost. For a production deploy without a
 repo clone the data tree would be downloaded from the TFG's Hugging Face
 mirror on first run (tracked under `project_cli_distribution_plan.md`,
 deferred past the first release).
+
+For the **Docker Streamlit stack**, `./data` is mounted read-only, so the
+container cannot populate it — seed it on the host before `docker compose up`,
+either by running the CLI path once (`uv run f1-sim Melbourne VER "Red Bull Racing" --year 2025 --no-llm --laps 1-1`)
+or directly:
+
+```bash
+uv run python -c "from src.f1_strat_manager.data_cache import ensure_setup; ensure_setup(show_progress=True)"
+```
 
 ---
 
