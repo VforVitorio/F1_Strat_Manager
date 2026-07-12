@@ -571,15 +571,17 @@ def _classify_rcm_event(event: "RCMEvent") -> str:
     msg  = event.message.upper()
 
     if cat == "SafetyCar":
+        # "SAFETY CAR IN THIS LAP" is the FIA end-of-neutralisation message (the
+        # car comes into the pit lane this lap). It carries none of the other
+        # keywords, so it used to fall through to SAFETY_CAR_DEPLOYED — which
+        # kept the stateful tracker pinned ON for the rest of the race. Treat it
+        # as ending. (NR-02 / NR-03, #305)
+        ending = "ENDING" in msg or "IN THIS LAP" in msg
         if "VIRTUAL" in msg:
-            return (
-                "VIRTUAL_SAFETY_CAR_ENDING"
-                if "ENDING" in msg
-                else "VIRTUAL_SAFETY_CAR_DEPLOYED"
-            )
+            return "VIRTUAL_SAFETY_CAR_ENDING" if ending else "VIRTUAL_SAFETY_CAR_DEPLOYED"
         if "IN THE PIT LANE" in msg:
             return "SAFETY_CAR_IN_PIT_LANE"
-        if "ENDING" in msg:
+        if ending:
             return "SAFETY_CAR_ENDING"
         return "SAFETY_CAR_DEPLOYED"
 

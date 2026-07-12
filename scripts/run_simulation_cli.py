@@ -1505,6 +1505,11 @@ def run(args: argparse.Namespace) -> None:
     # This sidesteps the repaint-from-top bug that happened when the growing
     # history table was inside Live and eventually exceeded terminal height
     # (the terminal cursor cannot rewind above the topmost visible line).
+    from src.nlp.rcm_state import RaceControlStateTracker
+
+    # One Safety-Car tracker for the whole run: persists SC/VSC state across laps
+    # so the deploy-once corpus message keeps the override active mid-stint (NR-02).
+    sc_tracker = RaceControlStateTracker()
     with Live(
         _live_content(),
         console=console,
@@ -1629,6 +1634,16 @@ def run(args: argparse.Namespace) -> None:
                         race_state.radio_msgs.extend(real_radios)
                     if real_rcms:
                         race_state.rcm_events.extend(real_rcms)
+                    # Persist Safety-Car state across laps (NR-02): the corpus
+                    # announces DEPLOYED once, so on the intervening laps we
+                    # re-assert it to the agents, which only see this lap's window.
+                    # DNF / incomplete / pre-lap_start laps are `continue`d before
+                    # this point, so the tracker only sees processed laps; a
+                    # release landing on a skipped lap is bounded by the tracker's
+                    # safety valve rather than pinning the override.
+                    sc_tracker.ingest(lap_num, real_rcms)
+                    if sc_tracker.should_inject(lap_num):
+                        race_state.rcm_events.append(sc_tracker.synthetic_event())
                     if sim_radio:
                         race_state.radio_msgs.append(sim_radio)
                     if sim_rcm:
