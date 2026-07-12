@@ -11,6 +11,22 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.10.3](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.2...v1.10.3) (2026-07-12)
+
+
+### Bug Fixes
+
+* **nlp:** DOUBLE YELLOW severity + time-penalty routing ([#398](https://github.com/VforVitorio/F1-StratLab/issues/398) follow-up) ([7f3f7a7](https://github.com/VforVitorio/F1-StratLab/commit/7f3f7a79d9ef96eb92538e702ca4d579332101e1))
+* **nlp:** RCM parser superset + penalty/red-flag routing + arcade SC persistence ([#398](https://github.com/VforVitorio/F1-StratLab/issues/398)) ([47cf9a7](https://github.com/VforVitorio/F1-StratLab/commit/47cf9a74ce2fc92095725dbe97bbe1b3e55c9216))
+* **nlp:** render DOUBLE YELLOW at yellow severity + route time penalties to N30 ([#398](https://github.com/VforVitorio/F1-StratLab/issues/398) follow-up) ([b45d7f1](https://github.com/VforVitorio/F1-StratLab/commit/b45d7f158c6b524da4f0a2c5ca66fe778c1c19ef))
+* **nlp:** widen the RCM parser + route penalty/red-flag alerts + persist SC in arcade ([#398](https://github.com/VforVitorio/F1-StratLab/issues/398)) ([6a223e1](https://github.com/VforVitorio/F1-StratLab/commit/6a223e1ac5809e43c2287959353a6ace860a06ec))
+
+
+### Performance
+
+* **cli:** skip double model load in --no-llm prewarm ([#389](https://github.com/VforVitorio/F1-StratLab/issues/389)) ([56c24f7](https://github.com/VforVitorio/F1-StratLab/commit/56c24f7aa37695f2e2a0026f9abcbf84dd686048))
+* **cli:** skip the tire/situation/pit singleton prewarm in --no-llm mode ([#389](https://github.com/VforVitorio/F1-StratLab/issues/389)) ([f0ba4b4](https://github.com/VforVitorio/F1-StratLab/commit/f0ba4b4b96ecca4146f353252eeb92302bacf626))
+
 ## [1.10.2](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.1...v1.10.2) (2026-07-12)
 
 
