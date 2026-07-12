@@ -42,6 +42,22 @@ import warnings
 from pathlib import Path
 from typing import Any, Optional
 
+# Ensure UTF-8 on Windows terminals when stdout/stderr are redirected (piped to a
+# file or another process). Without this, Rich's `→` glyphs raise
+# UnicodeEncodeError under the console's cp1252 fallback the moment output is not
+# a live terminal (issue #388). Must run before `console = Console()` below, which
+# caches the stream encoding at construction time.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Suppress stray SWIG DeprecationWarnings from C-extension imports.
 warnings.filterwarnings("ignore", message=".*builtin type.*__module__.*")
 

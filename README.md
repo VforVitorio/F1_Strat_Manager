@@ -83,10 +83,11 @@ uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
 f1-arcade
 ```
 
-**Streamlit**: clone and bring the stack up with Docker:
+**Streamlit**: clone **with the telemetry submodule**, add an env file, then bring the stack up with Docker:
 
 ```bash
-git clone https://github.com/VforVitorio/F1-StratLab.git && cd F1-StratLab
+git clone --recurse-submodules https://github.com/VforVitorio/F1-StratLab.git && cd F1-StratLab
+cp .env.example .env          # add OPENAI_API_KEY, or set F1_LLM_PROVIDER=lmstudio
 docker compose up
 ```
 
