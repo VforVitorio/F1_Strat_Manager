@@ -339,12 +339,10 @@ _TIER2_IMPORTS = [
     # tests/test_arcade_dashboard_imports.py, do not re-import here)
     "arcade",
     # Agents
-    # ``experta`` is intentionally excluded: it transitively pulls
-    # ``frozendict<2.0`` which references ``collections.Mapping`` and
-    # therefore raises ``AttributeError`` on Python 3.10+ unless the user
-    # bumps frozendict manually (see the comment next to it in
-    # ``pyproject.toml``). The legacy rule-based agent that uses experta
-    # is being replaced by the N31 orchestrator anyway.
+    # experta now imports cleanly: [tool.uv] override-dependencies bumps
+    # frozendict to >=2.4.0, since experta's own ==1.2 pin is broken on
+    # Python 3.10+ (it references the removed collections.Mapping) (#253).
+    "experta",
     "langgraph",
     "langchain",
     # Utilities
@@ -353,8 +351,8 @@ _TIER2_IMPORTS = [
     "requests",
     "tqdm",
     "rich",
-    "fitz",
     "bs4",
+    "pypdf",  # FIA regulation PDF reader (scripts/build_rag_index.py)
     "onnxruntime",
     "optuna",
 ]
@@ -447,3 +445,44 @@ def test_pyarrow_parquet_engine_available():
     pq = pytest.importorskip("pyarrow.parquet")
     assert callable(getattr(pq, "read_table", None))
     assert callable(getattr(pq, "write_table", None))
+
+
+def test_dropped_deps_absent():
+    """The fitz dummy and its heavy transitive tree stay uninstalled (#253).
+
+    ``fitz==0.0.1.dev2`` (a 2017 squatter on PyPI, NOT PyMuPDF) was dragging
+    nibabel / nipype / pyxnat into every install for zero runtime benefit —
+    nothing in the codebase imports it. This canary fails loudly if a future
+    dependency bump reintroduces any of them so the bloat cannot creep back
+    silently.
+    """
+    import importlib.util
+
+    for junk in ("fitz", "nipype", "nibabel", "pyxnat"):
+        assert importlib.util.find_spec(junk) is None, (
+            f"{junk!r} is installed again — the fitz dependency tree crept back (#253)"
+        )
+
+
+def test_pypdf_reader_available():
+    """pypdf.PdfReader is importable — ``scripts/build_rag_index.py`` needs it.
+
+    pypdf was imported but undeclared before #253, so a fresh environment hit
+    ``ModuleNotFoundError`` the moment it tried to build the RAG index. Pins
+    the entry point the RAG builder actually calls.
+    """
+    pypdf = pytest.importorskip("pypdf")
+    assert callable(getattr(pypdf, "PdfReader", None))
+
+
+def test_frozendict_v2_importable():
+    """frozendict imports and is >=2.0 — the #253 override target.
+
+    experta pins ``frozendict==1.2``, which cannot import on Python 3.10+
+    (it references the removed ``collections.Mapping``). ``[tool.uv]``
+    ``override-dependencies`` forces >=2.4.0; this pins that a fresh install
+    ships an importable frozendict, not the broken 1.2 the raw pin resolves to.
+    """
+    frozendict = pytest.importorskip("frozendict")
+    major = int(frozendict.__version__.split(".")[0])
+    assert major >= 2, f"frozendict {frozendict.__version__} < 2.0 — the #253 override regressed"
