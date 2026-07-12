@@ -38,6 +38,7 @@ F1_STRAT_NO_FIRST_RUN
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -467,9 +468,16 @@ def ensure_radio_corpus(
     try:
         slug = resolve_gp_slug(gp_name)
     except ValueError:
-        # Unknown friendly name — let the caller handle it. We do NOT raise
-        # here because the runner may itself accept the raw gp_name path
-        # and the user gets a clearer error from the runner constructor.
+        # Unknown name even after canonical normalisation — a genuine typo or an
+        # as-yet-unmapped GP. We do NOT raise here (the runner may accept the raw
+        # gp_name path and gives a clearer error), but warn so the miss is not
+        # fully silent: a zero-radio simulation used to look identical to a
+        # healthy one (#243).
+        print(
+            f"[warn] ensure_radio_corpus: no radio-corpus mapping for {gp_name!r} "
+            f"({year}); simulating with no team radio.",
+            file=sys.stderr,
+        )
         return get_data_root() / "raw" / "radio_audio" / str(year) / gp_name
 
     data_root = get_data_root()

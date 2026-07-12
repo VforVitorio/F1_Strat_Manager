@@ -47,7 +47,6 @@ dependencies = [
     # AGENTS / EXPERT SYSTEM
     # ===================
     "experta>=1.9.4",
-    # frozendict: install manually after (>=2.4.0 for Python 3.10+)
     "langgraph>=1.0.10rc1",
     "langchain>=1.3.9",
     # ===================
@@ -104,8 +103,10 @@ dependencies = [
     "setfit>=1.1.3",
     "seqeval>=1.2.2",
     "jiwer>=3.0.0",
-    "fitz>=0.0.1.dev2",
     "bs4>=0.0.2",
+    # pypdf: used by scripts/build_rag_index.py to read the FIA regulation PDFs.
+    # Was imported but undeclared, so a fresh env hit ModuleNotFoundError.
+    "pypdf>=4.0.0",
     "langchain-openai>=1.1.14",
     "rich>=14.3.3",
 ]
@@ -142,6 +143,13 @@ voice = [
 where = ["."]
 include = ["src*", "scripts*"]
 
+[tool.uv]
+# experta 1.9.4 hard-pins frozendict==1.2, which cannot import on Python 3.10+
+# (it references the removed collections.Mapping). Override to a working release
+# so a fresh `uv sync` no longer ships a broken package; nothing in the codebase
+# relies on frozendict's 1.2 API.
+override-dependencies = ["frozendict>=2.4.0"]
+
 # ── uv: PyTorch wheel routing ─────────────────────────────────────────────
 # `uv sync` reads these blocks and pulls torch / torchvision from the right
 # index per platform: cu128 on Windows only (the dev/training box, NVIDIA RTX
@@ -172,6 +180,13 @@ torchvision = [
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml", "*.json"]
+# Compiled assets of the vendored Streamlit audio-orb component. Its `frontend/`
+# `.gitignore` ignores both `node_modules/` and `build/`, so a clean checkout
+# carries neither; the `build/` dir is force-committed for release (see the
+# submodule) and shipped here so `f1-streamlit` renders the orb from the wheel.
+# Scoped to `frontend/build/**` on purpose: a broad `*.js` glob would recursively
+# rake in the ~87 MB `node_modules` tree on a dev box that ran `npm install`.
+"src.telemetry.frontend.components.streamlit_audio_viz" = ["frontend/build/*", "frontend/build/**/*"]
 
 [tool.black]
 line-length = 100

@@ -42,6 +42,22 @@ import warnings
 from pathlib import Path
 from typing import Any, Optional
 
+# Ensure UTF-8 on Windows terminals when stdout/stderr are redirected (piped to a
+# file or another process). Without this, Rich's `→` glyphs raise
+# UnicodeEncodeError under the console's cp1252 fallback the moment output is not
+# a live terminal (issue #388). Must run before `console = Console()` below, which
+# caches the stream encoding at construction time.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Suppress stray SWIG DeprecationWarnings from C-extension imports.
 warnings.filterwarnings("ignore", message=".*builtin type.*__module__.*")
 
@@ -345,8 +361,14 @@ def _load_tire_alloc(repo_root: Path) -> None:
 
 def _compound_text(compound: str, gp_name: str, year: int) -> Text:
     """Return a coloured Rich Text showing compound + Cx (e.g. 'SOF/C4')."""
+    from src.f1_strat_manager.gp_slugs import canonical_gp_name
+
     cu = compound.upper()
-    cx = _TIRE_ALLOC.get(str(year), {}).get(gp_name, {}).get(cu)
+    # tire_compounds_by_race.json is keyed by the friendly GP name; normalise the
+    # raw folder name (e.g. "Miami_Gardens" -> "Miami", "Las_Vegas" -> "Las Vegas")
+    # so the Cx label resolves for every GP, not just the ~18 whose folder name
+    # already matched the friendly key (#243).
+    cx = _TIRE_ALLOC.get(str(year), {}).get(canonical_gp_name(gp_name), {}).get(cu)
     if cx:
         label = f"{cu[:3]}/{cx}"  # SOF/C4, MED/C3, HAR/C2
     else:
@@ -1483,6 +1505,11 @@ def run(args: argparse.Namespace) -> None:
     # This sidesteps the repaint-from-top bug that happened when the growing
     # history table was inside Live and eventually exceeded terminal height
     # (the terminal cursor cannot rewind above the topmost visible line).
+    from src.nlp.rcm_state import RaceControlStateTracker
+
+    # One Safety-Car tracker for the whole run: persists SC/VSC state across laps
+    # so the deploy-once corpus message keeps the override active mid-stint (NR-02).
+    sc_tracker = RaceControlStateTracker()
     with Live(
         _live_content(),
         console=console,
@@ -1607,6 +1634,16 @@ def run(args: argparse.Namespace) -> None:
                         race_state.radio_msgs.extend(real_radios)
                     if real_rcms:
                         race_state.rcm_events.extend(real_rcms)
+                    # Persist Safety-Car state across laps (NR-02): the corpus
+                    # announces DEPLOYED once, so on the intervening laps we
+                    # re-assert it to the agents, which only see this lap's window.
+                    # DNF / incomplete / pre-lap_start laps are `continue`d before
+                    # this point, so the tracker only sees processed laps; a
+                    # release landing on a skipped lap is bounded by the tracker's
+                    # safety valve rather than pinning the override.
+                    sc_tracker.ingest(lap_num, real_rcms)
+                    if sc_tracker.should_inject(lap_num):
+                        race_state.rcm_events.append(sc_tracker.synthetic_event())
                     if sim_radio:
                         race_state.radio_msgs.append(sim_radio)
                     if sim_rcm:
