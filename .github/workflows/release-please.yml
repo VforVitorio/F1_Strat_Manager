@@ -14,6 +14,8 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      prs_created: ${{ steps.release.outputs.prs_created }}
+      pr: ${{ steps.release.outputs.pr }}
     steps:
       - id: release
         uses: googleapis/release-please-action@v5
@@ -77,3 +79,38 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload ${{ needs.release-please.outputs.tag_name }} dist/*.whl dist/*.tar.gz --clobber
+
+  # PK-02: release-please bumps pyproject.toml's version but never uv.lock's own
+  # root `version` field, so the next `uv sync --frozen` CI run reds on the
+  # lock/pyproject mismatch until someone re-locks by hand. Re-lock inside the
+  # open release PR so a version bump never leaves --frozen CI broken.
+  sync-uv-lock:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.prs_created == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the release PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: latest
+
+      - name: Re-lock uv.lock to the bumped version
+        run: uv lock
+
+      - name: Commit the re-locked uv.lock if it changed
+        run: |
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already in sync with pyproject.toml."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add uv.lock
+            git commit -m "chore: sync uv.lock to the release version"
+            git push origin HEAD:${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+          fi
