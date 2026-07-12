@@ -172,6 +172,13 @@ torchvision = [
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml", "*.json"]
+# Compiled assets of the vendored Streamlit audio-orb component. Its `frontend/`
+# `.gitignore` ignores both `node_modules/` and `build/`, so a clean checkout
+# carries neither; the `build/` dir is force-committed for release (see the
+# submodule) and shipped here so `f1-streamlit` renders the orb from the wheel.
+# Scoped to `frontend/build/**` on purpose: a broad `*.js` glob would recursively
+# rake in the ~87 MB `node_modules` tree on a dev box that ran `npm install`.
+"src.telemetry.frontend.components.streamlit_audio_viz" = ["frontend/build/*", "frontend/build/**/*"]
 
 [tool.black]
 line-length = 100
