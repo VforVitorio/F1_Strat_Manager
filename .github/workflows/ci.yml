@@ -166,3 +166,25 @@ jobs:
       - name: Mypy
         if: steps.changes.outputs.backend == 'true'
         run: uv run mypy src/rag/
+
+  # Same-day CVE alerts on the locked Python deps (OSV/PyPA), independent of
+  # whether the diff touches uv.lock. Always-on (no path filter) per
+  # PROJECT_BOOTSTRAP.md §6; advisory (continue-on-error) while baselining,
+  # promote to a required check after a clean week.
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Audit locked dependencies (advisory)
+        continue-on-error: true
+        run: |
+          uv export --frozen --no-emit-project --all-extras --no-hashes \
+            --format requirements-txt -o requirements.audit.txt
+          uvx pip-audit -r requirements.audit.txt
