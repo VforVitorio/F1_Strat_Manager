@@ -1,6 +1,6 @@
 # Security Phase A — Design (issue #224, epic #223)
 
-**Status:** PROPOSAL — pending Víctor's review + the §8 decisions before any code is written (DESIGN-BEFORE gate).
+**Status:** IMPLEMENTED — Phase A shipped in the submodule (PRs #70 A1a, #71 A1b/A1c, #72 A2, #73 A3, #74 WS-hardening; promoted to `F1_Telemetry_Manager` `main`). The four §8 decisions are resolved below. Verified by a Fable verify-after pass: **PHASE A SOUND** (0 P0 / 0 P1; one latent P2 — a websocket-scope bypass with no live route — closed in #74).
 **Author:** Fable, orchestrated during the Sprint 4 session.
 **Scope:** `src/telemetry/backend/` (a git submodule → implementation PRs land in `F1_Telemetry_Manager`, with a pointer bump in the parent). No code was written for this doc.
 
@@ -108,9 +108,11 @@ Green on all = Phase A done; then a 🔴 Fable VERIFY-AFTER pass on the implemen
 
 ---
 
-## 8. Open questions for Víctor (decide before implementation)
+## 8. Decisions (resolved by Víctor — implemented)
 
-1. **Deploy scope** — single-user localhost forever, or a shared/public deploy? Sets whether A1 is belt-and-braces or non-negotiable, and whether per-user anything is worth it (the recommendation assumes single-user → one shared key).
-2. **Auth enforcement default** — safe-by-default (enforce only when `F1_API_KEY` is set, but refuse a non-localhost boot without a key), or **fail-closed always** (refuse to boot with no key even on localhost)?
-3. **`/mcp` in prod** — keep external MCP-client access behind auth (`F1_MCP_ENABLED=true`), or default it **off** (treat it as an artifact, not a feature)?
-4. **Header convention** — `X-API-Key` (recommended, unambiguous) vs `Authorization: Bearer` (reuses standard tooling but visually collides with the *outbound* OpenAI bearer in `llm_service`)?
+All four open questions were decided before implementation; the shipped code follows them exactly.
+
+1. **Deploy scope → single-user / localhost.** One shared API key, nothing per-user (no OAuth/JWT, no user store). *(A1b: `core/auth.py` enforces one `F1_API_KEY`.)*
+2. **Auth enforcement default → safe-by-default.** Enforce only when `F1_API_KEY` is set, but refuse to boot on a non-localhost bind without a key (fail-closed on the one dangerous combination). Local dev stays frictionless. *(A1b: `enforce_startup_security()`.)*
+3. **`/mcp` in prod → OFF by default.** `F1_MCP_ENABLED=false` in prod (the mount is wrapped in an `if`); when enabled it sits behind auth. *(A1a: `config.mcp_enabled()` + gated `app.mount`.)*
+4. **Header convention → `X-API-Key`.** Constant-time compare (`hmac.compare_digest`). *(A1b: `ApiKeyMiddleware`.)*
