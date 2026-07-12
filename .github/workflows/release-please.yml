@@ -33,7 +33,13 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     steps:
+      # `submodules: recursive` bakes src/telemetry (the Streamlit surface) into
+      # the wheel; without it f1-streamlit shipped dead (PK-01). fetch-depth: 0 so
+      # the build is identical regardless of checkout depth.
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -42,6 +48,30 @@ jobs:
 
       - name: Build wheel and sdist
         run: uv build
+
+      # Guard the exact failure PK-01 was: a wheel that installs but whose entry
+      # points don't resolve. Install (no deps) and assert every console script
+      # plus the bundled Streamlit app + audio-orb component are present.
+      - name: Smoke-test the wheel
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/python -m pip install --no-deps -q dist/*.whl
+          for s in f1-strat f1-sim f1-arcade f1-streamlit f1-eval; do
+            test -x /tmp/smoke/bin/$s || { echo "missing console script: $s"; exit 1; }
+          done
+          /tmp/smoke/bin/python - <<'PY'
+          import importlib.util, pathlib
+          root = pathlib.Path(importlib.util.find_spec("scripts.run_streamlit").origin).resolve().parent.parent
+          need = [
+              "scripts/f1_cli.py", "scripts/run_simulation_cli.py", "scripts/run_streamlit.py",
+              "src/arcade/main.py", "src/strategy/eval/cli.py",
+              "src/telemetry/frontend/app/main.py",
+              "src/telemetry/frontend/components/streamlit_audio_viz/frontend/build/index.html",
+          ]
+          missing = [r for r in need if not (root / r).exists()]
+          assert not missing, f"wheel is missing: {missing}"
+          print("wheel smoke OK: 5 entry points + Streamlit app + audio-orb assets present")
+          PY
 
       - name: Upload artefacts to release
         env:
