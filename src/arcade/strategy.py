@@ -221,6 +221,15 @@ class SimConnector(threading.Thread):
         # degrade path — the agents run with empty radio_msgs if the
         # corpus cannot be loaded).
         self._radio_runner: Any = None
+        # One Safety-Car tracker for the whole replay: a "SAFETY CAR DEPLOYED"
+        # corpus message is announced once (at the deploy lap), so without this
+        # the per-lap RCM window is empty on laps 8-10 of the same neutralisation
+        # and the SC override drops mid-stint. Persists the state across laps and
+        # re-asserts it in _build_race_state (NR-02, #305 → #398; same wiring the
+        # CLI uses).
+        from src.nlp.rcm_state import RaceControlStateTracker
+
+        self._sc_tracker = RaceControlStateTracker()
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -542,6 +551,15 @@ class SimConnector(threading.Thread):
                 radio_msgs, rcm_events = self._radio_runner.radios_for_lap(lap_num)
             except Exception as exc:
                 logger.debug("radios_for_lap(%d) failed: %s", lap_num, exc)
+
+        # Re-assert an active Safety Car on the laps whose RCM window carries no
+        # fresh deploy message. Ingest only the laps actually processed here; a
+        # release landing on a skipped (stale) lap is bounded by the tracker's
+        # safety valve rather than pinning the override (NR-02, #398 — mirrors
+        # the CLI wiring in run_simulation_cli).
+        self._sc_tracker.ingest(lap_num, rcm_events)
+        if self._sc_tracker.should_inject(lap_num):
+            rcm_events = list(rcm_events) + [self._sc_tracker.synthetic_event()]
 
         return RaceState(
             driver=driver_st.get("driver", "UNK"),

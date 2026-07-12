@@ -474,6 +474,18 @@ class StrategyRecommendation(BaseModel):
 # Layer 1 — MoE routing
 # ==============================================================================
 
+# RCM event_type values (radio_agent._classify_rcm_event naming) that count as
+# a FIA-facing penalty or red-flag ruling for N30 routing purposes. RED_FLAG is
+# reachable today: it is one of radio_agent._SAFETY_FLAGS, so radio_agent
+# ._build_alerts forwards it into RadioOutput.alerts as {'source': 'rcm',
+# 'event_type': 'RED_FLAG', ...}. TIME_PENALTY is listed for when an RCM event
+# actually reaches this set; as of writing, radio_agent._build_alerts only
+# forwards RCM events whose event_type is in _SAFETY_FLAGS, which excludes
+# TIME_PENALTY — so it currently never arrives in radio_alerts. That is a
+# separate, upstream gap in src/agents/radio_agent.py, not fixed here.
+_RCM_PENALTY_EVENT_TYPES = {"RED_FLAG", "TIME_PENALTY"}
+
+
 def _decide_agents_to_call(
     tire_warning:  str,
     sc_prob_3lap:  float,
@@ -504,8 +516,10 @@ def _decide_agents_to_call(
       and pit-lane rules (mandatory dry compound, unsafe release, pit window).
     * sc_prob_3lap > threshold → SC deployment likely → query SC procedure
       (delta lap time, pit-lane closure, double-yellow restart).
-    * Radio carries a FIA-facing alert (PENALTY / WARNING intent) → regulation
-      lookup for the infringement the steward is flagging.
+    * Radio carries a FIA-facing alert — an RCM alert whose event_type is in
+      _RCM_PENALTY_EVENT_TYPES (e.g. RED_FLAG), or a radio-transcript alert
+      with a WARNING intent → regulation lookup for the infringement the
+      steward is flagging.
 
     Any of the three conditions independently activates N30. The orchestrator
     LLM then sees the retrieved regulation snippet in its prompt and must
@@ -523,7 +537,16 @@ def _decide_agents_to_call(
     if sc_prob_3lap > CFG.sc_prob_threshold:
         activate.add("N30")
 
-    if alert_intents & {"PENALTY", "WARNING"}:
+    # RCM-sourced alerts (source='rcm') carry no 'intent' key at all — only
+    # radio-transcript alerts (source='radio') do, and radio_agent.CFG
+    # .alert_intents is ("PROBLEM", "WARNING"); no producer ever emits
+    # intent == "PENALTY". `alert_intents & {"PENALTY", "WARNING"}` was
+    # therefore unreachable on its PENALTY half. Route penalty/red-flag RCM
+    # alerts on their real 'event_type' field instead, unioned with the
+    # still-valid WARNING intent check so nothing that used to fire stops
+    # firing (NR-04, #398).
+    alert_event_types = {a.get("event_type", "") for a in radio_alerts}
+    if (alert_intents & {"WARNING"}) or (alert_event_types & _RCM_PENALTY_EVENT_TYPES):
         activate.add("N30")
 
     if "N28" in activate:
