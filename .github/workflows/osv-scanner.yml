@@ -1,16 +1,21 @@
 name: OSV-Scanner
 
-# Cross-ecosystem vulnerability scan against OSV.dev. Runs the PR-DIFF scan ONLY:
-# a first full scan of `main` surfaced 14 pre-existing CVEs in the ML deps
-# (Pillow x6, nltk, torch, python-ecdsa), and the scheduled/full reusable workflow
-# fails the build on them and cannot take `continue-on-error` (it is a reusable
-# workflow, and its underlying action has no direct-use entrypoint). Until that
-# backlog is triaged (#403), the PR-diff scan still catches any NEW vuln a PR
-# would introduce, and continuous Python-CVE coverage is provided by the always-on
-# pip-audit job in ci.yml. Restore the scheduled full scan in #403 once clean.
+# Cross-ecosystem vulnerability scan against OSV.dev (Python via uv.lock, plus
+# any npm/JS manifests). Uploads SARIF to the Security tab. The submodule's own
+# manifests are owned by Security epic #223; this covers the parent.
+#
+# The full scan is BLOCKING again (#403 triaged the pre-existing backlog): nltk
+# was bumped to its fixed release, and the CVEs with no reachable fix (Pillow x6,
+# blocked by arcade's <11.4 pin; torch; ecdsa) are waived with documented reasons
+# in osv-scanner.toml, which osv-scanner auto-discovers. Any NEW vulnerability not
+# on that list fails the build.
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main, dev]
+  schedule:
+    - cron: "30 6 * * 1" # weekly, Monday 06:30 UTC
 
 permissions:
   actions: read
@@ -18,5 +23,10 @@ permissions:
   contents: read
 
 jobs:
+  scan-scheduled:
+    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8"
+
   scan-pr:
+    if: ${{ github.event_name == 'pull_request' }}
     uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.8"

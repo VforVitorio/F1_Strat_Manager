@@ -54,7 +54,11 @@ dependencies = [
     # ===================
     "opencv-python>=4.8.0",
     "ultralytics>=8.0.0",
-    "pillow>=10.0.0",
+    # pillow is CAPPED at 11.3.x by arcade==3.3.3 (pins pillow>=11.3.0,<11.4), so
+    # the 12.2.0 fix for the 6 OSV CVEs is unreachable without a pre-release
+    # arcade. Those CVEs need untrusted-image input we never accept and are
+    # waived in osv-scanner.toml (#403); revisit when arcade allows pillow>=12.
+    "pillow>=11.3.0",
     # ===================
     # BACKEND / STREAMING
     # ===================
@@ -97,7 +101,7 @@ dependencies = [
     "optuna>=4.7.0",
     "catboost>=1.2.10",
     "librosa>=0.11.0",
-    "nltk>=3.9.4",
+    "nltk>=3.10.0",
     "gliner>=0.2.25",
     "onnxruntime<1.24",
     "setfit>=1.1.3",
