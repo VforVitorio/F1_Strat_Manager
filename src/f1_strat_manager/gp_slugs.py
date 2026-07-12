@@ -63,11 +63,52 @@ COUNTRY_SLUG_BY_GP: dict[str, str] = {
 }
 
 
+# On-disk raw folder names that differ from the friendly key by more than the
+# underscore substitution — a mid-season circuit rename. Keyed by the folder
+# name under ``data/raw/{year}/``, value is the canonical friendly name used by
+# both :data:`COUNTRY_SLUG_BY_GP` and ``data/tire_compounds_by_race.json``. The
+# space-vs-underscore forms (``Las_Vegas`` → ``Las Vegas``) are handled generically
+# by :func:`canonical_gp_name` and do NOT belong here.
+FOLDER_ALIASES: dict[str, str] = {
+    "Miami_Gardens": "Miami",  # 2025 raw folder; 2023/2024 used "Miami"
+}
+
+
+def canonical_gp_name(name: str) -> str:
+    """Normalise any GP identifier form to the canonical friendly name.
+
+    A single GP is referred to by several strings across the project: the
+    friendly name the featured-laps parquet uses (``"Las Vegas"``), the raw
+    on-disk folder name with underscores (``"Las_Vegas"``, ``"Marina_Bay"``),
+    and the occasional renamed folder (``"Miami_Gardens"`` for what the tables
+    call ``"Miami"``). Both :data:`COUNTRY_SLUG_BY_GP` and
+    ``data/tire_compounds_by_race.json`` are keyed by the *friendly* name, so
+    every caller that starts from a folder name must funnel through here first
+    or it silently misses the lookup (~6 GPs/season had no radio and no
+    compound labels before this existed).
+
+    Resolution order: exact friendly name, then an explicit folder alias, then
+    the generic underscore→space form. Unknown inputs are returned unchanged so
+    the caller keeps control of the miss (the radio resolver raises; the
+    compound lookup degrades to a short label).
+    """
+    if name in COUNTRY_SLUG_BY_GP:
+        return name
+    if name in FOLDER_ALIASES:
+        return FOLDER_ALIASES[name]
+    spaced = name.replace("_", " ")
+    if spaced in COUNTRY_SLUG_BY_GP:
+        return spaced
+    return name
+
+
 def resolve_gp_slug(gp_name: str) -> str:
-    """Translate a friendly GP name into the on-disk corpus slug.
+    """Translate a friendly or on-disk GP name into the corpus slug.
 
     Accepts the names the CLI passes (``"Sakhir"``, ``"Imola"``,
-    ``"Marina Bay"``, ...) and returns the slug used by the static
+    ``"Marina Bay"``, ...) *and* the raw folder names with underscores
+    (``"Las_Vegas"``, ``"Miami_Gardens"``, ...) via
+    :func:`canonical_gp_name`, and returns the slug used by the static
     builder for the corpus directories under
     ``data/processed/race_radios/{year}/`` and
     ``data/raw/radio_audio/{year}/``. Falls through silently when the
@@ -77,12 +118,13 @@ def resolve_gp_slug(gp_name: str) -> str:
     download.
 
     Raises :class:`ValueError` listing the known GP names whenever the
-    input matches neither a friendly name nor an existing slug, so a
-    typo at the CLI surfaces immediately instead of producing a silent
+    input matches neither a friendly/folder name nor an existing slug, so
+    a typo at the CLI surfaces immediately instead of producing a silent
     zero-radio simulation.
     """
-    if gp_name in COUNTRY_SLUG_BY_GP:
-        return COUNTRY_SLUG_BY_GP[gp_name]
+    canonical = canonical_gp_name(gp_name)
+    if canonical in COUNTRY_SLUG_BY_GP:
+        return COUNTRY_SLUG_BY_GP[canonical]
     if gp_name in set(COUNTRY_SLUG_BY_GP.values()):
         return gp_name
     raise ValueError(f"Unknown GP {gp_name!r}. Known: {sorted(COUNTRY_SLUG_BY_GP)}")

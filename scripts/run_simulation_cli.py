@@ -361,8 +361,14 @@ def _load_tire_alloc(repo_root: Path) -> None:
 
 def _compound_text(compound: str, gp_name: str, year: int) -> Text:
     """Return a coloured Rich Text showing compound + Cx (e.g. 'SOF/C4')."""
+    from src.f1_strat_manager.gp_slugs import canonical_gp_name
+
     cu = compound.upper()
-    cx = _TIRE_ALLOC.get(str(year), {}).get(gp_name, {}).get(cu)
+    # tire_compounds_by_race.json is keyed by the friendly GP name; normalise the
+    # raw folder name (e.g. "Miami_Gardens" -> "Miami", "Las_Vegas" -> "Las Vegas")
+    # so the Cx label resolves for every GP, not just the ~18 whose folder name
+    # already matched the friendly key (#243).
+    cx = _TIRE_ALLOC.get(str(year), {}).get(canonical_gp_name(gp_name), {}).get(cu)
     if cx:
         label = f"{cu[:3]}/{cx}"  # SOF/C4, MED/C3, HAR/C2
     else:
