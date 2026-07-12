@@ -1,0 +1,62 @@
+# OSV-Scanner ignore list — triaged CVE backlog (#403).
+#
+# Every entry here is a vulnerability that CANNOT be fixed by a dependency bump
+# right now, with a documented reason and (where a fix may land) a review date.
+# The full OSV scan is BLOCKING again (see .github/workflows/osv-scanner.yml), so
+# any NEW vulnerability that is not listed here fails the build. Re-run
+# `osv-scanner scan --lockfile uv.lock` after any dependency change and prune
+# entries whose fix has become reachable.
+
+# --- Pillow x6 (blocked by arcade's hard pin) ---------------------------------
+# The fix is Pillow 12.2.0, but arcade==3.3.3 pins `pillow>=11.3.0,<11.4`, so the
+# fix is unreachable without a pre-release arcade (4.0.0.dev5). All six require
+# DECODING A MALICIOUSLY-CRAFTED IMAGE (PSD/PDF/GZIP/heap/OOB). F1 StratLab only
+# decodes its own bundled tyre-icon assets and FastF1-sourced telemetry plots —
+# never untrusted user-supplied images — so the vulnerable path is not reachable.
+# Revisit when arcade permits pillow>=12.2.0.
+[[IgnoredVulns]]
+id = "GHSA-wjx4-4jcj-g98j"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.2.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-5xmw-vc9v-4wf2"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.2.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-cfh3-3jmp-rvhc"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.1.1 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-pwv6-vv43-88gr"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.2.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-r73j-pqj5-w3x7"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.2.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-whj4-6x5x-4v2j"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.2.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+# --- torch (no upstream fix) --------------------------------------------------
+# GHSA-rrmf-rvhw-rf47 has no fixed version. torch is CUDA-pinned (cu128) for the
+# training/dev box; the flaw needs an attacker-controlled model/input executed
+# in-process, which a single-user local tool does not expose.
+[[IgnoredVulns]]
+id = "GHSA-rrmf-rvhw-rf47"
+reason = "torch: no upstream fix; CUDA-pinned; requires attacker-controlled in-process model input, outside the single-user local threat model."
+
+# --- ecdsa (no upstream fix, transitive, not on a hot path) -------------------
+# PYSEC-2026-1325 (Minerva-class timing side-channel on P-256) has no upstream
+# fix. ecdsa is transitive via python-jose[cryptography] and is not exercised:
+# the backend auth uses a static API key, not ECDSA/JWT. A timing side-channel
+# needs local co-resident measurement, outside the single-user localhost model.
+[[IgnoredVulns]]
+id = "GHSA-wj6h-64fc-37mp"
+reason = "ecdsa: no upstream fix; transitive via python-jose and not on any hot path (auth is a static API key, not ECDSA); timing attack needs local co-residence."

@@ -169,8 +169,11 @@ def test_mc_pit_out_none_falls_back_to_conservative_prior():
         ("OK", 0.90, [], False, {"N30"}),
         # radio PROBLEM → unplanned-stop risk → pit + regulation
         ("OK", 0.05, [{"intent": "PROBLEM"}], False, {"N28", "N30"}),
-        # radio PENALTY → FIA-facing → regulation only
-        ("OK", 0.05, [{"intent": "PENALTY"}], False, {"N30"}),
+        # RCM red-flag ruling (event_type) → FIA-facing → regulation only. Radio
+        # transcripts only ever carry PROBLEM/WARNING intents (never a PENALTY
+        # intent), so penalty/red-flag rulings reach the orchestrator as RCM
+        # alerts with an event_type — the routing now keys on that (NR-04, #398).
+        ("OK", 0.05, [{"event_type": "RED_FLAG"}], False, {"N30"}),
         # SC physically deployed (RCM-confirmed) → force pit + regulation
         ("OK", 0.05, [], True, {"N28", "N30"}),
     ],

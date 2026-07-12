@@ -418,21 +418,36 @@ def _prewarm_agents(no_llm: bool) -> None:
       3. Suppresses tqdm progress bars and NLP weight LOAD REPORTs at C level.
 
     LangGraph ReAct agents are NOT pre-warmed — they need a live LLM connection.
+
+    #389 — --no-llm skips the Tire/RaceSituation/Pit singletons: the engine's
+    no-llm profile (`src/strategy/inference/no_llm.py`) builds its OWN
+    engine-private TireAgent/RaceSituationAgent instances instead of reusing
+    these singletons (so an LLM-mode call sharing the same process is never
+    contaminated — see that module's docstring), and never calls the pit agent
+    at all (N28 is LLM-backed and simply not run there). Warming those three
+    singletons in --no-llm loaded the TCN + LightGBM weights a SECOND time for
+    nothing. The Pace Agent singleton and the radio_agent module's CFG (N24 NLP
+    models) are exceptions: both `run_pace_agent_from_state` and
+    `run_pipeline`/`run_rcm_pipeline` go through them in EITHER mode, so they
+    stay prewarmed unconditionally.
     """
     _old_tqdm = os.environ.get("TQDM_DISABLE")
     os.environ["TQDM_DISABLE"] = "1"
     try:
         with _devnull_fds():
             from src.agents.pace_agent import _get_default_pace_agent
-            from src.agents.pit_strategy_agent import _get_default_pit_agent
-            from src.agents.race_situation_agent import _get_default_situation_agent
             from src.agents.radio_agent import CFG as _r  # noqa: F401
-            from src.agents.tire_agent import _get_default_tire_agent
 
             _get_default_pace_agent()
-            _get_default_situation_agent()
-            _get_default_pit_agent()
-            _get_default_tire_agent()
+
+            if not no_llm:
+                from src.agents.pit_strategy_agent import _get_default_pit_agent
+                from src.agents.race_situation_agent import _get_default_situation_agent
+                from src.agents.tire_agent import _get_default_tire_agent
+
+                _get_default_situation_agent()
+                _get_default_pit_agent()
+                _get_default_tire_agent()
     except Exception:
         pass  # best-effort; actual errors surface during the run loop
     finally:

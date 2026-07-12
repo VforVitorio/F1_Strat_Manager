@@ -54,7 +54,11 @@ dependencies = [
     # ===================
     "opencv-python>=4.8.0",
     "ultralytics>=8.0.0",
-    "pillow>=10.0.0",
+    # pillow is CAPPED at 11.3.x by arcade==3.3.3 (pins pillow>=11.3.0,<11.4), so
+    # the 12.2.0 fix for the 6 OSV CVEs is unreachable without a pre-release
+    # arcade. Those CVEs need untrusted-image input we never accept and are
+    # waived in osv-scanner.toml (#403); revisit when arcade allows pillow>=12.
+    "pillow>=11.3.0",
     # ===================
     # BACKEND / STREAMING
     # ===================
@@ -97,7 +101,7 @@ dependencies = [
     "optuna>=4.7.0",
     "catboost>=1.2.10",
     "librosa>=0.11.0",
-    "nltk>=3.9.4",
+    "nltk>=3.10.0",
     "gliner>=0.2.25",
     "onnxruntime<1.24",
     "setfit>=1.1.3",
@@ -142,6 +146,11 @@ voice = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*", "scripts*"]
+# A dev box that ran `npm install` leaves node_modules dirs that setuptools would
+# otherwise auto-discover as namespace packages, dragging ~600 of their files into
+# the wheel via the "*" package-data glob. Exclude them from discovery so a local
+# build stays clean and fast (CI is already immune — clean checkout has none) (#392 D1).
+exclude = ["*node_modules*"]
 
 [tool.uv]
 # experta 1.9.4 hard-pins frozendict==1.2, which cannot import on Python 3.10+
@@ -187,6 +196,17 @@ torchvision = [
 # Scoped to `frontend/build/**` on purpose: a broad `*.js` glob would recursively
 # rake in the ~87 MB `node_modules` tree on a dev box that ran `npm install`.
 "src.telemetry.frontend.components.streamlit_audio_viz" = ["frontend/build/*", "frontend/build/**/*"]
+# Tyre-compound icons the Streamlit dashboard lap-graph reads from
+# frontend/shared/img/*.png (lap_graph.py). No .png was in package-data, so they
+# never shipped in any wheel and the table rendered iconless (#392 D2).
+"src.telemetry.frontend" = ["shared/img/*.png"]
+
+[tool.setuptools.exclude-package-data]
+# node_modules is pruned at the packages.find level above (excluded from
+# discovery). This drops the stray ~1.4 MB `bundle.js.map` the frontend/build
+# glob rakes in on a dev-box build; CI is immune (clean checkout has no map) (#392 D1).
+"src.telemetry.frontend.components.streamlit_audio_viz" = ["frontend/build/*.map", "frontend/build/**/*.map"]
+"*" = ["**/*.map"]
 
 [tool.black]
 line-length = 100
