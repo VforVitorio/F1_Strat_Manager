@@ -11,6 +11,30 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.10.2](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.1...v1.10.2) (2026-07-12)
+
+
+### Bug Fixes
+
+* **data:** resolve every GP's radio + compound labels via a canonical name (F-01) ([2ab70d1](https://github.com/VforVitorio/F1-StratLab/commit/2ab70d12fb9d127c7ec95efdfcc647f2dbd70f06))
+* **data:** resolve every GP's radio + compound labels via a canonical name (F-01) ([29d1cac](https://github.com/VforVitorio/F1-StratLab/commit/29d1cac6dc76c228d7f080cebbe5b72d2f103667)), closes [#243](https://github.com/VforVitorio/F1-StratLab/issues/243)
+* **data:** validate the parquet read boundary + surface FastF1 quality flags (F-02) ([80b12b6](https://github.com/VforVitorio/F1-StratLab/commit/80b12b6459cdd7358c4896f80114fbd46488a544))
+* **data:** validate the parquet read boundary and surface FastF1 quality flags (F-02) ([dd44451](https://github.com/VforVitorio/F1-StratLab/commit/dd4445150b13d3984bccae8ddf907618bea0e808)), closes [#244](https://github.com/VforVitorio/F1-StratLab/issues/244)
+* **deps:** drop fitz dummy, declare pypdf, override frozendict (DX-05) ([3a7612c](https://github.com/VforVitorio/F1-StratLab/commit/3a7612ce7d83a8334bb304ee210d3447ddf8cfa7))
+* **deps:** drop the unused fitz dummy, declare pypdf, override frozendict (DX-05) ([794a39b](https://github.com/VforVitorio/F1-StratLab/commit/794a39bd72fc8969cf09e79d5b3469a4c4d20f25)), closes [#253](https://github.com/VforVitorio/F1-StratLab/issues/253)
+* **devex:** unbreak the Docker/Streamlit quickstart + redirected-output crash ([#388](https://github.com/VforVitorio/F1-StratLab/issues/388)) ([75d1b3e](https://github.com/VforVitorio/F1-StratLab/commit/75d1b3ec0d681abe7b6b78afe6e7061cab22e02e))
+* **devex:** unbreak the Docker/Streamlit quickstart and the redirected-output crash ([f7f988a](https://github.com/VforVitorio/F1-StratLab/commit/f7f988a619224bd3adea5cda20cb7b117f689cfa)), closes [#252](https://github.com/VforVitorio/F1-StratLab/issues/252) [#388](https://github.com/VforVitorio/F1-StratLab/issues/388)
+* **nlp:** persist Safety-Car state across laps so the override survives the stint (NR-02) ([c713705](https://github.com/VforVitorio/F1-StratLab/commit/c713705d364271c55bbee42085d1e7c6e5742ac1))
+* **nlp:** persist Safety-Car state across laps so the override survives the stint (NR-02) ([215007b](https://github.com/VforVitorio/F1-StratLab/commit/215007be7d6198d6fd36386d0f3603a018200fdd)), closes [#305](https://github.com/VforVitorio/F1-StratLab/issues/305)
+* **packaging:** bundle the telemetry submodule in the release wheel (PK-01) ([a047b48](https://github.com/VforVitorio/F1-StratLab/commit/a047b485957c3f6fe65bad4b503459a234805d74))
+* **packaging:** bundle the telemetry submodule in the release wheel (PK-01) ([40ae581](https://github.com/VforVitorio/F1-StratLab/commit/40ae581df29022476c7def8f795a1db885b5b293)), closes [#289](https://github.com/VforVitorio/F1-StratLab/issues/289)
+
+
+### Documentation
+
+* **security:** add the Phase A security-boundary design for review ([#224](https://github.com/VforVitorio/F1-StratLab/issues/224)) ([c71eac9](https://github.com/VforVitorio/F1-StratLab/commit/c71eac9e6fb26da59ca3572f7817ff8de3c46a28))
+* **security:** Phase A security-boundary design for review ([#224](https://github.com/VforVitorio/F1-StratLab/issues/224)) ([ed4e829](https://github.com/VforVitorio/F1-StratLab/commit/ed4e8295b200cab373769378f9095335c090d113))
+
 ## [1.10.1](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.0...v1.10.1) (2026-07-12)
 
 
