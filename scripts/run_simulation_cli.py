@@ -3,8 +3,9 @@ Headless CLI simulation demo — validates the full v0.9 agent pipeline without
 any HTTP layer.
 
 Loads a race from data/raw/2025/<gp_name>/ and iterates lap by lap through
-RaceReplayEngine. For each lap it builds a RaceState, calls
-run_strategy_orchestrator_from_state, and renders a live per-lap Rich table.
+RaceReplayEngine. For each lap it builds a RaceState, runs one inference through
+the shared engine (``run_lap`` — rich profile with LLM synthesis, or --no-llm's
+deterministic profile), and renders a live per-lap Rich table.
 
 Usage
 -----
@@ -133,7 +134,8 @@ sys.stdout = sys.stderr = io.StringIO()
 os.environ["TQDM_DISABLE"] = "1"
 _import_err: str | None = None
 try:
-    from src.agents.strategy_orchestrator import RaceState, run_strategy_orchestrator_from_state
+    from src.agents.strategy_orchestrator import RaceState
+    from src.strategy.inference.engine import run_lap
 except ImportError as _e:
     _import_err = str(_e)
 finally:
@@ -382,69 +384,6 @@ def _devnull_fds():
         os.close(devnull_fd)
 
 
-# ---------------------------------------------------------------------------
-# LLM-unavailable detection — shared by _probe_core_agents and _run_no_llm
-# ---------------------------------------------------------------------------
-
-# Exception type-name fragments that indicate the LLM backend is unreachable
-# or misconfigured. Matched via substring on type(exc).__name__. Covers both
-# openai-python errors (BadRequestError, APIConnectionError, NotFoundError,
-# AuthenticationError, APIStatusError, InternalServerError, RateLimitError,
-# ServiceUnavailableError) and raw httpx/urllib failures (ConnectTimeout,
-# RemoteDisconnected, etc.).
-_LLM_ERR_TYPES = (
-    "Connection",
-    "APIConnection",
-    "OpenAI",
-    "HTTP",
-    "Timeout",
-    "RemoteDisconnected",
-    "BadRequest",
-    "NotFound",
-    "Authentication",
-    "APIError",
-    "APIStatusError",
-    "RateLimit",
-    "InternalServerError",
-    "ServiceUnavailable",
-    "PermissionDenied",
-)
-
-# Substrings that reliably indicate "LLM backend alive but unusable" — used
-# as a fallback when type name alone is ambiguous (e.g. generic OSError).
-# "No models loaded" is the exact LM Studio message when the developer forgot
-# to `lms load` a model; "model_not_found" covers OpenAI 404s.
-_LLM_ERR_MSGS = (
-    "Connection error",
-    "connect ECONNREFUSED",
-    "No models loaded",
-    "model_not_found",
-    "invalid_api_key",
-    "Could not connect",
-    "ENOTFOUND",
-    "getaddrinfo failed",
-)
-
-
-def _is_llm_unavailable(exc: Exception) -> bool:
-    """Return True when the exception indicates the LLM backend is unusable.
-
-    Used by --no-llm mode and the LLM-mode probe layer to decide whether to
-    swap an agent output for a stub. Errors unrelated to LLM connectivity
-    (ML model bugs, bad lap_state, missing features) must NOT match — those
-    should propagate up to the main try/except so they land in the error row
-    and alert the user to a real problem.
-
-    Matches on both the exception type name (substring) and the first ~300
-    chars of the exception message. Intentionally broad to handle LM Studio
-    "No models loaded" (BadRequestError), OpenAI rate limits, and plain
-    socket failures uniformly.
-    """
-    tn = type(exc).__name__
-    msg = str(exc)[:300]
-    return any(k in tn for k in _LLM_ERR_TYPES) or any(k in msg for k in _LLM_ERR_MSGS)
-
-
 def _prewarm_agents(no_llm: bool) -> None:
     """Initialise all agent singletons before the Live loop with all output suppressed.
 
@@ -479,85 +418,6 @@ def _prewarm_agents(no_llm: bool) -> None:
             os.environ.pop("TQDM_DISABLE", None)
         else:
             os.environ["TQDM_DISABLE"] = _old_tqdm
-
-
-def _probe_core_agents(
-    race_state: "RaceState",
-    lap_state: dict,
-    laps_df: "pd.DataFrame",
-):
-    """Run pace + tire + situation + radio agents and return their outputs.
-
-    Used in LLM mode to populate the detail panel without waiting for the
-    full orchestrator. All four always-on agents are probed (pit and RAG
-    stay unprobed: both are LLM-backed internally, so they would just hit
-    the LLM twice per lap). Returns a 4-tuple (pace, tire, sit, radio) —
-    any element may be a stub on error.
-    """
-    from src.agents.pace_agent import PaceOutput, run_pace_agent_from_state
-    from src.agents.race_situation_agent import (
-        RaceSituationOutput,
-        run_race_situation_agent_from_state,
-    )
-    from src.agents.radio_agent import RadioOutput, run_radio_agent_from_state
-    from src.agents.tire_agent import TireOutput, run_tire_agent_from_state
-
-    def _safe(fn, *args, stub):
-        try:
-            return fn(*args)
-        except Exception as exc:
-            if _is_llm_unavailable(exc):
-                return stub
-            raise
-
-    pace_stub = PaceOutput(
-        lap_time_pred=90.0,
-        delta_vs_prev=0.0,
-        delta_vs_median=0.0,
-        ci_p10=88.0,
-        ci_p90=92.0,
-        reasoning="[probe]",
-    )
-    tire_stub = TireOutput(
-        compound=race_state.compound,
-        current_tyre_life=race_state.tyre_life,
-        deg_rate=0.05,
-        laps_to_cliff_p10=20.0,
-        laps_to_cliff_p50=25.0,
-        laps_to_cliff_p90=30.0,
-        gp_name="",
-        reasoning="[probe]",
-    )
-    sit_stub = RaceSituationOutput(
-        overtake_prob=0.1,
-        sc_prob_3lap=0.05,
-        reasoning="[probe]",
-    )
-    radio_stub = RadioOutput(
-        radio_events=[],
-        rcm_events=[],
-        alerts=[],
-        reasoning="[probe]",
-        corrections=[],
-    )
-
-    pace_out = _safe(run_pace_agent_from_state, lap_state, stub=pace_stub)
-    tire_out = _safe(run_tire_agent_from_state, lap_state, laps_df, stub=tire_stub)
-    sit_out = _safe(run_race_situation_agent_from_state, lap_state, laps_df, stub=sit_stub)
-
-    # Radio probe — build a lap_state shim with the current race_state
-    # radio/RCM buffers so the NLP pipeline sees whatever the wizard-level
-    # --radio-every generator pushed in this lap. Without the shim it would
-    # always see an empty buffer and render idle.
-    radio_ls = {
-        **lap_state,
-        "lap": race_state.lap,
-        "radio_msgs": list(race_state.radio_msgs),
-        "rcm_events": list(race_state.rcm_events),
-    }
-    radio_out = _safe(run_radio_agent_from_state, radio_ls, laps_df, stub=radio_stub)
-
-    return pace_out, tire_out, sit_out, radio_out
 
 
 def _make_table(has_rival: bool = False, show_header: bool = True) -> Table:
@@ -1401,189 +1261,17 @@ def _build_race_state(
 
 
 # ---------------------------------------------------------------------------
-# no-LLM mode: run sub-agents + MC sim, skip LLM synthesis
-# ---------------------------------------------------------------------------
-
-
-def _run_no_llm(
-    race_state: RaceState,
-    lap_state: dict[str, Any],
-    laps_df: pd.DataFrame,
-    extra_radios: list[dict] | None = None,
-    extra_rcms: list[dict] | None = None,
-) -> dict[str, Any]:
-    """Run ML models only — no LLM synthesis at any layer.
-
-    extra_radios / extra_rcms are optional lists of dicts injected on top of
-    whatever the race_state buffers already carry. The CLI uses this entry
-    point to forward both the static OpenF1 corpus radios for the current
-    lap and any synthetic --radio-every fallback events in a single shot.
-    """
-    from src.agents.pace_agent import PaceOutput, run_pace_agent_from_state
-    from src.agents.race_situation_agent import (
-        RaceSituationOutput,
-        run_race_situation_agent_from_state,
-    )
-    from src.agents.radio_agent import RadioOutput, run_radio_agent_from_state
-    from src.agents.strategy_orchestrator import (
-        _decide_agents_to_call,
-        _run_conditional_agents,
-        _run_mc_simulation,
-    )
-    from src.agents.tire_agent import TireOutput, run_tire_agent_from_state
-
-    def _safe_call(fn, *args, stub):
-        try:
-            return fn(*args)
-        except Exception as exc:
-            if _is_llm_unavailable(exc):
-                return stub
-            raise
-
-    pace_stub = PaceOutput(
-        lap_time_pred=90.0,
-        delta_vs_prev=0.0,
-        delta_vs_median=0.0,
-        ci_p10=88.0,
-        ci_p90=92.0,
-        reasoning="[stub — LLM unreachable]",
-    )
-    tire_stub = TireOutput(
-        compound=race_state.compound,
-        current_tyre_life=race_state.tyre_life,
-        deg_rate=0.05,
-        laps_to_cliff_p10=20.0,
-        laps_to_cliff_p50=25.0,
-        laps_to_cliff_p90=30.0,
-        gp_name="",
-        reasoning="[stub — LLM unreachable]",
-    )
-    sit_stub = RaceSituationOutput(
-        overtake_prob=0.1,
-        sc_prob_3lap=0.05,
-        reasoning="[stub — LLM unreachable]",
-    )
-    radio_stub = RadioOutput(
-        radio_events=[],
-        rcm_events=[],
-        alerts=[],
-        reasoning="[stub — LLM unreachable]",
-        corrections=[],
-    )
-
-    pace_out = _safe_call(run_pace_agent_from_state, lap_state, stub=pace_stub)
-    tire_out = _safe_call(run_tire_agent_from_state, lap_state, laps_df, stub=tire_stub)
-    sit_out = _safe_call(run_race_situation_agent_from_state, lap_state, laps_df, stub=sit_stub)
-
-    radio_msgs = list(race_state.radio_msgs)
-    if extra_radios:
-        radio_msgs.extend(extra_radios)
-    rcm_events = list(race_state.rcm_events)
-    if extra_rcms:
-        rcm_events.extend(extra_rcms)
-    radio_out = _safe_call(
-        run_radio_agent_from_state,
-        {**lap_state, "lap": race_state.lap, "radio_msgs": radio_msgs, "rcm_events": rcm_events},
-        laps_df,
-        stub=radio_stub,
-    )
-
-    # N29 alerts are dicts with source+intent or source+event_type.
-    # _decide_agents_to_call reads a.get("intent", "") internally, so we pass
-    # the raw dict list — extracting strings would break the downstream contract
-    # (and the previous [a["type"] ...] comprehension crashed because no alert
-    # dict has a "type" key: radio alerts carry "intent", rcm alerts "event_type").
-    alerts = list(radio_out.alerts) if radio_out else []
-    active = _decide_agents_to_call(
-        tire_out.warning_level if tire_out else "OK",
-        sit_out.sc_prob_3lap if sit_out else 0.0,
-        alerts,
-    )
-
-    # Conditional pit agent — also LLM-backed internally, so wrap it with
-    # the same fallback logic: if the pit ReAct chain hits an LLM error the
-    # result is simply "no pit call this lap" (pit_out=None), and the MC
-    # simulator degrades gracefully to 3 scenarios (STAY/UNDERCUT/OVERCUT).
-    try:
-        pit_out, rag_text = _run_conditional_agents(
-            active, lap_state, tire_out, sit_out, race_state, laps_df
-        )
-    except Exception as exc:
-        if _is_llm_unavailable(exc):
-            pit_out = None
-            rag_text = ""
-        else:
-            raise
-    rag_text = rag_text or ""
-
-    mc = _run_mc_simulation(
-        pace_out,
-        tire_out,
-        sit_out,
-        pit_out,
-        alpha=race_state.risk_tolerance,
-    )
-
-    best = max(mc, key=lambda k: mc[k]["score"])
-
-    # ── Strategic guard-rails (no-LLM mode) ─────────────────────────────────
-    # The MC simulation has no concept of pit windows, minimum stints, or race
-    # phase. These hard constraints mirror the prompt-level guard-rails that the
-    # LLM-mode agents enforce via their system prompts.
-    _PIT_ACTIONS = {"PIT_NOW", "UNDERCUT", "OVERCUT", "REACTIVE_SC"}
-    _guardrail_reason = ""
-    remaining_laps = race_state.total_laps - race_state.lap
-
-    if best in _PIT_ACTIONS and race_state.lap < 5:
-        # No pit before lap 5 — tyres cannot degrade in 1-4 laps
-        best = "STAY_OUT"
-        _guardrail_reason = "guard-rail: pit window not open (lap < 5)"
-    elif best in _PIT_ACTIONS and remaining_laps <= 3:
-        # No pit in last 3 laps — pit cost (~22s) > tyre gain (~1.5s)
-        cliff_p10 = tire_out.laps_to_cliff_p10 if tire_out else 99
-        if cliff_p10 >= 2:
-            best = "STAY_OUT"
-            _guardrail_reason = "guard-rail: too late to pit (≤3 laps left)"
-    elif best in _PIT_ACTIONS:
-        # Minimum stint check — don't waste fresh tyres
-        _MIN_STINT = {"SOFT": 8, "MEDIUM": 12, "HARD": 15}
-        min_life = _MIN_STINT.get(race_state.compound, 10)
-        if race_state.tyre_life < min_life:
-            best = "STAY_OUT"
-            _guardrail_reason = (
-                f"guard-rail: minimum stint not reached "
-                f"({race_state.compound} {race_state.tyre_life}/{min_life} laps)"
-            )
-
-    _reasoning = "[no-llm mode — LLM synthesis skipped]"
-    if _guardrail_reason:
-        _reasoning = f"[no-llm mode] {_guardrail_reason}"
-
-    return {
-        "action": best,
-        "reasoning": _reasoning,
-        "confidence": 0.0,
-        "scenario_scores": {k: round(v["score"], 3) for k, v in mc.items()},
-        "regulation_context": "",
-        # Sub-agent outputs exposed for the detail panel
-        "_pace_out": pace_out,
-        "_tire_out": tire_out,
-        "_sit_out": sit_out,
-        "_pit_out": pit_out,
-        "_radio_out": radio_out,
-        "_rag_text": rag_text,
-        "_active_agents": set(active),
-    }
-
-
-# ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 
 
 def run(args: argparse.Namespace) -> None:
-    # Set provider before any agent singleton is created
-    os.environ["F1_LLM_PROVIDER"] = args.provider
+    # Set provider before any agent singleton is created. Only when an LLM is
+    # actually used: --no-llm builds zero LLM clients (engine no-llm profile),
+    # so leaving the env untouched keeps that mode truly offline instead of
+    # silently becoming LLM mode if LM Studio happens to be up (audit C-06).
+    if not args.no_llm:
+        os.environ["F1_LLM_PROVIDER"] = args.provider
 
     # First-run bootstrap: pull data + models from HF Hub when the cache is
     # empty. Dev checkouts with a populated data/ tree short-circuit
@@ -1909,68 +1597,52 @@ def run(args: argparse.Namespace) -> None:
                     )
                     sim_rcm = _generate_rcm_event(lap_num)
 
+                # Inject this lap's corpus + synthetic radios into race_state.
+                # Both engine profiles read them off race_state.radio_msgs /
+                # rcm_events. race_state is rebuilt per lap (no cross-lap
+                # accumulation); the guard tolerates a non-list buffer, and a
+                # single lap can carry several team-radio rows (extend, not append).
+                try:
+                    if real_radios:
+                        race_state.radio_msgs.extend(real_radios)
+                    if real_rcms:
+                        race_state.rcm_events.extend(real_rcms)
+                    if sim_radio:
+                        race_state.radio_msgs.append(sim_radio)
+                    if sim_rcm:
+                        race_state.rcm_events.append(sim_rcm)
+                except (AttributeError, TypeError):
+                    pass
+
+                # One inference per lap through the shared engine (#236). rich =
+                # full LLM synthesis (byte-for-byte the orchestrator); no-llm =
+                # deterministic, zero LLM clients (fixes #166). `outs` carries the
+                # six sub-agent outputs the detail panel renders — no second pass.
+                profile = "no-llm" if args.no_llm else "rich"
+                result, outs, _ = run_lap(race_state, laps_df, lap_state, profile=profile)
+                scores = getattr(result, "scenario_scores", {})
+                action = getattr(result, "action", "?")
+                confidence = getattr(result, "confidence", 0.0)
+                reasoning = getattr(result, "reasoning", "")
                 if args.no_llm:
-                    # No-LLM: full ML stack (pace + tire + sit + radio + conditional + MC)
-                    result = _run_no_llm(
-                        race_state,
-                        lap_state,
-                        laps_df,
-                        extra_radios=real_radios + ([sim_radio] if sim_radio else []),
-                        extra_rcms=real_rcms + ([sim_rcm] if sim_rcm else []),
-                    )
-                    scores = result["scenario_scores"]
-                    action = result["action"]
-                    confidence = result["confidence"]
-                    reasoning = result["reasoning"]
                     _detail[0] = _make_inference_panel(
-                        pace_out=result.get("_pace_out"),
-                        tire_out=result.get("_tire_out"),
-                        sit_out=result.get("_sit_out"),
-                        active_agents=result.get("_active_agents"),
+                        pace_out=outs["pace_out"],
+                        tire_out=outs["tire_out"],
+                        sit_out=outs["situation_out"],
+                        active_agents=outs["active"],
                         rival_data=rival_data,
                         lap_num=lap_num,
-                        radio_out=result.get("_radio_out"),
-                        pit_out=result.get("_pit_out"),
-                        rag_text=result.get("_rag_text", ""),
+                        radio_out=outs["radio_out"],
+                        pit_out=outs["pit_out"],
+                        rag_text=outs["regulation_context"],
                         strategy_rec=None,
                     )
                 else:
-                    # LLM mode: inject the lap's real-corpus radios + RCMs
-                    # (and any synthetic fallback) BEFORE probing so the
-                    # radio agent sees the events, then run the full
-                    # orchestrator. We extend instead of append because a
-                    # single lap can carry several team-radio rows.
-                    try:
-                        if real_radios:
-                            race_state.radio_msgs.extend(real_radios)
-                        if real_rcms:
-                            race_state.rcm_events.extend(real_rcms)
-                    except (AttributeError, TypeError):
-                        pass
-                    if sim_radio:
-                        try:
-                            race_state.radio_msgs.append(sim_radio)
-                        except (AttributeError, TypeError):
-                            pass
-                    if sim_rcm:
-                        try:
-                            race_state.rcm_events.append(sim_rcm)
-                        except (AttributeError, TypeError):
-                            pass
-
-                    probe_pace, probe_tire, probe_sit, probe_radio = _probe_core_agents(
-                        race_state, lap_state, laps_df
-                    )
-                    result = run_strategy_orchestrator_from_state(race_state, laps_df, lap_state)
-                    scores = getattr(result, "scenario_scores", {})
-                    action = getattr(result, "action", "?")
-                    confidence = getattr(result, "confidence", 0.0)
-                    reasoning = getattr(result, "reasoning", "")
                     _detail[0] = _make_inference_panel(
-                        pace_out=probe_pace,
-                        tire_out=probe_tire,
-                        sit_out=probe_sit,
-                        radio_out=probe_radio,
+                        pace_out=outs["pace_out"],
+                        tire_out=outs["tire_out"],
+                        sit_out=outs["situation_out"],
+                        radio_out=outs["radio_out"],
                         active_agents=None,
                         rival_data=rival_data,
                         lap_num=lap_num,
@@ -1989,23 +1661,16 @@ def run(args: argparse.Namespace) -> None:
                 else:
                     stay = pit = ucut = ocut = 0.0
 
-                # Extract v2 tactical fields for Decision + Plan columns.
-                # LLM mode: result is StrategyRecommendation with all fields.
-                # No-LLM mode: result is a dict — infer plan from _pit_out.
-                if isinstance(result, dict):
-                    _pm, _rp = None, None
-                    _plt, _cnx, _uct = None, None, None
-                    _pit_local_v2 = result.get("_pit_out")
-                    if _pit_local_v2 is not None:
-                        _plt = getattr(_pit_local_v2, "recommended_lap", None)
-                        _cnx = getattr(_pit_local_v2, "compound_recommendation", None)
-                        _uct = getattr(_pit_local_v2, "undercut_target", None)
-                else:
-                    _pm = getattr(result, "pace_mode", None)
-                    _rp = getattr(result, "risk_posture", None)
-                    _plt = getattr(result, "pit_lap_target", None)
-                    _cnx = getattr(result, "compound_next", None)
-                    _uct = getattr(result, "undercut_target", None)
+                # Extract v2 tactical fields for Decision + Plan columns. Both
+                # modes now return a StrategyRecommendation (#236), so read them
+                # off the typed object. The pace/risk suffix is suppressed in
+                # no-llm mode: its NEUTRAL/BALANCED are fixed placeholders (no LLM
+                # decided them), so showing them would overstate the decision.
+                _pm = None if args.no_llm else getattr(result, "pace_mode", None)
+                _rp = None if args.no_llm else getattr(result, "risk_posture", None)
+                _plt = getattr(result, "pit_lap_target", None)
+                _cnx = getattr(result, "compound_next", None)
+                _uct = getattr(result, "undercut_target", None)
 
                 decision_text = Text()
                 decision_text.append(
@@ -2072,16 +1737,6 @@ def run(args: argparse.Namespace) -> None:
                 # Summary counters — cheap, per-lap increments so the final
                 # "Run complete" panel can show action mix, compound stints
                 # and conditional-agent usage without scanning the history.
-                #
-                # ``result`` has two shapes: a plain dict in no-llm mode and
-                # a StrategyRecommendation pydantic object in LLM mode. The
-                # previous version called ``.get()`` unconditionally, which
-                # crashed the LLM path with ``'StrategyRecommendation' object
-                # has no attribute 'get'`` and duplicated every lap as an
-                # [ERROR] row. Branch on isinstance so each mode reads its
-                # own native fields — in LLM mode the pit/rag/radio telemetry
-                # comes from the probe variables set inside the else branch
-                # above, not from result.
                 action_counts[action] = action_counts.get(action, 0) + 1
                 if lap_time:
                     best_lap_s = min(best_lap_s, lap_time) if best_lap_s else lap_time
@@ -2096,17 +1751,13 @@ def run(args: argparse.Namespace) -> None:
                     pit_stops_seen += 1
                 last_compound = compound
 
-                if isinstance(result, dict):
-                    _pit_out_local = result.get("_pit_out")
-                    _rag_text_local = result.get("_rag_text", "")
-                    _radio_out_local = result.get("_radio_out")
-                else:
-                    # LLM mode — orchestrator runs pit/rag internally. Infer
-                    # rag from regulation_context; pit firings are counted
-                    # implicitly via the PIT_NOW action bucket in action_counts.
-                    _pit_out_local = None
-                    _rag_text_local = getattr(result, "regulation_context", "") or ""
-                    _radio_out_local = probe_radio
+                # Conditional-agent usage counters come straight off the engine's
+                # typed outputs now (#236): pit firings are visible in both modes
+                # (rich no longer hides them behind the orchestrator's discarded
+                # outputs), rag from the regulation context, radio alerts from N29.
+                _pit_out_local = outs["pit_out"]
+                _rag_text_local = outs["regulation_context"]
+                _radio_out_local = outs["radio_out"]
 
                 if _pit_out_local is not None:
                     pit_agent_calls += 1
