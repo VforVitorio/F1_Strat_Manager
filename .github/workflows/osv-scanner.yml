@@ -1,0 +1,26 @@
+name: OSV-Scanner
+
+# Cross-ecosystem vulnerability scan against OSV.dev (Python via uv.lock, plus
+# any npm/JS manifests). Uploads SARIF to the Security tab. The submodule's own
+# manifests are owned by Security epic #223; this covers the parent.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: "30 6 * * 1" # weekly, Monday 06:30 UTC
+
+permissions:
+  actions: read
+  security-events: write
+  contents: read
+
+jobs:
+  scan-scheduled:
+    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8"
+
+  scan-pr:
+    if: ${{ github.event_name == 'pull_request' }}
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.8"
