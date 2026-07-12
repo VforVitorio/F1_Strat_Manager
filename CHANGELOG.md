@@ -11,6 +11,20 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.10.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.9.0...v1.10.0) (2026-07-11)
+
+
+### Features
+
+* **agents:** give every sub-agent ChatOpenAI a finite provider timeout (L-1) ([3eb0eb8](https://github.com/VforVitorio/F1-StratLab/commit/3eb0eb8b48ac88b49e3119d99946017447c34fec))
+* **agents:** give every sub-agent ChatOpenAI a finite provider timeout (L-1) ([401765f](https://github.com/VforVitorio/F1-StratLab/commit/401765fffa132b81d02f862c4c12362ef9d4567d)), closes [#263](https://github.com/VforVitorio/F1-StratLab/issues/263)
+
+
+### Bug Fixes
+
+* **ci:** skip the tiktoken vocab roundtrip on an upstream network outage ([6c26ec2](https://github.com/VforVitorio/F1-StratLab/commit/6c26ec23134029213c365cde787afebfc0069f56))
+* **ci:** skip the tiktoken vocab roundtrip on an upstream network outage ([cdd9f4a](https://github.com/VforVitorio/F1-StratLab/commit/cdd9f4ac895f7a26f21bfd306069d64423b57398))
+
 ## [1.9.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.8.0...v1.9.0) (2026-07-11)
 
 
