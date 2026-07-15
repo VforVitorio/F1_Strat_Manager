@@ -11,6 +11,14 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.10.4](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.3...v1.10.4) (2026-07-15)
+
+
+### Bug Fixes
+
+* **deps:** bump click/kafka-python/transformers past CVEs; waive blocked pillow and setuptools ([97d273d](https://github.com/VforVitorio/F1-StratLab/commit/97d273d3bce732b6f772e56c53d41e045427f113))
+* **deps:** resolve OSV Python CVE backlog (bump click/kafka-python/transformers; waive blocked pillow and setuptools) ([fbd6df2](https://github.com/VforVitorio/F1-StratLab/commit/fbd6df27ba0f826f33859ae9971b7675a7d78a4a))
+
 ## [1.10.3](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.2...v1.10.3) (2026-07-12)
 
 
