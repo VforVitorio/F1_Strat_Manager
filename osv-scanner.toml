@@ -44,6 +44,37 @@ id = "GHSA-whj4-6x5x-4v2j"
 ignoreUntil = 2026-10-12T00:00:00Z
 reason = "Pillow: fix in 12.2.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
 
+# --- Pillow x5 (later disclosures, same arcade block) -------------------------
+# Five more Pillow CVEs disclosed after the six above; their fix landed in
+# Pillow 12.3.0, still unreachable under arcade==3.3.3's `pillow>=11.3.0,<11.4`
+# pin. Like the six above they all require DECODING A MALICIOUSLY-CRAFTED IMAGE,
+# which F1 StratLab never does (only its own bundled tyre-icon assets and
+# FastF1-sourced telemetry plots). Revisit when arcade permits pillow>=12.3.0.
+[[IgnoredVulns]]
+id = "PYSEC-2026-2253"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-2254"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-2255"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-2256"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-2257"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
 # --- torch (no upstream fix) --------------------------------------------------
 # GHSA-rrmf-rvhw-rf47 has no fixed version. torch is CUDA-pinned (cu128) for the
 # training/dev box; the flaw needs an attacker-controlled model/input executed
@@ -60,3 +91,16 @@ reason = "torch: no upstream fix; CUDA-pinned; requires attacker-controlled in-p
 [[IgnoredVulns]]
 id = "GHSA-wj6h-64fc-37mp"
 reason = "ecdsa: no upstream fix; transitive via python-jose and not on any hot path (auth is a static API key, not ECDSA); timing attack needs local co-residence."
+
+# --- setuptools (fix blocked by torch's setuptools<82 pin) --------------------
+# The fix is setuptools 83.0.0, but torch 2.11/2.12 (the CUDA-pinned wheel this
+# project ships, cu128) require `setuptools<82`, so 83.0.0 is unreachable without
+# moving torch (only torch>=2.13 lifts the cap, and the cu128 index would force a
+# win32 downgrade to 2.10.0+cu128). The flaw itself only affects MANIFEST.in
+# exclude/prune normalization when BUILDING a source distribution on macOS
+# APFS/HFS+ (an NFD name bypassing an NFC exclusion) — a code path this runtime
+# ML app never exercises. Revisit when the CUDA-pinned torch allows setuptools>=83.
+[[IgnoredVulns]]
+id = "PYSEC-2026-3447"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "setuptools: fix in 83.0.0 blocked by torch 2.11/2.12 (setuptools<82 pin); flaw only affects MANIFEST.in exclude normalization when building an sdist on macOS APFS/HFS+, never exercised here. Revisit when CUDA-pinned torch allows setuptools>=83."
