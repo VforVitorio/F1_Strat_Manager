@@ -370,6 +370,23 @@ class RaceStateManager:
                     "humidity": float(w["Humidity"]) if pd.notna(w.get("Humidity")) else None,
                     "wind_speed": float(w["WindSpeed"]) if pd.notna(w.get("WindSpeed")) else None,
                     "rainfall": bool(w["Rainfall"]) if pd.notna(w.get("Rainfall")) else False,
+                    # The session's FIRST track temperature, not this lap's. N14 trains
+                    # `track_temp_delta = track_temp - track_temp_start` and it is its 5th
+                    # most important feature (6.0% gain), above humidity and the circuit
+                    # SC rate. The consumer defaults `track_temp_start` to the CURRENT
+                    # temp when it is absent, so the delta came out 0.0 on every lap of
+                    # every race: a live feature reading a constant. Real 2024 values run
+                    # to -9.1 C (Monaco), -8.6 (Monza), -8.1 (Yas Island).
+                    #
+                    # It is a session constant, not a per-lap reading, but it ships in the
+                    # weather dict because that is the channel the consumer looks in, and
+                    # a second channel is how the two paths drifted apart in the first
+                    # place (the FastF1 path reads `_wx['TrackTemp'].iloc[0]` correctly).
+                    "track_temp_start": (
+                        float(weather_df.iloc[0]["TrackTemp"])
+                        if pd.notna(weather_df.iloc[0].get("TrackTemp"))
+                        else None
+                    ),
                 }
             )
 

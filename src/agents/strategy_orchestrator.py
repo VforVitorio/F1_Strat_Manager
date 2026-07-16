@@ -1175,7 +1175,21 @@ def _run_conditional_agents(
     if "N30" in active:
         pit_action = pit_out.action if pit_out else None
         question   = _build_rag_question(
-            sc_active  = situation_out.sc_prob_3lap > CFG.sc_prob_threshold,
+            # A deployed SC is a FACT, not a forecast. This used to key off
+            # `sc_prob_3lap > threshold`, but N13/N14 predicts an SC *within the next 3
+            # laps*: while one is already out, that forward probability can sit below the
+            # threshold, and N30 would then ask the green-flag question and hand the
+            # orchestrator a "hard regulation constraint" block describing the wrong
+            # race. `sc_currently_active` is N27's observation of the RCM feed and it was
+            # already in scope twelve lines above (`:1166`), passed to N28 and dropped
+            # here — the same restored-datum-with-an-unswitched-consumer shape as #447.
+            #
+            # Keep the forecast as well: an SC that is merely likely still changes which
+            # articles matter.
+            sc_active  = (
+                situation_out.sc_currently_active
+                or situation_out.sc_prob_3lap > CFG.sc_prob_threshold
+            ),
             pit_action = pit_action,
             compound   = race_state.compound,
         )

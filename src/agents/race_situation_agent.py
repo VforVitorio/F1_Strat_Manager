@@ -1159,7 +1159,18 @@ class RaceSituationAgent:
             'AirTemp':          wx.get('air_temp',   28.0),
             'TrackTemp':        wx.get('track_temp', 38.0),
             'Humidity':         wx.get('humidity',   50.0),
-            'track_temp_start': wx.get('track_temp', 38.0),
+            # The session's FIRST track temp, which the RSM now supplies. This used to
+            # read `track_temp` — the CURRENT one — so `track_temp_delta` came out 0.0 on
+            # every lap of every race, on every shipping path (CLI, arcade, backend,
+            # /recommend, no-llm). The FastF1 path never had the bug: it reads
+            # `_wx['TrackTemp'].iloc[0]`, which is what this now mirrors.
+            #
+            # It is N14's 5th most important feature (6.0% gain). Real 2024 deltas reach
+            # -9.1 C (Monaco); the sensitivity is small mid-race and ~1.8x late, which is
+            # exactly where a late SC decides a result. Falling back to the current temp
+            # would reinstate the bug silently, so an absent value degrades to the
+            # training default instead.
+            'track_temp_start': wx.get('track_temp_start') or 38.0,
         }
 
         # Carry the RCM events into _run_core so the SC override can read them.

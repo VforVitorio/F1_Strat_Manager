@@ -550,6 +550,27 @@ class PitStrategyAgent:
 
     # ── Feature builders ──────────────────────────────────────────────────────
 
+    @staticmethod
+    def _tyre_life_in(row) -> int:
+        """TyreLife for N15, clipped to the trained ceiling, NaN-safe.
+
+        `row` is a pandas Series, so `row.get('TyreLife', 1)` returns the STORED value
+        including NaN — the default only fires when the COLUMN is absent, never when the
+        VALUE is. `int(nan)` then raises ValueError inside the ReAct loop, and 451 rows
+        (1.98%) of the 2025 featured parquet have a NaN TyreLife. That is the same
+        Series.get trap as #428/#462, on a third column.
+
+        A missing tyre age means "fresh" is the only defensible read: a car with no
+        recorded TyreLife has just been given a set, and 1 is what the dead default was
+        reaching for anyway. It is also the conservative direction for N15, which is
+        predicting how long the stop takes, not whether to make it.
+        """
+        value = row.get('TyreLife')
+        if value is None or pd.isna(value):
+            logger.warning('TyreLife missing on the lap row; N15 reads it as a fresh set')
+            return 1
+        return min(int(value), _MAX_TRAINED_TYRE_LIFE)
+
     def _build_pit_duration_features(
         self,
         driver: str,
@@ -584,6 +605,7 @@ class PitStrategyAgent:
 
         # No gp_name here on purpose: N15's compound_id is an ordinal rank, not the
         # circuit's Pirelli allocation, so this builder needs no circuit lookup (#445).
+        # (helper `_tyre_life_in` below reads TyreLife safely; see its docstring)
         year     = self.session_meta.get('year', 2025)
         team_raw = self.session_meta.get('team_lookup', {}).get(driver, 'Unknown')
 
@@ -592,7 +614,13 @@ class PitStrategyAgent:
             'year':             year,
             # N15 clipped tyre_life at 50 in training (cell 11); pass the raw value and
             # an absurd stint extrapolates outside the fitted range (#450).
-            'tyre_life_in':     min(int(row.get('TyreLife', 1)), _MAX_TRAINED_TYRE_LIFE),
+            #
+            # `_tyre_life_in` rather than `min(int(row.get('TyreLife', 1)), 50)`: `row` is
+            # a Series, so `.get(k, 1)` returns the STORED NaN and the `1` is dead code —
+            # the default only fires when the COLUMN is missing, never the VALUE. `int(nan)`
+            # then raises ValueError inside the ReAct loop, on 451 real rows (1.98%) of the
+            # 2025 featured parquet.
+            'tyre_life_in':     self._tyre_life_in(row),
             'lap_number':       lap_number,
             'compound_id':      _N15_COMPOUND_ORDER.get(compound.upper(), _N15_COMPOUND_UNKNOWN),
             'compound_change':  int(compound_change),
@@ -646,13 +674,26 @@ class PitStrategyAgent:
         # a crashed car whose Position is NaN sails straight through. That is the #428
         # sentinel bug wearing a different column, and the rule is the same: refuse,
         # never default to a number the model will read as a real reading (#462).
-        pos_x = x_row.get('Position')
-        pos_y = y_row.get('Position')
-        if pd.isna(pos_x) or pd.isna(pos_y):
+        # Position AND TyreLife, on both cars. `TyreLife` feeds three of N16's features
+        # (`tyre_life_diff`, `TyreLife_X`, `TyreLife_Y`) and its `.get(k, 10)` defaults are
+        # the same dead code as the position ones: a Series returns the stored NaN, so the
+        # 10 never fires. Measured: 561 of 79,032 raw laps carry a real Position and a NaN
+        # TyreLife, so this is reachable for a car that IS racing, not just a retiree.
+        missing = [
+            name for name, value in (
+                (f'{driver_x} position',  x_row.get('Position')),
+                (f'{driver_y} position',  y_row.get('Position')),
+                (f'{driver_x} tyre life', x_row.get('TyreLife')),
+                (f'{driver_y} tyre life', y_row.get('TyreLife')),
+            )
+            if value is None or pd.isna(value)
+        ]
+        if missing:
             logger.warning(
-                'Undercut features refused: %s or %s has no position at lap %s '
-                '(retired, or not classified on that lap)',
-                driver_x, driver_y, lap_number,
+                'Undercut features refused at lap %s: %s missing. N16 reads these as real '
+                'values and LightGBM answers from its missing branch, so a default here is '
+                'a fabricated reading',
+                lap_number, ', '.join(missing),
             )
             return None
 
@@ -672,14 +713,26 @@ class PitStrategyAgent:
         # per-lap rows, so a car that is gone is simply absent. `_live_drivers` carries
         # that set when we were run from a lap_state. When it is absent (direct calls,
         # tests) we cannot know, and fall through rather than guess.
+        # BOTH drivers, not just the target. This guarded `driver_y` alone, which is the
+        # incomplete-fix pattern in its purest form: the same argument, one call away,
+        # left open. Both are LLM free text.
+        #
+        # And on the FEATURED frame it bites harder than the NaN check above can catch.
+        # HUL crashed on lap 7 at Lusail; the featured frame drops that lap as inaccurate,
+        # so his LAST row is lap 6 — a normal racing lap carrying Position 10.0. Ask about
+        # him at lap 20 and `_get_lap_row`'s unbounded fallback returns it complete: no
+        # NaN, no warning, a confident undercut built from 14-lap-stale telemetry. The
+        # position check cannot see it; only presence can.
         live = getattr(self, '_live_drivers', None)
-        if live is not None and driver_y not in live:
-            logger.warning(
-                'Undercut features refused: %s is not on track at lap %s '
-                '(absent from the lap_state rivals)',
-                driver_y, lap_number,
-            )
-            return None
+        if live is not None:
+            gone = [d for d in (driver_x, driver_y) if d not in live]
+            if gone:
+                logger.warning(
+                    'Undercut features refused: %s not on track at lap %s '
+                    '(absent from the lap_state rivals)',
+                    ' and '.join(gone), lap_number,
+                )
+                return None
 
         gp_name    = self.session_meta.get('gp_name', '')
         year       = self.session_meta.get('year', 2025)
