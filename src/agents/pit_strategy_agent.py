@@ -14,6 +14,7 @@ get_pit_strategy_react_agent(**kwargs)                 → CompiledGraph
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,10 @@ try:
 except Exception:
     _DATA_ROOT = _REPO_ROOT / 'data'
 
+from src.f1_strat_manager.gp_slugs import rekey_by_slug  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
 _MODELS    = _DATA_ROOT / 'models'
 _PROCESSED = _DATA_ROOT / 'processed'
 _AGENTS    = _DATA_ROOT / 'models' / 'agents'
@@ -59,6 +64,27 @@ _COMPOUND_FALLBACK: dict[str, int] = {'HARD': 1, 'MEDIUM': 3, 'SOFT': 5}
 
 # Pirelli average stint capacities — Heilmeier et al. (2020, SAE 2020-01-1413)
 _STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
+
+# N16 trained Lap_gap as the offset between the two stops (lap_y - lap_x), never the
+# race lap. At inference we always score the canonical undercut: we box on this lap and
+# the rival responds on the next one, so the offset is 1 (#444).
+_ASSUMED_UNDERCUT_LAP_GAP: int = 1
+
+# N15 (pit duration) encoded compound_id with an ORDINAL rank, NOT the Pirelli number:
+# verbatim from N15_pit_duration.ipynb cell 11, where it is applied as
+# `.map(COMPOUND_ORDER).fillna(-1)`. Feeding `_compound_to_id` here (the absolute C1-C6)
+# made the model read a SOFT as WET and a MEDIUM as INTERMEDIATE on essentially every
+# call. N16 is different and DOES want the absolute Cx, so the two must not share a
+# helper (#445).
+# ponytail: duplicated from the notebook; load it from model_config.json once N15 exports it.
+_N15_COMPOUND_ORDER: dict[str, int] = {
+    'SOFT': 0, 'MEDIUM': 1, 'HARD': 2, 'INTERMEDIATE': 3, 'WET': 4,
+}
+_N15_COMPOUND_UNKNOWN: int = -1  # matches the notebook's .fillna(-1)
+
+# N15 clipped tyre_life_in at 50 laps in training (cell 11); mirror that ceiling here so
+# an absurd stint cannot extrapolate outside the fitted range (#450).
+_MAX_TRAINED_TYRE_LIFE: int = 50
 
 CLIFF_IMMINENT_LAPS = 3    # laps_to_cliff_p10 below this → PIT_NOW
 CLIFF_SOON_LAPS     = 10   # laps_to_cliff_p10 below this → prefer harder compound
@@ -115,7 +141,14 @@ class PitAgentCFG:
             pit_cfg = json.load(f)
 
         self.pit_features: list[str]   = pit_cfg['features']
-        self.circuit_traversal: dict   = pit_cfg['circuit_traversal_lookup']
+        # Re-key the circuit tables into the SLUG keyspace the agents actually query
+        # with (session_meta.gp_name / the featured parquet's GP_Name). They ship keyed
+        # by FastF1 full event names, whose overlap with the slugs is exactly zero — so
+        # every lookup missed and silently took its default, freezing traversal at
+        # 20.0 s and circuit_undercut_rate at 0.38 for every circuit (#448).
+        self.circuit_traversal: dict   = rekey_by_slug(
+            pit_cfg['circuit_traversal_lookup'], 'circuit_traversal_lookup',
+        )
 
         # Reconstruct LabelEncoder from saved class list
         le = LabelEncoder()
@@ -133,10 +166,13 @@ class PitAgentCFG:
         self.undercut_threshold: float    = uc_cfg['best_threshold']
         self.dry_compounds: list[str]     = uc_cfg['dry_compounds']
 
-        # Pre-aggregate circuit and team undercut rates from N16 training parquet
+        # Pre-aggregate circuit and team undercut rates from N16 training parquet.
+        # This parquet is keyed by full event name; re-key to slugs for the same
+        # reason as circuit_traversal above (#448).
         _uc = pd.read_parquet(_PROCESSED / 'undercut_labeled' / 'undercut_clean.parquet')
-        self.circuit_undercut_rate: dict = (
-            _uc.groupby('GP_Name')['undercut_success'].mean().to_dict()
+        self.circuit_undercut_rate: dict = rekey_by_slug(
+            _uc.groupby('GP_Name')['undercut_success'].mean().to_dict(),
+            'circuit_undercut_rate',
         )
         self.team_x_undercut_rate: dict = (
             _uc.groupby('Team_X')['undercut_success'].mean().to_dict()
@@ -532,16 +568,19 @@ class PitStrategyAgent:
         if row is None:
             raise ValueError(f'No lap data for {driver} at lap {lap_number}')
 
-        gp_name  = self.session_meta.get('gp_name', '')
+        # No gp_name here on purpose: N15's compound_id is an ordinal rank, not the
+        # circuit's Pirelli allocation, so this builder needs no circuit lookup (#445).
         year     = self.session_meta.get('year', 2025)
         team_raw = self.session_meta.get('team_lookup', {}).get(driver, 'Unknown')
 
         feat = {
             'team':             self._encode_team(team_raw),
             'year':             year,
-            'tyre_life_in':     int(row.get('TyreLife', 1)),
+            # N15 clipped tyre_life at 50 in training (cell 11); pass the raw value and
+            # an absurd stint extrapolates outside the fitted range (#450).
+            'tyre_life_in':     min(int(row.get('TyreLife', 1)), _MAX_TRAINED_TYRE_LIFE),
             'lap_number':       lap_number,
-            'compound_id':      _compound_to_id(compound, gp_name, year),
+            'compound_id':      _N15_COMPOUND_ORDER.get(compound.upper(), _N15_COMPOUND_UNKNOWN),
             'compound_change':  int(compound_change),
             'under_sc':         int(under_sc),
             'tight_pit_box':    0,
@@ -593,8 +632,17 @@ class PitStrategyAgent:
         comp_y_id = _compound_to_id(comp_y, gp_name, year)
 
         feat = {
-            'pos_gap':               float(y_row.get('Position', 9)) - float(x_row.get('Position', 10)),
-            'Lap_gap':               lap_number,
+            # N16 trained pos_gap as pos_X_before - pos_Y_before, so X (us, the
+            # undercutter) being BEHIND Y is positive — that is the model's single
+            # strongest feature (gain 0.690). The operands were reversed here, which
+            # handed every X-behind-Y pair a negative value the model never saw for
+            # that case. Keep this order aligned with N16 cell 41 (#444).
+            'pos_gap':               float(x_row.get('Position', 10)) - float(y_row.get('Position', 9)),
+            # Trained as the OFFSET between the two stops (lap_y - lap_x, 1..max_lap_gap),
+            # not the race lap. Feeding lap_number put it 10-70x out of range, so LightGBM
+            # clamped to the deepest bin on every call. We score the canonical undercut:
+            # we box now, the rival responds on the next lap (#444).
+            'Lap_gap':               _ASSUMED_UNDERCUT_LAP_GAP,
             'tyre_life_diff':        float(x_row.get('TyreLife', 10)) - float(y_row.get('TyreLife', 10)),
             'TyreLife_X':            float(x_row.get('TyreLife', 10)),
             'TyreLife_Y':            float(y_row.get('TyreLife', 10)),

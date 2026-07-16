@@ -313,7 +313,13 @@ def run_no_llm_lap(
             tire_out.laps_to_cliff_p10,
         )
         synth = _deterministic_synthesis(action, guardrail_reason)
-        rec = _assemble_recommendation(synth, pit_out, mc_results, regulation_context)
+        rec = _assemble_recommendation(
+            synth,
+            pit_out,
+            mc_results,
+            regulation_context,
+            sc_currently_active=situation_out.sc_currently_active,
+        )
 
     timings["total"] = sum(timings.values())
 

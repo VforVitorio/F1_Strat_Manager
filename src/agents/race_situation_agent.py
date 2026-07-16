@@ -44,6 +44,8 @@ try:
 except Exception:
     _DATA_ROOT = _REPO_ROOT / 'data'
 
+from src.f1_strat_manager.gp_slugs import rekey_by_slug, slug_from_event_name  # noqa: E402
+
 _MODELS    = _DATA_ROOT / 'models'
 _PROCESSED = _DATA_ROOT / 'processed'
 _AGENTS    = _DATA_ROOT / 'models' / 'agents'
@@ -149,11 +151,32 @@ class RaceSituationConfig:
             _PROCESSED / 'sc_labeled' / 'sc_labeled_2023_2025.parquet',
             columns=['event_name', 'circuit_sc_rate'],
         )
-        self.circuit_sc_rate_map: dict = (
+        # Re-key to the SLUG keyspace the replay path queries with. This table ships
+        # keyed by FastF1 event names, which the FastF1 session path supplies but the
+        # replay path (CLI / arcade / webapp, all fed by RaceStateManager) does not —
+        # it passes session_meta.gp_name, a slug. The keyspaces do not overlap, so on
+        # every replay lap this lookup missed and returned the 0.10 default: a trained
+        # per-circuit feature frozen to a constant for every race (#448). Lookups go
+        # through `sc_rate_for`, which resolves EITHER keyspace, so the FastF1 path
+        # keeps working too.
+        self.circuit_sc_rate_map: dict = rekey_by_slug(
             _sc_df.drop_duplicates('event_name')
                   .set_index('event_name')['circuit_sc_rate']
-                  .to_dict()
+                  .to_dict(),
+            'circuit_sc_rate_map',
         )
+
+    def sc_rate_for(self, event_name: str) -> float:
+        """Circuit SC base rate for a GP given in EITHER keyspace.
+
+        The two callers disagree: the FastF1 session path passes a full event name
+        ('Qatar Grand Prix'), the replay path passes the parquet slug ('Lusail').
+        `slug_from_event_name` is reentrant, so it normalises both. Falls back to the
+        0.10 training-set mean when a GP is genuinely unknown — the same default as
+        before, but now only for real misses instead of on every replay lap.
+        """
+        slug = slug_from_event_name(event_name) or event_name
+        return self.circuit_sc_rate_map.get(slug, 0.10)
 
 
 # ── Module-level config singleton ─────────────────────────────────────────────
@@ -536,6 +559,18 @@ def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
             df['LapTime'] = pd.to_timedelta(90.0, unit='s')
     elif not hasattr(df['LapTime'].iloc[0], 'total_seconds'):
         df['LapTime'] = pd.to_timedelta(pd.to_numeric(df['LapTime'], errors='coerce'), unit='s')
+
+    # Same normalisation for the session elapsed time, and it is load-bearing:
+    # _build_overtake_features reads `Time` to compute the gap the way N11 was
+    # trained (N11 cell 13: gap = abs(row_x["Time_s"] - row_y["Time_s"])), and
+    # falls back to a single lap's LapTime delta when it is absent. The featured
+    # parquet carries `Time_s`, never `Time`, so without this the fallback fired on
+    # 100% of calls: at Lusail lap 20 the model was told OCO sat 1.645 s from the
+    # leader when the real gap was 33.950 s, which is the difference between "in the
+    # DRS window" and "half a minute away". #447 restored the column; this is what
+    # lets the agent actually see it.
+    if 'Time' not in df.columns and 'Time_s' in df.columns:
+        df['Time'] = pd.to_timedelta(df['Time_s'], unit='s')
 
     for col in ('Sector1Time', 'Sector2Time', 'Sector3Time'):
         if col not in df.columns:
@@ -1029,7 +1064,7 @@ class RaceSituationAgent:
             'event_name':       event_name,
             'year':             lap_state.get('year', 2025),
             'circuit_cluster':  self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'circuit_sc_rate':  self.cfg.circuit_sc_rate_map.get(event_name, 0.10),
+            'circuit_sc_rate':  self.cfg.sc_rate_for(event_name),
             'total_laps':       int(session.total_laps),
             'fastest_lap_s':    _clean['LapTime'].min().total_seconds(),
             'AirTemp':          float(_wx['AirTemp'].mean())    if 'AirTemp'   in _wx else 28.0,
@@ -1093,7 +1128,7 @@ class RaceSituationAgent:
             'event_name':       event_name,
             'year':             year,
             'circuit_cluster':  self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'circuit_sc_rate':  self.cfg.circuit_sc_rate_map.get(event_name, 0.10),
+            'circuit_sc_rate':  self.cfg.sc_rate_for(event_name),
             'total_laps':       total_laps,
             'fastest_lap_s':    float(self.laps_df['LapTime'].dt.total_seconds().min())
                                 if len(self.laps_df) > 0 else 90.0,

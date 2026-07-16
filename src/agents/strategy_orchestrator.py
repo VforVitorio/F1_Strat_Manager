@@ -692,20 +692,28 @@ def _run_mc_simulation(
 
     sc_prob = situation_out.sc_prob_3lap
 
-    if pit_out is not None:
+    # A tool-parse failure inside N28 leaves the durations at 0.0 (its `or 0.0`
+    # defaults), and 0.0 is not a stop time — it means "unknown". Simulating it makes
+    # a pit stop FREE, so PIT_NOW (~+1.25 s) wins essentially every draw: a silent
+    # parse miss becomes a confident recommendation to box. Treat a non-positive P50
+    # as unavailable and fall through to the same prior the pit_out-is-None branch
+    # already uses (#436). Durations and undercut_prob degrade INDEPENDENTLY: a
+    # failed duration parse says nothing about the undercut probability.
+    _durations_known = pit_out is not None and (pit_out.stop_duration_p50 or 0.0) > 0.0
+    if _durations_known:
         pit_p05, pit_p50, pit_p95 = _clamp_triangular(
             pit_out.stop_duration_p05,
             pit_out.stop_duration_p50,
             pit_out.stop_duration_p95,
         )
-        ucut_prob = (
-            pit_out.undercut_prob
-            if pit_out.undercut_prob is not None
-            else 0.5
-        )
     else:
         pit_p05, pit_p50, pit_p95 = 2.2, 2.8, 3.8
-        ucut_prob = 0.5
+
+    ucut_prob = (
+        pit_out.undercut_prob
+        if pit_out is not None and pit_out.undercut_prob is not None
+        else 0.5
+    )
 
     pace_s  = rng.normal(pace_out.lap_time_pred, sigma_pace, n)  # noqa: F841
     cliff_s = rng.triangular(p10_cliff, p50_cliff, p90_cliff, n)
@@ -1199,6 +1207,7 @@ def _assemble_recommendation(
     pit_out,
     mc_results:         dict,
     regulation_context: str,
+    sc_currently_active: bool = False,
 ) -> "StrategyRecommendation":
     """Merge the LLM synthesis with N28 pit data and attach grounding fields.
 
@@ -1217,6 +1226,19 @@ def _assemble_recommendation(
     * regulation_context — attached verbatim from N30 so the UI can surface
       the regulatory basis for the action without re-querying N30.
 
+    --- WHERE TO CHANGE IF THE SC POLICY CHANGES ---
+    sc_currently_active carries N27's verdict so the Safety-Car guard-rail can
+    be enforced HERE, on the final answer. N28 already refuses to stay out under
+    a deployed SC (pit_strategy_agent.py, same condition and tag), but its action
+    only ever reached the LLM as prompt TEXT — the orchestrator returned
+    synth.action verbatim, so a synthesis that ignored the deterministic signal
+    silently won. That is exactly the STAY_OUT-under-SC failure the Qatar 2025
+    case (thesis 6.3) exists to prevent, and docs/pages/multi-agent.md already
+    promises this rail "so a misbehaving LLM can't override the deterministic
+    signal". This makes the code honour the rule the project already adopted one
+    layer down. Defaults to False so any caller that does not thread N27's output
+    keeps the previous behaviour rather than silently changing it.
+
     Returns a fully-populated StrategyRecommendation ready for the UI layer.
     """
     # N28 fallbacks — only used when the LLM did not commit to a value
@@ -1228,9 +1250,17 @@ def _assemble_recommendation(
     compound_next   = synth.compound_next   if synth.compound_next   is not None else fallback_cmpd
     undercut_target = synth.undercut_target if synth.undercut_target is not None else fallback_target
 
+    # Safety-Car guard-rail, mirroring N28's own (same condition, same tag) so the
+    # override stays auditable in the chat bubble / arcade dashboard / SSE stream.
+    action    = synth.action
+    reasoning = synth.reasoning
+    if sc_currently_active and action == 'STAY_OUT':
+        action    = 'PIT_NOW'
+        reasoning = f"[OVERRIDE: SC deployed — forcing PIT_NOW.] {reasoning}"
+
     return StrategyRecommendation(
-        action             = synth.action,
-        reasoning          = synth.reasoning,
+        action             = action,
+        reasoning          = reasoning,
         confidence         = synth.confidence,
         pit_lap_target     = pit_lap_target,
         compound_next      = compound_next,
@@ -1322,7 +1352,10 @@ def run_strategy_orchestrator(
     )
 
     synth: _LLMSynthesis = _get_orchestrator_llm().invoke(prompt)
-    return _assemble_recommendation(synth, pit_out, mc_results, regulation_context)
+    return _assemble_recommendation(
+        synth, pit_out, mc_results, regulation_context,
+        sc_currently_active = situation_out.sc_currently_active,
+    )
 
 
 def run_strategy_orchestrator_from_state(
@@ -1370,6 +1403,12 @@ def run_strategy_orchestrator_from_state(
                 "compound":      race_state.compound,
                 "tyre_life":     race_state.tyre_life,
                 "stint":         stint,
+                # A RaceState carries no lap history, so the stint's opening TyreLife is
+                # genuinely unknowable here. None makes N06 emit NaN FuelEffect plus a
+                # warning, which is in-distribution (2% of the training parquet is null)
+                # and cannot be mistaken for a reading. Keep in lockstep with the same
+                # key in engine._build_default_lap_state (#446).
+                "stint_baseline_tyre_life": None,
                 "lap_time_s":    None,
                 "speed_st":      300.0,
                 "fuel_load":     1 - race_state.lap / max(race_state.total_laps, 1),
@@ -1440,4 +1479,7 @@ def run_strategy_orchestrator_from_state(
     )
 
     synth: _LLMSynthesis = _get_orchestrator_llm().invoke(prompt)
-    return _assemble_recommendation(synth, pit_out, mc_results, regulation_context)
+    return _assemble_recommendation(
+        synth, pit_out, mc_results, regulation_context,
+        sc_currently_active = situation_out.sc_currently_active,
+    )

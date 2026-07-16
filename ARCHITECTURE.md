@@ -21,7 +21,7 @@ All three consume the same core:
 
 The Streamlit path also runs a FastAPI backend (`src/telemetry/backend/`).
 The Arcade path runs the strategy pipeline locally without the backend
-(see [`docs/arcade/strategy-pipeline.md`](docs/arcade/strategy-pipeline.md)).
+(see [`docs/pages/arcade-strategy-pipeline.md`](docs/pages/arcade-strategy-pipeline.md)).
 
 ## Multi-agent pipeline
 
@@ -29,9 +29,7 @@ N25 Pace · N26 Tire · N27 Situation · N29 Radio are always-on. N28 Pit
 Strategy and N30 RAG are conditional (routing decides per-lap). N31
 Orchestrator fuses all outputs through a Monte Carlo simulation and an
 LLM synthesis pass into a `StrategyRecommendation`. Full flow:
-[`docs/architecture.md`](docs/architecture.md) + the
-[`docs/diagrams/strategy_pipeline_flow.drawio`](docs/diagrams/strategy_pipeline_flow.drawio)
-diagram.
+[`docs/pages/architecture.md`](docs/pages/architecture.md).
 
 ## Arcade three-window topology
 
@@ -44,9 +42,7 @@ diagram.
 
 Both windows subscribe to the arcade's `TelemetryStreamServer` on
 `127.0.0.1:9998`. Details:
-[`docs/arcade/dashboard.md`](docs/arcade/dashboard.md) and the
-[`docs/diagrams/arcade_3window_architecture.drawio`](docs/diagrams/arcade_3window_architecture.drawio)
-diagram.
+[`docs/pages/arcade-dashboard.md`](docs/pages/arcade-dashboard.md).
 
 ## Data flow
 
@@ -58,16 +54,14 @@ diagram.
 - Featured laps parquets + per-race raw dirs + tire-compound-by-race
   map form the input to the multi-agent stack.
 
-See [`docs/diagrams/tcp_broadcast_dataflow.drawio`](docs/diagrams/tcp_broadcast_dataflow.drawio)
-and [`docs/diagrams/data_pipeline.drawio`](docs/diagrams/data_pipeline.drawio)
 for the wire-level view.
 
 ## Where to go next
 
 - **Install:** [`INSTALL.md`](INSTALL.md).
 - **Roadmap:** [`ROADMAP.md`](ROADMAP.md).
-- **Agents reference:** [`docs/agents-api-reference.md`](docs/agents-api-reference.md).
-- **Backend API:** [`docs/backend-api.md`](docs/backend-api.md).
-- **Streamlit frontend:** [`docs/streamlit-frontend.md`](docs/streamlit-frontend.md).
-- **Simulation engine:** [`docs/simulation/overview.md`](docs/simulation/overview.md).
+- **Agents reference:** [`docs/pages/agents-api.md`](docs/pages/agents-api.md).
+- **Backend API:** [`docs/pages/backend-api.md`](docs/pages/backend-api.md).
+- **Streamlit frontend:** [`docs/pages/streamlit.md`](docs/pages/streamlit.md).
+- **Simulation engine:** [`docs/pages/simulation.md`](docs/pages/simulation.md).
 - **All draw.io diagrams:** [`docs/diagrams/`](docs/diagrams/).

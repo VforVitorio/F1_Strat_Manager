@@ -1,6 +1,6 @@
 # src/simulation — Race replay engine
 
-> **Canonical narrative doc:** [`docs/simulation/overview.md`](../../docs/simulation/overview.md)
+> **Canonical narrative doc:** [`docs/pages/simulation.md`](../../docs/pages/simulation.md)
 > covers the `lap_state` contract and the data boundary with the agents.
 > This README is the package-level API pointer.
 

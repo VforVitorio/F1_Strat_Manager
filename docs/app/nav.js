@@ -125,9 +125,9 @@ window.PAGES = [
     title: "Strategy pipeline",
     section: "Arcade",
     file: "pages/arcade-strategy-pipeline.md",
-    description: "Why the arcade duplicates the N31 orchestrator body.",
+    description: "The shared run_lap engine behind all three surfaces, and its two profiles.",
     eyebrow: "Internals",
-    tags: ["arcade", "orchestrator", "agents", "pipeline", "monte-carlo", "threading"],
+    tags: ["arcade", "orchestrator", "agents", "pipeline", "engine", "monte-carlo", "threading"],
   },
 
   // ------- OPERATIONS -------
