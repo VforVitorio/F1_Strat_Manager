@@ -125,30 +125,30 @@ def canonical_gp_name(name: str) -> str:
 # 'Hungary'), so the mapping has to be explicit. Verified 1:1 against both sources
 # on disk (24 slugs, 24 event names).
 EVENT_NAME_BY_SLUG: Final[dict[str, str]] = {
-    "Sakhir":            "Bahrain Grand Prix",
-    "Jeddah":            "Saudi Arabian Grand Prix",
-    "Melbourne":         "Australian Grand Prix",
-    "Suzuka":            "Japanese Grand Prix",
-    "Shanghai":          "Chinese Grand Prix",
-    "Miami":             "Miami Grand Prix",
-    "Imola":             "Emilia Romagna Grand Prix",
-    "Monaco":            "Monaco Grand Prix",
-    "Barcelona":         "Spanish Grand Prix",
-    "Montréal":          "Canadian Grand Prix",
-    "Spielberg":         "Austrian Grand Prix",
-    "Silverstone":       "British Grand Prix",
+    "Sakhir": "Bahrain Grand Prix",
+    "Jeddah": "Saudi Arabian Grand Prix",
+    "Melbourne": "Australian Grand Prix",
+    "Suzuka": "Japanese Grand Prix",
+    "Shanghai": "Chinese Grand Prix",
+    "Miami": "Miami Grand Prix",
+    "Imola": "Emilia Romagna Grand Prix",
+    "Monaco": "Monaco Grand Prix",
+    "Barcelona": "Spanish Grand Prix",
+    "Montréal": "Canadian Grand Prix",
+    "Spielberg": "Austrian Grand Prix",
+    "Silverstone": "British Grand Prix",
     "Spa-Francorchamps": "Belgian Grand Prix",
-    "Budapest":          "Hungarian Grand Prix",
-    "Zandvoort":         "Dutch Grand Prix",
-    "Monza":             "Italian Grand Prix",
-    "Baku":              "Azerbaijan Grand Prix",
-    "Marina Bay":        "Singapore Grand Prix",
-    "Austin":            "United States Grand Prix",
-    "Mexico City":       "Mexico City Grand Prix",
-    "São Paulo":         "São Paulo Grand Prix",
-    "Las Vegas":         "Las Vegas Grand Prix",
-    "Lusail":            "Qatar Grand Prix",
-    "Yas Island":        "Abu Dhabi Grand Prix",
+    "Budapest": "Hungarian Grand Prix",
+    "Zandvoort": "Dutch Grand Prix",
+    "Monza": "Italian Grand Prix",
+    "Baku": "Azerbaijan Grand Prix",
+    "Marina Bay": "Singapore Grand Prix",
+    "Austin": "United States Grand Prix",
+    "Mexico City": "Mexico City Grand Prix",
+    "São Paulo": "São Paulo Grand Prix",
+    "Las Vegas": "Las Vegas Grand Prix",
+    "Lusail": "Qatar Grand Prix",
+    "Yas Island": "Abu Dhabi Grand Prix",
 }
 
 SLUG_BY_EVENT_NAME: Final[dict[str, str]] = {
@@ -202,8 +202,11 @@ def rekey_by_slug(table: dict, table_name: str) -> dict:
         rekeyed[slug] = value
     if unresolved:
         logger.warning(
-            '%s: %d key(s) did not resolve to a circuit slug and stay unreachable '
-            'from the agents: %s (#448)', table_name, len(unresolved), sorted(unresolved),
+            "%s: %d key(s) did not resolve to a circuit slug and stay unreachable "
+            "from the agents: %s (#448)",
+            table_name,
+            len(unresolved),
+            sorted(unresolved),
         )
     return rekeyed
 
