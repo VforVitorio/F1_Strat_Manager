@@ -225,7 +225,13 @@ def _run_rich(
             regulation_context=regulation_context,
         )
         synth = _get_orchestrator_llm().invoke(prompt)
-        rec = _assemble_recommendation(synth, pit_out, mc_results, regulation_context)
+        rec = _assemble_recommendation(
+            synth,
+            pit_out,
+            mc_results,
+            regulation_context,
+            sc_currently_active=situation_out.sc_currently_active,
+        )
 
     timings["total"] = sum(timings.values())
 
