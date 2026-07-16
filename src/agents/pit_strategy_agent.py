@@ -411,9 +411,17 @@ MINIMUM STINT LENGTH before a pit makes sense:
   set still has useful life; pitting now wastes a tyre allocation).
 
   EXCEPTION — SC ACTIVE: when the prompt states "SC STATUS: SAFETY CAR DEPLOYED
-  RIGHT NOW", the minimum stint constraint DOES NOT APPLY. Pitting under a
-  deployed SC costs ~10s instead of ~22s, so the cost/benefit inverts.  Recommend
-  PIT_NOW (action=PIT_NOW, not REACTIVE_SC) regardless of tyre_life.
+  RIGHT NOW", the minimum stint constraint DOES NOT APPLY: a stop under a deployed
+  SC is far cheaper because the field is delta-limited and queued behind the SC, so
+  your RELATIVE loss shrinks.
+  This makes pitting cheaper. It does NOT make it correct: weigh it against what a
+  stop surrenders. Stay out when you have already stopped (a second set buys you
+  nothing), when you lead a pack that still has to stop, when you would rejoin into
+  traffic, or when the race is ending — if the SC is still out on the last lap the
+  race finishes behind it with no overtaking (Art. 55.17), so track position given
+  away now cannot be won back. Box when you have yet to stop and must anyway, when
+  the tyres are near the cliff, or when the two-compound rule is still unsatisfied
+  and time is running out. Decide on the race state, not on the SC alone.
 
 COMPOUND vs REMAINING LAPS:
   SOFT: recommend only if remaining laps <= 15 (it won't last longer).
@@ -1117,14 +1125,12 @@ class PitStrategyAgent:
         parsed                          = _parse_tool_outputs(messages)
         action, compound_rec, reasoning = _parse_agent_summary(messages[-1].content)
 
-        # Code-level guard: if the SC is confirmed deployed but the LLM still
-        # returned STAY_OUT (e.g. it weighted MINIMUM STINT too heavily), force
-        # PIT_NOW.  Tag the reasoning so the override is auditable in the chat
-        # bubble / arcade dashboard.
-        if sc_currently_active and action == 'STAY_OUT':
-            action    = 'PIT_NOW'
-            reasoning = f"[OVERRIDE: SC deployed — forcing PIT_NOW.] {reasoning}"
-
+        # A deployed SC does NOT force a stop. There used to be a guard here flipping
+        # STAY_OUT to PIT_NOW, and it was a strategy opinion, not a rule: staying out
+        # is right whenever you have already stopped, you lead a pack that must stop
+        # anyway, or the race is ending (Art. 55.17 finishes it behind the SC, making
+        # the surrendered position unrecoverable). The regulatory facts an SC does
+        # force live in N27; see tests/test_sc_regulatory_rails.py.
         sc_reactive = sc_currently_active or (action == 'REACTIVE_SC') or (
             sc_prob >= 0.30 and action in ('PIT_NOW', 'UNDERCUT')
         )

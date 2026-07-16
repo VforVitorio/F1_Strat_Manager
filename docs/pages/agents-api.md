@@ -56,7 +56,7 @@ Each agent also exposes a `get_*_react_agent()` factory that returns a compiled 
 |---|---|---|
 | `overtake_prob` | float | Probability of being overtaken (0–1) |
 | `sc_prob_3lap` | float | Safety car probability within 3 laps (0–1) |
-| `sc_currently_active` | bool | A safety car is deployed **right now**. Not a prediction: it is read from the lap's RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces `sc_prob_3lap = 1.0`, activates N28, and the final recommendation is held to `PIT_NOW`. See [Multi-agent system](#/multi-agent). |
+| `sc_currently_active` | bool | A safety car is deployed **right now**. Not a prediction: it is read from the lap's RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces the regulatory facts (`sc_prob_3lap = 1.0`, `overtake_prob = 0` per Art. 55.8, `drs_window = 0` per Art. 22.1(c)) and activates N28. It does **not** force the action: whether to pit under an SC is race state, not a rule. See [Multi-agent system](#/multi-agent). |
 | `threat_level` | str | LOW, MEDIUM, HIGH, CRITICAL |
 | `gap_ahead_s` | float | Gap to car ahead in seconds |
 | `pace_delta_s` | float | Pace difference vs car ahead |
