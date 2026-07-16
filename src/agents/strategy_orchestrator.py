@@ -1250,13 +1250,35 @@ def _assemble_recommendation(
     compound_next   = synth.compound_next   if synth.compound_next   is not None else fallback_cmpd
     undercut_target = synth.undercut_target if synth.undercut_target is not None else fallback_target
 
-    # Safety-Car guard-rail, mirroring N28's own (same condition, same tag) so the
-    # override stays auditable in the chat bubble / arcade dashboard / SSE stream.
+    # The action is the synthesis's, always. There used to be an SC rail here forcing
+    # STAY_OUT -> PIT_NOW, and it was an opinion wearing a rail's clothes: one race
+    # (Qatar 2025) generalised into a universal law. Under a real SC, staying out is
+    # often right (you just pitted; you lead and the pack must stop anyway; you would
+    # rejoin into traffic), and Art. 55.17 makes forcing the stop provably wrong in the
+    # closing laps, where the race finishes behind the SC and the surrendered track
+    # position is unrecoverable by regulation.
+    #
+    # It also silenced the very computation built to weigh it: with an SC deployed
+    # sc_prob_3lap is 1.0, so every Monte Carlo draw already receives the full
+    # SC_PIT_BONUS. A STAY_OUT argmax under those conditions IS the model saying the
+    # cheap stop was outweighed.
+    #
+    # What a deployed SC forces are the REGULATORY facts, and they live in N27 where
+    # every consumer inherits one consistent number: overtake_prob = 0 (Art. 55.8),
+    # sc_prob_3lap = 1.0, drs_window = 0 (Art. 22.1(c)).
+    #
+    # One is forced here instead, because it is this layer that emits it:
+    # `target_lap_time_s` is grounded in N06's PaceOutput CI, and N06 predicts
+    # GREEN-FLAG pace. Art. 55.7 requires drivers to stay ABOVE the FIA ECU minimum
+    # time while the SC is out, so a green-flag target is below the delta by
+    # construction: the system would be instructing the driver to earn a penalty. We
+    # cannot source the real delta (it is not in the telemetry), so the field has no
+    # valid value. None is forced by ABSENCE OF A SOURCE, not by a strategy view, and
+    # the schema already documents None as "the LLM prefers not to commit".
+    # Inventing a delta would only launder the breach into looking authoritative.
+    # See tests/test_sc_regulatory_rails.py.
     action    = synth.action
     reasoning = synth.reasoning
-    if sc_currently_active and action == 'STAY_OUT':
-        action    = 'PIT_NOW'
-        reasoning = f"[OVERRIDE: SC deployed — forcing PIT_NOW.] {reasoning}"
 
     return StrategyRecommendation(
         action             = action,
@@ -1266,7 +1288,7 @@ def _assemble_recommendation(
         compound_next      = compound_next,
         undercut_target    = undercut_target,
         pace_mode          = synth.pace_mode,
-        target_lap_time_s  = synth.target_lap_time_s,
+        target_lap_time_s  = None if sc_currently_active else synth.target_lap_time_s,
         risk_posture       = synth.risk_posture,
         contingencies      = synth.contingencies,
         key_risks          = synth.key_risks,
