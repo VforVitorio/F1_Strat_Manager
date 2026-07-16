@@ -60,6 +60,15 @@ _COMPOUND_FALLBACK: dict[str, int] = {'HARD': 1, 'MEDIUM': 3, 'SOFT': 5}
 # Pirelli average stint capacities — Heilmeier et al. (2020, SAE 2020-01-1413)
 _STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
 
+# N16 trained Lap_gap as the offset between the two stops (lap_y - lap_x), never the
+# race lap. At inference we always score the canonical undercut: we box on this lap and
+# the rival responds on the next one, so the offset is 1 (#444).
+_ASSUMED_UNDERCUT_LAP_GAP: int = 1
+
+# N15 clipped tyre_life_in at 50 laps in training (cell 11); mirror that ceiling here so
+# an absurd stint cannot extrapolate outside the fitted range (#450).
+_MAX_TRAINED_TYRE_LIFE: int = 50
+
 CLIFF_IMMINENT_LAPS = 3    # laps_to_cliff_p10 below this → PIT_NOW
 CLIFF_SOON_LAPS     = 10   # laps_to_cliff_p10 below this → prefer harder compound
 
@@ -539,7 +548,9 @@ class PitStrategyAgent:
         feat = {
             'team':             self._encode_team(team_raw),
             'year':             year,
-            'tyre_life_in':     int(row.get('TyreLife', 1)),
+            # N15 clipped tyre_life at 50 in training (cell 11); pass the raw value and
+            # an absurd stint extrapolates outside the fitted range (#450).
+            'tyre_life_in':     min(int(row.get('TyreLife', 1)), _MAX_TRAINED_TYRE_LIFE),
             'lap_number':       lap_number,
             'compound_id':      _compound_to_id(compound, gp_name, year),
             'compound_change':  int(compound_change),
@@ -593,8 +604,17 @@ class PitStrategyAgent:
         comp_y_id = _compound_to_id(comp_y, gp_name, year)
 
         feat = {
-            'pos_gap':               float(y_row.get('Position', 9)) - float(x_row.get('Position', 10)),
-            'Lap_gap':               lap_number,
+            # N16 trained pos_gap as pos_X_before - pos_Y_before, so X (us, the
+            # undercutter) being BEHIND Y is positive — that is the model's single
+            # strongest feature (gain 0.690). The operands were reversed here, which
+            # handed every X-behind-Y pair a negative value the model never saw for
+            # that case. Keep this order aligned with N16 cell 41 (#444).
+            'pos_gap':               float(x_row.get('Position', 10)) - float(y_row.get('Position', 9)),
+            # Trained as the OFFSET between the two stops (lap_y - lap_x, 1..max_lap_gap),
+            # not the race lap. Feeding lap_number put it 10-70x out of range, so LightGBM
+            # clamped to the deepest bin on every call. We score the canonical undercut:
+            # we box now, the rival responds on the next lap (#444).
+            'Lap_gap':               _ASSUMED_UNDERCUT_LAP_GAP,
             'tyre_life_diff':        float(x_row.get('TyreLife', 10)) - float(y_row.get('TyreLife', 10)),
             'TyreLife_X':            float(x_row.get('TyreLife', 10)),
             'TyreLife_Y':            float(y_row.get('TyreLife', 10)),
