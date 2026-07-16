@@ -90,3 +90,35 @@ def test_the_position_default_cannot_mask_a_missing_value():
     assert pd.isna(row.get("Position", 10)), (
         "if this ever returns 10, pandas changed and the guards can be simplified"
     )
+
+
+def test_the_orchestrator_llm_cannot_ship_a_retired_undercut_target():
+    """N28's validated target wins; the LLM's free text only fills a gap, and only if live.
+
+    `score_undercut_tool` checks its target against the cars on track. The orchestrator
+    LLM then writes the SAME field from free text, and the prompt seeds it with a literal
+    example ("e.g. SAI"). Preferring the LLM's value made that check dead code: the
+    validated answer was computed and then overwritten by an unchecked string, which the
+    arcade renders as "UCUT: <name>".
+    """
+    from itertools import islice
+
+    from src.agents.strategy_orchestrator import _assemble_recommendation, _live_drivers_from
+    from src.simulation.replay_engine import RaceReplayEngine
+    from src.strategy.inference.no_llm import _deterministic_synthesis
+
+    replay = RaceReplayEngine(RACE_DIR, driver_code="NOR", team="McLaren")
+    live = _live_drivers_from(next(islice(replay.replay(), 49, 50)))
+    mc_results = {"UNDERCUT": {"score": 0.4}}
+
+    # HUL crashed on lap 7. The LLM names him anyway.
+    synthesis = _deterministic_synthesis("UNDERCUT", None)
+    synthesis.undercut_target = "HUL"
+    rec = _assemble_recommendation(synthesis, None, mc_results, "", live_drivers=live)
+    assert rec.undercut_target is None, "a car that crashed 43 laps ago reached the pit wall"
+
+    # A car that is racing survives.
+    synthesis_live = _deterministic_synthesis("UNDERCUT", None)
+    synthesis_live.undercut_target = "PIA"
+    rec_live = _assemble_recommendation(synthesis_live, None, mc_results, "", live_drivers=live)
+    assert rec_live.undercut_target == "PIA"
