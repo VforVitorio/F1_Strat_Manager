@@ -11,6 +11,32 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.10.5](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.4...v1.10.5) (2026-07-16)
+
+
+### Bug Fixes
+
+* **agents:** compute FuelEffect from the stint baseline, not a hardcoded fuel_load factor ([5d4ff38](https://github.com/VforVitorio/F1-StratLab/commit/5d4ff3818c49a26c571370f637b204223d711a2d))
+* **agents:** compute FuelEffect from the stint baseline, not a hardcoded fuel_load factor ([7ac17e5](https://github.com/VforVitorio/F1-StratLab/commit/7ac17e59495c4d8a3a8cc735c442cc8efe99139e)), closes [#446](https://github.com/VforVitorio/F1-StratLab/issues/446)
+* **agents:** encode N15's compound_id as the ordinal rank it was trained on ([6bb025f](https://github.com/VforVitorio/F1-StratLab/commit/6bb025f2ce62557b154ebf2e952a5210a467d64a)), closes [#445](https://github.com/VforVitorio/F1-StratLab/issues/445)
+* **agents:** honour the Safety-Car guard-rail on the final answer, and stop simulating free pit stops ([b423acd](https://github.com/VforVitorio/F1-StratLab/commit/b423acd3d62be44974ea7336ee6c0087604214f6)), closes [#436](https://github.com/VforVitorio/F1-StratLab/issues/436)
+* **agents:** let the overtake model see the elapsed-time gap it was trained on ([46c320f](https://github.com/VforVitorio/F1-StratLab/commit/46c320f8a47b23d41a9974a2e98aa3dfc4daab93))
+* **agents:** let the overtake model see the elapsed-time gap it was trained on ([3b722bb](https://github.com/VforVitorio/F1-StratLab/commit/3b722bbb1f77aa8cff7fd7b0750d8e332cc79885))
+* **agents:** re-key the circuit lookup tables to the slug keyspace the agents query with ([02e7a79](https://github.com/VforVitorio/F1-StratLab/commit/02e7a79d5e76e8b9e7fa54e863409bfc69c25b32)), closes [#448](https://github.com/VforVitorio/F1-StratLab/issues/448)
+* **agents:** Safety-Car rail on the final answer, MC sentinels, and un-freeze the circuit tables ([0fd28e7](https://github.com/VforVitorio/F1-StratLab/commit/0fd28e7efbae5fafd76b8ae048b09500a52c0420))
+* **agents:** un-invert the undercut model's top feature and stop feeding it the race lap ([a68025c](https://github.com/VforVitorio/F1-StratLab/commit/a68025ca375e0a0152f30a3040d026c1ecd92077))
+* **agents:** un-invert the undercut model's top feature and stop feeding it the race lap ([ec0f444](https://github.com/VforVitorio/F1-StratLab/commit/ec0f4448d2737b21146c2abf6349139adb9e52db)), closes [#444](https://github.com/VforVitorio/F1-StratLab/issues/444)
+* **engine:** scope the laps frame to the analysed Grand Prix in run_lap ([9a8f0cd](https://github.com/VforVitorio/F1-StratLab/commit/9a8f0cd09fada24005d7d1f979363377ed6420c7))
+* **engine:** scope the laps frame to the analysed Grand Prix in run_lap ([454db40](https://github.com/VforVitorio/F1-StratLab/commit/454db40bd213a29b4fffd1b4d10c9086093cf364)), closes [#429](https://github.com/VforVitorio/F1-StratLab/issues/429)
+* **simulation:** guard the stint-baseline precompute against frames without Stint ([4262859](https://github.com/VforVitorio/F1-StratLab/commit/4262859d8b85f62064dc2a4c34a6dc9824abaf73)), closes [#446](https://github.com/VforVitorio/F1-StratLab/issues/446)
+
+
+### Documentation
+
+* **agents:** fix the entry-point table and make the examples actually run ([59b02e0](https://github.com/VforVitorio/F1-StratLab/commit/59b02e071b296802f12489f2ebe187e1394d008e)), closes [#438](https://github.com/VforVitorio/F1-StratLab/issues/438)
+* **strategy:** correct the pages the engine fixes made wrong ([4168b13](https://github.com/VforVitorio/F1-StratLab/commit/4168b1355f3dc999ca96757656fd31a30c707a60))
+* **strategy:** correct the pages the engine fixes made wrong ([62fa3c5](https://github.com/VforVitorio/F1-StratLab/commit/62fa3c55c3f03cb65cff280b2bdfbaac35c4f6a1)), closes [#438](https://github.com/VforVitorio/F1-StratLab/issues/438)
+
 ## [1.10.4](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.3...v1.10.4) (2026-07-15)
 
 
