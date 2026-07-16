@@ -790,7 +790,20 @@ class TireAgent:
         if len(scaled) >= window:
             seq = scaled[-window:]
         else:
-            pad = np.tile(scaled[0], (window - len(scaled), 1))
+            # Left-ZERO-pad, verbatim from N09's `_pad_or_truncate`:
+            #   pad = np.zeros((window - L, F)); seq = np.concatenate([pad, arr])
+            # This used to tile the stint's first lap instead. Windows are 28-31 laps and
+            # the median stint is 21-23, so the pad branch is the COMMON path, not the
+            # fallback: measured at Barcelona 2024, 97% of calls take it. The TCN's
+            # receptive field (61) exceeds the window, so the padding reaches the output.
+            #
+            # Repeating a real lap tells the model the car ran 20 identical laps before
+            # the stint began, which is a fiction it never saw in training; zeros are the
+            # scaled-space "no data" it did see. Measured: the tile-pad put 87% of
+            # predictions outside the training target's 5-95% band (mean -29.97 s of
+            # cumulative degradation against a band of [-5.80, +2.46]), and flipped
+            # `warning_level` on 10.5% of laps.
+            pad = np.zeros((window - len(scaled), scaled.shape[1]), dtype=scaled.dtype)
             seq = np.vstack([pad, scaled])
 
         return torch.tensor(seq, dtype=torch.float32).unsqueeze(0)  # (1, window, 42)
@@ -816,14 +829,35 @@ class TireAgent:
             f'{driver}_compound',
             driver_laps['Compound'].iloc[-1] if len(driver_laps) > 0 else 'MEDIUM',
         )
-        stint = (
-            self.laps_df[
-                (self.laps_df['Driver']   == driver) &
-                (self.laps_df['Compound'] == compound) &
-                (self.laps_df['TyreLife'] <= tyre_life)
-            ]
-            .sort_values('LapNumber')
+        mask = (
+            (self.laps_df['Driver']   == driver) &
+            (self.laps_df['Compound'] == compound) &
+            (self.laps_df['TyreLife'] <= tyre_life)
         )
+
+        # Scope to THIS stint and to laps that have already happened. N10 built its
+        # training windows grouped by ['Year','GP_Name','DriverNumber','Stint'] (cell 10),
+        # and matching on Compound alone does not reproduce that: a driver runs the same
+        # compound in more than one stint 26% of the time, so a later stint joined the
+        # window, and with no lap bound those laps had not happened yet.
+        #
+        # Measured on 2024 (26,606 decision points): 37.5% of windows mixed stints and
+        # 17.2% contained FUTURE laps. HAM at Barcelona lap 16 got [1..16, 44..59], and
+        # `deg_rate` is read as the window's last row, so the agent reported lap 59's
+        # degradation while the car was on lap 16. That flips `warning_level`, which is
+        # the orchestrator's routing key, so it also decides whether N28 runs at all.
+        #
+        # Both keys are optional: the FastF1 path does not supply them and keeps its old
+        # behaviour rather than breaking.
+        current_stint = self.session_meta.get(f'{driver}_stint')
+        if current_stint is not None and 'Stint' in self.laps_df.columns:
+            mask &= (self.laps_df['Stint'] == current_stint)
+
+        current_lap = self.session_meta.get('current_lap')
+        if current_lap is not None and 'LapNumber' in self.laps_df.columns:
+            mask &= (self.laps_df['LapNumber'] <= current_lap)
+
+        stint = self.laps_df[mask].sort_values('LapNumber')
         return stint if len(stint) > 0 else None
 
     # ── LangChain tool factory ────────────────────────────────────────────────
@@ -933,9 +967,21 @@ class TireAgent:
             threshold        = CLIFF_THRESHOLD.get(compound_id, 2.5)
             remaining_budget = max(0.0, threshold - mean_pred)
 
-            p50 = remaining_budget / deg_rate
-            p10 = max(0.0, (remaining_budget - total_std) / deg_rate)
-            p90 = (remaining_budget + total_std) / deg_rate
+            # Flooring the divisor without clamping the quotient produced cliffs beyond
+            # any possible race: HAM at Austin reported "P50: 27375.2 laps, OK". The floor
+            # fires by construction on a stint's first two laps (`_add_degradation_rate`
+            # shifts and fills 0), and measured over six 2024 GPs it fires on 10.5% of
+            # decision points, 11.8% of which yield >200 laps. The failure mode is "never
+            # pit", precisely when the model has no signal.
+            #
+            # A cliff past the chequered flag is operationally "not this race", so the
+            # race distance is the honest ceiling: it says the same thing without looking
+            # like a reading. Nothing is invented — the bound is the race itself.
+            cliff_ceiling = float(agent.session_meta.get('total_laps', 100) or 100)
+
+            p50 = min(remaining_budget / deg_rate, cliff_ceiling)
+            p10 = min(max(0.0, (remaining_budget - total_std) / deg_rate), cliff_ceiling)
+            p90 = min((remaining_budget + total_std) / deg_rate, cliff_ceiling)
 
             to = TireOutput(
                 compound=compound_id,
@@ -1123,6 +1169,16 @@ class TireAgent:
             'Humidity':  wx.get('humidity',   50.0),
             'Rainfall':  float(wx.get('rainfall', 0)),
             f'{driver}_compound': compound,
+            # The stint we are actually in, and the lap we are actually on. N10 trained
+            # on windows grouped by ['Year','GP_Name','DriverNumber','Stint'], and the
+            # slice below had neither: it matched on Compound alone, so a later stint on
+            # the same compound joined the window, and nothing bounded it to the past.
+            # At Barcelona 2024 lap 16, HAM's window ran [1..16, 44..59] and the TCN read
+            # LAP 59's degradation as current. Both keys travel here rather than through
+            # the signature so the FastF1 path, which has neither, degrades to the old
+            # behaviour instead of breaking (#449).
+            f'{driver}_stint': d.get('stint'),
+            'current_lap': lap_state.get('lap_number'),
         }
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)

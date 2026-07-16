@@ -130,11 +130,32 @@ Wraps N15 (physical pit stop duration P05/P50/P95 via HistGBT) and N16 (undercut
 
 #### Honoring an active Safety Car
 
-When the orchestrator sets `sc_currently_active = True` on the lap state, N28's prompt swaps the legacy "SC probability" line for an explicit `SC STATUS: SAFETY CAR DEPLOYED RIGHT NOW` banner and the system prompt waives the `MINIMUM STINT LENGTH` constraint (pitting under SC costs ~10 s vs ~22 s, inverting the cost/benefit). A code-level guard-rail then flips any residual `STAY_OUT` to `PIT_NOW` so a misbehaving LLM can't override the deterministic signal — replicating the McLaren Catar 2025 V7 fix where the chain of safeguards previously locked the recommendation into `STAY_OUT` despite a confirmed SC.
+**A rail encodes what the regulation makes certain. It never encodes a strategy opinion.** Facts are forced; the stop/stay call stays with the model, which is the only layer that sees the state the decision depends on.
 
-**The rail is enforced twice, and it has to be.** N28's guard produces the right `action`, but the orchestrator's final synthesis then writes its own: `_assemble_recommendation` took the LLM's answer verbatim, so N28's `PIT_NOW` only ever reached the synthesis *prompt* as a line of text the model could ignore. It did: the same Lusail lap 7 scenario returned `PIT_NOW` twice and `STAY_OUT` four times across six runs. `_assemble_recommendation` now applies the same flip to the synthesised action, tagged `[OVERRIDE: SC deployed — forcing PIT_NOW.]` in the reasoning.
+When `sc_currently_active = True`, N28's prompt swaps the "SC probability" line for an explicit `SC STATUS: SAFETY CAR DEPLOYED RIGHT NOW` banner and waives the `MINIMUM STINT LENGTH` constraint: a stop under an SC is far cheaper, because the field is delta-limited and queued, so your *relative* loss shrinks. That makes pitting cheaper. It does not make it correct, and nothing forces it.
 
-A deterministic rail is only deterministic at the layer that emits the final answer. A guard one layer down is a suggestion.
+What is forced are the rules:
+
+| Fact | Regulation | Value | Where |
+|---|---|---|---|
+| No overtaking on track | **Art. 55.8** (SC) / **56.6** (VSC) | `overtake_prob = 0` | N27 |
+| An SC is deployed | Art. 55.4 | `sc_prob_3lap = 1.0` | N27 |
+| DRS unavailable | **Art. 22.1(c)** | `drs_window = 0` | N27, feature build |
+| No green-flag lap-time target | **Art. 55.7** | `target_lap_time_s = None` | final assembly |
+
+`overtake_prob = 0` is not an approximation. N12 models a *racing* overtake; of the eight exceptions in Art. 55.8, only "a car slows with an obvious problem" yields a real position gain, and N12 has no feature for it. Every input it does use is regulation-corrupted: DRS is off, the gap compresses toward ten car lengths (55.7/55.10), and `pace_delta` collapses to the FIA ECU delta. Under an SC the model is not imprecise, it is **inapplicable**.
+
+`target_lap_time_s` is the subtle one. It is grounded in N06's **green-flag** pace, and Art. 55.7 requires drivers to stay **above** the FIA ECU minimum time: shipping it instructs the driver to earn a penalty. We cannot source the real delta, so the field has no valid value. `None` is forced by **absence of a source** — which is the test that separates a fact from an opinion.
+
+##### Why the old rail was removed
+
+This page used to document a rail that flipped any `STAY_OUT` to `PIT_NOW` under an SC, "replicating the McLaren Catar 2025 V7 fix". That is one race generalised into a universal law, and Art. 55.17 makes it provably wrong: if the SC is still out at the start of the last lap, the race **finishes behind it with no overtaking**, so track position surrendered to a late stop is unrecoverable by regulation. The pipeline could emit `action=PIT_NOW` carrying the reason *"too late to pit"*, because the rail overrode a correct guard-rail that already knew this.
+
+It also silenced the computation built to weigh it: with an SC deployed `sc_prob_3lap` is 1.0, so **every** Monte Carlo draw already receives the full `SC_PIT_BONUS`. A `STAY_OUT` argmax under those conditions *is* the model saying the cheap stop was outweighed.
+
+Staying out under an SC is right whenever you have already stopped, you lead a pack that must stop anyway, you would rejoin into traffic, or the race is ending. Boxing is right when you must stop anyway, the tyres are near the cliff, or the two-compound rule is unsatisfied and time is short. Not one of those is a rule. All of them are race state the model is given, and a rail sees none of it.
+
+See `tests/test_sc_regulatory_rails.py`.
 
 ### N29 — Radio Agent (`radio_agent.py`)
 

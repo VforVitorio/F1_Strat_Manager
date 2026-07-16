@@ -411,9 +411,17 @@ MINIMUM STINT LENGTH before a pit makes sense:
   set still has useful life; pitting now wastes a tyre allocation).
 
   EXCEPTION — SC ACTIVE: when the prompt states "SC STATUS: SAFETY CAR DEPLOYED
-  RIGHT NOW", the minimum stint constraint DOES NOT APPLY. Pitting under a
-  deployed SC costs ~10s instead of ~22s, so the cost/benefit inverts.  Recommend
-  PIT_NOW (action=PIT_NOW, not REACTIVE_SC) regardless of tyre_life.
+  RIGHT NOW", the minimum stint constraint DOES NOT APPLY: a stop under a deployed
+  SC is far cheaper because the field is delta-limited and queued behind the SC, so
+  your RELATIVE loss shrinks.
+  This makes pitting cheaper. It does NOT make it correct: weigh it against what a
+  stop surrenders. Stay out when you have already stopped (a second set buys you
+  nothing), when you lead a pack that still has to stop, when you would rejoin into
+  traffic, or when the race is ending — if the SC is still out on the last lap the
+  race finishes behind it with no overtaking (Art. 55.17), so track position given
+  away now cannot be won back. Box when you have yet to stop and must anyway, when
+  the tyres are near the cliff, or when the two-compound rule is still unsatisfied
+  and time is running out. Decide on the race state, not on the SC alone.
 
 COMPOUND vs REMAINING LAPS:
   SOFT: recommend only if remaining laps <= 15 (it won't last longer).
@@ -456,6 +464,12 @@ class PitStrategyAgent:
         self.cfg: PitAgentCFG      = PitAgentCFG()
         self.laps_df: pd.DataFrame = pd.DataFrame()
         self.session_meta: dict    = {}
+        # The cars on track this lap, or None when we do not know. This agent is a module
+        # singleton (`_get_default_pit_agent`), so it MUST be initialised here and reset
+        # on every entry point: left over from a previous call it would validate targets
+        # against another race's roster, refusing live cars or admitting dead ones. None
+        # means "unknown", which disables the guard rather than rejecting everything.
+        self._live_drivers: set | None = None
         self._react_agent          = None
         self._tools: list          = self._build_tools()
 
@@ -622,6 +636,51 @@ class PitStrategyAgent:
         if not self._compounds_are_dry(comp_x, comp_y):
             return None
 
+        # A row with no Position cannot be scored. `pos_gap` is N16's single strongest
+        # feature (gain 0.690) and is built from both positions, so a NaN there is not a
+        # degraded prediction: LightGBM routes it down its missing branch and returns a
+        # confident-looking number computed from nothing.
+        #
+        # The defaults below cannot catch this: `Series.get(k, default)` returns the
+        # STORED value including NaN, and only falls back when the COLUMN is absent. So
+        # a crashed car whose Position is NaN sails straight through. That is the #428
+        # sentinel bug wearing a different column, and the rule is the same: refuse,
+        # never default to a number the model will read as a real reading (#462).
+        pos_x = x_row.get('Position')
+        pos_y = y_row.get('Position')
+        if pd.isna(pos_x) or pd.isna(pos_y):
+            logger.warning(
+                'Undercut features refused: %s or %s has no position at lap %s '
+                '(retired, or not classified on that lap)',
+                driver_x, driver_y, lap_number,
+            )
+            return None
+
+        # The position check above only catches a car whose last row happens to carry a
+        # NaN. It misses the worse case: BEA retired on lap 41 at Lusail, and at lap 50
+        # `_get_lap_row`'s unbounded prior-lap fallback returns his lap-41 row, complete,
+        # with Position 19.0. The features then build with no NaN and no warning: a
+        # confident undercut probability against a car in the garage, from 9-lap-stale
+        # telemetry.
+        #
+        # No staleness threshold can separate the two. Measured across 2025: a car that
+        # FINISHED can have its last known lap lag by 20 (RUS at Sakhir, because the
+        # featured frame drops SC/pit/out laps), while this bug fires at 9. The ranges
+        # overlap, so any bound that catches BEA also declares RUS retired.
+        #
+        # The only sound signal is presence: RaceStateManager builds `rivals` from the
+        # per-lap rows, so a car that is gone is simply absent. `_live_drivers` carries
+        # that set when we were run from a lap_state. When it is absent (direct calls,
+        # tests) we cannot know, and fall through rather than guess.
+        live = getattr(self, '_live_drivers', None)
+        if live is not None and driver_y not in live:
+            logger.warning(
+                'Undercut features refused: %s is not on track at lap %s '
+                '(absent from the lap_state rivals)',
+                driver_y, lap_number,
+            )
+            return None
+
         gp_name    = self.session_meta.get('gp_name', '')
         year       = self.session_meta.get('year', 2025)
         total_laps = self.session_meta.get('total_laps', 57)
@@ -752,6 +811,18 @@ class PitStrategyAgent:
             Returns:
                 "P(undercut_success)={prob:.3f} | threshold={threshold} | pos_gap={gap:.0f} | tyre_life_diff={diff:+.0f} laps | verdict={YES/NO}"
             """
+            # The LLM picks driver_y as free text, so it can name any car on the grid,
+            # including one that is no longer in the race. Answer with an error rather
+            # than a probability: a number here reads as a finding, and the model has
+            # no way to tell an invented target from a real one.
+            live = getattr(agent, '_live_drivers', None)
+            if live is not None and driver_y not in live:
+                return (
+                    f'Undercut scoring REFUSED — {driver_y} is not on track at lap '
+                    f'{lap_number}. Cars in the race this lap: {", ".join(sorted(live))}. '
+                    f'Pick a target from that list.'
+                )
+
             feat_df = agent._build_undercut_features(driver_x, driver_y, lap_number)
             if feat_df is None:
                 return (
@@ -922,6 +993,15 @@ class PitStrategyAgent:
         laps['LapNumber']  = laps['LapNumber'].astype(int)
         self.laps_df       = laps
 
+        # Who is on track this lap. This agent is a module singleton, so leaving the
+        # previous call's roster in place would validate targets against another race.
+        # A car that is gone has no row for the lap, which is the same presence signal
+        # RaceStateManager's `rivals` gives the other entry point (#462). Empty means we
+        # could not tell, so it stays None and the guard disables rather than rejecting
+        # every target.
+        _at_lap = laps.loc[laps['LapNumber'] == lap_number, 'Driver'].dropna()
+        self._live_drivers = set(_at_lap) | {driver} if len(_at_lap) else None
+
         team_lookup = (
             laps[['Driver', 'Team']].drop_duplicates()
                 .set_index('Driver')['Team'].to_dict()
@@ -977,6 +1057,17 @@ class PitStrategyAgent:
 
         team_lookup = {r['driver']: r.get('team', 'Unknown') for r in rivals}
         team_lookup[driver] = team
+
+        # Who is actually on track this lap. RaceStateManager builds `rivals` from the
+        # per-lap rows, so a car that has retired simply is not in it; this is the same
+        # answer a timing screen gives, and the only one available without guessing.
+        #
+        # It matters because score_undercut_tool takes a free-text driver code from the
+        # LLM, which can name anyone on the grid. Without this, undercutting HUL at
+        # Lusail lap 40 (he crashed on lap 7) scores happily, and worse: BEA retired on
+        # lap 41, so at lap 50 the features come out complete, with no NaN and no
+        # warning, describing a car sitting in the garage (#462).
+        self._live_drivers = {r['driver'] for r in rivals if r.get('driver')} | {driver}
 
         self.laps_df = laps_df.copy()
         if 'LapNumber' in self.laps_df.columns:
@@ -1049,14 +1140,12 @@ class PitStrategyAgent:
         parsed                          = _parse_tool_outputs(messages)
         action, compound_rec, reasoning = _parse_agent_summary(messages[-1].content)
 
-        # Code-level guard: if the SC is confirmed deployed but the LLM still
-        # returned STAY_OUT (e.g. it weighted MINIMUM STINT too heavily), force
-        # PIT_NOW.  Tag the reasoning so the override is auditable in the chat
-        # bubble / arcade dashboard.
-        if sc_currently_active and action == 'STAY_OUT':
-            action    = 'PIT_NOW'
-            reasoning = f"[OVERRIDE: SC deployed — forcing PIT_NOW.] {reasoning}"
-
+        # A deployed SC does NOT force a stop. There used to be a guard here flipping
+        # STAY_OUT to PIT_NOW, and it was a strategy opinion, not a rule: staying out
+        # is right whenever you have already stopped, you lead a pack that must stop
+        # anyway, or the race is ending (Art. 55.17 finishes it behind the SC, making
+        # the surrendered position unrecoverable). The regulatory facts an SC does
+        # force live in N27; see tests/test_sc_regulatory_rails.py.
         sc_reactive = sc_currently_active or (action == 'REACTIVE_SC') or (
             sc_prob >= 0.30 and action in ('PIT_NOW', 'UNDERCUT')
         )

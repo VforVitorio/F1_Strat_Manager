@@ -255,6 +255,24 @@ def _zscore(series: pd.DataFrame, col: str, lap_number: int) -> float:
     return float((val.iloc[0] - mu) / sig) if not val.empty else 0.0
 
 
+def _is_neutralised(track_status: object) -> bool:
+    """True when the lap ran under a Safety Car or a Virtual Safety Car.
+
+    FastF1 packs several codes into one string per lap, so '41' means the lap saw both
+    green and SC. Code 4 is the Safety Car and 6 the VSC; a substring test is the right
+    read because any appearance means the lap was neutralised for part of its length.
+
+    Used to shut features the regulation shuts. It deliberately does NOT cover the lap
+    after the restart, where DRS is still disabled (one lap, two under the 2023 wording)
+    but the track status is already green: catching that needs restart-lap state this
+    function does not have. Tracked separately.
+    """
+    if track_status is None or pd.isna(track_status):
+        return False
+    codes = str(track_status)
+    return '4' in codes or '6' in codes
+
+
 def _dominant_status(grp: pd.DataFrame) -> str:
     """Return the single worst TrackStatus code seen in a lap group."""
     codes = grp['TrackStatus'].dropna().astype(str).tolist()
@@ -757,7 +775,13 @@ class RaceSituationAgent:
             float(driver_x_lap.get('SpeedST', 300.0)) - float(driver_y_lap.get('SpeedST', 300.0))
         )
         lap_number      = int(driver_x_lap['LapNumber'])
-        drs_window      = int(gap_ahead_s < 1.0)
+        # DRS is unavailable under SC/VSC (Art. 22.1(c): activation only resumes one lap
+        # after a safety car period, two in the 2023 regulation). The gap-based rule
+        # below cannot know that, so a neutralised lap used to report an open DRS window
+        # purely because the field had bunched to under a second: the feature was live
+        # and lying, on exactly the laps where it is regulated shut.
+        drs_allowed     = not _is_neutralised(driver_x_lap.get('TrackStatus'))
+        drs_window      = int(gap_ahead_s < 1.0) if drs_allowed else 0
         drs_ready_gap   = gap_ahead_s * drs_window
 
         compound_x = _abs_compound(str(driver_x_lap.get('Compound', 'MEDIUM')), gp_name, year)
@@ -1189,17 +1213,30 @@ class RaceSituationAgent:
         sc_active           = _sc_active_from_rcm(getattr(self, "_pending_rcm_events", None) or [])
         raw_sc_prob         = round(parsed['sc_prob_3lap'], 3)
         effective_sc_prob   = 1.0 if sc_active else raw_sc_prob
+
+        # Art. 55.8 (SC) / 56.6 (VSC): no overtaking on track. N12 predicts a RACING
+        # overtake, and under an SC the only exception that yields a real position gain
+        # is 55.8(h) ("a car slows with an obvious problem") — a mechanism N12 has no
+        # feature for. Meanwhile every input it does use is regulation-corrupted: DRS is
+        # disabled (Art. 22.1(c)), the gap compresses toward ten car lengths (55.7/55.10)
+        # and pace_delta collapses to the FIA ECU delta. So the model is not merely
+        # imprecise here, it is inapplicable: 0.0 is the correct value and the honest one.
+        raw_overtake_prob       = round(parsed['overtake_prob'], 3)
+        effective_overtake_prob = 0.0 if sc_active else raw_overtake_prob
+
         effective_reasoning = (
             reasoning
             if not sc_active
             else (
                 f"[RCM OVERRIDE: SAFETY_CAR_DEPLOYED active — model output "
-                f"sc_prob_3lap={raw_sc_prob:.2f} overridden to 1.00.] {reasoning}"
+                f"sc_prob_3lap={raw_sc_prob:.2f} overridden to 1.00, "
+                f"overtake_prob={raw_overtake_prob:.2f} overridden to 0.00 "
+                f"(no overtaking under SC, Art. 55.8).] {reasoning}"
             )
         )
 
         return RaceSituationOutput(
-            overtake_prob       = round(parsed['overtake_prob'], 3),
+            overtake_prob       = effective_overtake_prob,
             sc_prob_3lap        = effective_sc_prob,
             gap_ahead_s         = round(parsed['gap_ahead_s'],   2),
             pace_delta_s        = round(parsed['pace_delta_s'],  3),
