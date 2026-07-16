@@ -560,6 +560,18 @@ def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
     elif not hasattr(df['LapTime'].iloc[0], 'total_seconds'):
         df['LapTime'] = pd.to_timedelta(pd.to_numeric(df['LapTime'], errors='coerce'), unit='s')
 
+    # Same normalisation for the session elapsed time, and it is load-bearing:
+    # _build_overtake_features reads `Time` to compute the gap the way N11 was
+    # trained (N11 cell 13: gap = abs(row_x["Time_s"] - row_y["Time_s"])), and
+    # falls back to a single lap's LapTime delta when it is absent. The featured
+    # parquet carries `Time_s`, never `Time`, so without this the fallback fired on
+    # 100% of calls: at Lusail lap 20 the model was told OCO sat 1.645 s from the
+    # leader when the real gap was 33.950 s, which is the difference between "in the
+    # DRS window" and "half a minute away". #447 restored the column; this is what
+    # lets the agent actually see it.
+    if 'Time' not in df.columns and 'Time_s' in df.columns:
+        df['Time'] = pd.to_timedelta(df['Time_s'], unit='s')
+
     for col in ('Sector1Time', 'Sector2Time', 'Sector3Time'):
         if col not in df.columns:
             df[col] = pd.NaT
