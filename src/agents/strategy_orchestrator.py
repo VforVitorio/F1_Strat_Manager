@@ -33,6 +33,7 @@ Liu et al. (2024) arXiv:2402.02392 — DeLLMa decision under uncertainty with LL
 """
 
 import json
+import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -43,6 +44,8 @@ from typing import Literal, Optional
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger(__name__)
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve()
@@ -1202,12 +1205,35 @@ def _run_conditional_agents(
 # Post-LLM assembly helper
 # ==============================================================================
 
+def _live_drivers_from(lap_state: dict | None) -> set | None:
+    """The cars on track this lap, or None when we cannot tell.
+
+    RaceStateManager builds ``rivals`` from the per-lap rows, so a car that has retired
+    is simply absent: the same answer a timing screen gives, and the only sound one.
+    No staleness threshold works, because the featured frame drops SC, pit and out laps,
+    so a car that FINISHED can have its last known lap lag by 20 while a retirement shows
+    up at 9 — the ranges overlap (#462).
+
+    Returns None rather than an empty set when there is no lap_state, so callers can tell
+    "nobody is racing" from "we do not know" and fall through instead of rejecting all.
+    """
+    if not lap_state:
+        return None
+    rivals = lap_state.get('rivals') or []
+    live = {r['driver'] for r in rivals if r.get('driver')}
+    own = (lap_state.get('session_meta') or {}).get('driver')
+    if own:
+        live.add(own)
+    return live or None
+
+
 def _assemble_recommendation(
     synth:              "_LLMSynthesis",
     pit_out,
     mc_results:         dict,
     regulation_context: str,
     sc_currently_active: bool = False,
+    live_drivers:       set | None = None,
 ) -> "StrategyRecommendation":
     """Merge the LLM synthesis with N28 pit data and attach grounding fields.
 
@@ -1248,7 +1274,24 @@ def _assemble_recommendation(
 
     pit_lap_target  = synth.pit_lap_target  if synth.pit_lap_target  is not None else fallback_lap
     compound_next   = synth.compound_next   if synth.compound_next   is not None else fallback_cmpd
-    undercut_target = synth.undercut_target if synth.undercut_target is not None else fallback_target
+    # N28's target wins, always. It is the one that went through score_undercut_tool's
+    # `_live_drivers` check; the synthesis field is free text the orchestrator LLM typed,
+    # and the prompt even seeds it with a literal example ("e.g. SAI"). Letting the LLM
+    # win made that check dead code: #462's fix never reached the output. The LLM may
+    # only fill the field when N28 produced nothing, and only if it names a car that is
+    # actually racing — an unvalidated code ends up rendered on the pit wall as
+    # "UCUT: SAI".
+    if fallback_target is not None:
+        undercut_target = fallback_target
+    elif synth.undercut_target is not None and synth.undercut_target in (live_drivers or ()):
+        undercut_target = synth.undercut_target
+    else:
+        if synth.undercut_target is not None:
+            logger.warning(
+                "Discarding LLM undercut_target %r: not on track this lap (live: %s)",
+                synth.undercut_target, sorted(live_drivers or ()),
+            )
+        undercut_target = None
 
     # The action is the synthesis's, always. There used to be an SC rail here forcing
     # STAY_OUT -> PIT_NOW, and it was an opinion wearing a rail's clothes: one race
@@ -1377,6 +1420,7 @@ def run_strategy_orchestrator(
     return _assemble_recommendation(
         synth, pit_out, mc_results, regulation_context,
         sc_currently_active = situation_out.sc_currently_active,
+        live_drivers        = _live_drivers_from(lap_state),
     )
 
 
@@ -1504,4 +1548,5 @@ def run_strategy_orchestrator_from_state(
     return _assemble_recommendation(
         synth, pit_out, mc_results, regulation_context,
         sc_currently_active = situation_out.sc_currently_active,
+        live_drivers        = _live_drivers_from(lap_state),
     )
