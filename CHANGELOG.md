@@ -11,6 +11,22 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [1.10.6](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.5...v1.10.6) (2026-07-16)
+
+
+### Bug Fixes
+
+* **agents:** force what the SC regulation makes certain, not a strategy opinion ([281fb32](https://github.com/VforVitorio/F1-StratLab/commit/281fb3210026c7a52354708f50d3c333c7ef0b97)), closes [#464](https://github.com/VforVitorio/F1-StratLab/issues/464)
+* **cli:** feed the PMV the real overtake gap, and give the augmentation one home ([dc9914d](https://github.com/VforVitorio/F1-StratLab/commit/dc9914d21e0667e90fb84b852bd287e589420763))
+* **N26:** scope the TCN window to this stint, up to now, and zero-pad as trained ([20a7a06](https://github.com/VforVitorio/F1-StratLab/commit/20a7a068c1de5f328607fc36ae7e2fdfccd71aaf)), closes [#449](https://github.com/VforVitorio/F1-StratLab/issues/449)
+* **N28:** refuse to score an undercut against a car that is not racing ([018f910](https://github.com/VforVitorio/F1-StratLab/commit/018f9107abdc5f72a13d0eb895d0bff433ed3628)), closes [#462](https://github.com/VforVitorio/F1-StratLab/issues/462)
+* **orchestrator:** stop the LLM overriding the validated undercut target ([fc2c42f](https://github.com/VforVitorio/F1-StratLab/commit/fc2c42f30bf51b96b6b089db28b2a5816f8e696b)), closes [#462](https://github.com/VforVitorio/F1-StratLab/issues/462)
+
+
+### Documentation
+
+* **multi-agent:** document the SC rails as rules, not as a forced stop ([d5f8709](https://github.com/VforVitorio/F1-StratLab/commit/d5f87094d397fe5e940beb14d0b36547804e1fc8)), closes [#464](https://github.com/VforVitorio/F1-StratLab/issues/464)
+
 ## [1.10.5](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.4...v1.10.5) (2026-07-16)
 
 
