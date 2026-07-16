@@ -132,6 +132,35 @@ class RaceStateManager:
         # calculations. Computed once to avoid repeated group operations.
         self._leader_cum: dict[int, float] = self._precompute_leader_times()
 
+        # TyreLife at the start of each of our driver's stints. Precomputed for the
+        # same reason as the leader times: get_lap_state must stay an O(1) lookup.
+        self._stint_baselines: dict[int, int] = self._precompute_stint_baselines()
+
+    def _precompute_stint_baselines(self) -> dict[int, int]:
+        """Return our driver's TyreLife at the first lap of each stint.
+
+        N06 trains ``FuelEffect`` as ``(TyreLife - min(TyreLife of the stint)) * 0.055``
+        — the seconds of lap time recovered since the stint began. The pace agent has no
+        laps frame of its own (``run_pace_agent_from_state`` takes only the lap_state),
+        so the baseline has to travel in the lap_state, and this is the producer that
+        actually has the stint history. Without it the agent fell back to
+        ``fuel_load * 0.03``, ~100x too small, and the model read every lap as a
+        fresh-fuel stint start (#446).
+
+        ``min`` rather than the first row's value so the result does not depend on row
+        order. Stints whose TyreLife is entirely NaN are omitted, and the consumer then
+        degrades to NaN rather than inventing a number.
+        """
+        baselines: dict[int, int] = {}
+        for stint, group in self._driver.groupby("Stint"):
+            if pd.isna(stint):
+                continue
+            tyre_life = group["TyreLife"].dropna()
+            if tyre_life.empty:
+                continue
+            baselines[int(stint)] = int(tyre_life.min())
+        return baselines
+
     def _precompute_leader_times(self) -> dict[int, float]:
         """Return the race leader's session elapsed time at the end of each lap.
 
@@ -209,6 +238,12 @@ class RaceStateManager:
             "compound_id": int(r["CompoundID"]) if pd.notna(r.get("CompoundID")) else None,
             "tyre_life": int(r["TyreLife"]) if pd.notna(r.get("TyreLife")) else None,
             "stint": int(r["Stint"]) if pd.notna(r.get("Stint")) else None,
+            # TyreLife when this stint began — N06's FuelEffect is measured from it.
+            # Driver-only on purpose: the pace model runs on our car, and rivals stay
+            # timing-screen-only per the single-driver boundary (#446).
+            "stint_baseline_tyre_life": (
+                self._stint_baselines.get(int(r["Stint"])) if pd.notna(r.get("Stint")) else None
+            ),
             "fresh_tyre": bool(r.get("FreshTyre", False)),
             # --- Speed traps (all four sensor points) ---
             "speed_i1": float(r["SpeedI1"]) if pd.notna(r.get("SpeedI1")) else None,
