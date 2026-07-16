@@ -65,6 +65,18 @@ _STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
 # the rival responds on the next one, so the offset is 1 (#444).
 _ASSUMED_UNDERCUT_LAP_GAP: int = 1
 
+# N15 (pit duration) encoded compound_id with an ORDINAL rank, NOT the Pirelli number:
+# verbatim from N15_pit_duration.ipynb cell 11, where it is applied as
+# `.map(COMPOUND_ORDER).fillna(-1)`. Feeding `_compound_to_id` here (the absolute C1-C6)
+# made the model read a SOFT as WET and a MEDIUM as INTERMEDIATE on essentially every
+# call. N16 is different and DOES want the absolute Cx, so the two must not share a
+# helper (#445).
+# ponytail: duplicated from the notebook; load it from model_config.json once N15 exports it.
+_N15_COMPOUND_ORDER: dict[str, int] = {
+    'SOFT': 0, 'MEDIUM': 1, 'HARD': 2, 'INTERMEDIATE': 3, 'WET': 4,
+}
+_N15_COMPOUND_UNKNOWN: int = -1  # matches the notebook's .fillna(-1)
+
 # N15 clipped tyre_life_in at 50 laps in training (cell 11); mirror that ceiling here so
 # an absurd stint cannot extrapolate outside the fitted range (#450).
 _MAX_TRAINED_TYRE_LIFE: int = 50
@@ -541,7 +553,8 @@ class PitStrategyAgent:
         if row is None:
             raise ValueError(f'No lap data for {driver} at lap {lap_number}')
 
-        gp_name  = self.session_meta.get('gp_name', '')
+        # No gp_name here on purpose: N15's compound_id is an ordinal rank, not the
+        # circuit's Pirelli allocation, so this builder needs no circuit lookup (#445).
         year     = self.session_meta.get('year', 2025)
         team_raw = self.session_meta.get('team_lookup', {}).get(driver, 'Unknown')
 
@@ -552,7 +565,7 @@ class PitStrategyAgent:
             # an absurd stint extrapolates outside the fitted range (#450).
             'tyre_life_in':     min(int(row.get('TyreLife', 1)), _MAX_TRAINED_TYRE_LIFE),
             'lap_number':       lap_number,
-            'compound_id':      _compound_to_id(compound, gp_name, year),
+            'compound_id':      _N15_COMPOUND_ORDER.get(compound.upper(), _N15_COMPOUND_UNKNOWN),
             'compound_change':  int(compound_change),
             'under_sc':         int(under_sc),
             'tight_pit_box':    0,
