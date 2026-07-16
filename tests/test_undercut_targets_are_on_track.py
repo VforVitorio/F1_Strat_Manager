@@ -29,19 +29,22 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.agents.pit_strategy_agent import PitStrategyAgent
-
 RACE_DIR = Path("data/raw/2025/Lusail")
+ROOT = Path(__file__).parent.parent
+_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 
+# Importing N28 reads model configs at import time, and the fixture needs the raw
+# parquet. data/ is pulled from Hugging Face, so the CI runner has neither.
 pytestmark = pytest.mark.skipif(
-    not (RACE_DIR / "laps.parquet").exists(),
-    reason="needs the raw Lusail parquet (data/ is pulled from HF, not in git)",
+    not (_HAS_MODELS and (RACE_DIR / "laps.parquet").exists()),
+    reason="needs data/models/ and the raw Lusail parquet (data/ comes from HF, not git)",
 )
 
 
 @pytest.fixture(scope="module")
 def agent_at_lap_50():
     """N28 wired exactly as ``run_from_state`` wires it, at Lusail lap 50."""
+    from src.agents.pit_strategy_agent import PitStrategyAgent
     from src.simulation.replay_engine import RaceReplayEngine
 
     replay = RaceReplayEngine(RACE_DIR, driver_code="NOR", team="McLaren")
