@@ -1253,17 +1253,32 @@ def _assemble_recommendation(
       the regulatory basis for the action without re-querying N30.
 
     --- WHERE TO CHANGE IF THE SC POLICY CHANGES ---
-    sc_currently_active carries N27's verdict so the Safety-Car guard-rail can
-    be enforced HERE, on the final answer. N28 already refuses to stay out under
-    a deployed SC (pit_strategy_agent.py, same condition and tag), but its action
-    only ever reached the LLM as prompt TEXT — the orchestrator returned
-    synth.action verbatim, so a synthesis that ignored the deterministic signal
-    silently won. That is exactly the STAY_OUT-under-SC failure the Qatar 2025
-    case (thesis 6.3) exists to prevent, and docs/pages/multi-agent.md already
-    promises this rail "so a misbehaving LLM can't override the deterministic
-    signal". This makes the code honour the rule the project already adopted one
-    layer down. Defaults to False so any caller that does not thread N27's output
-    keeps the previous behaviour rather than silently changing it.
+    **There is no action rail here, and there must not be one.** A rail may encode what
+    the FIA regulation makes certain; it may never encode a strategy opinion. Whether to
+    pit under a Safety Car depends on stops already made, laps remaining, gap behind and
+    compounds used — race state, none of it a rule — so it belongs to the model.
+
+    One forcing to a strategy opinion once lived here (STAY_OUT -> PIT_NOW on every SC
+    lap, from the Qatar 2025 case). It was wrong: Art. 55.17 finishes the race behind a
+    late SC with no overtaking, so the position a forced stop surrenders is unrecoverable
+    BY REGULATION, and the pipeline shipped PIT_NOW carrying the guard-rail's own reason
+    "too late to pit". It also silenced its evidence: with an SC deployed sc_prob is 1.0,
+    so every MC draw already receives the full SC_PIT_BONUS, and a STAY_OUT argmax IS the
+    model saying the cheap stop was outweighed.
+
+    What `sc_currently_active` is for, then: the regulatory FACTS. Most live in N27, so
+    every consumer inherits one number (overtake_prob = 0, Art. 55.8; drs_window = 0,
+    Art. 22.1(c)). Only `target_lap_time_s` is forced here, because this is the layer
+    that emits it — see the note at its assignment below. Add a new fact only if the
+    regulation removes the field's SOURCE; if it merely makes a choice usually smart,
+    it belongs in the prompt or the MC. See tests/test_sc_regulatory_rails.py.
+
+    Defaults to False so a caller that does not thread N27's output keeps the previous
+    behaviour rather than silently changing it.
+
+    `live_drivers` carries the cars on track so the LLM's free-text undercut_target can
+    be checked. **None means "unknown", not "nobody"** — a caller without a lap_state
+    cannot know, so its target passes rather than being silently discarded.
 
     Returns a fully-populated StrategyRecommendation ready for the UI layer.
     """
@@ -1283,14 +1298,21 @@ def _assemble_recommendation(
     # "UCUT: SAI".
     if fallback_target is not None:
         undercut_target = fallback_target
-    elif synth.undercut_target is not None and synth.undercut_target in (live_drivers or ()):
+    elif synth.undercut_target is None:
+        undercut_target = None
+    elif live_drivers is None:
+        # We cannot tell who is racing (no lap_state: the FastF1 path). Rejecting here
+        # would silently discard every LLM target on that path, which is not the same
+        # thing as knowing it is wrong. `None` means unknown; only a real roster may
+        # reject. Collapsing it to an empty set is how a "do not know" turns into a "no".
+        undercut_target = synth.undercut_target
+    elif synth.undercut_target in live_drivers:
         undercut_target = synth.undercut_target
     else:
-        if synth.undercut_target is not None:
-            logger.warning(
-                "Discarding LLM undercut_target %r: not on track this lap (live: %s)",
-                synth.undercut_target, sorted(live_drivers or ()),
-            )
+        logger.warning(
+            "Discarding LLM undercut_target %r: not on track this lap (live: %s)",
+            synth.undercut_target, sorted(live_drivers),
+        )
         undercut_target = None
 
     # The action is the synthesis's, always. There used to be an SC rail here forcing

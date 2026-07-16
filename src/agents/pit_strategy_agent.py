@@ -464,6 +464,12 @@ class PitStrategyAgent:
         self.cfg: PitAgentCFG      = PitAgentCFG()
         self.laps_df: pd.DataFrame = pd.DataFrame()
         self.session_meta: dict    = {}
+        # The cars on track this lap, or None when we do not know. This agent is a module
+        # singleton (`_get_default_pit_agent`), so it MUST be initialised here and reset
+        # on every entry point: left over from a previous call it would validate targets
+        # against another race's roster, refusing live cars or admitting dead ones. None
+        # means "unknown", which disables the guard rather than rejecting everything.
+        self._live_drivers: set | None = None
         self._react_agent          = None
         self._tools: list          = self._build_tools()
 
@@ -986,6 +992,15 @@ class PitStrategyAgent:
         laps               = session.laps.pick_accurate().copy()
         laps['LapNumber']  = laps['LapNumber'].astype(int)
         self.laps_df       = laps
+
+        # Who is on track this lap. This agent is a module singleton, so leaving the
+        # previous call's roster in place would validate targets against another race.
+        # A car that is gone has no row for the lap, which is the same presence signal
+        # RaceStateManager's `rivals` gives the other entry point (#462). Empty means we
+        # could not tell, so it stays None and the guard disables rather than rejecting
+        # every target.
+        _at_lap = laps.loc[laps['LapNumber'] == lap_number, 'Driver'].dropna()
+        self._live_drivers = set(_at_lap) | {driver} if len(_at_lap) else None
 
         team_lookup = (
             laps[['Driver', 'Team']].drop_duplicates()

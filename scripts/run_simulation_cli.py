@@ -1334,9 +1334,18 @@ def run(args: argparse.Namespace) -> None:
 
     _load_tire_alloc(_REPO_ROOT)
 
+    from src.f1_strat_manager.laps_augment import augment_featured_laps
+
     # ── Load data ────────────────────────────────────────────────────────────
     with console.status("[dim]Loading parquets…[/dim]", spinner="dots"):
-        laps_df = pd.read_parquet(featured_path)
+        # Never read the featured parquet raw: N04 drops `Time` (session elapsed) and no
+        # published featured parquet carries a `Time_s`, while N11 trains its overtake
+        # gap on exactly that column. Without the merge the agent falls back to a single
+        # lap's LapTime delta, and at Lusail 2024 that fed the model a 0.453 s mean gap
+        # against a real 3.113 s, flagging 91.1% of pairs as "in the DRS window" where
+        # the truth is 20.5%. Worst pair: BOT vs LAW on lap 27, told 0.130 s, real gap
+        # 21.066 s. The backend's loader had this fix; this surface did not.
+        laps_df = augment_featured_laps(pd.read_parquet(featured_path), args.year)
         engine = RaceReplayEngine(race_dir, args.driver, args.team, interval_seconds=args.interval)
 
     # ── Static OpenF1 radio corpus (replaces --radio-every when available) ───
