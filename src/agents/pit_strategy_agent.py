@@ -550,6 +550,27 @@ class PitStrategyAgent:
 
     # ── Feature builders ──────────────────────────────────────────────────────
 
+    @staticmethod
+    def _tyre_life_in(row) -> int:
+        """TyreLife for N15, clipped to the trained ceiling, NaN-safe.
+
+        `row` is a pandas Series, so `row.get('TyreLife', 1)` returns the STORED value
+        including NaN — the default only fires when the COLUMN is absent, never when the
+        VALUE is. `int(nan)` then raises ValueError inside the ReAct loop, and 451 rows
+        (1.98%) of the 2025 featured parquet have a NaN TyreLife. That is the same
+        Series.get trap as #428/#462, on a third column.
+
+        A missing tyre age means "fresh" is the only defensible read: a car with no
+        recorded TyreLife has just been given a set, and 1 is what the dead default was
+        reaching for anyway. It is also the conservative direction for N15, which is
+        predicting how long the stop takes, not whether to make it.
+        """
+        value = row.get('TyreLife')
+        if value is None or pd.isna(value):
+            logger.warning('TyreLife missing on the lap row; N15 reads it as a fresh set')
+            return 1
+        return min(int(value), _MAX_TRAINED_TYRE_LIFE)
+
     def _build_pit_duration_features(
         self,
         driver: str,
@@ -584,6 +605,7 @@ class PitStrategyAgent:
 
         # No gp_name here on purpose: N15's compound_id is an ordinal rank, not the
         # circuit's Pirelli allocation, so this builder needs no circuit lookup (#445).
+        # (helper `_tyre_life_in` below reads TyreLife safely; see its docstring)
         year     = self.session_meta.get('year', 2025)
         team_raw = self.session_meta.get('team_lookup', {}).get(driver, 'Unknown')
 
@@ -592,7 +614,13 @@ class PitStrategyAgent:
             'year':             year,
             # N15 clipped tyre_life at 50 in training (cell 11); pass the raw value and
             # an absurd stint extrapolates outside the fitted range (#450).
-            'tyre_life_in':     min(int(row.get('TyreLife', 1)), _MAX_TRAINED_TYRE_LIFE),
+            #
+            # `_tyre_life_in` rather than `min(int(row.get('TyreLife', 1)), 50)`: `row` is
+            # a Series, so `.get(k, 1)` returns the STORED NaN and the `1` is dead code —
+            # the default only fires when the COLUMN is missing, never the VALUE. `int(nan)`
+            # then raises ValueError inside the ReAct loop, on 451 real rows (1.98%) of the
+            # 2025 featured parquet.
+            'tyre_life_in':     self._tyre_life_in(row),
             'lap_number':       lap_number,
             'compound_id':      _N15_COMPOUND_ORDER.get(compound.upper(), _N15_COMPOUND_UNKNOWN),
             'compound_change':  int(compound_change),
