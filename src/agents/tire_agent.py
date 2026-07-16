@@ -904,9 +904,16 @@ class TireAgent:
             model.train()  # keep dropout active for MC
 
             preds = []
-            with torch.no_grad():
-                for _ in range(agent.cfg.n_mc):
-                    preds.append(model(tensor).item())
+            try:
+                with torch.no_grad():
+                    for _ in range(agent.cfg.n_mc):
+                        preds.append(model(tensor).item())
+            finally:
+                # Never leave the shared bundle in train mode: any later consumer of
+                # bundles[cid]['model'] would silently get stochastic "deterministic"
+                # predictions. Today only predict_tire_deg_tool saves us, by defensively
+                # calling eval() itself (#449).
+                model.eval()
 
             mean_pred = float(np.mean(preds))
             mc_std    = float(np.std(preds))
