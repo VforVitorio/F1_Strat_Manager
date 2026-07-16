@@ -21,6 +21,7 @@ CFG — TireAgentConfig: loads routing, calibration, encoding maps, cliff thresh
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,6 +50,8 @@ try:
     _DATA_ROOT = _get_data_root()
 except Exception:
     _DATA_ROOT = _REPO_ROOT / 'data'
+
+logger = logging.getLogger(__name__)
 
 _MODEL_DIR  = _DATA_ROOT / 'models' / 'tire_degradation'
 _PROCESSED  = _DATA_ROOT / 'processed'
@@ -1178,12 +1181,40 @@ class TireAgent:
                     reasoning = m.content.strip()
                     break
 
+        # A parse miss must NOT become 0.0 laps-to-cliff. `_parse_tool_outputs` only
+        # writes a key when its regex matched, so an absent 'p10' means "the tool was
+        # skipped or its output did not parse" — whereas a PRESENT 0.0 legitimately
+        # means "the cliff is now". Defaulting the miss to 0.0 collapsed those two into
+        # the alarming one: the MC read "cliff NOW" (penalising STAY_OUT by ~4 s) and
+        # the warning level flipped to PIT_SOON, so a silent regex miss became a
+        # confident call to box. Fall back to the same conservative stub the
+        # wet/intermediate branch above already uses, and say so in the reasoning so the
+        # degradation is visible instead of masquerading as a reading (#436).
+        if 'p10' not in parsed:
+            logger.warning(
+                'Tire tool output did not parse for %s (tyre_life=%s) — using conservative '
+                'defaults instead of a 0.0 cliff', compound_id, tyre_life,
+            )
+            return TireOutput(
+                compound          = compound_id,
+                current_tyre_life = tyre_life,
+                gp_name           = gp_name,
+                deg_rate          = 0.03,
+                laps_to_cliff_p10 = 20.0,
+                laps_to_cliff_p50 = 30.0,
+                laps_to_cliff_p90 = 40.0,
+                reasoning         = (
+                    f"[{compound_id} — tire tool output could not be parsed; conservative "
+                    f"defaults used] {reasoning}"
+                ),
+            )
+
         return TireOutput(
             compound          = compound_id,
             current_tyre_life = tyre_life,
             gp_name           = gp_name,
             deg_rate          = round(parsed.get('deg_rate', 0.0), 4),
-            laps_to_cliff_p10 = round(parsed.get('p10', 0.0), 1),
+            laps_to_cliff_p10 = round(parsed['p10'], 1),
             laps_to_cliff_p50 = round(parsed.get('p50', 0.0), 1),
             laps_to_cliff_p90 = round(parsed.get('p90', 0.0), 1),
             reasoning         = reasoning,
