@@ -10,13 +10,17 @@ Every agent has two entry points:
 
 | Agent | FastF1 Entry | RSM Adapter (no FastF1 session) |
 |---|---|---|
-| N25 Pace | `run_pace_agent(**kwargs)` | `run_pace_agent_from_state(lap_state, laps_df)` |
+| N25 Pace | `run_pace_agent(**kwargs)` | `run_pace_agent_from_state(lap_state)` |
 | N26 Tire | `run_tire_agent(stint_state)` | `run_tire_agent_from_state(lap_state, laps_df)` |
 | N27 Situation | `run_race_situation_agent(lap_state)` | `run_race_situation_agent_from_state(lap_state, laps_df)` |
 | N28 Pit | `run_pit_strategy_agent(lap_state)` | `run_pit_strategy_agent_from_state(lap_state, laps_df)` |
-| N29 Radio | `run_radio_agent(lap_state)` | `run_radio_agent_from_state(lap_state, laps_df)` |
-| N30 RAG | `run_rag_agent(question)` | `run_rag_agent_from_state(lap_state)` |
-| N31 Orchestrator | `run_strategy_orchestrator(race_state, lap_state)` | `run_strategy_orchestrator_from_state(race_state, laps_df)` |
+| N29 Radio | `run_radio_agent(lap_state, persist)` | `run_radio_agent_from_state(lap_state, laps_df, persist)` |
+| N30 RAG | `run_rag_agent(question)` | `run_rag_agent_from_state(lap_state, laps_df)` |
+| N31 Orchestrator | `run_strategy_orchestrator(race_state, lap_state)` | `run_strategy_orchestrator_from_state(race_state, laps_df, lap_state)` |
+
+**N25 is the odd one out: it takes no `laps_df`.** Everything it needs must already be in the
+`lap_state`, which is why the stint fuel baseline is carried there rather than derived from a
+frame. The adapters are not uniform, so check the signature before assuming.
 
 Each agent also exposes a `get_*_react_agent()` factory that returns a compiled LangGraph `CompiledGraph` for direct LangGraph usage.
 
@@ -52,6 +56,7 @@ Each agent also exposes a `get_*_react_agent()` factory that returns a compiled 
 |---|---|---|
 | `overtake_prob` | float | Probability of being overtaken (0–1) |
 | `sc_prob_3lap` | float | Safety car probability within 3 laps (0–1) |
+| `sc_currently_active` | bool | A safety car is deployed **right now**. Not a prediction: it is read from the lap's RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces `sc_prob_3lap = 1.0`, activates N28, and the final recommendation is held to `PIT_NOW`. See [Multi-agent system](#/multi-agent). |
 | `threat_level` | str | LOW, MEDIUM, HIGH, CRITICAL |
 | `gap_ahead_s` | float | Gap to car ahead in seconds |
 | `pace_delta_s` | float | Pace difference vs car ahead |
@@ -151,27 +156,71 @@ result = process_radio_tool.invoke({
 
 **Agent-level (no LLM needed):**
 
-```python
-from src.agents.pace_agent import run_pace_agent_from_state
-import pandas as pd
+The `*_from_state` entry points take **only** a `lap_state`, and it must be the real
+nested dict (`driver` / `rivals` / `weather` / `session_meta`), not a flat one. Build it
+with `RaceStateManager` rather than by hand: it is the component that owns the contract,
+and hand-rolling one is how the second, buggy implementation of this got written.
 
-laps_df = pd.read_parquet("data/processed/laps_featured_2025.parquet")
-lap_state = {"driver": "VER", "lap_number": 20}
-output = run_pace_agent_from_state(lap_state, laps_df)
+```python
+from pathlib import Path
+from itertools import islice
+from src.simulation.replay_engine import RaceReplayEngine
+from src.agents.pace_agent import run_pace_agent_from_state
+
+replay = RaceReplayEngine(Path("data/raw/2025/Lusail"), driver_code="PIA", team="McLaren")
+lap_state = next(islice(replay.replay(), 19, 20))   # lap 20
+output = run_pace_agent_from_state(lap_state)
+
+print(output.lap_time_pred, output.ci_p10, output.ci_p90)
 ```
+
+**Take the `lap_state` from `replay()`, not from `rsm.get_lap_state(lap)` directly.**
+`get_lap_state`'s `weather_df` argument is optional, and `replay()` is what passes it. Call
+the RSM bare and the weather dict comes back with only `track_status`, so consumers fall
+through to their hardcoded defaults (the arcade's are 25.0 C air / 35.0 C track) and never
+say so. At Lusail the real values are 23.7 C and 29.8 C, and track temperature is a live
+input to tire degradation.
+
+See [Race replay engine](#/simulation) for the full `lap_state` schema.
 
 **Full orchestrator (requires LM Studio or OpenAI):**
 
 ```python
-from src.agents.strategy_orchestrator import RaceState, run_strategy_orchestrator_from_state
+from pathlib import Path
+from itertools import islice
 import pandas as pd
+from src.simulation.replay_engine import RaceReplayEngine
+from src.agents.strategy_orchestrator import RaceState
+from src.strategy.inference.engine import run_lap
 
-laps_df = pd.read_parquet("data/processed/laps_featured_2025.parquet")
+race_dir = Path("data/raw/2025/Lusail")
+laps_df = pd.read_parquet(race_dir / "laps.parquet")
+replay = RaceReplayEngine(race_dir, driver_code="PIA", team="McLaren")
+lap_state = next(islice(replay.replay(), 19, 20))   # lap 20
+
+driver = lap_state["driver"]
+ahead = [r for r in lap_state["rivals"] if r["position"] == driver["position"] - 1]
 race_state = RaceState(
-    driver="NOR", lap=18, total_laps=57, position=3,
-    compound="C2", tyre_life=20, gap_ahead_s=1.2, pace_delta_s=-0.3,
-    air_temp=32.0, track_temp=48.0,
+    driver=driver["driver"], lap=20, total_laps=replay.total_laps,
+    position=driver["position"], compound=driver["compound"],
+    tyre_life=driver["tyre_life"],
+    # rivals ahead report a NEGATIVE interval; RaceState wants a magnitude
+    gap_ahead_s=abs(ahead[0]["interval_to_driver_s"]) if ahead else 0.0,
+    pace_delta_s=0.0,
+    air_temp=lap_state["weather"]["air_temp"],
+    track_temp=lap_state["weather"]["track_temp"],
 )
-rec = run_strategy_orchestrator_from_state(race_state, laps_df)
+
+rec, agent_outputs, timings = run_lap(race_state, laps_df, lap_state, profile="no-llm")
 print(rec.action, rec.confidence, rec.reasoning)
 ```
+
+Prefer `run_lap` over calling `run_strategy_orchestrator_from_state` directly: it is the
+same pipeline (parity-tested), and it also hands back the per-agent outputs and stage
+timings. Pass `profile="no-llm"` to run the deterministic path with no provider at all.
+
+**Pass the `lap_state`, and make sure it carries `session_meta`.** The `laps_df` is scoped
+to the Grand Prix named there. Without it, the engine falls back to the whole frame and
+logs a warning, and the agents then look up rivals by driver and lap number across the
+entire season: the Zandvoort grid can end up deciding a race at Lusail. The fallback is
+loud on purpose, but the fix is to supply the `session_meta`, not to ignore the warning.

@@ -1,6 +1,15 @@
-# src/strategy — Strategy Model Modules (Jupytext exports)
+# src/strategy — Strategy Model Modules
 
-**Status: Jupytext export / reference** — not imported by current agent notebooks.
+**Read this first:** this package holds two different things with opposite statuses.
+
+- **`inference/` is production.** `inference/engine.py::run_lap` is the single
+  implementation of the N31 lap pipeline, and the CLI, the arcade and the backend
+  all route through it. See
+  [Strategy pipeline](https://docs.f1stratlab.com/#/arcade-strategy-pipeline).
+- **`training/` and the Jupytext exports are reference**, and the status note below
+  applies only to them.
+
+## Status of the Jupytext exports: reference only
 
 These are Jupytext `.py` exports from early strategy notebooks. They contain the
 model architectures and prediction utilities developed before the LightGBM-based
@@ -35,8 +44,9 @@ The current production tire degradation model is the per-compound fine-tuned TCN
 from N10, exported to `data/models/tire_degradation/`. The lap time model is the
 XGBoost delta predictor from N06 (`data/models/lap_time/`).
 
-These `src/strategy/` files pre-date those exports and use different model
-architectures or APIs. Do not rely on them for inference in agent code.
+The **Jupytext export** files pre-date those exports and use different model
+architectures or APIs. Do not rely on them for inference in agent code. This does
+not apply to `inference/`, which is the production path.
 
 ---
 

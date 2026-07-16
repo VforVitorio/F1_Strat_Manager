@@ -21,10 +21,9 @@ f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing"
 
 ## Public docs
 
-- **End-user quick start:** [`docs/arcade/quick-start.md`](../../docs/arcade/quick-start.md)
-- **Dashboard architecture (developer deep dive):** [`docs/arcade/dashboard.md`](../../docs/arcade/dashboard.md)
-- **Why the arcade duplicates the N31 orchestrator body:** [`docs/arcade/strategy-pipeline.md`](../../docs/arcade/strategy-pipeline.md)
-- **Visual overview:** [`docs/diagrams/arcade_3window_architecture.drawio`](../../docs/diagrams/arcade_3window_architecture.drawio)
+- **End-user quick start:** [`docs/pages/arcade-quick-start.md`](../../docs/pages/arcade-quick-start.md)
+- **Dashboard architecture (developer deep dive):** [`docs/pages/arcade-dashboard.md`](../../docs/pages/arcade-dashboard.md)
+- **The shared `run_lap` engine the arcade delegates to:** [`docs/pages/arcade-strategy-pipeline.md`](../../docs/pages/arcade-strategy-pipeline.md)
 
 ## Layout
 
@@ -35,7 +34,7 @@ src/arcade/
 ├── data.py              # SessionLoader + SessionData + FrameData
 ├── config.py            # Palette, GP calendars, constants
 ├── strategy.py          # SimConnector + StrategyState + DTOs
-├── strategy_pipeline.py # Arcade-local duplicate of the N31 orchestrator body
+├── strategy_pipeline.py # Thin delegate over the shared engine (run_lap)
 ├── stream.py            # TelemetryStreamServer (stdlib TCP)
 ├── overlays.py          # WeatherPanel, LeaderboardPanel, DriverInfoPanel, …
 ├── track.py             # Track polyline renderer (DRS zones, cars)
@@ -47,5 +46,5 @@ The arcade **does not depend on the FastAPI backend at runtime**. The
 strategy pipeline runs in a background thread inside this process using
 `RaceReplayEngine` + the featured-laps parquet + the local
 `strategy_pipeline.run_strategy_pipeline` wrapper. See
-[`docs/arcade/strategy-pipeline.md`](../../docs/arcade/strategy-pipeline.md)
-for why the N31 body is duplicated here rather than extended upstream.
+[`docs/pages/arcade-strategy-pipeline.md`](../../docs/pages/arcade-strategy-pipeline.md)
+for the shared engine, its two profiles, and why the old duplicate is gone.
