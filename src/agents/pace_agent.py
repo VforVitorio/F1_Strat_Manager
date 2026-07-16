@@ -21,6 +21,7 @@ existing public API is preserved without globals.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -48,9 +49,18 @@ except Exception:
 _MODELS_DIR = _DATA_ROOT / 'models' / 'lap_time'
 _PROCESSED  = _DATA_ROOT / 'processed'
 
+logger = logging.getLogger(__name__)
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 N_BOOTSTRAP: int   = 200
 _NOISE_PCT: float  = 0.02   # 2 % Gaussian noise on continuous features
+
+# Seconds of lap time recovered per lap as fuel burns off. N04 builds the training
+# feature as (TyreLife - min(TyreLife of the stint)) * 0.055 — verified exactly against
+# laps_featured_2025 (100% of laps reproduce, range 0..3.685 s). The same coefficient
+# lives in tire_agent._add_fuel_cols; deliberately duplicated rather than shared, since
+# unifying constants across agent modules is a wider refactor than this fix (#446).
+FUEL_GAIN_PER_LAP_S: float = 0.055
 
 # ── Artifact paths ────────────────────────────────────────────────────────────
 _CLUSTER_PARQUET  = _PROCESSED / 'circuit_clustering' / 'circuit_clusters_k4_2025.parquet'
@@ -242,6 +252,7 @@ class PaceAgent:
         total_laps: int,
         prev_speed_st: float,
         mean_sector_speed: Optional[float],
+        stint_baseline_tyre_life: Optional[int] = None,
     ) -> dict:
         """Compute features derived from raw inputs that are not in the source data.
 
@@ -264,9 +275,31 @@ class PaceAgent:
             Dict with keys FreshTyre, FuelEffect, laps_remaining,
             mean_sector_speed.
         """
+        # FuelEffect is the cumulative time recovered since the stint started, in
+        # SECONDS (training range 0..3.685 s). It was being computed as
+        # `fuel_load * 0.03` — a [0, 0.03] value, ~100x too small and semantically
+        # different — so the model always read "fresh-fuel stint start" and the learned
+        # fuel-burn pace gain was suppressed on every lap (#446).
+        #
+        # Absent baseline -> NaN, never a fabricated number. NaN is IN-DISTRIBUTION here:
+        # the training parquet itself carries 2.0% null FuelEffect, so XGBoost has a
+        # learned default direction for it, and `_build_feature_row`'s to_numeric(coerce)
+        # tail already routes None -> NaN -> the model's native missing handling. The old
+        # formula must NOT survive as the fallback: a producer we missed would silently
+        # reproduce the exact bug this kills, whereas a NaN plus a warning is impossible
+        # to mistake for a reading.
+        if stint_baseline_tyre_life is None:
+            logger.warning(
+                'stint_baseline_tyre_life absent from lap_state: FuelEffect=NaN for this '
+                'lap; the producer must supply it (#446)'
+            )
+            fuel_effect = float('nan')
+        else:
+            fuel_effect = (tyre_life - stint_baseline_tyre_life) * FUEL_GAIN_PER_LAP_S
+
         return {
             'FreshTyre':        int(tyre_life <= 1),
-            'FuelEffect':       fuel_load * 0.03,
+            'FuelEffect':       fuel_effect,
             'laps_remaining':   max(0, total_laps - lap_number),
             'mean_sector_speed': mean_sector_speed if mean_sector_speed is not None else prev_speed_st,
         }
@@ -296,6 +329,7 @@ class PaceAgent:
         prev_deg_rate: float = 0.0,
         prev_cum_deg: float = 0.0,
         prev_deg_accel: float = 0.0,
+        stint_baseline_tyre_life: Optional[int] = None,
     ) -> pd.DataFrame:
         """Pack raw race state into a single-row DataFrame ready for predict().
 
@@ -309,7 +343,7 @@ class PaceAgent:
         c_id, t_id, cluster = self._encode_categorical(compound, team, gp_name)
         derived = self._compute_derived(
             tyre_life, fuel_load, lap_number, total_laps,
-            prev_speed_st, mean_sector_speed,
+            prev_speed_st, mean_sector_speed, stint_baseline_tyre_life,
         )
 
         row = {
@@ -463,6 +497,7 @@ class PaceAgent:
         prev_deg_rate: float = 0.0,
         prev_cum_deg: float = 0.0,
         prev_deg_accel: float = 0.0,
+        stint_baseline_tyre_life: Optional[int] = None,
     ) -> PaceOutput:
         """Run pace prediction for a single lap and return a PaceOutput.
 
@@ -508,6 +543,7 @@ class PaceAgent:
             gp_name=gp_name, mean_sector_speed=mean_sector_speed,
             prev_deg_rate=prev_deg_rate, prev_cum_deg=prev_cum_deg,
             prev_deg_accel=prev_deg_accel,
+            stint_baseline_tyre_life=stint_baseline_tyre_life,
         )
 
         lap_time_pred   = self._predict(feature_df)
@@ -599,6 +635,11 @@ class PaceAgent:
             prev_deg_rate  = 0.0,
             prev_cum_deg   = 0.0,
             prev_deg_accel = 0.0,
+            # Plain .get, deliberately NOT the `or` pattern used above: `or` would
+            # collapse a legitimate baseline of 0 into None and re-introduce exactly
+            # the sentinel-vs-real-value confusion this epic is about. Absent stays
+            # absent, and _compute_derived turns that into a NaN plus a warning (#446).
+            stint_baseline_tyre_life = d.get('stint_baseline_tyre_life'),
         )
 
     # ── LangGraph ReAct agent ─────────────────────────────────────────────────

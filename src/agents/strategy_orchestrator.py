@@ -1403,6 +1403,12 @@ def run_strategy_orchestrator_from_state(
                 "compound":      race_state.compound,
                 "tyre_life":     race_state.tyre_life,
                 "stint":         stint,
+                # A RaceState carries no lap history, so the stint's opening TyreLife is
+                # genuinely unknowable here. None makes N06 emit NaN FuelEffect plus a
+                # warning, which is in-distribution (2% of the training parquet is null)
+                # and cannot be mistaken for a reading. Keep in lockstep with the same
+                # key in engine._build_default_lap_state (#446).
+                "stint_baseline_tyre_life": None,
                 "lap_time_s":    None,
                 "speed_st":      300.0,
                 "fuel_load":     1 - race_state.lap / max(race_state.total_laps, 1),
