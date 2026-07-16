@@ -32,6 +32,7 @@ equals the orchestrator's on a fixture lap, down to the byte-level LLM prompts.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Literal
 
@@ -55,6 +56,41 @@ from src.agents.strategy_orchestrator import (
 PROFILES: tuple[str, ...] = ("rich", "no-llm")
 
 Profile = Literal["rich", "no-llm"]
+
+logger = logging.getLogger(__name__)
+
+
+def _scope_laps_to_gp(laps_df: pd.DataFrame, lap_state: dict[str, Any] | None) -> pd.DataFrame:
+    """Narrow a season-wide laps frame to the Grand Prix being analysed (#429).
+
+    Every caller loads ``laps_featured_<year>.parquet``, which holds the WHOLE season,
+    and hands it straight to the agents. Their lookups (``_get_lap_row``,
+    ``_get_position_map``, ``_get_undercut_candidates``, ``_get_driver_stint``, the SC
+    feature builder) filter by Driver and LapNumber but never by GP, so each silently
+    resolved to whichever race sorted first or last in the file: measured while analysing
+    Lusail, the lap-7 position map came from Zandvoort and the driver's lap row from
+    Barcelona. Every one of those lookups wants the single race, so scoping once here
+    fixes them all without touching the agents.
+
+    The GP name comes from ``lap_state['session_meta']['gp_name']``, which
+    ``RaceStateManager`` emits in the same keyspace the parquet's ``GP_Name`` uses
+    (verified: 'Lusail'). Falls back to the full frame, loudly, when the name does not
+    resolve — handing the agents an EMPTY frame would be worse than the bug this fixes,
+    and a warning is how we find out the keyspaces have drifted apart (see #448).
+    """
+    gp_name = (lap_state or {}).get("session_meta", {}).get("gp_name")
+    if not gp_name or "GP_Name" not in laps_df.columns:
+        return laps_df
+
+    scoped = laps_df[laps_df["GP_Name"] == gp_name]
+    if scoped.empty:
+        logger.warning(
+            "GP %r not found in the laps frame (%d rows, %d GPs); falling back to the "
+            "unscoped season frame — agent lookups may resolve to the wrong race (#429/#448)",
+            gp_name, len(laps_df), laps_df["GP_Name"].nunique(),
+        )
+        return laps_df
+    return scoped
 
 
 class _StageTimer:
@@ -107,6 +143,10 @@ def run_lap(
     Raises:
         ValueError: on an unknown profile, or on the reserved ``"fast"`` profile.
     """
+    # Scope BEFORE dispatch so both profiles, and therefore every surface that routes
+    # through this engine (CLI PMV, arcade), get the single-race frame (#429).
+    laps_df = _scope_laps_to_gp(laps_df, lap_state)
+
     if profile == "rich":
         return _run_rich(race_state, laps_df, lap_state, return_agent_outputs)
     if profile == "no-llm":
