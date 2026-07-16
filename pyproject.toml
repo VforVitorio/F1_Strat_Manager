@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "f1-strat-manager"
-version = "1.10.2"
+version = "1.10.5"
 description = "F1 StratLab — multi-agent race strategy intelligence system"
 authors = [{name = "Victor Vega Sobral", email = "victorvegasobral@gmail.com"}]
 readme = "README.md"
@@ -32,7 +32,7 @@ dependencies = [
     # ===================
     # NLP
     # ===================
-    "transformers>=5.3.0",
+    "transformers>=5.5.0",
     # Explicit dep even though transformers pulls it transitively — the
     # first-run data cache (src/f1_strat_manager/data_cache.py) imports
     # huggingface_hub.snapshot_download directly and needs a version with
