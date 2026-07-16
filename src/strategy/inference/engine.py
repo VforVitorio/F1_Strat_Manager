@@ -14,11 +14,16 @@ recommends (§7): CLI/Arcade/backend consume one ``run_lap`` instead of three co
 Design (per documents/audits/P2B_ENGINE_DESIGN.md, #169 Phases 1.1 + 1.2)
 --------------------------------------------------------------------------
 ``run_lap`` dispatches on ``profile``:
-  * ``rich``   — reproduces ``run_strategy_orchestrator_from_state`` byte-for-byte
-                 (same ``action`` / ``scenario_scores``) by IMPORTING the exact
-                 orchestrator layer functions and re-driving their five-step
-                 sequence, but RETURNS the per-agent outputs the orchestrator's
-                 public API discards. This is arcade's proven pattern, promoted.
+  * ``rich``   — re-drives ``run_strategy_orchestrator_from_state``'s five-step
+                 sequence by IMPORTING the exact orchestrator layer functions
+                 (never copying them), and RETURNS the per-agent outputs the
+                 orchestrator's public API discards. This is arcade's proven
+                 pattern, promoted.
+                 ⚠️ "byte-for-byte" is what this used to claim, and it was false:
+                 re-driving a sequence means every argument must be threaded by
+                 hand, and one was not (`live_drivers`, which silently disabled
+                 #462's guard on this profile — the default for every surface).
+                 Importing the functions removes body drift, not call drift.
   * ``no-llm`` — the deterministic, zero-LLM-client path (see ``no_llm.py``); fixes
                  #166 by construction (it never calls ``_run_conditional_agents``).
 
@@ -26,8 +31,15 @@ Untouchability: nothing in ``src/agents/`` is modified. Every strategy layer is 
 SAME code object the orchestrator runs (imported, never copied); the only
 engine-owned code is the call sequence itself and the default-lap_state builder.
 
-Anti-drift guard: ``tests/test_engine_parity.py`` asserts the engine's rich output
-equals the orchestrator's on a fixture lap, down to the byte-level LLM prompts.
+Anti-drift guard: ``tests/test_engine.py`` and ``tests/test_engine_no_llm.py``.
+
+⚠️ They do NOT assert byte-level parity with the orchestrator. This docstring used to
+promise a ``tests/test_engine_parity.py`` that **has never existed**, and the promise
+was load-bearing: it is why `_assemble_recommendation`'s `live_drivers` argument went
+unthreaded here for a whole session while everyone, including its author, believed a
+test would have caught it. What the real tests cover is the profile contract and the
+no-LLM path; the two `lap_state is None` fallbacks are kept in step **by hand**, so
+changing one without the other is a live risk, not a guarded one.
 """
 
 from __future__ import annotations
@@ -45,6 +57,7 @@ from src.agents.strategy_orchestrator import (
     _build_orchestrator_prompt,
     _decide_agents_to_call,
     _get_orchestrator_llm,
+    _live_drivers_from,
     _run_always_on_agents_from_state,
     _run_conditional_agents,
     _run_mc_simulation,
@@ -231,6 +244,13 @@ def _run_rich(
             mc_results,
             regulation_context,
             sc_currently_active=situation_out.sc_currently_active,
+            # Without this the LLM's free-text `undercut_target` ships unvalidated:
+            # `_assemble_recommendation` reads a missing `live_drivers` as "unknown" and
+            # lets it through by design. The orchestrator threads it; this path did not,
+            # so #462's guard was dead on the `rich` profile — which is the DEFAULT for
+            # /simulate, the arcade and the CLI. That is the whole class this engine
+            # exists to prevent: one call sequence, or every caller drifts.
+            live_drivers=_live_drivers_from(lap_state),
         )
 
     timings["total"] = sum(timings.values())

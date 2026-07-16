@@ -674,13 +674,26 @@ class PitStrategyAgent:
         # a crashed car whose Position is NaN sails straight through. That is the #428
         # sentinel bug wearing a different column, and the rule is the same: refuse,
         # never default to a number the model will read as a real reading (#462).
-        pos_x = x_row.get('Position')
-        pos_y = y_row.get('Position')
-        if pd.isna(pos_x) or pd.isna(pos_y):
+        # Position AND TyreLife, on both cars. `TyreLife` feeds three of N16's features
+        # (`tyre_life_diff`, `TyreLife_X`, `TyreLife_Y`) and its `.get(k, 10)` defaults are
+        # the same dead code as the position ones: a Series returns the stored NaN, so the
+        # 10 never fires. Measured: 561 of 79,032 raw laps carry a real Position and a NaN
+        # TyreLife, so this is reachable for a car that IS racing, not just a retiree.
+        missing = [
+            name for name, value in (
+                (f'{driver_x} position',  x_row.get('Position')),
+                (f'{driver_y} position',  y_row.get('Position')),
+                (f'{driver_x} tyre life', x_row.get('TyreLife')),
+                (f'{driver_y} tyre life', y_row.get('TyreLife')),
+            )
+            if value is None or pd.isna(value)
+        ]
+        if missing:
             logger.warning(
-                'Undercut features refused: %s or %s has no position at lap %s '
-                '(retired, or not classified on that lap)',
-                driver_x, driver_y, lap_number,
+                'Undercut features refused at lap %s: %s missing. N16 reads these as real '
+                'values and LightGBM answers from its missing branch, so a default here is '
+                'a fabricated reading',
+                lap_number, ', '.join(missing),
             )
             return None
 
@@ -700,14 +713,26 @@ class PitStrategyAgent:
         # per-lap rows, so a car that is gone is simply absent. `_live_drivers` carries
         # that set when we were run from a lap_state. When it is absent (direct calls,
         # tests) we cannot know, and fall through rather than guess.
+        # BOTH drivers, not just the target. This guarded `driver_y` alone, which is the
+        # incomplete-fix pattern in its purest form: the same argument, one call away,
+        # left open. Both are LLM free text.
+        #
+        # And on the FEATURED frame it bites harder than the NaN check above can catch.
+        # HUL crashed on lap 7 at Lusail; the featured frame drops that lap as inaccurate,
+        # so his LAST row is lap 6 — a normal racing lap carrying Position 10.0. Ask about
+        # him at lap 20 and `_get_lap_row`'s unbounded fallback returns it complete: no
+        # NaN, no warning, a confident undercut built from 14-lap-stale telemetry. The
+        # position check cannot see it; only presence can.
         live = getattr(self, '_live_drivers', None)
-        if live is not None and driver_y not in live:
-            logger.warning(
-                'Undercut features refused: %s is not on track at lap %s '
-                '(absent from the lap_state rivals)',
-                driver_y, lap_number,
-            )
-            return None
+        if live is not None:
+            gone = [d for d in (driver_x, driver_y) if d not in live]
+            if gone:
+                logger.warning(
+                    'Undercut features refused: %s not on track at lap %s '
+                    '(absent from the lap_state rivals)',
+                    ' and '.join(gone), lap_number,
+                )
+                return None
 
         gp_name    = self.session_meta.get('gp_name', '')
         year       = self.session_meta.get('year', 2025)
