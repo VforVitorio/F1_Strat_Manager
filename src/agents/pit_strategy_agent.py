@@ -14,6 +14,7 @@ get_pit_strategy_react_agent(**kwargs)                 → CompiledGraph
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,10 @@ try:
     _DATA_ROOT = _get_data_root()
 except Exception:
     _DATA_ROOT = _REPO_ROOT / 'data'
+
+from src.f1_strat_manager.gp_slugs import rekey_by_slug  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 _MODELS    = _DATA_ROOT / 'models'
 _PROCESSED = _DATA_ROOT / 'processed'
@@ -136,7 +141,14 @@ class PitAgentCFG:
             pit_cfg = json.load(f)
 
         self.pit_features: list[str]   = pit_cfg['features']
-        self.circuit_traversal: dict   = pit_cfg['circuit_traversal_lookup']
+        # Re-key the circuit tables into the SLUG keyspace the agents actually query
+        # with (session_meta.gp_name / the featured parquet's GP_Name). They ship keyed
+        # by FastF1 full event names, whose overlap with the slugs is exactly zero — so
+        # every lookup missed and silently took its default, freezing traversal at
+        # 20.0 s and circuit_undercut_rate at 0.38 for every circuit (#448).
+        self.circuit_traversal: dict   = rekey_by_slug(
+            pit_cfg['circuit_traversal_lookup'], 'circuit_traversal_lookup',
+        )
 
         # Reconstruct LabelEncoder from saved class list
         le = LabelEncoder()
@@ -154,10 +166,13 @@ class PitAgentCFG:
         self.undercut_threshold: float    = uc_cfg['best_threshold']
         self.dry_compounds: list[str]     = uc_cfg['dry_compounds']
 
-        # Pre-aggregate circuit and team undercut rates from N16 training parquet
+        # Pre-aggregate circuit and team undercut rates from N16 training parquet.
+        # This parquet is keyed by full event name; re-key to slugs for the same
+        # reason as circuit_traversal above (#448).
         _uc = pd.read_parquet(_PROCESSED / 'undercut_labeled' / 'undercut_clean.parquet')
-        self.circuit_undercut_rate: dict = (
-            _uc.groupby('GP_Name')['undercut_success'].mean().to_dict()
+        self.circuit_undercut_rate: dict = rekey_by_slug(
+            _uc.groupby('GP_Name')['undercut_success'].mean().to_dict(),
+            'circuit_undercut_rate',
         )
         self.team_x_undercut_rate: dict = (
             _uc.groupby('Team_X')['undercut_success'].mean().to_dict()
