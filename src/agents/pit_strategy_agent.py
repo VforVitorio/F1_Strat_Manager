@@ -622,6 +622,51 @@ class PitStrategyAgent:
         if not self._compounds_are_dry(comp_x, comp_y):
             return None
 
+        # A row with no Position cannot be scored. `pos_gap` is N16's single strongest
+        # feature (gain 0.690) and is built from both positions, so a NaN there is not a
+        # degraded prediction: LightGBM routes it down its missing branch and returns a
+        # confident-looking number computed from nothing.
+        #
+        # The defaults below cannot catch this: `Series.get(k, default)` returns the
+        # STORED value including NaN, and only falls back when the COLUMN is absent. So
+        # a crashed car whose Position is NaN sails straight through. That is the #428
+        # sentinel bug wearing a different column, and the rule is the same: refuse,
+        # never default to a number the model will read as a real reading (#462).
+        pos_x = x_row.get('Position')
+        pos_y = y_row.get('Position')
+        if pd.isna(pos_x) or pd.isna(pos_y):
+            logger.warning(
+                'Undercut features refused: %s or %s has no position at lap %s '
+                '(retired, or not classified on that lap)',
+                driver_x, driver_y, lap_number,
+            )
+            return None
+
+        # The position check above only catches a car whose last row happens to carry a
+        # NaN. It misses the worse case: BEA retired on lap 41 at Lusail, and at lap 50
+        # `_get_lap_row`'s unbounded prior-lap fallback returns his lap-41 row, complete,
+        # with Position 19.0. The features then build with no NaN and no warning: a
+        # confident undercut probability against a car in the garage, from 9-lap-stale
+        # telemetry.
+        #
+        # No staleness threshold can separate the two. Measured across 2025: a car that
+        # FINISHED can have its last known lap lag by 20 (RUS at Sakhir, because the
+        # featured frame drops SC/pit/out laps), while this bug fires at 9. The ranges
+        # overlap, so any bound that catches BEA also declares RUS retired.
+        #
+        # The only sound signal is presence: RaceStateManager builds `rivals` from the
+        # per-lap rows, so a car that is gone is simply absent. `_live_drivers` carries
+        # that set when we were run from a lap_state. When it is absent (direct calls,
+        # tests) we cannot know, and fall through rather than guess.
+        live = getattr(self, '_live_drivers', None)
+        if live is not None and driver_y not in live:
+            logger.warning(
+                'Undercut features refused: %s is not on track at lap %s '
+                '(absent from the lap_state rivals)',
+                driver_y, lap_number,
+            )
+            return None
+
         gp_name    = self.session_meta.get('gp_name', '')
         year       = self.session_meta.get('year', 2025)
         total_laps = self.session_meta.get('total_laps', 57)
@@ -752,6 +797,18 @@ class PitStrategyAgent:
             Returns:
                 "P(undercut_success)={prob:.3f} | threshold={threshold} | pos_gap={gap:.0f} | tyre_life_diff={diff:+.0f} laps | verdict={YES/NO}"
             """
+            # The LLM picks driver_y as free text, so it can name any car on the grid,
+            # including one that is no longer in the race. Answer with an error rather
+            # than a probability: a number here reads as a finding, and the model has
+            # no way to tell an invented target from a real one.
+            live = getattr(agent, '_live_drivers', None)
+            if live is not None and driver_y not in live:
+                return (
+                    f'Undercut scoring REFUSED — {driver_y} is not on track at lap '
+                    f'{lap_number}. Cars in the race this lap: {", ".join(sorted(live))}. '
+                    f'Pick a target from that list.'
+                )
+
             feat_df = agent._build_undercut_features(driver_x, driver_y, lap_number)
             if feat_df is None:
                 return (
@@ -977,6 +1034,17 @@ class PitStrategyAgent:
 
         team_lookup = {r['driver']: r.get('team', 'Unknown') for r in rivals}
         team_lookup[driver] = team
+
+        # Who is actually on track this lap. RaceStateManager builds `rivals` from the
+        # per-lap rows, so a car that has retired simply is not in it; this is the same
+        # answer a timing screen gives, and the only one available without guessing.
+        #
+        # It matters because score_undercut_tool takes a free-text driver code from the
+        # LLM, which can name anyone on the grid. Without this, undercutting HUL at
+        # Lusail lap 40 (he crashed on lap 7) scores happily, and worse: BEA retired on
+        # lap 41, so at lap 50 the features come out complete, with no NaN and no
+        # warning, describing a car sitting in the garage (#462).
+        self._live_drivers = {r['driver'] for r in rivals if r.get('driver')} | {driver}
 
         self.laps_df = laps_df.copy()
         if 'LapNumber' in self.laps_df.columns:
