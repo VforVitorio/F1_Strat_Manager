@@ -33,6 +33,7 @@ from src.arcade.config import (
     TEXT_SECONDARY,
     WARNING,
 )
+from src.f1_strat_manager.laps_augment import augment_featured_laps
 
 logger = logging.getLogger(__name__)
 
@@ -494,11 +495,22 @@ class SimConnector(threading.Thread):
         )
 
     def _load_laps_df(self, year: int) -> pd.DataFrame | None:
+        """Load the featured laps for `year`, augmented, for the agents to consume.
+
+        Never `read_parquet` this file raw. N04 drops `Time` and no published featured
+        parquet carries a `Time_s`, which is the column N11 trains its overtake gap on,
+        so a direct read silently degrades that gap to a lap-time delta: at Lusail the
+        model reads a 0.49 s mean gap where the truth is 3.29 s, and 90% of pairs look
+        like they are in the DRS window when 20% are.
+
+        The backend's loader had this fix and the CLI did not; the arcade did not either.
+        `augment_featured_laps` is the one place that owns it now.
+        """
         path = REPO_ROOT / "data" / "processed" / f"laps_featured_{year}.parquet"
         if not path.exists():
             logger.error("Featured laps parquet missing: %s", path)
             return None
-        return pd.read_parquet(path)
+        return augment_featured_laps(pd.read_parquet(path), year)
 
     @staticmethod
     def _resolve_race_dir(year: int, gp: str):
