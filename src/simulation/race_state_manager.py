@@ -150,7 +150,15 @@ class RaceStateManager:
         ``min`` rather than the first row's value so the result does not depend on row
         order. Stints whose TyreLife is entirely NaN are omitted, and the consumer then
         degrades to NaN rather than inventing a number.
+
+        ``Stint`` and ``TyreLife`` are not in ``REQUIRED_LAPS_COLUMNS``, so a frame may
+        legitimately arrive without them. That yields an empty map, which the consumer
+        reads as "no baseline" and turns into the same honest NaN.
         """
+        has_columns = {"Stint", "TyreLife"} <= set(self._driver.columns)
+        if not has_columns or self._driver.empty:
+            return {}
+
         baselines: dict[int, int] = {}
         for stint, group in self._driver.groupby("Stint"):
             if pd.isna(stint):
@@ -266,12 +274,18 @@ class RaceStateManager:
         compound and age, and the final speed trap reading. No sector times,
         no fuel data, no detailed speed readings beyond SpeedST.
 
-        ``interval_to_driver_s``: cumulative race time of rival minus our
-        driver's cumulative time. Positive → rival is ahead of us (they have
-        accumulated less race time). Negative → we are ahead of them.
+        ``interval_to_driver_s``: session elapsed time of the rival minus our
+        driver's. **Negative → the rival is ahead of us** (they reached the end
+        of this lap earlier, so less race time has elapsed for them). Positive
+        → we are ahead of them. Verified on Lusail 2025 lap 20: PIA leading,
+        every car behind reports a positive interval (NOR +3.578 s).
 
-        Returns a list sorted by Position (ascending). Rivals without a
-        position value sort to the back (position=99 placeholder).
+        Returns a list sorted by Position (ascending). A rival with no position
+        that lap keeps ``position=None`` and sorts to the back through a local
+        ``99`` placeholder. The placeholder is confined to the sort key on
+        purpose: it never enters the emitted dict, so no consumer can look up a
+        car "at position 99" and find one. Defaulting an unknown position to a
+        number the code also searches by is the #428 bug.
 
         Args:
             lap_number: 1-indexed lap number to retrieve.
