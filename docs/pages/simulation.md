@@ -45,19 +45,35 @@ The single most important design decision in this module.
 
 Rivals get only what appears on the FIA live timing screen. This mirrors the real information asymmetry a strategy engineer faces on the pit wall.
 
+### Who counts as a rival
+
+The boundary above says *what* a rival's row contains. This says *which cars get a row at all*, and it is just as load-bearing:
+
+**A car appears in `rivals` for a lap only if it was classified on that lap.** Retired, crashed, or not yet across the line means no row, so the car is absent from the list entirely. It is never present with an invented position, a placeholder gap or a default lap time.
+
+This is the rule that a real timing screen follows, and skipping it produces decisions that look reasonable and are absurd. The pit wall once recommended undercutting HUL at Lusail lap 7. HUL had just crashed on lap 6, which is what brought out the safety car the same recommendation was reacting to. The car was gone; only a filled-in default kept it on the list.
+
+Two habits follow from it, and both are worth copying into any new code that shapes race data:
+
+- **Absence beats a default.** If a value is unknown, leave it `None` and let the consumer filter. A number is a claim, and an invented one is a false claim that nothing downstream can distinguish from a reading.
+- **Never default to a value the code also searches by.** `Position` defaulting to `0` is how the leader found "the car ahead at position `pos - 1 == 0`" and got handed the car that had just crashed. Placeholders belong in sort keys, never in emitted data.
+
 ## Gap computation
 
-Gaps are derived from cumulative `LapTime` differences rather than from the intervals OpenF1 API feed. This is the standard F1 analytics approach (see TUMFTM race-simulation methodology).
+Gaps come from `session_time_s`, the session elapsed time at the end of each lap, read from FastF1's `Time` column. This is the same value FastF1 uses internally for gaps in `session.laps`.
 
 ```
-gap_to_leader[driver, lap] = cum_time[driver, lap] - cum_time[leader, lap]
-interval_to_driver[rival, lap] = cum_time[rival, lap] - cum_time[our_driver, lap]
+gap_to_leader[driver, lap]      = session_time[driver, lap] - session_time[leader, lap]
+interval_to_driver[rival, lap]  = session_time[rival, lap]  - session_time[our_driver, lap]
 ```
 
-Known limitations (acceptable for thesis demo):
+**Not** cumulative `LapTime` sums, which is the tempting alternative. Summed lap times drift away from the real on-track gap wherever timing corrections or safety-car bunching apply, which is exactly where a strategy call matters most. `_compute_session_times` in `src/simulation/race_state_manager.py` takes elapsed time for that reason.
 
-- Safety car bunching is not reflected accurately.
-- Lapped cars show large positive gaps, not "lapped" flag.
+This is worth stating loudly because the feature-engineering step drops the `Time` column, so any consumer reading the featured parquet directly used to fall back to lap-time deltas without noticing. Measured on Lusail 2025 lap 20, that fallback fed the model a **0.10 s** gap between PIA and NOR when the real one was **3.58 s**: the difference between "inside the DRS window" and "not close". The loader now restores `Time_s` from the raw per-race parquet at load time, so both paths agree.
+
+Known limitations:
+
+- Lapped cars show a large positive gap rather than a "lapped" flag.
 
 ## Files
 
@@ -142,10 +158,17 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
         "is_in_lap": bool,
         "is_out_lap": bool,
     },
+    # Only cars classified on this lap. A car that has retired, crashed or has
+    # not yet completed the lap has no row for it, so it is simply ABSENT from
+    # `rivals` — never present with a filled-in default. See "Who counts as a
+    # rival" below.
     "rivals": [
         {
             "driver": str,
             "team": str,
+            # None when the car has no position that lap. It sorts to the back
+            # through a placeholder confined to the sort key, so no consumer can
+            # look up a car at that position and find one.
             "position": int | None,
             "lap_time_s": float | None,
             "compound": str,

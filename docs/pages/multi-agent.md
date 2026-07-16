@@ -88,9 +88,9 @@ Four properties are load-bearing:
 1. **The arcade owns the `TelemetryStreamServer`.** `src/arcade/stream.py` exposes the merged arcade + strategy snapshot; every other window is a subscriber, never the source of truth.
 2. **One subprocess hosts both Qt windows.** The arcade spawns a single `subprocess.Popen` that boots one `QApplication`. Two windows inside one event loop is cheaper than two OS processes and avoids duplicated imports of PySide6 + pyqtgraph.
 3. **Each window has its own `TelemetryStreamClient(QThread)`.** Subscribers do not share sockets; each window reconnects independently when the arcade restarts.
-4. **Arcade runs a local strategy pipeline.** `src/arcade/strategy_pipeline.py` carries a copy of the N31 orchestrator body so the arcade does not depend on the FastAPI backend at runtime.
+4. **Arcade runs the strategy pipeline in-process.** `src/arcade/strategy_pipeline.py` delegates to the shared engine (`src/strategy/inference/engine.py::run_lap`), so the arcade does not depend on the FastAPI backend at runtime and does not carry its own copy of the orchestrator. It used to; that copy drifted and crashed (#166), which is why the engine exists.
 
-See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the rationale and [Arcade dashboard](#/arcade-dashboard) for the Qt-side architecture.
+See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the shared engine and its profiles, and [Arcade dashboard](#/arcade-dashboard) for the Qt-side architecture.
 
 ## Agent details
 
@@ -131,6 +131,10 @@ Wraps N15 (physical pit stop duration P05/P50/P95 via HistGBT) and N16 (undercut
 #### Honoring an active Safety Car
 
 When the orchestrator sets `sc_currently_active = True` on the lap state, N28's prompt swaps the legacy "SC probability" line for an explicit `SC STATUS: SAFETY CAR DEPLOYED RIGHT NOW` banner and the system prompt waives the `MINIMUM STINT LENGTH` constraint (pitting under SC costs ~10 s vs ~22 s, inverting the cost/benefit). A code-level guard-rail then flips any residual `STAY_OUT` to `PIT_NOW` so a misbehaving LLM can't override the deterministic signal — replicating the McLaren Catar 2025 V7 fix where the chain of safeguards previously locked the recommendation into `STAY_OUT` despite a confirmed SC.
+
+**The rail is enforced twice, and it has to be.** N28's guard produces the right `action`, but the orchestrator's final synthesis then writes its own: `_assemble_recommendation` took the LLM's answer verbatim, so N28's `PIT_NOW` only ever reached the synthesis *prompt* as a line of text the model could ignore. It did: the same Lusail lap 7 scenario returned `PIT_NOW` twice and `STAY_OUT` four times across six runs. `_assemble_recommendation` now applies the same flip to the synthesised action, tagged `[OVERRIDE: SC deployed — forcing PIT_NOW.]` in the reasoning.
+
+A deterministic rail is only deterministic at the layer that emits the final answer. A guard one layer down is a suggestion.
 
 ### N29 — Radio Agent (`radio_agent.py`)
 
