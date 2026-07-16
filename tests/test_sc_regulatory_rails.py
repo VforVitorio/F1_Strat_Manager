@@ -15,14 +15,25 @@ Every assertion here runs without an LLM, against the real helpers.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from src.agents.strategy_orchestrator import _assemble_recommendation
-from src.strategy.inference.no_llm import _deterministic_synthesis, apply_guard_rails
+# Importing the orchestrator pulls the sub-agent modules, which read model configs at
+# import time, so this carries the same guard as the other agent-touching tests.
+ROOT = Path(__file__).parent.parent
+_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
+pytestmark = pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="data/models/ not present (CI runner without model weights)",
+)
 
 
 def _recommend_under_sc(action: str, reason: str | None):
     """Assemble a recommendation the way the no-LLM path does, with an SC deployed."""
+    from src.agents.strategy_orchestrator import _assemble_recommendation
+    from src.strategy.inference.no_llm import _deterministic_synthesis
+
     synthesis = _deterministic_synthesis(action, reason)
     mc_results = {"STAY_OUT": {"score": 0.4}, "PIT_NOW": {"score": -1.2}}
     return _assemble_recommendation(synthesis, None, mc_results, "", sc_currently_active=True)
@@ -40,6 +51,8 @@ def test_sc_in_the_last_laps_does_not_force_a_stop():
     downstream overrides it. Before the rail was removed, the pipeline shipped
     ``action=PIT_NOW`` carrying the reason "too late to pit".
     """
+    from src.strategy.inference.no_llm import apply_guard_rails
+
     action, reason = apply_guard_rails(
         action="PIT_NOW",
         lap=55,
@@ -68,6 +81,8 @@ def test_the_shipped_action_never_contradicts_its_own_reason():
     decision it had just overridden. A deterministic layer may only write a field it is
     the authority for, and ``action`` is not a leaf.
     """
+    from src.strategy.inference.no_llm import apply_guard_rails
+
     action, reason = apply_guard_rails(
         action="PIT_NOW",
         lap=55,
@@ -96,6 +111,9 @@ def test_no_green_flag_lap_time_target_under_a_safety_car():
     so there is nothing to substitute. None is forced by absence of a source, which is
     what separates this from a strategy opinion.
     """
+    from src.agents.strategy_orchestrator import _assemble_recommendation
+    from src.strategy.inference.no_llm import _deterministic_synthesis
+
     synthesis = _deterministic_synthesis("STAY_OUT", None)
     synthesis.target_lap_time_s = 84.5  # a green-flag target
     mc_results = {"STAY_OUT": {"score": 0.4}}
