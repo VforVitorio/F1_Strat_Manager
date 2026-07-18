@@ -2041,8 +2041,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--raw-dir",
         default=None,
-        help="Base directory for raw race parquets "
-        "(default: <data_root>/raw/<--year>)",
+        help="Base directory for raw race parquets (default: <data_root>/raw/<--year>)",
     )
     p.add_argument(
         "--featured",
