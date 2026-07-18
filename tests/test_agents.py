@@ -285,8 +285,10 @@ def test_race_situation_sc_override_pure():
     assert _sc_active_from_rcm([sc_ev]) is True
 
     end_ev = RCMEvent(message="SAFETY CAR ENDING", flag="", category="SafetyCar", lap=7)
-    # Release wins over deploy in the same RCM window.
-    assert _sc_active_from_rcm([sc_ev, end_ev]) is False
+    # A lap carrying the SC-ending message is still neutralised: the car returns at the
+    # end of that lap and overtaking stays banned until a driver passes the Line after it
+    # returns (Art. 55.15 + 55.8). The flag clears the next lap, not on the release lap.
+    assert _sc_active_from_rcm([sc_ev, end_ev]) is True
 
     # Raw FastF1-shaped dict is also accepted (auto-classified inside the helper).
     assert (
