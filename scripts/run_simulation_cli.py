@@ -1985,36 +1985,42 @@ def run(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _default_raw_dir() -> str:
-    """Return the default ``--raw-dir`` value as a string path.
+def _default_raw_dir(year: int) -> str:
+    """Return the default ``--raw-dir`` value as a string path for a season.
 
     Routes through :func:`src.f1_strat_manager.data_cache.get_data_root`
     when that helper is importable so that ``uv tool install`` users
     (whose data lives under ``~/.f1-strat/data/``) see a sensible default
-    instead of the legacy repo-relative ``data/raw/2025``. Dev checkouts
-    without the helper fall back to the historical string.
+    instead of the legacy repo-relative ``data/raw/<year>``. Dev checkouts
+    without the helper fall back to the historical string. The ``year``
+    argument keeps the default aligned with ``--year`` so a 2024 run reads
+    the 2024 raw races instead of whichever season was hardcoded here
+    (issue #443).
     """
     try:
         from src.f1_strat_manager.data_cache import get_data_root
 
-        return str(get_data_root() / "raw" / "2025")
+        return str(get_data_root() / "raw" / str(year))
     except ImportError:
-        return "data/raw/2025"
+        return f"data/raw/{year}"
 
 
-def _default_featured() -> str:
-    """Return the default ``--featured`` value as a string path.
+def _default_featured(year: int) -> str:
+    """Return the default ``--featured`` value as a string path for a season.
 
     Same rationale as :func:`_default_raw_dir` — the featured parquet lives
     under ``data/processed/`` in every layout, and we want the path to
-    match wherever ``get_data_root()`` ends up resolving to.
+    match wherever ``get_data_root()`` ends up resolving to. The ``year``
+    argument keeps the filename (``laps_featured_<year>.parquet``) in sync
+    with ``--year`` so a 2024 run does not silently load the 2025 frame
+    (issue #443).
     """
     try:
         from src.f1_strat_manager.data_cache import get_data_root
 
-        return str(get_data_root() / "processed" / "laps_featured_2025.parquet")
+        return str(get_data_root() / "processed" / f"laps_featured_{year}.parquet")
     except ImportError:
-        return "data/processed/laps_featured_2025.parquet"
+        return f"data/processed/laps_featured_{year}.parquet"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -2034,13 +2040,15 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--raw-dir",
-        default=_default_raw_dir(),
-        help="Base directory for raw race parquets (default: <data_root>/raw/2025)",
+        default=None,
+        help="Base directory for raw race parquets "
+        "(default: <data_root>/raw/<--year>)",
     )
     p.add_argument(
         "--featured",
-        default=_default_featured(),
-        help="Path to featured parquet for agent RSM adapters",
+        default=None,
+        help="Path to featured parquet for agent RSM adapters "
+        "(default: <data_root>/processed/laps_featured_<--year>.parquet)",
     )
     p.add_argument(
         "--no-first-run",
@@ -2108,7 +2116,18 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print full tracebacks on per-lap errors",
     )
-    return p.parse_args()
+    args = p.parse_args()
+
+    # Year-derived data defaults. Argparse fixes ``default=`` at parser build
+    # time, before ``--year`` is known, so the data defaults could not track the
+    # season and a ``--year 2024`` run silently loaded the 2025 parquet and raw
+    # dir (issue #443). Resolve them here from the parsed year, and only when the
+    # flag was left unset, so an explicit --raw-dir / --featured still wins.
+    if args.raw_dir is None:
+        args.raw_dir = _default_raw_dir(args.year)
+    if args.featured is None:
+        args.featured = _default_featured(args.year)
+    return args
 
 
 def main() -> None:
