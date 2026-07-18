@@ -569,12 +569,34 @@ def _decide_agents_to_call(
 # Layer 2 — Monte Carlo simulation
 # ==============================================================================
 
-# Simulation constants (Heilmeier et al. 2020 § 3.2 — race-sim parameters)
-WINDOW_LAPS  = 5     # lap horizon for each strategy evaluation
+# Simulation constants. Cite per constant, not as a block: the earlier blanket
+# attribution "Heilmeier et al. 2020 section 3.2" was inaccurate. Section 3.2 of the
+# Virtual Strategy Engineer paper (ApplSci 10/7805) covers pit-stop decisions with a
+# neural network and holds none of these values. The safety-car pit-loss material is in
+# section 3.5 of the race-simulation paper (ApplSci 10/4229), and there it is a
+# per-circuit table rather than a single constant.
+WINDOW_LAPS  = 5     # lap horizon for each strategy evaluation.
+                     # Not drawn from the literature. Published F1 strategy models
+                     # optimise over the full remaining race (Heilmeier minimises total
+                     # race time; van Kampen et al. 2024 argues against short horizons).
+                     # A short window is a deliberate simplification, noted as a
+                     # limitation rather than derived.
 FRESH_GAIN   = 0.25  # s/lap advantage of fresh vs degraded tyre
-CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff
+CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff.
+                     # No counterpart in Heilmeier, who models degradation as linear
+                     # (t_tire = k0 + k1*age) with no cliff term. About 14x the
+                     # degradation rate measured on this repo's 71 races (HARD .052 /
+                     # MEDIUM .059 / SOFT .072 s/lap), so it stands as a cliff parameter,
+                     # not a Heilmeier citation.
 POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation)
-SC_PIT_BONUS = 8.0   # seconds saved by pitting under SC (no delta-lap loss)
+SC_PIT_BONUS = 8.0   # seconds saved by pitting under SC (no delta-lap loss).
+                     # Measured on this repo's 71 races: 5.75 s, 95% CI [3.14, 8.25]
+                     # (n=124), so 8.0 sits inside the interval. Close to the mean of
+                     # Heilmeier's four published circuits (8.18 s, section 3.5 of
+                     # 10/4229). The N28 prompt's earlier "~12 s" is outside that CI.
+                     # A per-circuit value would fit better: Heilmeier's spread runs
+                     # 5.24 s (Melbourne) to 11.16 s (Catalunya), and #448 already builds
+                     # the per-circuit table it could read from.
 
 
 def simulate_lap_window(
@@ -598,10 +620,17 @@ def simulate_lap_window(
         to position units using POS_GAP_S.
     sc_i:
         Whether a Safety Car event occurs in the window (Bernoulli N27 draw).
-        Pitting under SC avoids the delta-lap penalty (SC_PIT_BONUS saved).
-        OVERCUT under SC scores like PIT_NOW (free opportunity to pit).
+        Pitting under SC avoids the delta-lap penalty (SC_PIT_BONUS saved). Under SC,
+        OVERCUT scores the same as PIT_NOW (same stop, same bonus, same fresh-tyre
+        window), so the model is indifferent between them and the tie breaks elsewhere.
+        OVERCUT previously scored higher because its branch took the bonus without
+        subtracting the stop.
     pit_i:
-        Pit stop duration sample in seconds (Triangular N28 / prior draw).
+        Pit stop duration sample in seconds (Triangular N28 / prior draw). Physical stop
+        only, not the pit-lane traversal. The two-compound rule makes a stop mandatory,
+        so pit-now and pit-later both pay the traversal and it cancels in a comparison
+        scored relative to STAY_OUT. Adding it to one side puts PIT_NOW near -14 positions
+        against a worst-case STAY_OUT of about -2.7, which would suppress pitting entirely.
     ucut_i:
         Whether the undercut succeeds (Bernoulli N16 draw). Gates the extra
         +POS_GAP_S bonus of UNDERCUT vs PIT_NOW.
@@ -622,11 +651,22 @@ def simulate_lap_window(
         time_delta = -pit_i + sc_saving + FRESH_GAIN * window + ucut_bonus
 
     elif strategy == "OVERCUT":
+        # An overcut still makes the stop, just later, so it pays for it like the others.
+        # These branches previously omitted `-pit_i`, so OVERCUT collected FRESH_GAIN and
+        # the full SC_PIT_BONUS without cost and took the argmax on 92.5% of a 160-state
+        # sweep, leaving the layer effectively constant. Charging the stop restores a real
+        # choice (STAY_OUT 40% / UNDERCUT 60% on that sweep).
+        #
+        # Do not add the pit-lane traversal (~20 s) here. A stop is mandatory under the
+        # two-compound rule, so pit-now and pit-later both pay it and it cancels in a
+        # comparison scored relative to STAY_OUT; charging one side only puts PIT_NOW near
+        # -14 positions against a worst-case STAY_OUT of about -2.7 and suppresses pitting.
+        # See tests/test_mc_is_a_real_decision.py.
         if sc_i:
-            time_delta = SC_PIT_BONUS + FRESH_GAIN * window
+            time_delta = -pit_i + SC_PIT_BONUS + FRESH_GAIN * window
         else:
             cliff_laps = max(0.0, (window // 2) - cliff_i)
-            time_delta = FRESH_GAIN * (window // 2) - cliff_laps * CLIFF_LOSS
+            time_delta = -pit_i + FRESH_GAIN * (window // 2) - cliff_laps * CLIFF_LOSS
 
     else:
         time_delta = 0.0
@@ -944,8 +984,14 @@ def _build_orchestrator_prompt(
         f"  lost +0.42s/lap vs session median, so the window is closing. SC\n"
         f"  probability (0.38) is below the threshold so we cannot wait for a free\n"
         f"  stop. Radio intent 'BLISTER' on RUS confirms the front-left is gone.\n"
-        f"  Regulation Article 30.5(a) requires no fewer than two dry compounds\n"
-        f"  used, so switching to HARD satisfies the rule. MC ranks PIT_NOW first\n"
+        # No article number in this example on purpose. The two-compound rule is
+        # renumbered between seasons (30.5(n) in 2023, 30.5(m) in 2024, 30.5(i) in 2025,
+        # from the corpus PDFs), and this block asks the LLM to cite article numbers, so a
+        # hardcoded one would be echoed into the output and wrong for most years. N30
+        # reads the season's own regulations; the article should come from that context.
+        f"  The mandatory two-compound rule (see the regulation context above for the\n"
+        f"  article, it is renumbered between seasons) requires no fewer than two dry\n"
+        f"  compounds used, so switching to HARD satisfies it. MC ranks PIT_NOW first\n"
         f"  (score +0.81) and the tire and radio evidence reinforce that call.\"\n\n"
         f"Return a StrategyRecommendation filling EVERY field:\n"
         f"  action:             one of STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT / ALERT.\n"
@@ -1303,13 +1349,11 @@ def _assemble_recommendation(
 
     pit_lap_target  = synth.pit_lap_target  if synth.pit_lap_target  is not None else fallback_lap
     compound_next   = synth.compound_next   if synth.compound_next   is not None else fallback_cmpd
-    # N28's target wins, always. It is the one that went through score_undercut_tool's
-    # `_live_drivers` check; the synthesis field is free text the orchestrator LLM typed,
-    # and the prompt even seeds it with a literal example ("e.g. SAI"). Letting the LLM
-    # win made that check dead code: #462's fix never reached the output. The LLM may
-    # only fill the field when N28 produced nothing, and only if it names a car that is
-    # actually racing — an unvalidated code ends up rendered on the pit wall as
-    # "UCUT: SAI".
+    # N28's target takes precedence: it is the one validated against the live drivers in
+    # score_undercut_tool. The synthesis field is LLM free text (the prompt seeds it with
+    # an example, "e.g. SAI"), so preferring it bypasses that check. The LLM value is used
+    # only when N28 produced none, and only if it names a car currently racing; otherwise
+    # an unvalidated code would surface on the pit wall as "UCUT: SAI".
     if fallback_target is not None:
         undercut_target = fallback_target
     elif synth.undercut_target is None:

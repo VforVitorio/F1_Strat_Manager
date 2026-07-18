@@ -7,10 +7,10 @@ directly, so it kept its own copy of the bug.
 
 Two distinct failures, and only one of them is loud:
 
-* **HUL at lap 40** — his last row carries a NaN position, and ``pos_gap`` (N16's single
+* **HUL at lap 40**: his last row carries a NaN position, and ``pos_gap`` (N16's single
   strongest feature, gain 0.690) comes out NaN. LightGBM routes it down the missing
   branch and answers anyway.
-* **BEA at lap 50** — he retired on lap 41, and ``_get_lap_row``'s unbounded prior-lap
+* **BEA at lap 50**: he retired on lap 41, and ``_get_lap_row``'s unbounded prior-lap
   fallback hands back that complete row, position 19.0 and all. **No NaN, no warning**:
   a confident probability against a car in the garage, from 9-lap-stale telemetry.
 
