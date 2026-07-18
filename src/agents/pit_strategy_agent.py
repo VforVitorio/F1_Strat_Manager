@@ -1494,8 +1494,13 @@ class PitStrategyAgent:
         rival_str  = rival if rival else (candidates[0] if candidates else 'no rival in range')
 
         driver_row = self._get_lap_row(driver, lap_number)
-        tyre_life  = int(driver_row.get('TyreLife', 1)) if driver_row is not None else 1
-        position   = int(driver_row.get('Position', 0)) if driver_row is not None else 0
+        # Series.get returns a stored NaN, so int() would crash on the ~486 featured
+        # rows with NaN TyreLife/Position — guard with pd.notna, not a bare .get
+        # default (which only fires when the KEY is missing, never the VALUE) (#499).
+        _raw_tl    = driver_row.get('TyreLife') if driver_row is not None else None
+        tyre_life  = int(_raw_tl) if pd.notna(_raw_tl) else 1
+        _raw_pos   = driver_row.get('Position') if driver_row is not None else None
+        position   = int(_raw_pos) if pd.notna(_raw_pos) else 0
         team       = self.session_meta.get('team_lookup', {}).get(driver, 'Unknown')
 
         message = _build_pit_prompt(
