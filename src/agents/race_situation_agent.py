@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -67,19 +68,46 @@ _EXCLUDE_RE      = r'TRACK LIMITS|LAP TIME|PENALTY|PIT LANE|FORMATION|GRID|DRS|S
 
 
 # ── RCM context override (post-hoc fix for "SC active but model says low") ────
-# RCM event types that confirm a Safety Car is physically deployed RIGHT NOW.
-# Strings match exactly what radio_agent._classify_rcm_event() emits.
-_SC_ACTIVE_EVENT_TYPES: frozenset[str] = frozenset({
-    "SAFETY_CAR_DEPLOYED",
-    "VIRTUAL_SAFETY_CAR_DEPLOYED",
-})
+# A full Safety Car (FIA Sporting Regs Art. 55) and a Virtual Safety Car (Art. 56) are
+# different race situations, not one flag (#471): under a full SC the field queues behind
+# the car and gaps compress (55.7 / 55.10); under a VSC there is no queue, gaps are
+# broadly preserved and the delta binds throughout (56.5). Both ban overtaking
+# (55.8 / 56.6), so both force overtake_prob = 0, but the pit-time saving is much smaller
+# under a VSC, so the two are tracked apart from here on. Strings match exactly what
+# radio_agent._classify_rcm_event() emits. (src/nlp/rcm_state.py mirrors these sets for
+# its cross-lap tracker; keep them in sync.)
+_SC_DEPLOY_EVENT_TYPES:  frozenset[str] = frozenset({"SAFETY_CAR_DEPLOYED"})
+_VSC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"VIRTUAL_SAFETY_CAR_DEPLOYED"})
 
-# RCM event types that confirm the SC phase is ending and release the override.
-_SC_RELEASE_EVENT_TYPES: frozenset[str] = frozenset({
+# SC release. Art. 55.15's "SAFETY CAR IN THIS LAP" (the real message, which classifies
+# to SAFETY_CAR_ENDING — verified on Qatar 2025 L10 and Spain 2025 L60) means the car
+# enters the pits at the END of that lap, and Art. 55.8 forbids overtaking until the
+# driver passes the Line AFTER it has returned. So the announcement lap is still
+# neutralised: _neutralization_from_rcm keeps the flag active for it and it clears the
+# lap after. SAFETY_CAR_IN_PIT_LANE is the same case for the rarer "IN THE PIT LANE"
+# wording.
+_SC_RELEASE_EVENT_TYPES:  frozenset[str] = frozenset({
     "SAFETY_CAR_ENDING",
     "SAFETY_CAR_IN_PIT_LANE",
-    "VIRTUAL_SAFETY_CAR_ENDING",
 })
+
+# VSC release. Art. 56.7's restart is near-instant (green ~10-15 s after "VSC ENDING"),
+# so at lap granularity the neutralisation is over on the announcement lap: this releases
+# immediately, unlike the SC.
+_VSC_RELEASE_EVENT_TYPES: frozenset[str] = frozenset({"VIRTUAL_SAFETY_CAR_ENDING"})
+
+
+class Neutralization(str, Enum):
+    """Which on-track neutralisation the RCM feed confirms is in force this lap.
+
+    NONE — green-flag racing.
+    SC   — full Safety Car (FIA Sporting Regs Art. 55): field queued, large pit saving.
+    VSC  — Virtual Safety Car (Art. 56): no queue, gaps preserved, small pit saving.
+    """
+
+    NONE = "NONE"
+    SC = "SC"
+    VSC = "VSC"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -209,6 +237,13 @@ class RaceSituationOutput:
         gap_ahead_s: Gap to the car directly ahead (seconds). < 1.0s = DRS range.
         pace_delta_s: 3-lap rolling pace delta vs car ahead (s/lap). Negative = faster.
         reasoning: LLM synthesis forwarded verbatim to N31 Orchestrator.
+        sc_currently_active: Any neutralisation (SC OR VSC) confirmed deployed this lap
+            by the RCM feed. Kept as the single back-compat flag every consumer already
+            reads; True under both a full SC and a VSC.
+        vsc_active: The active neutralisation is specifically a Virtual Safety Car
+            (Art. 56). Only meaningful when sc_currently_active is True. Lets consumers
+            that care about the pit-time saving (the Monte Carlo, the N28 prompt) tell a
+            VSC apart from a full SC, which the single flag could not (#471).
     """
 
     overtake_prob: float
@@ -217,7 +252,8 @@ class RaceSituationOutput:
     gap_ahead_s: float  = 0.0
     pace_delta_s: float = 0.0
     reasoning: str      = ''
-    sc_currently_active: bool = False  # True when an RCM confirms a SC/VSC is deployed AHORA
+    sc_currently_active: bool = False  # any neutralisation (SC OR VSC) confirmed by RCM this lap
+    vsc_active: bool          = False  # the active neutralisation is specifically a VSC (Art. 56)
 
     def __post_init__(self) -> None:
         if self.sc_currently_active or self.overtake_prob >= CFG.high_overtake or self.sc_prob_3lap >= CFG.high_sc:
@@ -226,6 +262,15 @@ class RaceSituationOutput:
             self.threat_level = 'MEDIUM'
         else:
             self.threat_level = 'LOW'
+
+    @property
+    def sc_active(self) -> bool:
+        """True only under a full Safety Car (Art. 55): a neutralisation that is not a VSC.
+
+        The complement of vsc_active within sc_currently_active, so the three read as a
+        clean split (green / SC / VSC) without storing a redundant third field.
+        """
+        return self.sc_currently_active and not self.vsc_active
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1234,33 +1279,40 @@ class RaceSituationAgent:
         parsed      = _parse_tool_outputs(response['messages'])
         reasoning   = response['messages'][-1].content
 
-        # Post-hoc override: when the lap's RCM events confirm a SC/VSC is
-        # currently deployed, force sc_prob_3lap to 1.0 and flag the output
-        # so downstream agents (N28 pit, N31 orchestrator) can react.  The
-        # legacy LightGBM model was trained to predict FUTURE SC, not to
-        # recognise a SC already in progress, hence the patch.
-        sc_active           = _sc_active_from_rcm(getattr(self, "_pending_rcm_events", None) or [])
-        raw_sc_prob         = round(parsed['sc_prob_3lap'], 3)
-        effective_sc_prob   = 1.0 if sc_active else raw_sc_prob
+        # Post-hoc override: when the lap's RCM events confirm a neutralisation is
+        # currently deployed, force sc_prob_3lap to 1.0 and flag the output so downstream
+        # agents (N28 pit, N31 orchestrator) can react. The legacy LightGBM model was
+        # trained to predict a FUTURE SC, not to recognise one already in progress, hence
+        # the patch. The SC/VSC split (#471) rides on the same signal: both are
+        # neutralisations (overtake_prob = 0, sc_prob_3lap = 1.0), but only the KIND
+        # changes the pit-time saving, carried downstream on vsc_active.
+        neutralization    = _neutralization_from_rcm(getattr(self, "_pending_rcm_events", None) or [])
+        is_neutralized    = neutralization is not Neutralization.NONE
+        is_vsc            = neutralization is Neutralization.VSC
+        raw_sc_prob       = round(parsed['sc_prob_3lap'], 3)
+        effective_sc_prob = 1.0 if is_neutralized else raw_sc_prob
 
         # Art. 55.8 (SC) / 56.6 (VSC): no overtaking on track. N12 predicts a RACING
-        # overtake, and under an SC the only exception that yields a real position gain
-        # is 55.8(h) ("a car slows with an obvious problem") — a mechanism N12 has no
-        # feature for. Meanwhile every input it does use is regulation-corrupted: DRS is
-        # disabled (Art. 22.1(c)), the gap compresses toward ten car lengths (55.7/55.10)
-        # and pace_delta collapses to the FIA ECU delta. So the model is not merely
-        # imprecise here, it is inapplicable: 0.0 is the correct value and the honest one.
+        # overtake, and under a neutralisation the only exception that yields a real
+        # position gain is 55.8(h) ("a car slows with an obvious problem") — a mechanism
+        # N12 has no feature for. Meanwhile every input it does use is regulation-
+        # corrupted: DRS is disabled (Art. 22.1(c)), the gap compresses toward ten car
+        # lengths (55.7/55.10) and pace_delta collapses to the FIA ECU delta. So the model
+        # is not merely imprecise here, it is inapplicable: 0.0 is the correct value and
+        # the honest one, and it holds identically under a VSC (56.6).
         raw_overtake_prob       = round(parsed['overtake_prob'], 3)
-        effective_overtake_prob = 0.0 if sc_active else raw_overtake_prob
+        effective_overtake_prob = 0.0 if is_neutralized else raw_overtake_prob
 
+        _kind_label       = "VIRTUAL_SAFETY_CAR_DEPLOYED" if is_vsc else "SAFETY_CAR_DEPLOYED"
+        _overtake_article = "56.6" if is_vsc else "55.8"
         effective_reasoning = (
             reasoning
-            if not sc_active
+            if not is_neutralized
             else (
-                f"[RCM OVERRIDE: SAFETY_CAR_DEPLOYED active — model output "
+                f"[RCM OVERRIDE: {_kind_label} active — model output "
                 f"sc_prob_3lap={raw_sc_prob:.2f} overridden to 1.00, "
                 f"overtake_prob={raw_overtake_prob:.2f} overridden to 0.00 "
-                f"(no overtaking under SC, Art. 55.8).] {reasoning}"
+                f"(no overtaking under a neutralisation, Art. {_overtake_article}).] {reasoning}"
             )
         )
 
@@ -1270,7 +1322,8 @@ class RaceSituationAgent:
             gap_ahead_s         = round(parsed['gap_ahead_s'],   2),
             pace_delta_s        = round(parsed['pace_delta_s'],  3),
             reasoning           = effective_reasoning,
-            sc_currently_active = sc_active,
+            sc_currently_active = is_neutralized,
+            vsc_active          = is_vsc,
         )
 
 
@@ -1278,41 +1331,37 @@ class RaceSituationAgent:
 # RCM context override helper
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _sc_active_from_rcm(rcm_events: list | None) -> bool:
-    """True if the lap's RCM events confirm a Safety Car is deployed RIGHT NOW.
+def _classify_rcm_events(rcm_events: list | None) -> list[str]:
+    """Classify a lap's RCM events into canonical event-type strings.
 
     Accepts whatever shape the lap_state ships:
-      - dicts already pre-classified with an ``event_type`` key
-        (the cheap path used by RaceStateManager once a lap has been
-        classified upstream),
+      - dicts already pre-classified with an ``event_type`` key (the cheap path used by
+        RaceStateManager and the CLI's synthetic events once classified upstream),
       - ``RCMEvent`` dataclass instances from radio_agent,
-      - raw FastF1-shaped dicts (``message``, ``flag``, ``category``,
-        ``lap``...) which we promote to RCMEvent and classify.
+      - raw FastF1-shaped dicts (``message``, ``flag``, ``category``, ``lap``...), which
+        are promoted to RCMEvent and classified.
 
-    Resolution order (so a deploy + ending in the same window correctly
-    releases the override instead of pinning):
-      1. Any release event in the list  → False.
-      2. Any deploy event in the list   → True.
-      3. Anything else                  → False.
-
-    The radio_agent import is lazy to avoid the agents → orchestrator →
-    radio_agent → agents loop at module import time.
+    The radio_agent import is lazy AND only taken when a raw event actually needs
+    classifying: it avoids the agents -> orchestrator -> radio_agent -> agents loop at
+    module import time, and keeps a caller that passes only pre-classified dicts (the
+    CLI's synthetic events, the hermetic tests) from pulling in the heavy model stack.
     """
     if not rcm_events:
-        return False
-
-    from src.agents.radio_agent import RCMEvent, _classify_rcm_event
+        return []
 
     classified: list[str] = []
+    _radio = None
     for ev in rcm_events:
         if isinstance(ev, dict) and "event_type" in ev:
-            classified.append(ev["event_type"])
+            classified.append(str(ev["event_type"]))
             continue
-        if isinstance(ev, RCMEvent):
-            classified.append(_classify_rcm_event(ev))
+        if _radio is None:
+            from src.agents import radio_agent as _radio
+        if isinstance(ev, _radio.RCMEvent):
+            classified.append(_radio._classify_rcm_event(ev))
             continue
         if isinstance(ev, dict):
-            classified.append(_classify_rcm_event(RCMEvent(
+            classified.append(_radio._classify_rcm_event(_radio.RCMEvent(
                 message=str(ev.get("message", "")),
                 flag=str(ev.get("flag", "") or ""),
                 category=str(ev.get("category", "")),
@@ -1320,10 +1369,53 @@ def _sc_active_from_rcm(rcm_events: list | None) -> bool:
                 racing_number=ev.get("racing_number") or ev.get("RacingNumber"),
                 scope=str(ev.get("scope", "") or ""),
             )))
+    return classified
 
+
+def _neutralization_from_rcm(rcm_events: list | None) -> Neutralization:
+    """Which neutralisation the lap's RCM events confirm is in force RIGHT NOW.
+
+    Resolution order encodes two regulations that differ (#471):
+
+      1. VSC release (Art. 56.7)  -> NONE. The virtual SC restarts near-instantly, so at
+         lap granularity it is already over on the "VSC ENDING" lap.
+      2. SC release (Art. 55.15)  -> SC. "SAFETY CAR IN THIS LAP" means the car comes in
+         at the END of this lap and Art. 55.8 keeps overtaking banned until the driver
+         passes the Line after it has returned, so THIS lap is still neutralised. The
+         flag clears the next lap, when the cross-lap tracker stops re-asserting the
+         deploy and no release event remains in the window.
+      3. SC deploy                -> SC.
+      4. VSC deploy               -> VSC.
+      5. anything else            -> NONE.
+
+    Release beats deploy within one window (steps 1-2 before 3-4), matching the prior
+    "release wins" ordering. The only change from the old single-flag helper is that an
+    SC release no longer clears the override on its own announcement lap — that lap is
+    still neutralised by Art. 55.8, which is exactly the one-lap-early bug (#471).
+    """
+    classified = _classify_rcm_events(rcm_events)
+    if not classified:
+        return Neutralization.NONE
+
+    if any(t in _VSC_RELEASE_EVENT_TYPES for t in classified):
+        return Neutralization.NONE
     if any(t in _SC_RELEASE_EVENT_TYPES for t in classified):
-        return False
-    return any(t in _SC_ACTIVE_EVENT_TYPES for t in classified)
+        return Neutralization.SC
+    if any(t in _SC_DEPLOY_EVENT_TYPES for t in classified):
+        return Neutralization.SC
+    if any(t in _VSC_DEPLOY_EVENT_TYPES for t in classified):
+        return Neutralization.VSC
+    return Neutralization.NONE
+
+
+def _sc_active_from_rcm(rcm_events: list | None) -> bool:
+    """True if the lap's RCM events confirm any neutralisation (SC or VSC) right now.
+
+    Back-compat bool wrapper over :func:`_neutralization_from_rcm`; kept because the
+    override began life as a single flag. New code should read the finer distinction from
+    the enum, since SC and VSC differ on the pit-time saving (#471).
+    """
+    return _neutralization_from_rcm(rcm_events) is not Neutralization.NONE
 
 
 # ─────────────────────────────────────────────────────────────────────────────

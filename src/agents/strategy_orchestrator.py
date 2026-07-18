@@ -589,14 +589,24 @@ CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff.
                      # MEDIUM .059 / SOFT .072 s/lap), so it stands as a cliff parameter,
                      # not a Heilmeier citation.
 POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation)
-SC_PIT_BONUS = 8.0   # seconds saved by pitting under SC (no delta-lap loss).
-                     # Measured on this repo's 71 races: 5.75 s, 95% CI [3.14, 8.25]
-                     # (n=124), so 8.0 sits inside the interval. Close to the mean of
-                     # Heilmeier's four published circuits (8.18 s, section 3.5 of
+SC_PIT_BONUS = 8.0   # seconds saved by pitting under a full Safety Car (Art. 55, no
+                     # delta-lap loss). Measured on this repo's 71 races: 5.75 s, 95% CI
+                     # [3.14, 8.25] (n=124), so 8.0 sits inside the interval. Close to the
+                     # mean of Heilmeier's four published circuits (8.18 s, section 3.5 of
                      # 10/4229). The N28 prompt's earlier "~12 s" is outside that CI.
                      # A per-circuit value would fit better: Heilmeier's spread runs
                      # 5.24 s (Melbourne) to 11.16 s (Catalunya), and #448 already builds
                      # the per-circuit table it could read from.
+VSC_PIT_BONUS = 3.0  # seconds saved by pitting under a Virtual Safety Car (Art. 56).
+                     # Materially less than a full SC: a VSC preserves gaps and restarts
+                     # near-instantly (56.5 / 56.7), so the field is NOT queued and the
+                     # relative saving is roughly half. NOT measured: the repo ships no
+                     # pit-stop dataset labelled by track status (data/processed/pit_labeled
+                     # is empty), so this is a conservative placeholder to calibrate once
+                     # such data exists (#470/#471). Roughly half the SC saving measured
+                     # elsewhere (~5.75 s) rounds to ~3.0; conservative (understates the VSC
+                     # benefit) so it biases against over-recommending a VSC stop until
+                     # measured.
 
 
 def simulate_lap_window(
@@ -606,6 +616,7 @@ def simulate_lap_window(
     pit_i:    float,
     ucut_i:   bool,
     window:   int = WINDOW_LAPS,
+    sc_pit_bonus: float = SC_PIT_BONUS,
 ) -> float:
     """Estimate position gain vs STAY_OUT baseline over a W-lap window.
 
@@ -619,12 +630,12 @@ def simulate_lap_window(
         beyond the cliff contribute CLIFF_LOSS s/lap of time loss, converted
         to position units using POS_GAP_S.
     sc_i:
-        Whether a Safety Car event occurs in the window (Bernoulli N27 draw).
-        Pitting under SC avoids the delta-lap penalty (SC_PIT_BONUS saved). Under SC,
-        OVERCUT scores the same as PIT_NOW (same stop, same bonus, same fresh-tyre
-        window), so the model is indifferent between them and the tie breaks elsewhere.
-        OVERCUT previously scored higher because its branch took the bonus without
-        subtracting the stop.
+        Whether a neutralisation (SC or VSC) occurs in the window (Bernoulli N27 draw).
+        Pitting under one avoids the delta-lap penalty (sc_pit_bonus saved). Under a
+        neutralisation, OVERCUT scores the same as PIT_NOW (same stop, same bonus, same
+        fresh-tyre window), so the model is indifferent between them and the tie breaks
+        elsewhere. OVERCUT previously scored higher because its branch took the bonus
+        without subtracting the stop.
     pit_i:
         Pit stop duration sample in seconds (Triangular N28 / prior draw). Physical stop
         only, not the pit-lane traversal. The two-compound rule makes a stop mandatory,
@@ -636,17 +647,23 @@ def simulate_lap_window(
         +POS_GAP_S bonus of UNDERCUT vs PIT_NOW.
     window:
         Lap horizon for the evaluation. Default is WINDOW_LAPS=5.
+    sc_pit_bonus:
+        Seconds a pit stop saves when sc_i is True. Defaults to SC_PIT_BONUS (a full
+        Safety Car). The caller passes VSC_PIT_BONUS under a Virtual Safety Car, which
+        saves materially less because the field is not queued (Art. 56, #471). Only the
+        magnitude of the neutralisation's pit benefit differs; every other term is
+        unchanged, so a green-flag call (default) is byte-identical to before.
     """
     if strategy == "STAY_OUT":
         cliff_laps = max(0.0, window - cliff_i)
         time_delta = -cliff_laps * CLIFF_LOSS
 
     elif strategy == "PIT_NOW":
-        sc_saving  = SC_PIT_BONUS if sc_i else 0.0
+        sc_saving  = sc_pit_bonus if sc_i else 0.0
         time_delta = -pit_i + sc_saving + FRESH_GAIN * window
 
     elif strategy == "UNDERCUT":
-        sc_saving  = SC_PIT_BONUS if sc_i else 0.0
+        sc_saving  = sc_pit_bonus if sc_i else 0.0
         ucut_bonus = POS_GAP_S if ucut_i else 0.0
         time_delta = -pit_i + sc_saving + FRESH_GAIN * window + ucut_bonus
 
@@ -666,7 +683,7 @@ def simulate_lap_window(
         # -14 positions against a worst-case STAY_OUT of about -2.7 and suppresses pitting.
         # See tests/test_mc_is_a_real_decision.py.
         if sc_i:
-            time_delta = -pit_i + SC_PIT_BONUS + FRESH_GAIN * window
+            time_delta = -pit_i + sc_pit_bonus + FRESH_GAIN * window
         else:
             cliff_laps = max(0.0, (window // 2) - cliff_i)
             time_delta = -pit_i + FRESH_GAIN * (window // 2) - cliff_laps * CLIFF_LOSS
@@ -738,6 +755,15 @@ def _run_mc_simulation(
 
     sc_prob = situation_out.sc_prob_3lap
 
+    # A VSC is a neutralisation too (N27 forces sc_prob_3lap to 1.0, so every draw sees
+    # it), but it does NOT bunch the field the way a full SC does: gaps are preserved and
+    # the restart is instant (Art. 56.5 / 56.7), so the relative pit-time saving is much
+    # smaller. Charge the VSC its own (smaller) bonus instead of the full SC one; every
+    # other draw is unchanged, so a green or full-SC state is byte-identical to before
+    # (#471, and the "same 8 s for a VSC" bug in #470). vsc_active is False on any
+    # RaceSituationOutput that predates the split, so old callers keep the SC bonus.
+    sc_pit_bonus = VSC_PIT_BONUS if getattr(situation_out, "vsc_active", False) else SC_PIT_BONUS
+
     # A tool-parse failure inside N28 leaves the durations at 0.0 (its `or 0.0`
     # defaults), and 0.0 is not a stop time — it means "unknown". Simulating it makes
     # a pit stop FREE, so PIT_NOW (~+1.25 s) wins essentially every draw: a silent
@@ -772,7 +798,8 @@ def _run_mc_simulation(
 
     for s in strategies:
         outcomes = np.array([
-            simulate_lap_window(s, cliff_s[i], sc_s[i], pit_s[i], ucut_s[i])
+            simulate_lap_window(s, cliff_s[i], sc_s[i], pit_s[i], ucut_s[i],
+                                sc_pit_bonus=sc_pit_bonus)
             for i in range(n)
         ])
         e_val   = float(np.mean(outcomes))
@@ -1213,6 +1240,9 @@ def _run_conditional_agents(
             # its prompt with the deploy banner, (b) bypass the minimum-stint
             # guard, and (c) trip the post-LLM STAY_OUT→PIT_NOW guard-rail.
             "sc_currently_active": situation_out.sc_currently_active,
+            # ...and this one so the banner names a VSC as a VSC: under Art. 56 the
+            # field is not queued, so a stop saves much less than under a full SC (#471).
+            "vsc_active":          situation_out.vsc_active,
         }
         if laps_df is not None:
             pit_out = run_pit_strategy_agent_from_state(pit_lap_state, laps_df)

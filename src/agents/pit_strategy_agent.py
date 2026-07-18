@@ -335,6 +335,7 @@ def _build_pit_prompt(
     sc_prob: float,
     laps_to_cliff_p10: float,
     sc_currently_active: bool = False,
+    vsc_active: bool = False,
 ) -> str:
     """Build the natural-language prompt for the Pit Strategy ReAct agent.
 
@@ -348,20 +349,29 @@ def _build_pit_prompt(
         rival_str: Description of the nearest rival ahead.
         sc_prob: Safety Car probability from N27.
         laps_to_cliff_p10: P10 laps-to-cliff from N26 TireOutput.
-        sc_currently_active: True when an RCM confirms a SC/VSC is deployed
-            right now.  Replaces the legacy "SC probability" line with an
-            unambiguous "SC STATUS: SAFETY CAR DEPLOYED RIGHT NOW" banner so
-            the model cannot mistake an active SC for a low future-SC
-            probability (the historical N28 failure mode at Catar 2025 V7).
+        sc_currently_active: True when an RCM confirms a neutralisation (SC OR VSC)
+            is deployed right now.  Replaces the legacy "SC probability" line with an
+            unambiguous "SC STATUS: ... DEPLOYED RIGHT NOW" banner so the model cannot
+            mistake an active neutralisation for a low future-SC probability (the
+            historical N28 failure mode at Catar 2025 V7).
+        vsc_active: True when that neutralisation is specifically a Virtual Safety Car
+            (Art. 56). The field is not queued and the restart is instant, so a stop
+            saves materially less than under a full SC; the banner says so, so the model
+            does not treat a VSC stop as the near-free stop a full SC offers (#471).
 
     Returns:
         Formatted prompt string for the ReAct agent.
     """
-    sc_line = (
-        "SC STATUS: SAFETY CAR DEPLOYED RIGHT NOW (confirmed by RCM).\n"
-        if sc_currently_active
-        else f"SC probability (next 3 laps): {sc_prob:.2f}\n"
-    )
+    if sc_currently_active and vsc_active:
+        sc_line = (
+            "SC STATUS: VIRTUAL SAFETY CAR DEPLOYED RIGHT NOW (confirmed by RCM). "
+            "Gaps are preserved and the restart is instant (Art. 56), so a stop saves "
+            "materially less time than under a full Safety Car.\n"
+        )
+    elif sc_currently_active:
+        sc_line = "SC STATUS: SAFETY CAR DEPLOYED RIGHT NOW (confirmed by RCM).\n"
+    else:
+        sc_line = f"SC probability (next 3 laps): {sc_prob:.2f}\n"
     return (
         f'Driver {driver} | Lap {lap_number} | P{position} | '
         f'Tyre: {compound} (life {tyre_life} laps)\n'
@@ -1101,9 +1111,11 @@ class PitStrategyAgent:
         }
 
         sc_currently_active = bool(lap_state.get('sc_currently_active', False))
+        vsc_active          = bool(lap_state.get('vsc_active', False))
         return self._run_core(
             driver, lap_number, compound, rival, sc_prob, laps_cliff,
             sc_currently_active=sc_currently_active,
+            vsc_active=vsc_active,
         )
 
     def run_from_state(self, lap_state: dict, laps_df: pd.DataFrame) -> PitStrategyOutput:
@@ -1178,10 +1190,12 @@ class PitStrategyAgent:
         sc_prob             = lap_state.get('sc_prob', 0.0)
         laps_cliff          = lap_state.get('laps_to_cliff')
         sc_currently_active = bool(lap_state.get('sc_currently_active', False))
+        vsc_active          = bool(lap_state.get('vsc_active', False))
 
         return self._run_core(
             driver, lap_number, compound, rival_ahead, sc_prob, laps_cliff,
             sc_currently_active=sc_currently_active,
+            vsc_active=vsc_active,
         )
 
     def _run_core(
@@ -1193,6 +1207,7 @@ class PitStrategyAgent:
         sc_prob: float,
         laps_cliff: Optional[float],
         sc_currently_active: bool = False,
+        vsc_active: bool = False,
     ) -> PitStrategyOutput:
         """Core invocation: self.laps_df / self.session_meta already set.
 
@@ -1205,6 +1220,10 @@ class PitStrategyAgent:
             rival: Abbreviation of the nearest rival ahead (or None).
             sc_prob: Safety Car probability from N27.
             laps_cliff: P10 laps-to-cliff from N26 (or None).
+            sc_currently_active: True when an RCM confirms a neutralisation now.
+            vsc_active: True when that neutralisation is a VSC (Art. 56); shapes the
+                prompt banner so the model does not treat a VSC stop as a near-free
+                full-SC stop (#471).
 
         Returns:
             Fully populated PitStrategyOutput.
@@ -1226,6 +1245,7 @@ class PitStrategyAgent:
             sc_prob=sc_prob,
             laps_to_cliff_p10=laps_cliff if laps_cliff is not None else 0.0,
             sc_currently_active=sc_currently_active,
+            vsc_active=vsc_active,
         )
 
         react_agent = self.get_react_agent()
