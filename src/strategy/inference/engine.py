@@ -71,7 +71,11 @@ Profile = Literal["rich", "no-llm"]
 logger = logging.getLogger(__name__)
 
 
-def _scope_laps_to_gp(laps_df: pd.DataFrame, lap_state: dict[str, Any] | None) -> pd.DataFrame:
+def _scope_laps_to_gp(
+    laps_df: pd.DataFrame,
+    lap_state: dict[str, Any] | None,
+    race_state: RaceState | None = None,
+) -> pd.DataFrame:
     """Narrow a season-wide laps frame to the Grand Prix being analysed (#429).
 
     Every caller loads ``laps_featured_<year>.parquet``, which holds the WHOLE season,
@@ -85,12 +89,38 @@ def _scope_laps_to_gp(laps_df: pd.DataFrame, lap_state: dict[str, Any] | None) -
 
     The GP name comes from ``lap_state['session_meta']['gp_name']``, which
     ``RaceStateManager`` emits in the same keyspace the parquet's ``GP_Name`` uses
-    (verified: 'Lusail'). Falls back to the full frame, loudly, when the name does not
-    resolve — handing the agents an EMPTY frame would be worse than the bug this fixes,
-    and a warning is how we find out the keyspaces have drifted apart (see #448).
+    (verified: 'Lusail'). When ``lap_state`` is ``None`` (the ``_build_default_lap_state``
+    path, #465), there is no ``session_meta`` yet to read a GP from — so, given a
+    ``race_state``, this derives the GP the same way ``_build_default_lap_state`` will
+    (the (driver, lap) row match) and scopes on THAT. This lets scoping happen BEFORE the
+    default lap_state is built instead of after: the previous order scoped on a still-None
+    ``lap_state`` (a no-op) and only built the default from the still-unscoped, season-wide
+    frame, so a GP's grid could be decided from another race's data.
+
+    Falls back to the full frame, loudly, when the name does not resolve — handing the
+    agents an EMPTY frame would be worse than the bug this fixes, and a warning is how we
+    find out the keyspaces have drifted apart (see #448).
     """
     gp_name = (lap_state or {}).get("session_meta", {}).get("gp_name")
-    if not gp_name or "GP_Name" not in laps_df.columns:
+
+    if (
+        not gp_name
+        and race_state is not None
+        and laps_df is not None
+        and "GP_Name" in laps_df.columns
+    ):
+        driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
+        lap_row = driver_rows[driver_rows["LapNumber"] == race_state.lap]
+        if not lap_row.empty:
+            gp_name = str(lap_row["GP_Name"].iloc[0])
+
+    if not gp_name or laps_df is None or "GP_Name" not in laps_df.columns:
+        if laps_df is not None:
+            logger.warning(
+                "Could not resolve a GP to scope laps by (gp_name=%r) — falling back to "
+                "the unscoped frame; agent lookups may resolve to the wrong race (#429/#465)",
+                gp_name,
+            )
         return laps_df
 
     scoped = laps_df[laps_df["GP_Name"] == gp_name]
@@ -155,8 +185,11 @@ def run_lap(
         ValueError: on an unknown profile, or on the reserved ``"fast"`` profile.
     """
     # Scope BEFORE dispatch so both profiles, and therefore every surface that routes
-    # through this engine (CLI PMV, arcade), get the single-race frame (#429).
-    laps_df = _scope_laps_to_gp(laps_df, lap_state)
+    # through this engine (CLI PMV, arcade), get the single-race frame (#429). Passing
+    # `race_state` lets scoping resolve a GP even when `lap_state` is None (#465), so the
+    # `_build_default_lap_state` fallback below/inside `_run_rich`/`run_no_llm_lap` always
+    # runs against an already-scoped frame instead of the season-wide one.
+    laps_df = _scope_laps_to_gp(laps_df, lap_state, race_state)
 
     if profile == "rich":
         return _run_rich(race_state, laps_df, lap_state, return_agent_outputs)
@@ -309,6 +342,11 @@ def _build_default_lap_state(race_state: RaceState, laps_df: pd.DataFrame) -> di
     single non-orchestrator home for it; arcade's copy is deleted when it delegates.
     The parity test's ``lap_state=None`` case guards this against the orchestrator's
     inline block.
+
+    ``laps_df`` is expected to already be scoped to a single GP by the time this runs
+    (``run_lap`` calls ``_scope_laps_to_gp(..., race_state)`` BEFORE dispatching to
+    ``_run_rich``/``run_no_llm_lap``, #465) — otherwise ``gp_name``/``year`` below read
+    ``iloc[0]`` of a season-wide frame and can pick a GP unrelated to ``race_state``.
     """
     driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
     lap_row = driver_rows[driver_rows["LapNumber"] == race_state.lap]

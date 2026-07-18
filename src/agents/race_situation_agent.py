@@ -124,14 +124,18 @@ class RaceSituationConfig:
     save_model on Windows.
 
     Threat-level boundaries map raw calibrated probabilities to LOW/MEDIUM/HIGH
-    categorical signals for N31. Thresholds match the Optuna/F2-score tuning
-    from N12 (overtake) and N14 (SC).
+    categorical signals for N31. high_overtake/high_sc are overwritten in
+    __post_init__ from the tuned optimal_threshold/best_threshold in each model's
+    on-disk config (#450) — the literals below are only a construction-time
+    placeholder, never the value actually used once the config has loaded.
 
     Attributes:
         model_name: LM Studio model identifier for the ReAct agent LLM.
         high_overtake: Probability above which threat_level is HIGH via overtake.
+            Overwritten from overtake_threshold (N12's model_config.json).
         medium_overtake: Probability above which threat_level is MEDIUM via overtake.
         high_sc: Probability above which threat_level is HIGH via SC risk.
+            Overwritten from sc_threshold (N14's feature_list_v1.json).
         medium_sc: Probability above which threat_level is MEDIUM via SC risk.
     """
 
@@ -167,6 +171,18 @@ class RaceSituationConfig:
             sc_cfg = json.load(f)
         self.sc_features: list[str] = sc_cfg['features']
         self.sc_threshold: float    = sc_cfg['best_threshold']
+
+        # #450: high_overtake/high_sc were dataclass literals (0.80/0.30) that this
+        # __post_init__ never touched, so the genuinely tuned thresholds loaded just
+        # above (overtake_threshold, sc_threshold) sat unused — every threat_level ever
+        # computed by RaceSituationOutput.__post_init__ was thresholded against the
+        # untuned placeholder, most visibly for SC (0.30 hardcoded vs 0.2335 tuned:
+        # a real SC risk between those two values was silently reported as MEDIUM
+        # instead of HIGH). Overwriting here means every downstream reader of
+        # CFG.high_overtake / CFG.high_sc (RaceSituationOutput, the system prompt
+        # string below) gets the value the model was actually tuned against.
+        self.high_overtake = self.overtake_threshold
+        self.high_sc       = self.sc_threshold
 
         # Circuit cluster map (k=4 parquet from N05)
         _cl = pd.read_parquet(_PROCESSED / 'circuit_clustering' / 'circuit_clusters_k4.parquet')
@@ -230,9 +246,12 @@ class RaceSituationOutput:
 
     Attributes:
         overtake_prob: Calibrated P(overtake in next few laps) from N12 LightGBM
-            + Platt calibration. Above CFG.high_overtake (0.80) = strong opportunity.
+            + Platt calibration. Above CFG.high_overtake (N12's tuned
+            optimal_threshold, ~0.80 — see RaceSituationConfig.__post_init__) =
+            strong opportunity.
         sc_prob_3lap: Calibrated P(SC within 3 laps) from N14 LightGBM + Platt
-            calibration. Above CFG.high_sc (0.30) = imminent SC risk.
+            calibration. Above CFG.high_sc (N14's tuned best_threshold, ~0.23 —
+            see RaceSituationConfig.__post_init__) = imminent SC risk.
         threat_level: LOW / MEDIUM / HIGH derived from both probabilities in __post_init__.
         gap_ahead_s: Gap to the car directly ahead (seconds). < 1.0s = DRS range.
         pace_delta_s: 3-lap rolling pace delta vs car ahead (s/lap). Negative = faster.
@@ -341,8 +360,14 @@ def _dominant_status(grp: pd.DataFrame) -> str:
 def _compute_laptime_features(all_laps: pd.DataFrame, lap_number: int) -> dict:
     """Compute lap-time aggregate and z-score features for the current lap window.
 
-    Replicates the N13 aggregate_laps logic. Z-scores are causal — only laps up
-    to lap_number are used, matching the N14 training pipeline.
+    Replicates the N13 aggregate_laps logic, but NOT the N14 training pipeline's
+    normalisation: N14 was trained on z-scores computed non-causally over the WHOLE
+    race (mean/std of lap_time drawn from every lap, past and future relative to the
+    labeled row). This function is deliberately causal instead — it z-scores only
+    against laps up to lap_number, because a live agent has no future laps to read.
+    That is a genuine train/serve skew (#450); retraining N14 causally is out of
+    scope here, so this docstring names the mismatch rather than the previous
+    (incorrect) claim that the two "match".
 
     Args:
         all_laps: Accurate FastF1 laps from race start to current lap.
@@ -713,10 +738,15 @@ except ImportError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt (module-level constant — unchanged from N27)
+# System prompt (module-level constant — interpolates CFG's loaded thresholds)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_RACE_SITUATION_SYSTEM_PROMPT = """You are a Formula 1 race situation analyst embedded in a multi-agent strategy system.
+# f-string, not a plain triple-quoted constant: it must read the SAME thresholds
+# RaceSituationOutput.__post_init__ actually classifies against (CFG.high_overtake /
+# CFG.high_sc, loaded from each model's tuned config in RaceSituationConfig.__post_init__),
+# not the untuned dataclass literals. CFG is fully built by the time this module-level
+# constant is evaluated (CFG is constructed above, at import time). #450.
+_RACE_SITUATION_SYSTEM_PROMPT = f"""You are a Formula 1 race situation analyst embedded in a multi-agent strategy system.
 
 Your job is to assess two dimensions of strategic threat per lap:
 
@@ -728,8 +758,8 @@ Your job is to assess two dimensions of strategic threat per lap:
 1. If the gap to the car ahead is less than 2.5 seconds, call `predict_overtake_tool` with the chasing driver (driver_x) and the car ahead (driver_y) at the current lap number.
 2. Always call `predict_sc_tool` with the current lap number to assess SC deployment risk.
 3. Synthesize a **threat level** based on the two probabilities:
-   - **HIGH**: Either P(overtake) >= 0.80 OR P(SC 3-lap) >= 0.30
-   - **MEDIUM**: Either P(overtake) >= 0.40 OR P(SC 3-lap) >= 0.15
+   - **HIGH**: Either P(overtake) >= {CFG.high_overtake:.3f} OR P(SC 3-lap) >= {CFG.high_sc:.3f}
+   - **MEDIUM**: Either P(overtake) >= {CFG.medium_overtake:.3f} OR P(SC 3-lap) >= {CFG.medium_sc:.3f}
    - **LOW**: Both probabilities below medium thresholds
 
 ## Rules
@@ -951,6 +981,62 @@ class RaceSituationAgent:
 
         return pd.DataFrame([feat])[self.cfg.sc_features]
 
+    # ── LLM-input validation (shared by both LangChain tools) ────────────────
+
+    def _lap_range_error(self, lap_number: int) -> Optional[str]:
+        """Reject a lap_number outside the causal range the agent was loaded with.
+
+        run() loads the WHOLE FastF1 session into self.laps_df (session.laps.pick_
+        accurate()), so nothing on its own stops a hallucinated future lap number
+        from reaching the feature builders and returning a confident-looking
+        prediction built from data the race hasn't reached yet (#476). self.
+        _current_lap is set once per call in run()/run_from_state() to the lap
+        actually being assessed; anything beyond it is a future lookahead.
+
+        Args:
+            lap_number: The lap_number argument as supplied by the LLM tool call.
+
+        Returns:
+            An error string naming the problem, or None when lap_number is valid.
+        """
+        if lap_number < 1:
+            return f'invalid lap_number {lap_number} — laps start at 1'
+        current = getattr(self, '_current_lap', None)
+        if current is not None and lap_number > current:
+            return (
+                f'invalid lap_number {lap_number} — the race is currently at lap '
+                f'{current}; cannot query a future lap'
+            )
+        return None
+
+    def _unknown_driver_error(self, drivers: tuple[str, ...], lap_number: int) -> Optional[str]:
+        """Reject driver codes that are not racing at lap_number.
+
+        Both LangChain tools take driver abbreviations as free LLM text, so a
+        hallucinated or retired driver code would otherwise reach the feature
+        builders unchecked (#476) — mirrors pit_strategy_agent's score_undercut_tool
+        guard, same error shape (names the valid options instead of just failing).
+
+        Args:
+            drivers: One or more driver abbreviations to check.
+            lap_number: Lap number, only used to phrase the error message.
+
+        Returns:
+            An error string naming the offending driver(s) and the valid roster,
+            or None when every driver is live (or presence is unknown, in which
+            case the guard disables rather than rejecting every target).
+        """
+        live = getattr(self, '_live_drivers', None)
+        if live is None:
+            return None
+        unknown = [d for d in drivers if d not in live]
+        if not unknown:
+            return None
+        return (
+            f'{" and ".join(unknown)} not on track at lap {lap_number}. '
+            f'Drivers racing this lap: {", ".join(sorted(live))}. Pick from that list.'
+        )
+
     # ── LangChain tool factory ────────────────────────────────────────────────
 
     def _build_tools(self) -> list:
@@ -983,6 +1069,13 @@ class RaceSituationAgent:
             Returns:
                 "P(overtake) = 0.XXX | gap=X.XXs | pace_delta=X.XXXs/lap | DRS: active/inactive"
             """
+            lap_err = agent._lap_range_error(lap_number)
+            if lap_err:
+                return f'Overtake scoring REFUSED — {lap_err}'
+            drv_err = agent._unknown_driver_error((driver_x, driver_y), lap_number)
+            if drv_err:
+                return f'Overtake scoring REFUSED — {drv_err}'
+
             x_rows = agent.laps_df[
                 (agent.laps_df['Driver'] == driver_x) & (agent.laps_df['LapNumber'] == lap_number)
             ]
@@ -1037,6 +1130,9 @@ class RaceSituationAgent:
             Returns:
                 "P(SC 3-lap) = 0.XXX | lap_time_std_z=X.XX | circuit_sc_rate=X.XX | status: {status} | {incident}"
             """
+            lap_err = agent._lap_range_error(lap_number)
+            if lap_err:
+                return f'SC scoring REFUSED — {lap_err}'
             if len(agent.laps_df) < 10:
                 return f'Insufficient lap data at lap {lap_number}'
 
@@ -1143,6 +1239,17 @@ class RaceSituationAgent:
         _clean       = self.laps_df[self.laps_df['TrackStatus'] == '1']
         _wx          = session.weather_data
 
+        # Who is actually on track at this lap. session.laps carries the WHOLE race
+        # (not just laps up to lap_number), so without this a free-text driver_x/
+        # driver_y from the LLM can name a car that already retired, or a lap the
+        # driver never reached, and still get a confident-looking prediction back
+        # (#476) — mirrors pit_strategy_agent's `_live_drivers` (#462). Empty means
+        # we could not tell (e.g. lap_number outside the session), so the guard
+        # disables (None) rather than rejecting every target.
+        _at_lap = self.laps_df.loc[self.laps_df['LapNumber'] == lap_number, 'Driver'].dropna()
+        self._live_drivers = set(_at_lap) | {driver} if len(_at_lap) else None
+        self._current_lap  = lap_number
+
         self.session_meta = {
             'session':          session,
             'gp_name':          gp_name,
@@ -1175,7 +1282,11 @@ class RaceSituationAgent:
         estimates using track status and lap-time variance signals.
 
         The rival_ahead is derived from lap_state['rivals'] by looking for the car
-        with position = driver_position - 1.
+        with position = driver_position - 1. When the driver's own position is
+        unknown (missing from the telemetry dict), rival_ahead is None rather than
+        guessing a position — a guessed default is a searchable grid slot, so it
+        would otherwise silently pair the driver with whoever is one place ahead of
+        the DEFAULT, not the truth (#465).
 
         Args:
             lap_state: Dict from RaceStateManager.get_lap_state(). Expected keys:
@@ -1200,14 +1311,30 @@ class RaceSituationAgent:
         total_laps = meta.get('total_laps', 57)
         year       = meta.get('year', 2025)
 
-        driver_pos  = d.get('position', 20)
-        rival_ahead = next(
-            (r['driver'] for r in rivals if r.get('position') == driver_pos - 1),
-            None,
+        # #465 (F6): a defaulted position (previously `.get('position', 20)`) is a
+        # SEARCHABLE value, not a safe placeholder — if the real grid has a car at
+        # P19, "unknown position" and "genuinely P20" silently produce the same
+        # rival_ahead lookup. An unknown position must propagate as "no rival
+        # computable", not guess P20.
+        driver_pos  = d.get('position')
+        rival_ahead = (
+            next((r['driver'] for r in rivals if r.get('position') == driver_pos - 1), None)
+            if driver_pos is not None else None
         )
 
         self.laps_df = _ensure_timedelta_laps(laps_df)
         event_name   = meta.get('event_name', gp_name)
+
+        # Who is actually on track this lap, from the RSM's `rivals` list (a car that
+        # retired simply is not in it — the same answer a timing screen gives). Used
+        # to refuse predict_overtake_tool/predict_sc_tool calls naming a driver who
+        # isn't racing this lap (#476), mirroring pit_strategy_agent's `_live_drivers`
+        # (#462). An empty rivals list means the roster is unknown, not "only our car
+        # is racing", so it disables the guard (None) rather than rejecting every
+        # target — same convention as pit_strategy_agent.run_from_state.
+        on_track = {r['driver'] for r in rivals if r.get('driver')}
+        self._live_drivers = on_track | {driver} if on_track else None
+        self._current_lap  = lap_number
 
         self.session_meta = {
             'session':          None,

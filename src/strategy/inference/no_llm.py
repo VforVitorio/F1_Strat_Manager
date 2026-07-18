@@ -186,8 +186,18 @@ def _situation_no_llm(sit_lap_state: dict[str, Any], laps_df: pd.DataFrame):
     driver = meta["driver"]
     lap_number = sit_lap_state["lap_number"]
     rivals = sit_lap_state.get("rivals", []) or []
-    driver_pos = d.get("position", 20)
-    rival = next((r["driver"] for r in rivals if r.get("position") == driver_pos - 1), None)
+    driver_pos = d.get("position")
+    # An incomplete lap (FastF1 NaN) or the bare-RaceState default builder leave
+    # `position` as `None` (RSM's own convention, see race_state_manager.py's
+    # get_rival_states docstring — #428). Defaulting it to 20 here would fabricate a
+    # position that could coincidentally collide with a real rival's `position - 1`
+    # and hand `predict_overtake_tool` the wrong "car ahead" (#465); skip the rival
+    # lookup instead when the position is genuinely unknown.
+    rival = (
+        next((r["driver"] for r in rivals if r.get("position") == driver_pos - 1), None)
+        if driver_pos is not None
+        else None
+    )
 
     tools = {tool.name: tool for tool in agent._tools}
     calls: list[tuple[Any, dict[str, Any]]] = [

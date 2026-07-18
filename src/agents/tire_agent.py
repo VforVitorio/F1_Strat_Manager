@@ -638,10 +638,14 @@ def _parse_tool_outputs(messages: list) -> dict:
         if not isinstance(content, str):
             continue
         for pattern, key in [
-            (r'Degradation rate:\s*([\d.]+)', 'deg_rate'),
-            (r'P10:\s*([\d.]+)',              'p10'),
-            (r'P50:\s*([\d.]+)',              'p50'),
-            (r'P90:\s*([\d.]+)',              'p90'),
+            # -?[\d.]+ (was [\d.]+, #477): the bare digit class can't match a
+            # leading minus, so a negative degradation rate — real and expected
+            # per the system prompt ("track evolution or fuel load reduction")
+            # — silently failed to parse and fell through to the 0.0 default.
+            (r'Degradation rate:\s*(-?[\d.]+)', 'deg_rate'),
+            (r'P10:\s*(-?[\d.]+)',              'p10'),
+            (r'P50:\s*(-?[\d.]+)',              'p50'),
+            (r'P90:\s*(-?[\d.]+)',              'p90'),
         ]:
             m = re.search(pattern, content)
             if m and key not in result:
@@ -759,6 +763,11 @@ class TireAgent:
         self.bundles: dict        = self.cfg.load_all_bundles()
         self.laps_df: pd.DataFrame = pd.DataFrame()
         self.session_meta: dict    = {}
+        # Driver codes actually on track for the CURRENT loaded state (#476). Reset
+        # on every run()/run_from_state() call — this instance is a process-level
+        # singleton reused across many laps/drivers, so a stale set from a previous
+        # call must never leak into the next one's tool-arg validation.
+        self._live_drivers: Optional[set] = None
         self._react_agent          = None
         self._tools: list          = self._build_tools()
 
@@ -916,6 +925,65 @@ class TireAgent:
         stint = self.laps_df[mask].sort_values('LapNumber')
         return stint if len(stint) > 0 else None
 
+    # ── Live-driver guard (#476) ───────────────────────────────────────────────
+
+    def _live_drivers_at_current_lap(self) -> Optional[set]:
+        """Return driver codes on track for the currently loaded state, or None.
+
+        run_from_state() sets self._live_drivers from the RSM's rivals list plus
+        our own driver — both are PRESENCE-based (a row exists for this lap), the
+        same signal race_state_manager.py and pit_strategy_agent.py rely on for
+        their own retired-car guards (#470/#462): an age/lap-count cutoff cannot
+        separate a retiree from a finisher because the ranges overlap (a finisher
+        can go 20 laps without a row, a retirement can show up in 9). The FastF1
+        run() path has no per-lap rivals list, so it falls back to every driver
+        present anywhere in laps_df.
+
+        Returns:
+            Set of driver codes, or None when there is nothing to validate against
+            (callers treat None as "cannot tell" and skip the guard rather than
+            block every driver on missing data — the same convention
+            pit_strategy_agent.py uses for its own `_live_drivers`, #470/#462).
+        """
+        if self._live_drivers is not None:
+            return self._live_drivers
+        if len(self.laps_df) > 0 and 'Driver' in self.laps_df.columns:
+            drivers = set(self.laps_df['Driver'].dropna().unique())
+            return drivers or None
+        return None
+
+    def _validate_driver_on_track(self, driver: str) -> Optional[str]:
+        """Return an error string if `driver` is not on track right now, else None.
+
+        Guards the two LLM-facing tools against a hallucinated or long-retired
+        driver code. Reachable in production: laps_df carries the WHOLE race's
+        history, so the stint filter in _get_driver_stint happily builds a
+        'stint' out of laps recorded before a car crashed — it never checks
+        whether the driver is still racing at the lap the agent is currently
+        analysing. Example (#476): Austin 2024, HAM crashed on lap 2 of 56;
+        asked about at a later lap, the tool used to return a confident
+        'P50: 21867.1' instead of erroring.
+
+        Args:
+            driver: FastF1 driver abbreviation as passed by the LLM tool call.
+
+        Returns:
+            An error string (do not compute) when the driver is not in the live
+            set, or when the loaded current_lap falls outside [1, total_laps].
+            None when the driver checks out and the tool should proceed.
+        """
+        live       = self._live_drivers_at_current_lap()
+        lap        = self.session_meta.get('current_lap')
+        total_laps = self.session_meta.get('total_laps')
+        lap_out_of_range = (
+            lap is not None and total_laps is not None and not (1 <= lap <= total_laps)
+        )
+        if (live is not None and driver not in live) or lap_out_of_range:
+            lap_display = lap if lap is not None else 'unknown'
+            valid = sorted(live) if live is not None else []
+            return f"error: '{driver}' is not on track at lap {lap_display}; valid: {valid}"
+        return None
+
     # ── LangChain tool factory ────────────────────────────────────────────────
 
     def _build_tools(self) -> list:
@@ -949,8 +1017,13 @@ class TireAgent:
 
             Returns:
                 Multi-line string: cumulative degradation (s) and degradation rate (s/lap).
-                Returns an error string if no laps are found.
+                Returns an error string if no laps are found, or if the driver is not
+                on track at the currently loaded lap (#476).
             """
+            guard_error = agent._validate_driver_on_track(driver)
+            if guard_error:
+                return guard_error
+
             stint = agent._get_driver_stint(driver, tyre_life)
             if stint is None:
                 return f'No laps found for driver {driver} with tyre_life <= {tyre_life}.'
@@ -987,7 +1060,13 @@ class TireAgent:
 
             Returns:
                 Multi-line string: P10/P50/P90 laps to cliff, deg rate, MC std, warning level.
+                Returns an error string if no laps are found, or if the driver is not
+                on track at the currently loaded lap (#476).
             """
+            guard_error = agent._validate_driver_on_track(driver)
+            if guard_error:
+                return guard_error
+
             stint = agent._get_driver_stint(driver, tyre_life)
             if stint is None:
                 return f'No laps found for driver {driver} with tyre_life <= {tyre_life}.'
@@ -1167,8 +1246,16 @@ class TireAgent:
             'AirTemp':   float(_weather.get('AirTemp',   28.0)),
             'TrackTemp': float(_weather.get('TrackTemp', 38.0)),
             'Humidity':  float(_weather.get('Humidity',  50.0)),
-            'Rainfall':  0.0,
+            # Was hardcoded 0.0 (#477) while run_from_state() correctly reads
+            # wx.get('rainfall', 0) from the RSM weather dict — mirror that here
+            # from the session's own weather data instead of silently telling
+            # every dry-model feature the race was rain-free regardless of what
+            # actually happened.
+            'Rainfall':  float(_weather.get('Rainfall', 0.0)),
         }
+        # No per-lap rivals list on this path (single-shot FastF1 query, not a live
+        # simulation lap) — _live_drivers_at_current_lap() falls back to laps_df.
+        self._live_drivers = None
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)
 
@@ -1243,6 +1330,16 @@ class TireAgent:
             # behaviour instead of breaking (#449).
             f'{driver}_stint': d.get('stint'),
             'current_lap': lap_state.get('lap_number'),
+        }
+
+        # Presence-based on-track set for this lap (#476): our own driver plus
+        # every rival the RSM actually emitted a row for. A driver who crashed
+        # earlier in the race simply stops appearing in rivals from that lap on
+        # — the same signal race_state_manager.py itself relies on (#470) — so
+        # this catches an LLM tool call for a long-retired driver code without
+        # reimplementing any retirement/lap-count heuristic.
+        self._live_drivers = {driver} | {
+            str(r['driver']) for r in lap_state.get('rivals', []) or [] if r.get('driver')
         }
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)

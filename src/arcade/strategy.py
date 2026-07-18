@@ -587,7 +587,19 @@ class SimConnector(threading.Thread):
         pace_delta = cur_lap_time - prev_lap_time if prev_lap_time else 0.0
 
         rivals = lap_state.get("rivals", [])
-        our_pos = driver_st.get("position", 99)
+        our_pos = driver_st.get("position")
+        # `_lap_skip_reason` (the DNF/incomplete-lap guard the driver loop runs before
+        # `_step_once` -> `_build_race_state`) already filters out laps where position
+        # is None, so reaching here with an unknown position means that invariant broke.
+        # Fail loudly instead of fabricating a searchable P99 car (the #428 bug shape:
+        # a sentinel that collides with a real rival's `position - 1`) — the caller's
+        # `except Exception` wraps this into a surfaced `state.error`, it does not crash
+        # the driver thread (#465).
+        if our_pos is None:
+            raise ValueError(
+                "_build_race_state: driver position is None; the incomplete-lap guard "
+                "should have skipped this lap before calling _build_race_state (#465)"
+            )
         car_ahead = next((r for r in rivals if r.get("position") == our_pos - 1), None)
         gap_ahead_s = abs(car_ahead.get("interval_to_driver_s") or 0.0) if car_ahead else 0.0
 
@@ -614,7 +626,7 @@ class SimConnector(threading.Thread):
             lap=lap_num,
             # 57 = median/mode race length across the dataset; the shared strategy fallback.
             total_laps=meta.get("total_laps", 57),
-            position=driver_st.get("position", 10),
+            position=our_pos,
             compound=driver_st.get("compound", "MEDIUM"),
             tyre_life=driver_st.get("tyre_life", 1),
             gap_ahead_s=float(gap_ahead_s),
