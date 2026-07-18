@@ -11,9 +11,9 @@ Doctrine: no-LLM assertions only.
 - The #476 section calls ``PaceAgent.run()`` (the real N06 XGBoost model) through
   ``predict_pace_tool.invoke()`` directly — deterministic inference, never a
   LangGraph ReAct loop or a live LLM client.
-- The #433 section calls ``_clamp_expected_stint_end`` directly — the pure clamp
-  helper extracted from ``_assemble_recommendation`` — so it needs no model or data
-  and never runs a live orchestrator.
+- The #433 section calls the pure ``_clamp_expected_stint_end`` helper directly
+  (never a live orchestrator), but skips when ``data/`` is absent: importing
+  ``strategy_orchestrator`` instantiates the tire agent, which loads model files.
 """
 
 from __future__ import annotations
@@ -228,21 +228,41 @@ def test_predict_pace_tool_still_computes_for_a_real_driver_in_range(
 # =============================================================================
 # #433 — expected_stint_end must be grounded against pit_lap_target plus the
 # N26 cliff / Pirelli stint capacity, not passed through as raw LLM free text.
-# The clamp is the pure _clamp_expected_stint_end helper, so these tests need no
-# model and run on CI too (not just locally with data/).
+# The clamp is the pure _clamp_expected_stint_end helper; these tests call it
+# directly (no live orchestrator). They skip when data/ is absent because
+# importing strategy_orchestrator instantiates the tire agent, which loads
+# data/models/tire_degradation/ (fetched from HF Hub, not committed).
 # =============================================================================
 
 
-def test_expected_stint_end_is_clamped_to_the_pit_and_cliff_anchor():
+@pytest.fixture(scope="module")
+def clamp_fn():
+    """The pure _clamp_expected_stint_end helper, imported lazily.
+
+    Importing it pulls in strategy_orchestrator, whose import chain instantiates the
+    tire agent and loads data/models/tire_degradation/routing_config.json — absent in
+    a bare checkout (data/ comes from HF Hub). Skip rather than fail there, like every
+    other data-dependent test in this suite; the pure clamp still runs locally.
+    """
+    routing_cfg = ROOT / "data" / "models" / "tire_degradation" / "routing_config.json"
+    if not routing_cfg.exists():
+        pytest.skip(
+            "importing strategy_orchestrator instantiates the tire agent, which needs "
+            "data/models/tire_degradation/ (data/ comes from HF, not git)"
+        )
+    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
+
+    return _clamp_expected_stint_end
+
+
+def test_expected_stint_end_is_clamped_to_the_pit_and_cliff_anchor(clamp_fn):
     """#433: an absurd 57 must be pulled back to the pit_lap + cliff/capacity anchor.
 
     pit_lap_target=7, HARD capacity=38 (pit_strategy_agent._STINT_CAPACITY_LAPS),
     cliff_p50=20.0 -> anchor = 7 + min(20.0, 38) = 27. |57 - 27| = 30 > 3, so the
     LLM's 57 must be discarded in favour of the anchor.
     """
-    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
-
-    result = _clamp_expected_stint_end(
+    result = clamp_fn(
         llm_stint_end=57,
         pit_lap_target=7,
         compound_next="HARD",
@@ -254,12 +274,10 @@ def test_expected_stint_end_is_clamped_to_the_pit_and_cliff_anchor():
     assert result <= 45
 
 
-def test_expected_stint_end_within_band_is_kept_as_the_llm_reported_it():
+def test_expected_stint_end_within_band_is_kept_as_the_llm_reported_it(clamp_fn):
     """A plausible LLM value close to the anchor must survive unchanged."""
-    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
-
     # anchor is 27; |29-27| = 2 <= 3
-    result = _clamp_expected_stint_end(
+    result = clamp_fn(
         llm_stint_end=29,
         pit_lap_target=7,
         compound_next="HARD",
@@ -270,12 +288,10 @@ def test_expected_stint_end_within_band_is_kept_as_the_llm_reported_it():
     assert result == 29
 
 
-def test_expected_stint_end_anchor_is_clamped_to_total_laps():
+def test_expected_stint_end_anchor_is_clamped_to_total_laps(clamp_fn):
     """The anchor itself must never exceed the race's actual lap count."""
-    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
-
     # 50 + min(38, 38) = 88 would exceed a 57-lap race
-    result = _clamp_expected_stint_end(
+    result = clamp_fn(
         llm_stint_end=95,
         pit_lap_target=50,
         compound_next="HARD",
@@ -286,14 +302,12 @@ def test_expected_stint_end_anchor_is_clamped_to_total_laps():
     assert result == 57
 
 
-def test_expected_stint_end_passes_through_unclamped_when_no_anchor_is_available():
+def test_expected_stint_end_passes_through_unclamped_when_no_anchor_is_available(clamp_fn):
     """Without pit_lap_target/compound_next/cliff_p50 there is no anchor to
     ground against, so the LLM's raw value must pass through rather than
     inventing one.
     """
-    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
-
-    result = _clamp_expected_stint_end(
+    result = clamp_fn(
         llm_stint_end=57,
         pit_lap_target=None,
         compound_next=None,
