@@ -398,7 +398,13 @@ def main() -> None:
     laps_df: pd.DataFrame | None = None
     if featured_path.exists():
         print(f"{_DIM}Loading featured parquet…{_RESET}", end=" ", flush=True)
-        laps_df = pd.read_parquet(featured_path)
+        # Route through the shared augmenter so this debug surface runs on the same frame
+        # the shipping paths do. A raw read leaves off Time_s, which collapses the overtake
+        # gap to a lap-time delta (#486); the debug harness is where you go to understand a
+        # bad number, so it is the worst possible place to run the degraded frame.
+        from src.f1_strat_manager.laps_augment import augment_featured_laps
+
+        laps_df = augment_featured_laps(pd.read_parquet(featured_path), args.year)
         print(f"done ({len(laps_df):,} rows)")
     else:
         print(

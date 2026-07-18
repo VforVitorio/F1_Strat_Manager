@@ -576,6 +576,7 @@ class SimConnector(threading.Thread):
         return RaceState(
             driver=driver_st.get("driver", "UNK"),
             lap=lap_num,
+            # 57 = median/mode race length across the dataset; the shared strategy fallback.
             total_laps=meta.get("total_laps", 57),
             position=driver_st.get("position", 10),
             compound=driver_st.get("compound", "MEDIUM"),

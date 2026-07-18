@@ -1097,7 +1097,9 @@ class PitStrategyAgent:
         lap_number = lap_state['lap_number']
         driver     = meta['driver']
         gp_name    = meta.get('gp_name', '')
-        total_laps = meta.get('total_laps', 60)
+        # 57 = median/mode race length across the 2022-2025 dataset; the same fallback the
+        # other strategy surfaces use, so a missing key resolves to one value everywhere.
+        total_laps = meta.get('total_laps', 57)
         year       = meta.get('year', 2025)
         team       = meta.get('team', 'Unknown')
         compound   = d.get('compound', 'MEDIUM')
@@ -1120,7 +1122,13 @@ class PitStrategyAgent:
         # Lusail lap 40 (he crashed on lap 7) scores happily, and worse: BEA retired on
         # lap 41, so at lap 50 the features come out complete, with no NaN and no
         # warning, describing a car sitting in the garage (#462).
-        self._live_drivers = {r['driver'] for r in rivals if r.get('driver')} | {driver}
+        #
+        # An empty rivals list means the roster is unknown, not "only our car is racing":
+        # keeping {driver} alone would reject every undercut target silently. None disables
+        # the guard instead, matching run() (`... if len(_at_lap) else None`) and
+        # _live_drivers_from (`return live or None`) in strategy_orchestrator.
+        on_track = {r['driver'] for r in rivals if r.get('driver')}
+        self._live_drivers = on_track | {driver} if on_track else None
 
         self.laps_df = laps_df.copy()
         if 'LapNumber' in self.laps_df.columns:
