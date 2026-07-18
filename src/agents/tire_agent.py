@@ -333,6 +333,14 @@ CLIFF_THRESHOLD: dict[str, int] = {
     'C6': 2,  # p75 = 1.82 → ceil = 2
 }
 
+# Longest race on the current calendar (Monaco, 78 laps; max observed across
+# 2023-2025 data). Used as the fallback ceiling for laps-to-cliff when
+# session_meta carries no total_laps: a cliff past this many laps is "not this
+# race" regardless of circuit. It must stay at or below the shortest real race so
+# a missing key can never lift the ceiling above an actual race and silently
+# disable the clamp — the earlier default of 100 exceeded every race and did.
+MAX_RACE_LAPS: int = 78
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TireOutput
@@ -542,17 +550,35 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     """Normalise lap times against session fastest lap and circuit cluster mean.
 
     lap_time_pct_of_race_fastest: ratio to the race's fastest lap (~1.04 mean).
-    lap_time_vs_cluster_mean: delta vs cluster's typical lap time (seconds).
+    lap_time_vs_cluster_mean: delta vs the cluster's typical lap time (seconds).
+    mean_sector_speed: circuit-level mean of the three speed traps (km/h).
     track_status_clean: 3-class int — 0=green, 1=yellow/VSC, 2=SC/red flag.
+
+    Two of these columns are trained per-circuit constants, not per-lap values.
+    N04 built lap_time_vs_cluster_mean as LapTime_s minus a global per-cluster
+    mean lap time (81.36-100.92 s depending on cluster, std 0.0 within a cluster),
+    and mean_sector_speed as a per-GP circuit feature (one value per race, std 0.0
+    within a GP). Both are TCN inputs listed in tiredeg_feature_manifest.json, and
+    both are already shipped by the featured parquet. Recomputing them here from
+    the handed-in frame overwrites the trained constant with a per-frame quantity:
+    the cluster-mean delta was off by up to 14.9 s per lap (Lusail) and the sector
+    speed by up to 17.5 s. They are therefore guarded like FuelLoad and
+    track_status_clean — recomputed only when the frame does not already carry them
+    (the raw FastF1 path, which has no better source). The sibling
+    lap_time_pct_of_race_fastest and laps_remaining are recomputed unconditionally
+    because their per-frame recompute reproduces the shipped value exactly
+    (0.0000 s delta across all 24 GPs).
     """
     df['lap_time_pct_of_race_fastest'] = (
         df['LapTime_s'] / session_meta['fastest_lap_s']
     )
-    df['lap_time_vs_cluster_mean'] = (
-        df['LapTime_s'] - session_meta['cluster_mean_lap_s']
-    )
-    df['laps_remaining']    = session_meta['total_laps'] - df['LapNumber']
-    df['mean_sector_speed'] = (df['SpeedI1'] + df['SpeedI2'] + df['SpeedFL']) / 3
+    if 'lap_time_vs_cluster_mean' not in df.columns:
+        df['lap_time_vs_cluster_mean'] = (
+            df['LapTime_s'] - session_meta['cluster_mean_lap_s']
+        )
+    df['laps_remaining'] = session_meta['total_laps'] - df['LapNumber']
+    if 'mean_sector_speed' not in df.columns:
+        df['mean_sector_speed'] = (df['SpeedI1'] + df['SpeedI2'] + df['SpeedFL']) / 3
 
     if 'track_status_clean' not in df.columns:
         status_map = {'1': 0, '2': 1, '3': 2, '4': 2, '5': 2, '6': 1, '7': 1}
@@ -769,8 +795,15 @@ class TireAgent:
         2023-2024 training data), then pads or trims the sequence to the compound's
         window length. Short stints are left-padded by repeating the first row.
 
-        NaN values from first-lap shifted features are replaced with 0.0 after
-        scaling — equivalent to imputing the training-data mean, matching N10.
+        NaN values (first-lap shifted features and missing speed-trap readings) are
+        replaced with 0.0 in RAW space before scaling, matching N09's apply_scaler
+        (`scaler.transform(df[features].fillna(0))`). A zero in raw space maps to a
+        negative z-score after scaling, which is the "no reading" signal the model
+        learned in training; zeroing AFTER scaling instead injects each feature's
+        mean, which the model never learned to read as missing. The two are
+        equivalent only for a zero-mean feature, and a missing SpeedI1 turned a
+        -1.8 s cumulative-degradation reading into +0.4 s (a sign flip across the
+        2 s C4 cliff threshold) on the ~20% of mid-stint laps with a NaN speed trap.
 
         Args:
             stint_laps: Raw FastF1 laps for one driver + stint, sorted ascending.
@@ -784,8 +817,7 @@ class TireAgent:
         window = bundle['window']
 
         feat_df = self._build_stint_features(stint_laps, compound_id, session_meta)
-        scaled  = bundle['scaler'].transform(feat_df)
-        scaled  = np.nan_to_num(scaled, nan=0.0)
+        scaled  = bundle['scaler'].transform(feat_df.fillna(0))
 
         if len(scaled) >= window:
             seq = scaled[-window:]
@@ -977,7 +1009,15 @@ class TireAgent:
             # A cliff past the chequered flag is operationally "not this race", so the
             # race distance is the honest ceiling: it says the same thing without looking
             # like a reading. Nothing is invented — the bound is the race itself.
-            cliff_ceiling = float(agent.session_meta.get('total_laps', 100) or 100)
+            #
+            # The fallback must stay at or below the shortest real race, otherwise a
+            # missing total_laps lifts the ceiling above the race and the clamp stops
+            # clamping. MAX_RACE_LAPS (78) is the longest race on the calendar; the
+            # earlier default of 100 exceeded every race, so an absent key silently
+            # disabled the clamp for any race up to 100 laps.
+            cliff_ceiling = float(
+                agent.session_meta.get('total_laps', MAX_RACE_LAPS) or MAX_RACE_LAPS
+            )
 
             p50 = min(remaining_budget / deg_rate, cliff_ceiling)
             p10 = min(max(0.0, (remaining_budget - total_std) / deg_rate), cliff_ceiling)
