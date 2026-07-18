@@ -522,11 +522,34 @@ def _add_compound_cols(df: pd.DataFrame, compound_id: str) -> pd.DataFrame:
     All three encodings are constant within a stint. CompoundHardness is the
     inverse of AbsoluteCompoundID: C1=6 (hardest), C6=1 (softest), as encoded
     in the N10 training data.
+
+    The defaults (C3 / mid-hardness / SOFT) are real, in-range codes, so an unknown
+    compound is silently scored as a real one rather than flagged. That is only reached
+    with corrupt or out-of-scope compound data, but it is a sentinel by construction, so
+    it is logged loudly rather than left invisible.
     """
+    name = str(df['Compound'].iloc[0])
+    if compound_id not in CFG.abs_compound_id_map:
+        logger.warning("Unknown compound_id %r: encoding as C3 (AbsoluteCompoundID=3)", compound_id)
+    if name not in CFG.compound_id_map:
+        logger.warning("Unknown compound name %r: encoding as SOFT (CompoundID=1)", name)
     df['AbsoluteCompoundID'] = CFG.abs_compound_id_map.get(compound_id, 3)
     df['CompoundHardness']   = CFG.compound_hardness_map.get(compound_id, 4)
-    df['CompoundID']         = CFG.compound_id_map.get(df['Compound'].iloc[0], 1)
+    df['CompoundID']         = CFG.compound_id_map.get(name, 1)
     return df
+
+
+def _encode_team_id(team_id_map: dict, team: str) -> int:
+    """Team label encoding, with the McLaren default made loud.
+
+    `team_id_map.get(team, 4)` defaults to 4, which is a real team (McLaren), so an
+    unrecognised team is silently scored as one. This is reachable in normal operation:
+    engine.py sets team='Unknown' whenever a lap row is empty, and 'Unknown' is not in
+    the map. Log it rather than let a mislabelled team ride as McLaren unnoticed.
+    """
+    if team not in team_id_map:
+        logger.warning("Unknown team %r: encoding as team_id 4 (McLaren default)", team)
+    return team_id_map.get(team, 4)
 
 
 def _add_fuel_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
@@ -1139,7 +1162,7 @@ class TireAgent:
             'cluster_mean_lap_s': _clean['LapTime'].dt.total_seconds().mean(),
             'total_laps':         int(session.total_laps),
             'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'team_id':            self.cfg.team_id_map.get(stint_state.get('team', 'Unknown'), 4),
+            'team_id':            _encode_team_id(self.cfg.team_id_map, stint_state.get('team', 'Unknown')),
             'year':               stint_state.get('year', 2025),
             'AirTemp':   float(_weather.get('AirTemp',   28.0)),
             'TrackTemp': float(_weather.get('TrackTemp', 38.0)),
@@ -1203,7 +1226,7 @@ class TireAgent:
             'cluster_mean_lap_s': float(clean_times.mean()) if len(clean_times) > 0 else 90.0,
             'total_laps':         total_laps,
             'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'team_id':            self.cfg.team_id_map.get(team, 4),
+            'team_id':            _encode_team_id(self.cfg.team_id_map, team),
             'year':               year,
             'AirTemp':   wx.get('air_temp',   28.0),
             'TrackTemp': wx.get('track_temp', 38.0),

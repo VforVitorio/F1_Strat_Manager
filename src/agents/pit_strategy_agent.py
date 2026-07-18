@@ -545,6 +545,16 @@ class PitStrategyAgent:
         Returns:
             Pandas Series for that lap, the closest prior lap, or None.
         """
+        # A car that is not on track this lap has no valid row, however many stale ones
+        # it left behind. Without this, a driver who retired on lap 5 answers a lap-50
+        # query with his lap-5 row (the prior-lap fallback below has no staleness bound,
+        # and no bound works: a finisher's last featured lap can lag 20 while a retiree
+        # shows at 9, #462). `_live_drivers` is the presence signal RaceStateManager
+        # already supplies; None means we cannot tell, so the guard stays off then.
+        live = getattr(self, '_live_drivers', None)
+        if live is not None and driver not in live:
+            return None
+
         driver_rows = self.laps_df[self.laps_df['Driver'] == driver]
         if driver_rows.empty:
             return None
@@ -554,8 +564,10 @@ class PitStrategyAgent:
         prior = driver_rows[driver_rows['LapNumber'] < lap_number]
         if not prior.empty:
             return prior.sort_values('LapNumber').iloc[-1]
-        # No prior lap either — fall back to the earliest later lap so the
-        # feature builder still has something to work with.
+        # No prior lap: the query is for a lap before this driver's first recorded one
+        # (FastF1 sometimes omits lap 1). Return the earliest lap as a start-of-race
+        # stand-in. This is not the retired-car case, which the presence guard above and
+        # the prior-lap branch already handle.
         return driver_rows.sort_values('LapNumber').iloc[0]
 
     def _get_position_map(self, lap_number: int) -> dict[str, float]:
