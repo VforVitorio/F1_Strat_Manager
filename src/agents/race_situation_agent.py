@@ -274,11 +274,23 @@ def _is_neutralised(track_status: object) -> bool:
 
 
 def _dominant_status(grp: pd.DataFrame) -> str:
-    """Return the single worst TrackStatus code seen in a lap group."""
+    """Return the single worst TrackStatus CODE (one character) seen in a lap group.
+
+    FastF1 packs several codes into one string per driver per lap, so a lap that crosses a
+    status boundary carries both (e.g. '12' is yellow then clear, '41' Safety Car then
+    green). The worst status of the lap therefore lives in an individual character, not in
+    a whole row string. Ranking the row strings and returning one intact yields values like
+    '12', which is a key neither STATUS_ENC nor STATUS_SEVERITY has, so downstream the lap
+    falls to the green default (encoding 0) and a real yellow reads as clear. Joining every
+    driver's codes and ranking the characters keeps the result inside the encoding domain.
+
+    Mirrors N13's most_severe_status (notebook N13_sc_eda.ipynb, Step 2 loader cell).
+    """
     codes = grp['TrackStatus'].dropna().astype(str).tolist()
-    if not codes:
+    chars = [c for c in ''.join(codes) if c in STATUS_SEVERITY]
+    if not chars:
         return '1'
-    return max(codes, key=lambda s: STATUS_SEVERITY.get(s[0], 1))
+    return max(chars, key=lambda c: STATUS_SEVERITY[c])
 
 
 def _compute_laptime_features(all_laps: pd.DataFrame, lap_number: int) -> dict:
@@ -865,6 +877,10 @@ class RaceSituationAgent:
         feat.update(_compute_rcm_features(all_laps, lap_number, session_meta, cur_code, prev_code))
         feat.update(_compute_weather_features(session_meta))
 
+        # RaceStateManager and the FastF1 session always supply total_laps, so this
+        # fallback only fires for hand-built states (tests, debug). 57 is the median and
+        # mode race length across the 2022-2025 dataset (71 races), so it is the least
+        # surprising stand-in and is kept identical across every strategy surface.
         total_laps = int(session_meta.get('total_laps', 57))
         is_lap1    = int(lap_number == 1)
         lap_pct    = float(lap_number) / max(total_laps, 1)
@@ -1134,7 +1150,9 @@ class RaceSituationAgent:
         lap_number = lap_state['lap_number']
         driver     = meta['driver']
         gp_name    = meta.get('gp_name', '')
-        total_laps = meta.get('total_laps', 60)
+        # 57 = median/mode race length across the dataset; matches _build_features above
+        # and the other strategy surfaces so the fallback is one value, not several.
+        total_laps = meta.get('total_laps', 57)
         year       = meta.get('year', 2025)
 
         driver_pos  = d.get('position', 20)
