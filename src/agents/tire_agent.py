@@ -334,11 +334,12 @@ CLIFF_THRESHOLD: dict[str, int] = {
 }
 
 # Longest race on the current calendar (Monaco, 78 laps; max observed across
-# 2023-2025 data). Used as the fallback ceiling for laps-to-cliff when
-# session_meta carries no total_laps: a cliff past this many laps is "not this
-# race" regardless of circuit. It must stay at or below the shortest real race so
-# a missing key can never lift the ceiling above an actual race and silently
-# disable the clamp — the earlier default of 100 exceeded every race and did.
+# 2023-2025 data). Fallback ceiling for laps-to-cliff when session_meta carries no
+# total_laps: a cliff beyond the longest possible race is "not this race" regardless
+# of circuit, so clamping there caps absurd values without touching any real one. The
+# earlier default of 100 sat above every race, so the clamp it belonged to never fired.
+# session_meta.total_laps is present on every shipping path, so this only guards
+# hand-built states.
 MAX_RACE_LAPS: int = 78
 
 
@@ -1173,7 +1174,7 @@ class TireAgent:
         compound    = d.get('compound', 'MEDIUM')
         tyre_life   = d.get('tyre_life', 1)
         gp_name     = meta.get('gp_name', '')
-        total_laps  = meta.get('total_laps', 60)
+        total_laps  = meta.get('total_laps', 57)
         year        = meta.get('year', 2025)
         team        = meta.get('team', 'Unknown')
 
