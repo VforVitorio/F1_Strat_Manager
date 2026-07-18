@@ -281,6 +281,33 @@ class SimConnector(threading.Thread):
         driver = lap_state.get("driver") or {}
         return float(driver.get("lap_time_s") or fallback)
 
+    @staticmethod
+    def _lap_skip_reason(driver_st: dict[str, Any]) -> str | None:
+        """Reason this lap must skip the strategy pipeline, or None when safe.
+
+        Mirrors the two guards the CLI PMV applies before building a RaceState
+        (scripts/run_simulation_cli.py L1551-1584):
+
+        - DNF: ``RaceStateManager.get_driver_state`` returns an empty dict once
+          the driver retires, so an empty ``driver`` state means the car is out.
+        - Incomplete lap: FastF1 lands a NaN position / tyre_life / lap_time on
+          some opening laps (RSM emits them as None). A None position would be
+          coerced into a searchable number and a None lap_time into a physically
+          impossible pace delta.
+
+        Skipping keeps the arcade from fabricating a P10 MEDIUM car for a
+        retired driver and invoking the pipeline once per remaining lap (#441).
+        """
+        if not driver_st:
+            return "DNF"
+        if driver_st.get("position") is None:
+            return "incomplete lap (position is None)"
+        if driver_st.get("tyre_life") is None:
+            return "incomplete lap (tyre_life is None)"
+        if driver_st.get("lap_time_s") is None:
+            return "incomplete lap (lap_time is None)"
+        return None
+
     def run(self) -> None:
         """Drive the local strategy loop and capture fatal errors.
 
@@ -348,6 +375,15 @@ class SimConnector(threading.Thread):
             # so the next processed lap sees a sensible baseline.
             if self._should_skip_stale(lap_num):
                 prev_lap_time = self._lap_time_from_state(lap_state, prev_lap_time)
+                continue
+            # DNF + incomplete-lap guard (mirrors the CLI, run_simulation_cli.py
+            # L1551-1584). Without it _build_race_state defaults an empty driver
+            # state to a P10 MEDIUM car and the loop keeps invoking the pipeline
+            # for a car that retired, and a None position / lap_time reaches
+            # RaceState (#441).
+            skip_reason = self._lap_skip_reason(lap_state.get("driver", {}))
+            if skip_reason is not None:
+                logger.info("Lap %d skipped (%s): no strategy pipeline call", lap_num, skip_reason)
                 continue
             try:
                 prev_lap_time = self._step_once(laps_df, lap_state, prev_lap_time)
