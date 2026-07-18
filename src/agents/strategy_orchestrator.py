@@ -1321,6 +1321,45 @@ def _live_drivers_from(lap_state: dict | None) -> set | None:
     return live or None
 
 
+def _clamp_expected_stint_end(
+    llm_stint_end:  int | None,
+    pit_lap_target: int | None,
+    compound_next:  str | None,
+    cliff_p50:      float | None,
+    total_laps:     int | None,
+) -> int | None:
+    """Ground the LLM's ``expected_stint_end`` against a physical anchor (#433).
+
+    ``expected_stint_end`` is unvalidated LLM free text: nothing in the schema stops
+    the LLM naming a lap far beyond what this stint can physically reach. Anchor it to
+    ``pit_lap_target`` plus the shorter of the N26 cliff P50 and the Pirelli stint
+    capacity for the NEXT compound (the same ``_STINT_CAPACITY_LAPS`` table
+    ``recommend_compound_tool`` uses, not duplicated), bounded by ``total_laps``. Accept
+    the LLM value only within +/-3 laps of the anchor; otherwise use the anchor. When
+    ``pit_lap_target``, ``compound_next`` or ``cliff_p50`` is missing there is no anchor
+    to ground against, so the LLM value passes through unclamped rather than inventing
+    one. Pure (no I/O) so it is unit-testable without loading any model.
+    """
+    if pit_lap_target is None or compound_next is None or cliff_p50 is None:
+        return llm_stint_end
+
+    capacity = _STINT_CAPACITY_LAPS.get(compound_next, _STINT_CAPACITY_LAPS['MEDIUM'])
+    anchor = pit_lap_target + min(cliff_p50, capacity)
+    if total_laps is not None:
+        anchor = min(anchor, total_laps)
+    anchor = int(round(anchor))
+
+    if llm_stint_end is not None and abs(llm_stint_end - anchor) <= 3:
+        return llm_stint_end
+    if llm_stint_end is not None:
+        logger.warning(
+            "Clamping LLM expected_stint_end %r to anchor %d "
+            "(pit_lap_target=%s, compound_next=%s, cliff_p50=%.1f) — #433",
+            llm_stint_end, anchor, pit_lap_target, compound_next, cliff_p50,
+        )
+    return anchor
+
+
 def _assemble_recommendation(
     synth:              "_LLMSynthesis",
     pit_out,
@@ -1444,38 +1483,12 @@ def _assemble_recommendation(
     action    = synth.action
     reasoning = synth.reasoning
 
-    # #433 — expected_stint_end is unvalidated LLM free text: nothing in the schema
-    # stops the LLM naming a lap far beyond what this stint can physically reach.
-    # Ground it against pit_lap_target (already resolved above) plus the shorter of
-    # the N26 cliff P50 and the Pirelli stint capacity for the NEXT compound — the
-    # same capacity table recommend_compound_tool uses in pit_strategy_agent.py, not
-    # duplicated here. Accept the LLM's number only when it lands within +/-3 laps of
-    # that anchor; otherwise use the anchor itself. cliff_p50 measures the CURRENT
-    # compound's cliff from now, reused here as a stint-length proxy for the NEXT
-    # compound — a deliberate simplification, not a physically exact re-derivation.
-    # When pit_lap_target, compound_next, or cliff_p50 is unavailable there is no
-    # anchor to ground against, so the LLM value passes through unclamped rather
-    # than inventing one.
-    if pit_lap_target is not None and compound_next is not None and cliff_p50 is not None:
-        capacity = _STINT_CAPACITY_LAPS.get(compound_next, _STINT_CAPACITY_LAPS['MEDIUM'])
-        anchor = pit_lap_target + min(cliff_p50, capacity)
-        if total_laps is not None:
-            anchor = min(anchor, total_laps)
-        anchor = int(round(anchor))
-
-        llm_stint_end = synth.expected_stint_end
-        if llm_stint_end is not None and abs(llm_stint_end - anchor) <= 3:
-            expected_stint_end = llm_stint_end
-        else:
-            if llm_stint_end is not None:
-                logger.warning(
-                    "Clamping LLM expected_stint_end %r to anchor %d "
-                    "(pit_lap_target=%s, compound_next=%s, cliff_p50=%.1f) — #433",
-                    llm_stint_end, anchor, pit_lap_target, compound_next, cliff_p50,
-                )
-            expected_stint_end = anchor
-    else:
-        expected_stint_end = synth.expected_stint_end
+    # #433 — expected_stint_end is unvalidated LLM free text; clamp it against the
+    # physical pit_lap + cliff/capacity anchor via the pure _clamp_expected_stint_end
+    # helper (extracted so the clamp is CI-testable without loading any model).
+    expected_stint_end = _clamp_expected_stint_end(
+        synth.expected_stint_end, pit_lap_target, compound_next, cliff_p50, total_laps
+    )
 
     return StrategyRecommendation(
         action             = action,

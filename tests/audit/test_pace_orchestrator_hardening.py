@@ -11,9 +11,9 @@ Doctrine: no-LLM assertions only.
 - The #476 section calls ``PaceAgent.run()`` (the real N06 XGBoost model) through
   ``predict_pace_tool.invoke()`` directly — deterministic inference, never a
   LangGraph ReAct loop or a live LLM client.
-- The #433 section exercises ``_assemble_recommendation``, a pure post-LLM
-  assembly helper, with a hand-built ``_LLMSynthesis`` — never a live orchestrator
-  run end to end.
+- The #433 section calls ``_clamp_expected_stint_end`` directly — the pure clamp
+  helper extracted from ``_assemble_recommendation`` — so it needs no model or data
+  and never runs a live orchestrator.
 """
 
 from __future__ import annotations
@@ -228,27 +228,9 @@ def test_predict_pace_tool_still_computes_for_a_real_driver_in_range(
 # =============================================================================
 # #433 — expected_stint_end must be grounded against pit_lap_target plus the
 # N26 cliff / Pirelli stint capacity, not passed through as raw LLM free text.
+# The clamp is the pure _clamp_expected_stint_end helper, so these tests need no
+# model and run on CI too (not just locally with data/).
 # =============================================================================
-
-
-def _minimal_llm_synthesis(**overrides):
-    """Build a minimal, schema-valid _LLMSynthesis for clamp-logic tests.
-
-    Only the fields _assemble_recommendation actually reads for the clamp
-    (pit_lap_target, compound_next, expected_stint_end) vary per test; the rest
-    are fixed to the smallest valid value _LLMSynthesis's schema accepts.
-    """
-    from src.agents.strategy_orchestrator import _LLMSynthesis
-
-    base = dict(
-        action="STAY_OUT",
-        reasoning="test synthesis",
-        confidence=0.5,
-        pace_mode="NEUTRAL",
-        risk_posture="BALANCED",
-    )
-    base.update(overrides)
-    return _LLMSynthesis(**base)
 
 
 def test_expected_stint_end_is_clamped_to_the_pit_and_cliff_anchor():
@@ -258,69 +240,50 @@ def test_expected_stint_end_is_clamped_to_the_pit_and_cliff_anchor():
     cliff_p50=20.0 -> anchor = 7 + min(20.0, 38) = 27. |57 - 27| = 30 > 3, so the
     LLM's 57 must be discarded in favour of the anchor.
     """
-    from src.agents.strategy_orchestrator import _assemble_recommendation
+    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
 
-    synth = _minimal_llm_synthesis(
+    result = _clamp_expected_stint_end(
+        llm_stint_end=57,
         pit_lap_target=7,
         compound_next="HARD",
-        expected_stint_end=57,
-    )
-
-    rec = _assemble_recommendation(
-        synth,
-        pit_out=None,
-        mc_results={},
-        regulation_context="",
         cliff_p50=20.0,
         total_laps=57,
     )
 
-    assert rec.expected_stint_end == 27
-    assert rec.expected_stint_end <= 45
+    assert result == 27
+    assert result <= 45
 
 
 def test_expected_stint_end_within_band_is_kept_as_the_llm_reported_it():
     """A plausible LLM value close to the anchor must survive unchanged."""
-    from src.agents.strategy_orchestrator import _assemble_recommendation
+    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
 
-    synth = _minimal_llm_synthesis(
+    # anchor is 27; |29-27| = 2 <= 3
+    result = _clamp_expected_stint_end(
+        llm_stint_end=29,
         pit_lap_target=7,
         compound_next="HARD",
-        expected_stint_end=29,  # anchor is 27; |29-27|=2 <= 3
-    )
-
-    rec = _assemble_recommendation(
-        synth,
-        pit_out=None,
-        mc_results={},
-        regulation_context="",
         cliff_p50=20.0,
         total_laps=57,
     )
 
-    assert rec.expected_stint_end == 29
+    assert result == 29
 
 
 def test_expected_stint_end_anchor_is_clamped_to_total_laps():
     """The anchor itself must never exceed the race's actual lap count."""
-    from src.agents.strategy_orchestrator import _assemble_recommendation
+    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
 
-    synth = _minimal_llm_synthesis(
+    # 50 + min(38, 38) = 88 would exceed a 57-lap race
+    result = _clamp_expected_stint_end(
+        llm_stint_end=95,
         pit_lap_target=50,
         compound_next="HARD",
-        expected_stint_end=95,  # 50 + min(38,38) = 88 would exceed a 57-lap race
-    )
-
-    rec = _assemble_recommendation(
-        synth,
-        pit_out=None,
-        mc_results={},
-        regulation_context="",
         cliff_p50=38.0,
         total_laps=57,
     )
 
-    assert rec.expected_stint_end == 57
+    assert result == 57
 
 
 def test_expected_stint_end_passes_through_unclamped_when_no_anchor_is_available():
@@ -328,17 +291,14 @@ def test_expected_stint_end_passes_through_unclamped_when_no_anchor_is_available
     ground against, so the LLM's raw value must pass through rather than
     inventing one.
     """
-    from src.agents.strategy_orchestrator import _assemble_recommendation
+    from src.agents.strategy_orchestrator import _clamp_expected_stint_end
 
-    synth = _minimal_llm_synthesis(expected_stint_end=57)  # no pit_lap_target set
-
-    rec = _assemble_recommendation(
-        synth,
-        pit_out=None,
-        mc_results={},
-        regulation_context="",
+    result = _clamp_expected_stint_end(
+        llm_stint_end=57,
+        pit_lap_target=None,
+        compound_next=None,
         cliff_p50=None,
         total_laps=57,
     )
 
-    assert rec.expected_stint_end == 57
+    assert result == 57
