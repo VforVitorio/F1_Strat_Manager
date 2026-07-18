@@ -40,7 +40,7 @@ try:
 except Exception:
     _DATA_ROOT = _REPO_ROOT / 'data'
 
-from src.f1_strat_manager.gp_slugs import rekey_by_slug  # noqa: E402
+from src.f1_strat_manager.gp_slugs import rekey_by_slug, slug_from_event_name  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +177,28 @@ class PitAgentCFG:
         self.team_x_undercut_rate: dict = (
             _uc.groupby('Team_X')['undercut_success'].mean().to_dict()
         )
+
+    def traversal_for(self, gp_name: str) -> float:
+        """Pit-lane traversal (s) for a GP given in EITHER keyspace.
+
+        The two callers disagree, exactly as they do in race_situation_agent.sc_rate_for:
+        the FastF1 session path passes a full event name ('Qatar Grand Prix'), the replay
+        path passes the parquet slug ('Lusail'). circuit_traversal is keyed by slug (#448
+        rekeyed it), so the full name missed and every FastF1-path circuit fell back to
+        the 20.0 default. slug_from_event_name is reentrant and normalises both.
+        """
+        slug = slug_from_event_name(gp_name) or gp_name
+        return self.circuit_traversal.get(slug, 20.0)
+
+    def undercut_rate_for(self, gp_name: str) -> float:
+        """Circuit undercut base rate for a GP in either keyspace (an N16 feature).
+
+        Same dual-keyspace resolution as traversal_for. Without it the FastF1 path fed
+        N16 a constant 0.38 on every circuit, which is the #448 dead-feature bug moved to
+        the sibling path rather than fixed.
+        """
+        slug = slug_from_event_name(gp_name) or gp_name
+        return self.circuit_undercut_rate.get(slug, 0.38)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -761,10 +783,10 @@ class PitStrategyAgent:
             'compound_x_id':         comp_x_id,
             'compound_y_id':         comp_y_id,
             'compound_delta':        comp_x_id - comp_y_id,
-            'pit_delta_X':           self.cfg.circuit_traversal.get(gp_name, 20.0) + 4.5,
+            'pit_delta_X':           self.cfg.traversal_for(gp_name) + 4.5,
             'lap_race_pct':          lap_number / total_laps,
             'pos_X_before':          float(x_row.get('Position', 10)),
-            'circuit_undercut_rate': self.cfg.circuit_undercut_rate.get(gp_name, 0.38),
+            'circuit_undercut_rate': self.cfg.undercut_rate_for(gp_name),
             'team_x_undercut_rate':  self.cfg.team_x_undercut_rate.get(team_x, 0.38),
         }
         return pd.DataFrame([feat])[self.cfg.undercut_features]
@@ -843,7 +865,7 @@ class PitStrategyAgent:
             p50      = float(agent.cfg.pit_p50_model.predict(feat_df)[0])
             p95      = float(agent.cfg.pit_p95_model.predict(feat_df)[0])
             gp_name  = agent.session_meta.get('gp_name', '')
-            traversal = agent.cfg.circuit_traversal.get(gp_name, 20.0)
+            traversal = agent.cfg.traversal_for(gp_name)
             return (
                 f'physical_stop: P05={p05:.2f}s | P50={p50:.2f}s | P95={p95:.2f}s | '
                 f'total_pit_P50={p50 + traversal:.2f}s (traversal={traversal:.2f}s)'
