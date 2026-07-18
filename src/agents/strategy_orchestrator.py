@@ -655,7 +655,10 @@ def simulate_lap_window(
         # These branches previously omitted `-pit_i`, so OVERCUT collected FRESH_GAIN and
         # the full SC_PIT_BONUS without cost and took the argmax on 92.5% of a 160-state
         # sweep, leaving the layer effectively constant. Charging the stop restores a real
-        # choice (STAY_OUT 40% / UNDERCUT 60% on that sweep).
+        # choice: STAY_OUT 42.5%, UNDERCUT 31.2%, PIT_NOW 26.2% on that sweep (PIT_NOW's
+        # share is all tie-break: it ties UNDERCUT whenever the undercut fails, and the
+        # dict order lists it first). OVERCUT no longer wins, which is the known
+        # limitation in test_mc_is_a_real_decision.py and #470.
         #
         # Do not add the pit-lane traversal (~20 s) here. A stop is mandatory under the
         # two-compound rule, so pit-now and pit-later both pay it and it cancels in a
