@@ -219,7 +219,9 @@ class TireAgentConfig:
 
         mc_dropout_calibration.json stores per-compound mean_sigma_s values fitted
         in N10. The fallback sigma is the mean across all compounds — used when
-        compound_id is absent from the dict (e.g. C6 with sparse data).
+        compound_id is absent from the dict (currently C1 and C3, whose sigmas are
+        not yet fitted; C2/C4/C5/C6 are present). Regenerating them needs N09's MC
+        Dropout calibration cell, so the cross-compound mean stands in until then.
 
         Returns:
             Tuple (calibration_dict, sigma_fallback).
