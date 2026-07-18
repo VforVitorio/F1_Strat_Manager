@@ -74,6 +74,7 @@ from src.agents.race_situation_agent import (
 from src.agents.pit_strategy_agent import (
     run_pit_strategy_agent,
     run_pit_strategy_agent_from_state,
+    _STINT_CAPACITY_LAPS,
 )
 from src.agents.radio_agent        import (
     run_radio_agent,
@@ -1320,6 +1321,45 @@ def _live_drivers_from(lap_state: dict | None) -> set | None:
     return live or None
 
 
+def _clamp_expected_stint_end(
+    llm_stint_end:  int | None,
+    pit_lap_target: int | None,
+    compound_next:  str | None,
+    cliff_p50:      float | None,
+    total_laps:     int | None,
+) -> int | None:
+    """Ground the LLM's ``expected_stint_end`` against a physical anchor (#433).
+
+    ``expected_stint_end`` is unvalidated LLM free text: nothing in the schema stops
+    the LLM naming a lap far beyond what this stint can physically reach. Anchor it to
+    ``pit_lap_target`` plus the shorter of the N26 cliff P50 and the Pirelli stint
+    capacity for the NEXT compound (the same ``_STINT_CAPACITY_LAPS`` table
+    ``recommend_compound_tool`` uses, not duplicated), bounded by ``total_laps``. Accept
+    the LLM value only within +/-3 laps of the anchor; otherwise use the anchor. When
+    ``pit_lap_target``, ``compound_next`` or ``cliff_p50`` is missing there is no anchor
+    to ground against, so the LLM value passes through unclamped rather than inventing
+    one. Pure (no I/O) so it is unit-testable without loading any model.
+    """
+    if pit_lap_target is None or compound_next is None or cliff_p50 is None:
+        return llm_stint_end
+
+    capacity = _STINT_CAPACITY_LAPS.get(compound_next, _STINT_CAPACITY_LAPS['MEDIUM'])
+    anchor = pit_lap_target + min(cliff_p50, capacity)
+    if total_laps is not None:
+        anchor = min(anchor, total_laps)
+    anchor = int(round(anchor))
+
+    if llm_stint_end is not None and abs(llm_stint_end - anchor) <= 3:
+        return llm_stint_end
+    if llm_stint_end is not None:
+        logger.warning(
+            "Clamping LLM expected_stint_end %r to anchor %d "
+            "(pit_lap_target=%s, compound_next=%s, cliff_p50=%.1f) — #433",
+            llm_stint_end, anchor, pit_lap_target, compound_next, cliff_p50,
+        )
+    return anchor
+
+
 def _assemble_recommendation(
     synth:              "_LLMSynthesis",
     pit_out,
@@ -1327,6 +1367,8 @@ def _assemble_recommendation(
     regulation_context: str,
     sc_currently_active: bool = False,
     live_drivers:       set | None = None,
+    cliff_p50:          Optional[float] = None,
+    total_laps:         Optional[int] = None,
 ) -> "StrategyRecommendation":
     """Merge the LLM synthesis with N28 pit data and attach grounding fields.
 
@@ -1372,6 +1414,11 @@ def _assemble_recommendation(
     `live_drivers` carries the cars on track so the LLM's free-text undercut_target can
     be checked. **None means "unknown", not "nobody"** — a caller without a lap_state
     cannot know, so its target passes rather than being silently discarded.
+
+    `cliff_p50` (N26 TireOutput.laps_to_cliff_p50) and `total_laps` (RaceState.total_laps)
+    ground `expected_stint_end` — see the clamp below (#433). Both default to None so a
+    caller that has not been updated to pass them keeps the previous unclamped behaviour
+    rather than crashing.
 
     Returns a fully-populated StrategyRecommendation ready for the UI layer.
     """
@@ -1436,6 +1483,13 @@ def _assemble_recommendation(
     action    = synth.action
     reasoning = synth.reasoning
 
+    # #433 — expected_stint_end is unvalidated LLM free text; clamp it against the
+    # physical pit_lap + cliff/capacity anchor via the pure _clamp_expected_stint_end
+    # helper (extracted so the clamp is CI-testable without loading any model).
+    expected_stint_end = _clamp_expected_stint_end(
+        synth.expected_stint_end, pit_lap_target, compound_next, cliff_p50, total_laps
+    )
+
     return StrategyRecommendation(
         action             = action,
         reasoning          = reasoning,
@@ -1448,7 +1502,7 @@ def _assemble_recommendation(
         risk_posture       = synth.risk_posture,
         contingencies      = synth.contingencies,
         key_risks          = synth.key_risks,
-        expected_stint_end = synth.expected_stint_end,
+        expected_stint_end = expected_stint_end,
         scenario_scores    = mc_results,
         regulation_context = regulation_context,
     )
@@ -1534,7 +1588,29 @@ def run_strategy_orchestrator(
         synth, pit_out, mc_results, regulation_context,
         sc_currently_active = situation_out.sc_currently_active,
         live_drivers        = _live_drivers_from(lap_state),
+        cliff_p50           = tire_out.laps_to_cliff_p50,
+        total_laps          = race_state.total_laps,
     )
+
+
+def _scope_laps_to_gp(
+    laps_df: pd.DataFrame,
+    lap_state: dict | None,
+    race_state: "RaceState | None" = None,
+) -> pd.DataFrame:
+    """Narrow a season-wide laps frame to the Grand Prix being analysed (#429/#465).
+
+    Thin delegator to the canonical implementation in
+    ``src/strategy/inference/engine.py``. That module imports FROM this one, so a
+    top-level ``import`` would be circular — the deferred import inside the body
+    breaks the cycle while keeping ONE source of truth. A hand-kept duplicate is
+    exactly the kind of drift the #429/#465 family of bugs came from, so we do not
+    keep two copies; the engine version also derives the GP from ``race_state`` when
+    ``lap_state`` carries no ``gp_name`` yet.
+    """
+    from src.strategy.inference.engine import _scope_laps_to_gp as _engine_scope
+
+    return _engine_scope(laps_df, lap_state, race_state)
 
 
 def run_strategy_orchestrator_from_state(
@@ -1565,8 +1641,14 @@ def run_strategy_orchestrator_from_state(
         driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
         lap_row     = driver_rows[driver_rows["LapNumber"] == race_state.lap]
         year        = int(laps_df["Year"].iloc[0]) if "Year" in laps_df.columns else 2025
+        # Derive the GP from the (driver, lap) row match, NOT laps_df.iloc[0] (the
+        # first row of the whole-season frame): the latter blends one race's GP with
+        # another race's stint/team — the #465 wrong-GP bug engine._build_default_lap_state
+        # also has to avoid. Fall back to iloc[0] only when the row is absent.
         gp_name     = (
-            str(laps_df["GP_Name"].iloc[0]) if "GP_Name" in laps_df.columns else ""
+            str(lap_row["GP_Name"].iloc[0])
+            if not lap_row.empty and "GP_Name" in lap_row
+            else (str(laps_df["GP_Name"].iloc[0]) if "GP_Name" in laps_df.columns else "")
         )
         stint = int(lap_row["Stint"].iloc[0]) if not lap_row.empty else 1
         team  = (
@@ -1608,6 +1690,13 @@ def run_strategy_orchestrator_from_state(
             },
             "rivals": [],
         }
+
+    # Scope AFTER lap_state is resolved (built above or supplied by the caller),
+    # never before — see _scope_laps_to_gp's docstring for the #465 ordering bug
+    # this avoids. Passing race_state lets the canonical engine helper derive the GP
+    # even when a caller supplies a lap_state without a gp_name. Every downstream use
+    # of laps_df in this function (both agent calls below) sees the scoped frame.
+    laps_df = _scope_laps_to_gp(laps_df, lap_state, race_state)
 
     # Layer 1a — always-on agents (RSM variants)
     pace_out, tire_out, situation_out, radio_out = _run_always_on_agents_from_state(
@@ -1662,4 +1751,6 @@ def run_strategy_orchestrator_from_state(
         synth, pit_out, mc_results, regulation_context,
         sc_currently_active = situation_out.sc_currently_active,
         live_drivers        = _live_drivers_from(lap_state),
+        cliff_p50           = tire_out.laps_to_cliff_p50,
+        total_laps          = race_state.total_laps,
     )

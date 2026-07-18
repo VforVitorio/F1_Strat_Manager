@@ -207,18 +207,20 @@ class PaceAgent:
     def _load_reference_laps(self, processed_dir: Path) -> pd.DataFrame:
         """Load the reference laps parquet used for session median computation.
 
-        Only four columns are loaded to keep the in-memory footprint small.
-        The median baseline is used by N31 to contextualise absolute predictions.
+        Five columns are loaded to keep the in-memory footprint small. The median
+        baseline is used by N31 to contextualise absolute predictions. DriverNumber
+        is also kept so predict_pace_tool can refuse an LLM-invented car number for
+        a real GP/year instead of predicting from data that does not exist (#476).
 
         Args:
             processed_dir: Root of the processed data directory.
 
         Returns:
-            DataFrame with columns GP_Name, Year, Compound, LapTime_s.
+            DataFrame with columns GP_Name, Year, Compound, LapTime_s, DriverNumber.
         """
         return pd.read_parquet(
             processed_dir / 'laps_featured_2025.parquet',
-            columns=['GP_Name', 'Year', 'Compound', 'LapTime_s'],
+            columns=['GP_Name', 'Year', 'Compound', 'LapTime_s', 'DriverNumber'],
         )
 
     # ── Encoding helpers ──────────────────────────────────────────────────────
@@ -470,6 +472,56 @@ class PaceAgent:
         subset = self.laps_ref.loc[mask, 'LapTime_s'].dropna()
         return float(subset.median()) if len(subset) > 0 else None
 
+    def _validate_pace_inputs(
+        self, driver_number: int, lap_number: int, total_laps: int,
+        gp_name: str, year: int,
+    ) -> Optional[str]:
+        """Refuse an LLM-supplied pace query when the lap or driver cannot be real.
+
+        predict_pace_tool takes 19 raw scalar params straight from the LLM with no
+        closure over a live-drivers roster or a lap_state at all (#476) — unlike
+        score_undercut_tool in pit_strategy_agent.py, which checks its free-text
+        driver_y against self._live_drivers before scoring. This is the pace-side
+        equivalent: an out-of-range lap or an invented car number would otherwise
+        produce a confident-looking lap-time prediction from data that does not
+        exist.
+
+        laps_ref only carries the 2025 season (see _load_reference_laps), so a
+        legitimate 2023/2024 call, or a GP name outside the 2025 calendar, yields
+        an empty ``known`` set here. That means "the roster is unknown", not "no
+        cars are racing", so the driver check is skipped rather than rejecting
+        every call outside 2025 — the same unknown-disables-the-guard rule
+        score_undercut_tool follows for its own live_drivers=None case.
+
+        Args:
+            driver_number: Car number as supplied by the LLM caller.
+            lap_number: Lap number as supplied by the LLM caller.
+            total_laps: Total scheduled race laps, also LLM-supplied.
+            gp_name: GP name matching the laps_ref GP_Name column.
+            year: Race year integer.
+
+        Returns:
+            An error string when the query should be refused, None when it is
+            safe to run inference.
+        """
+        if not (1 <= lap_number <= total_laps):
+            return (
+                f'Pace prediction REFUSED — lap {lap_number} is out of range for a '
+                f'{total_laps}-lap race (valid range: 1-{total_laps}).'
+            )
+
+        known = self.laps_ref.loc[
+            (self.laps_ref['GP_Name'] == gp_name) & (self.laps_ref['Year'] == year),
+            'DriverNumber',
+        ].dropna().astype(int)
+        known_set = set(known)
+        if known_set and driver_number not in known_set:
+            return (
+                f'Pace prediction REFUSED — car number {driver_number} is not on '
+                f'track at {gp_name} {year}. Known car numbers: {sorted(known_set)}.'
+            )
+        return None
+
     # ── Main inference entrypoint ─────────────────────────────────────────────
 
     def run(
@@ -623,7 +675,23 @@ class PaceAgent:
             laps_since_pit = d.get('tyre_life') or 1,
             fuel_load      = laps_remaining / max(total_laps, 1),
             year           = meta.get('year') or 2025,
-            prev_lap_time  = d.get('lap_time_s') or 90.0,
+            # ``d.get('prev_lap_time') or 90.0``, NOT ``d.get('lap_time_s')``: the
+            # latter fed this LAP's own time back in as the PREVIOUS lap's time, so
+            # the model chased its own most recent prediction instead of the real
+            # preceding lap (#435). RaceStateManager.get_driver_state now emits the
+            # real 'prev_lap_time' sourced from the parquet's Prev_LapTime column.
+            # ``or``, not the two-arg get(key, default) form: Prev_LapTime is NaN
+            # on the first lap of a stint/race (no earlier lap exists), which
+            # get_driver_state turns into an explicit ``None`` — present key, None
+            # value — and the two-arg form only substitutes when the KEY is
+            # absent, never when the VALUE is (the same Series.get trap #428/#446/
+            # #462 keep finding). Unlike stint_baseline_tyre_life below, None
+            # cannot be allowed through here: _predict() reads Prev_LapTime
+            # straight into ``prev + delta`` with no NaN branch, so a bare None
+            # would turn lap_time_pred itself into NaN. 90.0 is the same
+            # order-of-magnitude placeholder the old (wrong) code used, now only
+            # reached on a genuinely missing previous lap.
+            prev_lap_time  = d.get('prev_lap_time') or 90.0,
             prev_tyre_life = max(0, (d.get('tyre_life') or 1) - 1),
             prev_speed_st  = float(_speed_st),
             air_temp       = float(_air_temp),
@@ -814,8 +882,19 @@ if _LANGGRAPH_AVAILABLE:
 
         Returns:
             Dict with keys: lap_time_pred, delta_vs_prev, delta_vs_median,
-            ci_p10, ci_p90 (all floats in seconds).
+            ci_p10, ci_p90 (all floats in seconds). Returns {'error': str}
+            instead, without running inference, when the driver is not on
+            track for the given GP/year or the lap is outside [1, total_laps]
+            (#476) — the LLM supplies every one of these 19 params as free
+            text with no server-side roster or range check otherwise.
         """
+        agent = _get_default_pace_agent()
+        validation_error = agent._validate_pace_inputs(
+            driver_number, lap_number, total_laps, gp_name, year,
+        )
+        if validation_error is not None:
+            return {'error': validation_error}
+
         out = run_pace_agent(
             driver_number=driver_number, lap_number=lap_number, stint=stint,
             tyre_life=tyre_life, compound=compound, position=position, team=team,

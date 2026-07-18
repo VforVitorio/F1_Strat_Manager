@@ -235,6 +235,17 @@ class RaceStateManager:
             "lap_number": int(lap_number),
             # --- Timing ---
             "lap_time_s": _to_seconds(r.get("LapTime")),
+            # The featured parquet's own previous-lap time (N04's Prev_LapTime
+            # column) — NOT this lap's lap_time_s reused as a stand-in. The pace
+            # agent used to default prev_lap_time to the CURRENT lap's time
+            # (`d.get('lap_time_s') or 90.0`), which fed its own most recent
+            # prediction back in as the "previous" lap and made pace
+            # self-fulfilling (#435). ``.get`` (not indexing) so a laps_df built
+            # without this optional column returns None here rather than raising,
+            # same as every other optional column read via ``r.get(...)`` below.
+            # NaN (no earlier lap, e.g. the first lap of a stint) -> None, same
+            # handling as every other timing field in this method.
+            "prev_lap_time": _to_seconds(r.get("Prev_LapTime")),
             "sector1_s": _to_seconds(r.get("Sector1Time")),
             "sector2_s": _to_seconds(r.get("Sector2Time")),
             "sector3_s": _to_seconds(r.get("Sector3Time")),
