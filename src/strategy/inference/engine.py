@@ -15,15 +15,14 @@ Design (per documents/audits/P2B_ENGINE_DESIGN.md, #169 Phases 1.1 + 1.2)
 --------------------------------------------------------------------------
 ``run_lap`` dispatches on ``profile``:
   * ``rich``   — re-drives ``run_strategy_orchestrator_from_state``'s five-step
-                 sequence by IMPORTING the exact orchestrator layer functions
-                 (never copying them), and RETURNS the per-agent outputs the
-                 orchestrator's public API discards. This is arcade's proven
-                 pattern, promoted.
-                 ⚠️ "byte-for-byte" is what this used to claim, and it was false:
-                 re-driving a sequence means every argument must be threaded by
-                 hand, and one was not (`live_drivers`, which silently disabled
-                 #462's guard on this profile — the default for every surface).
-                 Importing the functions removes body drift, not call drift.
+                 sequence by importing the orchestrator layer functions (never
+                 copying them) and returns the per-agent outputs the public API
+                 discards. Importing the functions removes body drift, but not
+                 call drift: re-driving a sequence means every argument is
+                 threaded by hand. This is why the docstring no longer claims
+                 "byte-for-byte" parity — one argument (`live_drivers`) was once
+                 missed here, which disabled #462's guard on this profile, the
+                 default for every surface.
   * ``no-llm`` — the deterministic, zero-LLM-client path (see ``no_llm.py``); fixes
                  #166 by construction (it never calls ``_run_conditional_agents``).
 
@@ -31,15 +30,14 @@ Untouchability: nothing in ``src/agents/`` is modified. Every strategy layer is 
 SAME code object the orchestrator runs (imported, never copied); the only
 engine-owned code is the call sequence itself and the default-lap_state builder.
 
-Anti-drift guard: ``tests/test_engine.py`` and ``tests/test_engine_no_llm.py``.
+Anti-drift guards: ``tests/test_engine.py``, ``tests/test_engine_no_llm.py`` and
+``tests/test_engine_threads_every_argument.py`` (which checks, by AST, that this path
+passes ``_assemble_recommendation`` every argument the orchestrator does).
 
-⚠️ They do NOT assert byte-level parity with the orchestrator. This docstring used to
-promise a ``tests/test_engine_parity.py`` that **has never existed**, and the promise
-was load-bearing: it is why `_assemble_recommendation`'s `live_drivers` argument went
-unthreaded here for a whole session while everyone, including its author, believed a
-test would have caught it. What the real tests cover is the profile contract and the
-no-LLM path; the two `lap_state is None` fallbacks are kept in step **by hand**, so
-changing one without the other is a live risk, not a guarded one.
+These do not assert byte-level parity with the orchestrator. An earlier docstring cited
+a ``tests/test_engine_parity.py`` that does not exist; the argument-threading test above
+replaces that claim with a real one. The two ``lap_state is None`` fallbacks are still
+kept in step by hand, so changing one without the other is not caught by a test.
 """
 
 from __future__ import annotations

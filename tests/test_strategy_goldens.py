@@ -77,11 +77,21 @@ def _canned_outputs():
 # The exact MC output for the canned scenario at alpha=0.5 (seed 42, n=500),
 # rounded to 3 decimals by _run_mc_simulation. This IS the thesis-defended math:
 # any drift in simulate_lap_window or the sampling breaks this assert.
+# Re-frozen when OVERCUT started paying for its stop. Only OVERCUT's numbers moved —
+# STAY_OUT, PIT_NOW and UNDERCUT are unchanged to the digit, which is the proof the fix
+# only touched the branch it meant to.
+#
+# The old OVERCUT row is worth keeping visible, because it is the bug:
+#     OVERCUT: {"E": 0.893, "P10": 0.333, "P90": 0.333, "score": 0.613}
+# It was the ONLY positive score in the fixture, so it took the argmax — as it did on
+# 92.5% of all race states, by collecting the fresh-tyre gain and the full SC bonus
+# without ever subtracting `pit_i`. On this fixture the winner now flips to STAY_OUT,
+# which the model previously could not choose anywhere.
 _GOLDEN_ALPHA_05 = {
     "STAY_OUT": {"E": -0.149, "P10": -0.529, "P90": 0.0, "score": -0.339},
     "PIT_NOW": {"E": -0.574, "P10": -1.332, "P90": -0.695, "score": -0.953},
     "UNDERCUT": {"E": 0.01, "P10": -1.217, "P90": 0.26, "score": -0.604},
-    "OVERCUT": {"E": 0.893, "P10": 0.333, "P90": 0.333, "score": 0.613},
+    "OVERCUT": {"E": -1.026, "P10": -1.832, "P90": -1.195, "score": -1.429},
 }
 
 

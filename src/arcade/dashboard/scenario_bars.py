@@ -1,11 +1,12 @@
-"""Scenario score bars — four horizontal bars for STAY_OUT / PIT_NOW / UCUT / OCUT.
+"""Scenario score bars: four horizontal bars for STAY_OUT / PIT_NOW / UCUT / OCUT.
 
-Consumes ``latest.scenario_scores`` from the LapDecision (already
-normalised in ``src/arcade/strategy.py::_normalize_scores``). Each score
-is in [0, 1]; the bar widths are scaled relative to the maximum of the
-four so the winner always reaches 100% width even when absolute scores
-cluster low (e.g. all below 0.4 during quiet laps). The winner is
-coloured ACCENT; the rest stay TEXT_SECONDARY.
+Consumes ``latest.scenario_scores`` from the LapDecision (flattened in
+``src/arcade/strategy.py::_normalize_scores``). Scores are position-equivalent
+gains relative to the STAY_OUT baseline, so they are signed and the winner is
+frequently negative (STAY_OUT itself is the reference at 0.0). ``update_from``
+below shifts by the minimum before scaling, so bar widths stay valid whatever
+the sign; the winner reaches full width and is coloured ACCENT, the rest stay
+TEXT_SECONDARY.
 """
 
 from __future__ import annotations

@@ -1,20 +1,18 @@
 """The engine must pass `_assemble_recommendation` everything the orchestrator does.
 
-The engine's whole purpose is to remove duplication: it IMPORTS the orchestrator's layer
-functions rather than copying their bodies. But it re-drives the call *sequence*, which
-means every argument is threaded by hand — and importing the functions removes **body**
-drift, not **call** drift.
+The engine removes duplication by importing the orchestrator's layer functions rather
+than copying their bodies, but it re-drives the call sequence, so every argument is
+threaded by hand. Importing the functions prevents body drift, not call drift.
 
-That distinction cost a real bug. `_assemble_recommendation` grew a `live_drivers`
-argument (#462, so the LLM cannot name a retired car as an undercut target). The
-orchestrator threads it at both call sites; the engine did not. `live_drivers=None` is
-documented to mean "unknown" and therefore passes the LLM's value unchecked, so the guard
-was dead on the `rich` profile — which is the DEFAULT for /simulate, the arcade and the
-CLI. The fix shipped and reached nothing.
+That gap is a real failure mode: when `_assemble_recommendation` gained a `live_drivers`
+argument (#462, to keep the LLM from naming a retired car as an undercut target), the
+orchestrator threaded it at both call sites and the engine did not. `live_drivers=None`
+means "unknown" and passes the LLM value unchecked, so the guard was inactive on the
+`rich` profile, which is the default for /simulate, the arcade and the CLI.
 
-Nobody caught it because the module docstring promised an anti-drift guard,
-`tests/test_engine_parity.py`, that **has never existed**. This file is the smallest
-thing that would have.
+The guarantee this file provides is that the engine passes every keyword the orchestrator
+passes. The engine docstring previously cited a `tests/test_engine_parity.py` that does
+not exist; this test replaces that claim with an enforced one.
 """
 
 from __future__ import annotations
@@ -75,24 +73,20 @@ def test_live_drivers_reaches_the_assembly_from_the_engine():
     assert "live_drivers" in _kwargs_passed_by(engine._run_rich)
 
 
-def test_the_docstring_does_not_promise_a_test_that_does_not_exist():
-    """The promise of a guard is worse than no guard: it stops people looking.
+def test_the_docstring_does_not_name_a_test_that_does_not_exist():
+    """Every test file the engine docstring names as a guard must exist.
 
-    The engine's docstring cited `tests/test_engine_parity.py` as its anti-drift guard
-    for months. The file never existed, and its absence is why `live_drivers` went
-    unthreaded while its author believed a test covered it.
-
-    Only the line that ASSERTS a guard is checked. Prose explaining a file's absence may
-    name it — that is history, not a claim.
+    The docstring cited a `tests/test_engine_parity.py` that was never written. Naming a
+    guard that does not exist is worse than naming none, because it discourages checking.
+    This scans the "Anti-drift guards" section and asserts each file it points at is real.
     """
     import re
 
     from src.strategy.inference import engine
 
-    for line in (engine.__doc__ or "").splitlines():
-        if not line.strip().startswith("Anti-drift guard:"):
-            continue
-        for name in re.findall(r"tests/test_[a-z_]+\.py", line):
-            assert (ROOT / name).exists(), (
-                f"the engine docstring names {name} as its anti-drift guard, and it does not exist"
-            )
+    doc = engine.__doc__ or ""
+    section = doc.split("Anti-drift guard", 1)[-1].split("\n\n", 1)[0]
+    for name in re.findall(r"tests/test_[a-z_]+\.py", section):
+        assert (ROOT / name).exists(), (
+            f"the engine docstring names {name} as an anti-drift guard, but it does not exist"
+        )
