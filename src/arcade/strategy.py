@@ -383,9 +383,7 @@ class SimConnector(threading.Thread):
             # RaceState (#441).
             skip_reason = self._lap_skip_reason(lap_state.get("driver", {}))
             if skip_reason is not None:
-                logger.info(
-                    "Lap %d skipped (%s): no strategy pipeline call", lap_num, skip_reason
-                )
+                logger.info("Lap %d skipped (%s): no strategy pipeline call", lap_num, skip_reason)
                 continue
             try:
                 prev_lap_time = self._step_once(laps_df, lap_state, prev_lap_time)
