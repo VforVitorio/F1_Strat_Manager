@@ -15,13 +15,18 @@ All three consume the same core:
 
 - `src/agents/` — N25-N31 multi-agent stack (pace, tire, race situation,
   pit strategy, radio NLP, RAG regulations, orchestrator).
+- `src/strategy/inference/engine.py::run_lap` — the single shared per-lap
+  pipeline call that the CLI, Arcade, and backend all route through
+  (profiles: `rich` for the full LLM-synthesis path, `no-llm` for the
+  deterministic zero-LLM-client path). Replaces three hand-mirrored
+  copies of the orchestrator sequence that used to drift out of sync.
 - `src/simulation/` — `RaceReplayEngine` + `RaceStateManager`.
 - `data/processed/laps_featured_<year>.parquet` + `data/raw/<year>/<Location>/` +
   `data/tire_compounds_by_race.json`.
 
 The Streamlit path also runs a FastAPI backend (`src/telemetry/backend/`).
-The Arcade path runs the strategy pipeline locally without the backend
-(see [`docs/pages/arcade-strategy-pipeline.md`](docs/pages/arcade-strategy-pipeline.md)).
+The Arcade path calls `run_lap` in-process without going through the
+backend (see [`docs/pages/arcade-strategy-pipeline.md`](docs/pages/arcade-strategy-pipeline.md)).
 
 ## Multi-agent pipeline
 
@@ -54,7 +59,7 @@ Both windows subscribe to the arcade's `TelemetryStreamServer` on
 - Featured laps parquets + per-race raw dirs + tire-compound-by-race
   map form the input to the multi-agent stack.
 
-for the wire-level view.
+See [`docs/pages/simulation.md`](docs/pages/simulation.md) for the wire-level view.
 
 ## Where to go next
 

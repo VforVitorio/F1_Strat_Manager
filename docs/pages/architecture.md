@@ -25,7 +25,7 @@ sequenceDiagram
     MC-->>Orch: scored outcomes
     Orch->>LLM: synthesise recommendation
     LLM-->>Orch: Decision (ACTION · PACE · RISK · Plan)
-    Orch-->>UI: StrategyState payload
+    Orch-->>UI: StrategyRecommendation payload
 ```
 
 The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in a PySide6 dashboard, and the Streamlit app surfaces it inside a chat tab.
@@ -53,11 +53,11 @@ The atomic payload the simulation engine emits per driver per lap. It carries th
 
 ### `RaceState`
 
-The cumulative session view assembled by `RaceStateManager` from successive `lap_state` ticks. It holds the entire field's stint history, the pit-stop log, the safety-car timeline, and the per-driver tire compound roster. The orchestrator snapshots `RaceState` before each decision so every sub-agent sees the same frozen world, regardless of how fast they each respond.
+A thin, per-lap Pydantic model (`src/agents/strategy_orchestrator.py`) that carries the single-driver context N31 needs for one decision: driver code, lap, total laps, position, compound, tyre age, gap/pace deltas versus the car ahead, weather, radio/RCM windows, and the risk-tolerance dial. It is **not** a cumulative session object — there is exactly one `RaceState` class in the codebase, and it holds no stint history, pit log, or field-wide tire roster. The field-wide picture (every driver's stints, pit stops, and current tyre) lives in the `laps_df` DataFrame the orchestrator and agents load once per session, plus the `rivals` list inside each `lap_state` tick — see [Race replay engine](#/simulation) for that schema. The orchestrator builds a fresh `RaceState` per lap so every sub-agent decision is grounded in the same snapshot, regardless of how fast each agent responds.
 
-### `StrategyState`
+### `StrategyRecommendation`
 
-The structured output the orchestrator emits per decision tick. Fourteen fields are frozen by schema (action, target lap, target compound, expected delta, pace mode, risk level, plan summary, rationale, confidence, sub-agent attributions, scenario scores, and metadata flags); the narrative richness lives inside the LLM-synthesised `Plan` and `Rationale` blocks. `StrategyState` is what the CLI prints, the Arcade renders and the Streamlit chat surfaces.
+The structured output the orchestrator emits per decision tick (called `StrategyState` on the wire protocol some surfaces consume, but the Pydantic type is `StrategyRecommendation`). Fourteen fields are frozen by schema: the primary `action` plus pit-execution detail (`pit_lap_target`, `compound_next`, `undercut_target`), driver-side instructions (`pace_mode`, `target_lap_time_s`, `risk_posture`), multi-lap planning (`contingencies`, `key_risks`, `expected_stint_end`), and post-hoc grounding attached in code (`scenario_scores`, `regulation_context`) around the LLM's own `reasoning` and `confidence`. See [Agents API reference](#/agents-api) for the full field-by-field table. `StrategyRecommendation` is what the CLI prints, the Arcade renders and the Streamlit chat surfaces.
 
 ## How the pieces ship
 

@@ -14,7 +14,7 @@ One command launches everything: the arcade replay window (pyglet), the strategy
 
 - **Python**: 3.10 or newer. The project pins dependencies with `uv`.
 - **Dependencies**: run `uv sync` from the repo root. The lockfile pulls `arcade`, `PySide6`, `pyqtgraph`, `fastf1`, `langchain-openai`, the model stack (`xgboost`, `lightgbm`, `torch`), and the NLP stack (`transformers`, `sentence-transformers`, `setfit`). No manual install steps required beyond `uv sync`.
-- **LLM credentials**: either set `OPENAI_API_KEY` in a repo-root `.env` (the canonical TFG setup) or run LM Studio locally on `http://localhost:1234/v1` and export `F1_LLM_PROVIDER=lmstudio`. Only the wording of the orchestrator's reasoning changes.
+- **LLM credentials**: either set `OPENAI_API_KEY` in a repo-root `.env` (the canonical TFG setup) or run LM Studio locally on `http://localhost:1234/v1` and pass `--provider lmstudio` on the command line (the arcade's own flag; its default is `openai`, independent of the `F1_LLM_PROVIDER` env var the backend and CLI read). Only the wording of the orchestrator's reasoning changes.
 - **Race data cache**: the replay reads `data/raw/{year}/{Location}/laps.parquet` and optionally `weather.parquet`. The parquet files are produced by FastF1 on first run. Expect a 20–40 second delay on the first launch of a round.
 - **Vector store (optional)**: the N30 RAG agent reads a local Qdrant index under `data/rag/`. If missing, the orchestrator degrades gracefully — regulation lookups return an empty context. Run `python scripts/build_rag_index.py` once to build it.
 

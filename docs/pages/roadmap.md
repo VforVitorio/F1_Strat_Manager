@@ -264,7 +264,8 @@
     <p class="rl-title">ML foundation: lap time and tire degradation</p>
     <p class="rl-summary">First two production ML models. XGBoost delta-lap-time predictor (N06) and a Temporal Convolutional Network for tire degradation with MC Dropout uncertainty (N07-N10, per-compound fine-tuning on SOFT / MEDIUM / HARD).</p>
     <div class="rl-metrics">
-      <span class="rl-metric">MAE 0.4104 s</span>
+      <span class="rl-metric">Pace MAE 0.4104 s</span>
+      <span class="rl-metric">Tire MAE 0.708 s</span>
       <span class="rl-metric">MC Dropout N=50</span>
     </div>
   </div>
@@ -334,9 +335,9 @@
       <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Multi-agent system: N25 to N31</p>
-    <p class="rl-summary">Seven LangGraph ReAct agents coordinated by a three-layer Strategy Orchestrator: MoE-style dynamic routing, Monte Carlo simulation over 500 samples ranking four strategy candidates by risk-adjusted expected outcome, and LLM synthesis producing a 14-field <code>StrategyRecommendation</code>. Bahrain 2025 end-to-end demo.</p>
+    <p class="rl-summary">Six LangGraph ReAct sub-agents coordinated by the N31 Strategy Orchestrator's three-layer pipeline: MoE-style dynamic routing, Monte Carlo simulation over 500 samples ranking four strategy candidates by risk-adjusted expected outcome, and LLM synthesis producing a 14-field <code>StrategyRecommendation</code>. Bahrain 2025 end-to-end demo.</p>
     <div class="rl-metrics">
-      <span class="rl-metric">7 agents</span>
+      <span class="rl-metric">6 agents + 1 orchestrator</span>
       <span class="rl-metric">MC N=500</span>
       <span class="rl-metric">MoE routing</span>
     </div>
@@ -433,7 +434,7 @@
       <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
     </div>
     <p class="rl-title">Documentation site launch and custom domain</p>
-    <p class="rl-summary">React + Babel docs site published under <code>docs.f1stratlab.com</code>. Full architecture pages, agent API reference, arcade quick-start, CI/CD narrative, and graph-based page discovery. Five drawio architecture diagrams. Brand theme aligned with the F1 StratLab purple palette.</p>
+    <p class="rl-summary">React docs site (plain <code>React.createElement</code> scripts, no JSX, no Babel, no build step) published under <code>docs.f1stratlab.com</code>. Full architecture pages, agent API reference, arcade quick-start, CI/CD narrative, and graph-based page discovery. Five drawio architecture diagrams. Brand theme aligned with the F1 StratLab purple palette.</p>
   </div>
 </li>
 
@@ -451,7 +452,7 @@
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Modern frontend</p>
-    <p class="rl-summary">React / Vite UI replaces Streamlit. The FastAPI backend stays unchanged. A presentation-layer swap: menus, flows, and all agent endpoints remain the same; only the client is rewritten for faster load times and a production-grade SPA experience.</p>
+    <p class="rl-summary">React / Vite UI replaces Streamlit. In progress under <code>src/telemetry/webapp/</code>: foundations, dashboard, home, and the strategy tab (Race Trace) are largely shipped on <code>dev</code>; comparison, race, lab, and chat tabs remain. The FastAPI backend stays unchanged, and Streamlit remains the production surface until the migration completes. A presentation-layer swap: menus, flows, and all agent endpoints remain the same; only the client is rewritten for faster load times and a production-grade SPA experience.</p>
   </div>
 </li>
 

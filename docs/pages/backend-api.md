@@ -8,15 +8,45 @@ Entry point: `backend/main.py` — creates the FastAPI app and registers all rou
 
 ## Router map
 
+There is no `auth` router. Authentication is a single ASGI middleware wrapping every router (see below), not a mounted endpoint set.
+
 | Router | Prefix | Tags | Source |
 |---|---|---|---|
-| auth | `/api/v1` | auth | `endpoints/auth.py` |
-| telemetry | `/api/v1/telemetry` | telemetry | `endpoints/telemetry.py` |
-| circuit_domination | `/api/v1` | circuit_domination | `endpoints/circuit_domination.py` |
-| comparison | `/api/v1/comparison` | comparison | `endpoints/comparison.py` |
-| chat | `/api/v1/chat` | chat | `endpoints/chat.py` |
-| voice | `/api/v1/voice` | voice | `endpoints/voice.py` |
-| strategy | `/api/v1/strategy` | strategy | `endpoints/strategy.py` |
+| telemetry | `/api/v1/telemetry` | telemetry | `api/v1/endpoints/telemetry.py` |
+| circuit_domination | `/api/v1` | circuit_domination | `api/v1/endpoints/circuit_domination.py` |
+| comparison | `/api/v1/comparison` | comparison | `api/v1/endpoints/comparison.py` |
+| chat | `/api/v1/chat` | chat | `api/v1/endpoints/chat.py` |
+| voice | `/api/v1/voice` | voice | `api/v1/endpoints/voice.py` |
+| strategy | `/api/v1/strategy` | strategy | `api/v1/endpoints/strategy.py` |
+
+Two more mount points sit outside the router list:
+
+- **`GET /`** and **`GET /health`** — unauthenticated liveness endpoints, registered directly on the `FastAPI` app in `main.py`.
+- **`/mcp`** — the FastMCP Streamable-HTTP server, mounted only when `F1_MCP_ENABLED=true` (off by default). The chat pipeline reaches the same tools in-process regardless of this flag, so leaving it unmounted removes an open network surface, not a feature. See "Authentication" and "MCP-Driven Tool Routing" below.
+
+## Authentication
+
+Every router (and the `/mcp` mount, when enabled) sits behind a single shared-secret ASGI middleware, `ApiKeyMiddleware` (`backend/core/auth.py`, Security A1 / issue #224). It is intentionally pure ASGI rather than `BaseHTTPMiddleware`, because the latter buffers the whole response body and would break the SSE streams (`/chat/tool-message-stream`, `/simulate`).
+
+- **Header**: `X-API-Key`, compared against the `F1_API_KEY` env var with `hmac.compare_digest`.
+- **Open paths**: `/` and `/health` always pass unauthenticated (uptime probes). `OPTIONS` (CORS preflight) always passes.
+- **Safe-by-default when unset**: if `F1_API_KEY` is not set, every other request also passes — this is the local-dev default. The dangerous combination is a non-loopback bind (`F1_HOST` other than `127.0.0.1`/`localhost`/`::1`) with no key set: `enforce_startup_security()` refuses to boot in that case rather than come up open on the network.
+- **WebSocket**: gated the same way; an unauthorized WS handshake gets a policy-violation close (code 1008) instead of a 401 body.
+
+This means `F1_API_KEY` and `F1_HOST` (see [Setup and deployment](#/setup)) are the two env vars that decide whether the backend is safe to expose beyond localhost.
+
+## Rate limiting
+
+Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`, Security C2 / S-7) keyed on client IP. No external dependency — a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket.
+
+| Route | Burst capacity | Refill rate |
+|---|---|---|
+| `/pace`, `/tire`, `/situation`, `/pit`, `/radio` | 20 | 60/min |
+| `/pace-range`, `/tire-range`, `/rag` | 5 | 10/min |
+| `/recommend` | 5 | 10/min |
+| `/simulate` | 3 | 3/min |
+
+An exhausted bucket returns `429` with a `Retry-After` hint. Set `F1_RATE_LIMIT_OFF=1` to disable limiting entirely (load tests, benchmarking). A token is consumed only at request admission, so a long-lived SSE stream (`/simulate`, `/chat/tool-message-stream`) is metered once and then runs unmetered.
 
 ## Telemetry endpoints
 
@@ -77,6 +107,12 @@ Each tool is mapped to a `DisplayType` hint via `TOOL_DISPLAY_MAP` (`models/tool
 
 `chat_engine._trim_for_llm` caps long arrays before they are sent back to the LLM for summarisation; the unmodified payload still reaches the frontend on `tool_result.data` so charts retain the full series. The four telemetry tools are wired to `CHART` so the frontend renders them as inline Plotly figures (see [Streamlit frontend → chat tool-result rendering](#/streamlit)).
 
+### Tool risk tiers and the chat allowlist (Security A2, #224)
+
+`models/tool_schemas.py` classifies every dispatchable MCP tool into a `ToolRisk` tier — `READ_SAFE` (cheap, e.g. `predict_pace`), `READ_EXPENSIVE` (heavy but still read-only, e.g. `recommend_strategy`'s 500-sample Monte Carlo, or `query_regulations`'s RAG lookup), or `MUTATING` (writes/exports; none exist today). `CHAT_ALLOWED_TOOLS` is the default-deny set built from the first two tiers: a tool absent from `TOOL_RISK_MAP` — hallucinated by the LLM, or a newly added tool nobody classified yet — is refused by both `mcp_bridge` (before it reaches the LLM's tool list) and `chat_engine`'s dispatch guard (before it runs), and a `MUTATING` tool can never join the allowlist. The hard rule: no write/export tool may be added to the MCP server until it has a `TOOL_RISK_MAP` entry.
+
+Every Phase 1 tool (`predict_pace`/`predict_tire`/`predict_situation`/`predict_pit`/`analyze_radio`/`recommend_strategy`) also normalises its `gp`/`driver`/`lap`/`year` arguments in `mcp_tools.py` before building the `lap_state` (`_normalize_gp_name`, `_normalize_driver_code`, `_normalize_lap`, `_normalize_year`). An unparseable lap number used to silently become lap 1 (#442); it now raises `ToolInputError`, which the `_catch_tool_input_error` decorator turns into a plain "X is invalid, here are the valid options" string for the LLM instead of a traceback — the same REFUSED shape the agent-level tool guards described in [Agents API reference](#/agents-api) already use.
+
 ### Smart-spinner stage tracker
 
 The frontend mints a UUID, sends it on every chat request via the `X-Request-Id` header, and polls `/api/v1/chat/status?request_id=...` every second. The backend writes the current stage (`preparing_tools`, `model_choosing_tool`, `calling_<tool>`, `summarizing_with_llm`, ...) into a process-global tracker (`services/chatbot/stage_tracker.py`) at every checkpoint, cleared in a `try/finally` so the dict never leaks. The Streamlit chat page maps these stages to humanised labels so the spinner narrates the slow phases (model loading, tool execution).
@@ -107,6 +143,26 @@ All strategy endpoints live under `/api/v1/strategy/`. They accept JSON bodies a
 
 The `/api/v1/strategy/simulate` SSE endpoint is consumed by the Streamlit app and by `curl` / `TestClient` smoke tests. The arcade replay no longer calls this endpoint — as of Phase 3.5 Proceso B (April 2026), the arcade owns its own strategy pipeline via [`src/arcade/strategy_pipeline.py`](#/arcade-strategy-pipeline).
 
+### `POST /api/v1/strategy/simulate`
+
+Streams per-lap strategy decisions as Server-Sent Events, rate-limited to 3 requests/minute per client (see "Rate limiting" above).
+
+```python
+class SimulateRequest(BaseModel):
+    year: int = 2025            # 2023-2025
+    gp: str
+    driver: str
+    team: str
+    driver2: Optional[str] = None
+    lap_range: Optional[tuple[int, int]] = None
+    risk_tolerance: float = 0.5  # 0-1
+    no_llm: bool = False
+    provider: str = "lmstudio"   # "lmstudio" | "openai"
+    interval_s: float = 0.0      # 0-10, artificial delay between laps
+```
+
+Event stream: one `start` event, then one `lap` (or `error`) event per processed lap, closed with a `summary` event. A blank SSE comment (`:\n\n`) is sent every 15 `lap` events as a heartbeat so long runs survive proxy idle timeouts.
+
 ### Metadata (GET)
 
 | Path | Description |
@@ -115,19 +171,27 @@ The `/api/v1/strategy/simulate` SSE endpoint is consumed by the Streamlit app an
 | `/api/v1/strategy/available-drivers` | Driver codes for a GP |
 | `/api/v1/strategy/lap-range` | Min/max lap for a driver at a GP |
 | `/api/v1/strategy/lap-state` | Build canonical lap_state dict from parquet |
+| `/api/v1/strategy/radio-available-gps` | GPs with a recorded radio/RCM corpus |
+| `/api/v1/strategy/radio-laps` | Laps with radio messages for a GP (optionally filtered by driver) |
+| `/api/v1/strategy/radio-transcript` | Cached Whisper transcript for one driver/lap |
 
 ### Agent endpoints (POST)
 
 | Path | Request Body | Agent | Description |
 |---|---|---|---|
 | `/api/v1/strategy/pace` | `PaceRequest` | N25 | Lap time prediction + CI |
-| `/api/v1/strategy/pace-range` | `PaceRangeRequest` | N25 | Batch predictions over lap range |
+| `/api/v1/strategy/pace-range` | `PaceRangeRequest` | N25 | Batch predictions over a lap range (Model Lab chart) |
 | `/api/v1/strategy/tire` | `TireRequest` | N26 | Tire cliff estimation |
+| `/api/v1/strategy/tire-range` | `PaceRangeRequest` | N26 | Batch degradation over a lap range (actual vs predicted) |
 | `/api/v1/strategy/situation` | `SituationRequest` | N27 | Overtake + SC probability |
 | `/api/v1/strategy/pit` | `PitRequest` | N28 | Pit duration + undercut analysis |
 | `/api/v1/strategy/radio` | `RadioRequest` | N29 | NLP radio pipeline |
 | `/api/v1/strategy/rag` | `RagRequest` | N30 | Regulation retrieval |
 | `/api/v1/strategy/recommend` | `RecommendRequest` | N31 | Full orchestrator pipeline |
+
+`/tire-range` reuses `PaceRangeRequest` — same `{year, gp, driver, lap_start, lap_end}` shape as `/pace-range`, just routed to the TCN instead of the XGBoost model.
+
+Every POST endpoint above (plus `/pace-range` and `/tire-range`) sits behind its own rate-limit bucket — see "Rate limiting" above.
 
 ### Request schemas
 
@@ -149,6 +213,14 @@ class RadioRequest(BaseModel):
     radio_msgs: List[Dict[str, Any]] = []
     rcm_events: List[Dict[str, Any]] = []
 
+class PaceRangeRequest(BaseModel):
+    """Shared by /pace-range and /tire-range."""
+    year: int = 2025
+    gp: str
+    driver: str
+    lap_start: int
+    lap_end: int
+
 class RagRequest(BaseModel):
     question: str
 
@@ -161,21 +233,25 @@ class RecommendRequest(BaseModel):
     risk_tolerance: float = 0.5
     radio_msgs: Optional[List[Dict[str, Any]]] = None
     rcm_events: Optional[List[Dict[str, Any]]] = None
+    # Three-letter code of the rival selected in the Strategy tab. When set,
+    # gap_ahead_s / pace_delta_s are measured against this car instead of the
+    # positional car ahead (#431). None keeps the old positional behaviour.
+    rival: Optional[str] = None
 ```
 
 ### Response schemas
 
-All agent endpoints return `StrategyResponse`:
+All agent endpoints return the generic `StrategyResponse` envelope. Swagger also exposes a typed result model per agent (`PaceResult`, `TireResult`, `SituationResult`, `PitResult`, `RadioResult`, `RagResult` — mirroring the dataclass fields in [Agents API reference](#/agents-api)) for self-documentation, but the actual response body is the untyped envelope below:
 
 ```python
 class StrategyResponse(BaseModel):
-    agent: str       # e.g. "pace", "tire", "orchestrator"
+    agent: str       # e.g. "pace", "tire", "radio", "orchestrator"
     result: Dict[str, Any]
 ```
 
 ### Error handling
 
-Strategy endpoints return structured errors:
+Strategy endpoints catch `(KeyError, TypeError, ValueError)` from the underlying agent and return **422** (a bad/incomplete input); any other exception returns **500**. Both cases share the same structured `StrategyError` body:
 
 ```json
 {
@@ -185,9 +261,11 @@ Strategy endpoints return structured errors:
 }
 ```
 
+`/pace-range` and `/tire-range` also return `503` when the requested year's featured parquet is not cached, and `404` when the GP or driver is not found in it.
+
 ## CORS
 
-The backend allows requests from the frontend URL (default `http://localhost:8501`) via `CORSMiddleware`.
+`CORSMiddleware` allows a single origin — `FRONTEND_URL` (default `http://localhost:8501`) — not a wildcard. Credentials are dropped (`allow_credentials=False`, the Streamlit frontend calls the backend server-side, never from the browser), and both the method and header allowlists are enumerated rather than `"*"`: `GET`/`POST`/`OPTIONS` and `Content-Type`/`Accept`/`X-Request-Id`. The `ApiKeyMiddleware` described under "Authentication" wraps CORS from the outside (registered after it in `main.py`), so an unauthenticated request is rejected before any CORS or routing logic runs; `OPTIONS` preflight is exempted so it still completes.
 
 ## Swagger / OpenAPI
 
