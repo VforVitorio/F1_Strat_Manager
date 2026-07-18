@@ -72,4 +72,4 @@ The narratives on this site stop at the contract level. For per-file deep-dives 
 | Release automation (`release-please`) | v1.1.0 | shipped |
 | Current release | v__DOCS_VERSION__ | shipped |
 
-The current focus is documentation polish for the thesis defence; see the [project changelog](https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md) for the full history.
+F1 StratLab was defended as a Final Degree Project in June 2026, graded 10/10 with Distinction (Matricula de Honor) and unanimously recommended by the tribunal for publication as a research article. Development continues past the defence: a React front-end migration is underway (Streamlit remains the current production surface in the meantime) alongside ongoing correctness hardening across the multi-agent pipeline. See the [project changelog](https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md) for the full history.

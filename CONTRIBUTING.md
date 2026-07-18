@@ -21,8 +21,8 @@ after merge.
 ## Development setup
 
 ```bash
-git clone https://github.com/VforVitorio/F1_Strat_Manager.git
-cd F1_Strat_Manager
+git clone https://github.com/VforVitorio/F1-StratLab.git
+cd F1-StratLab
 git submodule update --init --recursive     # src/telemetry/ is a submodule
 uv sync                                      # installs every dependency
 cp .env.example .env                         # add OPENAI_API_KEY here
@@ -34,13 +34,15 @@ Run once to pre-populate the data cache on first launch:
 python -c "from src.f1_strat_manager.data_cache import ensure_setup; ensure_setup(show_progress=True)"
 ```
 
-Three entry points after install (`pyproject.toml::[project.scripts]`):
+Five entry points after install (`pyproject.toml::[project.scripts]`):
 
 | Command | What it runs |
 |---|---|
-| `f1-sim` | CLI strategy simulation with Rich live panel |
+| `f1-strat` | Interactive CLI wizard (arrow-key pickers for race / driver / provider); shells out to `f1-sim` |
+| `f1-sim` | Headless CLI strategy simulation with Rich live panel (the scripted form) |
 | `f1-arcade --strategy` | 2D replay + PySide6 dashboard + telemetry |
 | `f1-streamlit` | Post-race analysis + chat UI |
+| `f1-eval` | Regenerates the model evaluation reports (`registry`, `calibration`, `hygiene`, `nlp`, `models`, `alert-llm` subcommands) under `documents/eval_reports/` |
 
 ## Code style
 
@@ -71,9 +73,10 @@ Some code carries hard rules set by the TFG author:
 - **`scripts/run_simulation_cli.py`** — the TFG's PMV (first working
   CLI). Duplicate before modifying; do not refactor in-place.
 - **`src/agents/` internals** — stable contract for the CLI + Streamlit
-  + Arcade paths. Additive entry points are welcome (see the verbose
-  variant in `src/arcade/strategy_pipeline.py`), but do not refactor
-  existing ones.
+  + Arcade paths. Additive entry points are welcome (see
+  `src/strategy/inference/engine.py::run_lap`, the shared per-lap pipeline
+  call all three surfaces route through), but do not refactor existing
+  agent modules in place.
 - **`notebooks/**`** and **`legacy/**`** — exploration / historical
   archive, different conventions.
 
@@ -127,13 +130,20 @@ these safeguards trigger there. They are no-ops on POSIX.
 
 ## CI pipeline
 
-Three parallel jobs run on every push and PR (`.github/workflows/ci.yml`):
+Four jobs run on every push and PR (`.github/workflows/ci.yml`):
 
 | Job | Installs | Runs |
 |---|---|---|
 | `lint` | nothing — ruff via `uvx` | `ruff check .` + `ruff format --check .` |
 | `typecheck` | `uv sync --extra dev` (mypy + project deps, no voice extras) | `mypy src/rag/` |
-| `test` | `uv sync --all-extras` (full ML/voice/arcade stack) | `pytest -v` |
+| `test` | `uv sync --all-extras` (full ML/voice/arcade stack) | `pytest -v --cov=src` + a collected-test-count floor (guards against a refactor silently dropping the suite) |
+| `pip-audit` | `uv export` to a requirements file | `pip-audit` against the locked deps (advisory, `continue-on-error: true` while baselining) |
+
+`test` and `typecheck` are additionally gated by `dorny/paths-filter`:
+they skip their real work (still reporting green) when the diff touches
+neither `src/`, `tests/`, `pyproject.toml`, `uv.lock`, nor the workflow
+file itself — a docs-only or CI-only PR does not pay for a full ML-stack
+install. `lint` and `pip-audit` stay always-on.
 
 All jobs share uv's wheel cache (`enable-cache: true`, keyed off
 `uv.lock`), so the cache only invalidates when the resolved graph
@@ -159,7 +169,7 @@ at once and stranded them for 20+ minutes.
 ### PR labels
 
 Every pull request gets auto-tagged with one or more `area:` labels by
-`.github/workflows/labeler.yml` (path-based via `actions/labeler@v5`).
+`.github/workflows/labeler.yml` (path-based via `actions/labeler@v6`).
 Dependabot PRs additionally get their label set by `dependabot.yml` so
 the tag is in place the moment the PR opens — no need to wait for the
 labeler workflow to run.
@@ -219,11 +229,28 @@ accepting a bump that breaks something:
      import paths, `np.bool_` alias). Grows whenever a new upstream
      incident reveals a fragile call site.
 
+### Security workflows
+
+Three additional workflows run independently of `ci.yml`, all scoped to
+the parent repo (the `src/telemetry` submodule has its own scanner
+coverage, tracked separately):
+
+- **CodeQL** (`.github/workflows/codeql.yml`) — SAST on Python and the
+  `docs/` React SPA, `security-extended` query suite, on push/PR to
+  `main`/`dev` plus a weekly schedule.
+- **gitleaks** (`.github/workflows/gitleaks.yml`) — secret scanning over
+  full history on push/PR plus a weekly schedule, complementing GitHub's
+  native secret scanning.
+- **OSV-Scanner** (`.github/workflows/osv-scanner.yml`) — cross-ecosystem
+  vulnerability scan against OSV.dev on `uv.lock`; blocking (any new,
+  un-waived CVE fails the build). Known unfixable CVEs (Pillow, torch,
+  ecdsa) are waived with documented reasons in `osv-scanner.toml`.
+
 ## Issue templates
 
-File an issue via the GitHub UI. Three templates are available under
+File an issue via the GitHub UI. Four templates are available under
 [.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE): bug report, feature
-request, data issue.
+request, data issue, epic.
 
 ## Related reading
 

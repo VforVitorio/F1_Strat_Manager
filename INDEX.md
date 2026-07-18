@@ -6,7 +6,7 @@ The project integrates several ML stacks — XGBoost/LightGBM for race strategy 
 
 The current development phase (N25–N31) replaces the legacy Experta rule engine with a **LangGraph multi-agent architecture**: specialised sub-agents (pace, tyre, overtake, safety car, pit strategy, radio NLP, regulation RAG) coordinate under a Supervisor Orchestrator.
 
-> For full documentation see the [README](README.md) and the [DeepWiki](https://deepwiki.com/VforVitorio/F1_Strat_Manager). For the deep reference (methodology, metrics, design rationale): the **TFG thesis + IEEE technical report** in [`documents/thesis/`](documents/thesis/). Legacy paper: [F1_Strategy_Manager_AI.pdf](documents/docs_legacy_strat_manager/F1_Strategy_Manager_AI.pdf).
+> For full documentation see the [README](README.md) and the [DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab). For the deep reference (methodology, metrics, design rationale): the **TFG thesis + IEEE technical report** in [`documents/thesis/`](documents/thesis/). Legacy paper: [F1_Strategy_Manager_AI.pdf](documents/docs_legacy_strat_manager/F1_Strategy_Manager_AI.pdf).
 
 Notebooks are the primary development artefact. `src/` modules are extracted from notebooks only when they need to be imported by other notebooks or the telemetry app.
 
@@ -89,6 +89,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | [N22_ner_models.ipynb](notebooks/nlp/N22_ner_models.ipynb)                   | F1-domain NER on short radio transcriptions; BERT-large CoNLL-03 BIO token classifier (F1 = 0.42); documents GLiNER zero-shot and fine-tuning failures |
 | [N23_rcm_parser.ipynb](notebooks/nlp/N23_rcm_parser.ipynb)                   | Rule-based structured event extractor for FastF1 `race_control_messages`; deterministic, no ML required                                                |
 | [N24_nlp_pipeline.ipynb](notebooks/nlp/N24_nlp_pipeline.ipynb)               | Unified inference pipeline merging N20-N23: sentiment + intent + NER + RCM parsing; GPU P95 latency 59.4 ms; exports `pipeline_config_v1.json`         |
+| [N33_radio_dataset_builder.ipynb](notebooks/nlp/N33_radio_dataset_builder.ipynb) | Builds the static per-GP OpenF1 radio corpus (parquets + MP3s) consumed at replay time by `src/nlp/radio_runner.py`; the CLI's `ensure_radio_corpus()` downloads this corpus lazily per GP |
 
 ### Agents (`notebooks/agents/`)
 
@@ -98,7 +99,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | [N30_rag_agent.ipynb](notebooks/agents/N30_rag_agent.ipynb)   | RAG Agent — retrieval-augmented generation over FIA Sporting and Technical Regulations (2023-2025) via local Qdrant; returns structured `RegulationContext` objects with article references |
 | [N34_radio_runner_smoke.ipynb](notebooks/agents/N34_radio_runner_smoke.ipynb) | Radio runner smoke test — end-to-end validation of `src/nlp/radio_runner.py`: cache hit/miss, per-lap radio distribution, transcript sanity, and N29 round-trip via `run_radio_agent_from_state` on Bahrain 2025 (28 radios + 76 RCMs, lap 4 emits a PROBLEM alert) |
 
-> The full multi-agent system (N25–N31) is **complete**. The importable agent + orchestrator modules live in [`src/agents/`](src/agents/) (each exposes `run_*_agent_from_state`). Notebooks N26–N29, N31, plus N33 (decision thresholds + calibration benchmarks) and N34 (radio runner smoke) are under `notebooks/agents/`.
+> The full multi-agent system (N25–N31) is **complete**. The importable agent + orchestrator modules live in [`src/agents/`](src/agents/) (each exposes `run_*_agent_from_state`). Notebooks N26–N29, N30B (RAG benchmark), two N31 notebooks (`N31_strategy_orchestrator.ipynb` + `N31_mc_visualization.ipynb`), N32 (smoke test), N33 (decision thresholds + calibration benchmarks), and N34 (radio runner smoke) are under `notebooks/agents/`. A different, unrelated `N33_radio_dataset_builder.ipynb` lives under `notebooks/nlp/` (see the NLP table below) — the two share a number by coincidence, not by pipeline order.
 
 ---
 
@@ -142,24 +143,35 @@ The two files below are the **legacy** `experta` rule engine, kept for reference
 
 ### `src/strategy/`
 
+`inference/engine.py` is **production**: it is the single shared implementation
+of the per-lap N31 pipeline, and the CLI, Arcade, and FastAPI backend all route
+through it instead of maintaining hand-mirrored copies (a real drift bug once
+caused every `--no-llm` lap to crash, since a signature change was mirrored
+into two of the three copies but not the third). `eval/` backs the `f1-eval`
+console script. The jupytext-exported `models/` files and `training/` (empty)
+are reference/historical only — see [`src/strategy/README.md`](src/strategy/README.md).
+
 | File                                                                                           | Description                                          |
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [src/strategy/models/lap_time_model.py](src/strategy/models/lap_time_model.py)                 | Jupytext-exported lap time model module              |
-| [src/strategy/models/tire_degradation_model.py](src/strategy/models/tire_degradation_model.py) | Jupytext-exported tire degradation model module      |
-| [src/strategy/inference/tire_predictor.py](src/strategy/inference/tire_predictor.py)           | Jupytext-exported tire degradation inference wrapper |
+| [src/strategy/inference/engine.py](src/strategy/inference/engine.py)                           | `run_lap()` — the shared strategy inference engine consumed by the CLI, Arcade, and backend; dispatches on `profile` (`"rich"` re-drives the full N31 orchestrator sequence, `"no-llm"` is the deterministic zero-LLM-client path) |
+| [src/strategy/inference/no_llm.py](src/strategy/inference/no_llm.py)                           | The deterministic `--no-llm` code path consumed by `run_lap` |
+| [src/strategy/eval/](src/strategy/eval/)                                                       | `f1-eval` CLI backend — regenerates the model evaluation reports (metrics registry, calibration, threshold hygiene, NLP per-stage eval, headline-number reproduction, LLM-judged alert precision) under `documents/eval_reports/` |
+| [src/strategy/inference/tire_predictor.py](src/strategy/inference/tire_predictor.py)           | Jupytext-exported tire degradation inference wrapper (N09 era; reference only) |
+| [src/strategy/models/lap_time_model.py](src/strategy/models/lap_time_model.py)                 | Jupytext-exported lap time model module (reference only) |
+| [src/strategy/models/tire_degradation_model.py](src/strategy/models/tire_degradation_model.py) | Jupytext-exported tire degradation model module (reference only) |
 
 ### `src/telemetry/`
 
 A separate full-stack web application for live telemetry visualisation, independent of the agent notebooks.
 
-| Component                                                                | Description                                                                                                             |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| [src/telemetry/backend/main.py](src/telemetry/backend/main.py)           | FastAPI application entry point; mounts endpoints for telemetry, circuit domination, driver comparison, chat, and voice |
-| `src/telemetry/backend/api/`                                             | Versioned API route handlers (`telemetry`, `comparison`, `chatbot`, `voice`)                                            |
-| `src/telemetry/backend/services/`                                        | Business logic:`telemetry_service.py`, `comparison_service.py`, and sub-services for telemetry and voice                |
-| [src/telemetry/frontend/app/main.py](src/telemetry/frontend/app/main.py) | Streamlit multi-page app entry point (dashboard, comparison, chat pages)                                                |
-| `src/telemetry/frontend/app/pages/`                                      | Individual Streamlit pages                                                                                              |
-| `src/telemetry/frontend/app/components/`                                 | Reusable UI components (auth, layout, navbar)                                                                           |
+| Component                                                                | Description                                                                                                                                |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [src/telemetry/backend/main.py](src/telemetry/backend/main.py)           | FastAPI application entry point; mounts endpoints for telemetry, circuit domination, driver comparison, chat, voice, and strategy             |
+| `src/telemetry/backend/api/`                                             | Versioned API route handlers (`telemetry`, `circuit_domination`, `comparison`, `chat`, `voice`, `strategy` — the last exposes all N25-N31 agents + orchestrator over REST) |
+| `src/telemetry/backend/services/`                                        | Business logic: `telemetry/` (FastF1 client + session cache), `chatbot/` (chat engine, LLM service, MCP bridge), `simulation/` (SSE strategy-replay generator), `voice/` (STT/TTS/audio), plus `comparison_service.py` |
+| [src/telemetry/frontend/app/main.py](src/telemetry/frontend/app/main.py) | Streamlit multi-page app entry point (dashboard, comparison, chat pages)                                                                    |
+| `src/telemetry/frontend/app/pages/`                                      | Individual Streamlit pages                                                                                                                  |
+| `src/telemetry/frontend/app/components/`                                 | Reusable UI components (auth, layout, navbar)                                                                                               |
 
 ### `src/data_extraction/`
 

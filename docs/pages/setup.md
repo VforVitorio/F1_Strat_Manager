@@ -12,16 +12,13 @@
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/VforVitorio/F1_Strat_Manager.git
-cd F1_Strat_Manager
-pip install -e .
+git clone https://github.com/VforVitorio/F1-StratLab.git
+cd F1-StratLab
+git submodule update --init --recursive   # src/telemetry/ is a submodule
+uv sync --all-extras
 ```
 
-Or with uv:
-
-```bash
-uv pip install -e .
-```
+`uv` is the project's package manager (the lockfile `uv.lock` is committed and CI runs `uv sync --frozen`); a bare `pip install -e .` will not resolve the pinned, CUDA-routed PyTorch wheel the way `uv sync` does.
 
 ### 2. Data
 
@@ -54,11 +51,18 @@ Create a `.env` file at the repo root:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `BACKEND_URL` | no | `http://localhost:8000` | Backend URL for frontend |
-| `FRONTEND_URL` | no | `http://localhost:8501` | Frontend URL for CORS |
+| `BACKEND_URL` | no | `http://localhost:8000` | Backend URL, read by the frontend |
+| `FRONTEND_URL` | no | `http://localhost:8501` | Frontend URL, read by the backend for CORS |
 | `F1_LLM_PROVIDER` | no | `lmstudio` | Set to `openai` for OpenAI API |
 | `OPENAI_API_KEY` | if provider=openai | — | OpenAI API key |
 | `F1_STRAT_DATA_ROOT` | no | repo `data/` | Override data directory |
+| `F1_API_KEY` | no | unset | Shared secret for the `X-API-Key` header. Unset = unauthenticated (safe only on a loopback bind, see `F1_HOST` below) |
+| `F1_HOST` | no | `127.0.0.1` | The host uvicorn binds to. A non-loopback bind (e.g. `0.0.0.0`) with `F1_API_KEY` unset refuses to start |
+| `F1_MCP_ENABLED` | no | `false` | Mount the external `/mcp` Streamable-HTTP endpoint. The chat pipeline uses the same tools in-process regardless |
+| `F1_CHAT_MAX_TOKENS` | no | `2048` | Server-side cap on completion tokens per chat turn |
+| `F1_RATE_LIMIT_OFF` | no | unset | Set to `1` to disable the per-route rate limiter (load tests only) |
+
+See [Backend API reference → Authentication](#/backend-api) for how `F1_API_KEY` and `F1_HOST` interact.
 
 ### 4. Run the backend
 
@@ -84,9 +88,9 @@ Start LM Studio with a model loaded, serving on `http://localhost:1234/v1`. The 
 
 ## Docker deployment
 
-### Root `docker-compose.yml`
+Two equivalent compose files exist, one at the repo root and one path-relative copy inside the submodule — both already mount volumes for live code reload and data access, so pick whichever working directory is convenient.
 
-The repo root `docker-compose.yml` provides a simple two-service setup:
+### Root `docker-compose.yml`
 
 ```bash
 docker-compose up --build
@@ -94,25 +98,21 @@ docker-compose up --build
 
 Services:
 
-- **backend**: FastAPI on port 8000
-- **frontend**: Streamlit on port 8501
+- **backend**: FastAPI on port 8000. Volumes: `./src:/app/src:ro` (read-only source — agents import from here), `./data:/app/data:ro` (read-only data), `./data/rag:/app/data/rag:rw` (writable RAG index, N30 may write here).
+- **frontend**: Streamlit on port 8501, depends on `backend`.
+
+The `:ro` mounts mean agents must handle `OSError` / `PermissionError` gracefully when they attempt to create export directories inside the container.
 
 ### Telemetry `docker-compose.yml`
-
-A more detailed compose file at `src/telemetry/docker-compose.yml` mounts volumes for live code reload and data access:
 
 ```bash
 cd src/telemetry
 docker-compose up --build
 ```
 
-Key volume mounts:
+Same two services (paths relative to `src/telemetry/` instead of the repo root) plus a third:
 
-- `../../src:/app/src:ro` — read-only source code (agents import from here)
-- `../../data:/app/data:ro` — read-only data directory
-- `../../data/rag:/app/data/rag:rw` — writable RAG index (N30 may write here)
-
-The `:ro` mount means agents handle `OSError` / `PermissionError` gracefully when they attempt to create export directories inside Docker.
+- **webapp**: the React SPA replacing Streamlit (migration epic #25, a strangler-pattern rollout). Host port `3000` during the migration; takes over `8501` at cutover (#43). Not present in the root compose file.
 
 ### Frontend Dockerfile (multi-stage)
 

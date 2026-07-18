@@ -91,7 +91,7 @@ cp .env.example .env          # add OPENAI_API_KEY, or set F1_LLM_PROVIDER=lmstu
 docker compose up
 ```
 
-Requires Python 3.10 / 3.11 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudio`). Full options (pip fallback, local Streamlit, data bootstrap) in [`INSTALL.md`](INSTALL.md).
+Requires Python 3.10-3.12 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudio`). Full options (pip fallback, local Streamlit, data bootstrap) in [`INSTALL.md`](INSTALL.md).
 
 ## Project layout
 
