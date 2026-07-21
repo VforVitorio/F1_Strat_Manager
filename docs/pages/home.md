@@ -43,7 +43,7 @@ graph TD
     subgraph Surfaces["Operator surfaces"]
         CLI[Headless CLI]
         ARC[Arcade dashboard]
-        STR[Streamlit web app]
+        STR[React web app]
     end
 
     Sources --> RRE
@@ -72,4 +72,4 @@ The narratives on this site stop at the contract level. For per-file deep-dives 
 | Release automation (`release-please`) | v1.1.0 | shipped |
 | Current release | v__DOCS_VERSION__ | shipped |
 
-F1 StratLab was defended as a Final Degree Project in June 2026, graded 10/10 with Distinction (Matricula de Honor) and unanimously recommended by the tribunal for publication as a research article. Development continues past the defence: a React front-end migration is underway (Streamlit remains the current production surface in the meantime) alongside ongoing correctness hardening across the multi-agent pipeline. See the [project changelog](https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md) for the full history.
+F1 StratLab was defended as a Final Degree Project in June 2026, graded 10/10 with Distinction (Matricula de Honor) and unanimously recommended by the tribunal for publication as a research article. Development continues past the defence: the React front-end migration is complete (v2.0.0, the React web app replaced Streamlit as the post-race UI) alongside ongoing correctness hardening across the multi-agent pipeline. See the [project changelog](https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md) for the full history.

@@ -5,9 +5,9 @@
 Three ways to get F1 StratLab running on your machine, from fastest to deepest.
 
 <p align="center">
-  <video src="/assets/demo/cli-demo.mp4" poster="/assets/demo/cli-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab CLI wizard in action"></video>
+  <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab Arcade replay in action"></video>
   <br/>
-  <sub>The <code>f1-strat</code> interactive wizard: pick the GP, drivers and provider, then watch the live inference panel.</sub>
+  <sub>The <code>f1-arcade</code> replay: a 2D race with the strategy dashboard and live telemetry, all from one command.</sub>
 </p>
 
 ## 1. Install the latest wheel
@@ -54,7 +54,7 @@ Drop `--no-llm` once you have an LLM provider configured (LM Studio at `http://l
 
 ## 3. Docker
 
-For a reproducible all-in-one setup, see [Setup and deployment](#/setup) for the Docker compose recipe that boots the FastAPI backend, the Streamlit frontend and the Qdrant store in one command.
+For a reproducible all-in-one setup, see [Setup and deployment](#/setup) for the Docker compose recipe that boots the FastAPI backend, the React web app and the Qdrant store in one command.
 
 ## Where to next
 
