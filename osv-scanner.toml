@@ -75,6 +75,59 @@ id = "PYSEC-2026-2257"
 ignoreUntil = 2026-10-12T00:00:00Z
 reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
 
+# --- Pillow x9 (further disclosures, same arcade block) -----------------------
+# Nine more Pillow CVEs disclosed after the eleven above (surfaced on the main
+# scheduled scan and the v2 promotion). Same story: the fix is in Pillow 12.3.0,
+# still unreachable under arcade==3.3.3's `pillow>=11.3.0,<11.4` pin, and every
+# one requires DECODING A MALICIOUSLY-CRAFTED IMAGE, which F1 StratLab never does
+# (only its own bundled tyre-icon assets and FastF1-sourced telemetry plots).
+# Both the PYSEC id and its GHSA alias are listed so the match holds regardless
+# of which id OSV reports. Revisit when arcade permits pillow>=12.3.0.
+[[IgnoredVulns]]
+id = "PYSEC-2026-3451"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-6r8x-57c9-28j4"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3453"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-9hw9-ch79-4vh6"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-62p4-gmf7-7g93"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-fj7v-r99m-22gq"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-jjj6-mw9f-p565"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-vjc4-5qp5-m44j"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
+[[IgnoredVulns]]
+id = "GHSA-xj96-63gp-2gmr"
+ignoreUntil = 2026-10-12T00:00:00Z
+reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrusted-image decode path in this app. Revisit when arcade allows pillow>=12."
+
 # --- torch (no upstream fix) --------------------------------------------------
 # GHSA-rrmf-rvhw-rf47 has no fixed version. torch is CUDA-pinned (cu128) for the
 # training/dev box; the flaw needs an attacker-controlled model/input executed
