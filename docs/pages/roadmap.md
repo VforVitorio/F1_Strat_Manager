@@ -461,7 +461,19 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v2.1.0</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.5.0</span>
+      <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
+    </div>
+    <p class="rl-title">Arcade, modernized: a web-native trackside frontend</p>
+    <p class="rl-summary">Bring the web app's modern frontend to part of the live Arcade experience, running alongside the PySide6 / pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to a web-native view; the <code>lap_state</code> contract and the agents stay unchanged.</p>
+  </div>
+</li>
+
+<li class="rl-item">
+  <div class="rl-dot planned"></div>
+  <div class="rl-card planned">
+    <div class="rl-header">
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.8.0</span>
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Rival Agent: anticipate each rival's next move</p>
@@ -473,7 +485,7 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v2.2.0</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v3.0.0</span>
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Live race inference and 2026 regulation adaptation</p>
