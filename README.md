@@ -6,7 +6,7 @@
 
 [![License](https://img.shields.io/github/license/VforVitorio/F1-StratLab)](LICENSE) [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/) [![Latest release](https://img.shields.io/github/v/release/VforVitorio/F1-StratLab)](https://github.com/VforVitorio/F1-StratLab/releases) [![CI](https://img.shields.io/github/actions/workflow/status/VforVitorio/F1-StratLab/ci.yml?branch=main&label=CI)](https://github.com/VforVitorio/F1-StratLab/actions/workflows/ci.yml) [![Docs](https://img.shields.io/github/actions/workflow/status/VforVitorio/F1-StratLab/docs.yml?branch=main&label=docs)](https://docs.f1stratlab.com/)
 
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-red)](https://streamlit.io/) [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)](https://pytorch.org/) [![FastF1](https://img.shields.io/badge/FastF1-3.1%2B-red)](https://github.com/theOehrly/Fast-F1) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/VforVitorio/F1-StratLab)
+[![React](https://img.shields.io/badge/React-19-149eca)](https://react.dev/) [![Vite](https://img.shields.io/badge/Vite-7-646cff)](https://vite.dev/) [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)](https://pytorch.org/) [![FastF1](https://img.shields.io/badge/FastF1-3.1%2B-red)](https://github.com/theOehrly/Fast-F1) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/VforVitorio/F1-StratLab)
 
 F1 StratLab is an open-source multi-agent AI platform for Formula 1 race replay and real-time strategy simulation. Replay a full race lap by lap in an interactive 2D interface and watch six specialised agents and an orchestrator work out an explainable strategy for every lap, covering tire wear, lap time, race situation, pit windows, team radio, and FIA regulations.
 
@@ -23,11 +23,13 @@ F1 StratLab is an open-source multi-agent AI platform for Formula 1 race replay 
 </div>
 
 <div align="center">
-  <img src="docs/assets/demo/arcade-demo.gif" alt="F1 StratLab arcade demo: 2D race replay, strategy dashboard and live telemetry" width="820"/>
+  <a href="docs/assets/demo/webapp-demo.mp4">
+    <img src="docs/assets/demo/webapp-demo.gif" alt="F1 StratLab v2 web app demo: head-to-head 60fps replay, ML model lab, a multi-agent pit-wall call, and a streaming AI strategist rendering charts inline" width="860"/>
+  </a>
 </div>
 
 <div align="center">
-  <sub>▶ See the <strong>CLI</strong>, <strong>Arcade</strong> and <strong>Streamlit</strong> demos in action on the <a href="https://vforvitorio.github.io/f1stratlab-web/#demo-carousel">landing page</a>.</sub>
+  <sub>▶ <strong>New in v2</strong> — the post-race UI is now a fast React web app (it replaces Streamlit). The GIF loops the highlights; <a href="docs/assets/demo/webapp-demo.mp4">click for the full ~30s tour</a>. See the <strong>CLI</strong>, <strong>Arcade</strong> and <strong>Web app</strong> demos on the <a href="https://vforvitorio.github.io/f1stratlab-web/#demo-carousel">landing page</a>.</sub>
 </div>
 
 <div align="center">
@@ -55,7 +57,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the one-page topology and [`docs/`]
 - Retrieval over the FIA sporting regulations (Qdrant + BGE-M3)
 - Live telemetry windows and post-race analytics
 - Natural-language chat over a finished race
-- Three ways to run it: CLI, Arcade, and Streamlit
+- Three ways to run it: CLI, Arcade, and the Web app (React SPA)
 
 ## Three surfaces, one codebase
 
@@ -63,7 +65,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the one-page topology and [`docs/`]
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **CLI**                      | `f1-strat` (interactive wizard) · `f1-sim Melbourne VER "Red Bull Racing" --year 2025` (headless)                                                      | Headless Rich-based live inference panel for a single race. `f1-strat` opens an arrow-key menu (GP, driver, provider, head-to-head); `f1-sim` is the scripted form. |
 | **Arcade** (primary live UI) | `f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --driver2 LEC --strategy` | Three-window 2D race replay + PySide6 strategy dashboard + live telemetry grid. No backend required. |
-| **Streamlit** (post-race)    | `docker compose up` *or* `f1-streamlit`                                                               | Analytics dashboard, chat Q&A, model lab, voice mode. Backed by FastAPI.                             |
+| **Web app** (post-race)    | `docker compose up`                                                               | React SPA (Vite + TypeScript + Tailwind + ECharts): telemetry dashboard, 60fps driver comparison, ML model lab, multi-agent pit-wall strategy, race analysis, and a streaming AI chat that renders tool results inline. Backed by FastAPI. |
 
 ## How to run
 
@@ -83,7 +85,7 @@ uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
 f1-arcade
 ```
 
-**Streamlit**: clone **with the telemetry submodule**, add an env file, then bring the stack up with Docker:
+**Web app**: clone **with the telemetry submodule**, add an env file, then bring the stack up with Docker (FastAPI + the React SPA):
 
 ```bash
 git clone --recurse-submodules https://github.com/VforVitorio/F1-StratLab.git && cd F1-StratLab
@@ -91,14 +93,14 @@ cp .env.example .env          # add OPENAI_API_KEY, or set F1_LLM_PROVIDER=lmstu
 docker compose up
 ```
 
-Requires Python 3.10-3.12 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudio`). Full options (pip fallback, local Streamlit, data bootstrap) in [`INSTALL.md`](INSTALL.md).
+Requires Python 3.10-3.12 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudio`). Full options (pip fallback, local web-app dev server, data bootstrap) in [`INSTALL.md`](INSTALL.md).
 
 ## Project layout
 
 - [`src/arcade/`](src/arcade/): 2D race replay (pyglet) + PySide6 strategy dashboard
 - [`src/agents/`](src/agents/): multi-agent orchestrator (N25 → N31)
 - [`src/simulation/`](src/simulation/): `RaceReplayEngine` + `RaceStateManager`
-- [`src/telemetry/`](src/telemetry/): FastAPI backend + Streamlit post-race UI (git submodule)
+- [`src/telemetry/`](src/telemetry/): FastAPI backend + React web app (post-race UI, git submodule)
 - [`src/nlp/`](src/nlp/): radio transcription + sentiment/intent/NER pipeline
 - [`src/rag/`](src/rag/): Qdrant retriever over FIA sporting regulations
 - [`src/f1_strat_manager/`](src/f1_strat_manager/): CLI infrastructure (data bootstrap, GP slug resolver)
@@ -114,7 +116,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, code-style rules, and th
 This project is part of a broader F1 AI suite:
 
 - [F1 StratLab (this repo)](https://github.com/VforVitorio/F1-StratLab): strategy engine
-- [F1 Telemetry Manager](https://github.com/VforVitorio/F1_Telemetry_Manager): FastAPI backend + Streamlit post-race UI, vendored here under [`src/telemetry/`](src/telemetry/) as a git submodule
+- [F1 Telemetry Manager](https://github.com/VforVitorio/F1_Telemetry_Manager): FastAPI backend + React web app (post-race UI), vendored here under [`src/telemetry/`](src/telemetry/) as a git submodule
 - [F1 AI Team Detection](https://github.com/VforVitorio/F1_AI_team_detection): YOLOv12 team identification from race footage
 - [F1 Strategy Dataset (Hugging Face)](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset): trained weights and processed race data
 - [Thesis + IEEE technical report](documents/thesis/): the full TFG memoria and IEEE report (deep methodology, metrics, design rationale)
