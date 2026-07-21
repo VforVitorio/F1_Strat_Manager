@@ -11,6 +11,49 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.0.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.6...v2.0.0) (2026-07-21)
+
+
+### Bug Fixes
+
+* **agents:** bound the retired-car lap fallback by presence and make searchable defaults loud ([662102c](https://github.com/VforVitorio/F1-StratLab/commit/662102c337bf0afc32bd7ec3b7622a07196632cd)), closes [#477](https://github.com/VforVitorio/F1-StratLab/issues/477)
+* **agents:** guard the pit prompt-build NaN crash and correct the calibration docstring ([df988e7](https://github.com/VforVitorio/F1-StratLab/commit/df988e70ac38ecf03b018a9c1a8f388a24f4f6db))
+* **agents:** resolve the pit-agent circuit lookups by slug on the FastF1 path too ([ba0be59](https://github.com/VforVitorio/F1-StratLab/commit/ba0be59bd403f1675543f003e49c9fb542d15ffd))
+* **agents:** split Safety Car from Virtual Safety Car in the strategy engine ([4f124cf](https://github.com/VforVitorio/F1-StratLab/commit/4f124cf3c63b8dcd6b3e90e2dd07b9b4d963ee2e)), closes [#471](https://github.com/VforVitorio/F1-StratLab/issues/471)
+* **agents:** validate LLM tool inputs and fix model-fidelity defects across the strategy engine ([5f84218](https://github.com/VforVitorio/F1-StratLab/commit/5f842187a3b22f20f313085619f0f8fef703e891))
+* **agents:** yellow laps read as green, empty-roster vs unknown, and two raw parquet readers ([52aa560](https://github.com/VforVitorio/F1-StratLab/commit/52aa5605cfe046c57ebf50f8d8c14de0bf016e50)), closes [#486](https://github.com/VforVitorio/F1-StratLab/issues/486)
+* **arcade:** stop reading the featured parquet raw ([79ce0ba](https://github.com/VforVitorio/F1-StratLab/commit/79ce0ba1563b52f7a82c6d3f6236237d7ca17594)), closes [#447](https://github.com/VforVitorio/F1-StratLab/issues/447)
+* **cli:** derive the data defaults from --year so a 2024 run loads 2024 data ([8951cb3](https://github.com/VforVitorio/F1-StratLab/commit/8951cb3959de8360b4534bae26807f7d39190048)), closes [#443](https://github.com/VforVitorio/F1-StratLab/issues/443)
+* **deps:** bump pyasn1 to 0.6.4 to clear two high advisories ([5123d42](https://github.com/VforVitorio/F1-StratLab/commit/5123d42e2e9e4cd4075de53f29ec58e0378353ea))
+* **engine:** guard DNF laps in arcade and bump telemetry for rival threading ([3b4606c](https://github.com/VforVitorio/F1-StratLab/commit/3b4606cf2094e199939c406914459ea65da45a98)), closes [#431](https://github.com/VforVitorio/F1-StratLab/issues/431) [#441](https://github.com/VforVitorio/F1-StratLab/issues/441)
+* **engine:** thread live_drivers, guard both undercut drivers, and stop promising a test that never existed ([fbcb690](https://github.com/VforVitorio/F1-StratLab/commit/fbcb6909d3bc7a43a91f6d4ba7a62fd0776c89af)), closes [#462](https://github.com/VforVitorio/F1-StratLab/issues/462)
+* **N26:** stop overwriting trained TCN features and NaN-fill before scaling ([775bd13](https://github.com/VforVitorio/F1-StratLab/commit/775bd1371d6cc9664902a8f02ea8589a132424b1)), closes [#485](https://github.com/VforVitorio/F1-StratLab/issues/485)
+* **orchestrator:** charge OVERCUT for its pit stop so the Monte Carlo decides ([bc1c34a](https://github.com/VforVitorio/F1-StratLab/commit/bc1c34ad05711f6a195669d89c3fac20b9c05036)), closes [#470](https://github.com/VforVitorio/F1-StratLab/issues/470)
+
+
+### Performance
+
+* **agents:** lazy package __init__ so one agent doesn't load the whole family ([b7f4cda](https://github.com/VforVitorio/F1-StratLab/commit/b7f4cda98ada41f4418ae5d4c590ba7f2f95e75b))
+
+
+### Documentation
+
+* **agents:** regenerate the N31 Monte Carlo figure with the OVERCUT fix ([305778b](https://github.com/VforVitorio/F1-StratLab/commit/305778baa4e30429b938f487d3379a10cf188b3d)), closes [#470](https://github.com/VforVitorio/F1-StratLab/issues/470)
+* **demo:** re-record the web-app demo with the brand favicon; bump telemetry submodule ([efb7a83](https://github.com/VforVitorio/F1-StratLab/commit/efb7a832d83fd10b7470eaec372ec582563e00f1))
+* fact-check and refresh the project + site documentation against the current code ([9490fe4](https://github.com/VforVitorio/F1-StratLab/commit/9490fe419f67c398d31a8987be89713e9d71d23e))
+* **orchestrator:** correct the post-fix sweep split and a stale [0,1] score claim ([6777998](https://github.com/VforVitorio/F1-StratLab/commit/6777998848ee7d893dd2796be6d0af67715a9aee)), closes [#470](https://github.com/VforVitorio/F1-StratLab/issues/470)
+* **readme:** v2 web-app demo GIF + Streamlit-&gt;web-app rewrite; bump telemetry submodule ([586aed9](https://github.com/VforVitorio/F1-StratLab/commit/586aed94883f2b75fb8d112c3d64a907ef44a71e))
+
+
+### Refactoring
+
+* **agents:** extract _clamp_expected_stint_end so the [#433](https://github.com/VforVitorio/F1-StratLab/issues/433) clamp is CI-testable ([bf1ede8](https://github.com/VforVitorio/F1-StratLab/commit/bf1ede8a6453ef69e595357cbe6ed5129deaff7c))
+
+
+### Chores
+
+* release 2.0.0 ([5f3804c](https://github.com/VforVitorio/F1-StratLab/commit/5f3804c18e64d03d499522f2eacbc15020fc20b8))
+
 ## [1.10.6](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.5...v1.10.6) (2026-07-16)
 
 
