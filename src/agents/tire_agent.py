@@ -219,7 +219,9 @@ class TireAgentConfig:
 
         mc_dropout_calibration.json stores per-compound mean_sigma_s values fitted
         in N10. The fallback sigma is the mean across all compounds — used when
-        compound_id is absent from the dict (e.g. C6 with sparse data).
+        compound_id is absent from the dict (currently C1 and C3, whose sigmas are
+        not yet fitted; C2/C4/C5/C6 are present). Regenerating them needs N09's MC
+        Dropout calibration cell, so the cross-compound mean stands in until then.
 
         Returns:
             Tuple (calibration_dict, sigma_fallback).
@@ -332,6 +334,15 @@ CLIFF_THRESHOLD: dict[str, int] = {
     'C5': 2,  # p75 = 1.43 → ceil = 2
     'C6': 2,  # p75 = 1.82 → ceil = 2
 }
+
+# Longest race on the current calendar (Monaco, 78 laps; max observed across
+# 2023-2025 data). Fallback ceiling for laps-to-cliff when session_meta carries no
+# total_laps: a cliff beyond the longest possible race is "not this race" regardless
+# of circuit, so clamping there caps absurd values without touching any real one. The
+# earlier default of 100 sat above every race, so the clamp it belonged to never fired.
+# session_meta.total_laps is present on every shipping path, so this only guards
+# hand-built states.
+MAX_RACE_LAPS: int = 78
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -513,11 +524,34 @@ def _add_compound_cols(df: pd.DataFrame, compound_id: str) -> pd.DataFrame:
     All three encodings are constant within a stint. CompoundHardness is the
     inverse of AbsoluteCompoundID: C1=6 (hardest), C6=1 (softest), as encoded
     in the N10 training data.
+
+    The defaults (C3 / mid-hardness / SOFT) are real, in-range codes, so an unknown
+    compound is silently scored as a real one rather than flagged. That is only reached
+    with corrupt or out-of-scope compound data, but it is a sentinel by construction, so
+    it is logged loudly rather than left invisible.
     """
+    name = str(df['Compound'].iloc[0])
+    if compound_id not in CFG.abs_compound_id_map:
+        logger.warning("Unknown compound_id %r: encoding as C3 (AbsoluteCompoundID=3)", compound_id)
+    if name not in CFG.compound_id_map:
+        logger.warning("Unknown compound name %r: encoding as SOFT (CompoundID=1)", name)
     df['AbsoluteCompoundID'] = CFG.abs_compound_id_map.get(compound_id, 3)
     df['CompoundHardness']   = CFG.compound_hardness_map.get(compound_id, 4)
-    df['CompoundID']         = CFG.compound_id_map.get(df['Compound'].iloc[0], 1)
+    df['CompoundID']         = CFG.compound_id_map.get(name, 1)
     return df
+
+
+def _encode_team_id(team_id_map: dict, team: str) -> int:
+    """Team label encoding, with the McLaren default made loud.
+
+    `team_id_map.get(team, 4)` defaults to 4, which is a real team (McLaren), so an
+    unrecognised team is silently scored as one. This is reachable in normal operation:
+    engine.py sets team='Unknown' whenever a lap row is empty, and 'Unknown' is not in
+    the map. Log it rather than let a mislabelled team ride as McLaren unnoticed.
+    """
+    if team not in team_id_map:
+        logger.warning("Unknown team %r: encoding as team_id 4 (McLaren default)", team)
+    return team_id_map.get(team, 4)
 
 
 def _add_fuel_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
@@ -542,17 +576,35 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     """Normalise lap times against session fastest lap and circuit cluster mean.
 
     lap_time_pct_of_race_fastest: ratio to the race's fastest lap (~1.04 mean).
-    lap_time_vs_cluster_mean: delta vs cluster's typical lap time (seconds).
+    lap_time_vs_cluster_mean: delta vs the cluster's typical lap time (seconds).
+    mean_sector_speed: circuit-level mean of the three speed traps (km/h).
     track_status_clean: 3-class int — 0=green, 1=yellow/VSC, 2=SC/red flag.
+
+    Two of these columns are trained per-circuit constants, not per-lap values.
+    N04 built lap_time_vs_cluster_mean as LapTime_s minus a global per-cluster
+    mean lap time (81.36-100.92 s depending on cluster, std 0.0 within a cluster),
+    and mean_sector_speed as a per-GP circuit feature (one value per race, std 0.0
+    within a GP). Both are TCN inputs listed in tiredeg_feature_manifest.json, and
+    both are already shipped by the featured parquet. Recomputing them here from
+    the handed-in frame overwrites the trained constant with a per-frame quantity:
+    the cluster-mean delta was off by up to 14.9 s per lap (Lusail) and the sector
+    speed by up to 17.5 s. They are therefore guarded like FuelLoad and
+    track_status_clean — recomputed only when the frame does not already carry them
+    (the raw FastF1 path, which has no better source). The sibling
+    lap_time_pct_of_race_fastest and laps_remaining are recomputed unconditionally
+    because their per-frame recompute reproduces the shipped value exactly
+    (0.0000 s delta across all 24 GPs).
     """
     df['lap_time_pct_of_race_fastest'] = (
         df['LapTime_s'] / session_meta['fastest_lap_s']
     )
-    df['lap_time_vs_cluster_mean'] = (
-        df['LapTime_s'] - session_meta['cluster_mean_lap_s']
-    )
-    df['laps_remaining']    = session_meta['total_laps'] - df['LapNumber']
-    df['mean_sector_speed'] = (df['SpeedI1'] + df['SpeedI2'] + df['SpeedFL']) / 3
+    if 'lap_time_vs_cluster_mean' not in df.columns:
+        df['lap_time_vs_cluster_mean'] = (
+            df['LapTime_s'] - session_meta['cluster_mean_lap_s']
+        )
+    df['laps_remaining'] = session_meta['total_laps'] - df['LapNumber']
+    if 'mean_sector_speed' not in df.columns:
+        df['mean_sector_speed'] = (df['SpeedI1'] + df['SpeedI2'] + df['SpeedFL']) / 3
 
     if 'track_status_clean' not in df.columns:
         status_map = {'1': 0, '2': 1, '3': 2, '4': 2, '5': 2, '6': 1, '7': 1}
@@ -588,10 +640,14 @@ def _parse_tool_outputs(messages: list) -> dict:
         if not isinstance(content, str):
             continue
         for pattern, key in [
-            (r'Degradation rate:\s*([\d.]+)', 'deg_rate'),
-            (r'P10:\s*([\d.]+)',              'p10'),
-            (r'P50:\s*([\d.]+)',              'p50'),
-            (r'P90:\s*([\d.]+)',              'p90'),
+            # -?[\d.]+ (was [\d.]+, #477): the bare digit class can't match a
+            # leading minus, so a negative degradation rate — real and expected
+            # per the system prompt ("track evolution or fuel load reduction")
+            # — silently failed to parse and fell through to the 0.0 default.
+            (r'Degradation rate:\s*(-?[\d.]+)', 'deg_rate'),
+            (r'P10:\s*(-?[\d.]+)',              'p10'),
+            (r'P50:\s*(-?[\d.]+)',              'p50'),
+            (r'P90:\s*(-?[\d.]+)',              'p90'),
         ]:
             m = re.search(pattern, content)
             if m and key not in result:
@@ -709,6 +765,11 @@ class TireAgent:
         self.bundles: dict        = self.cfg.load_all_bundles()
         self.laps_df: pd.DataFrame = pd.DataFrame()
         self.session_meta: dict    = {}
+        # Driver codes actually on track for the CURRENT loaded state (#476). Reset
+        # on every run()/run_from_state() call — this instance is a process-level
+        # singleton reused across many laps/drivers, so a stale set from a previous
+        # call must never leak into the next one's tool-arg validation.
+        self._live_drivers: Optional[set] = None
         self._react_agent          = None
         self._tools: list          = self._build_tools()
 
@@ -769,8 +830,15 @@ class TireAgent:
         2023-2024 training data), then pads or trims the sequence to the compound's
         window length. Short stints are left-padded by repeating the first row.
 
-        NaN values from first-lap shifted features are replaced with 0.0 after
-        scaling — equivalent to imputing the training-data mean, matching N10.
+        NaN values (first-lap shifted features and missing speed-trap readings) are
+        replaced with 0.0 in RAW space before scaling, matching N09's apply_scaler
+        (`scaler.transform(df[features].fillna(0))`). A zero in raw space maps to a
+        negative z-score after scaling, which is the "no reading" signal the model
+        learned in training; zeroing AFTER scaling instead injects each feature's
+        mean, which the model never learned to read as missing. The two are
+        equivalent only for a zero-mean feature, and a missing SpeedI1 turned a
+        -1.8 s cumulative-degradation reading into +0.4 s (a sign flip across the
+        2 s C4 cliff threshold) on the ~20% of mid-stint laps with a NaN speed trap.
 
         Args:
             stint_laps: Raw FastF1 laps for one driver + stint, sorted ascending.
@@ -784,8 +852,7 @@ class TireAgent:
         window = bundle['window']
 
         feat_df = self._build_stint_features(stint_laps, compound_id, session_meta)
-        scaled  = bundle['scaler'].transform(feat_df)
-        scaled  = np.nan_to_num(scaled, nan=0.0)
+        scaled  = bundle['scaler'].transform(feat_df.fillna(0))
 
         if len(scaled) >= window:
             seq = scaled[-window:]
@@ -860,6 +927,65 @@ class TireAgent:
         stint = self.laps_df[mask].sort_values('LapNumber')
         return stint if len(stint) > 0 else None
 
+    # ── Live-driver guard (#476) ───────────────────────────────────────────────
+
+    def _live_drivers_at_current_lap(self) -> Optional[set]:
+        """Return driver codes on track for the currently loaded state, or None.
+
+        run_from_state() sets self._live_drivers from the RSM's rivals list plus
+        our own driver — both are PRESENCE-based (a row exists for this lap), the
+        same signal race_state_manager.py and pit_strategy_agent.py rely on for
+        their own retired-car guards (#470/#462): an age/lap-count cutoff cannot
+        separate a retiree from a finisher because the ranges overlap (a finisher
+        can go 20 laps without a row, a retirement can show up in 9). The FastF1
+        run() path has no per-lap rivals list, so it falls back to every driver
+        present anywhere in laps_df.
+
+        Returns:
+            Set of driver codes, or None when there is nothing to validate against
+            (callers treat None as "cannot tell" and skip the guard rather than
+            block every driver on missing data — the same convention
+            pit_strategy_agent.py uses for its own `_live_drivers`, #470/#462).
+        """
+        if self._live_drivers is not None:
+            return self._live_drivers
+        if len(self.laps_df) > 0 and 'Driver' in self.laps_df.columns:
+            drivers = set(self.laps_df['Driver'].dropna().unique())
+            return drivers or None
+        return None
+
+    def _validate_driver_on_track(self, driver: str) -> Optional[str]:
+        """Return an error string if `driver` is not on track right now, else None.
+
+        Guards the two LLM-facing tools against a hallucinated or long-retired
+        driver code. Reachable in production: laps_df carries the WHOLE race's
+        history, so the stint filter in _get_driver_stint happily builds a
+        'stint' out of laps recorded before a car crashed — it never checks
+        whether the driver is still racing at the lap the agent is currently
+        analysing. Example (#476): Austin 2024, HAM crashed on lap 2 of 56;
+        asked about at a later lap, the tool used to return a confident
+        'P50: 21867.1' instead of erroring.
+
+        Args:
+            driver: FastF1 driver abbreviation as passed by the LLM tool call.
+
+        Returns:
+            An error string (do not compute) when the driver is not in the live
+            set, or when the loaded current_lap falls outside [1, total_laps].
+            None when the driver checks out and the tool should proceed.
+        """
+        live       = self._live_drivers_at_current_lap()
+        lap        = self.session_meta.get('current_lap')
+        total_laps = self.session_meta.get('total_laps')
+        lap_out_of_range = (
+            lap is not None and total_laps is not None and not (1 <= lap <= total_laps)
+        )
+        if (live is not None and driver not in live) or lap_out_of_range:
+            lap_display = lap if lap is not None else 'unknown'
+            valid = sorted(live) if live is not None else []
+            return f"error: '{driver}' is not on track at lap {lap_display}; valid: {valid}"
+        return None
+
     # ── LangChain tool factory ────────────────────────────────────────────────
 
     def _build_tools(self) -> list:
@@ -893,8 +1019,13 @@ class TireAgent:
 
             Returns:
                 Multi-line string: cumulative degradation (s) and degradation rate (s/lap).
-                Returns an error string if no laps are found.
+                Returns an error string if no laps are found, or if the driver is not
+                on track at the currently loaded lap (#476).
             """
+            guard_error = agent._validate_driver_on_track(driver)
+            if guard_error:
+                return guard_error
+
             stint = agent._get_driver_stint(driver, tyre_life)
             if stint is None:
                 return f'No laps found for driver {driver} with tyre_life <= {tyre_life}.'
@@ -931,7 +1062,13 @@ class TireAgent:
 
             Returns:
                 Multi-line string: P10/P50/P90 laps to cliff, deg rate, MC std, warning level.
+                Returns an error string if no laps are found, or if the driver is not
+                on track at the currently loaded lap (#476).
             """
+            guard_error = agent._validate_driver_on_track(driver)
+            if guard_error:
+                return guard_error
+
             stint = agent._get_driver_stint(driver, tyre_life)
             if stint is None:
                 return f'No laps found for driver {driver} with tyre_life <= {tyre_life}.'
@@ -977,7 +1114,15 @@ class TireAgent:
             # A cliff past the chequered flag is operationally "not this race", so the
             # race distance is the honest ceiling: it says the same thing without looking
             # like a reading. Nothing is invented — the bound is the race itself.
-            cliff_ceiling = float(agent.session_meta.get('total_laps', 100) or 100)
+            #
+            # The fallback must stay at or below the shortest real race, otherwise a
+            # missing total_laps lifts the ceiling above the race and the clamp stops
+            # clamping. MAX_RACE_LAPS (78) is the longest race on the calendar; the
+            # earlier default of 100 exceeded every race, so an absent key silently
+            # disabled the clamp for any race up to 100 laps.
+            cliff_ceiling = float(
+                agent.session_meta.get('total_laps', MAX_RACE_LAPS) or MAX_RACE_LAPS
+            )
 
             p50 = min(remaining_budget / deg_rate, cliff_ceiling)
             p10 = min(max(0.0, (remaining_budget - total_std) / deg_rate), cliff_ceiling)
@@ -1098,13 +1243,21 @@ class TireAgent:
             'cluster_mean_lap_s': _clean['LapTime'].dt.total_seconds().mean(),
             'total_laps':         int(session.total_laps),
             'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'team_id':            self.cfg.team_id_map.get(stint_state.get('team', 'Unknown'), 4),
+            'team_id':            _encode_team_id(self.cfg.team_id_map, stint_state.get('team', 'Unknown')),
             'year':               stint_state.get('year', 2025),
             'AirTemp':   float(_weather.get('AirTemp',   28.0)),
             'TrackTemp': float(_weather.get('TrackTemp', 38.0)),
             'Humidity':  float(_weather.get('Humidity',  50.0)),
-            'Rainfall':  0.0,
+            # Was hardcoded 0.0 (#477) while run_from_state() correctly reads
+            # wx.get('rainfall', 0) from the RSM weather dict — mirror that here
+            # from the session's own weather data instead of silently telling
+            # every dry-model feature the race was rain-free regardless of what
+            # actually happened.
+            'Rainfall':  float(_weather.get('Rainfall', 0.0)),
         }
+        # No per-lap rivals list on this path (single-shot FastF1 query, not a live
+        # simulation lap) — _live_drivers_at_current_lap() falls back to laps_df.
+        self._live_drivers = None
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)
 
@@ -1133,7 +1286,7 @@ class TireAgent:
         compound    = d.get('compound', 'MEDIUM')
         tyre_life   = d.get('tyre_life', 1)
         gp_name     = meta.get('gp_name', '')
-        total_laps  = meta.get('total_laps', 60)
+        total_laps  = meta.get('total_laps', 57)
         year        = meta.get('year', 2025)
         team        = meta.get('team', 'Unknown')
 
@@ -1162,7 +1315,7 @@ class TireAgent:
             'cluster_mean_lap_s': float(clean_times.mean()) if len(clean_times) > 0 else 90.0,
             'total_laps':         total_laps,
             'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'team_id':            self.cfg.team_id_map.get(team, 4),
+            'team_id':            _encode_team_id(self.cfg.team_id_map, team),
             'year':               year,
             'AirTemp':   wx.get('air_temp',   28.0),
             'TrackTemp': wx.get('track_temp', 38.0),
@@ -1179,6 +1332,16 @@ class TireAgent:
             # behaviour instead of breaking (#449).
             f'{driver}_stint': d.get('stint'),
             'current_lap': lap_state.get('lap_number'),
+        }
+
+        # Presence-based on-track set for this lap (#476): our own driver plus
+        # every rival the RSM actually emitted a row for. A driver who crashed
+        # earlier in the race simply stops appearing in rivals from that lap on
+        # — the same signal race_state_manager.py itself relies on (#470) — so
+        # this catches an LLM tool call for a long-retired driver code without
+        # reimplementing any retirement/lap-count heuristic.
+        self._live_drivers = {driver} | {
+            str(r['driver']) for r in lap_state.get('rivals', []) or [] if r.get('driver')
         }
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)

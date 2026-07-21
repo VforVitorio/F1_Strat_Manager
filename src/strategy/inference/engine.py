@@ -14,11 +14,15 @@ recommends (§7): CLI/Arcade/backend consume one ``run_lap`` instead of three co
 Design (per documents/audits/P2B_ENGINE_DESIGN.md, #169 Phases 1.1 + 1.2)
 --------------------------------------------------------------------------
 ``run_lap`` dispatches on ``profile``:
-  * ``rich``   — reproduces ``run_strategy_orchestrator_from_state`` byte-for-byte
-                 (same ``action`` / ``scenario_scores``) by IMPORTING the exact
-                 orchestrator layer functions and re-driving their five-step
-                 sequence, but RETURNS the per-agent outputs the orchestrator's
-                 public API discards. This is arcade's proven pattern, promoted.
+  * ``rich``   — re-drives ``run_strategy_orchestrator_from_state``'s five-step
+                 sequence by importing the orchestrator layer functions (never
+                 copying them) and returns the per-agent outputs the public API
+                 discards. Importing the functions removes body drift, but not
+                 call drift: re-driving a sequence means every argument is
+                 threaded by hand. This is why the docstring no longer claims
+                 "byte-for-byte" parity — one argument (`live_drivers`) was once
+                 missed here, which disabled #462's guard on this profile, the
+                 default for every surface.
   * ``no-llm`` — the deterministic, zero-LLM-client path (see ``no_llm.py``); fixes
                  #166 by construction (it never calls ``_run_conditional_agents``).
 
@@ -26,8 +30,14 @@ Untouchability: nothing in ``src/agents/`` is modified. Every strategy layer is 
 SAME code object the orchestrator runs (imported, never copied); the only
 engine-owned code is the call sequence itself and the default-lap_state builder.
 
-Anti-drift guard: ``tests/test_engine_parity.py`` asserts the engine's rich output
-equals the orchestrator's on a fixture lap, down to the byte-level LLM prompts.
+Anti-drift guards: ``tests/test_engine.py``, ``tests/test_engine_no_llm.py`` and
+``tests/test_engine_threads_every_argument.py`` (which checks, by AST, that this path
+passes ``_assemble_recommendation`` every argument the orchestrator does).
+
+These do not assert byte-level parity with the orchestrator. An earlier docstring cited
+a ``tests/test_engine_parity.py`` that does not exist; the argument-threading test above
+replaces that claim with a real one. The two ``lap_state is None`` fallbacks are still
+kept in step by hand, so changing one without the other is not caught by a test.
 """
 
 from __future__ import annotations
@@ -45,6 +55,7 @@ from src.agents.strategy_orchestrator import (
     _build_orchestrator_prompt,
     _decide_agents_to_call,
     _get_orchestrator_llm,
+    _live_drivers_from,
     _run_always_on_agents_from_state,
     _run_conditional_agents,
     _run_mc_simulation,
@@ -60,7 +71,11 @@ Profile = Literal["rich", "no-llm"]
 logger = logging.getLogger(__name__)
 
 
-def _scope_laps_to_gp(laps_df: pd.DataFrame, lap_state: dict[str, Any] | None) -> pd.DataFrame:
+def _scope_laps_to_gp(
+    laps_df: pd.DataFrame,
+    lap_state: dict[str, Any] | None,
+    race_state: RaceState | None = None,
+) -> pd.DataFrame:
     """Narrow a season-wide laps frame to the Grand Prix being analysed (#429).
 
     Every caller loads ``laps_featured_<year>.parquet``, which holds the WHOLE season,
@@ -74,12 +89,38 @@ def _scope_laps_to_gp(laps_df: pd.DataFrame, lap_state: dict[str, Any] | None) -
 
     The GP name comes from ``lap_state['session_meta']['gp_name']``, which
     ``RaceStateManager`` emits in the same keyspace the parquet's ``GP_Name`` uses
-    (verified: 'Lusail'). Falls back to the full frame, loudly, when the name does not
-    resolve — handing the agents an EMPTY frame would be worse than the bug this fixes,
-    and a warning is how we find out the keyspaces have drifted apart (see #448).
+    (verified: 'Lusail'). When ``lap_state`` is ``None`` (the ``_build_default_lap_state``
+    path, #465), there is no ``session_meta`` yet to read a GP from — so, given a
+    ``race_state``, this derives the GP the same way ``_build_default_lap_state`` will
+    (the (driver, lap) row match) and scopes on THAT. This lets scoping happen BEFORE the
+    default lap_state is built instead of after: the previous order scoped on a still-None
+    ``lap_state`` (a no-op) and only built the default from the still-unscoped, season-wide
+    frame, so a GP's grid could be decided from another race's data.
+
+    Falls back to the full frame, loudly, when the name does not resolve — handing the
+    agents an EMPTY frame would be worse than the bug this fixes, and a warning is how we
+    find out the keyspaces have drifted apart (see #448).
     """
     gp_name = (lap_state or {}).get("session_meta", {}).get("gp_name")
-    if not gp_name or "GP_Name" not in laps_df.columns:
+
+    if (
+        not gp_name
+        and race_state is not None
+        and laps_df is not None
+        and "GP_Name" in laps_df.columns
+    ):
+        driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
+        lap_row = driver_rows[driver_rows["LapNumber"] == race_state.lap]
+        if not lap_row.empty:
+            gp_name = str(lap_row["GP_Name"].iloc[0])
+
+    if not gp_name or laps_df is None or "GP_Name" not in laps_df.columns:
+        if laps_df is not None:
+            logger.warning(
+                "Could not resolve a GP to scope laps by (gp_name=%r) — falling back to "
+                "the unscoped frame; agent lookups may resolve to the wrong race (#429/#465)",
+                gp_name,
+            )
         return laps_df
 
     scoped = laps_df[laps_df["GP_Name"] == gp_name]
@@ -144,8 +185,11 @@ def run_lap(
         ValueError: on an unknown profile, or on the reserved ``"fast"`` profile.
     """
     # Scope BEFORE dispatch so both profiles, and therefore every surface that routes
-    # through this engine (CLI PMV, arcade), get the single-race frame (#429).
-    laps_df = _scope_laps_to_gp(laps_df, lap_state)
+    # through this engine (CLI PMV, arcade), get the single-race frame (#429). Passing
+    # `race_state` lets scoping resolve a GP even when `lap_state` is None (#465), so the
+    # `_build_default_lap_state` fallback below/inside `_run_rich`/`run_no_llm_lap` always
+    # runs against an already-scoped frame instead of the season-wide one.
+    laps_df = _scope_laps_to_gp(laps_df, lap_state, race_state)
 
     if profile == "rich":
         return _run_rich(race_state, laps_df, lap_state, return_agent_outputs)
@@ -231,6 +275,13 @@ def _run_rich(
             mc_results,
             regulation_context,
             sc_currently_active=situation_out.sc_currently_active,
+            # Without this the LLM's free-text `undercut_target` ships unvalidated:
+            # `_assemble_recommendation` reads a missing `live_drivers` as "unknown" and
+            # lets it through by design. The orchestrator threads it; this path did not,
+            # so #462's guard was dead on the `rich` profile — which is the DEFAULT for
+            # /simulate, the arcade and the CLI. That is the whole class this engine
+            # exists to prevent: one call sequence, or every caller drifts.
+            live_drivers=_live_drivers_from(lap_state),
         )
 
     timings["total"] = sum(timings.values())
@@ -291,6 +342,11 @@ def _build_default_lap_state(race_state: RaceState, laps_df: pd.DataFrame) -> di
     single non-orchestrator home for it; arcade's copy is deleted when it delegates.
     The parity test's ``lap_state=None`` case guards this against the orchestrator's
     inline block.
+
+    ``laps_df`` is expected to already be scoped to a single GP by the time this runs
+    (``run_lap`` calls ``_scope_laps_to_gp(..., race_state)`` BEFORE dispatching to
+    ``_run_rich``/``run_no_llm_lap``, #465) — otherwise ``gp_name``/``year`` below read
+    ``iloc[0]`` of a season-wide frame and can pick a GP unrelated to ``race_state``.
     """
     driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
     lap_row = driver_rows[driver_rows["LapNumber"] == race_state.lap]

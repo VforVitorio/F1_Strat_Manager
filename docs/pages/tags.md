@@ -46,7 +46,7 @@ Tags that appear on a single page are listed under **Other** at the end.
 | `uv` | [Getting started](#/getting-started), [Setup & deployment](#/setup), [CI/CD pipeline](#/ci-cd) |
 | `dev` | [Development overview](#/development), [Docs maintenance](#/docs-maintenance), [CI/CD pipeline](#/ci-cd) |
 | `git` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd) |
-| `release` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd) |
+| `release` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd), [Roadmap](#/roadmap), [Changelog](#/changelog) |
 | `github-actions` | [Docs maintenance](#/docs-maintenance), [CI/CD pipeline](#/ci-cd) |
 
 ## Data
@@ -61,6 +61,7 @@ Tags that appear on a single page are listed under **Other** at the end.
 
 | Tag | Pages |
 |---|---|
-| `overview` | [Welcome](#/home), [Meet the author](#/meet-the-author), [How it is wired](#/architecture) |
+| `overview` | [Welcome](#/home), [Meet the author](#/meet-the-author), [How it is wired](#/architecture), [Tags index](#/tags), [Roadmap](#/roadmap) |
 | `fastapi` | [Backend API](#/backend-api) |
 | `evaluation` | [Thesis results](#/thesis) |
+| `engine` | [Strategy pipeline](#/arcade-strategy-pipeline) |

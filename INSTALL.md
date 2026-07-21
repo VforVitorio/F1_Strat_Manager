@@ -7,12 +7,15 @@ prerequisites are on the machine.
 
 ## Prerequisites
 
-- Python **3.10 or 3.11** (the project pins `>=3.10,<3.13` in
-  `pyproject.toml`).
+- Python **3.10, 3.11, or 3.12** (the project pins `>=3.10,<3.13` in
+  `pyproject.toml`; CI runs on 3.12).
 - `OPENAI_API_KEY` in a `.env` at the repo root (or exported in the
-  shell). The Arcade and CLI paths use OpenAI `gpt-4.1-mini` by default;
-  set `F1_LLM_PROVIDER=lmstudio` to route to a local LM Studio server on
-  `http://localhost:1234` instead.
+  shell) for OpenAI `gpt-4.1-mini`, the default model on every provider
+  path. Arcade and Streamlit read `F1_LLM_PROVIDER` from `.env`
+  (`.env.example` ships `openai`). **The CLI is the exception:** `f1-sim`'s
+  `--provider` flag overrides `.env` and defaults to `lmstudio` (a local
+  LM Studio server on `http://localhost:1234`) — pass `--provider openai`
+  to use OpenAI instead, or `--no-llm` to skip the LLM step entirely.
 - For Streamlit Docker flow: **Docker Desktop** (Windows/Mac) or
   `docker + compose` plugin (Linux).
 - For Arcade: a working OpenGL graphics stack (any modern laptop
@@ -32,7 +35,7 @@ prerequisites are on the machine.
 ## CLI — headless strategy replay with Rich live panels
 
 ```bash
-uv tool install "git+https://github.com/VforVitorio/F1_Strat_Manager.git"
+uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
 f1-strat
 ```
 
@@ -60,7 +63,7 @@ Already installed from a source checkout? `uv sync && uv run f1-strat`
 ## Arcade — 3-window race replay + live dashboard + telemetry
 
 ```bash
-uv tool install "git+https://github.com/VforVitorio/F1_Strat_Manager.git"
+uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
 f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --driver2 LEC --strategy
 ```
 
@@ -83,8 +86,8 @@ controls legend, troubleshooting and window tour.
 ## Streamlit — post-race analysis UI (backend + frontend)
 
 ```bash
-git clone --recurse-submodules https://github.com/VforVitorio/F1_Strat_Manager.git
-cd F1_Strat_Manager
+git clone --recurse-submodules https://github.com/VforVitorio/F1-StratLab.git
+cd F1-StratLab
 cp .env.example .env          # add OPENAI_API_KEY, or set F1_LLM_PROVIDER=lmstudio
 docker compose up
 ```
@@ -128,10 +131,10 @@ All three surfaces read from `data/`:
   and compound allocation
 
 The CLI and Arcade call `ensure_radio_corpus()` and FastF1's cache on
-first run; a warm cache is zero-cost. For a production deploy without a
-repo clone the data tree would be downloaded from the TFG's Hugging Face
-mirror on first run (tracked under `project_cli_distribution_plan.md`,
-deferred past the first release).
+first run; a warm cache is zero-cost. The Docker Streamlit stack does not
+yet have an equivalent auto-download step for a production deploy without
+a host-side repo clone — that gap is a known, deferred follow-up; seed
+`data/` on the host as described below in the meantime.
 
 For the **Docker Streamlit stack**, `./data` is mounted read-only, so the
 container cannot populate it — seed it on the host before `docker compose up`,

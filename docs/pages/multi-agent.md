@@ -107,18 +107,20 @@ Wraps per-compound TireDegTCN models (N09/N10) with MC Dropout inference. Answer
 
 - **Model**: Causal TCN per compound + Platt calibration
 - **Output**: `TireOutput` (laps_to_cliff_p10/p50/p90, warning_level, deg_rate)
-- **Warning levels**: OK, MONITOR, PIT_SOON, CRITICAL
+- **Warning levels**: OK, MONITOR, PIT_SOON (derived from `laps_to_cliff_p10` against circuit-cluster-aware thresholds; there is no CRITICAL level)
 
 ### N27 — Race Situation Agent (`race_situation_agent.py`)
 
 Combines N12 (overtake probability via LightGBM) and N14 (safety car probability via LightGBM) into a single threat assessment per lap.
 
 - **Models**: LightGBM overtake (AUC-PR 0.5491) + LightGBM SC (AUC-PR 0.0723)
-- **Output**: `RaceSituationOutput` (overtake_prob, sc_prob_3lap, threat_level, **sc_currently_active**)
+- **Output**: `RaceSituationOutput` (overtake_prob, sc_prob_3lap, threat_level, **sc_currently_active**, **vsc_active**)
 
 #### RCM Safety Car override
 
-The N14 LightGBM was trained to predict a *future* SC, not to recognise one already deployed. To close that gap, N27 inspects the lap's `rcm_events` (forwarded by the orchestrator from `RadioPipelineRunner`) and, when any event matches `SAFETY_CAR_DEPLOYED` or `VIRTUAL_SAFETY_CAR_DEPLOYED`, forces `sc_prob_3lap = 1.0`, sets `sc_currently_active = True`, and elevates `threat_level` to `HIGH`. Release events (`SAFETY_CAR_ENDING`, `SAFETY_CAR_IN_PIT_LANE`, `VIRTUAL_SAFETY_CAR_ENDING`) take priority in the same window so the override clears as soon as the SC ends. The override is logged in the `reasoning` field with an `[RCM OVERRIDE: ...]` prefix so the audit trail survives the chat / arcade summary path.
+The N14 LightGBM was trained to predict a *future* SC, not to recognise one already deployed. To close that gap, N27 inspects the lap's `rcm_events` (forwarded by the orchestrator from `RadioPipelineRunner`) and, when any event matches `SAFETY_CAR_DEPLOYED` or `VIRTUAL_SAFETY_CAR_DEPLOYED`, forces `sc_prob_3lap = 1.0`, sets `sc_currently_active = True`, and elevates `threat_level` to `HIGH`. Release events (`SAFETY_CAR_ENDING`, `SAFETY_CAR_IN_PIT_LANE`, `VIRTUAL_SAFETY_CAR_ENDING`) take priority in the same window so the override clears as soon as the neutralisation ends. The override is logged in the `reasoning` field with an `[RCM OVERRIDE: ...]` prefix so the audit trail survives the chat / arcade summary path.
+
+`sc_currently_active` is deliberately a single back-compat flag: true under **either** a full Safety Car (Art. 55) or a Virtual Safety Car (Art. 56). A second field, `vsc_active`, records whether the specific neutralisation is a VSC — a full SC and a VSC differ in the pit-time saving they offer, so the Monte Carlo and the N28 prompt need to tell them apart (#471), which the single flag could not. `sc_active` (a derived property, not stored) is true only for a full SC: `sc_currently_active and not vsc_active`.
 
 ### N28 — Pit Strategy Agent (`pit_strategy_agent.py`)
 

@@ -235,6 +235,17 @@ class RaceStateManager:
             "lap_number": int(lap_number),
             # --- Timing ---
             "lap_time_s": _to_seconds(r.get("LapTime")),
+            # The featured parquet's own previous-lap time (N04's Prev_LapTime
+            # column) — NOT this lap's lap_time_s reused as a stand-in. The pace
+            # agent used to default prev_lap_time to the CURRENT lap's time
+            # (`d.get('lap_time_s') or 90.0`), which fed its own most recent
+            # prediction back in as the "previous" lap and made pace
+            # self-fulfilling (#435). ``.get`` (not indexing) so a laps_df built
+            # without this optional column returns None here rather than raising,
+            # same as every other optional column read via ``r.get(...)`` below.
+            # NaN (no earlier lap, e.g. the first lap of a stint) -> None, same
+            # handling as every other timing field in this method.
+            "prev_lap_time": _to_seconds(r.get("Prev_LapTime")),
             "sector1_s": _to_seconds(r.get("Sector1Time")),
             "sector2_s": _to_seconds(r.get("Sector2Time")),
             "sector3_s": _to_seconds(r.get("Sector3Time")),
@@ -370,6 +381,23 @@ class RaceStateManager:
                     "humidity": float(w["Humidity"]) if pd.notna(w.get("Humidity")) else None,
                     "wind_speed": float(w["WindSpeed"]) if pd.notna(w.get("WindSpeed")) else None,
                     "rainfall": bool(w["Rainfall"]) if pd.notna(w.get("Rainfall")) else False,
+                    # The session's FIRST track temperature, not this lap's. N14 trains
+                    # `track_temp_delta = track_temp - track_temp_start` and it is its 5th
+                    # most important feature (6.0% gain), above humidity and the circuit
+                    # SC rate. The consumer defaults `track_temp_start` to the CURRENT
+                    # temp when it is absent, so the delta came out 0.0 on every lap of
+                    # every race: a live feature reading a constant. Real 2024 values run
+                    # to -9.1 C (Monaco), -8.6 (Monza), -8.1 (Yas Island).
+                    #
+                    # It is a session constant, not a per-lap reading, but it ships in the
+                    # weather dict because that is the channel the consumer looks in, and
+                    # a second channel is how the two paths drifted apart in the first
+                    # place (the FastF1 path reads `_wx['TrackTemp'].iloc[0]` correctly).
+                    "track_temp_start": (
+                        float(weather_df.iloc[0]["TrackTemp"])
+                        if pd.notna(weather_df.iloc[0].get("TrackTemp"))
+                        else None
+                    ),
                 }
             )
 

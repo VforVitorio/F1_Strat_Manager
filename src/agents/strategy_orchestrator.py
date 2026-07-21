@@ -74,6 +74,7 @@ from src.agents.race_situation_agent import (
 from src.agents.pit_strategy_agent import (
     run_pit_strategy_agent,
     run_pit_strategy_agent_from_state,
+    _STINT_CAPACITY_LAPS,
 )
 from src.agents.radio_agent        import (
     run_radio_agent,
@@ -569,12 +570,44 @@ def _decide_agents_to_call(
 # Layer 2 — Monte Carlo simulation
 # ==============================================================================
 
-# Simulation constants (Heilmeier et al. 2020 § 3.2 — race-sim parameters)
-WINDOW_LAPS  = 5     # lap horizon for each strategy evaluation
+# Simulation constants. Cite per constant, not as a block: the earlier blanket
+# attribution "Heilmeier et al. 2020 section 3.2" was inaccurate. Section 3.2 of the
+# Virtual Strategy Engineer paper (ApplSci 10/7805) covers pit-stop decisions with a
+# neural network and holds none of these values. The safety-car pit-loss material is in
+# section 3.5 of the race-simulation paper (ApplSci 10/4229), and there it is a
+# per-circuit table rather than a single constant.
+WINDOW_LAPS  = 5     # lap horizon for each strategy evaluation.
+                     # Not drawn from the literature. Published F1 strategy models
+                     # optimise over the full remaining race (Heilmeier minimises total
+                     # race time; van Kampen et al. 2024 argues against short horizons).
+                     # A short window is a deliberate simplification, noted as a
+                     # limitation rather than derived.
 FRESH_GAIN   = 0.25  # s/lap advantage of fresh vs degraded tyre
-CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff
+CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff.
+                     # No counterpart in Heilmeier, who models degradation as linear
+                     # (t_tire = k0 + k1*age) with no cliff term. About 14x the
+                     # degradation rate measured on this repo's 71 races (HARD .052 /
+                     # MEDIUM .059 / SOFT .072 s/lap), so it stands as a cliff parameter,
+                     # not a Heilmeier citation.
 POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation)
-SC_PIT_BONUS = 8.0   # seconds saved by pitting under SC (no delta-lap loss)
+SC_PIT_BONUS = 8.0   # seconds saved by pitting under a full Safety Car (Art. 55, no
+                     # delta-lap loss). Measured on this repo's 71 races: 5.75 s, 95% CI
+                     # [3.14, 8.25] (n=124), so 8.0 sits inside the interval. Close to the
+                     # mean of Heilmeier's four published circuits (8.18 s, section 3.5 of
+                     # 10/4229). The N28 prompt's earlier "~12 s" is outside that CI.
+                     # A per-circuit value would fit better: Heilmeier's spread runs
+                     # 5.24 s (Melbourne) to 11.16 s (Catalunya), and #448 already builds
+                     # the per-circuit table it could read from.
+VSC_PIT_BONUS = 3.0  # seconds saved by pitting under a Virtual Safety Car (Art. 56).
+                     # Materially less than a full SC: a VSC preserves gaps and restarts
+                     # near-instantly (56.5 / 56.7), so the field is NOT queued and the
+                     # relative saving is roughly half. NOT measured: the repo ships no
+                     # pit-stop dataset labelled by track status (data/processed/pit_labeled
+                     # is empty), so this is a conservative placeholder to calibrate once
+                     # such data exists (#470/#471). Roughly half the SC saving measured
+                     # elsewhere (~5.75 s) rounds to ~3.0; conservative (understates the VSC
+                     # benefit) so it biases against over-recommending a VSC stop until
+                     # measured.
 
 
 def simulate_lap_window(
@@ -584,6 +617,7 @@ def simulate_lap_window(
     pit_i:    float,
     ucut_i:   bool,
     window:   int = WINDOW_LAPS,
+    sc_pit_bonus: float = SC_PIT_BONUS,
 ) -> float:
     """Estimate position gain vs STAY_OUT baseline over a W-lap window.
 
@@ -597,36 +631,63 @@ def simulate_lap_window(
         beyond the cliff contribute CLIFF_LOSS s/lap of time loss, converted
         to position units using POS_GAP_S.
     sc_i:
-        Whether a Safety Car event occurs in the window (Bernoulli N27 draw).
-        Pitting under SC avoids the delta-lap penalty (SC_PIT_BONUS saved).
-        OVERCUT under SC scores like PIT_NOW (free opportunity to pit).
+        Whether a neutralisation (SC or VSC) occurs in the window (Bernoulli N27 draw).
+        Pitting under one avoids the delta-lap penalty (sc_pit_bonus saved). Under a
+        neutralisation, OVERCUT scores the same as PIT_NOW (same stop, same bonus, same
+        fresh-tyre window), so the model is indifferent between them and the tie breaks
+        elsewhere. OVERCUT previously scored higher because its branch took the bonus
+        without subtracting the stop.
     pit_i:
-        Pit stop duration sample in seconds (Triangular N28 / prior draw).
+        Pit stop duration sample in seconds (Triangular N28 / prior draw). Physical stop
+        only, not the pit-lane traversal. The two-compound rule makes a stop mandatory,
+        so pit-now and pit-later both pay the traversal and it cancels in a comparison
+        scored relative to STAY_OUT. Adding it to one side puts PIT_NOW near -14 positions
+        against a worst-case STAY_OUT of about -2.7, which would suppress pitting entirely.
     ucut_i:
         Whether the undercut succeeds (Bernoulli N16 draw). Gates the extra
         +POS_GAP_S bonus of UNDERCUT vs PIT_NOW.
     window:
         Lap horizon for the evaluation. Default is WINDOW_LAPS=5.
+    sc_pit_bonus:
+        Seconds a pit stop saves when sc_i is True. Defaults to SC_PIT_BONUS (a full
+        Safety Car). The caller passes VSC_PIT_BONUS under a Virtual Safety Car, which
+        saves materially less because the field is not queued (Art. 56, #471). Only the
+        magnitude of the neutralisation's pit benefit differs; every other term is
+        unchanged, so a green-flag call (default) is byte-identical to before.
     """
     if strategy == "STAY_OUT":
         cliff_laps = max(0.0, window - cliff_i)
         time_delta = -cliff_laps * CLIFF_LOSS
 
     elif strategy == "PIT_NOW":
-        sc_saving  = SC_PIT_BONUS if sc_i else 0.0
+        sc_saving  = sc_pit_bonus if sc_i else 0.0
         time_delta = -pit_i + sc_saving + FRESH_GAIN * window
 
     elif strategy == "UNDERCUT":
-        sc_saving  = SC_PIT_BONUS if sc_i else 0.0
+        sc_saving  = sc_pit_bonus if sc_i else 0.0
         ucut_bonus = POS_GAP_S if ucut_i else 0.0
         time_delta = -pit_i + sc_saving + FRESH_GAIN * window + ucut_bonus
 
     elif strategy == "OVERCUT":
+        # An overcut still makes the stop, just later, so it pays for it like the others.
+        # These branches previously omitted `-pit_i`, so OVERCUT collected FRESH_GAIN and
+        # the full SC_PIT_BONUS without cost and took the argmax on 92.5% of a 160-state
+        # sweep, leaving the layer effectively constant. Charging the stop restores a real
+        # choice: STAY_OUT 42.5%, UNDERCUT 31.2%, PIT_NOW 26.2% on that sweep (PIT_NOW's
+        # share is all tie-break: it ties UNDERCUT whenever the undercut fails, and the
+        # dict order lists it first). OVERCUT no longer wins, which is the known
+        # limitation in test_mc_is_a_real_decision.py and #470.
+        #
+        # Do not add the pit-lane traversal (~20 s) here. A stop is mandatory under the
+        # two-compound rule, so pit-now and pit-later both pay it and it cancels in a
+        # comparison scored relative to STAY_OUT; charging one side only puts PIT_NOW near
+        # -14 positions against a worst-case STAY_OUT of about -2.7 and suppresses pitting.
+        # See tests/test_mc_is_a_real_decision.py.
         if sc_i:
-            time_delta = SC_PIT_BONUS + FRESH_GAIN * window
+            time_delta = -pit_i + sc_pit_bonus + FRESH_GAIN * window
         else:
             cliff_laps = max(0.0, (window // 2) - cliff_i)
-            time_delta = FRESH_GAIN * (window // 2) - cliff_laps * CLIFF_LOSS
+            time_delta = -pit_i + FRESH_GAIN * (window // 2) - cliff_laps * CLIFF_LOSS
 
     else:
         time_delta = 0.0
@@ -695,6 +756,15 @@ def _run_mc_simulation(
 
     sc_prob = situation_out.sc_prob_3lap
 
+    # A VSC is a neutralisation too (N27 forces sc_prob_3lap to 1.0, so every draw sees
+    # it), but it does NOT bunch the field the way a full SC does: gaps are preserved and
+    # the restart is instant (Art. 56.5 / 56.7), so the relative pit-time saving is much
+    # smaller. Charge the VSC its own (smaller) bonus instead of the full SC one; every
+    # other draw is unchanged, so a green or full-SC state is byte-identical to before
+    # (#471, and the "same 8 s for a VSC" bug in #470). vsc_active is False on any
+    # RaceSituationOutput that predates the split, so old callers keep the SC bonus.
+    sc_pit_bonus = VSC_PIT_BONUS if getattr(situation_out, "vsc_active", False) else SC_PIT_BONUS
+
     # A tool-parse failure inside N28 leaves the durations at 0.0 (its `or 0.0`
     # defaults), and 0.0 is not a stop time — it means "unknown". Simulating it makes
     # a pit stop FREE, so PIT_NOW (~+1.25 s) wins essentially every draw: a silent
@@ -729,7 +799,8 @@ def _run_mc_simulation(
 
     for s in strategies:
         outcomes = np.array([
-            simulate_lap_window(s, cliff_s[i], sc_s[i], pit_s[i], ucut_s[i])
+            simulate_lap_window(s, cliff_s[i], sc_s[i], pit_s[i], ucut_s[i],
+                                sc_pit_bonus=sc_pit_bonus)
             for i in range(n)
         ])
         e_val   = float(np.mean(outcomes))
@@ -944,8 +1015,14 @@ def _build_orchestrator_prompt(
         f"  lost +0.42s/lap vs session median, so the window is closing. SC\n"
         f"  probability (0.38) is below the threshold so we cannot wait for a free\n"
         f"  stop. Radio intent 'BLISTER' on RUS confirms the front-left is gone.\n"
-        f"  Regulation Article 30.5(a) requires no fewer than two dry compounds\n"
-        f"  used, so switching to HARD satisfies the rule. MC ranks PIT_NOW first\n"
+        # No article number in this example on purpose. The two-compound rule is
+        # renumbered between seasons (30.5(n) in 2023, 30.5(m) in 2024, 30.5(i) in 2025,
+        # from the corpus PDFs), and this block asks the LLM to cite article numbers, so a
+        # hardcoded one would be echoed into the output and wrong for most years. N30
+        # reads the season's own regulations; the article should come from that context.
+        f"  The mandatory two-compound rule (see the regulation context above for the\n"
+        f"  article, it is renumbered between seasons) requires no fewer than two dry\n"
+        f"  compounds used, so switching to HARD satisfies it. MC ranks PIT_NOW first\n"
         f"  (score +0.81) and the tire and radio evidence reinforce that call.\"\n\n"
         f"Return a StrategyRecommendation filling EVERY field:\n"
         f"  action:             one of STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT / ALERT.\n"
@@ -1164,6 +1241,9 @@ def _run_conditional_agents(
             # its prompt with the deploy banner, (b) bypass the minimum-stint
             # guard, and (c) trip the post-LLM STAY_OUT→PIT_NOW guard-rail.
             "sc_currently_active": situation_out.sc_currently_active,
+            # ...and this one so the banner names a VSC as a VSC: under Art. 56 the
+            # field is not queued, so a stop saves much less than under a full SC (#471).
+            "vsc_active":          situation_out.vsc_active,
         }
         if laps_df is not None:
             pit_out = run_pit_strategy_agent_from_state(pit_lap_state, laps_df)
@@ -1175,7 +1255,21 @@ def _run_conditional_agents(
     if "N30" in active:
         pit_action = pit_out.action if pit_out else None
         question   = _build_rag_question(
-            sc_active  = situation_out.sc_prob_3lap > CFG.sc_prob_threshold,
+            # A deployed SC is a FACT, not a forecast. This used to key off
+            # `sc_prob_3lap > threshold`, but N13/N14 predicts an SC *within the next 3
+            # laps*: while one is already out, that forward probability can sit below the
+            # threshold, and N30 would then ask the green-flag question and hand the
+            # orchestrator a "hard regulation constraint" block describing the wrong
+            # race. `sc_currently_active` is N27's observation of the RCM feed and it was
+            # already in scope twelve lines above (`:1166`), passed to N28 and dropped
+            # here — the same restored-datum-with-an-unswitched-consumer shape as #447.
+            #
+            # Keep the forecast as well: an SC that is merely likely still changes which
+            # articles matter.
+            sc_active  = (
+                situation_out.sc_currently_active
+                or situation_out.sc_prob_3lap > CFG.sc_prob_threshold
+            ),
             pit_action = pit_action,
             compound   = race_state.compound,
         )
@@ -1227,6 +1321,45 @@ def _live_drivers_from(lap_state: dict | None) -> set | None:
     return live or None
 
 
+def _clamp_expected_stint_end(
+    llm_stint_end:  int | None,
+    pit_lap_target: int | None,
+    compound_next:  str | None,
+    cliff_p50:      float | None,
+    total_laps:     int | None,
+) -> int | None:
+    """Ground the LLM's ``expected_stint_end`` against a physical anchor (#433).
+
+    ``expected_stint_end`` is unvalidated LLM free text: nothing in the schema stops
+    the LLM naming a lap far beyond what this stint can physically reach. Anchor it to
+    ``pit_lap_target`` plus the shorter of the N26 cliff P50 and the Pirelli stint
+    capacity for the NEXT compound (the same ``_STINT_CAPACITY_LAPS`` table
+    ``recommend_compound_tool`` uses, not duplicated), bounded by ``total_laps``. Accept
+    the LLM value only within +/-3 laps of the anchor; otherwise use the anchor. When
+    ``pit_lap_target``, ``compound_next`` or ``cliff_p50`` is missing there is no anchor
+    to ground against, so the LLM value passes through unclamped rather than inventing
+    one. Pure (no I/O) so it is unit-testable without loading any model.
+    """
+    if pit_lap_target is None or compound_next is None or cliff_p50 is None:
+        return llm_stint_end
+
+    capacity = _STINT_CAPACITY_LAPS.get(compound_next, _STINT_CAPACITY_LAPS['MEDIUM'])
+    anchor = pit_lap_target + min(cliff_p50, capacity)
+    if total_laps is not None:
+        anchor = min(anchor, total_laps)
+    anchor = int(round(anchor))
+
+    if llm_stint_end is not None and abs(llm_stint_end - anchor) <= 3:
+        return llm_stint_end
+    if llm_stint_end is not None:
+        logger.warning(
+            "Clamping LLM expected_stint_end %r to anchor %d "
+            "(pit_lap_target=%s, compound_next=%s, cliff_p50=%.1f) — #433",
+            llm_stint_end, anchor, pit_lap_target, compound_next, cliff_p50,
+        )
+    return anchor
+
+
 def _assemble_recommendation(
     synth:              "_LLMSynthesis",
     pit_out,
@@ -1234,6 +1367,8 @@ def _assemble_recommendation(
     regulation_context: str,
     sc_currently_active: bool = False,
     live_drivers:       set | None = None,
+    cliff_p50:          Optional[float] = None,
+    total_laps:         Optional[int] = None,
 ) -> "StrategyRecommendation":
     """Merge the LLM synthesis with N28 pit data and attach grounding fields.
 
@@ -1280,6 +1415,11 @@ def _assemble_recommendation(
     be checked. **None means "unknown", not "nobody"** — a caller without a lap_state
     cannot know, so its target passes rather than being silently discarded.
 
+    `cliff_p50` (N26 TireOutput.laps_to_cliff_p50) and `total_laps` (RaceState.total_laps)
+    ground `expected_stint_end` — see the clamp below (#433). Both default to None so a
+    caller that has not been updated to pass them keeps the previous unclamped behaviour
+    rather than crashing.
+
     Returns a fully-populated StrategyRecommendation ready for the UI layer.
     """
     # N28 fallbacks — only used when the LLM did not commit to a value
@@ -1289,13 +1429,11 @@ def _assemble_recommendation(
 
     pit_lap_target  = synth.pit_lap_target  if synth.pit_lap_target  is not None else fallback_lap
     compound_next   = synth.compound_next   if synth.compound_next   is not None else fallback_cmpd
-    # N28's target wins, always. It is the one that went through score_undercut_tool's
-    # `_live_drivers` check; the synthesis field is free text the orchestrator LLM typed,
-    # and the prompt even seeds it with a literal example ("e.g. SAI"). Letting the LLM
-    # win made that check dead code: #462's fix never reached the output. The LLM may
-    # only fill the field when N28 produced nothing, and only if it names a car that is
-    # actually racing — an unvalidated code ends up rendered on the pit wall as
-    # "UCUT: SAI".
+    # N28's target takes precedence: it is the one validated against the live drivers in
+    # score_undercut_tool. The synthesis field is LLM free text (the prompt seeds it with
+    # an example, "e.g. SAI"), so preferring it bypasses that check. The LLM value is used
+    # only when N28 produced none, and only if it names a car currently racing; otherwise
+    # an unvalidated code would surface on the pit wall as "UCUT: SAI".
     if fallback_target is not None:
         undercut_target = fallback_target
     elif synth.undercut_target is None:
@@ -1345,6 +1483,13 @@ def _assemble_recommendation(
     action    = synth.action
     reasoning = synth.reasoning
 
+    # #433 — expected_stint_end is unvalidated LLM free text; clamp it against the
+    # physical pit_lap + cliff/capacity anchor via the pure _clamp_expected_stint_end
+    # helper (extracted so the clamp is CI-testable without loading any model).
+    expected_stint_end = _clamp_expected_stint_end(
+        synth.expected_stint_end, pit_lap_target, compound_next, cliff_p50, total_laps
+    )
+
     return StrategyRecommendation(
         action             = action,
         reasoning          = reasoning,
@@ -1357,7 +1502,7 @@ def _assemble_recommendation(
         risk_posture       = synth.risk_posture,
         contingencies      = synth.contingencies,
         key_risks          = synth.key_risks,
-        expected_stint_end = synth.expected_stint_end,
+        expected_stint_end = expected_stint_end,
         scenario_scores    = mc_results,
         regulation_context = regulation_context,
     )
@@ -1443,7 +1588,29 @@ def run_strategy_orchestrator(
         synth, pit_out, mc_results, regulation_context,
         sc_currently_active = situation_out.sc_currently_active,
         live_drivers        = _live_drivers_from(lap_state),
+        cliff_p50           = tire_out.laps_to_cliff_p50,
+        total_laps          = race_state.total_laps,
     )
+
+
+def _scope_laps_to_gp(
+    laps_df: pd.DataFrame,
+    lap_state: dict | None,
+    race_state: "RaceState | None" = None,
+) -> pd.DataFrame:
+    """Narrow a season-wide laps frame to the Grand Prix being analysed (#429/#465).
+
+    Thin delegator to the canonical implementation in
+    ``src/strategy/inference/engine.py``. That module imports FROM this one, so a
+    top-level ``import`` would be circular — the deferred import inside the body
+    breaks the cycle while keeping ONE source of truth. A hand-kept duplicate is
+    exactly the kind of drift the #429/#465 family of bugs came from, so we do not
+    keep two copies; the engine version also derives the GP from ``race_state`` when
+    ``lap_state`` carries no ``gp_name`` yet.
+    """
+    from src.strategy.inference.engine import _scope_laps_to_gp as _engine_scope
+
+    return _engine_scope(laps_df, lap_state, race_state)
 
 
 def run_strategy_orchestrator_from_state(
@@ -1474,8 +1641,14 @@ def run_strategy_orchestrator_from_state(
         driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
         lap_row     = driver_rows[driver_rows["LapNumber"] == race_state.lap]
         year        = int(laps_df["Year"].iloc[0]) if "Year" in laps_df.columns else 2025
+        # Derive the GP from the (driver, lap) row match, NOT laps_df.iloc[0] (the
+        # first row of the whole-season frame): the latter blends one race's GP with
+        # another race's stint/team — the #465 wrong-GP bug engine._build_default_lap_state
+        # also has to avoid. Fall back to iloc[0] only when the row is absent.
         gp_name     = (
-            str(laps_df["GP_Name"].iloc[0]) if "GP_Name" in laps_df.columns else ""
+            str(lap_row["GP_Name"].iloc[0])
+            if not lap_row.empty and "GP_Name" in lap_row
+            else (str(laps_df["GP_Name"].iloc[0]) if "GP_Name" in laps_df.columns else "")
         )
         stint = int(lap_row["Stint"].iloc[0]) if not lap_row.empty else 1
         team  = (
@@ -1517,6 +1690,13 @@ def run_strategy_orchestrator_from_state(
             },
             "rivals": [],
         }
+
+    # Scope AFTER lap_state is resolved (built above or supplied by the caller),
+    # never before — see _scope_laps_to_gp's docstring for the #465 ordering bug
+    # this avoids. Passing race_state lets the canonical engine helper derive the GP
+    # even when a caller supplies a lap_state without a gp_name. Every downstream use
+    # of laps_df in this function (both agent calls below) sees the scoped frame.
+    laps_df = _scope_laps_to_gp(laps_df, lap_state, race_state)
 
     # Layer 1a — always-on agents (RSM variants)
     pace_out, tire_out, situation_out, radio_out = _run_always_on_agents_from_state(
@@ -1571,4 +1751,6 @@ def run_strategy_orchestrator_from_state(
         synth, pit_out, mc_results, regulation_context,
         sc_currently_active = situation_out.sc_currently_active,
         live_drivers        = _live_drivers_from(lap_state),
+        cliff_p50           = tire_out.laps_to_cliff_p50,
+        total_laps          = race_state.total_laps,
     )

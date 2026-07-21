@@ -134,9 +134,15 @@ class SubAgentLatencyRunner:
         self.lap_state["question"] = "What is the minimum pit stop duration under Safety Car?"
 
         # Featured 2025 laps — required by Tire / RaceSituation / Pit / Radio
-        # agents because they pull historical context out of the laps frame.
-        self.laps_featured = pd.read_parquet(
-            _DATA_ROOT / "processed" / "laps_featured_2025.parquet"
+        # agents because they pull historical context out of the laps frame. Route through
+        # the shared augmenter so Time_s is present; a raw read collapses the overtake gap
+        # to a lap-time delta (#486), which would skew the very latencies this bench reports.
+        # Same fix as the CLI and arcade surfaces.
+        from src.f1_strat_manager.laps_augment import augment_featured_laps
+
+        self.laps_featured = augment_featured_laps(
+            pd.read_parquet(_DATA_ROOT / "processed" / "laps_featured_2025.parquet"),
+            2025,
         )
 
     @staticmethod

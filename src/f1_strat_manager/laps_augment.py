@@ -19,7 +19,7 @@ This lives in the PARENT package on purpose. It used to live in the telemetry ba
 loader, which meant the backend was fixed and every other consumer was not: the CLI
 (`f1-sim`, the TFG's PMV) read the parquet straight from disk and shipped the degraded
 gap on 100% of calls. The data layer belongs to whoever owns the data, and the submodule
-consumes it — not the other way round.
+consumes it: not the other way round.
 
 `PitInTime` is deliberately NOT restored, though raw has it: a car only carries one on
 the lap it actually pits, and those are precisely the laps N04's `IsAccurate` filter
@@ -102,7 +102,7 @@ def augment_featured_laps(
 
     The join is safe: `(GP_Name, Driver, LapNumber)` is unique in the featured frame and
     every featured row is a subset of raw. A race whose raw parquet is absent is skipped
-    with a warning rather than failing — the agents' existing fallbacks then behave as
+    with a warning rather than failing: the agents' existing fallbacks then behave as
     they did before, which is the old status quo rather than a new failure.
 
     Args:
@@ -142,7 +142,7 @@ def augment_featured_laps(
 
     if missing:
         logger.warning(
-            "Raw laps unavailable for %d GP(s) in %d: %s — their laps keep the "
+            "Raw laps unavailable for %d GP(s) in %d: %s: their laps keep the "
             "degraded behaviour (the overtake gap falls back to a lap-time delta)",
             len(missing),
             year,

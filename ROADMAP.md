@@ -20,8 +20,8 @@ Development follows an incremental approach. v0.1–v0.5 covered project setup a
 
 **Three-release distribution model (v0.12+):** The project ships as three independent artifacts because each has different distribution mechanics:
 - **R1: CLI wheel** (`f1-strat`, `f1-sim`): pip-installable wheel on GitHub Releases, lazy HF data download
-- **R2: Arcade**: container deploy for interactive race replay visualization
-- **R3: Streamlit + Backend**: Docker Compose (FastAPI + Streamlit + Qdrant + LM Studio) or Streamlit Cloud
+- **R2: Arcade**: `uv tool install` console script (`f1-arcade`) for interactive race replay visualization — container deploy was evaluated and descoped (pyglet + Qt need a host OpenGL context and native display; see `INSTALL.md`)
+- **R3: Streamlit + Backend**: Docker Compose (FastAPI + Streamlit; Qdrant runs on-disk in-process, no separate container) or Streamlit Cloud
 
 ---
 
@@ -322,7 +322,7 @@ Extracted N25-N31 agent entry points to importable `src/agents/` modules. Built 
 
 - [X] `pyproject.toml` with `[project.scripts]` entry points (`f1-strat`, `f1-sim`)
 - [X] Lazy first-run data download from HuggingFace Hub (`ensure_setup()`)
-- [X] Installable via `uv tool install git+https://github.com/VforVitorio/F1_Strat_Manager.git`
+- [X] Installable via `uv tool install git+https://github.com/VforVitorio/F1-StratLab.git`
 
 **Success Metrics:**
 
@@ -510,8 +510,8 @@ At session start, the user selects `TEAM` and `DRIVER` (e.g. McLaren / NOR). Thi
 
 **R3: Streamlit + Backend Release:**
 
-- [ ] Docker Compose: FastAPI backend + Streamlit frontend + Qdrant + Kafka + LM Studio sidecar
-- [ ] Alternative: Streamlit Cloud + hosted FastAPI
+- [X] Docker Compose: FastAPI backend + Streamlit frontend (`docker-compose.yml`, two services). Qdrant runs on-disk in-process (no container); LM Studio/OpenAI is reached from the host via `host.docker.internal`. Kafka sidecar descoped (see note above)
+- [ ] Alternative: Streamlit Cloud + hosted FastAPI (documented as viable, not deployed)
 - [ ] Legacy cleanup: archive `base_agent.py`, `strategy_agent.py`, `rules/`; update `src/nlp/pipeline.py` to match N24
 
 **Success Metrics:**
@@ -531,7 +531,7 @@ At session start, the user selects `TEAM` and `DRIVER` (e.g. McLaren / NOR). Thi
 **Test scope actually executed (absorbed into v1.0.0):**
 
 - [X] End-to-end CLI simulation with no-LLM and LLM modes on representative 2025 races
-- [X] Smoke tests for agent imports and Arcade dashboard subprocess (`tests/test_agents.py`, `tests/arcade/*`)
+- [X] Smoke tests for agent imports and Arcade dashboard subprocess (`tests/test_agents.py`, `tests/test_arcade_dashboard_imports.py`)
 - [X] FastAPI + FastMCP integration path validated via `TestClient` and manual chat interactions
 - [X] Historical replay of the Bahrain 2025 GP used as the primary qualitative demo
 

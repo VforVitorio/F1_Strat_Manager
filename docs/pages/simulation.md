@@ -22,9 +22,9 @@ RaceReplayEngine
         └── get_lap_state()     ← merges all into lap_state dict
               ↓
     lap_state dict → all 7 agents → strategy orchestrator
-              ↓
-    to_arcade_frame() → WebSocket /ws/replay → Arcade UI
 ```
+
+`RaceReplayEngine.to_arcade_frame()` still exists in `replay_engine.py`, but nothing calls it and its docstring's `/ws/replay` WebSocket route was never registered on the backend — the arcade's real live path is the direct in-process pipeline broadcasting over a local TCP socket, documented in [Arcade strategy pipeline](#/arcade-strategy-pipeline) and [Multi-agent system → Three-window arcade](#/multi-agent).
 
 ## Data boundary (architectural constraint)
 
@@ -139,6 +139,10 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
     "lap_number": int,
     "driver": {
         "lap_time_s": float | None,
+        # This lap's Prev_LapTime feature, never last lap's own lap_time_s
+        # reused as a stand-in — that self-reference used to feed the pace
+        # agent its own most recent prediction back in as "previous" (#435).
+        "prev_lap_time": float | None,
         "sector1_s": float | None,
         "sector2_s": float | None,
         "sector3_s": float | None,
@@ -148,6 +152,9 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
         "compound_id": int | None,
         "tyre_life": int | None,
         "stint": int | None,
+        # TyreLife at the first lap of the current stint. N06's FuelEffect is
+        # measured from this baseline, not from lap 1 of the race (#446).
+        "stint_baseline_tyre_life": int | None,
         "fresh_tyre": bool,
         "speed_i1": float | None,
         "speed_i2": float | None,
@@ -184,6 +191,10 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
         "track_status": str,
         "air_temp": float | None,
         "track_temp": float | None,
+        # The session's FIRST track temperature, not this lap's — a session
+        # constant carried in the weather dict because that is the channel
+        # its consumer (N14's track_temp_delta feature) reads from (#486).
+        "track_temp_start": float | None,
         "humidity": float | None,
         "wind_speed": float | None,
         "rainfall": bool,

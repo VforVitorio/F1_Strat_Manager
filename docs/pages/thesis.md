@@ -52,3 +52,5 @@ Both notebooks emit CSV and Markdown tables alongside their PNGs:
 | MC Dropout (C2) | calibrated 80 % coverage | **0.840** | `data/eval/mc_dropout_coverage.{csv,md}` |
 
 All numbers reproducible with the commands above.
+
+**Note on the NLP pipeline figure.** The thesis and IEEE report publish **47.8 ms mean / 59.4 ms P95** for `run_pipeline` (the original N24 benchmark run). The **42.1 ms** figure in the table above comes from re-running the same benchmark on the current hardware and environment, as this page's figures are regenerated automatically rather than pinned to the publication. Both numbers are valid measurements of the same pipeline; the difference is measurement lineage (published vs. regenerated), not a correction.
