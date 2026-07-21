@@ -1,16 +1,19 @@
 # Meet the author
 
-Hi — I'm **Victor Vega Sobral** (a.k.a. VforVitorio), a graduate in
-Intelligent Systems Engineering from UIE Campus Coruña and AI & Data
-Intern at NTT DATA Spain. F1 StratLab was my Final-Degree Project,
-defended in June 2026 with a 10/10 grade and Distinction (Matricula de
-Honor) and unanimously recommended by the tribunal for publication as
-a research article: an open-source multi-agent AI for real-time
-Formula 1 race strategy, built end-to-end from telemetry ingestion and
-ML modelling to a LangGraph orchestrator and three operator surfaces.
-I built it because I wanted to see how far a single thesis could push
-a digital twin of an F1 race — and because nobody else was going to do
-it for me.
+Hi, I'm **Victor Vega Sobral** (a.k.a. VforVitorio). I graduated in
+Intelligent Systems Engineering from UIE Campus Coruña (9.0/10 average,
+four Distinctions / Matricula de Honor) and I'm now a **Junior AI
+Engineer at NTT DATA Spain**, working across computer vision, LLM
+behavior, agentic AI, and tooling such as Model Context Protocol (MCP)
+servers. Alongside the role I'm pursuing a Master's in Artificial
+Intelligence Research (AEPIA / UIMP). F1 StratLab was my Final-Degree
+Project, defended in June 2026 with a 10/10 grade and Distinction
+(Matricula de Honor) and unanimously recommended by the tribunal for
+publication as a research article: an open-source multi-agent AI for
+real-time Formula 1 race strategy, built end-to-end from telemetry
+ingestion and ML modelling to a LangGraph orchestrator and three
+operator surfaces. I built it to see how far a single thesis could push
+a digital twin of an F1 race.
 
 ## Where to find me
 
@@ -33,7 +36,7 @@ situation, pit strategy, radio, RAG) which a single orchestrator
 Pydantic-typed decision per lap: action, pace target, risk level,
 and a plan for the next pit window.
 
-The same engine drives three operator surfaces: a Streamlit dashboard
+The same engine drives three operator surfaces: a React web app
 for analysts (backed by a FastAPI/MCP API for programmatic access and
 chat tool-calling), a CLI for headless replays, and a three-window
 arcade (race replay, strategy dashboard, live telemetry) built in
@@ -53,8 +56,8 @@ graph view so you can navigate by topic, by tag, or by cross-reference.
   [OpenF1](https://openf1.org) provide the telemetry, lap and timing
   data this entire project depends on.
 - **Open-source libraries** — LangGraph, LightGBM, XGBoost, PyTorch,
-  Pydantic, FastAPI, Streamlit, PySide6, pyglet, Qdrant, and the
-  Hugging Face ecosystem.
+  Pydantic, FastAPI, React, Vite, ECharts, PySide6, pyglet, Qdrant, and
+  the Hugging Face ecosystem.
 - **Reference work** — TUMFTM race-simulation for the pit-delta
   framing, plus the wider F1 analytics community whose public
   notebooks shaped the early modelling decisions.

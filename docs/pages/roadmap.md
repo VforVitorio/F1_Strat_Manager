@@ -438,6 +438,19 @@
   </div>
 </li>
 
+<li class="rl-item">
+  <div class="rl-dot done"></div>
+  <div class="rl-card">
+    <div class="rl-header">
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.0.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-07-21</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
+    </div>
+    <p class="rl-title">Modern frontend: the post-race UI moves to a React web app</p>
+    <p class="rl-summary">The Streamlit post-race interface is fully replaced by a React web app (React 19, Vite, TypeScript, Tailwind, ECharts, TanStack Router/Query, Zustand) across six surfaces: dashboard, comparison (60fps replay), model lab, strategy, race analysis, and a streaming chat that renders each tool result inline. The FastAPI backend, the six agents, the orchestrator and the models are unchanged: a presentation-layer swap, not a rebuild.</p>
+  </div>
+</li>
+
 </ul>
 
 <p class="rl-section-label">Planned milestones</p>
@@ -448,19 +461,7 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v1.6.0</span>
-      <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
-    </div>
-    <p class="rl-title">Modern frontend</p>
-    <p class="rl-summary">React / Vite UI replaces Streamlit. In progress under <code>src/telemetry/webapp/</code>: foundations, dashboard, home, and the strategy tab (Race Trace) are largely shipped on <code>dev</code>; comparison, race, lab, and chat tabs remain. The FastAPI backend stays unchanged, and Streamlit remains the production surface until the migration completes. A presentation-layer swap: menus, flows, and all agent endpoints remain the same; only the client is rewritten for faster load times and a production-grade SPA experience.</p>
-  </div>
-</li>
-
-<li class="rl-item">
-  <div class="rl-dot planned"></div>
-  <div class="rl-card planned">
-    <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v1.7.0</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.1.0</span>
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Rival Agent: anticipate each rival's next move</p>
@@ -472,7 +473,7 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v1.8.0</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.2.0</span>
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Live race inference and 2026 regulation adaptation</p>
