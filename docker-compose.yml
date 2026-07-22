@@ -24,21 +24,17 @@ services:
       - f1_network
     restart: unless-stopped
 
-  # Streamlit Frontend
-  frontend:
+  # React web app (v2). nginx serves the built SPA and reverse-proxies /api to
+  # the backend service, so the browser stays same-origin. The legacy Streamlit
+  # app no longer ships in compose (cutover #43); it stays on disk under
+  # src/telemetry/frontend/ and runs locally via f1-streamlit.
+  webapp:
     build:
-      context: ./src/telemetry
-      dockerfile: frontend/Dockerfile
-    container_name: f1_telemetry_frontend
+      context: ./src/telemetry/webapp
+      dockerfile: Dockerfile
+    container_name: f1_webapp
     ports:
-      - "8501:8501"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - BACKEND_URL=http://backend:8000
-    volumes:
-      - ./src/telemetry/frontend:/app/frontend
-      - frontend_cache:/root/.cache
-    command: streamlit run frontend/app/main.py --server.port 8501 --server.address 0.0.0.0
+      - "8501:80"
     depends_on:
       - backend
     networks:
@@ -51,4 +47,3 @@ networks:
 
 volumes:
   backend_cache:
-  frontend_cache:

@@ -100,22 +100,24 @@ data from a **read-only** `./data` mount, so seed `data/` on the host first (see
 
 Opens:
 
-- Frontend at `http://localhost:8501`
+- React web app at `http://localhost:8501`
 - FastAPI backend at `http://localhost:8000`
 
-Both containers mount `./src/telemetry` so edits reload without a
-rebuild. `.env` at repo root is picked up by the backend image.
+The backend container mounts `./src/telemetry` so its edits reload without a
+rebuild; the web app ships as a built nginx image (rebuild to pick up frontend
+changes, or use the dev server below). `.env` at repo root is picked up by the
+backend image.
 
-If you prefer a local (non-Docker) Streamlit run:
+For frontend development without Docker:
 
 ```bash
-uv sync
-uv run f1-streamlit
+cd src/telemetry/webapp
+npm install && npm run dev   # Vite dev server, proxies /api to :8000
 ```
 
-`f1-streamlit` is a wrapper around `python -m streamlit run
-src/telemetry/frontend/app/main.py` that forwards any extra flag
-(`--server.port`, `--server.headless`, etc.).
+The legacy Streamlit app no longer ships in compose, but stays on disk and
+still runs locally via `uv run f1-streamlit` (a wrapper around
+`python -m streamlit run src/telemetry/frontend/app/main.py`).
 
 ---
 
