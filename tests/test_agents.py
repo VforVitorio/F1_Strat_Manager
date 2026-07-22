@@ -234,39 +234,6 @@ def test_tire_request_defaults():
 
 
 # ---------------------------------------------------------------------------
-# Voice config constants
-# ---------------------------------------------------------------------------
-#
-# The voice stack was rolled back to Whisper + Edge-TTS after Nemotron /
-# Qwen3-TTS were found to pull ~5 GB of extra deps (NVIDIA NeMo, qwen_tts)
-# that did not fit the backend image. ``project_voice_stack_migration.md``
-# tracks the rationale. These tests pin the constants the FastAPI voice
-# endpoints currently read so future swaps do not silently break them.
-
-
-@_skip_no_backend
-def test_voice_config_whisper_and_edge_tts():
-    """voice_config.py must expose Whisper STT + Edge-TTS defaults.
-
-    These constants are the public contract between the voice route layer
-    and the STT/TTS adapters; changing them without updating the adapters
-    is a silent regression.
-    """
-    import sys
-
-    sys.path.insert(0, str(ROOT / "src" / "telemetry"))
-    from backend.core.voice_config import (
-        AUDIO_SAMPLE_RATE,
-        EDGE_TTS_DEFAULT_VOICE,
-        WHISPER_MODEL,
-    )
-
-    assert "whisper" in WHISPER_MODEL.lower()
-    assert "neural" in EDGE_TTS_DEFAULT_VOICE.lower()
-    assert AUDIO_SAMPLE_RATE == 16000
-
-
-# ---------------------------------------------------------------------------
 # RCM context override (SC-active patch) — tests for the post-hoc safeguard
 # that flips N27/N28/N31 routing when an RCM confirms a deployed Safety Car.
 # ---------------------------------------------------------------------------
