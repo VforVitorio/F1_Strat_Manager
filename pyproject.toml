@@ -136,7 +136,7 @@ dev = [
     "mypy>=1.0.0",
     "ipykernel>=6.25.0",
     "jupyter>=1.0.0",
-    "jupyterlab>=4.5.9",
+    "jupyterlab>=4.5.10",
     "jupytext>=1.16.0",
 ]
 
