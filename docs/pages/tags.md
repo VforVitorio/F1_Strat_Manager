@@ -33,7 +33,7 @@ Tags that appear on a single page are listed under **Other** at the end.
 | `api` | [Agents API reference](#/agents-api), [Backend API](#/backend-api) |
 | `telemetry` | [Race replay engine](#/simulation), [Backend API](#/backend-api), [Streamlit frontend](#/streamlit), [Dashboard architecture](#/arcade-dashboard) |
 | `chat` | [Backend API](#/backend-api), [Streamlit frontend](#/streamlit) |
-| `voice` | [Backend API](#/backend-api), [Streamlit frontend](#/streamlit) |
+| `voice` | [Streamlit frontend](#/streamlit) (legacy — the voice surface was retired in v2) |
 | `mcp` | [Backend API](#/backend-api), [Streamlit frontend](#/streamlit) |
 
 ## Operations

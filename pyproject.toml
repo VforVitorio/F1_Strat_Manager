@@ -101,6 +101,10 @@ dependencies = [
     "optuna>=4.7.0",
     "catboost>=1.2.10",
     "librosa>=0.11.0",
+    # soundfile: directly imported by src/nlp/radio_runner.py (radio audio IO).
+    # Declared here on its own — it used to ride in via the retired voice extra
+    # and librosa's transitive dependency, which is not a contract.
+    "soundfile>=0.12.0",
     "nltk>=3.10.0",
     "gliner>=0.2.25",
     "onnxruntime<1.24",
@@ -134,13 +138,6 @@ dev = [
     "jupyter>=1.0.0",
     "jupyterlab>=4.5.9",
     "jupytext>=1.16.0",
-]
-
-voice = [
-    "edge-tts>=6.1.0",
-    "pydub>=0.25.0",
-    "soundfile>=0.12.0",
-    "ffmpeg-python>=0.2.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -8,8 +8,9 @@ into the deep dives as needed.
 - **CLI** (`f1-sim`) — headless Rich-based live inference panel.
 - **Arcade** (`f1-arcade`) — 2D race replay + PySide6 strategy dashboard
   + PySide6 telemetry window (one command spawns all three).
-- **Streamlit app** (`f1-streamlit` or `docker compose up`) — post-race
-  analysis, chat, voice.
+- **Web app** (`docker compose up`) — post-race analysis and chat
+  (React SPA backed by FastAPI; the legacy Streamlit app stays behind
+  `f1-streamlit`).
 
 All three consume the same core:
 
