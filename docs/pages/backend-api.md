@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend is a FastAPI application at `src/telemetry/backend/`. It serves telemetry data, driver comparisons, chat (LM Studio proxy), voice (STT/TTS), and the N25–N31 strategy agent pipeline. All endpoints are prefixed with `/api/v1`.
+The backend is a FastAPI application at `src/telemetry/backend/`. It serves telemetry data, driver comparisons, chat (LM Studio proxy), and the N25–N31 strategy agent pipeline. All endpoints are prefixed with `/api/v1`.
 
 Entry point: `backend/main.py` — creates the FastAPI app and registers all routers.
 
@@ -16,7 +16,6 @@ There is no `auth` router. Authentication is a single ASGI middleware wrapping e
 | circuit_domination | `/api/v1` | circuit_domination | `api/v1/endpoints/circuit_domination.py` |
 | comparison | `/api/v1/comparison` | comparison | `api/v1/endpoints/comparison.py` |
 | chat | `/api/v1/chat` | chat | `api/v1/endpoints/chat.py` |
-| voice | `/api/v1/voice` | voice | `api/v1/endpoints/voice.py` |
 | strategy | `/api/v1/strategy` | strategy | `api/v1/endpoints/strategy.py` |
 
 Two more mount points sit outside the router list:
@@ -127,13 +126,9 @@ The frontend mints a UUID, sends it on every chat request via the `X-Request-Id`
 - `stage_tracker.py` — per-request stage dict for the smart-spinner.
 - `utils/` — empty placeholder; the legacy `tool_param_extractor`, `query_classifier`, `validators`, the per-handler files, the `router/` package and the `prompts/` directory were deleted along with the `/chat/query` endpoint.
 
-## Voice endpoints
+## Voice endpoints (retired)
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/v1/voice/transcribe` | Speech-to-text (Whisper) |
-| POST | `/api/v1/voice/tts` | Text-to-speech |
-| GET | `/api/v1/voice/health` | Voice service health check |
+The `/api/v1/voice` router (STT, TTS and the STT to LLM to TTS pipeline) was retired in v2: it came from a course requirement and the web app ships without it. The implementation remains available in the legacy Streamlit app (`src/telemetry/frontend/`) and in the `legacy_version` branch.
 
 ## Strategy endpoints (N25–N31)
 
