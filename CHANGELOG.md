@@ -11,6 +11,24 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.0.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.0.0...v2.0.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* **deps:** bump gitpython to 3.1.54 to clear a high advisory ([3ae5af2](https://github.com/VforVitorio/F1-StratLab/commit/3ae5af2a072fea6458e6d56831e2faaa517ff433))
+
+
+### Documentation
+
+* **site:** expand the roadmap (v2.5 modern arcade, v2.8 rival, v3.0 live) ([7564e73](https://github.com/VforVitorio/F1-StratLab/commit/7564e733b5f01f5eed20b6820edbe74b7a60c28f))
+* **site:** mark the v2 migration shipped, refresh author bio and getting-started hero ([c9681b9](https://github.com/VforVitorio/F1-StratLab/commit/c9681b9130c78f97a4c591cda2f775f369947926))
+
+
+### Refactoring
+
+* retire the voice surface on the parent side; bump telemetry submodule ([d916368](https://github.com/VforVitorio/F1-StratLab/commit/d916368b4b98449ae5742a691fcc15bb0b3ed8b8))
+
 ## [2.0.0](https://github.com/VforVitorio/F1-StratLab/compare/v1.10.6...v2.0.0) (2026-07-21)
 
 
