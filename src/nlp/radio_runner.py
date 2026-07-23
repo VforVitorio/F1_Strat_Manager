@@ -188,7 +188,7 @@ def _get_whisper(model_name: str) -> WhisperTranscriber:
     the cached instance otherwise. Two runners constructed in the same
     process therefore share the loaded Whisper weights as long as they
     use the same checkpoint, which is the common case for an
-    interactive Streamlit / CLI session that simulates multiple GPs in
+    interactive CLI or backend session that simulates multiple GPs in
     a row.
     """
     global _WHISPER_SINGLETON

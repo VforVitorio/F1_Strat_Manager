@@ -41,7 +41,7 @@ Five entry points after install (`pyproject.toml::[project.scripts]`):
 | `f1-strat` | Interactive CLI wizard (arrow-key pickers for race / driver / provider); shells out to `f1-sim` |
 | `f1-sim` | Headless CLI strategy simulation with Rich live panel (the scripted form) |
 | `f1-arcade --strategy` | 2D replay + PySide6 dashboard + telemetry |
-| `f1-streamlit` | Post-race analysis + chat UI |
+| `f1-webapp` | Post-race web app (wraps `docker compose up`: FastAPI backend + React SPA) |
 | `f1-eval` | Regenerates the model evaluation reports (`registry`, `calibration`, `hygiene`, `nlp`, `models`, `alert-llm` subcommands) under `documents/eval_reports/` |
 
 ## Code style
