@@ -116,6 +116,12 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 
 **Production multi-agent system** (N25–N31): `pace_agent.py`, `tire_agent.py`, `race_situation_agent.py`, `pit_strategy_agent.py`, `radio_agent.py`, `rag_agent.py`, `strategy_orchestrator.py` — each exposes a `run_*_agent_from_state(lap_state)` entry point consumed by the CLI, Arcade and Streamlit surfaces.
 
+**Production support module** for the orchestrator:
+
+| File                                                                    | Description                                                                                                                                  |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [src/agents/position_projection.py](src/agents/position_projection.py) | Pure primitive that projects track position from end-of-window gaps; replaces the generic seconds/1.5 model with measured per-rival state  |
+
 The two files below are the **legacy** `experta` rule engine, kept for reference (superseded by the LangGraph agents above):
 
 | File                                                         | Description                                                                                                                    |
@@ -129,6 +135,7 @@ The two files below are the **legacy** `experta` rule engine, kept for reference
 | ---- | ----------- |
 | [src/simulation/race_state_manager.py](src/simulation/race_state_manager.py) | `RaceStateManager` — builds the per-lap `lap_state` dict (single-driver telemetry + timing-only rivals) consumed by all agents |
 | [src/simulation/replay_engine.py](src/simulation/replay_engine.py) | `RaceReplayEngine` — iterates a race parquet lap by lap, yielding `lap_state` (same contract for replay or a future live feed) |
+| [src/simulation/stint_history.py](src/simulation/stint_history.py) | Art. 30.5(m) stint-history helpers: answers pit-stop count, compound history, and mandatory-two-dry-compound obligation per driver and lap |
 | [src/arcade/](src/arcade/) | 2D pyglet replay + PySide6 strategy dashboard + `stream.py` TCP broadcast to the dashboard subprocess |
 
 ### `src/nlp/` (legacy)
@@ -205,9 +212,11 @@ historical reference scripts.
 
 | Script                                                       | Description                                                                                                                       |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| [scripts/download_data.py](scripts/download_data.py)         | Downloads the full raw + processed dataset from Hugging Face Hub (`VforVitorio/f1-strategy-dataset`)                              |
+| [scripts/download_data.py](scripts/download_data.py)         | Thin wrapper to `src.f1_strat_manager.data_cache.ensure_setup`; downloads the curated subset (~7-8 GB) from Hugging Face Hub    |
 | [scripts/download_fia_pdfs.py](scripts/download_fia_pdfs.py) | Scrapes and downloads FIA Sporting and Technical Regulation PDFs (2023-2025) into `data/rag/documents/`; falls back to known URLs |
 | [scripts/build_rag_index.py](scripts/build_rag_index.py)     | One-shot ingestion: PDF → article chunks → BGE-M3 embeddings → local Qdrant collection; idempotent (hash-based deduplication)     |
 | [scripts/build_radio_dataset.py](scripts/build_radio_dataset.py) | Multi-GP CLI wrapper around `RadioDatasetBuilder`; writes per-GP `radios.parquet` + `rcm.parquet` under `data/processed/race_radios/{year}/{slug}/` and downloads radio MP3s under `data/raw/radio_audio/{year}/{slug}/driver_{N}/` (default season: 2025; `--skip-audio` for parquets only) |
 | [scripts/upload_radio_corpus.py](scripts/upload_radio_corpus.py) | Publish-side helper — `HfApi.upload_folder` pushes both the parquet tree (`data/processed/race_radios/…`) and the MP3 tree (`data/raw/radio_audio/…`) to `VforVitorio/f1-strategy-dataset` preserving the on-disk layout. Idempotent (content-hash dedup). Flags: `--year`, `--dry-run`, `--skip-parquets`, `--skip-audio`, `--commit-message` |
+| [scripts/measure_mc_tables.py](scripts/measure_mc_tables.py) | Measure six quantitative tables (neutralisation rates, gap densities, clean-air gains, undercut bands, pit hazards, SC window duration) from raw parquets; writes `data/mc_measured_v1.json` for the projection-based Monte Carlo layer |
 | [scripts/run_simulation_cli.py](scripts/run_simulation_cli.py) | Headless multi-agent simulator. Consumes the static radio corpus at replay time via `src/nlp/radio_runner.py`; `ensure_radio_corpus(year, gp_name)` lazily downloads the per-GP MP3 tree on first run. Flags: `--no-real-radios` (fall back to legacy mock injection), `--whisper-model NAME` (default `turbo`) |
+| [scripts/run_webapp.py](scripts/run_webapp.py) | Console script launcher for the post-race web app (FastAPI backend + React SPA); wraps `docker compose up` and forwards CLI arguments |

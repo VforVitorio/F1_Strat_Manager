@@ -205,7 +205,26 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
         "driver": str,
         "team": str,
         "total_laps": int,
-    }
+    },
+    # Art. 30.5(m) two-compound obligation, for our driver, as of this lap.
+    # Emitted here (rather than fetched separately) so the CLI, the arcade and
+    # the backend cannot each derive their own, divergent view of who still
+    # owes a stop. A lap with no row falls back to the nearest earlier lap,
+    # since compound history only grows and the last known state is still the
+    # truth about what has been used.
+    "stint_flags": {
+        "stops_made": int | None,               # highest visible stint number minus one
+        "compounds_used": list[str],             # first-seen order, dry and wet compounds
+        "mandatory_stop_pending": bool | None,   # None when an unseen stint could hide the second compound
+    },
+    # mandatory_stop_pending for every rival present in `rivals`, keyed by
+    # driver code. A rival who must still stop is no threat: they pay the same
+    # price later. A driver absent from this dict has no row for this lap and
+    # is not asserted either way, the same "absence beats a default" rule
+    # `rivals` itself follows.
+    "rival_stop_pending": {
+        "<driver_code>": bool | None,
+    },
 }
 ```
 
