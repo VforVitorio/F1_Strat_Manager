@@ -11,12 +11,12 @@ prerequisites are on the machine.
   `pyproject.toml`; CI runs on 3.12).
 - `OPENAI_API_KEY` in a `.env` at the repo root (or exported in the
   shell) for OpenAI `gpt-4.1-mini`, the default model on every provider
-  path. Arcade and Streamlit read `F1_LLM_PROVIDER` from `.env`
+  path. Arcade and the web app backend read `F1_LLM_PROVIDER` from `.env`
   (`.env.example` ships `openai`). **The CLI is the exception:** `f1-sim`'s
   `--provider` flag overrides `.env` and defaults to `lmstudio` (a local
   LM Studio server on `http://localhost:1234`) — pass `--provider openai`
   to use OpenAI instead, or `--no-llm` to skip the LLM step entirely.
-- For Streamlit Docker flow: **Docker Desktop** (Windows/Mac) or
+- For the web app Docker flow: **Docker Desktop** (Windows/Mac) or
   `docker + compose` plugin (Linux).
 - For Arcade: a working OpenGL graphics stack (any modern laptop
   qualifies; arcade auto-detects).
@@ -83,13 +83,13 @@ controls legend, troubleshooting and window tour.
 
 ---
 
-## Streamlit — post-race analysis UI (backend + frontend)
+## Web app — post-race analysis UI (backend + React SPA)
 
 ```bash
 git clone --recurse-submodules https://github.com/VforVitorio/F1-StratLab.git
 cd F1-StratLab
 cp .env.example .env          # add OPENAI_API_KEY, or set F1_LLM_PROVIDER=lmstudio
-docker compose up
+uv run f1-webapp              # wraps `docker compose up` and prints the URLs
 ```
 
 `--recurse-submodules` is required: both containers build from `src/telemetry`,
@@ -115,9 +115,9 @@ cd src/telemetry/webapp
 npm install && npm run dev   # Vite dev server, proxies /api to :8000
 ```
 
-The legacy Streamlit app no longer ships in compose, but stays on disk and
-still runs locally via `uv run f1-streamlit` (a wrapper around
-`python -m streamlit run src/telemetry/frontend/app/main.py`).
+The legacy Streamlit app has been removed from the repo (the `f1-streamlit`
+entry point with it); it survives in git history and in the `legacy_version`
+branch. `f1-webapp` is the single launcher for the post-race surface.
 
 ---
 
@@ -133,12 +133,12 @@ All three surfaces read from `data/`:
   and compound allocation
 
 The CLI and Arcade call `ensure_radio_corpus()` and FastF1's cache on
-first run; a warm cache is zero-cost. The Docker Streamlit stack does not
+first run; a warm cache is zero-cost. The Docker web app stack does not
 yet have an equivalent auto-download step for a production deploy without
 a host-side repo clone — that gap is a known, deferred follow-up; seed
 `data/` on the host as described below in the meantime.
 
-For the **Docker Streamlit stack**, `./data` is mounted read-only, so the
+For the **Docker web app stack**, `./data` is mounted read-only, so the
 container cannot populate it — seed it on the host before `docker compose up`,
 either by running the CLI path once (`uv run f1-sim Melbourne VER "Red Bull Racing" --year 2025 --no-llm --laps 1-1`)
 or directly:
@@ -170,5 +170,5 @@ python scripts/verify_drs_zones.py --year 2025 --summary
 
 ```bash
 uv tool uninstall f1-strat-manager
-docker compose down      # from the repo root for the Streamlit stack
+docker compose down      # from the repo root for the web app stack
 ```

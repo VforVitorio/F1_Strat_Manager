@@ -40,6 +40,8 @@ from src.agents.strategy_orchestrator import (
     _decide_agents_to_call,
     _LLMSynthesis,
     _run_mc_simulation,
+    best_mc_candidate,
+    race_context_from_lap_state,
     _to_radio_message,
     _to_rcm_event,
 )
@@ -304,14 +306,19 @@ def run_no_llm_lap(
         pit_out, regulation_context, rag_dict = None, "", None
 
     with _StageTimer(timings, "mc"):
+        _ctx = race_context_from_lap_state(lap_state, race_state)
         mc_results = _run_mc_simulation(
             pace_out=pace_out,
             tire_out=tire_out,
             situation_out=situation_out,
             pit_out=pit_out,  # None -> conservative prior (Triangular 2.2/2.8/3.8, ucut 0.5)
             alpha=race_state.risk_tolerance,
+            rivals=(lap_state or {}).get("rivals"),
+            position=_ctx.get("position"),
+            laps_remaining=_ctx.get("laps_remaining"),
+            pit_context=_ctx.get("pit_context"),
         )
-        best_mc = max(mc_results, key=lambda s: mc_results[s]["score"])
+        best_mc = best_mc_candidate(mc_results)
 
     with _StageTimer(timings, "synthesis"):
         action, guardrail_reason = apply_guard_rails(

@@ -24,7 +24,7 @@ After install you have five console entry points:
 f1-strat       # interactive launcher (recommended starting point)
 f1-sim         # headless CLI simulation against a saved race
 f1-arcade      # three-window PySide6 + pyglet experience
-f1-streamlit   # Streamlit dashboards
+f1-webapp      # post-race web app (wraps `docker compose up`)
 f1-eval        # regenerate the evaluation reports (registry, calibration, hygiene, ...)
 ```
 

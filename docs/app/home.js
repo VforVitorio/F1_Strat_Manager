@@ -110,7 +110,7 @@ function HomePage({ onNav, onOpenGraph, pagesReady }) {
         React.createElement("div", { className: "layer-card" },
           React.createElement("div", { className: "layer-card-num" }, "Layer 03"),
           React.createElement("h3", null, "Operator surfaces"),
-          React.createElement("p", null, "Three independent UIs consume the orchestrator: the headless CLI for batch races, the three-window Arcade dashboard for live racing, and the Streamlit web app for race analysis."),
+          React.createElement("p", null, "Three independent UIs consume the orchestrator: the headless CLI for batch races, the three-window Arcade dashboard for live racing, and the React web app for race analysis."),
         ),
       ),
     ),
@@ -171,7 +171,7 @@ function HomePage({ onNav, onOpenGraph, pagesReady }) {
     React.createElement("section", { className: "cta-strip" },
       React.createElement("div", { className: "cta-strip-text" },
         React.createElement("h3", null, "Three console scripts. One wheel. No GPU required."),
-        React.createElement("p", null, "Install the release wheel and pick the surface that fits your workflow — headless CLI, Arcade dashboard, or Streamlit. First boot caches the models locally; subsequent runs are offline."),
+        React.createElement("p", null, "Install the release wheel and pick the surface that fits your workflow — headless CLI, Arcade dashboard, or the web app. First boot caches the models locally; subsequent runs are offline."),
       ),
       React.createElement("button", {
         className: "btn btn-primary",

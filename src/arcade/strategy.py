@@ -702,11 +702,18 @@ def _normalize_scores(raw: Any) -> dict[str, float]:
     for k, v in raw.items():
         key = str(k).upper()
         if isinstance(v, dict):
-            v = v.get("score", 0.0)
+            v = v.get("score")
+        # A candidate the projection engine declined to score arrives as None.
+        # It used to become 0.0 here, which painted a full-height bar at the
+        # zero line for a strategy that was never on the table — a numeric
+        # sentinel by accident. Dropping the key instead leaves the dashboard
+        # with three bars, and an absent bar cannot be misread as a score.
+        if v is None:
+            continue
         try:
             out[key] = float(v)
         except (TypeError, ValueError):
-            out[key] = 0.0
+            continue
     return out
 
 

@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.10+
-- Node.js 18+ (for the audio visualization React component build)
+- Node.js 18+ (for the React web app build / dev server)
 - Docker and Docker Compose (for containerized deployment)
 - LM Studio or OpenAI API key (for LLM-powered agents)
 
@@ -73,14 +73,15 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 Verify at `http://localhost:8000/docs` (Swagger UI).
 
-### 5. Run the frontend
+### 5. Run the web app
 
 ```bash
-cd src/telemetry
-streamlit run frontend/app/main.py --server.port 8501
+cd src/telemetry/webapp
+npm install && npm run dev   # Vite dev server, proxies /api to :8000
 ```
 
-Open `http://localhost:8501`.
+Open `http://localhost:5173`. The production path serves the built SPA
+through nginx on `:8501` (see Docker below), launched with `f1-webapp`.
 
 ### 6. LM Studio (for LLM agents)
 
@@ -99,7 +100,9 @@ docker-compose up --build
 Services:
 
 - **backend**: FastAPI on port 8000. Volumes: `./src:/app/src:ro` (read-only source — agents import from here), `./data:/app/data:ro` (read-only data), `./data/rag:/app/data/rag:rw` (writable RAG index, N30 may write here).
-- **frontend**: Streamlit on port 8501, depends on `backend`.
+- **webapp**: React SPA served by nginx on port 8501; `/api` is reverse-proxied to `backend`, so the browser stays same-origin. Depends on `backend`.
+
+`uv run f1-webapp` wraps this compose invocation and prints the URLs.
 
 The `:ro` mounts mean agents must handle `OSError` / `PermissionError` gracefully when they attempt to create export directories inside the container.
 
@@ -110,16 +113,14 @@ cd src/telemetry
 docker-compose up --build
 ```
 
-Same two services (paths relative to `src/telemetry/` instead of the repo root) plus a third:
+Same two services, with paths relative to `src/telemetry/` instead of the repo root. The cutover (#43) is done: the **webapp** owns `:8501` in both compose files and the Streamlit service is gone (the legacy Streamlit app was later removed from the repo entirely, #551).
 
-- **webapp**: the React SPA replacing Streamlit (migration epic #25, a strangler-pattern rollout). Host port `3000` during the migration; takes over `8501` at cutover (#43). Not present in the root compose file.
+### Webapp Dockerfile (multi-stage)
 
-### Frontend Dockerfile (multi-stage)
+The webapp Dockerfile has two stages:
 
-The frontend Dockerfile has two stages:
-
-1. **node-builder**: builds the React audio visualization component from `components/streamlit_audio_viz/frontend/`
-2. **python app**: installs Python deps, copies frontend code, copies compiled React build
+1. **node-builder**: `npm ci && npm run build` of the Vite + React SPA
+2. **nginx**: serves the built assets and reverse-proxies `/api` to the backend service
 
 ### Backend Dockerfile
 
@@ -140,10 +141,10 @@ This processes FIA Sporting Regulations PDFs and stores embeddings in `data/rag/
 ```
                     f1_network (bridge)
                     |                |
-    frontend:8501 --+                +-- backend:8000
-    (Streamlit)     |                |   (FastAPI + uvicorn)
+    webapp:8501  ---+                +-- backend:8000
+    (nginx + SPA)   |                |   (FastAPI + uvicorn)
                     +-- LM Studio --+
                         :1234 (host)
 ```
 
-The frontend calls the backend via `http://backend:8000` (Docker service name). LM Studio runs on the host machine and is accessed at `http://host.docker.internal:1234/v1` or via host networking.
+The webapp's nginx reverse-proxies `/api` to `http://backend:8000` (Docker service name), so the browser stays same-origin. LM Studio runs on the host machine and is accessed at `http://host.docker.internal:1234/v1` or via host networking.

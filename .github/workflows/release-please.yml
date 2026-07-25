@@ -35,9 +35,10 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      # `submodules: recursive` bakes src/telemetry (the Streamlit surface) into
-      # the wheel; without it f1-streamlit shipped dead (PK-01). fetch-depth: 0 so
-      # the build is identical regardless of checkout depth.
+      # `submodules: recursive` bakes src/telemetry (the FastAPI backend) into
+      # the wheel (PK-01 lesson). The Streamlit surface is retired (#551);
+      # un-baking the backend is a named follow-up. fetch-depth: 0 so the build
+      # is identical regardless of checkout depth.
       - uses: actions/checkout@v7
         with:
           submodules: recursive
@@ -53,26 +54,24 @@ jobs:
 
       # Guard the exact failure PK-01 was: a wheel that installs but whose entry
       # points don't resolve. Install (no deps) and assert every console script
-      # plus the bundled Streamlit app + audio-orb component are present.
+      # resolves and its backing module shipped.
       - name: Smoke-test the wheel
         run: |
           python -m venv /tmp/smoke
           /tmp/smoke/bin/python -m pip install --no-deps -q dist/*.whl
-          for s in f1-strat f1-sim f1-arcade f1-streamlit f1-eval; do
+          for s in f1-strat f1-sim f1-arcade f1-webapp f1-eval; do
             test -x /tmp/smoke/bin/$s || { echo "missing console script: $s"; exit 1; }
           done
           /tmp/smoke/bin/python - <<'PY'
           import importlib.util, pathlib
-          root = pathlib.Path(importlib.util.find_spec("scripts.run_streamlit").origin).resolve().parent.parent
+          root = pathlib.Path(importlib.util.find_spec("scripts.run_webapp").origin).resolve().parent.parent
           need = [
-              "scripts/f1_cli.py", "scripts/run_simulation_cli.py", "scripts/run_streamlit.py",
+              "scripts/f1_cli.py", "scripts/run_simulation_cli.py", "scripts/run_webapp.py",
               "src/arcade/main.py", "src/strategy/eval/cli.py",
-              "src/telemetry/frontend/app/main.py",
-              "src/telemetry/frontend/components/streamlit_audio_viz/frontend/build/index.html",
           ]
           missing = [r for r in need if not (root / r).exists()]
           assert not missing, f"wheel is missing: {missing}"
-          print("wheel smoke OK: 5 entry points + Streamlit app + audio-orb assets present")
+          print("wheel smoke OK: 5 entry points present")
           PY
 
       - name: Upload artefacts to release
