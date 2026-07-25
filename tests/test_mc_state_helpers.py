@@ -302,30 +302,48 @@ def test_rivals_with_no_usable_gap_cannot_conjure_a_projection():
 # ---------------------------------------------------------------------------
 
 
-def test_every_spelling_of_a_circuit_finds_the_same_measured_values():
-    """Three keyspaces meet in this repo and a miss used to be silent.
+# Circuits this repo spells more than one way: underscored folder forms, the
+# country name 2023 filed Barcelona under, Miami's three variants, and the two
+# that carry diacritics and lose them through a non-UTF-8 console.
+_CIRCUIT_SPELLINGS = (
+    ("Barcelona", "Spain"),
+    ("Miami", "Miami Gardens", "Miami_Gardens"),
+    ("Lusail", "Qatar Grand Prix"),
+    ("Yas Island", "Yas_Island"),
+    ("São Paulo", "Sao Paulo", "Sao_Paulo"),
+    ("Montréal", "Montreal"),
+)
 
-    Folder names underscore multi-word slugs, 2023 filed Barcelona under a
-    country name, Miami has three spellings, and two circuits carry diacritics
-    that vanish through a non-UTF-8 console. A traversal lookup that missed fell
-    back to a flat 20.0 with a warning; a hazard lookup that missed fell back to
-    the pooled rate in silence, which is the #448 failure exactly.
+
+def test_every_spelling_of_a_circuit_finds_the_same_hazard():
+    """Three keyspaces meet in this repo, and a hazard miss used to be silent.
+
+    Unlike the traversal lookup, which at least warns when it falls back, a
+    hazard miss quietly returned the pooled rate — a table that looks populated
+    while every lookup misses is the #448 failure exactly. Reads the committed
+    measured tables, so it runs everywhere.
     """
-    from src.agents.position_projection import measured_neutralisation_rate, traversal_seconds
+    from src.agents.position_projection import measured_neutralisation_rate
 
-    for spellings in (
-        ("Barcelona", "Spain"),
-        ("Miami", "Miami Gardens", "Miami_Gardens"),
-        ("Lusail", "Qatar Grand Prix"),
-        ("Yas Island", "Yas_Island"),
-        ("São Paulo", "Sao Paulo", "Sao_Paulo"),
-        ("Montréal", "Montreal"),
-    ):
-        traversals = {traversal_seconds(name) for name in spellings}
+    for spellings in _CIRCUIT_SPELLINGS:
         hazards = {round(measured_neutralisation_rate(name), 6) for name in spellings}
+        assert len(hazards) == 1, f"{spellings} disagree on hazard: {hazards}"
+
+
+@_skip_no_models
+def test_every_spelling_of_a_circuit_finds_the_same_traversal():
+    """Same keyspace check for the per-circuit pit-lane traversal.
+
+    Separate from the hazard test because this table lives in ``data/models/``,
+    which is distributed through the Hugging Face Hub rather than git — so a CI
+    runner without the weights has no table to look anything up in.
+    """
+    from src.agents.position_projection import traversal_seconds
+
+    for spellings in _CIRCUIT_SPELLINGS:
+        traversals = {traversal_seconds(name) for name in spellings}
         assert len(traversals) == 1, f"{spellings} disagree on traversal: {traversals}"
         assert None not in traversals, f"{spellings} has no traversal at all"
-        assert len(hazards) == 1, f"{spellings} disagree on hazard: {hazards}"
 
 
 def test_a_circuit_that_has_never_thrown_a_safety_car_is_not_given_a_zero_rate():
