@@ -314,3 +314,79 @@ def test_the_legacy_path_is_taken_whenever_the_rivals_list_is_falsy():
     baseline = _run_mc_simulation(pace, tire, situation, pit, alpha=0.5)
     for falsy in (None, [], ()):
         assert _run_mc_simulation(pace, tire, situation, pit, alpha=0.5, rivals=falsy) == baseline
+
+
+def test_an_undercut_earns_nothing_under_a_neutralisation():
+    """Art. 55.8 forbids overtaking under a Safety Car, so the move does not exist.
+
+    The field is queued and everyone reaches the pit lane on the same delta, so
+    arriving first buys nothing. The bonus used to be granted regardless of
+    regime, which awarded roughly half a position for a manoeuvre the
+    regulations prohibit.
+    """
+    racing = _projection_scores((-1.2, 8.0, False, 20.0, False, True, 2.4))
+    neutralised = _projection_scores((-1.2, 8.0, False, 20.0, True, True, 2.4))
+
+    assert racing["UNDERCUT"]["score"] > racing["PIT_NOW"]["score"]
+    assert neutralised["UNDERCUT"]["score"] == pytest.approx(
+        neutralised["PIT_NOW"]["score"], abs=1e-9
+    )
+
+
+def test_the_window_cannot_outlast_the_race():
+    """With one lap left behind the Safety Car a stop cannot pay itself back.
+
+    This is the Art. 55.17 endgame, and until the racing-lap count was bounded
+    by the laps that actually remain, the code could not express it: the count
+    was always the measured average, so a stop always appeared to have laps left
+    to earn its cost over. The docs described the mechanism; the code did not
+    have it.
+    """
+    from src.agents.strategy_orchestrator import _run_projection_mc
+
+    rivals = [
+        {"driver": "B", "interval_to_driver_s": 1.2, "is_pitting": False},
+        {"driver": "C", "interval_to_driver_s": 3.0, "is_pitting": False},
+    ]
+
+    def _scores(laps_remaining: int) -> dict:
+        return _run_projection_mc(
+            rivals=rivals,
+            position=1,
+            laps_remaining=laps_remaining,
+            pit_context={
+                "traversal_s": 21.0,
+                "mandatory_stop_pending": False,
+                "neutralisation_rate": 0.0179,
+                "rival_stop_pending": {"B": False, "C": False},
+                "rival_pit_loss_s": 23.8,
+            },
+            cliff_s=np.full(_DRAWS, 2.0),
+            sc_s=np.full(_DRAWS, True),
+            pit_s=np.full(_DRAWS, 2.8),
+            ucut_s=np.zeros(_DRAWS, dtype=bool),
+            alpha=0.5,
+            neutralisation_saving_s=8.0,
+        )
+
+    endgame = _scores(1)
+    assert _projection_argmax(endgame) == "STAY_OUT"
+    assert endgame["STAY_OUT"]["score"] > endgame["PIT_NOW"]["score"]
+
+
+def test_the_racing_lap_clamp_only_fires_near_the_flag():
+    """The bound belongs to the end of the race, not to every lap of it.
+
+    Asserted on the helper rather than through a score, because with one lap
+    left or thirty the stop loses the same two cars — the sub-second difference
+    in fresh-tyre laps does not move a whole position, so the score cannot show
+    the clamp working. Zero means unknown here, not "the race is over": several
+    callers cannot supply a lap count, and clamping an unknown to zero would
+    silence the window entirely.
+    """
+    from src.agents.strategy_orchestrator import _bounded_by_race_end
+
+    assert _bounded_by_race_end(5.0, 30) == 5.0
+    assert _bounded_by_race_end(5.0, 3) == 3.0
+    assert _bounded_by_race_end(2.61, 1) == 1.0
+    assert _bounded_by_race_end(2.61, 0) == 2.61

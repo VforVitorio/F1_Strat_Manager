@@ -838,6 +838,18 @@ def _finite_or_none(value) -> float | None:
     return None if math.isnan(number) or math.isinf(number) else number
 
 
+def _bounded_by_race_end(racing_laps: float, laps_remaining: int) -> float:
+    """Racing laps the window can actually contain, given the race ends.
+
+    ``laps_remaining`` of 0 means unknown here, not "the race is over": several
+    callers cannot supply it, and clamping an unknown to zero would silence the
+    whole window. Only a positive, smaller count clamps.
+    """
+    if laps_remaining <= 0:
+        return racing_laps
+    return min(racing_laps, float(laps_remaining))
+
+
 def _position_or(reported, counted: int) -> int:
     """The reported classification position, or the one counted from the gaps.
 
@@ -992,11 +1004,19 @@ def _run_projection_mc(
     # measured average, so the case could not be expressed at all and a test that
     # passed 0.0 silently received 2.61 and went green for the wrong reason.
     override_racing_laps = _finite_or_none(context.get("racing_laps_neutralised"))
-    racing_when_neutralised = (
-        float(override_racing_laps)
-        if override_racing_laps is not None
-        else measured_racing_laps("vsc" if is_vsc else "sc")
-    )
+    if override_racing_laps is not None:
+        racing_when_neutralised = float(override_racing_laps)
+    else:
+        racing_when_neutralised = measured_racing_laps("vsc" if is_vsc else "sc")
+
+    # The window cannot outlast the race. A decision three laps from the flag
+    # cannot bank five laps of racing, and under a neutralisation that runs to
+    # the end it banks none at all — which is the Art. 55.17 endgame the docs
+    # describe, and until this clamp existed the code could not express it: the
+    # racing-lap count was always the measured average, so a stop always looked
+    # as though it had laps left to pay itself back over.
+    racing_when_racing = _bounded_by_race_end(float(WINDOW_LAPS), remaining)
+    racing_when_neutralised = _bounded_by_race_end(racing_when_neutralised, remaining)
 
     def _config(racing_laps: float) -> ProjectionConfig:
         return ProjectionConfig(
@@ -1011,7 +1031,7 @@ def _run_projection_mc(
             mandatory_stop_pending=context.get("mandatory_stop_pending"),
         )
 
-    green_config = _config(float(WINDOW_LAPS))
+    green_config = _config(racing_when_racing)
     neutralised_config = _config(racing_when_neutralised)
 
     undercut_choices = undercut_targets(rival_states, green_config)
@@ -1064,7 +1084,15 @@ def _run_projection_mc(
             # actually clear the target? A success is worth the place, and the
             # projection supplies everything else. No new constant is introduced —
             # the alternative was inventing an out-lap delta nobody measured.
-            outcomes = outcomes + _np.asarray(ucut_s, dtype=float)
+            #
+            # Only on RACING draws. Under a neutralisation the move does not
+            # exist: overtaking is prohibited (Art. 55.8), the field is queued
+            # and everyone reaches the pit lane on the same delta, so there is no
+            # advantage to arriving first. Granting it there was worth about half
+            # a position on a fully neutralised state — a place awarded for a
+            # manoeuvre the regulations forbid.
+            landed = _np.asarray(ucut_s, dtype=float) * (~neutralised).astype(float)
+            outcomes = outcomes + landed
 
         e_val = float(_np.mean(outcomes))
         p10_val = float(_np.percentile(outcomes, 10))
