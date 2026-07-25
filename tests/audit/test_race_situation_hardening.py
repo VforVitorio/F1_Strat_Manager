@@ -89,7 +89,7 @@ def test_thresholds_loaded_from_model_config_not_hardcoded():
 def agent_at_lap_50():
     """RaceSituationAgent wired exactly as run_from_state wires it, Lusail lap 50.
 
-    Reuses the same real-bug scenario as tests/test_undercut_targets_are_on_track.py:
+    Reuses the same real-bug scenario as tests/mc/test_undercut_targets_are_on_track.py:
     HUL crashed on lap 7, so he is absent from the RaceStateManager ``rivals`` this
     replay actually produces at lap 50 — a real retired-driver case, not a made-up one.
     """

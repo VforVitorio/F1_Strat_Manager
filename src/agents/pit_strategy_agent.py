@@ -1524,7 +1524,7 @@ class PitStrategyAgent:
         # is right whenever you have already stopped, you lead a pack that must stop
         # anyway, or the race is ending (Art. 55.17 finishes it behind the SC, making
         # the surrendered position unrecoverable). The regulatory facts an SC does
-        # force live in N27; see tests/test_sc_regulatory_rails.py.
+        # force live in N27; see tests/mc/test_sc_regulatory_rails.py.
         sc_reactive = sc_currently_active or (action == 'REACTIVE_SC') or (
             sc_prob >= 0.30 and action in ('PIT_NOW', 'UNDERCUT')
         )

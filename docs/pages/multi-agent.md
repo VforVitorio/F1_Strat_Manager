@@ -157,7 +157,7 @@ It also silenced the computation built to weigh it: with an SC deployed `sc_prob
 
 Staying out under an SC is right whenever you have already stopped, you lead a pack that must stop anyway, you would rejoin into traffic, or the race is ending. Boxing is right when you must stop anyway, the tyres are near the cliff, or the two-compound rule is unsatisfied and time is short. Not one of those is a rule. All of them are race state the model is given, and a rail sees none of it.
 
-See `tests/test_sc_regulatory_rails.py`.
+See `tests/mc/test_sc_regulatory_rails.py`.
 
 ### N29 — Radio Agent (`radio_agent.py`)
 

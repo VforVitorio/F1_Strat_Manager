@@ -33,7 +33,7 @@ from src.agents.position_projection import (
     undercut_targets,
 )
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 
 _HAS_RAW = (ROOT / "data" / "raw" / "2024").is_dir()
 _skip_no_raw = pytest.mark.skipif(

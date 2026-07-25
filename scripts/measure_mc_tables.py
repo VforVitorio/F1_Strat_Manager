@@ -44,7 +44,7 @@ Regenerate with::
     uv run python scripts/measure_mc_tables.py
 
 The output is deterministic: same parquets in, byte-identical JSON out. A test
-(``tests/test_mc_measured_tables.py``) asserts the committed file matches a fresh
+(``tests/mc/test_mc_measured_tables.py``) asserts the committed file matches a fresh
 run, so a silent data change cannot drift the tables the engine reads.
 
 --- WHERE TO CHANGE IF THE RACE DATA LAYOUT CHANGES ---
