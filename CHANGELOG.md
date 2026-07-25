@@ -11,6 +11,46 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.1.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.0.1...v2.1.0) (2026-07-25)
+
+
+### Features
+
+* **cli:** retire f1-streamlit and add the f1-webapp launcher ([d9151d4](https://github.com/VforVitorio/F1-StratLab/commit/d9151d455abccfa3255a4de8ea369a28573ed98e)), closes [#551](https://github.com/VforVitorio/F1-StratLab/issues/551)
+* **mc:** measure the tables the projection layer needs ([48092d6](https://github.com/VforVitorio/F1-StratLab/commit/48092d6bdeec2ac91dfdacebc4ed22699c7aaf9a)), closes [#553](https://github.com/VforVitorio/F1-StratLab/issues/553)
+* **mc:** name the target we will actually be racing ([f36464e](https://github.com/VforVitorio/F1-StratLab/commit/f36464e0219f0326637c017981d3a836239e8219))
+* **mc:** price clean air per circuit so the overcut becomes a real move ([0e30689](https://github.com/VforVitorio/F1-StratLab/commit/0e30689b0fa12656411aff7f79f39fe998ea56a5)), closes [#550](https://github.com/VforVitorio/F1-StratLab/issues/550)
+* **mc:** price the lap an overcut spends waiting for a neutralisation ([8044fd5](https://github.com/VforVitorio/F1-StratLab/commit/8044fd52beb57ab24396f9e4ba3f9780932ecdb8)), closes [#550](https://github.com/VforVitorio/F1-StratLab/issues/550)
+* **mc:** project track position from per-rival gaps ([7f91d1d](https://github.com/VforVitorio/F1-StratLab/commit/7f91d1de94b0807ae1f8c04f0279487c804e539c)), closes [#554](https://github.com/VforVitorio/F1-StratLab/issues/554)
+* **mc:** score the candidates in projected track position ([8052343](https://github.com/VforVitorio/F1-StratLab/commit/8052343368bdaf20698828216f77d338ab1c8175)), closes [#555](https://github.com/VforVitorio/F1-StratLab/issues/555)
+* **mc:** thread race context to the MC boundary ([fa0932b](https://github.com/VforVitorio/F1-StratLab/commit/fa0932b67e3e787af916fefc1a73524d6cb5708a)), closes [#552](https://github.com/VforVitorio/F1-StratLab/issues/552)
+* **mc:** wire the projection into every surface ([97514b4](https://github.com/VforVitorio/F1-StratLab/commit/97514b4812ed9e96e117586cbf88af9f26e877e7)), closes [#556](https://github.com/VforVitorio/F1-StratLab/issues/556)
+
+
+### Bug Fixes
+
+* **ci:** pin ruff so a linter release cannot turn every branch red ([7e69340](https://github.com/VforVitorio/F1-StratLab/commit/7e69340bc4dea4c6954d75dd5da61d0e90a3f48a))
+* **data:** share one FastF1 cache and stop download_data pulling the whole hub ([cc612ad](https://github.com/VforVitorio/F1-StratLab/commit/cc612adb8555f9d786a924e893819039e75f4a7d))
+* **deps:** drop python-jose, which nothing imported ([8993b69](https://github.com/VforVitorio/F1-StratLab/commit/8993b69bceb0eff5afbd6c8861ee81a4f6a4c389))
+* **docs:** correct two published diagram errors ([e040fcf](https://github.com/VforVitorio/F1-StratLab/commit/e040fcf2d5aead66b4c6d6281a4df472d0e66d93))
+* **mc:** bound the window by the race end and gate the undercut by regime ([6767490](https://github.com/VforVitorio/F1-StratLab/commit/67674905282a9fcc5bd2d6c2902b481ebcfc8ec8)), closes [#550](https://github.com/VforVitorio/F1-StratLab/issues/550)
+* **mc:** floor the hazard, resolve every circuit spelling, restore the O(1) lap state ([f1563c7](https://github.com/VforVitorio/F1-StratLab/commit/f1563c7108f7dd8f30b296cc2dcd1f268be4c585)), closes [#550](https://github.com/VforVitorio/F1-StratLab/issues/550)
+* **mc:** reject NaN, honour an explicit zero, and project on every surface ([bb4b4c6](https://github.com/VforVitorio/F1-StratLab/commit/bb4b4c64b1030cdfac90ca05f8f28d5350ade1c8)), closes [#550](https://github.com/VforVitorio/F1-StratLab/issues/550)
+
+
+### Documentation
+
+* bring every surface up to the shipped Monte Carlo and data layer ([e5e5882](https://github.com/VforVitorio/F1-StratLab/commit/e5e58826fd501da36154dfb1203668754dbe21f8))
+* **mc:** add the waiting term to the overcut section ([4a9d527](https://github.com/VforVitorio/F1-StratLab/commit/4a9d527af2de0c3600d9ad71628e2a66fb4d4ec1))
+* **mc:** describe what the Monte Carlo now scores ([fbbae7f](https://github.com/VforVitorio/F1-StratLab/commit/fbbae7f110715a17f00605dcc2dc487b91182667)), closes [#557](https://github.com/VforVitorio/F1-StratLab/issues/557)
+* **mc:** describe where the overcut works instead of calling it a limitation ([1fab451](https://github.com/VforVitorio/F1-StratLab/commit/1fab451b28e71e01a3ed604ae027b4202877f664))
+* **readme:** restore the arcade hero, pair the CLI and web app demos, add a citation section ([049316e](https://github.com/VforVitorio/F1-StratLab/commit/049316e8a70c1a856d0752ae44a44e4fe456857a))
+
+
+### Refactoring
+
+* **mc:** name the racing bucket for what it holds ([406a0e8](https://github.com/VforVitorio/F1-StratLab/commit/406a0e810cce2a329ea1f0c47d864116dd1f60b7)), closes [#553](https://github.com/VforVitorio/F1-StratLab/issues/553)
+
 ## [2.0.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.0.0...v2.0.1) (2026-07-22)
 
 
