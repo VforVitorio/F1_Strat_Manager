@@ -28,7 +28,7 @@ sequenceDiagram
     Orch-->>UI: StrategyRecommendation payload
 ```
 
-The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in a PySide6 dashboard, and the Streamlit app surfaces it inside a chat tab.
+The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in a PySide6 dashboard, and the web app surfaces it in its strategy and chat tabs.
 
 ## Where to go next
 
@@ -37,8 +37,8 @@ Six layers, six pages — each linked from the agent graph and from this page.
 - **[Multi-agent system](#/multi-agent)** — N25–N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.
 - **[Simulation engine](#/simulation)** — `RaceReplayEngine`, `RaceStateManager`, the `lap_state` schema every layer agrees on.
 - **[Agents API reference](#/agents-api)** — per-agent input / output schemas, model artefacts and entry-point signatures.
-- **[Backend API](#/backend-api)** — FastAPI routers, the SSE simulation endpoint, the contract Streamlit and the Arcade speak.
-- **[Streamlit frontend](#/streamlit)** — tab-by-tab walkthrough of the Streamlit app.
+- **[Backend API](#/backend-api)** — FastAPI routers, the SSE simulation endpoint, the contract the web app and the Arcade speak.
+- **[Streamlit frontend (legacy)](#/streamlit)** — walkthrough of the retired Streamlit app, kept for historical reference.
 - **[Arcade dashboard](#/arcade-quick-start)** — three independent windows coordinated by a single Python process.
 
 > **Looking for a specific file?** The narratives on this site stop at the contract level. For per-file deep-dives — every function in `src/agents/`, every notebook from N06 to N34, every helper in `src/arcade/` — jump to the [F1 StratLab DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab). It is regenerated on every push to `main`.
@@ -57,7 +57,7 @@ A thin, per-lap Pydantic model (`src/agents/strategy_orchestrator.py`) that carr
 
 ### `StrategyRecommendation`
 
-The structured output the orchestrator emits per decision tick (called `StrategyState` on the wire protocol some surfaces consume, but the Pydantic type is `StrategyRecommendation`). Fourteen fields are frozen by schema: the primary `action` plus pit-execution detail (`pit_lap_target`, `compound_next`, `undercut_target`), driver-side instructions (`pace_mode`, `target_lap_time_s`, `risk_posture`), multi-lap planning (`contingencies`, `key_risks`, `expected_stint_end`), and post-hoc grounding attached in code (`scenario_scores`, `regulation_context`) around the LLM's own `reasoning` and `confidence`. See [Agents API reference](#/agents-api) for the full field-by-field table. `StrategyRecommendation` is what the CLI prints, the Arcade renders and the Streamlit chat surfaces.
+The structured output the orchestrator emits per decision tick (called `StrategyState` on the wire protocol some surfaces consume, but the Pydantic type is `StrategyRecommendation`). Fourteen fields are frozen by schema: the primary `action` plus pit-execution detail (`pit_lap_target`, `compound_next`, `undercut_target`), driver-side instructions (`pace_mode`, `target_lap_time_s`, `risk_posture`), multi-lap planning (`contingencies`, `key_risks`, `expected_stint_end`), and post-hoc grounding attached in code (`scenario_scores`, `regulation_context`) around the LLM's own `reasoning` and `confidence`. See [Agents API reference](#/agents-api) for the full field-by-field table. `StrategyRecommendation` is what the CLI prints, the Arcade renders and the web app chat surfaces.
 
 ## How the pieces ship
 
@@ -65,6 +65,6 @@ Three independent release tracks ship the system so that consumers can pick the 
 
 - **R1 — CLI wheel.** `uv tool install` straight from the GitHub release. Headless, batchable, no GPU needed for the inference path.
 - **R2 — Arcade.** The three-window PySide6 + pyglet experience. Same wheel, but the `f1-arcade` entry point boots the GUI and spawns the strategy subprocess locally.
-- **R3 — Backend + Streamlit.** The FastAPI server (SSE simulator, MCP tools) plus the Streamlit chat / race-analysis frontend. Docker-compose recipe ships the whole stack.
+- **R3 — Backend + web app.** The FastAPI server (SSE simulator, MCP tools) plus the React SPA. The docker-compose recipe ships the whole stack; `f1-webapp` launches it.
 
 See [Setup and deployment](#/setup) for the full install matrix per surface and platform.

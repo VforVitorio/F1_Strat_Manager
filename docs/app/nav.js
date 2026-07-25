@@ -84,12 +84,12 @@ window.PAGES = [
   },
   {
     slug: "streamlit",
-    title: "Streamlit frontend",
+    title: "Streamlit frontend (legacy)",
     section: "Surfaces",
     file: "pages/streamlit.md",
-    description: "Multi-page Streamlit app: dashboard, strategy, chat.",
-    eyebrow: "Web app",
-    tags: ["frontend", "ui", "telemetry", "chat", "voice", "mcp"],
+    description: "Retired Streamlit app, kept for historical reference.",
+    eyebrow: "Legacy",
+    tags: ["frontend", "ui", "telemetry", "chat", "voice", "legacy"],
   },
   {
     slug: "driver-colors",

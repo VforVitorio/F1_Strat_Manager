@@ -1,8 +1,10 @@
-# Streamlit Frontend
+# Streamlit Frontend (legacy)
+
+> **Retired surface.** The Streamlit app was replaced by the React web app in v2 and its code was removed from the repo (parent #551, submodule #188). It survives in git history and in the `legacy_version` branch. This page is kept as historical reference; the paths below no longer exist on `main`.
 
 ## Overview
 
-The frontend is a multi-page Streamlit application at `src/telemetry/frontend/`. It communicates with the FastAPI backend via HTTP and renders telemetry visualizations, strategy recommendations, driver comparisons, and a chat interface.
+The frontend was a multi-page Streamlit application at `src/telemetry/frontend/`. It communicated with the FastAPI backend via HTTP and rendered telemetry visualizations, strategy recommendations, driver comparisons, and a chat interface.
 
 Entry point: `frontend/app/main.py`.
 

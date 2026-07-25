@@ -101,7 +101,16 @@ def test_no_llm_sweep_produces_a_decision_every_lap_with_zero_clients(no_llm_cli
         assert rec.reasoning.startswith("[no-llm"), f"lap {lap}: {rec.reasoning[:40]}"
         assert set(rec.scenario_scores) == {"STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT"}
         for scores in rec.scenario_scores.values():
-            assert set(scores) == {"E", "P10", "P90", "score"}
+            # The projection path adds `eligible` and `target`; the legacy path
+            # emits the four numbers alone. Both are valid, so assert the numeric
+            # core is always present rather than pinning an exact key set — the
+            # exact-set form failed the moment the engine started threading
+            # rivals, which is a schema change the surfaces tolerate by design.
+            assert {"E", "P10", "P90", "score"} <= set(scores)
+            if scores.get("eligible") is False:
+                assert scores["score"] is None, "an unoffered candidate must carry no score"
+            else:
+                assert scores["score"] is not None
         assert outs["pit_out"] is None  # N28 is LLM-backed, never run in no-llm
         assert "total" in timings
 

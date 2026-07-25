@@ -78,7 +78,6 @@ dependencies = [
     # ===================
     # UI / VISUALIZATION
     # ===================
-    "streamlit>=1.28.0",
     "plotly>=5.14.0",
     "matplotlib>=3.7.0",
     "seaborn>=0.12.0",
@@ -123,7 +122,7 @@ dependencies = [
 f1-strat     = "scripts.f1_cli:main"
 f1-sim       = "scripts.run_simulation_cli:main"
 f1-arcade    = "src.arcade.main:main"
-f1-streamlit = "scripts.run_streamlit:main"
+f1-webapp    = "scripts.run_webapp:main"
 f1-eval      = "src.strategy.eval.cli:main"
 
 [project.optional-dependencies]
@@ -186,23 +185,10 @@ torchvision = [
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml", "*.json"]
-# Compiled assets of the vendored Streamlit audio-orb component. Its `frontend/`
-# `.gitignore` ignores both `node_modules/` and `build/`, so a clean checkout
-# carries neither; the `build/` dir is force-committed for release (see the
-# submodule) and shipped here so `f1-streamlit` renders the orb from the wheel.
-# Scoped to `frontend/build/**` on purpose: a broad `*.js` glob would recursively
-# rake in the ~87 MB `node_modules` tree on a dev box that ran `npm install`.
-"src.telemetry.frontend.components.streamlit_audio_viz" = ["frontend/build/*", "frontend/build/**/*"]
-# Tyre-compound icons the Streamlit dashboard lap-graph reads from
-# frontend/shared/img/*.png (lap_graph.py). No .png was in package-data, so they
-# never shipped in any wheel and the table rendered iconless (#392 D2).
-"src.telemetry.frontend" = ["shared/img/*.png"]
 
 [tool.setuptools.exclude-package-data]
-# node_modules is pruned at the packages.find level above (excluded from
-# discovery). This drops the stray ~1.4 MB `bundle.js.map` the frontend/build
-# glob rakes in on a dev-box build; CI is immune (clean checkout has no map) (#392 D1).
-"src.telemetry.frontend.components.streamlit_audio_viz" = ["frontend/build/*.map", "frontend/build/**/*.map"]
+# Source maps never belong in a wheel; a dev-box npm build can leave them
+# under src/ and the "*" json/yaml glob above would otherwise rake them in.
 "*" = ["**/*.map"]
 
 [tool.black]

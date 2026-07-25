@@ -104,7 +104,7 @@ Each tool is mapped to a `DisplayType` hint via `TOOL_DISPLAY_MAP` (`models/tool
 | `TEXT` | `query_regulations`, `list_gps`, `list_drivers`, `get_lap_range` |
 | `CHART` | `get_lap_times`, `get_telemetry`, `compare_drivers`, `get_race_data` |
 
-`chat_engine._trim_for_llm` caps long arrays before they are sent back to the LLM for summarisation; the unmodified payload still reaches the frontend on `tool_result.data` so charts retain the full series. The four telemetry tools are wired to `CHART` so the frontend renders them as inline Plotly figures (see [Streamlit frontend → chat tool-result rendering](#/streamlit)).
+`chat_engine._trim_for_llm` caps long arrays before they are sent back to the LLM for summarisation; the unmodified payload still reaches the frontend on `tool_result.data` so charts retain the full series. The four telemetry tools are wired to `CHART` so the web app chat renders them as inline charts.
 
 ### Tool risk tiers and the chat allowlist (Security A2, #224)
 
@@ -114,7 +114,7 @@ Every Phase 1 tool (`predict_pace`/`predict_tire`/`predict_situation`/`predict_p
 
 ### Smart-spinner stage tracker
 
-The frontend mints a UUID, sends it on every chat request via the `X-Request-Id` header, and polls `/api/v1/chat/status?request_id=...` every second. The backend writes the current stage (`preparing_tools`, `model_choosing_tool`, `calling_<tool>`, `summarizing_with_llm`, ...) into a process-global tracker (`services/chatbot/stage_tracker.py`) at every checkpoint, cleared in a `try/finally` so the dict never leaks. The Streamlit chat page maps these stages to humanised labels so the spinner narrates the slow phases (model loading, tool execution).
+The frontend mints a UUID, sends it on every chat request via the `X-Request-Id` header, and polls `/api/v1/chat/status?request_id=...` every second. The backend writes the current stage (`preparing_tools`, `model_choosing_tool`, `calling_<tool>`, `summarizing_with_llm`, ...) into a process-global tracker (`services/chatbot/stage_tracker.py`) at every checkpoint, cleared in a `try/finally` so the dict never leaks. The web app chat maps these stages to humanised labels so the spinner narrates the slow phases (model loading, tool execution).
 
 ### Module layout
 
@@ -128,7 +128,7 @@ The frontend mints a UUID, sends it on every chat request via the `X-Request-Id`
 
 ## Voice endpoints (retired)
 
-The `/api/v1/voice` router (STT, TTS and the STT to LLM to TTS pipeline) was retired in v2: it came from a course requirement and the web app ships without it. The implementation remains available in the legacy Streamlit app (`src/telemetry/frontend/`) and in the `legacy_version` branch.
+The `/api/v1/voice` router (STT, TTS and the STT to LLM to TTS pipeline) was retired in v2: it came from a course requirement and the web app ships without it. The implementation remains available in git history and in the `legacy_version` branch (the legacy Streamlit app was removed from the repo, #551).
 
 ## Strategy endpoints (N25–N31)
 
@@ -136,7 +136,7 @@ All strategy endpoints live under `/api/v1/strategy/`. They accept JSON bodies a
 
 ### Consumers
 
-The `/api/v1/strategy/simulate` SSE endpoint is consumed by the Streamlit app and by `curl` / `TestClient` smoke tests. The arcade replay no longer calls this endpoint — as of Phase 3.5 Proceso B (April 2026), the arcade owns its own strategy pipeline via [`src/arcade/strategy_pipeline.py`](#/arcade-strategy-pipeline).
+The `/api/v1/strategy/simulate` SSE endpoint is consumed by the web app and by `curl` / `TestClient` smoke tests. The arcade replay no longer calls this endpoint — as of Phase 3.5 Proceso B (April 2026), the arcade owns its own strategy pipeline via [`src/arcade/strategy_pipeline.py`](#/arcade-strategy-pipeline).
 
 ### `POST /api/v1/strategy/simulate`
 
@@ -260,7 +260,7 @@ Strategy endpoints catch `(KeyError, TypeError, ValueError)` from the underlying
 
 ## CORS
 
-`CORSMiddleware` allows a single origin — `FRONTEND_URL` (default `http://localhost:8501`) — not a wildcard. Credentials are dropped (`allow_credentials=False`, the Streamlit frontend calls the backend server-side, never from the browser), and both the method and header allowlists are enumerated rather than `"*"`: `GET`/`POST`/`OPTIONS` and `Content-Type`/`Accept`/`X-Request-Id`. The `ApiKeyMiddleware` described under "Authentication" wraps CORS from the outside (registered after it in `main.py`), so an unauthenticated request is rejected before any CORS or routing logic runs; `OPTIONS` preflight is exempted so it still completes.
+`CORSMiddleware` allows a single origin — `FRONTEND_URL` (default `http://localhost:8501`) — not a wildcard. Credentials are dropped (`allow_credentials=False`; the web app reaches the backend same-origin through its nginx / Vite `/api` proxy, so cross-origin browser requests are the exception, not the rule), and both the method and header allowlists are enumerated rather than `"*"`: `GET`/`POST`/`OPTIONS` and `Content-Type`/`Accept`/`X-Request-Id`. The `ApiKeyMiddleware` described under "Authentication" wraps CORS from the outside (registered after it in `main.py`), so an unauthenticated request is rejected before any CORS or routing logic runs; `OPTIONS` preflight is exempted so it still completes.
 
 ## Swagger / OpenAPI
 

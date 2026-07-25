@@ -25,6 +25,7 @@ from typing import Any
 import pandas as pd
 
 from src.simulation.data_validation import validate_laps_df
+from src.simulation.stint_history import stint_history_flags, stint_history_timeline
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -135,6 +136,15 @@ class RaceStateManager:
         # TyreLife at the start of each of our driver's stints. Precomputed for the
         # same reason as the leader times: get_lap_state must stay an O(1) lookup.
         self._stint_baselines: dict[int, int] = self._precompute_stint_baselines()
+
+        # Art. 30.5(m) flags, one timeline per driver, built on first ask.
+        # `get_lap_state` needs ours plus one per rival, and the per-lap helper
+        # rescans the whole frame each time, so a lap cost about twenty full
+        # scans: 2 ms became 18 ms, a 9x regression against the O(1) promise this
+        # class makes above. Building each driver's whole timeline in one ordered
+        # pass brings it back to 3.9 ms. Lazy per driver, because a caller asking
+        # about three cars should not pay for twenty.
+        self._stint_flags: dict[str, dict[int, dict[str, Any]]] = {}
 
     def _precompute_stint_baselines(self) -> dict[int, int]:
         """Return our driver's TyreLife at the first lap of each stint.
@@ -419,6 +429,49 @@ class RaceStateManager:
             "total_laps": self.total_laps,
         }
 
+    def get_stint_flags(
+        self,
+        lap_number: int,
+        driver_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Art. 30.5(m) facts for one driver up to ``lap_number``.
+
+        Defaults to our driver; pass a rival's code for their view. Exposing
+        this for rivals does not break the single-driver boundary: stint counts
+        and compound history are timing-screen knowledge on any real pit wall.
+
+        Added for the MC projection redesign (#552). Nothing in
+        ``get_lap_state`` consumes it yet, so every emitted payload is
+        unchanged; the projection engine picks it up when the MC learns to
+        read race context (#555, #556).
+        """
+        code = driver_code or self.driver_code
+        timeline = self._stint_timeline(code)
+        flags = timeline.get(lap_number)
+        if flags is not None:
+            return flags
+
+        # No row for that lap: the featured frame drops laps run under a Safety
+        # Car, so read the most recent earlier lap instead of reporting nothing.
+        # Compound history only ever grows, so the last known state is still the
+        # truth about what has been used — it just may be missing a newer stint.
+        earlier = [lap for lap in timeline if lap < lap_number]
+        if earlier:
+            return timeline[max(earlier)]
+        return stint_history_flags(self._all, code, lap_number)
+
+    def _stint_timeline(self, driver_code: str) -> dict[int, dict[str, Any]]:
+        """Per-driver flag timeline, built once per driver and cached.
+
+        Built lazily rather than for the whole grid upfront: a caller that asks
+        about three drivers should not pay for twenty.
+        """
+        cached = self._stint_flags.get(driver_code)
+        if cached is None:
+            cached = stint_history_timeline(self._all, driver_code)
+            self._stint_flags[driver_code] = cached
+        return cached
+
     def get_lap_state(
         self,
         lap_number: int,
@@ -449,10 +502,25 @@ class RaceStateManager:
                     "session_meta": dict,   # see get_session_meta
                 }
         """
+        rivals = self.get_rival_states(lap_number)
         return {
             "lap_number": lap_number,
             "driver": self.get_driver_state(lap_number),
-            "rivals": self.get_rival_states(lap_number),
+            "rivals": rivals,
             "weather": self.get_weather_state(lap_number, weather_df),
             "session_meta": self.get_session_meta(),
+            # Art. 30.5(m) state for us and for every rival on track. The decision
+            # layer needs both sides: our own pending stop is what makes staying
+            # out a deferral rather than a saving, and a rival who still owes a
+            # stop is no threat to us, because they will pay the same price later.
+            # Emitted here rather than fetched separately so the four surfaces
+            # cannot drift on how they ask for it.
+            "stint_flags": self.get_stint_flags(lap_number),
+            "rival_stop_pending": {
+                rival["driver"]: self.get_stint_flags(lap_number, rival["driver"])[
+                    "mandatory_stop_pending"
+                ]
+                for rival in rivals
+                if rival.get("driver")
+            },
         }
