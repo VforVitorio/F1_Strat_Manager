@@ -4,7 +4,7 @@ The MC redesign (#550) replaces hand-picked constants with measured tables. This
 script produces them from the RAW per-race parquets and writes
 ``data/mc_measured_v1.json`` plus human-readable twins under ``data/eval/``.
 
-Five tables, each value carrying its sample size and a 95% interval:
+Six tables, each value carrying its sample size and a 95% interval:
 
 - ``sc_window``       expected RACING laps inside the W-lap decision window while a
                       neutralisation is active, plus how long spells last and how
@@ -19,6 +19,9 @@ Five tables, each value carrying its sample size and a 95% interval:
 - ``stop_hazard``     P(a driver pits within W laps | compound, tyre-life bin,
                       neutralisation), for the surfaces whose rivals list carries
                       no ``is_pitting`` flag.
+- ``clean_air``       per-circuit seconds a follower gains once the car DIRECTLY
+                      ahead pits — the term that decides whether an overcut has
+                      anything to win, and the one v1 of the projection lacks.
 
 Why RAW and never the featured parquet: N04's ``IsAccurate`` gate drops laps run
 under a Safety Car, pit laps and out-laps by design. Every measurement here is
@@ -130,6 +133,14 @@ UNDERCUT_GAP_BINS: tuple[tuple[str, float, float], ...] = (
 )
 
 MIN_CELL_N = 30  # below this a cell is reported but flagged as thin
+
+# Clean air: how close a follower must be for the car ahead to be costing it
+# downforce, and how many laps either side of that car's stop to average. 2.0 s
+# is the outer edge of the dirty-air band the projection already assumes
+# (MARGIN_CLIP_S), and three laps is the longest window that still fits between
+# most consecutive stops without swallowing another one.
+CLEAN_AIR_PROXIMITY_S = 2.0
+CLEAN_AIR_LAPS = 3
 
 
 # ---------------------------------------------------------------------------
@@ -720,6 +731,207 @@ def measure_stop_hazard(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dic
 
 
 # ---------------------------------------------------------------------------
+# Table 6 — what clean air is worth, per circuit
+# ---------------------------------------------------------------------------
+
+
+def _lap_time_seconds(laps: pd.DataFrame, driver: str, lap: int) -> float | None:
+    """One driver's lap time on one lap, or None when it is missing or a pit lap.
+
+    In-laps and out-laps are excluded here rather than by the caller because a
+    pit lap is not a lap of pace at all: including one would put the pit lane
+    into a clean-air estimate.
+    """
+    row = laps[(laps["Driver"] == driver) & (laps["LapNumber"] == lap)]
+    if row.empty:
+        return None
+    record = row.iloc[0]
+    if pd.notna(record.get("PitInTime")) or pd.notna(record.get("PitOutTime")):
+        return None
+    lap_time = record.get("LapTime")
+    if lap_time is None or pd.isna(lap_time):
+        return None
+    return float(lap_time.total_seconds())
+
+
+def _clean_window(race: RaceLaps, driver: str, laps: Iterable[int]) -> list[float] | None:
+    """Lap times for ``driver`` over ``laps``, or None if any lap is unusable.
+
+    All-or-nothing on purpose: a window with a neutralised or missing lap is not
+    a smaller sample of the same thing, it is a different thing. Averaging what
+    survives would quietly mix a green three-lap mean with a one-lap mean.
+    """
+    times = []
+    for lap in laps:
+        if not race.is_racing(lap):
+            return None
+        lap_time = _lap_time_seconds(race.laps, driver, lap)
+        if lap_time is None:
+            return None
+        times.append(lap_time)
+    return times
+
+
+def _is_directly_behind(race: RaceLaps, follower: str, leader: str, lap: int) -> bool:
+    """Whether no third car sat between the two at the end of ``lap``.
+
+    This is the guard the first pass of this measurement lacked. If another car
+    is running between them, the leader boxing does not hand the follower clear
+    track: it hands them the same dirty air from a different gearbox. Without the
+    guard those cases enter the sample as clean-air observations worth roughly
+    nothing and drag the estimate toward zero.
+    """
+    leader_time = _elapsed_at_lap(race.laps, leader, lap)
+    follower_time = _elapsed_at_lap(race.laps, follower, lap)
+    if leader_time is None or follower_time is None:
+        return False
+
+    on_lap = race.laps[race.laps["LapNumber"] == lap]
+    for _, row in on_lap.iterrows():
+        other = str(row["Driver"])
+        if other in (leader, follower):
+            continue
+        other_time = _elapsed_at_lap(race.laps, other, lap)
+        if other_time is not None and leader_time < other_time < follower_time:
+            return False
+    return True
+
+
+def _degradation_slope(races: list[RaceLaps]) -> dict[str, Any]:
+    """Median lap-to-lap loss on consecutive racing laps of the same stint.
+
+    Needed because the clean-air estimate below compares laps before a stop
+    against laps after it, and the follower's own tyres age across that span.
+    That ageing pushes the estimate DOWN, so the raw number is a lower bound and
+    this slope is what turns it into a corrected one. Measured rather than
+    assumed, so the correction is auditable instead of a constant someone picked.
+    """
+    deltas: list[float] = []
+    for race in races:
+        for driver, driver_laps in race.laps.groupby("Driver"):
+            for stint, stint_laps in driver_laps.groupby("Stint"):
+                if pd.isna(stint):
+                    continue
+                ordered = stint_laps.sort_values("LapNumber")
+                previous_lap, previous_time = None, None
+                for _, row in ordered.iterrows():
+                    lap = int(row["LapNumber"])
+                    lap_time = _lap_time_seconds(race.laps, str(driver), lap)
+                    if lap_time is not None and race.is_racing(lap):
+                        if previous_lap == lap - 1 and previous_time is not None:
+                            deltas.append(lap_time - previous_time)
+                        previous_lap, previous_time = lap, lap_time
+                    else:
+                        previous_lap, previous_time = None, None
+
+    return {
+        "definition": (
+            "Lap-to-lap change in lap time between consecutive racing laps of the "
+            "same stint, excluding pit laps. The median is the degradation slope "
+            "used to correct the clean-air estimate."
+        ),
+        "n": len(deltas),
+        **_quantiles(deltas),
+    }
+
+
+def measure_clean_air(races: list[RaceLaps], window: int = CLEAN_AIR_LAPS) -> dict[str, Any]:
+    """What a follower gains, per circuit, when the car directly ahead pits.
+
+    This is the term that makes a real overcut pay, and v1 of the projection does
+    not carry it. Staying out while the rival stops is not only one more lap of
+    older rubber: it is several laps of clear track, and clear track is worth more
+    at circuits where following is expensive. A single pooled number would hide
+    exactly the variation the decision needs, so this table is keyed by circuit.
+
+    The design, and what each choice defends against:
+
+    - The follower must be within ``CLEAN_AIR_PROXIMITY_S`` and DIRECTLY behind,
+      because a car in between means the leader's stop clears nothing.
+    - Every lap in both windows must be raced, so a Safety Car cannot masquerade
+      as clean air.
+    - The leader's in-lap and the lap after it are skipped: on those the leader
+      is in the pit lane or on an out-lap, and neither is the steady state the
+      comparison is about.
+    - The gain is reported raw AND corrected by the measured degradation slope,
+      with both published, so a reader can disagree with the correction without
+      having to rerun anything.
+    """
+    per_circuit: dict[str, list[float]] = defaultdict(list)
+
+    for race in races:
+        pit_laps = _driver_pit_laps(race.laps)
+        for leader, stops in pit_laps.items():
+            for pit_lap in stops:
+                decision_lap = pit_lap - 1
+                before_laps = range(pit_lap - window, pit_lap)
+                after_laps = range(pit_lap + 2, pit_lap + 2 + window)
+                if decision_lap - window < 1 or pit_lap + 1 + window > race.total_laps:
+                    continue
+
+                for follower in race.laps["Driver"].unique():
+                    follower = str(follower)
+                    if follower == leader or pit_lap in pit_laps.get(follower, set()):
+                        continue
+
+                    gap = _attempt_gap_seconds(race, follower, leader, pit_lap)
+                    if gap is None or not 0.0 < gap <= CLEAN_AIR_PROXIMITY_S:
+                        continue
+                    if not _is_directly_behind(race, follower, leader, decision_lap):
+                        continue
+
+                    before = _clean_window(race, follower, before_laps)
+                    after = _clean_window(race, follower, after_laps)
+                    if before is None or after is None:
+                        continue
+
+                    dirty_mean = sum(before) / len(before)
+                    clean_mean = sum(after) / len(after)
+                    per_circuit[race.slug].append(dirty_mean - clean_mean)
+
+    slope = _degradation_slope(races)
+    laps_between_centres = float(window + 2)
+    correction = laps_between_centres * float(slope["p50"] or 0.0)
+
+    by_circuit = {}
+    for slug, gains in sorted(per_circuit.items()):
+        stats = _mean_ci(gains)
+        by_circuit[slug] = {
+            **stats,
+            "median_raw_s": _quantiles(gains)["p50"],
+            "corrected_mean_s": round(stats["mean"] + correction, 4),
+        }
+
+    pooled = [gain for gains in per_circuit.values() for gain in gains]
+    pooled_stats = _mean_ci(pooled)
+
+    table = {
+        "definition": (
+            "Improvement in the follower's mean lap time after the car DIRECTLY "
+            "ahead pits, measured over W raced laps either side of the stop, for "
+            "followers within PROXIMITY seconds. Positive means the follower got "
+            "faster once the air cleared. Raw values are a lower bound because the "
+            "follower's own tyres age across the comparison; corrected values add "
+            "back the measured degradation slope over the span between window "
+            "centres."
+        ),
+        "window_laps": window,
+        "proximity_s": CLEAN_AIR_PROXIMITY_S,
+        "laps_between_window_centres": laps_between_centres,
+        "degradation_slope": slope,
+        "degradation_correction_s": round(correction, 4),
+        "min_cell_n": MIN_CELL_N,
+        "pooled": {
+            **pooled_stats,
+            "median_raw_s": _quantiles(pooled)["p50"],
+            "corrected_mean_s": round(pooled_stats["mean"] + correction, 4),
+        },
+        "by_circuit": by_circuit,
+    }
+    return table
+
+
+# ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
 
@@ -739,6 +951,7 @@ def build_tables(races: list[RaceLaps]) -> dict[str, Any]:
         "gap_density": measure_gap_density(races),
         "undercut_band": measure_undercut_band(races),
         "stop_hazard": measure_stop_hazard(races),
+        "clean_air": measure_clean_air(races),
     }
     return payload
 
@@ -798,6 +1011,30 @@ def _undercut_rows(tables: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _clean_air_rows(tables: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten the clean-air table into CSV rows, one per circuit, richest first.
+
+    Sorted by corrected gain rather than alphabetically because the ordering IS
+    the finding: the circuits at the top are the ones where an overcut has
+    something to win.
+    """
+    clean_air = tables["clean_air"]
+    rows = [
+        {
+            "circuit": slug,
+            "raw_mean_s": stats["mean"],
+            "raw_median_s": stats["median_raw_s"],
+            "corrected_mean_s": stats["corrected_mean_s"],
+            "ci95_low": stats["ci95"][0],
+            "ci95_high": stats["ci95"][1],
+            "n": stats["n"],
+        }
+        for slug, stats in clean_air["by_circuit"].items()
+    ]
+    rows.sort(key=lambda row: row["corrected_mean_s"] or 0.0, reverse=True)
+    return rows
+
+
 def _write_twin(stem: str, title: str, rows: list[dict[str, Any]]) -> None:
     """Write the CSV (dot decimal) and Markdown (comma decimal) twins for one table.
 
@@ -836,10 +1073,11 @@ def write_outputs(tables: dict[str, Any]) -> None:
     _write_twin("mc_sc_window", "Neutralisation window (W=5)", _sc_window_rows(tables))
     _write_twin("mc_gap_density", "Seconds between consecutive cars", _gap_density_rows(tables))
     _write_twin("mc_undercut_band", "Undercut success by gap to target", _undercut_rows(tables))
+    _write_twin("mc_clean_air", "What clean air is worth, by circuit", _clean_air_rows(tables))
 
 
 def main() -> int:
-    """Load every raw race, measure the five tables, write the artefacts."""
+    """Load every raw race, measure the six tables, write the artefacts."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     races = load_races()

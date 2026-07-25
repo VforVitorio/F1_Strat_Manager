@@ -1,4 +1,271 @@
 {
+  "clean_air": {
+    "by_circuit": {
+      "Austin": {
+        "ci95": [
+          0.161,
+          0.5394
+        ],
+        "corrected_mean_s": 0.2502,
+        "mean": 0.3502,
+        "median_raw_s": 0.4013,
+        "n": 21
+      },
+      "Baku": {
+        "ci95": [
+          0.055,
+          0.7356
+        ],
+        "corrected_mean_s": 0.2953,
+        "mean": 0.3953,
+        "median_raw_s": 0.624,
+        "n": 18
+      },
+      "Barcelona": {
+        "ci95": [
+          -0.0534,
+          0.2914
+        ],
+        "corrected_mean_s": 0.019,
+        "mean": 0.119,
+        "median_raw_s": 0.2197,
+        "n": 54
+      },
+      "Budapest": {
+        "ci95": [
+          0.216,
+          0.5897
+        ],
+        "corrected_mean_s": 0.3029,
+        "mean": 0.4029,
+        "median_raw_s": 0.2967,
+        "n": 35
+      },
+      "Imola": {
+        "ci95": [
+          -0.0553,
+          0.5573
+        ],
+        "corrected_mean_s": 0.151,
+        "mean": 0.251,
+        "median_raw_s": 0.2157,
+        "n": 20
+      },
+      "Jeddah": {
+        "ci95": [
+          0.2682,
+          0.8401
+        ],
+        "corrected_mean_s": 0.4542,
+        "mean": 0.5542,
+        "median_raw_s": 0.4865,
+        "n": 10
+      },
+      "Las Vegas": {
+        "ci95": [
+          -0.4791,
+          0.4572
+        ],
+        "corrected_mean_s": -0.1109,
+        "mean": -0.0109,
+        "median_raw_s": 0.147,
+        "n": 23
+      },
+      "Lusail": {
+        "ci95": [
+          0.5237,
+          0.9686
+        ],
+        "corrected_mean_s": 0.6462,
+        "mean": 0.7462,
+        "median_raw_s": 0.7337,
+        "n": 15
+      },
+      "Marina Bay": {
+        "ci95": [
+          0.0611,
+          0.7319
+        ],
+        "corrected_mean_s": 0.2965,
+        "mean": 0.3965,
+        "median_raw_s": 0.2497,
+        "n": 19
+      },
+      "Melbourne": {
+        "ci95": [
+          -0.1742,
+          0.3896
+        ],
+        "corrected_mean_s": 0.0077,
+        "mean": 0.1077,
+        "median_raw_s": -0.0377,
+        "n": 9
+      },
+      "Mexico City": {
+        "ci95": [
+          -0.0365,
+          0.3351
+        ],
+        "corrected_mean_s": 0.0493,
+        "mean": 0.1493,
+        "median_raw_s": 0.261,
+        "n": 19
+      },
+      "Miami": {
+        "ci95": [
+          0.2884,
+          0.7016
+        ],
+        "corrected_mean_s": 0.395,
+        "mean": 0.495,
+        "median_raw_s": 0.4613,
+        "n": 15
+      },
+      "Monaco": {
+        "ci95": [
+          -0.0253,
+          1.5197
+        ],
+        "corrected_mean_s": 0.6472,
+        "mean": 0.7472,
+        "median_raw_s": 0.3423,
+        "n": 17
+      },
+      "Montr\u00e9al": {
+        "ci95": [
+          -4.2873,
+          1.1256
+        ],
+        "corrected_mean_s": -1.6808,
+        "mean": -1.5808,
+        "median_raw_s": 0.0237,
+        "n": 21
+      },
+      "Monza": {
+        "ci95": [
+          -0.0613,
+          0.2321
+        ],
+        "corrected_mean_s": -0.0146,
+        "mean": 0.0854,
+        "median_raw_s": 0.022,
+        "n": 29
+      },
+      "Sakhir": {
+        "ci95": [
+          -0.2642,
+          0.2769
+        ],
+        "corrected_mean_s": -0.0936,
+        "mean": 0.0064,
+        "median_raw_s": -0.073,
+        "n": 10
+      },
+      "Shanghai": {
+        "ci95": [
+          0.0556,
+          0.6549
+        ],
+        "corrected_mean_s": 0.2552,
+        "mean": 0.3552,
+        "median_raw_s": 0.2367,
+        "n": 11
+      },
+      "Silverstone": {
+        "ci95": [
+          0.2913,
+          1.1638
+        ],
+        "corrected_mean_s": 0.6275,
+        "mean": 0.7275,
+        "median_raw_s": 0.5107,
+        "n": 9
+      },
+      "Spa-Francorchamps": {
+        "ci95": [
+          0.3785,
+          0.9963
+        ],
+        "corrected_mean_s": 0.5874,
+        "mean": 0.6874,
+        "median_raw_s": 0.597,
+        "n": 19
+      },
+      "Spielberg": {
+        "ci95": [
+          -0.3554,
+          -0.0142
+        ],
+        "corrected_mean_s": -0.2848,
+        "mean": -0.1848,
+        "median_raw_s": -0.135,
+        "n": 22
+      },
+      "Suzuka": {
+        "ci95": [
+          -0.5577,
+          2.2996
+        ],
+        "corrected_mean_s": 0.7709,
+        "mean": 0.8709,
+        "median_raw_s": 0.3108,
+        "n": 18
+      },
+      "S\u00e3o Paulo": {
+        "ci95": [
+          -0.1779,
+          0.234
+        ],
+        "corrected_mean_s": -0.072,
+        "mean": 0.028,
+        "median_raw_s": 0.0175,
+        "n": 16
+      },
+      "Yas Island": {
+        "ci95": [
+          0.0294,
+          0.3451
+        ],
+        "corrected_mean_s": 0.0872,
+        "mean": 0.1872,
+        "median_raw_s": 0.2043,
+        "n": 34
+      },
+      "Zandvoort": {
+        "ci95": [
+          -0.2725,
+          1.3129
+        ],
+        "corrected_mean_s": 0.4202,
+        "mean": 0.5202,
+        "median_raw_s": 0.12,
+        "n": 15
+      }
+    },
+    "definition": "Improvement in the follower's mean lap time after the car DIRECTLY ahead pits, measured over W raced laps either side of the stop, for followers within PROXIMITY seconds. Positive means the follower got faster once the air cleared. Raw values are a lower bound because the follower's own tyres age across the comparison; corrected values add back the measured degradation slope over the span between window centres.",
+    "degradation_correction_s": -0.1,
+    "degradation_slope": {
+      "definition": "Lap-to-lap change in lap time between consecutive racing laps of the same stint, excluding pit laps. The median is the degradation slope used to correct the clean-air estimate.",
+      "n": 65198,
+      "p10": -0.74,
+      "p50": -0.02,
+      "p90": 0.54
+    },
+    "laps_between_window_centres": 5.0,
+    "min_cell_n": 30,
+    "pooled": {
+      "ci95": [
+        0.0767,
+        0.3703
+      ],
+      "corrected_mean_s": 0.1235,
+      "mean": 0.2235,
+      "median_raw_s": 0.2377,
+      "n": 479
+    },
+    "proximity_s": 2.0,
+    "window_laps": 3
+  },
   "gap_density": {
     "definition": "Seconds between consecutive cars on the same lap, from elapsed session time (the Time column), pooled over every lap of every race. Racing covers clear and local-yellow laps.",
     "racing": {

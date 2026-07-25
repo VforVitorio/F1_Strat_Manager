@@ -849,6 +849,28 @@ def _ordered_by(choices: list[str], preference: list[str]) -> list[str]:
     return sorted(choices, key=lambda driver: rank.get(driver, len(rank)))
 
 
+def _clean_air_available(rival_states: list, gp_name: str | None) -> float:
+    """This circuit's clean-air gain, but only if a car ahead is boxing from our wake.
+
+    Two conditions, both necessary. Someone directly ahead has to be entering the
+    pit lane, because that is what vacates the road; and we have to be inside the
+    band the measurement was taken at, because the number describes what a car
+    within two seconds gains and says nothing about a car eight seconds back.
+    Fail either and the gain is zero, which is what makes an overcut a real move
+    at Suzuka and merely a late stop at Monza.
+    """
+    from src.agents.position_projection import CLEAN_AIR_BAND_S, measured_clean_air_s
+
+    in_our_wake = any(
+        rival.is_ahead
+        and rival.is_pitting
+        and rival.gap_ahead_s is not None
+        and rival.gap_ahead_s <= CLEAN_AIR_BAND_S
+        for rival in rival_states
+    )
+    return measured_clean_air_s(gp_name) if in_our_wake else 0.0
+
+
 def _bounded_by_race_end(racing_laps: float, laps_remaining: int) -> float:
     """Racing laps the window can actually contain, given the race ends.
 
@@ -1030,7 +1052,14 @@ def _run_projection_mc(
     racing_when_racing = _bounded_by_race_end(float(WINDOW_LAPS), remaining)
     racing_when_neutralised = _bounded_by_race_end(racing_when_neutralised, remaining)
 
-    def _config(racing_laps: float) -> ProjectionConfig:
+    # Clean air is worth something only to a car that was actually in the wake.
+    # The measurement covers followers inside CLEAN_AIR_BAND_S of the car ahead,
+    # so a rival boxing eight seconds up the road earns nothing here — and the
+    # gain is zero under a neutralisation, where everyone runs to a delta and
+    # clear track buys no lap time at all.
+    clean_air_s = _clean_air_available(rival_states, context.get("gp_name"))
+
+    def _config(racing_laps: float, clean_air_gain_s: float) -> ProjectionConfig:
         return ProjectionConfig(
             window_laps=WINDOW_LAPS,
             racing_laps=racing_laps,
@@ -1041,10 +1070,12 @@ def _run_projection_mc(
             future_neutralisation_prob=q_f,
             laps_remaining=remaining,
             mandatory_stop_pending=context.get("mandatory_stop_pending"),
+            clean_air_gain_s=clean_air_gain_s,
+            neutralisation_onset_rate=float(onset_rate),
         )
 
-    green_config = _config(racing_when_racing)
-    neutralised_config = _config(racing_when_neutralised)
+    green_config = _config(racing_when_racing, clean_air_s)
+    neutralised_config = _config(racing_when_neutralised, 0.0)
 
     # Eligible targets, ordered by where they will be once BOTH pit cycles have
     # played out rather than by where they sit on the timing screen now. That
