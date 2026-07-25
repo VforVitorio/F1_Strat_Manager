@@ -73,7 +73,7 @@ The Arcade is in the hero above. Here are the other two:
 <tr>
 <td width="50%" align="center">
   <a href="docs/assets/demo/cli-demo.mp4">
-    <img src="docs/assets/demo/cli-demo-poster.jpg" alt="F1 StratLab CLI demo: headless Rich live inference panel" width="100%"/>
+    <img src="docs/assets/demo/cli-demo.gif" alt="F1 StratLab CLI demo: headless Rich live inference panel" width="100%"/>
   </a>
   <br/>
   <sub><strong>CLI</strong> — headless Rich panel, one race, no GUI. <a href="docs/assets/demo/cli-demo.mp4">Play ▶</a></sub>
