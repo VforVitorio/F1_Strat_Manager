@@ -141,8 +141,13 @@ _PROJECTION_STATES = tuple(
 )
 
 
-def _projection_scores(state: tuple) -> dict:
-    """Score one projected race state, returning the four candidates' dicts."""
+def _projection_scores(state: tuple, gp_name: str | None = None) -> dict:
+    """Score one projected race state, returning the four candidates' dicts.
+
+    ``gp_name`` is left unset for the main sweep so the invariants below hold on
+    the pooled measurements rather than on any one circuit's quirks. The
+    clean-air tests pass it, because that is the only term that is per circuit.
+    """
     from src.agents.strategy_orchestrator import _run_projection_mc
 
     gap_ahead, gap_behind, ahead_pitting, cliff, neutralised, owes_stop, stop_s = state
@@ -156,6 +161,7 @@ def _projection_scores(state: tuple) -> dict:
         position=2,
         laps_remaining=22,
         pit_context={
+            "gp_name": gp_name,
             "traversal_s": 21.0,
             "mandatory_stop_pending": owes_stop,
             "neutralisation_rate": 0.0179,
@@ -235,22 +241,66 @@ def test_an_overcut_is_only_offered_when_a_car_ahead_is_in_the_pit_lane(projecti
             assert scores["OVERCUT"]["score"] is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "OVERCUT still cannot strictly win, and the projection narrowed WHY rather "
-        "than fixing it. Within one window both candidates take the same stop and pay "
-        "the same lane, so an overcut is PIT_NOW minus a lap of fresh rubber. What "
-        "makes a real overcut pay is the out-lap: a new set needs a lap to switch on, "
-        "so worn-but-warm tyres can out-run it. That warm-up is measurable from the "
-        "raw laps and is not modelled in v1 (it lives inside the measured undercut "
-        "band instead), so this stays an honest xfail with a named fix rather than a "
-        "deleted assertion. When the out-lap penalty is measured, this passes."
-    ),
-)
-def test_the_overcut_can_win_somewhere(projection_sweep):
-    wins = Counter(_projection_argmax(scores) for scores in projection_sweep)
-    assert wins["OVERCUT"] > 0, f"OVERCUT never wins on the projection: {dict(wins)}"
+# ---------------------------------------------------------------------------
+# Clean air — the term that makes an overcut a move and not a late pit stop
+#
+# Within one window an overcut and a pit stop take the same stop and pay the same
+# pit lane, so an overcut forfeits exactly one lap of fresh rubber. It can only
+# pay if the lap it runs on instead is worth more than that lap of fresh rubber
+# was. Both quantities are measured, which turns "does the overcut work?" into an
+# arithmetic comparison: clean_air_gain_s vs fresh_gain_s.
+#
+# So the honest claim is not "the overcut can win". It is "the overcut can win
+# where following is expensive, and cannot where the tow is worth more than the
+# clear track". Both halves are asserted below, because a test that only checked
+# the first would pass on a version that credited clean air everywhere.
+# ---------------------------------------------------------------------------
+
+# Suzuka measures the largest clean-air gain in the sample and Monza one of the
+# smallest, and neither was chosen for that: they are the archetypal
+# high-downforce and slipstream circuits, and the measurement independently put
+# them at the two ends.
+DIRTY_AIR_EXPENSIVE = "Suzuka"
+TOW_MATTERS = "Monza"
+
+
+def _overcut_wins_at(gp_name: str) -> int:
+    """How many swept states pick OVERCUT at ``gp_name``.
+
+    Restricted to states where a car ahead is actually in the pit lane and inside
+    the dirty-air band, since those are the only ones where an overcut exists at
+    all: counting the rest would dilute the answer with states that were never a
+    choice between the two.
+    """
+    live = [state for state in _PROJECTION_STATES if state[2] and abs(state[0]) <= 2.0]
+    assert live, "the sweep must contain a car pitting from inside the dirty-air band"
+    return sum(
+        1 for state in live if _projection_argmax(_projection_scores(state, gp_name)) == "OVERCUT"
+    )
+
+
+def test_the_overcut_wins_where_dirty_air_is_expensive():
+    """At Suzuka the lap in clean air outweighs the lap of fresh rubber it costs."""
+    wins = _overcut_wins_at(DIRTY_AIR_EXPENSIVE)
+    assert wins > 0, (
+        f"OVERCUT never wins at {DIRTY_AIR_EXPENSIVE}, where clean air measures more "
+        f"than a lap of fresh rubber is worth: the term is not reaching the projection"
+    )
+
+
+def test_the_overcut_stays_unreachable_where_the_tow_is_worth_more():
+    """At Monza it must not win, and that is a result rather than a limitation.
+
+    Losing the car ahead there costs a tow worth roughly what the clear track
+    gives back, so running on buys nothing and the stop should simply be taken.
+    A version that credited clean air uniformly would fail here, which is the
+    point of asserting it.
+    """
+    wins = _overcut_wins_at(TOW_MATTERS)
+    assert wins == 0, (
+        f"OVERCUT wins {wins} states at {TOW_MATTERS}, where the measured clean-air "
+        f"gain is at or below zero: the gain is being applied without its circuit"
+    )
 
 
 def test_a_slower_stop_is_worse_for_every_projected_candidate_that_pits():

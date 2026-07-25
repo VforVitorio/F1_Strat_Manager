@@ -36,6 +36,11 @@ was an unmeasured constant, which is what the redesign exists to remove:
   warm-up is precisely what decides whether an undercut lands, so the effect is
   not cosmetic — it is folded into the measured undercut band instead of being
   modelled per lap.
+- **Dirty air is priced at one moment, not continuously.** The measured
+  clean-air gain enters only when a car directly ahead boxes, which is the
+  moment it decides something. Running the whole window stuck in traffic is not
+  otherwise penalised, so the projection understates how bad a lap behind a
+  slower car is at a circuit like Suzuka.
 - **Neutralisation hazard is flat across the race.** The measured per-circuit
   rate pools every lap, while the real thing spikes on lap one and around the
   pit windows.
@@ -70,6 +75,12 @@ _MEASURED_TABLES = Path(__file__).resolve().parents[2] / "data" / "mc_measured_v
 DEFAULT_UNDERCUT_BAND_S = 4.91
 DEFAULT_NEUTRALISATION_RATE = 0.0179
 DEFAULT_RACING_LAPS_UNDER_SC = 2.61
+
+# How close we must be for the car ahead to be costing us downforce. This is not
+# a tuning knob: it is the proximity the clean-air table was measured at, so
+# crediting the gain to a car eight seconds back would apply a number outside
+# the sample it came from.
+CLEAN_AIR_BAND_S = 2.0
 
 # Margin is a tie-break, not a second currency: at most a third of a position.
 MARGIN_WEIGHT = 0.1
@@ -172,6 +183,12 @@ class ProjectionConfig:
                           ``None`` means unknown and disables the liability term
                           rather than assuming either way.
         margin_weight:    Weight of the seconds-margin tie-break.
+        clean_air_gain_s: Seconds per lap gained running in air the car directly
+                          ahead has just vacated, for this circuit. Only a plan
+                          that runs on after the target boxes accrues it, which
+                          is what makes an overcut a real move rather than a
+                          worse pit stop. Zero under a neutralisation, where the
+                          field runs to a delta and clear track buys nothing.
     """
 
     window_laps: int = 5
@@ -184,6 +201,7 @@ class ProjectionConfig:
     laps_remaining: int = 0
     mandatory_stop_pending: bool | None = None
     margin_weight: float = MARGIN_WEIGHT
+    clean_air_gain_s: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -257,6 +275,40 @@ def measured_neutralisation_rate(circuit: str | None = None) -> float:
     if float(rate) <= 0.0:
         return fallback
     return float(rate)
+
+
+def measured_clean_air_s(circuit: str | None = None) -> float:
+    """Seconds per lap a follower gains at ``circuit`` once the car ahead boxes.
+
+    Measured over 479 cases where a car sat within two seconds of, and directly
+    behind, a driver who then pitted: their mean lap time over the three raced
+    laps after the stop against the three before it, corrected by the measured
+    lap-to-lap trend so the follower's own fuel burn and tyre wear are not read
+    as clean air.
+
+    The spread is the finding, which is why this is per circuit and not a single
+    constant. It runs from roughly +0.77 s at Suzuka and +0.65 at Monaco down to
+    zero or below at Monza and Spielberg — that is, largest exactly where
+    following costs the most downforce, and absent where the tow is worth more
+    than the clear track. Nothing in the measurement knows about downforce; the
+    ordering came out of the lap times.
+
+    Negative cells are returned as measured. A circuit where losing the car
+    ahead costs you a tow is not a measurement error, and clamping it to zero
+    would tell the decision layer that an overcut is free at Monza.
+
+    Unknown circuits get the pooled figure, which is deliberately small.
+    """
+    table = measured_tables().get("clean_air", {})
+    pooled = (table.get("pooled") or {}).get("corrected_mean_s")
+    fallback = float(pooled) if pooled is not None else 0.0
+
+    if not circuit:
+        return fallback
+
+    cell = (table.get("by_circuit") or {}).get(_resolved_circuit_key(circuit)) or {}
+    gain = cell.get("corrected_mean_s")
+    return float(gain) if gain is not None else fallback
 
 
 # Circuits this repo files under more than one name. The measured tables and the
@@ -423,11 +475,21 @@ def driver_time_delta(
       (the field is queued, so the same pit lane costs fewer seconds of race),
     - time lost running past the tyre cliff, over the laps this plan spends on
       the old set,
-    - time gained on fresh rubber, over the racing laps that follow the stop.
+    - time gained on fresh rubber, over the racing laps that follow the stop,
+    - time gained in clean air, over the laps this plan runs on after the car
+      ahead has boxed.
 
     A plan that does not stop pays no pit loss and gains nothing fresh; it just
     lives with its tyres. That asymmetry is the whole trade-off, and it is
     expressed here rather than asserted in a comment.
+
+    The clean-air term is what separates an overcut from a late pit stop. It
+    accrues over ``stop_offset_laps`` because those are exactly the laps run
+    after the target vacated the road and before we take our own stop; every
+    other plan has an offset of zero and the term vanishes for them without a
+    branch. Caller's job to pass a gain of zero when we were never close enough
+    to be in that wake, since the measurement only covers followers inside the
+    dirty-air band.
     """
     draws = len(pit_loss_s)
     delta = np.zeros(draws, dtype=float)
@@ -444,6 +506,7 @@ def driver_time_delta(
         delta += effective_loss
         delta += worn_laps * config.cliff_loss_s
         delta -= laps_after_stop * config.fresh_gain_s
+        delta -= laps_before_stop * config.clean_air_gain_s
     else:
         worn_laps = np.maximum(0.0, racing - cliff_laps)
         delta += worn_laps * config.cliff_loss_s
