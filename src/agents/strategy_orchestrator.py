@@ -838,6 +838,17 @@ def _finite_or_none(value) -> float | None:
     return None if math.isnan(number) or math.isinf(number) else number
 
 
+def _ordered_by(choices: list[str], preference: list[str]) -> list[str]:
+    """``choices`` sorted to follow ``preference``, keeping anything it omits.
+
+    Used to put the nearest post-pit-cycle rival at the head of an eligibility
+    list, so ``target`` names the car we will actually be racing rather than
+    whichever one the rivals list happened to mention first.
+    """
+    rank = {driver: index for index, driver in enumerate(preference)}
+    return sorted(choices, key=lambda driver: rank.get(driver, len(rank)))
+
+
 def _bounded_by_race_end(racing_laps: float, laps_remaining: int) -> float:
     """Racing laps the window can actually contain, given the race ends.
 
@@ -958,6 +969,7 @@ def _run_projection_mc(
         overcut_targets,
         payoff,
         project_positions,
+        rank_targets,
         undercut_targets,
     )
 
@@ -1034,8 +1046,16 @@ def _run_projection_mc(
     green_config = _config(racing_when_racing)
     neutralised_config = _config(racing_when_neutralised)
 
-    undercut_choices = undercut_targets(rival_states, green_config)
-    overcut_choices = overcut_targets(rival_states)
+    # Eligible targets, ordered by where they will be once BOTH pit cycles have
+    # played out rather than by where they sit on the timing screen now. That
+    # ordering is the whole point of the far-field ranker (#439): the car we end
+    # up racing is not always the car currently in front, and picking the first
+    # entry of an unordered list made "target" a coincidence of iteration order.
+    ranking = rank_targets(rival_states, green_config, our_pit_loss_s=float(pit_loss_s.mean()))
+    by_post_cycle_proximity = [target.driver for target in ranking]
+
+    undercut_choices = _ordered_by(undercut_targets(rival_states, green_config), by_post_cycle_proximity)
+    overcut_choices = _ordered_by(overcut_targets(rival_states), by_post_cycle_proximity)
 
     plans = {
         "STAY_OUT": DriverPlan("STAY_OUT", stops_in_window=False),

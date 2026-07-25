@@ -390,3 +390,42 @@ def test_the_racing_lap_clamp_only_fires_near_the_flag():
     assert _bounded_by_race_end(5.0, 3) == 3.0
     assert _bounded_by_race_end(2.61, 1) == 1.0
     assert _bounded_by_race_end(2.61, 0) == 2.61
+
+
+def test_the_named_target_is_the_car_we_will_be_racing_not_the_first_in_the_list():
+    """#439 delivered: eligibility is ordered by post-pit-cycle proximity.
+
+    Two cars are inside the undercut band. The one further away on the timing
+    screen is the one still owing a stop, so once both cycles play out it is the
+    one we come out racing. Picking the first entry of an unordered list made
+    `target` a coincidence of iteration order.
+    """
+    from src.agents.strategy_orchestrator import _run_projection_mc
+
+    rivals = [
+        # Listed first, but it has already stopped, so it keeps gaining on us.
+        {"driver": "GONE", "interval_to_driver_s": -1.0, "is_pitting": False},
+        # Listed second and further away, but it still owes the stop we are
+        # about to take, so after both cycles it is right next to us.
+        {"driver": "RACING_US", "interval_to_driver_s": -3.5, "is_pitting": False},
+    ]
+    scores = _run_projection_mc(
+        rivals=rivals,
+        position=3,
+        laps_remaining=25,
+        pit_context={
+            "traversal_s": 21.0,
+            "mandatory_stop_pending": True,
+            "neutralisation_rate": 0.0179,
+            "rival_stop_pending": {"GONE": False, "RACING_US": True},
+            "rival_pit_loss_s": 23.8,
+        },
+        cliff_s=np.full(_DRAWS, 8.0),
+        sc_s=np.zeros(_DRAWS, dtype=bool),
+        pit_s=np.full(_DRAWS, 2.8),
+        ucut_s=np.zeros(_DRAWS, dtype=bool),
+        alpha=0.5,
+        neutralisation_saving_s=8.0,
+    )
+    assert scores["UNDERCUT"]["eligible"]
+    assert scores["UNDERCUT"]["target"] == "RACING_US"
