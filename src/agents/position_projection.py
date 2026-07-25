@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import json
 import math
+import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -226,22 +227,109 @@ def measured_undercut_band_s() -> float:
 
 
 def measured_neutralisation_rate(circuit: str | None = None) -> float:
-    """Per-lap onset hazard for ``circuit``, falling back to the pooled rate.
+    """Per-lap onset hazard for ``circuit``, never zero.
 
-    A circuit we have never raced (a new venue, or a name that did not resolve)
-    gets the pooled figure rather than zero. Zero is not a neutral default here:
-    it drives ``q_f`` to 0, which tells the decision layer that no future Safety
-    Car will ever turn up to cover a stop, and that biases the terminal
-    liability upward on every lap of every race.
+    A circuit we have never raced gets the pooled figure rather than zero, and so
+    does a circuit that simply has not thrown a Safety Car in our three seasons.
+    Zero is not a neutral default here: it drives ``q_f`` to 0, which tells the
+    decision layer that no future neutralisation can ever turn up to cover a
+    stop, and that biases the terminal liability upward on every lap.
+
+    That second case is real, not hypothetical. Monza and Budapest both measure
+    exactly 0 (0 onsets in 157 and 210 racing laps), and Monza is the archetypal
+    Art. 55.17 circuit. A zero count is not evidence of a zero rate: the upper
+    bound of that interval comfortably covers the pooled value, so the honest
+    reading is "we have not seen one here", not "one cannot happen here".
     """
     table = measured_tables().get("neutralisation_rate", {})
-    if circuit:
-        cell = (table.get("per_circuit") or {}).get(circuit) or {}
-        rate = cell.get("rate")
-        if rate is not None:
-            return float(rate)
     pooled = (table.get("pooled") or {}).get("rate")
-    return float(pooled) if pooled is not None else DEFAULT_NEUTRALISATION_RATE
+    fallback = float(pooled) if pooled is not None else DEFAULT_NEUTRALISATION_RATE
+
+    if not circuit:
+        return fallback
+
+    cell = (table.get("per_circuit") or {}).get(_resolved_circuit_key(circuit)) or {}
+    rate = cell.get("rate")
+    if rate is None:
+        return fallback
+    # An observed zero means "never seen", not "impossible". Fall back rather
+    # than let a small sample silence the whole option-value term.
+    if float(rate) <= 0.0:
+        return fallback
+    return float(rate)
+
+
+# Circuits this repo files under more than one name. The measured tables and the
+# traversal table are keyed by the circuit slug, but callers hand us whatever
+# their surface holds: 2023 filed Barcelona under a country name, and Miami has
+# three spellings across the repo. Left explicit so an unresolved name is a
+# genuinely unknown circuit rather than a silent keyspace miss (#448).
+_CIRCUIT_ALIASES: dict[str, str] = {
+    "Spain": "Barcelona",
+    "Miami Gardens": "Miami",
+    "Miami_Gardens": "Miami",
+}
+
+
+def _key_candidates(name: str) -> list[str]:
+    """Every spelling of ``name`` worth trying against a circuit-keyed table.
+
+    Ordered cheapest-first: the name as given, its explicit alias, the
+    underscored folder form, then the two resolvers in ``gp_slugs``. Returning a
+    list rather than resolving eagerly keeps the caller in charge of which table
+    it is matching against, since the two tables do not hold identical key sets.
+    """
+    from src.f1_strat_manager.gp_slugs import canonical_gp_name, slug_from_event_name
+
+    spaced = name.replace("_", " ")
+    candidates = [name, _CIRCUIT_ALIASES.get(name), spaced, _CIRCUIT_ALIASES.get(spaced)]
+    for resolver in (slug_from_event_name, canonical_gp_name):
+        try:
+            candidates.append(resolver(name))
+        except (ValueError, KeyError):
+            continue
+
+    # Accent-folded spellings, because two of our circuits carry diacritics
+    # (São Paulo, Montréal) and they lose them whenever a name passes through a
+    # non-UTF-8 console, a filename or a hand-typed argument. Matched by folding
+    # BOTH sides so "Sao Paulo" finds "São Paulo" without a second alias entry.
+    folded = {_fold_accents(c): c for c in candidates if c}
+    for key in list(_traversal_table()) + list(
+        (measured_tables().get("neutralisation_rate") or {}).get("per_circuit") or {}
+    ):
+        if _fold_accents(key) in folded:
+            candidates.append(key)
+
+    seen, ordered = set(), []
+    for candidate in candidates:
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            ordered.append(candidate)
+    return ordered
+
+
+def _fold_accents(text: str) -> str:
+    """``São Paulo`` and ``Sao Paulo`` collapse to the same comparison key."""
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
+
+
+def _lookup_by_circuit(table: dict, name: str):
+    """First value in ``table`` matching any accepted spelling of ``name``."""
+    for candidate in _key_candidates(name):
+        if candidate in table:
+            return table[candidate]
+    return None
+
+
+@lru_cache(maxsize=64)
+def _resolved_circuit_key(name: str) -> str:
+    """The key a circuit-keyed measured table actually holds for ``name``."""
+    per_circuit = (measured_tables().get("neutralisation_rate") or {}).get("per_circuit") or {}
+    for candidate in _key_candidates(name):
+        if candidate in per_circuit:
+            return candidate
+    return name
 
 
 @lru_cache(maxsize=1)
@@ -277,7 +365,7 @@ def traversal_seconds(gp_name: str | None) -> float | None:
     """
     if not gp_name:
         return None
-    value = _traversal_table().get(gp_name)
+    value = _lookup_by_circuit(_traversal_table(), gp_name)
     return float(value) if value is not None else None
 
 

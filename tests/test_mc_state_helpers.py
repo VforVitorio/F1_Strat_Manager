@@ -295,3 +295,53 @@ def test_rivals_with_no_usable_gap_cannot_conjure_a_projection():
         laps_remaining=20,
     )
     assert blind == baseline
+
+
+# ---------------------------------------------------------------------------
+# Keyspace and hazard floor (final-audit F3-6, F3-7)
+# ---------------------------------------------------------------------------
+
+
+def test_every_spelling_of_a_circuit_finds_the_same_measured_values():
+    """Three keyspaces meet in this repo and a miss used to be silent.
+
+    Folder names underscore multi-word slugs, 2023 filed Barcelona under a
+    country name, Miami has three spellings, and two circuits carry diacritics
+    that vanish through a non-UTF-8 console. A traversal lookup that missed fell
+    back to a flat 20.0 with a warning; a hazard lookup that missed fell back to
+    the pooled rate in silence, which is the #448 failure exactly.
+    """
+    from src.agents.position_projection import measured_neutralisation_rate, traversal_seconds
+
+    for spellings in (
+        ("Barcelona", "Spain"),
+        ("Miami", "Miami Gardens", "Miami_Gardens"),
+        ("Lusail", "Qatar Grand Prix"),
+        ("Yas Island", "Yas_Island"),
+        ("São Paulo", "Sao Paulo", "Sao_Paulo"),
+        ("Montréal", "Montreal"),
+    ):
+        traversals = {traversal_seconds(name) for name in spellings}
+        hazards = {round(measured_neutralisation_rate(name), 6) for name in spellings}
+        assert len(traversals) == 1, f"{spellings} disagree on traversal: {traversals}"
+        assert None not in traversals, f"{spellings} has no traversal at all"
+        assert len(hazards) == 1, f"{spellings} disagree on hazard: {hazards}"
+
+
+def test_a_circuit_that_has_never_thrown_a_safety_car_is_not_given_a_zero_rate():
+    """Monza and Budapest measure exactly zero onsets, and zero is not a rate.
+
+    A zero drives q_f to 0, which tells the decision layer that no future
+    neutralisation can ever cover a stop and biases the terminal liability
+    upward on every lap. Monza is also the archetypal Art. 55.17 circuit, so
+    that is the worst possible place to lose the term. A zero count means "not
+    seen here", not "cannot happen here".
+    """
+    from src.agents.position_projection import measured_neutralisation_rate
+
+    pooled = measured_neutralisation_rate(None)
+    for quiet_circuit in ("Monza", "Budapest"):
+        assert measured_neutralisation_rate(quiet_circuit) == pooled
+
+    # A circuit that HAS thrown them keeps its own measured, higher rate.
+    assert measured_neutralisation_rate("Melbourne") > pooled
