@@ -24,6 +24,7 @@ from src.agents.position_projection import (
     DriverPlan,
     ProjectionConfig,
     RivalState,
+    driver_time_delta,
     future_neutralisation_probability,
     overcut_targets,
     payoff,
@@ -580,3 +581,45 @@ def test_a_nan_gap_never_counts_as_ahead():
     assert not RivalState("NAN", float("nan")).is_ahead
     assert not RivalState("INF", float("inf")).is_ahead
     assert RivalState("NAN", float("nan")).gap_ahead_s is None
+
+
+# ---------------------------------------------------------------------------
+# The two reasons a strategist delays a stop
+# ---------------------------------------------------------------------------
+
+STOP_NEXT_LAP = DriverPlan("OVERCUT", stops_in_window=True, stop_offset_laps=1)
+
+
+def _delta(plan: DriverPlan, config: ProjectionConfig, neutralised=False) -> float:
+    """Seconds this plan loses over the window, for a single deterministic draw."""
+    pit_loss, cliff = _draws(22.0)
+    return float(driver_time_delta(plan, pit_loss, cliff, config, neutralised)[0])
+
+
+def test_running_on_in_clean_air_is_worth_exactly_the_measured_gain():
+    """One lap held back buys one lap of the circuit's clean-air gain, no more."""
+    config = _flat_config(clean_air_gain_s=0.6)
+    assert _delta(STOP_NOW, config) - _delta(STOP_NEXT_LAP, config) == pytest.approx(0.6)
+
+
+def test_waiting_a_lap_is_paid_only_when_the_safety_car_has_not_already_come():
+    """A lap of exposure is worth rate x saving, and nothing once it has happened.
+
+    On a draw where the stop is already neutralised the Safety Car is out: paying
+    for the chance of it arriving as well would credit one deployment twice.
+    """
+    config = _flat_config(neutralisation_saving_s=8.0, neutralisation_onset_rate=0.075)
+
+    racing = _delta(STOP_NOW, config) - _delta(STOP_NEXT_LAP, config)
+    assert racing == pytest.approx(0.075 * 8.0)
+
+    already_out = _delta(STOP_NOW, config, neutralised=True) - _delta(
+        STOP_NEXT_LAP, config, neutralised=True
+    )
+    assert already_out == pytest.approx(0.0)
+
+
+def test_a_circuit_that_never_throws_a_safety_car_pays_nothing_for_waiting():
+    """The term has to vanish where the hazard does, or it becomes a free bonus."""
+    config = _flat_config(neutralisation_saving_s=8.0, neutralisation_onset_rate=0.0)
+    assert _delta(STOP_NOW, config) == pytest.approx(_delta(STOP_NEXT_LAP, config))

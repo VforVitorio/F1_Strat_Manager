@@ -189,6 +189,12 @@ class ProjectionConfig:
                           is what makes an overcut a real move rather than a
                           worse pit stop. Zero under a neutralisation, where the
                           field runs to a delta and clear track buys nothing.
+        neutralisation_onset_rate: Per-lap probability this circuit throws a
+                          neutralisation. Distinct from
+                          ``future_neutralisation_prob``, which is the same rate
+                          integrated over the whole remaining race for a stop we
+                          are deferring past the window. This one prices the
+                          single extra lap a delayed stop spends waiting.
     """
 
     window_laps: int = 5
@@ -202,6 +208,7 @@ class ProjectionConfig:
     mandatory_stop_pending: bool | None = None
     margin_weight: float = MARGIN_WEIGHT
     clean_air_gain_s: float = 0.0
+    neutralisation_onset_rate: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -477,7 +484,9 @@ def driver_time_delta(
       the old set,
     - time gained on fresh rubber, over the racing laps that follow the stop,
     - time gained in clean air, over the laps this plan runs on after the car
-      ahead has boxed.
+      ahead has boxed,
+    - the option value of those same laps: each one is another chance that a
+      neutralisation turns up first and makes the stop cheap.
 
     A plan that does not stop pays no pit loss and gains nothing fresh; it just
     lives with its tyres. That asymmetry is the whole trade-off, and it is
@@ -490,6 +499,11 @@ def driver_time_delta(
     branch. Caller's job to pass a gain of zero when we were never close enough
     to be in that wake, since the measurement only covers followers inside the
     dirty-air band.
+
+    The waiting term is the other half of why a strategist delays a stop, and it
+    rides on the same laps. It applies only to draws where the stop is NOT
+    already neutralised: on those it has happened, and counting the chance of it
+    happening as well would pay twice for one Safety Car.
     """
     draws = len(pit_loss_s)
     delta = np.zeros(draws, dtype=float)
@@ -499,7 +513,8 @@ def driver_time_delta(
         laps_before_stop = min(float(plan.stop_offset_laps), racing)
         laps_after_stop = max(0.0, racing - laps_before_stop)
 
-        saving = np.where(stop_is_neutralised, config.neutralisation_saving_s, 0.0)
+        saving_if_it_comes = config.neutralisation_saving_s
+        saving = np.where(stop_is_neutralised, saving_if_it_comes, 0.0)
         effective_loss = np.maximum(0.0, pit_loss_s - saving)
 
         worn_laps = np.maximum(0.0, laps_before_stop - cliff_laps)
@@ -507,6 +522,9 @@ def driver_time_delta(
         delta += worn_laps * config.cliff_loss_s
         delta -= laps_after_stop * config.fresh_gain_s
         delta -= laps_before_stop * config.clean_air_gain_s
+
+        waiting_pays = laps_before_stop * config.neutralisation_onset_rate * saving_if_it_comes
+        delta -= np.where(stop_is_neutralised, 0.0, waiting_pays)
     else:
         worn_laps = np.maximum(0.0, racing - cliff_laps)
         delta += worn_laps * config.cliff_loss_s

@@ -1071,6 +1071,7 @@ def _run_projection_mc(
             laps_remaining=remaining,
             mandatory_stop_pending=context.get("mandatory_stop_pending"),
             clean_air_gain_s=clean_air_gain_s,
+            neutralisation_onset_rate=float(onset_rate),
         )
 
     green_config = _config(racing_when_racing, clean_air_s)
