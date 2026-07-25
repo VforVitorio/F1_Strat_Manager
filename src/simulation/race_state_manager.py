@@ -25,6 +25,7 @@ from typing import Any
 import pandas as pd
 
 from src.simulation.data_validation import validate_laps_df
+from src.simulation.stint_history import stint_history_flags
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -418,6 +419,25 @@ class RaceStateManager:
             "team": self.team,
             "total_laps": self.total_laps,
         }
+
+    def get_stint_flags(
+        self,
+        lap_number: int,
+        driver_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Art. 30.5(m) facts for one driver up to ``lap_number``.
+
+        Defaults to our driver; pass a rival's code for their view. Exposing
+        this for rivals does not break the single-driver boundary: stint counts
+        and compound history are timing-screen knowledge on any real pit wall.
+
+        Added for the MC projection redesign (#552). Nothing in
+        ``get_lap_state`` consumes it yet, so every emitted payload is
+        unchanged; the projection engine picks it up when the MC learns to
+        read race context (#555, #556).
+        """
+        code = driver_code or self.driver_code
+        return stint_history_flags(self._all, code, lap_number)
 
     def get_lap_state(
         self,

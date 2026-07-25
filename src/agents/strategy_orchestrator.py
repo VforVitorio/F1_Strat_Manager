@@ -701,6 +701,11 @@ def _run_mc_simulation(
     situation_out,
     pit_out=None,
     alpha: float = 0.5,
+    *,
+    rivals: list[dict] | None = None,
+    position: int | None = None,
+    laps_remaining: int | None = None,
+    pit_context: dict | None = None,
 ) -> dict:
     """Layer 2 Monte Carlo simulation over strategy candidates.
 
@@ -722,6 +727,14 @@ def _run_mc_simulation(
     alpha:
         RaceState.risk_tolerance. score = alpha·E[S] + (1−alpha)·P10[S].
         α=1.0 is pure expected value (aggressive); α=0.0 is worst-case only.
+    rivals / position / laps_remaining / pit_context:
+        Race-context state for the projection-based scoring (#550). Accepted
+        since #552 and IGNORED here on purpose: every current caller leaves
+        them at their defaults and this body is the legacy seconds-based
+        scoring, which must stay byte-identical (the strategy goldens pin it).
+        The projection engine (#555) dispatches on truthy ``rivals``; a falsy
+        value — None, or the ``[]`` the default lap_state builders emit —
+        means "no per-rival gap data" and keeps this path.
     """
     rng = np.random.default_rng(seed=42)
     n   = CFG.n_sim
