@@ -562,15 +562,19 @@ def build_index(
         log.error("No valid PDFs loaded — check naming convention")
         sys.exit(1)
 
+    # Counted in the same pass that collects them. The skipped total used to come
+    # from a second `iter_chunks` over every document, which re-ran the sliding
+    # window, the article regexes and a SHA-256 over the whole corpus purely to
+    # produce one number for the log line below.
     all_chunks: list[TextChunk] = []
+    skipped = 0
     for doc in documents:
         for chunk in iter_chunks(doc):
-            if chunk.chunk_hash not in existing_hashes:
+            if chunk.chunk_hash in existing_hashes:
+                skipped += 1
+            else:
                 all_chunks.append(chunk)
 
-    skipped = sum(
-        1 for doc in documents for chunk in iter_chunks(doc) if chunk.chunk_hash in existing_hashes
-    )
     log.info("New chunks to index: %d  |  skipped (already indexed): %d", len(all_chunks), skipped)
 
     if not all_chunks:
