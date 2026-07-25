@@ -32,10 +32,10 @@ was an unmeasured constant, which is what the redesign exists to remove:
   counterfactual gaps a projection invents would run it off its own manifold.
 - **The out-lap is treated like any other lap on fresh rubber.** In reality a new
   set needs a lap, sometimes a sector, to switch on, and on a hard compound in
-  cold conditions the out-lap can be slower than the worn set it replaced. That
-  warm-up is precisely what decides whether an undercut lands, so the effect is
-  not cosmetic — it is folded into the measured undercut band instead of being
-  modelled per lap.
+  cold conditions the out-lap can be slower than the worn set it replaced. In our
+  own dry-race sample the effect is small at the flying-lap level, under a tenth,
+  and most of its true cost already sits inside the pit-loss figure — so it is
+  left folded into the measured undercut band rather than modelled per lap.
 - **Dirty air is priced at one moment, not continuously.** The measured
   clean-air gain enters only when a car directly ahead boxes, which is the
   moment it decides something. Running the whole window stuck in traffic is not
