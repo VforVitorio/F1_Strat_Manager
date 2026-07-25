@@ -325,7 +325,6 @@ _TIER2_IMPORTS = [
     "websockets",
     "aiofiles",
     "multipart",  # python-multipart imports as ``multipart``
-    "jose",  # python-jose
     "passlib",
     "kafka",  # kafka-python
     # Database

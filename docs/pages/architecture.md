@@ -49,7 +49,7 @@ Three structures cross every boundary in the system. If you remember nothing els
 
 ### `lap_state`
 
-The atomic payload the simulation engine emits per driver per lap. It carries the bare-minimum slice of telemetry the agents need: current lap number, compound and tire age, current and previous lap times, gap to leader and rivals, sector deltas, pit-window flag, and the active race-control state. Every downstream agent treats `lap_state` as immutable; mutations happen in the orchestrator's state machine, not inside the agents.
+The atomic payload the simulation engine emits per driver per lap. It carries the bare-minimum slice of telemetry the agents need: current lap number, compound and tire age, current and previous lap times, gap to leader and rivals, sector deltas, pit-window flag, each driver's Art. 30.5(m) stint history (stops made, compounds used, whether the mandatory two-compound stop is still pending), and the active race-control state. Every downstream agent treats `lap_state` as immutable; mutations happen in the orchestrator's state machine, not inside the agents.
 
 ### `RaceState`
 

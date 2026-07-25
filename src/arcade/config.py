@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from typing import Final
 
+from src.f1_strat_manager.data_cache import get_data_root
+
 logger = logging.getLogger(__name__)
 
 # --- Playback & timing ----------------------------------------------------
@@ -147,9 +149,15 @@ FLAG_COLORS: Final[dict[str, tuple[int, int, int]]] = {
 }
 
 # --- Paths ----------------------------------------------------------------
+# Resolved through data_cache rather than from __file__, so the arcade lands in
+# the same directory as every other surface and honours $F1_STRAT_DATA_ROOT
+# (docker-compose sets it to /app/data). The FastF1 cache in particular was
+# fragmented: this surface wrote 3.8 GB under data/cache/fastf1 while the
+# backend kept its own 274 MB copy of the same sessions, so whichever one
+# touched a race first paid the full parse cost and the other paid it again.
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
-FASTF1_CACHE_DIR: Final[Path] = REPO_ROOT / "data" / "cache" / "fastf1"
-ARCADE_CACHE_DIR: Final[Path] = REPO_ROOT / "data" / "cache" / "arcade"
+FASTF1_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "fastf1"
+ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 CACHE_VERSION: Final[str] = "v6"  # adds track_status_by_lap for the race-events HUD card
 
 # --- Multiprocessing pool -------------------------------------------------

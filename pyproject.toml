@@ -67,7 +67,6 @@ dependencies = [
     "websockets>=11.0.0",
     "kafka-python>=2.0.2",
     "python-multipart>=0.0.31",
-    "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "httpx>=0.25.0",
     "aiofiles>=23.0.0",
