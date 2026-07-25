@@ -26,7 +26,7 @@ graph TD
         M4[Safety-car LightGBM · N14]
         M5[Pit duration HistGBT · N15]
         M6[Undercut LightGBM · N16]
-        M7[Circuit clusters · N30]
+        M7[Circuit clusters · N03]
     end
 
     subgraph Agents["LangGraph sub-agents · 6"]

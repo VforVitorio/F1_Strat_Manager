@@ -33,6 +33,8 @@ graph TD
     N29 -->|PROBLEM or WARNING alert| N28
     N27 -->|sc_prob > 0.30| N30
     N28 -->|always when N28 active| N30
+    N27 -->|sc_currently_active, overrides every threshold| N28
+    N27 -->|sc_currently_active, overrides every threshold| N30
 
     subgraph "Layer 2 — Monte Carlo Simulation"
         MC[500 draws x 4 candidates<br/>STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT<br/>score = alpha * E + 1-alpha * P10]
