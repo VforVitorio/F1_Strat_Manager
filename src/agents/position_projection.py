@@ -1,0 +1,511 @@
+"""Project where our car comes out, in cars rather than in seconds (#554).
+
+The Monte Carlo layer used to score strategies in generic seconds divided by a
+flat 1.5 s/position, over a sampled state containing no cars at all. Losing 20 s
+costs zero positions with a 25 s cushion behind and three positions with cars at
++2 / +8 / +15 s, and only a model that knows *which cars are where* can tell the
+difference. This module is that model: one pure primitive that turns per-rival
+gaps into a projected end-of-window track position.
+
+Nothing here loads a model, reads a file or touches the orchestrator. It takes
+plain state in and returns arrays out, which is what lets the projection be
+validated against real pit stops before a single call site changes.
+
+SIGN CONVENTION, stated once and loudly because a docstring that lied about a
+sign has already cost this project a bug: gaps follow the RaceStateManager
+contract, ``gap_s = rival_elapsed_time - our_elapsed_time``. So
+
+    gap_s < 0  =>  the rival is AHEAD of us (less race time elapsed)
+    gap_s > 0  =>  the rival is BEHIND us
+
+Losing time pushes our elapsed time up, which pushes every gap DOWN.
+
+KNOWN v1 SIMPLIFICATIONS, named so nobody mistakes them for oversights. Each is
+a real racing effect this model does not carry, left out because the alternative
+was an unmeasured constant, which is what the redesign exists to remove:
+
+- **A gap crossing counts as a position change.** In the pit-stop cases that
+  dominate the window this is exact — you emerge where you emerge. On track it
+  is optimistic: three tenths does not pass at Monaco and does at Monza, and
+  nothing here knows the difference. N11 already models overtake probability and
+  is the natural gate, but it was trained on observed gaps, so feeding it the
+  counterfactual gaps a projection invents would run it off its own manifold.
+- **The out-lap is treated like any other lap on fresh rubber.** In reality a new
+  set needs a lap, sometimes a sector, to switch on, and on a hard compound in
+  cold conditions the out-lap can be slower than the worn set it replaced. That
+  warm-up is precisely what decides whether an undercut lands, so the effect is
+  not cosmetic — it is folded into the measured undercut band instead of being
+  modelled per lap.
+- **Neutralisation hazard is flat across the race.** The measured per-circuit
+  rate pools every lap, while the real thing spikes on lap one and around the
+  pit windows.
+- **Lapped cars are counted by elapsed time on the same lap number**, which
+  matches the timing screen but does not model the unlapping procedure before a
+  restart (Art. 55.13).
+
+--- WHERE TO CHANGE IF THE RIVALS CONTRACT CHANGES ---
+``RivalState`` mirrors the fields ``RaceStateManager.get_rival_states`` emits
+(``interval_to_driver_s``, ``is_pitting``, ``lap_time_s``). If that contract
+gains or renames a field, the adapter that builds ``RivalState`` moves with it;
+this module never reads a DataFrame.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Sequence
+
+import numpy as np
+
+_MEASURED_TABLES = Path(__file__).resolve().parents[2] / "data" / "mc_measured_v1.json"
+
+# Fallbacks used only when the measured tables are unavailable (a wheel install
+# without data/). They are the values measured on 2026-07-25 over 71 races, so a
+# missing file degrades to the same numbers rather than to invented ones.
+DEFAULT_UNDERCUT_BAND_S = 4.91
+DEFAULT_NEUTRALISATION_RATE = 0.0179
+DEFAULT_RACING_LAPS_UNDER_SC = 2.61
+
+# Margin is a tie-break, not a second currency: at most a third of a position.
+MARGIN_WEIGHT = 0.1
+# Capped at three seconds because that is roughly where the car behind stops
+# being a threat within one lap: DRS arms inside one second (Art. 22.1), and by
+# about three the follower is out of dirty air and cannot mount an attack next
+# time by. Buffer beyond that is real comfort but no longer decision-relevant,
+# so the tie-break saturates rather than rewarding a 40-second cushion forever.
+MARGIN_CLIP_S = 3.0
+
+
+@dataclass(frozen=True)
+class RivalState:
+    """One rival as the pit wall sees them at the decision lap.
+
+    Attributes:
+        driver:      FIA three-letter code.
+        gap_s:       Signed seconds, rival minus us. Negative means ahead of us.
+                     ``None`` means unknown, and an unknown gap keeps the rival
+                     out of the projection entirely rather than at a made-up
+                     zero — a searchable sentinel is how #428 happened.
+        pace_delta_s: Seconds per lap this rival is slower than us (negative =
+                     faster). Zero when unknown, which is the neutral
+                     assumption rather than a guess in either direction.
+        is_pitting:  They entered the pit lane on this lap. A fact from timing,
+                     the only rival-strategy signal v1 trusts.
+        stop_pending: Whether they still owe the Art. 30.5(m) stop. ``None``
+                     when their compound history cannot settle it.
+        stop_loss_s: Total pit loss if they stop in the window (lane traversal
+                     plus the physical stop).
+    """
+
+    driver: str
+    gap_s: float | None
+    pace_delta_s: float = 0.0
+    is_pitting: bool = False
+    stop_pending: bool | None = None
+    stop_loss_s: float = 0.0
+
+    @property
+    def is_ahead(self) -> bool:
+        """Whether the rival is ahead of us right now (unknown gap counts as no)."""
+        return self.gap_s is not None and self.gap_s < 0
+
+    @property
+    def gap_ahead_s(self) -> float | None:
+        """Positive seconds we sit behind this rival, or None if not ahead."""
+        if not self.is_ahead:
+            return None
+        return -float(self.gap_s)
+
+
+@dataclass(frozen=True)
+class DriverPlan:
+    """What one candidate strategy does to our own car over the window.
+
+    Attributes:
+        name:            STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT.
+        stops_in_window: Whether this candidate takes the stop inside the window.
+        stop_offset_laps: Laps from now until that stop (0 = this lap). Ignored
+                     when the candidate does not stop.
+    """
+
+    name: str
+    stops_in_window: bool
+    stop_offset_laps: int = 0
+
+
+@dataclass(frozen=True)
+class ProjectionConfig:
+    """Measured constants and race context the projection needs.
+
+    Everything here is either measured (see ``scripts/measure_mc_tables.py``) or
+    a fact of the current race. No strategy opinions live in this object.
+
+    Attributes:
+        window_laps:      Decision horizon W.
+        racing_laps:      Laps inside the window that will actually be raced.
+                          Equals ``window_laps`` under green and drops toward
+                          zero under a neutralisation, which is what makes the
+                          Art. 55.17 endgame fall out of the arithmetic: with no
+                          racing laps left, fresh tyres buy nothing.
+        fresh_gain_s:     Seconds per lap a fresh tyre gains.
+        cliff_loss_s:     Seconds per lap lost past the tyre cliff.
+        neutralisation_saving_s: Seconds a stop saves when taken under a
+                          neutralisation (the field is queued, so the pit loss
+                          costs less).
+        undercut_band_s:  Beyond this gap an undercut effectively never works.
+        future_neutralisation_prob: q_f, the chance a later neutralisation
+                          covers a stop we have not taken yet.
+        laps_remaining:   Laps left in the race, for the q_f estimate.
+        mandatory_stop_pending: Whether WE still owe the Art. 30.5(m) stop.
+                          ``None`` means unknown and disables the liability term
+                          rather than assuming either way.
+        margin_weight:    Weight of the seconds-margin tie-break.
+    """
+
+    window_laps: int = 5
+    racing_laps: float = 5.0
+    fresh_gain_s: float = 0.25
+    cliff_loss_s: float = 0.80
+    neutralisation_saving_s: float = 8.0
+    undercut_band_s: float = DEFAULT_UNDERCUT_BAND_S
+    future_neutralisation_prob: float = 0.0
+    laps_remaining: int = 0
+    mandatory_stop_pending: bool | None = None
+    margin_weight: float = MARGIN_WEIGHT
+
+
+@dataclass(frozen=True)
+class ProjectionResult:
+    """Per-draw output of a projection for one candidate.
+
+    Attributes:
+        positions:   Projected track position at the end of the window.
+        margins_s:   Seconds of buffer to the nearest projected car behind,
+                     clipped, and 0.0 when nothing is behind us.
+        liabilities: Cars the still-owed stop is projected to cost later.
+        rivals_used: How many rivals had a usable gap and entered the count.
+    """
+
+    positions: np.ndarray
+    margins_s: np.ndarray
+    liabilities: np.ndarray
+    rivals_used: int
+
+
+def load_measured_config(path: Path | None = None, **overrides) -> ProjectionConfig:
+    """Build a config from the committed measured tables, with race context on top.
+
+    Falls back to the values those tables held on 2026-07-25 when the file is
+    absent (a wheel install without ``data/``), so the degraded path lands on
+    measured numbers instead of invented ones. ``overrides`` carries the
+    per-race context the tables cannot know (laps remaining, whether we still
+    owe a stop, how many laps of the window will be raced).
+    """
+    tables_path = path or _MEASURED_TABLES
+    settings: dict = {}
+
+    if tables_path.exists():
+        tables = json.loads(tables_path.read_text(encoding="utf-8"))
+        band = tables.get("undercut_band", {}).get("u_band_s")
+        if band:
+            settings["undercut_band_s"] = float(band)
+
+    settings.update(overrides)
+    return ProjectionConfig(**settings)
+
+
+def future_neutralisation_probability(rate_per_lap: float, laps_remaining: int) -> float:
+    """Probability at least one neutralisation begins in the laps that remain.
+
+    ``1 - exp(-rate * laps)`` rather than ``rate * laps``: the product form runs
+    past 1 on a long run and would hand the decision layer a certainty it has no
+    right to. Clamped anyway, because a probability that can leave [0, 1] is a
+    bug waiting for its first extreme input.
+    """
+    if rate_per_lap <= 0 or laps_remaining <= 0:
+        return 0.0
+    probability = 1.0 - math.exp(-rate_per_lap * laps_remaining)
+    return min(1.0, max(0.0, probability))
+
+
+def _usable_rivals(rivals: Sequence[RivalState]) -> list[RivalState]:
+    """Rivals whose gap is known. An unknown gap cannot be projected, so it is
+    excluded rather than defaulted — the house rule that None means unknown."""
+    return [rival for rival in rivals if rival.gap_s is not None]
+
+
+def driver_time_delta(
+    plan: DriverPlan,
+    pit_loss_s: np.ndarray,
+    cliff_laps: np.ndarray,
+    config: ProjectionConfig,
+    stop_is_neutralised: np.ndarray | bool = False,
+) -> np.ndarray:
+    """Seconds we lose over the window under ``plan``, per draw.
+
+    Three terms, all in seconds so they can be compared with a rival's:
+
+    - the stop itself, discounted when it is taken under a neutralisation
+      (the field is queued, so the same pit lane costs fewer seconds of race),
+    - time lost running past the tyre cliff, over the laps this plan spends on
+      the old set,
+    - time gained on fresh rubber, over the racing laps that follow the stop.
+
+    A plan that does not stop pays no pit loss and gains nothing fresh; it just
+    lives with its tyres. That asymmetry is the whole trade-off, and it is
+    expressed here rather than asserted in a comment.
+    """
+    draws = len(pit_loss_s)
+    delta = np.zeros(draws, dtype=float)
+
+    racing = float(config.racing_laps)
+    if plan.stops_in_window:
+        laps_before_stop = min(float(plan.stop_offset_laps), racing)
+        laps_after_stop = max(0.0, racing - laps_before_stop)
+
+        saving = np.where(stop_is_neutralised, config.neutralisation_saving_s, 0.0)
+        effective_loss = np.maximum(0.0, pit_loss_s - saving)
+
+        worn_laps = np.maximum(0.0, laps_before_stop - cliff_laps)
+        delta += effective_loss
+        delta += worn_laps * config.cliff_loss_s
+        delta -= laps_after_stop * config.fresh_gain_s
+    else:
+        worn_laps = np.maximum(0.0, racing - cliff_laps)
+        delta += worn_laps * config.cliff_loss_s
+
+    return delta
+
+
+def rival_time_deltas(
+    rivals: Sequence[RivalState],
+    config: ProjectionConfig,
+    draws: int,
+) -> np.ndarray:
+    """Seconds each rival loses over the window, shaped (draws, rivals).
+
+    A rival costs themselves time two ways: by stopping (only when timing says
+    they are in the pit lane right now — v1 trusts the fact, never a guess about
+    their strategy) and by being slower than us lap after lap.
+
+    Deterministic per rival today, so every draw carries the same column. It is
+    still built at full width because the projection multiplies it against
+    per-draw quantities, and because sampling rival stop durations is the
+    natural next refinement.
+    """
+    usable = _usable_rivals(rivals)
+    deltas = np.zeros((draws, len(usable)), dtype=float)
+
+    for index, rival in enumerate(usable):
+        loss = rival.stop_loss_s if rival.is_pitting else 0.0
+        pace = rival.pace_delta_s * config.racing_laps
+        deltas[:, index] = loss + pace
+
+    return deltas
+
+
+def terminal_liability(
+    rivals: Sequence[RivalState],
+    plan: DriverPlan,
+    pit_loss_s: np.ndarray,
+    config: ProjectionConfig,
+) -> np.ndarray:
+    """Cars that a still-owed stop is projected to cost us later, per draw.
+
+    The two-compound rule (Art. 30.5(m)) makes one stop mandatory, so a candidate
+    that skips the window has not avoided the cost, only deferred it. This counts
+    what that deferral will cost in cars: rivals close enough behind to come out
+    ahead when we finally stop, and only those who have ALREADY satisfied their
+    own obligation — a rival who must still stop pays the same price later, so
+    they are no threat.
+
+    The window is discounted by ``q_f * saving``: a future neutralisation might
+    cover the stop cheaply, and that possibility is worth real seconds. This is
+    what turns the old flat Safety Car bonus into an option value, and it is why
+    the three cases the deleted rail was patching now fall out of the arithmetic:
+
+    - already stopped (no obligation) -> no liability, staying out is free;
+    - leading a pack that all still owe a stop -> every rival is exempt, so the
+      liability is zero and holding the lead costs nothing;
+    - the race ending behind the Safety Car -> the config's racing laps go to
+      zero, so nothing is gained by stopping in the first place.
+
+    An unknown obligation (``mandatory_stop_pending is None``) yields zero: the
+    liability is a claim about a fact, and without the fact we do not make it.
+    """
+    if plan.stops_in_window or config.mandatory_stop_pending is not True:
+        return np.zeros(len(pit_loss_s), dtype=float)
+
+    discounted = pit_loss_s - config.future_neutralisation_prob * config.neutralisation_saving_s
+    exposure_s = np.maximum(0.0, discounted)
+
+    behind_and_settled = [
+        rival.gap_s
+        for rival in _usable_rivals(rivals)
+        if rival.gap_s > 0 and rival.stop_pending is False
+    ]
+    if not behind_and_settled:
+        return np.zeros(len(pit_loss_s), dtype=float)
+
+    gaps = np.asarray(behind_and_settled, dtype=float)
+    return (gaps[None, :] < exposure_s[:, None]).sum(axis=1).astype(float)
+
+
+def project_positions(
+    rivals: Sequence[RivalState],
+    plan: DriverPlan,
+    config: ProjectionConfig,
+    pit_loss_s: np.ndarray,
+    cliff_laps: np.ndarray,
+    stop_is_neutralised: np.ndarray | bool = False,
+) -> ProjectionResult:
+    """Project our end-of-window position among the actual cars, per draw.
+
+    Every gap moves by the difference between what the rival loses and what we
+    lose; a gap that crosses zero is a car changing sides. Counting the cars
+    projected ahead gives the position directly, so "rejoining into traffic"
+    needs no special case: every rival within our pit loss behind us is a
+    position lost, counted by name.
+
+    Returns positions, the seconds of margin to the nearest car behind (a
+    tie-break with real strategic meaning, since two seconds of clear air beats
+    a tenth at the same position), and the terminal liability.
+    """
+    usable = _usable_rivals(rivals)
+    draws = len(pit_loss_s)
+
+    our_delta = driver_time_delta(plan, pit_loss_s, cliff_laps, config, stop_is_neutralised)
+    liabilities = terminal_liability(rivals, plan, pit_loss_s, config)
+
+    if not usable:
+        return ProjectionResult(
+            positions=np.ones(draws, dtype=float),
+            margins_s=np.zeros(draws, dtype=float),
+            liabilities=liabilities,
+            rivals_used=0,
+        )
+
+    current_gaps = np.asarray([rival.gap_s for rival in usable], dtype=float)
+    their_deltas = rival_time_deltas(rivals, config, draws)
+
+    projected_gaps = current_gaps[None, :] + their_deltas - our_delta[:, None]
+
+    ahead = projected_gaps < 0
+    positions = 1.0 + ahead.sum(axis=1)
+
+    behind_gaps = np.where(ahead, np.inf, projected_gaps)
+    nearest_behind = behind_gaps.min(axis=1)
+    margins = np.clip(np.where(np.isinf(nearest_behind), 0.0, nearest_behind), 0.0, MARGIN_CLIP_S)
+
+    return ProjectionResult(
+        positions=positions,
+        margins_s=margins,
+        liabilities=liabilities,
+        rivals_used=len(usable),
+    )
+
+
+def payoff(result: ProjectionResult, current_position: int, config: ProjectionConfig) -> np.ndarray:
+    """Per-draw payoff in positions gained, margin-adjusted and liability-charged.
+
+    Positions are the currency, which is the point of the redesign. The margin
+    term is deliberately small (a tenth of a position per second, capped): it
+    breaks ties between candidates that land on the same car count and smooths
+    the quantile steps that an integer-valued score would otherwise have, but it
+    can never outvote an actual position.
+    """
+    gained = float(current_position) - result.positions
+    margin_bonus = config.margin_weight * result.margins_s
+    return gained + margin_bonus - result.liabilities
+
+
+def undercut_targets(rivals: Sequence[RivalState], config: ProjectionConfig) -> list[str]:
+    """Live rivals ahead of us and inside the measured undercut band.
+
+    The band is measured, not assumed: across 716 real attempts, success falls
+    from 86% under a second to under 1% beyond ten, and the committed band is the
+    P90 of the gaps at which one actually worked. It replaces the old "within
+    five positions" rule, which reasoned in a unit the pit lane does not use.
+
+    Liveness is presence in this list — a car that crashed is simply not in it —
+    never a DNF classification or a staleness threshold, because a car that
+    finished can legitimately lag twenty laps behind in the data.
+    """
+    band = config.undercut_band_s
+    return [
+        rival.driver
+        for rival in _usable_rivals(rivals)
+        if rival.is_ahead and rival.gap_ahead_s is not None and rival.gap_ahead_s <= band
+    ]
+
+
+def overcut_targets(rivals: Sequence[RivalState]) -> list[str]:
+    """Live rivals ahead of us who are in the pit lane right now.
+
+    An overcut needs someone to overcut: the payoff is holding track position
+    while they serve their stop. v1 keys off the timing fact (``is_pitting``)
+    and never off a guess about who might stop soon, which would be rival
+    strategy modelling by another name. Surfaces whose rivals list carries no
+    such flag get the measured stop-hazard prior instead, wired separately.
+    """
+    return [rival.driver for rival in _usable_rivals(rivals) if rival.is_ahead and rival.is_pitting]
+
+
+@dataclass(frozen=True)
+class TargetRanking:
+    """One rival scored as a post-pit-cycle target.
+
+    Attributes:
+        driver:            FIA code.
+        projected_gap_s:   Signed seconds to them once both pit cycles are done.
+        current_gap_s:     Signed seconds now, for comparison.
+        positions_apart:   How far apart the timing screen says we are.
+    """
+
+    driver: str
+    projected_gap_s: float
+    current_gap_s: float
+    positions_apart: int
+
+
+def rank_targets(
+    rivals: Sequence[RivalState],
+    config: ProjectionConfig,
+    our_pit_loss_s: float,
+) -> list[TargetRanking]:
+    """Rank rivals by how close they will be once both pit cycles have played out.
+
+    A strategist does not attack the car currently ahead, they attack the car
+    they will be racing after the stops. Víctor's own example: leading a race
+    while the car behind pits early and emerges tenth, the right target may be a
+    car eight places down the screen, because after our own stop they come out
+    in front of us.
+
+    Deterministic and run once (no sampling): it selects who to attack, and the
+    Monte Carlo then scores the attacking. Both consume the same definition of
+    "who we are racing", so the selector and the scorer can no longer disagree.
+    """
+    ranked: list[TargetRanking] = []
+
+    for offset, rival in enumerate(_usable_rivals(rivals), start=1):
+        # Charge a rival a pit loss only when we KNOW they still owe the stop.
+        # Unknown is not "probably yes": an unsettled obligation treated as a
+        # certainty invents 20-odd seconds of someone else's race.
+        their_loss = rival.stop_loss_s if rival.stop_pending is True else 0.0
+        projected = (
+            rival.gap_s + their_loss - our_pit_loss_s + rival.pace_delta_s * config.racing_laps
+        )
+        ranked.append(
+            TargetRanking(
+                driver=rival.driver,
+                projected_gap_s=round(float(projected), 3),
+                current_gap_s=round(float(rival.gap_s), 3),
+                positions_apart=offset,
+            )
+        )
+
+    ranked.sort(key=lambda target: abs(target.projected_gap_s))
+    return ranked
