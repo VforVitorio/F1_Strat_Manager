@@ -589,7 +589,15 @@ CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff.
                      # degradation rate measured on this repo's 71 races (HARD .052 /
                      # MEDIUM .059 / SOFT .072 s/lap), so it stands as a cliff parameter,
                      # not a Heilmeier citation.
-POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation)
+POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation).
+                     # LEGACY PATH ONLY. The projection scoring counts the actual
+                     # cars and needs no such constant. Measured over this repo's
+                     # 71 races, the median gap between consecutive cars is 2.23 s
+                     # while racing and 1.48 s under a Safety Car, so a single
+                     # figure cannot serve both regimes: 1.5 is close to the
+                     # bunched-field value and was being applied to green-flag
+                     # racing, where most decisions are taken. Kept unchanged
+                     # because the goldens pin the legacy output to the digit.
 SC_PIT_BONUS = 8.0   # seconds saved by pitting under a full Safety Car (Art. 55, no
                      # delta-lap loss). Measured on this repo's 71 races: 5.75 s, 95% CI
                      # [3.14, 8.25] (n=124), so 8.0 sits inside the interval. Close to the
