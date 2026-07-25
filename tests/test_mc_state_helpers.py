@@ -295,3 +295,71 @@ def test_rivals_with_no_usable_gap_cannot_conjure_a_projection():
         laps_remaining=20,
     )
     assert blind == baseline
+
+
+# ---------------------------------------------------------------------------
+# Keyspace and hazard floor (final-audit F3-6, F3-7)
+# ---------------------------------------------------------------------------
+
+
+# Circuits this repo spells more than one way: underscored folder forms, the
+# country name 2023 filed Barcelona under, Miami's three variants, and the two
+# that carry diacritics and lose them through a non-UTF-8 console.
+_CIRCUIT_SPELLINGS = (
+    ("Barcelona", "Spain"),
+    ("Miami", "Miami Gardens", "Miami_Gardens"),
+    ("Lusail", "Qatar Grand Prix"),
+    ("Yas Island", "Yas_Island"),
+    ("São Paulo", "Sao Paulo", "Sao_Paulo"),
+    ("Montréal", "Montreal"),
+)
+
+
+def test_every_spelling_of_a_circuit_finds_the_same_hazard():
+    """Three keyspaces meet in this repo, and a hazard miss used to be silent.
+
+    Unlike the traversal lookup, which at least warns when it falls back, a
+    hazard miss quietly returned the pooled rate — a table that looks populated
+    while every lookup misses is the #448 failure exactly. Reads the committed
+    measured tables, so it runs everywhere.
+    """
+    from src.agents.position_projection import measured_neutralisation_rate
+
+    for spellings in _CIRCUIT_SPELLINGS:
+        hazards = {round(measured_neutralisation_rate(name), 6) for name in spellings}
+        assert len(hazards) == 1, f"{spellings} disagree on hazard: {hazards}"
+
+
+@_skip_no_models
+def test_every_spelling_of_a_circuit_finds_the_same_traversal():
+    """Same keyspace check for the per-circuit pit-lane traversal.
+
+    Separate from the hazard test because this table lives in ``data/models/``,
+    which is distributed through the Hugging Face Hub rather than git — so a CI
+    runner without the weights has no table to look anything up in.
+    """
+    from src.agents.position_projection import traversal_seconds
+
+    for spellings in _CIRCUIT_SPELLINGS:
+        traversals = {traversal_seconds(name) for name in spellings}
+        assert len(traversals) == 1, f"{spellings} disagree on traversal: {traversals}"
+        assert None not in traversals, f"{spellings} has no traversal at all"
+
+
+def test_a_circuit_that_has_never_thrown_a_safety_car_is_not_given_a_zero_rate():
+    """Monza and Budapest measure exactly zero onsets, and zero is not a rate.
+
+    A zero drives q_f to 0, which tells the decision layer that no future
+    neutralisation can ever cover a stop and biases the terminal liability
+    upward on every lap. Monza is also the archetypal Art. 55.17 circuit, so
+    that is the worst possible place to lose the term. A zero count means "not
+    seen here", not "cannot happen here".
+    """
+    from src.agents.position_projection import measured_neutralisation_rate
+
+    pooled = measured_neutralisation_rate(None)
+    for quiet_circuit in ("Monza", "Budapest"):
+        assert measured_neutralisation_rate(quiet_circuit) == pooled
+
+    # A circuit that HAS thrown them keeps its own measured, higher rate.
+    assert measured_neutralisation_rate("Melbourne") > pooled
