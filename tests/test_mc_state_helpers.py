@@ -237,7 +237,19 @@ def _canned_outputs():
 
 
 @_skip_no_models
-def test_mc_race_context_kwargs_are_accepted_and_ignored():
+def test_race_context_without_rivals_still_takes_the_legacy_path():
+    """The kwargs alone change nothing — only a usable rivals list switches paths.
+
+    This test pinned a contract that has since moved. When PR-1 added the kwargs
+    they were accepted and ignored, so passing a rivals list had to be a no-op;
+    PR-4 gave that list meaning and made it the dispatch key. The assertion now
+    covers what is still true: race context with no rivals is legacy scoring.
+
+    Worth remembering how it surfaced. It failed only on a machine holding the
+    dataset, because ``_skip_no_models`` hides it on CI — the same shape as the
+    voice-retirement test that pinned a retired contract and only broke on the
+    promotion. A test that guards a contract must fail where the contract lives.
+    """
     from src.agents.strategy_orchestrator import _run_mc_simulation
 
     pace, tire, situation, pit = _canned_outputs()
@@ -248,9 +260,38 @@ def test_mc_race_context_kwargs_are_accepted_and_ignored():
         situation,
         pit,
         alpha=0.5,
-        rivals=[{"driver": "HAM", "interval_to_driver_s": -1.8}],
         position=5,
         laps_remaining=20,
         pit_context={"mandatory_stop_pending": True},
     )
     assert with_context == baseline
+
+
+@_skip_no_models
+def test_rivals_with_no_usable_gap_cannot_conjure_a_projection():
+    """A list of cars whose intervals are all unknown is not race context.
+
+    It is truthy, so it used to route into the projection, which then counted
+    zero rivals and reported P1 with no uncertainty — "you will finish first",
+    fabricated from nothing. Unknown gaps mean the projection has no geometry to
+    work with, and the honest fallback is the legacy scoring it would have used
+    had the list been empty.
+    """
+    from src.agents.strategy_orchestrator import _run_mc_simulation
+
+    pace, tire, situation, pit = _canned_outputs()
+    baseline = _run_mc_simulation(pace, tire, situation, pit, alpha=0.5)
+    blind = _run_mc_simulation(
+        pace,
+        tire,
+        situation,
+        pit,
+        alpha=0.5,
+        rivals=[
+            {"driver": "HAM", "interval_to_driver_s": None},
+            {"driver": "VER", "interval_to_driver_s": None},
+        ],
+        position=5,
+        laps_remaining=20,
+    )
+    assert blind == baseline
