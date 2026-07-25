@@ -13,6 +13,12 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Pinned so a linter release cannot turn every branch red on its own. See the
+  # note above the lint steps before bumping — the bump and the reformatting it
+  # implies belong in one deliberate PR.
+  RUFF_VERSION: "0.15.22"
+
 # Notes on dependency strategy across the three jobs:
 #   - All three jobs enable uv's built-in cache (`enable-cache: true`) and
 #     key it off `uv.lock`. uv.lock is now committed so the cache only
@@ -105,11 +111,18 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
+      # Ruff is PINNED. `uvx ruff` resolves the latest release at run time, so a
+      # ruff release could turn every branch red without a single line of our code
+      # changing — and worse, inconsistently: 0.16.0 shipped on 2026-07-23 and
+      # started formatting Python code blocks inside Markdown, yet runs kept
+      # passing while the tool cache still held 0.15.x, so the same commit passed
+      # one run and failed the next. Bump this deliberately, with the reformat it
+      # implies in the same PR (the webapp CI pins prettier for this same reason).
       - name: Ruff check
-        run: uvx ruff check .
+        run: uvx ruff@${{ env.RUFF_VERSION }} check .
 
       - name: Ruff format check
-        run: uvx ruff format --check .
+        run: uvx ruff@${{ env.RUFF_VERSION }} format --check .
 
   typecheck:
     name: typecheck
