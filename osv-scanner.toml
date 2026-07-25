@@ -136,14 +136,13 @@ reason = "Pillow: fix in 12.3.0 blocked by arcade==3.3.3 (<11.4 pin); no untrust
 id = "GHSA-rrmf-rvhw-rf47"
 reason = "torch: no upstream fix; CUDA-pinned; requires attacker-controlled in-process model input, outside the single-user local threat model."
 
-# --- ecdsa (no upstream fix, transitive, not on a hot path) -------------------
-# PYSEC-2026-1325 (Minerva-class timing side-channel on P-256) has no upstream
-# fix. ecdsa is transitive via python-jose[cryptography] and is not exercised:
-# the backend auth uses a static API key, not ECDSA/JWT. A timing side-channel
-# needs local co-resident measurement, outside the single-user localhost model.
-[[IgnoredVulns]]
-id = "GHSA-wj6h-64fc-37mp"
-reason = "ecdsa: no upstream fix; transitive via python-jose and not on any hot path (auth is a static API key, not ECDSA); timing attack needs local co-residence."
+# --- ecdsa: waiver removed, the dependency is gone ----------------------------
+# GHSA-wj6h-64fc-37mp was waived here on the grounds that ecdsa arrived
+# transitively through python-jose and was never exercised, since the backend
+# authenticates with a static API key rather than JWT. That reasoning was the
+# argument for deleting the dependency, not for tolerating it: nothing in the
+# codebase imported python-jose at all. Dropping it took ecdsa, rsa and pyasn1
+# out of the lock with it, so there is no longer a vulnerability to ignore.
 
 # --- setuptools (fix blocked by torch's setuptools<82 pin) --------------------
 # The fix is setuptools 83.0.0, but torch 2.11/2.12 (the CUDA-pinned wheel this
