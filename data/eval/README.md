@@ -14,16 +14,24 @@ This directory holds benchmark output artefacts referenced by chapter 5 of the T
 | `threshold_sweep_sc`        | `notebooks/agents/N33_thresholds_and_calibration.ipynb` (Section B)     | safety car probability threshold sweep                                               |
 | `threshold_sweep_undercut`  | `notebooks/agents/N33_thresholds_and_calibration.ipynb` (Section C)     | undercut success threshold sweep                                                     |
 | `mc_dropout_coverage`       | `notebooks/agents/N33_thresholds_and_calibration.ipynb` (Section D)     | MC dropout interval coverage for tire degradation predictions                        |
+| `mc_sc_window`              | `scripts/measure_mc_tables.py`                                          | green laps inside the 5-lap decision window while neutralised, spell length, endgame |
+| `mc_gap_density`            | `scripts/measure_mc_tables.py`                                          | measured seconds between consecutive cars, green vs Safety Car                       |
+| `mc_undercut_band`          | `scripts/measure_mc_tables.py`                                          | undercut success by gap to the target in seconds, from N16's labelled attempts        |
+
+The three `mc_*` artefacts are extracts of `data/mc_measured_v1.json`, which is the
+machine-readable table the Monte Carlo layer reads and carries two further tables
+(per-circuit neutralisation rate, stop hazard) with no thesis-facing extract.
 
 ## How to regenerate
 
-Run the four benchmark scripts:
+Run the benchmark scripts:
 
 ```bash
 uv run python scripts/bench_pace_baselines.py
 uv run python scripts/bench_whisper.py
 uv run python scripts/bench_subagent_latency.py
 uv run python scripts/bench_nlp_pipeline_cpu.py
+uv run python scripts/measure_mc_tables.py      # + data/mc_measured_v1.json
 ```
 
 Then open each notebook and use Restart Kernel -> Run All:
