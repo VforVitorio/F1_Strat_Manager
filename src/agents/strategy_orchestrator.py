@@ -695,31 +695,40 @@ def simulate_lap_window(
     return time_delta / POS_GAP_S
 
 
-# Pooled green-flag pit loss measured over this repo's 71 races (n=1746, ~22.6 s),
-# used only when the caller cannot say which circuit we are at. The per-circuit
-# table (#448) spans 19.7 s at Budapest to 27.5 s at Marina Bay, so a caller that
-# knows the GP should always pass its own figure through pit_context.
+# PIT-LANE TRAVERSAL, NOT TOTAL PIT LOSS. This is the time spent transiting the
+# lane, to which the sampled physical stop is added: D = traversal + stop. The
+# per-circuit table (#448) spans 19.7 s at Budapest to 27.5 s at Marina Bay and a
+# caller that knows the GP must pass its own figure through pit_context, because
+# a 7.9 s spread is the difference between a stop that costs a place and one that
+# does not. The 20.0 fallback is a traversal, so adding a ~2.6 s stop lands near
+# the 22.6 s pooled green pit loss measured over this repo's 71 races (n=1746) —
+# do NOT pass that 22.6 s figure in as traversal or the stop is counted twice.
 DEFAULT_PIT_TRAVERSAL_S = 20.0
 
-# Racing laps left inside a W=5 window once a Safety Car is out, measured over the
-# same races (2.61, n=215 neutralised laps). Under a VSC the field is not queued and
-# more of the window is raced (2.91, n=80).
-RACING_LAPS_UNDER_SC = 2.61
-RACING_LAPS_UNDER_VSC = 2.91
+# Physical-stop prior used for a RIVAL when the caller cannot supply one: the mode
+# of N15's conservative Triangular(2.2, 2.8, 3.8). A rival who is in the pit lane
+# has to lose the same kind of time we would, and defaulting that to zero made
+# their stop free — a car ahead could serve a stop and stay ahead, which is a
+# sentinel wearing a plausible number (the #428 lesson in a new place).
+RIVAL_STOP_PRIOR_S = 2.8
 
 
-def _rival_states_from_lap_state(rivals: list[dict], pit_context: dict | None):
+def _rival_states_from_lap_state(rivals: list[dict], pit_context: dict | None, traversal_s: float):
     """Adapt the lap_state rivals list into the projection's own value type.
 
     The one place that knows the RaceStateManager field names, so a rename there
     lands here and nowhere else. A rival whose interval is unknown keeps a None
     gap and the projection drops it from the count rather than inventing a zero.
+
+    ``traversal_s`` is threaded in so a pitting rival is charged the same kind of
+    pit loss we charge ourselves. Callers can override per rival through
+    ``pit_context['rival_pit_loss_s']`` once that figure is available per car.
     """
     from src.agents.position_projection import RivalState
 
     context = pit_context or {}
     per_rival_pending: dict = context.get("rival_stop_pending") or {}
-    rival_loss = float(context.get("rival_pit_loss_s") or context.get("pit_loss_s") or 0.0)
+    rival_loss = float(context.get("rival_pit_loss_s") or (traversal_s + RIVAL_STOP_PRIOR_S))
 
     states = []
     for rival in rivals:
@@ -734,6 +743,104 @@ def _rival_states_from_lap_state(rivals: list[dict], pit_context: dict | None):
             )
         )
     return states
+
+
+def race_context_from_lap_state(lap_state: dict | None, race_state=None) -> dict:
+    """Assemble the projection's race context from a lap_state, or an empty dict.
+
+    Built here rather than at each surface so the CLI, the arcade and the backend
+    cannot drift on what "race context" means — three hand-mirrored copies of a
+    payload is how this codebase acquired most of its cross-surface bugs.
+
+    Everything is optional and everything degrades honestly: no rivals means the
+    caller stays on the legacy scoring, an unknown circuit means the traversal
+    falls back with a warning rather than to a silent average, and an unsettled
+    stop obligation stays None so the terminal liability makes no claim.
+    """
+    if not lap_state:
+        return {}
+
+    from src.agents.position_projection import traversal_seconds
+
+    driver = lap_state.get("driver") or {}
+    meta = lap_state.get("session_meta") or {}
+    gp_name = meta.get("gp_name")
+
+    total_laps = meta.get("total_laps") or (getattr(race_state, "total_laps", 0) or 0)
+    current_lap = lap_state.get("lap_number") or getattr(race_state, "lap", 0) or 0
+    traversal = traversal_seconds(gp_name)
+    if traversal is None and gp_name:
+        logger.warning(
+            "no pit-lane traversal for GP %r — the projection falls back to %.1f s, "
+            "which is right to within a few seconds but wrong per circuit (#448)",
+            gp_name,
+            DEFAULT_PIT_TRAVERSAL_S,
+        )
+
+    context = {
+        "gp_name": gp_name,
+        "laps_remaining": max(0, int(total_laps) - int(current_lap)),
+        "position": driver.get("position"),
+        "pit_context": {
+            "gp_name": gp_name,
+            "traversal_s": traversal,
+            "mandatory_stop_pending": (lap_state.get("stint_flags") or {}).get(
+                "mandatory_stop_pending"
+            ),
+            "rival_stop_pending": lap_state.get("rival_stop_pending") or {},
+        },
+    }
+    return context
+
+
+def _has_usable_gaps(rivals: list[dict] | None) -> bool:
+    """Whether any rival carries a gap the projection can actually use.
+
+    A list of cars whose intervals are all unknown is truthy but carries no
+    geometry: projecting from it counted zero rivals and reported P1 with no
+    uncertainty, which is a confident "you will finish first" assembled from no
+    information at all. Unknown is not zero, and a list of unknowns is not a
+    race state — those runs belong on the legacy path.
+    """
+    return any(rival.get("interval_to_driver_s") is not None for rival in rivals or ())
+
+
+def best_mc_candidate(mc_results: dict) -> str:
+    """The argmax over scored candidates, skipping the ones never offered.
+
+    Four call sites used to do ``max(results, key=lambda s: results[s]["score"])``
+    directly, which raises the moment a score is None — and None is exactly what
+    the projection engine emits for a candidate with no valid target. Sharing one
+    helper is also what stops the four from drifting apart, which is how this
+    codebase acquired most of its duplicate-logic bugs.
+
+    Falls back to the first key when nothing is scoreable at all (no rivals, every
+    candidate ineligible): callers need a string, and an arbitrary-but-stable pick
+    beats raising inside a race.
+    """
+    scored = {name: cell for name, cell in mc_results.items() if cell.get("score") is not None}
+    if not scored:
+        return next(iter(mc_results), "STAY_OUT")
+    return max(scored, key=lambda name: scored[name]["score"])
+
+
+def _format_mc_row(name: str, cell: dict) -> str:
+    """One line of the Monte Carlo table for the LLM prompt.
+
+    An ineligible candidate is stated as such rather than formatted: ``%+.3f``
+    raises on None, and a candidate with no target is information the model
+    should have — "there is nobody to undercut" is a reason, not a gap.
+    """
+    if cell.get("score") is None:
+        reason = "no valid target" if cell.get("eligible") is False else "not scored"
+        return f"  {name}: not offered ({reason})"
+
+    target = cell.get("target")
+    suffix = f"  target={target}" if target else ""
+    return (
+        f"  {name}: E={cell['E']:+.3f}  P10={cell['P10']:+.3f}  "
+        f"P90={cell['P90']:+.3f}  score={cell['score']:+.3f}{suffix}"
+    )
 
 
 def _run_projection_mc(
@@ -774,6 +881,9 @@ def _run_projection_mc(
         DriverPlan,
         ProjectionConfig,
         future_neutralisation_probability,
+        measured_neutralisation_rate,
+        measured_racing_laps,
+        measured_undercut_band_s,
         overcut_targets,
         payoff,
         project_positions,
@@ -782,7 +892,7 @@ def _run_projection_mc(
 
     context = pit_context or {}
     traversal_s = float(context.get("traversal_s") or DEFAULT_PIT_TRAVERSAL_S)
-    rival_states = _rival_states_from_lap_state(rivals, pit_context)
+    rival_states = _rival_states_from_lap_state(rivals, pit_context, traversal_s)
 
     # Total pit loss per draw: the lane traversal plus the physical stop. The legacy
     # scoring charged only the stop and argued in a comment that the traversal
@@ -790,14 +900,37 @@ def _run_projection_mc(
     # the rival really pays it too, and not otherwise.
     pit_loss_s = traversal_s + _np.asarray(pit_s, dtype=float)
 
-    current_position = int(position) if position else 1
-    remaining = int(laps_remaining) if laps_remaining else 0
-    onset_rate = float(context.get("neutralisation_rate") or 0.0)
-    q_f = future_neutralisation_probability(onset_rate, remaining)
+    # Our position, preferably as reported, otherwise counted from the same gaps
+    # the projection is about to use. It has to be derived rather than defaulted:
+    # the featured parquet drops laps run under a Safety Car, so on exactly the
+    # laps this layer matters most the driver row is missing and the position
+    # arrives as None. Defaulting that to 1 claimed we were leading the race.
+    # Counting rivals ahead is not a guess — it is the same arithmetic that
+    # produces the projected position, so both sides of the delta agree.
+    rivals_ahead = sum(1 for state in rival_states if state.is_ahead)
+    current_position = int(position) if position else 1 + rivals_ahead
 
+    remaining = int(laps_remaining) if laps_remaining else 0
+
+    # Every constant below comes from the committed measurements
+    # (data/mc_measured_v1.json, regenerated by scripts/measure_mc_tables.py). A
+    # caller may override any of them through pit_context; what it may not do is
+    # leave the onset rate at zero, which would tell the layer that no future
+    # Safety Car can ever cover a stop and bias the terminal liability upward on
+    # every lap of every race.
+    onset_rate = context.get("neutralisation_rate")
+    if onset_rate is None:
+        onset_rate = measured_neutralisation_rate(context.get("gp_name"))
+    q_f = future_neutralisation_probability(float(onset_rate), remaining)
+
+    # ONE source for which neutralisation we are in: the saving passed by the
+    # caller already encodes it (VSC_PIT_BONUS vs SC_PIT_BONUS), so reading a
+    # separate `vsc_active` here as well let the two disagree — a VSC saving
+    # scored against a full-SC racing window.
+    is_vsc = neutralisation_saving_s <= VSC_PIT_BONUS
     racing_when_neutralised = float(
         context.get("racing_laps_neutralised")
-        or (RACING_LAPS_UNDER_VSC if context.get("vsc_active") else RACING_LAPS_UNDER_SC)
+        or measured_racing_laps("vsc" if is_vsc else "sc")
     )
 
     def _config(racing_laps: float) -> ProjectionConfig:
@@ -807,6 +940,7 @@ def _run_projection_mc(
             fresh_gain_s=FRESH_GAIN,
             cliff_loss_s=CLIFF_LOSS,
             neutralisation_saving_s=neutralisation_saving_s,
+            undercut_band_s=measured_undercut_band_s(),
             future_neutralisation_prob=q_f,
             laps_remaining=remaining,
             mandatory_stop_pending=context.get("mandatory_stop_pending"),
@@ -997,7 +1131,7 @@ def _run_mc_simulation(
     # the comparison between them carries no sampling noise of its own. That is what
     # an argmax over 500 draws needs — the variance that matters is the variance of
     # the DIFFERENCES, and sharing the draws collapses it.
-    if rivals:
+    if _has_usable_gaps(rivals):
         return _run_projection_mc(
             rivals=rivals,
             position=position,
@@ -1090,10 +1224,7 @@ def _build_orchestrator_prompt(
     regulation context, radio alerts, or a planned contingency justify a
     different action.
     """
-    mc_table = "\n".join(
-        f"  {s}: E={v['E']:+.3f}  P10={v['P10']:+.3f}  P90={v['P90']:+.3f}  score={v['score']:+.3f}"
-        for s, v in mc_results.items()
-    )
+    mc_table = "\n".join(_format_mc_row(name, cell) for name, cell in mc_results.items())
 
     reg_block = (
         f"REGULATION CONSTRAINT (hard — exclude non-compliant actions):\n"

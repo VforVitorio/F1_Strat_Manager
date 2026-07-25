@@ -257,6 +257,22 @@ def test_no_reachable_rival_means_no_undercut_target_at_all():
     assert undercut_targets(rivals, config) == []
 
 
+def test_a_car_already_in_the_pit_lane_cannot_be_undercut():
+    """You cannot beat someone to the pit lane once they are in it.
+
+    The whole move is arriving first. Offering a stopping car as an undercut
+    target credited the candidate with a place it had no mechanism to take, and
+    the projection agreed with itself: both cars pay the same loss, so the order
+    survives, yet the candidate still collected the success bonus.
+    """
+    config = ProjectionConfig(undercut_band_s=4.91)
+    rivals = [
+        RivalState("SERVING_A_STOP", gap_s=-2.0, is_pitting=True),
+        RivalState("RACING", gap_s=-3.0, is_pitting=False),
+    ]
+    assert undercut_targets(rivals, config) == ["RACING"]
+
+
 def test_an_overcut_needs_a_car_ahead_actually_in_the_pit_lane():
     rivals = [
         RivalState("AHEAD_PITTING", gap_s=-3.0, is_pitting=True),

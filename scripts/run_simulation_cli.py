@@ -334,20 +334,36 @@ def _generate_rcm_event(lap_num: int) -> dict | None:
     return evt
 
 
-def _score_float(v: Any) -> float:
+def _score_float(v: Any) -> float | None:
     """Extract a scalar score from an MC simulation result entry.
 
     _run_mc_simulation returns {scenario: {"E": float, "P10": float, "P90": float,
     "score": float}}. When scenario_scores holds these inner dicts (full LLM path),
     we extract the "score" key. When it holds plain floats (no-llm path), we cast
     directly.
+
+    Returns None for a candidate the projection layer declined to score — an
+    undercut with no reachable target, an overcut with nobody in the pit lane.
+    That used to read as 0.0, which is a real-looking score for a strategy that
+    was never on the table; callers must skip a None instead of ranking it.
     """
     if isinstance(v, dict):
-        return float(v.get("score", 0.0))
+        score = v.get("score")
+        return float(score) if score is not None else None
     try:
         return float(v)
     except (TypeError, ValueError):
-        return 0.0
+        return None
+
+
+def _fmt_score(score: float | None) -> str:
+    """Render one Monte Carlo score, or a dash for a candidate never offered.
+
+    A dash rather than 0.000: the panel is read at a glance during a race, and a
+    zero in a score column looks like a strategy that was considered and found
+    unattractive, not one that had no target to aim at.
+    """
+    return "--" if score is None else f"{score:.3f}"
 
 
 def _load_tire_alloc(repo_root: Path) -> None:
@@ -1720,7 +1736,7 @@ def run(args: argparse.Namespace) -> None:
                     ucut = _score_float(scores.get("UNDERCUT", 0.0))
                     ocut = _score_float(scores.get("OVERCUT", 0.0))
                 else:
-                    stay = pit = ucut = ocut = 0.0
+                    stay = pit = ucut = ocut = None
 
                 # Extract v2 tactical fields for Decision + Plan columns. Both
                 # modes now return a StrategyRecommendation (#236), so read them
@@ -1783,10 +1799,10 @@ def run(args: argparse.Namespace) -> None:
                         decision_text,
                         plan_text,
                         f"{confidence:.2f}",
-                        f"{stay:.3f}",
-                        f"{pit:.3f}",
-                        f"{ucut:.3f}",
-                        f"{ocut:.3f}",
+                        _fmt_score(stay),
+                        _fmt_score(pit),
+                        _fmt_score(ucut),
+                        _fmt_score(ocut),
                         _style_reasoning(reasoning[:200]),
                     ]
                 )

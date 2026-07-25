@@ -469,10 +469,25 @@ class RaceStateManager:
                     "session_meta": dict,   # see get_session_meta
                 }
         """
+        rivals = self.get_rival_states(lap_number)
         return {
             "lap_number": lap_number,
             "driver": self.get_driver_state(lap_number),
-            "rivals": self.get_rival_states(lap_number),
+            "rivals": rivals,
             "weather": self.get_weather_state(lap_number, weather_df),
             "session_meta": self.get_session_meta(),
+            # Art. 30.5(m) state for us and for every rival on track. The decision
+            # layer needs both sides: our own pending stop is what makes staying
+            # out a deferral rather than a saving, and a rival who still owes a
+            # stop is no threat to us, because they will pay the same price later.
+            # Emitted here rather than fetched separately so the four surfaces
+            # cannot drift on how they ask for it.
+            "stint_flags": self.get_stint_flags(lap_number),
+            "rival_stop_pending": {
+                rival["driver"]: self.get_stint_flags(lap_number, rival["driver"])[
+                    "mandatory_stop_pending"
+                ]
+                for rival in rivals
+                if rival.get("driver")
+            },
         }

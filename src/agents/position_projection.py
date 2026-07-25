@@ -55,6 +55,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Sequence
 
@@ -195,26 +196,91 @@ class ProjectionResult:
     rivals_used: int
 
 
-def load_measured_config(path: Path | None = None, **overrides) -> ProjectionConfig:
-    """Build a config from the committed measured tables, with race context on top.
+@lru_cache(maxsize=1)
+def measured_tables(path: str | None = None) -> dict:
+    """The committed measurements, read once and cached.
 
-    Falls back to the values those tables held on 2026-07-25 when the file is
-    absent (a wheel install without ``data/``), so the degraded path lands on
-    measured numbers instead of invented ones. ``overrides`` carries the
-    per-race context the tables cannot know (laps remaining, whether we still
-    owe a stop, how many laps of the window will be raced).
+    Returns an empty dict when the file is absent (a wheel install without
+    ``data/``), which leaves every caller on the module's DEFAULT_* constants.
+    Those are not invented numbers: they are the values this same file held on
+    2026-07-25, so a missing table degrades to the last measured state rather
+    than to a guess. Regenerate with ``scripts/measure_mc_tables.py``.
     """
-    tables_path = path or _MEASURED_TABLES
-    settings: dict = {}
+    tables_path = Path(path) if path else _MEASURED_TABLES
+    if not tables_path.exists():
+        return {}
+    return json.loads(tables_path.read_text(encoding="utf-8"))
 
-    if tables_path.exists():
-        tables = json.loads(tables_path.read_text(encoding="utf-8"))
-        band = tables.get("undercut_band", {}).get("u_band_s")
-        if band:
-            settings["undercut_band_s"] = float(band)
 
-    settings.update(overrides)
-    return ProjectionConfig(**settings)
+def measured_undercut_band_s() -> float:
+    """The measured undercut band, or the last measured value if the file is gone."""
+    band = measured_tables().get("undercut_band", {}).get("u_band_s")
+    return float(band) if band else DEFAULT_UNDERCUT_BAND_S
+
+
+def measured_neutralisation_rate(circuit: str | None = None) -> float:
+    """Per-lap onset hazard for ``circuit``, falling back to the pooled rate.
+
+    A circuit we have never raced (a new venue, or a name that did not resolve)
+    gets the pooled figure rather than zero. Zero is not a neutral default here:
+    it drives ``q_f`` to 0, which tells the decision layer that no future Safety
+    Car will ever turn up to cover a stop, and that biases the terminal
+    liability upward on every lap of every race.
+    """
+    table = measured_tables().get("neutralisation_rate", {})
+    if circuit:
+        cell = (table.get("per_circuit") or {}).get(circuit) or {}
+        rate = cell.get("rate")
+        if rate is not None:
+            return float(rate)
+    pooled = (table.get("pooled") or {}).get("rate")
+    return float(pooled) if pooled is not None else DEFAULT_NEUTRALISATION_RATE
+
+
+@lru_cache(maxsize=1)
+def _traversal_table() -> dict:
+    """Per-circuit pit-lane traversal seconds, keyed by the slug agents query with.
+
+    Read straight from N15's committed model config rather than through the pit
+    agent, because the decision layer needs this number on the no-LLM path too and
+    constructing N28 there would load a stack of models to answer one lookup.
+
+    Re-keyed through ``rekey_by_slug``: the table ships keyed by FastF1 event names
+    whose overlap with the slug keyspace is exactly zero, which is how every
+    circuit lookup silently missed and froze traversal at a single constant (#448).
+    """
+    config_path = Path(__file__).resolve().parents[2] / "data" / "models" / "pit_prediction"
+    config_file = config_path / "model_config.json"
+    if not config_file.exists():
+        return {}
+
+    from src.f1_strat_manager.gp_slugs import rekey_by_slug
+
+    payload = json.loads(config_file.read_text(encoding="utf-8"))
+    return rekey_by_slug(payload.get("circuit_traversal_lookup", {}), "circuit_traversal_lookup")
+
+
+def traversal_seconds(gp_name: str | None) -> float | None:
+    """Pit-lane traversal for ``gp_name``, or None when the circuit is unknown.
+
+    None rather than a pooled average on purpose: the caller decides whether to
+    fall back, and a silent average would hide a keyspace drift exactly the way
+    #448 did. The real spread is 19.7 s at Budapest to 27.5 s at Marina Bay, which
+    is the difference between a stop that costs a place and one that does not.
+    """
+    if not gp_name:
+        return None
+    value = _traversal_table().get(gp_name)
+    return float(value) if value is not None else None
+
+
+def measured_racing_laps(neutralisation: str = "sc") -> float:
+    """Measured racing laps left inside the window under ``sc`` or ``vsc``."""
+    kinds = measured_tables().get("sc_window", {}).get("by_kind", {})
+    mean = (kinds.get(neutralisation) or {}).get("racing_laps_in_window", {}).get("mean")
+    if mean is not None:
+        return float(mean)
+    return DEFAULT_RACING_LAPS_UNDER_VSC if neutralisation == "vsc" else DEFAULT_RACING_LAPS_UNDER_SC
 
 
 def future_neutralisation_probability(rate_per_lap: float, laps_remaining: int) -> float:
@@ -433,12 +499,20 @@ def undercut_targets(rivals: Sequence[RivalState], config: ProjectionConfig) -> 
     Liveness is presence in this list — a car that crashed is simply not in it —
     never a DNF classification or a staleness threshold, because a car that
     finished can legitimately lag twenty laps behind in the data.
+
+    A car already in the pit lane is NOT a target. You cannot undercut someone
+    who is serving their stop as you decide: the whole move is to reach the pit
+    lane before they do. Offering them as a target credited the undercut with a
+    place it had no way to take.
     """
     band = config.undercut_band_s
     return [
         rival.driver
         for rival in _usable_rivals(rivals)
-        if rival.is_ahead and rival.gap_ahead_s is not None and rival.gap_ahead_s <= band
+        if rival.is_ahead
+        and not rival.is_pitting
+        and rival.gap_ahead_s is not None
+        and rival.gap_ahead_s <= band
     ]
 
 
