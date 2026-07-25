@@ -55,8 +55,11 @@ An exhausted bucket returns `429` with a `Retry-After` hint. Set `F1_RATE_LIMIT_
 | GET | `/api/v1/telemetry/gps` | List available GPs for a year |
 | GET | `/api/v1/telemetry/sessions` | List sessions for a GP |
 | GET | `/api/v1/telemetry/drivers` | List drivers for a session |
+| GET | `/api/v1/telemetry/race-data` | Full-field featured-parquet frame for a GP (positions, lap times, inter-driver gaps), optionally filtered to driver codes |
 
 **Query parameters**: `year` (int), `gp` (str), `session` (str), `drivers` (comma-separated).
+
+`/race-data` computes the inter-driver gap columns (`GapToCarAhead`, `GapToCarBehind`) over the whole field first, then applies the optional `driver` filter afterwards: a single-car frame has no second car to measure a gap against, so filtering before computing the gaps used to return `null` on every lap whenever a `driver` was supplied. The gap-annotated frame is cached per `(year, gp)`, since it is a pure function of the static featured parquet.
 
 ## Comparison endpoints
 
@@ -169,6 +172,10 @@ Event stream: one `start` event, then one `lap` (or `error`) event per processed
 | `/api/v1/strategy/radio-available-gps` | GPs with a recorded radio/RCM corpus |
 | `/api/v1/strategy/radio-laps` | Laps with radio messages for a GP (optionally filtered by driver) |
 | `/api/v1/strategy/radio-transcript` | Cached Whisper transcript for one driver/lap |
+
+`/lap-state` also returns two Art. 30.5(m) stint-history keys the strategy layer's terminal-liability term depends on: `stint_flags` (the requested driver's `stops_made`, `compounds_used`, `mandatory_stop_pending`) and `rival_stop_pending` (a `{driver_code: mandatory_stop_pending}` map, one entry per rival in the response). Both come from `src/simulation/stint_history.py`, the same helper the replay engine calls, so the CLI, the Arcade and this endpoint read the same stop history and cannot disagree. Any of the three flags can be `null`: an unresolvable stint history (an invisible earlier stint that could hide a compound change) is reported as unknown rather than guessed.
+
+`/radio-laps` and `/radio-transcript` cache their parquet and transcript-JSON reads in memory per `(year, gp)`, since the underlying radio corpus is static for the life of the process; the first request for a race pays the read cost, later ones are served from the cache.
 
 ### Agent endpoints (POST)
 

@@ -16,7 +16,7 @@ NLP runner without circular dependencies.
 
 | File | Description |
 |---|---|
-| [`data_cache.py`](data_cache.py) | First-run resolver + HuggingFace Hub downloader. Public API: `get_data_root`, `get_models_root`, `is_first_run`, `ensure_setup`, `ensure_race`, `ensure_radio_corpus`, `ensure_models`. Pulls `~15 GB` of models + race data + radio parquets via `snapshot_download` patterns the first time `f1-strat` / `f1-sim` runs without a cloned repo |
+| [`data_cache.py`](data_cache.py) | First-run resolver + HuggingFace Hub downloader. Public API: `get_data_root`, `get_models_root`, `is_first_run`, `ensure_setup`, `ensure_race`, `ensure_radio_corpus`, `ensure_models`. Pulls a curated subset (load-bearing models + race data + radio metadata, ~7-8 GB total) from `VforVitorio/f1-strategy-dataset` via `snapshot_download` patterns the first time `f1-strat` / `f1-sim` runs without a cloned repo. Omits redundant model checkpoints that the production path never uses |
 | [`gp_slugs.py`](gp_slugs.py) | `COUNTRY_SLUG_BY_GP` static dict + `resolve_gp_slug(gp_name)` function. The single source of truth that translates CLI / featured-laps friendly names (`Sakhir`, `Imola`, `Marina Bay`, ...) into the on-disk slugs the radio dataset builder writes (`bahrain`, `italy_imola`, `singapore`, ...). Multi-race countries (Italy, United States) carry a circuit suffix |
 | `__init__.py` | Package docstring; no re-exports |
 
@@ -25,9 +25,9 @@ NLP runner without circular dependencies.
 ## `data_cache.py` — first-run bootstrap
 
 Resolves `data/` and `data/models/` to project-relative paths and lazily
-downloads anything missing from `VforVitorio/f1-strategy-dataset` on the
-HuggingFace Hub. Two trees are pulled differently to keep the first-run
-footprint small:
+downloads a curated subset from `VforVitorio/f1-strategy-dataset` on the
+HuggingFace Hub, pulling only the load-bearing assets needed for simulation.
+Two trees are pulled differently to keep the first-run footprint small (around 7-8 GB instead of the full 31.7 GB repository):
 
 | Tree | When it downloads | Why |
 |---|---|---|

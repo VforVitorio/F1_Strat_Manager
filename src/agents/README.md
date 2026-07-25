@@ -15,6 +15,7 @@ Each module is importable without a FastF1 session via its `*_from_state` RSM ad
 | `pit_strategy_agent.py` | N28 | N15 pit quantiles + N16 undercut + compound recommendation | `run_pit_strategy_agent(lap_state)` · `run_pit_strategy_agent_from_state(lap_state, laps_df)` |
 | `radio_agent.py` | N29 | RoBERTa sentiment + SetFit intent + BERT-large NER + RCM parser | `run_radio_agent(lap_state)` · `run_radio_agent_from_state(lap_state, laps_df)` |
 | `rag_agent.py` | N30 | FIA regulation retrieval (Qdrant + BGE-M3 + LangGraph ReAct) | `run_rag_agent(question)` · `run_rag_agent_from_state(lap_state)` |
+| `position_projection.py` | — | Pure primitive: turns per-rival gaps into a projected end-of-window track position, so the decision layer scores in cars rather than in seconds. Loads no model, reads no file. | `project_positions(rivals, plan, config, pit_loss_s, cliff_laps, stop_is_neutralised=False)` · `payoff(result, current_position, config)` · `rank_targets(rivals, config, our_pit_loss_s)` |
 | `strategy_orchestrator.py` | N31 | MoE routing + MC simulation + LLM synthesis | `run_strategy_orchestrator(race_state, lap_state)` · `run_strategy_orchestrator_from_state(race_state, laps_df)` |
 
 ### Arcade duplication
