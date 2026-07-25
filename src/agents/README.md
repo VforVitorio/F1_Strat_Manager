@@ -69,6 +69,8 @@ RaceState (Pydantic)
       ├─ Layer 2 Monte Carlo (N_SIM=500, window=5 laps) ──────────────── │
       │   STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT                         │
       │   score = α·E[S] + (1−α)·P10[S]                                  │
+      │   S = projected track position (position_projection.py)           │
+      │   no rival gaps → legacy seconds scoring, unchanged               │
       │                                                                   │
       └─ Layer 3 LLM synthesis ───────────────────────────────────────── │
           with_structured_output(StrategyRecommendation)                  │
