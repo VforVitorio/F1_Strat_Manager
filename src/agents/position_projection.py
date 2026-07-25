@@ -110,8 +110,15 @@ class RivalState:
 
     @property
     def is_ahead(self) -> bool:
-        """Whether the rival is ahead of us right now (unknown gap counts as no)."""
-        return self.gap_s is not None and self.gap_s < 0
+        """Whether the rival is ahead of us right now.
+
+        An unknown gap counts as no, and so does a NaN one: ``nan < 0`` is False
+        anyway, but stating it keeps the rule visible next to the comparison
+        rather than resting on IEEE-754 happening to agree with us.
+        """
+        return (
+            self.gap_s is not None and math.isfinite(float(self.gap_s)) and self.gap_s < 0
+        )
 
     @property
     def gap_ahead_s(self) -> float | None:
@@ -298,9 +305,19 @@ def future_neutralisation_probability(rate_per_lap: float, laps_remaining: int) 
 
 
 def _usable_rivals(rivals: Sequence[RivalState]) -> list[RivalState]:
-    """Rivals whose gap is known. An unknown gap cannot be projected, so it is
-    excluded rather than defaulted — the house rule that None means unknown."""
-    return [rival for rival in rivals if rival.gap_s is not None]
+    """Rivals whose gap is a real number.
+
+    An unknown gap cannot be projected, so it is excluded rather than defaulted —
+    the house rule that None means unknown. NaN and infinity are excluded on the
+    same grounds and for a sharper reason: they are not merely unknown, they are
+    contagious. One NaN gap turns every candidate's E, P10, P90 and score into
+    ``nan`` while the payload still reports itself as scored.
+    """
+    return [
+        rival
+        for rival in rivals
+        if rival.gap_s is not None and math.isfinite(float(rival.gap_s))
+    ]
 
 
 def driver_time_delta(

@@ -552,3 +552,31 @@ def test_the_projection_reproduces_real_pit_stop_rejoins():
         f"{sample.size} real green-flag pit stops (floor {MIN_WITHIN_ONE:.0%}). "
         "A sign flip or a dropped rival looks exactly like this."
     )
+
+
+# ---------------------------------------------------------------------------
+# NaN is not a number the projection may use (final-audit F3-4)
+# ---------------------------------------------------------------------------
+
+
+def test_a_nan_gap_is_treated_as_unknown_not_as_zero():
+    """One NaN gap used to turn every candidate's score into nan.
+
+    A pandas frame yields NaN where a dict yields None, and NaN is not merely
+    unknown, it is contagious: it propagates through the projection so all four
+    candidates come back `nan` while still reporting `eligible: true`, the argmax
+    collapses to whichever key sorts first, and the payload serialises to invalid
+    JSON. Excluding it at the boundary is the only place the rule holds.
+    """
+    rivals = [RivalState("KNOWN", -1.0), RivalState("NAN", float("nan"))]
+    pit_loss, cliff = _draws(22.0)
+    result = project_positions(rivals, STOP_NOW, _flat_config(), pit_loss, cliff)
+    assert result.rivals_used == 1
+    assert np.isfinite(result.positions).all()
+    assert np.isfinite(result.margins_s).all()
+
+
+def test_a_nan_gap_never_counts_as_ahead():
+    assert not RivalState("NAN", float("nan")).is_ahead
+    assert not RivalState("INF", float("inf")).is_ahead
+    assert RivalState("NAN", float("nan")).gap_ahead_s is None
