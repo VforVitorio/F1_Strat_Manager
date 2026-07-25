@@ -695,6 +695,193 @@ def simulate_lap_window(
     return time_delta / POS_GAP_S
 
 
+# Pooled green-flag pit loss measured over this repo's 71 races (n=1746, ~22.6 s),
+# used only when the caller cannot say which circuit we are at. The per-circuit
+# table (#448) spans 19.7 s at Budapest to 27.5 s at Marina Bay, so a caller that
+# knows the GP should always pass its own figure through pit_context.
+DEFAULT_PIT_TRAVERSAL_S = 20.0
+
+# Racing laps left inside a W=5 window once a Safety Car is out, measured over the
+# same races (2.61, n=215 neutralised laps). Under a VSC the field is not queued and
+# more of the window is raced (2.91, n=80).
+RACING_LAPS_UNDER_SC = 2.61
+RACING_LAPS_UNDER_VSC = 2.91
+
+
+def _rival_states_from_lap_state(rivals: list[dict], pit_context: dict | None):
+    """Adapt the lap_state rivals list into the projection's own value type.
+
+    The one place that knows the RaceStateManager field names, so a rename there
+    lands here and nowhere else. A rival whose interval is unknown keeps a None
+    gap and the projection drops it from the count rather than inventing a zero.
+    """
+    from src.agents.position_projection import RivalState
+
+    context = pit_context or {}
+    per_rival_pending: dict = context.get("rival_stop_pending") or {}
+    rival_loss = float(context.get("rival_pit_loss_s") or context.get("pit_loss_s") or 0.0)
+
+    states = []
+    for rival in rivals:
+        driver = str(rival.get("driver", ""))
+        states.append(
+            RivalState(
+                driver=driver,
+                gap_s=rival.get("interval_to_driver_s"),
+                is_pitting=bool(rival.get("is_pitting", False)),
+                stop_pending=per_rival_pending.get(driver),
+                stop_loss_s=rival_loss,
+            )
+        )
+    return states
+
+
+def _run_projection_mc(
+    *,
+    rivals: list[dict],
+    position: int | None,
+    laps_remaining: int | None,
+    pit_context: dict | None,
+    cliff_s,
+    sc_s,
+    pit_s,
+    ucut_s,
+    alpha: float,
+    neutralisation_saving_s: float,
+) -> dict:
+    """Score the four candidates in projected track position instead of seconds.
+
+    Same draws, same window, same alpha·E + (1−alpha)·P10 as the legacy path; what
+    changes is the currency. Each candidate is projected against the ACTUAL cars on
+    track (``position_projection``), so the pit lane, the traffic we rejoin into and
+    the still-owed stop all enter the score as cars rather than as constants.
+
+    Draws are shared across candidates (common random numbers) and across the two
+    neutralisation regimes: a draw that samples a Safety Car is scored with the
+    measured racing-lap count for one, and the same draw under green with the full
+    window. That per-draw split is why the Art. 55.17 endgame needs no rail — with
+    the race finishing behind the Safety Car there are no racing laps left, so a
+    stop buys nothing and staying out wins on the numbers.
+
+    Returns the usual four keys, each with E / P10 / P90 / score, plus ``eligible``
+    and ``target``. A candidate with no valid target is ``eligible: false`` with a
+    ``score`` of None — never a numeric sentinel, which is the 0.5 coin-flip that
+    used to hand UNDERCUT a bonus with no target at all (#434).
+    """
+    import numpy as _np
+
+    from src.agents.position_projection import (
+        DriverPlan,
+        ProjectionConfig,
+        future_neutralisation_probability,
+        overcut_targets,
+        payoff,
+        project_positions,
+        undercut_targets,
+    )
+
+    context = pit_context or {}
+    traversal_s = float(context.get("traversal_s") or DEFAULT_PIT_TRAVERSAL_S)
+    rival_states = _rival_states_from_lap_state(rivals, pit_context)
+
+    # Total pit loss per draw: the lane traversal plus the physical stop. The legacy
+    # scoring charged only the stop and argued in a comment that the traversal
+    # cancels; here it is charged per car, so the cancellation happens exactly when
+    # the rival really pays it too, and not otherwise.
+    pit_loss_s = traversal_s + _np.asarray(pit_s, dtype=float)
+
+    current_position = int(position) if position else 1
+    remaining = int(laps_remaining) if laps_remaining else 0
+    onset_rate = float(context.get("neutralisation_rate") or 0.0)
+    q_f = future_neutralisation_probability(onset_rate, remaining)
+
+    racing_when_neutralised = float(
+        context.get("racing_laps_neutralised")
+        or (RACING_LAPS_UNDER_VSC if context.get("vsc_active") else RACING_LAPS_UNDER_SC)
+    )
+
+    def _config(racing_laps: float) -> ProjectionConfig:
+        return ProjectionConfig(
+            window_laps=WINDOW_LAPS,
+            racing_laps=racing_laps,
+            fresh_gain_s=FRESH_GAIN,
+            cliff_loss_s=CLIFF_LOSS,
+            neutralisation_saving_s=neutralisation_saving_s,
+            future_neutralisation_prob=q_f,
+            laps_remaining=remaining,
+            mandatory_stop_pending=context.get("mandatory_stop_pending"),
+        )
+
+    green_config = _config(float(WINDOW_LAPS))
+    neutralised_config = _config(racing_when_neutralised)
+
+    undercut_choices = undercut_targets(rival_states, green_config)
+    overcut_choices = overcut_targets(rival_states)
+
+    plans = {
+        "STAY_OUT": DriverPlan("STAY_OUT", stops_in_window=False),
+        "PIT_NOW": DriverPlan("PIT_NOW", stops_in_window=True, stop_offset_laps=0),
+        "UNDERCUT": DriverPlan("UNDERCUT", stops_in_window=True, stop_offset_laps=0),
+        # An overcut runs on for a lap while the target serves their stop, then boxes.
+        "OVERCUT": DriverPlan("OVERCUT", stops_in_window=True, stop_offset_laps=1),
+    }
+    targets = {"UNDERCUT": undercut_choices, "OVERCUT": overcut_choices}
+
+    neutralised = _np.asarray(sc_s, dtype=bool)
+    results: dict = {}
+
+    for name, plan in plans.items():
+        choices = targets.get(name)
+        if choices is not None and not choices:
+            results[name] = {
+                "E": None,
+                "P10": None,
+                "P90": None,
+                "score": None,
+                "eligible": False,
+                "target": None,
+            }
+            continue
+
+        green = project_positions(
+            rival_states, plan, green_config, pit_loss_s, cliff_s, stop_is_neutralised=False
+        )
+        under_sc = project_positions(
+            rival_states,
+            plan,
+            neutralised_config,
+            pit_loss_s,
+            cliff_s,
+            stop_is_neutralised=True,
+        )
+        outcomes = _np.where(
+            neutralised,
+            payoff(under_sc, current_position, neutralised_config),
+            payoff(green, current_position, green_config),
+        )
+
+        if name == "UNDERCUT":
+            # N16 answers the one question it was trained on: does the undercut
+            # actually clear the target? A success is worth the place, and the
+            # projection supplies everything else. No new constant is introduced —
+            # the alternative was inventing an out-lap delta nobody measured.
+            outcomes = outcomes + _np.asarray(ucut_s, dtype=float)
+
+        e_val = float(_np.mean(outcomes))
+        p10_val = float(_np.percentile(outcomes, 10))
+        p90_val = float(_np.percentile(outcomes, 90))
+        results[name] = {
+            "E": round(e_val, 3),
+            "P10": round(p10_val, 3),
+            "P90": round(p90_val, 3),
+            "score": round(alpha * e_val + (1 - alpha) * p10_val, 3),
+            "eligible": True,
+            "target": choices[0] if choices else None,
+        }
+
+    return results
+
+
 def _run_mc_simulation(
     pace_out,
     tire_out,
@@ -728,13 +915,12 @@ def _run_mc_simulation(
         RaceState.risk_tolerance. score = alpha·E[S] + (1−alpha)·P10[S].
         α=1.0 is pure expected value (aggressive); α=0.0 is worst-case only.
     rivals / position / laps_remaining / pit_context:
-        Race-context state for the projection-based scoring (#550). Accepted
-        since #552 and IGNORED here on purpose: every current caller leaves
-        them at their defaults and this body is the legacy seconds-based
-        scoring, which must stay byte-identical (the strategy goldens pin it).
-        The projection engine (#555) dispatches on truthy ``rivals``; a falsy
-        value — None, or the ``[]`` the default lap_state builders emit —
-        means "no per-rival gap data" and keeps this path.
+        Race-context state for the projection-based scoring (#550). A TRUTHY
+        ``rivals`` list routes to ``_run_projection_mc``, which scores in
+        projected track position; a falsy value — None, or the ``[]`` the
+        default lap_state builders emit — means "no per-rival gap data" and
+        keeps the legacy seconds-based body below, byte-identical (the strategy
+        goldens pin it to the digit). None means unknown, never zero rivals.
     """
     rng = np.random.default_rng(seed=42)
     n   = CFG.n_sim
@@ -806,6 +992,24 @@ def _run_mc_simulation(
     sc_s    = rng.random(n) < sc_prob
     pit_s   = rng.triangular(pit_p05, pit_p50, pit_p95, n)
     ucut_s  = rng.random(n) < ucut_prob
+
+    # Common random numbers: every candidate is scored on the SAME draw vectors, so
+    # the comparison between them carries no sampling noise of its own. That is what
+    # an argmax over 500 draws needs — the variance that matters is the variance of
+    # the DIFFERENCES, and sharing the draws collapses it.
+    if rivals:
+        return _run_projection_mc(
+            rivals=rivals,
+            position=position,
+            laps_remaining=laps_remaining,
+            pit_context=pit_context,
+            cliff_s=cliff_s,
+            sc_s=sc_s,
+            pit_s=pit_s,
+            ucut_s=ucut_s,
+            alpha=alpha,
+            neutralisation_saving_s=sc_pit_bonus,
+        )
 
     strategies = ["STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT"]
     results    = {}
