@@ -23,13 +23,13 @@ F1 StratLab is an open-source multi-agent AI platform for Formula 1 race replay 
 </div>
 
 <div align="center">
-  <a href="docs/assets/demo/webapp-demo.mp4">
-    <img src="docs/assets/demo/webapp-demo.gif" alt="F1 StratLab v2 web app demo: head-to-head 60fps replay, ML model lab, a multi-agent pit-wall call, and a streaming AI strategist rendering charts inline" width="860"/>
+  <a href="docs/assets/demo/arcade-demo.mp4">
+    <img src="docs/assets/demo/arcade-demo.gif" alt="F1 StratLab arcade demo: 2D race replay, strategy dashboard and live telemetry" width="860"/>
   </a>
 </div>
 
 <div align="center">
-  <sub>▶ <strong>New in v2</strong> — the post-race UI is now a fast React web app (it replaces Streamlit). The GIF loops the highlights; <a href="docs/assets/demo/webapp-demo.mp4">click for the full ~30s tour</a>. See the <strong>CLI</strong>, <strong>Arcade</strong> and <strong>Web app</strong> demos on the <a href="https://vforvitorio.github.io/f1stratlab-web/#demo-carousel">landing page</a>.</sub>
+  <sub>▶ The <strong>Arcade</strong>: 2D race replay, strategy dashboard and live telemetry, all driven by one shared stream. <a href="docs/assets/demo/arcade-demo.mp4">Click for the full clip</a>, or see all three surfaces on the <a href="https://vforvitorio.github.io/f1stratlab-web/#demo-carousel">landing page</a>.</sub>
 </div>
 
 <div align="center">
@@ -65,7 +65,28 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the one-page topology and [`docs/`]
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **CLI**                      | `f1-strat` (interactive wizard) · `f1-sim Melbourne VER "Red Bull Racing" --year 2025` (headless)                                                      | Headless Rich-based live inference panel for a single race. `f1-strat` opens an arrow-key menu (GP, driver, provider, head-to-head); `f1-sim` is the scripted form. |
 | **Arcade** (primary live UI) | `f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --driver2 LEC --strategy` | Three-window 2D race replay + PySide6 strategy dashboard + live telemetry grid. No backend required. |
-| **Web app** (post-race)    | `docker compose up`                                                               | React SPA (Vite + TypeScript + Tailwind + ECharts): telemetry dashboard, 60fps driver comparison, ML model lab, multi-agent pit-wall strategy, race analysis, and a streaming AI chat that renders tool results inline. Backed by FastAPI. |
+| **Web app** (post-race)    | `f1-webapp` (wraps `docker compose up`)                                                               | React SPA (Vite + TypeScript + Tailwind + ECharts): telemetry dashboard, 60fps driver comparison, ML model lab, multi-agent pit-wall strategy, race analysis, and a streaming AI chat that renders tool results inline. Backed by FastAPI. |
+
+The Arcade is in the hero above. Here are the other two:
+
+<table>
+<tr>
+<td width="50%" align="center">
+  <a href="docs/assets/demo/cli-demo.mp4">
+    <img src="docs/assets/demo/cli-demo-poster.jpg" alt="F1 StratLab CLI demo: headless Rich live inference panel" width="100%"/>
+  </a>
+  <br/>
+  <sub><strong>CLI</strong> — headless Rich panel, one race, no GUI. <a href="docs/assets/demo/cli-demo.mp4">Play ▶</a></sub>
+</td>
+<td width="50%" align="center">
+  <a href="docs/assets/demo/webapp-demo.mp4">
+    <img src="docs/assets/demo/webapp-demo.gif" alt="F1 StratLab v2 web app demo: head-to-head 60fps replay, ML model lab, a multi-agent pit-wall call, and a streaming AI strategist rendering charts inline" width="100%"/>
+  </a>
+  <br/>
+  <sub><strong>Web app</strong> — post-race analytics and the AI strategist. <a href="docs/assets/demo/webapp-demo.mp4">Full ~30s tour ▶</a></sub>
+</td>
+</tr>
+</table>
 
 ## How to run
 
@@ -124,6 +145,33 @@ This project is part of a broader F1 AI suite:
 ## About
 
 **Final Degree Project (Trabajo Fin de Grado)**, Fourth year, Grado en Ingeniería de Sistemas Inteligentes. Feedback, suggestions and contributions are welcome via the issue templates.
+
+## Cite this work
+
+If F1 StratLab is useful in your research, your writing or your own project, please cite it. GitHub's "Cite this repository" button reads the same [`CITATION.cff`](CITATION.cff), but here it is in full so it can be copied without leaving the page.
+
+**BibTeX**
+
+```bibtex
+@software{vega_sobral_f1stratlab,
+  author  = {Vega Sobral, V{\'i}ctor},
+  title   = {{F1 StratLab}: an open multi-agent system for Formula 1 race strategy},
+  year    = {2026},
+  version = {2.0.1},
+  url     = {https://github.com/VforVitorio/F1-StratLab},
+  note    = {Documentation: https://docs.f1stratlab.com/}
+}
+```
+
+**APA**
+
+> Vega Sobral, V. (2026). *F1 StratLab: an open multi-agent system for Formula 1 race strategy* (Version 2.0.1) [Computer software]. https://github.com/VforVitorio/F1-StratLab
+
+**Plain text** — a link is enough for a blog post or a talk:
+
+> F1 StratLab by Víctor Vega Sobral — https://github.com/VforVitorio/F1-StratLab
+
+If you build on a specific part, citing the version you used helps: the strategy engine changes between releases, so the numbers in a v1 run are not the numbers in a v2 one. And if you do use it for something, an issue or a message saying so is genuinely welcome — it is the only way to find out where this ends up.
 
 ---
 
