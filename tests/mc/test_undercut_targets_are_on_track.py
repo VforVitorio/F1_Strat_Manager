@@ -30,7 +30,7 @@ import pandas as pd
 import pytest
 
 RACE_DIR = Path("data/raw/2025/Lusail")
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 _HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 
 # Importing N28 reads model configs at import time, and the fixture needs the raw

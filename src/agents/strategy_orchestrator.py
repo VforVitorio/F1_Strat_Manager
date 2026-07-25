@@ -691,7 +691,7 @@ def simulate_lap_window(
         # two-compound rule, so pit-now and pit-later both pay it and it cancels in a
         # comparison scored relative to STAY_OUT; charging one side only puts PIT_NOW near
         # -14 positions against a worst-case STAY_OUT of about -2.7 and suppresses pitting.
-        # See tests/test_mc_is_a_real_decision.py.
+        # See tests/mc/test_mc_is_a_real_decision.py.
         if sc_i:
             time_delta = -pit_i + sc_pit_bonus + FRESH_GAIN * window
         else:
@@ -1898,7 +1898,7 @@ def _assemble_recommendation(
     Art. 22.1(c)). Only `target_lap_time_s` is forced here, because this is the layer
     that emits it — see the note at its assignment below. Add a new fact only if the
     regulation removes the field's SOURCE; if it merely makes a choice usually smart,
-    it belongs in the prompt or the MC. See tests/test_sc_regulatory_rails.py.
+    it belongs in the prompt or the MC. See tests/mc/test_sc_regulatory_rails.py.
 
     Defaults to False so a caller that does not thread N27's output keeps the previous
     behaviour rather than silently changing it.
@@ -1971,7 +1971,7 @@ def _assemble_recommendation(
     # valid value. None is forced by ABSENCE OF A SOURCE, not by a strategy view, and
     # the schema already documents None as "the LLM prefers not to commit".
     # Inventing a delta would only launder the breach into looking authoritative.
-    # See tests/test_sc_regulatory_rails.py.
+    # See tests/mc/test_sc_regulatory_rails.py.
     action    = synth.action
     reasoning = synth.reasoning
 

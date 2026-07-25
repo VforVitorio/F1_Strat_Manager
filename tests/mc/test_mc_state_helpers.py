@@ -22,7 +22,7 @@ import pytest
 
 from src.simulation.stint_history import stint_history_flags
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 
 _HAS_DATA = (ROOT / "data" / "processed" / "laps_featured_2024.parquet").exists()
 _skip_no_data = pytest.mark.skipif(
@@ -202,7 +202,7 @@ def test_rsm_get_stint_flags_matches_the_pure_helper(raw_lusail_2024):
 
 
 def _canned_outputs():
-    """Same canned near-cliff fixture as tests/test_strategy_goldens.py."""
+    """Same canned near-cliff fixture as tests/mc/test_strategy_goldens.py."""
     from src.agents.pace_agent import PaceOutput
     from src.agents.pit_strategy_agent import PitStrategyOutput
     from src.agents.race_situation_agent import RaceSituationOutput

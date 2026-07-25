@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 TABLES_PATH = ROOT / "data" / "mc_measured_v1.json"
 
 _HAS_RAW = (ROOT / "data" / "raw" / "2024").is_dir()
