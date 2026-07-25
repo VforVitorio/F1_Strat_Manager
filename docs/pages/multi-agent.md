@@ -203,7 +203,19 @@ Candidates carry **explicit eligibility**. An undercut with no live rival inside
 
 Both sides are measured. A fresh set is worth 0.25 s/lap; clean air is measured per circuit over 479 cases where a car sat within two seconds of, and directly behind, a driver who then pitted — **+0.77 s/lap at Suzuka, +0.65 at Monaco, +0.63 at Silverstone**, down to **−0.02 at Monza and −0.29 at Spielberg**, where losing the car ahead costs a slipstream worth more than the clear track. The ordering is high-downforce circuits first and slipstream circuits last, and nothing in the measurement knows what downforce is.
 
-So an overcut pays exactly where clean air beats a lap of fresh rubber, which is 13 of the 24 circuits measured. The invariant tests assert both directions: it must win at Suzuka and must not win at Monza.
+Clean air is one of two reasons to hold a car out. The other is **option value**: one more lap before the stop is one more lap of exposure to a neutralisation that would make that stop cheap, worth the circuit's measured onset hazard times what a neutralised stop saves. **Melbourne** separates the two cleanly — its clean-air gain is +0.008 s, effectively nothing, but Albert Park throws more neutralisations per lap than any circuit in the sample, so an overcut pays there on Safety Car odds alone.
+
+Together the two terms decide it against the 0.25 s/lap the delay costs:
+
+| circuit | clean air | waiting | total |
+|---|---|---|---|
+| Suzuka | +0.771 | +0.158 | **+0.93** |
+| Lusail | +0.646 | +0.214 | +0.86 |
+| Melbourne | +0.008 | +0.597 | +0.61 |
+| Monza | −0.015 | +0.143 | +0.13 |
+| Spielberg | −0.285 | +0.161 | −0.12 |
+
+The invariant tests assert both directions, comparing the overcut against the same stop taken now: it must out-score a plain stop at Suzuka and at Melbourne, and must lose to one at Monza.
 
 Dirty air is priced at the moment the car ahead boxes and not continuously, so running a whole window stuck in traffic is still under-penalised. That one is named in the module docstring rather than hidden here.
 - **Pace modes**: PUSH, NEUTRAL, MANAGE, LIFT_AND_COAST
