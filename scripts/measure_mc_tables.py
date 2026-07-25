@@ -6,12 +6,12 @@ script produces them from the RAW per-race parquets and writes
 
 Five tables, each value carrying its sample size and a 95% interval:
 
-- ``sc_window``       expected GREEN laps inside the W-lap decision window while a
+- ``sc_window``       expected RACING laps inside the W-lap decision window while a
                       neutralisation is active, plus how long spells last and how
                       often they run to the flag (the Art. 55.17 endgame).
 - ``neutralisation_rate``  per-circuit onset hazard, the input to
                       ``q_f = 1 - exp(-rate * laps_remaining)`` (clamped to [0, 1]).
-- ``gap_density``     measured seconds between consecutive cars under green and
+- ``gap_density``     measured seconds between consecutive cars while racing and
                       under neutralisation — the empirical answer to the
                       ``POS_GAP_S = 1.5`` constant the redesign retires.
 - ``undercut_band``   undercut success by gap-to-target in SECONDS, so target
@@ -25,6 +25,16 @@ under a Safety Car, pit laps and out-laps by design. Every measurement here is
 ABOUT those laps, so the featured frame would report a race with no neutralisations
 at all. The featured frame is the agents' feature channel; ``data/raw`` is the
 source of truth for track status.
+
+RACING, not "green": a lap counts as racing when it is not neutralised, which
+includes laps run under a local yellow (4.1% of all laps). A yellow flag covers
+one marshalling sector — cars lift there and race the rest of the lap — so for
+"how much of this window is still worth racing" it belongs with the clear laps,
+and for "is this lap at risk of a Safety Car" it belongs there even more firmly,
+being the usual precursor. The distinction is kept in the status mix rather than
+buried, because calling a yellow lap green is a bug this repo has already had
+(#486) and a bucket named for something it does not contain is how the next one
+starts.
 
 Regenerate with::
 
@@ -85,11 +95,20 @@ FOLDER_SLUG_ALIASES: dict[str, str] = {"Spain": "Barcelona"}
 STATUS_SAFETY_CAR = "4"
 STATUS_VSC = "6"
 STATUS_RED_FLAG = "5"
+STATUS_YELLOW = "2"
 
-GREEN = "green"
+CLEAR = "clear"
+YELLOW = "yellow"
 SAFETY_CAR = "sc"
 VIRTUAL_SAFETY_CAR = "vsc"
 RED_FLAG = "red"
+
+# The two buckets every table aggregates into. RACING is clear + yellow: a local
+# yellow slows one sector, it does not neutralise the race. NEUTRALISED is the
+# rest, where no position can be won on track.
+RACING = "racing"
+NEUTRALISED = "neutralised"
+NEUTRALISED_STATUSES = frozenset({SAFETY_CAR, VIRTUAL_SAFETY_CAR, RED_FLAG})
 
 # Tyre-life bins for the stop-hazard table. Coarse on purpose: the table is read
 # as an eligibility prior, and narrow bins would ship cells with n < 30.
@@ -217,7 +236,7 @@ class RaceLaps:
         slug:          Circuit slug (the keyspace the agents query with).
         laps:          Raw laps frame, all drivers, all laps (nothing filtered).
         total_laps:    Highest lap number any driver completed.
-        status_by_lap: Lap number to one of green / sc / vsc / red.
+        status_by_lap: Lap number to one of clear / yellow / sc / vsc / red.
     """
 
     year: int
@@ -227,8 +246,16 @@ class RaceLaps:
     status_by_lap: dict[int, str]
 
     def is_neutralised(self, lap: int) -> bool:
-        """Whether ``lap`` ran under any non-green condition."""
-        return self.status_by_lap.get(lap, GREEN) != GREEN
+        """Whether the race was neutralised on ``lap`` (SC, VSC or red flag).
+
+        A local yellow is NOT a neutralisation: the field still races, which is
+        why it counts as a racing lap below and as a lap at risk of an onset.
+        """
+        return self.status_by_lap.get(lap, CLEAR) in NEUTRALISED_STATUSES
+
+    def is_racing(self, lap: int) -> bool:
+        """Whether ``lap`` was raced — clear or under a local yellow."""
+        return not self.is_neutralised(lap)
 
 
 def _status_by_lap(laps: pd.DataFrame) -> dict[int, str]:
@@ -236,9 +263,15 @@ def _status_by_lap(laps: pd.DataFrame) -> dict[int, str]:
 
     A lap counts as neutralised when ANY car reports the flag, because the flag
     is a property of the race, not of a car; drivers already past the incident
-    keep a clean status for that lap. Precedence red > SC > VSC > green: a lap
-    that saw an SC deployed and withdrawn is an SC lap for the decision layer,
-    since no racing happened on it.
+    keep a clean status for that lap. Precedence red > SC > VSC > yellow > clear:
+    a lap that saw an SC deployed and withdrawn is an SC lap for the decision
+    layer, since no racing happened on it.
+
+    That precedence is also why the usual incident sequence — yellow first, then
+    the Safety Car — mostly does not show up as a yellow lap followed by an SC
+    lap: at ~90 s per lap, race control escalates inside the same lap, and this
+    function labels it by the stronger flag. Only 27% of onsets are preceded by a
+    lap that was yellow and nothing else.
     """
     statuses: dict[int, str] = {}
     for lap, group in laps.groupby("LapNumber"):
@@ -249,9 +282,31 @@ def _status_by_lap(laps: pd.DataFrame) -> dict[int, str]:
             statuses[int(lap)] = SAFETY_CAR
         elif STATUS_VSC in joined:
             statuses[int(lap)] = VIRTUAL_SAFETY_CAR
+        elif STATUS_YELLOW in joined:
+            statuses[int(lap)] = YELLOW
         else:
-            statuses[int(lap)] = GREEN
+            statuses[int(lap)] = CLEAR
     return statuses
+
+
+def measure_status_mix(races: list[RaceLaps]) -> dict[str, Any]:
+    """Share of laps by track status, so the racing bucket is never a black box.
+
+    Published because two tables aggregate clear and yellow together: a reader
+    who wants to know how much yellow is inside "racing" must not have to rerun
+    the script to find out.
+    """
+    counts: dict[str, int] = defaultdict(int)
+    for race in races:
+        for status in race.status_by_lap.values():
+            counts[status] += 1
+
+    total = sum(counts.values())
+    mix = {
+        status: {"laps": counts[status], "share": round(counts[status] / total, 4)}
+        for status in sorted(counts)
+    }
+    return {"total_laps": total, "by_status": mix, "racing_is": [CLEAR, YELLOW]}
 
 
 def load_races(years: tuple[int, ...] = YEARS) -> list[RaceLaps]:
@@ -297,7 +352,7 @@ def load_races(years: tuple[int, ...] = YEARS) -> list[RaceLaps]:
 
 
 # ---------------------------------------------------------------------------
-# Table 1 — the neutralisation window (W_green and spell length)
+# Table 1 — the neutralisation window (racing laps left, and spell length)
 # ---------------------------------------------------------------------------
 
 
@@ -311,42 +366,43 @@ def _spell_length_from(race: RaceLaps, lap: int) -> int:
     return length
 
 
-def _green_laps_in_window(race: RaceLaps, lap: int, window: int) -> int:
-    """Green laps among the ``window`` laps that follow ``lap``.
+def _racing_laps_in_window(race: RaceLaps, lap: int, window: int) -> int:
+    """Racing laps among the ``window`` laps that follow ``lap``.
 
-    Laps past the chequered flag are not green laps: a decision taken three laps
+    Laps past the chequered flag are not racing laps: a decision taken three laps
     from the end cannot bank five laps of racing, and the projection must see
     that, so the count is bounded by the race distance rather than assumed full.
     """
     upcoming = range(lap + 1, min(lap + window, race.total_laps) + 1)
-    return sum(1 for nxt in upcoming if not race.is_neutralised(nxt))
+    return sum(1 for nxt in upcoming if race.is_racing(nxt))
 
 
 def measure_sc_window(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dict[str, Any]:
-    """Expected green laps in the decision window while a neutralisation is active.
+    """Expected racing laps in the decision window while a neutralisation is active.
 
-    This is the ``W_green`` the projection scales its per-lap accrual terms by.
-    Reported per neutralisation kind: an SC bunches the field and runs for laps,
-    a VSC is typically over within one or two, and the decision layer must not
-    treat them alike (#471).
+    This is the quantity the projection scales its per-lap accrual terms by: fresh
+    tyres only pay back over laps that are actually raced. Reported per
+    neutralisation kind, because an SC bunches the field and runs for laps while a
+    VSC is typically over within one or two, and the decision layer must not treat
+    them alike (#471).
 
-    Also reports how long spells last and how often one reaches the flag, which
-    is the Art. 55.17 endgame the redesign wants to emerge from numbers rather
-    than from a rail: when the race ends behind the Safety Car, a stop buys
-    nothing because there are no green laps left to spend the fresh tyres on.
+    Also reports how long spells last and how often one reaches the flag, which is
+    the Art. 55.17 endgame the redesign wants to emerge from numbers rather than
+    from a rail: when the race ends behind the Safety Car, a stop buys nothing
+    because there are no racing laps left to spend the fresh tyres on.
     """
-    green_in_window: dict[str, list[int]] = defaultdict(list)
+    racing_in_window: dict[str, list[int]] = defaultdict(list)
     spell_lengths: dict[str, list[int]] = defaultdict(list)
     spells_to_flag: dict[str, int] = defaultdict(int)
     spells_total: dict[str, int] = defaultdict(int)
 
     for race in races:
         for lap in range(1, race.total_laps + 1):
-            status = race.status_by_lap.get(lap, GREEN)
+            status = race.status_by_lap.get(lap, CLEAR)
             if status not in (SAFETY_CAR, VIRTUAL_SAFETY_CAR):
                 continue
 
-            green_in_window[status].append(_green_laps_in_window(race, lap, window))
+            racing_in_window[status].append(_racing_laps_in_window(race, lap, window))
 
             starts_spell = not race.is_neutralised(lap - 1) if lap > 1 else True
             if not starts_spell:
@@ -361,8 +417,8 @@ def measure_sc_window(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dict[
     per_kind: dict[str, Any] = {}
     for kind in (SAFETY_CAR, VIRTUAL_SAFETY_CAR):
         per_kind[kind] = {
-            "green_laps_in_window": _mean_ci(green_in_window[kind]),
-            "green_laps_quantiles": _quantiles(green_in_window[kind]),
+            "racing_laps_in_window": _mean_ci(racing_in_window[kind]),
+            "racing_laps_quantiles": _quantiles(racing_in_window[kind]),
             "spell_length_laps": _mean_ci(spell_lengths[kind]),
             "spell_length_quantiles": _quantiles(spell_lengths[kind]),
             "runs_to_the_flag": _proportion_ci(spells_to_flag[kind], spells_total[kind]),
@@ -371,9 +427,10 @@ def measure_sc_window(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dict[
     table = {
         "window_laps": window,
         "definition": (
-            "For every lap run under a neutralisation, the number of GREEN laps among "
-            "the next W laps, bounded by the race distance. Spell length counts "
-            "consecutive neutralised laps from each spell's first lap."
+            "For every lap run under a neutralisation, the number of RACING laps "
+            "(clear or local yellow) among the next W laps, bounded by the race "
+            "distance. Spell length counts consecutive neutralised laps from each "
+            "spell's first lap."
         ),
         "by_kind": per_kind,
     }
@@ -391,38 +448,40 @@ def measure_neutralisation_rate(races: list[RaceLaps]) -> dict[str, Any]:
     Feeds the option-value term: ``q_f = 1 - exp(-rate * laps_remaining)`` is the
     probability that a future neutralisation turns up to cover a stop we have not
     taken yet. The exponential form is what keeps q_f a probability — the naive
-    ``rate * laps_remaining`` exceeds 1 on a long green run and would hand the MC
+    ``rate * laps_remaining`` exceeds 1 on a long racing run and would hand the MC
     a nonsense certainty.
 
-    Only GREEN laps are at risk of an onset, so they are the denominator; laps
-    already neutralised cannot start a new spell.
+    Only RACING laps are at risk of an onset, so they are the denominator; laps
+    already neutralised cannot start a new spell. Laps under a local yellow stay
+    in that denominator on purpose: a yellow is the usual precursor to a Safety
+    Car, so it is the most at-risk lap there is, not an exempt one.
     """
     onsets: dict[str, int] = defaultdict(int)
-    green_laps: dict[str, int] = defaultdict(int)
+    racing_laps: dict[str, int] = defaultdict(int)
     races_seen: dict[str, int] = defaultdict(int)
 
     for race in races:
         races_seen[race.slug] += 1
         for lap in range(1, race.total_laps + 1):
-            previous_green = race.status_by_lap.get(lap - 1, GREEN) == GREEN if lap > 1 else True
-            if race.status_by_lap.get(lap, GREEN) == GREEN:
-                green_laps[race.slug] += 1
-            elif previous_green:
+            was_racing = race.is_racing(lap - 1) if lap > 1 else True
+            if race.is_racing(lap):
+                racing_laps[race.slug] += 1
+            elif was_racing:
                 onsets[race.slug] += 1
 
     per_circuit = {
         slug: {
-            **_proportion_ci(onsets[slug], green_laps[slug]),
+            **_proportion_ci(onsets[slug], racing_laps[slug]),
             "races": races_seen[slug],
         }
         for slug in sorted(races_seen)
     }
-    pooled = _proportion_ci(sum(onsets.values()), sum(green_laps.values()))
+    pooled = _proportion_ci(sum(onsets.values()), sum(racing_laps.values()))
 
     table = {
         "definition": (
-            "Onsets per green lap at risk, per circuit. q_f(laps_remaining) = "
-            "1 - exp(-rate * laps_remaining), clamped to [0, 1]."
+            "Onsets per racing lap at risk (clear or local yellow), per circuit. "
+            "q_f(laps_remaining) = 1 - exp(-rate * laps_remaining), clamped to [0, 1]."
         ),
         "q_f_form": "1 - exp(-rate * laps_remaining)",
         "pooled": pooled,
@@ -446,7 +505,7 @@ def _lap_intervals(lap_rows: pd.DataFrame) -> list[float]:
 
 
 def measure_gap_density(races: list[RaceLaps]) -> dict[str, Any]:
-    """Measured seconds between consecutive cars, under green and neutralised.
+    """Measured seconds between consecutive cars, racing versus under a Safety Car.
 
     The legacy scoring divided seconds by a flat ``POS_GAP_S = 1.5`` to convert a
     time loss into positions. This measures what that constant approximates, and
@@ -455,22 +514,27 @@ def measure_gap_density(races: list[RaceLaps]) -> dict[str, Any]:
     needs no such constant — it counts the actual cars — but publishing the
     measurement is what retires the constant honestly instead of by assertion.
     """
-    intervals: dict[str, list[float]] = {GREEN: [], SAFETY_CAR: []}
+    intervals: dict[str, list[float]] = {RACING: [], SAFETY_CAR: []}
 
     for race in races:
         for lap, lap_rows in race.laps.groupby("LapNumber"):
-            status = race.status_by_lap.get(int(lap), GREEN)
-            if status not in intervals:
+            lap = int(lap)
+            if race.is_racing(lap):
+                regime = RACING
+            elif race.status_by_lap.get(lap) == SAFETY_CAR:
+                regime = SAFETY_CAR
+            else:
                 continue
-            intervals[status].extend(_lap_intervals(lap_rows))
+            intervals[regime].extend(_lap_intervals(lap_rows))
 
     table = {
         "definition": (
             "Seconds between consecutive cars on the same lap, from elapsed session "
-            "time (the Time column), pooled over every lap of every race."
+            "time (the Time column), pooled over every lap of every race. Racing "
+            "covers clear and local-yellow laps."
         ),
         "retires_constant": "POS_GAP_S = 1.5 s/position (legacy scoring path only)",
-        "green": {**_mean_ci(intervals[GREEN]), **_quantiles(intervals[GREEN])},
+        "racing": {**_mean_ci(intervals[RACING]), **_quantiles(intervals[RACING])},
         "safety_car": {**_mean_ci(intervals[SAFETY_CAR]), **_quantiles(intervals[SAFETY_CAR])},
     }
     return table
@@ -630,7 +694,7 @@ def measure_stop_hazard(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dic
                 continue
 
             lap = int(lap)
-            regime = SAFETY_CAR if race.is_neutralised(lap) else GREEN
+            regime = RACING if race.is_racing(lap) else NEUTRALISED
             upcoming = range(lap + 1, min(lap + window, race.total_laps) + 1)
             stops_soon = any(nxt in pit_laps[str(row["Driver"])] for nxt in upcoming)
             cells[(compound, bin_label, regime)].append(stops_soon)
@@ -643,7 +707,8 @@ def measure_stop_hazard(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dic
     table = {
         "definition": (
             "Share of laps after which the driver entered the pit lane within the next "
-            "W laps, grouped by compound, tyre-life bin and whether the lap was "
+            "W laps, grouped by compound, tyre-life bin and whether the lap was raced "
+            "(clear or local yellow) or "
             "neutralised. Key format: compound|tyre_life_bin|regime."
         ),
         "window_laps": window,
@@ -668,6 +733,7 @@ def build_tables(races: list[RaceLaps]) -> dict[str, Any]:
         "years": list(YEARS),
         "races_measured": len(races),
         "window_laps": WINDOW_LAPS,
+        "status_mix": measure_status_mix(races),
         "sc_window": measure_sc_window(races),
         "neutralisation_rate": measure_neutralisation_rate(races),
         "gap_density": measure_gap_density(races),
@@ -684,8 +750,8 @@ def _sc_window_rows(tables: dict[str, Any]) -> list[dict[str, Any]]:
         rows.append(
             {
                 "kind": kind,
-                "green_laps_in_window_mean": stats["green_laps_in_window"]["mean"],
-                "green_laps_in_window_n": stats["green_laps_in_window"]["n"],
+                "racing_laps_in_window_mean": stats["racing_laps_in_window"]["mean"],
+                "racing_laps_in_window_n": stats["racing_laps_in_window"]["n"],
                 "spell_length_mean": stats["spell_length_laps"]["mean"],
                 "spell_length_p90": stats["spell_length_quantiles"]["p90"],
                 "spells_n": stats["runs_to_the_flag"]["n"],
@@ -698,7 +764,7 @@ def _sc_window_rows(tables: dict[str, Any]) -> list[dict[str, Any]]:
 def _gap_density_rows(tables: dict[str, Any]) -> list[dict[str, Any]]:
     """Flatten the gap-density table into CSV rows."""
     rows = []
-    for regime in ("green", "safety_car"):
+    for regime in ("racing", "safety_car"):
         stats = tables["gap_density"][regime]
         rows.append(
             {
@@ -787,10 +853,10 @@ def main() -> int:
 
     sc_stats = tables["sc_window"]["by_kind"][SAFETY_CAR]
     logger.info(
-        "SC: %.2f green laps in a %d-lap window (n=%d); spells run to the flag %.1f%% of the time",
-        sc_stats["green_laps_in_window"]["mean"] or 0.0,
+        "SC: %.2f racing laps in a %d-lap window (n=%d); spells run to the flag %.1f%% of the time",
+        sc_stats["racing_laps_in_window"]["mean"] or 0.0,
         WINDOW_LAPS,
-        sc_stats["green_laps_in_window"]["n"],
+        sc_stats["racing_laps_in_window"]["n"],
         100 * (sc_stats["runs_to_the_flag"]["rate"] or 0.0),
     )
     return 0

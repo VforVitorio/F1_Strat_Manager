@@ -92,13 +92,13 @@ def test_rates_are_probabilities(tables):
 # ---------------------------------------------------------------------------
 
 
-def test_a_neutralised_window_holds_fewer_green_laps_than_the_window(tables):
+def test_a_neutralised_window_holds_fewer_racing_laps_than_the_window(tables):
     for kind, stats in tables["sc_window"]["by_kind"].items():
-        green = stats["green_laps_in_window"]["mean"]
-        assert green is not None, f"{kind}: no measurement"
-        assert 0.0 <= green < tables["window_laps"], (
-            f"{kind}: {green} green laps inside a {tables['window_laps']}-lap window "
-            "while neutralised — a neutralisation that costs no green laps is not one"
+        racing = stats["racing_laps_in_window"]["mean"]
+        assert racing is not None, f"{kind}: no measurement"
+        assert 0.0 <= racing < tables["window_laps"], (
+            f"{kind}: {racing} racing laps inside a {tables['window_laps']}-lap window "
+            "while neutralised — a neutralisation that costs no racing laps is not one"
         )
 
 
@@ -111,11 +111,24 @@ def test_safety_car_spells_outlast_virtual_ones(tables):
 
 
 def test_the_field_closes_up_under_a_safety_car(tables):
-    green_median = tables["gap_density"]["green"]["p50"]
+    racing_median = tables["gap_density"]["racing"]["p50"]
     sc_median = tables["gap_density"]["safety_car"]["p50"]
-    assert sc_median < green_median, (
-        "cars must sit closer together under a Safety Car than under green flag; "
+    assert sc_median < racing_median, (
+        "cars must sit closer together under a Safety Car than while racing; "
         "this is the physics the pit-loss saving comes from"
+    )
+
+
+def test_the_racing_bucket_declares_what_is_inside_it(tables):
+    mix = tables["status_mix"]
+    assert mix["racing_is"] == ["clear", "yellow"], (
+        "the racing bucket must state that it holds local-yellow laps too; a bucket "
+        "named for something it does not contain is how #486 happened"
+    )
+    shares = {status: cell["share"] for status, cell in mix["by_status"].items()}
+    assert abs(sum(shares.values()) - 1.0) < 1e-3, "status shares must cover every lap"
+    assert shares.get("yellow", 0) > 0, (
+        "yellow laps must be visible in the mix, not silently folded into clear"
     )
 
 
@@ -144,8 +157,8 @@ def test_the_undercut_band_is_a_usable_number_of_seconds(tables):
 def test_stop_hazard_rises_with_tyre_life_on_every_dry_compound(tables):
     cells = tables["stop_hazard"]["by_cell"]
     for compound in ("SOFT", "MEDIUM", "HARD"):
-        young = cells.get(f"{compound}|0-9|green", {}).get("rate")
-        old = cells.get(f"{compound}|20-29|green", {}).get("rate")
+        young = cells.get(f"{compound}|0-9|racing", {}).get("rate")
+        old = cells.get(f"{compound}|20-29|racing", {}).get("rate")
         if young is None or old is None:
             continue
         assert old > young, (
