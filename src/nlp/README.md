@@ -1,19 +1,24 @@
 # src/nlp: Radio NLP modules
 
-Two layers live here:
+Two modules, both live:
 
-1. **`radio_runner.py`**, the **active** replay-time consumer of the static
-   OpenF1 radio corpus. This is the one piece of `src/nlp/` that the live
-   simulation pipeline imports today.
-2. Everything else (`pipeline.py`, `sentiment.py`, `ner.py`,
-   `radio_classifier.py`): Jupytext exports from the early NLP development
-   notebooks (week 4). They predate the unified N24 pipeline and are kept
-   for reference only.
+1. **`radio_runner.py`**, the replay-time consumer of the static OpenF1 radio
+   corpus: transcription via Whisper, plus the adapter that turns raw MP3s into
+   the dict shape N29 expects.
+2. **`rcm_state.py`**, the race-control state tracker that decides whether a
+   neutralisation is currently active.
 
-The N24 inference pipeline itself (sentiment + intent + NER + RCM parser) is
-loaded inside the N29 Radio Agent at `src/agents/radio_agent.py`, not from
-this folder. The active modules here only cover the *transcription* +
-*adapter* steps that turn raw OpenF1 MP3s into the dict shape N29 expects.
+**The inference models are not here.** Sentiment, intent and NER are loaded and
+run inside the N29 Radio Agent at `src/agents/radio_agent.py`, which is
+self-contained. If you are looking for the code that classifies a radio message,
+that is the file to open.
+
+The Jupytext exports that used to sit alongside these two (`pipeline.py`,
+`sentiment.py`, `ner.py`, `radio_classifier.py`) moved to
+[`legacy/nlp_standalone/`](../../legacy/nlp_standalone/). They predated the
+unified N24 pipeline and nothing imported them, but their presence here made this
+folder look like the implementation, which is how someone ends up editing the
+wrong file.
 
 ---
 
