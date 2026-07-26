@@ -14,7 +14,7 @@
         </mxCell>
 
         <!-- ============ STEP 1: USER INPUT ============ -->
-        <mxCell id="user" value="&lt;b&gt;User Message&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;Text / Voice / Image&lt;br&gt;from Streamlit chat UI&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#a78bfa;strokeWidth=2;fontColor=#c4b5fd;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="user" value="&lt;b&gt;User Message&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;Text&lt;br&gt;from the React chat tab&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#a78bfa;strokeWidth=2;fontColor=#c4b5fd;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="30" y="150" width="180" height="70" as="geometry"/>
         </mxCell>
 
@@ -103,7 +103,7 @@
         </mxCell>
 
         <!-- ============ STEP 9: STREAMLIT RENDER ============ -->
-        <mxCell id="render" value="&lt;b&gt;Streamlit Chat UI&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;st.chat_message rendering&lt;br&gt;inline charts, tables, text&lt;br&gt;voice playback (if voice input)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#a78bfa;strokeWidth=2;fontColor=#c4b5fd;fontSize=11;verticalAlign=top;spacingTop=4;" vertex="1" parent="1">
+        <mxCell id="render" value="&lt;b&gt;React Chat tab&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;SSE token stream&lt;br&gt;inline charts, tables, text&lt;br&gt;voice playback (if voice input)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#a78bfa;strokeWidth=2;fontColor=#c4b5fd;fontSize=11;verticalAlign=top;spacingTop=4;" vertex="1" parent="1">
           <mxGeometry x="1100" y="570" width="240" height="90" as="geometry"/>
         </mxCell>
 
@@ -192,9 +192,6 @@
         <mxCell id="voice_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f0f2e;strokeColor=#64748b;strokeWidth=1;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="30" y="400" width="430" height="90" as="geometry"/>
         </mxCell>
-        <mxCell id="voice_label" value="Voice Input Path (optional)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#64748b;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="140" y="405" width="220" height="20" as="geometry"/>
-        </mxCell>
         <mxCell id="voice1" value="Audio recording" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#475569;fontColor=#94a3b8;fontSize=9;" vertex="1" parent="1">
           <mxGeometry x="45" y="430" width="100" height="35" as="geometry"/>
         </mxCell>
@@ -203,9 +200,6 @@
             <mxPoint x="150" y="447" as="sourcePoint"/>
             <mxPoint x="170" y="447" as="targetPoint"/>
           </mxGeometry>
-        </mxCell>
-        <mxCell id="voice2" value="POST /voice/transcribe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#475569;fontColor=#94a3b8;fontSize=9;" vertex="1" parent="1">
-          <mxGeometry x="175" y="430" width="140" height="35" as="geometry"/>
         </mxCell>
         <mxCell id="va2" value="" style="shape=flexArrow;endArrow=classic;html=1;strokeColor=#475569;fillColor=#1e293b;width=6;endSize=3;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">

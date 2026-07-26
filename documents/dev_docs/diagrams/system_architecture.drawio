@@ -56,16 +56,16 @@
         </mxCell>
 
         <!-- Surface 3: Streamlit -->
-        <mxCell id="st-box" value="Surface 3 &#8212; Streamlit + FastAPI&#10;src/telemetry/frontend/ &#183; src/telemetry/api/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#EC4899;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="st-box" value="Surface 3 &#8212; Web app + FastAPI&#10;src/telemetry/webapp/ &#183; src/telemetry/backend/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#EC4899;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="1320" y="230" width="520" height="280" as="geometry"/>
         </mxCell>
-        <mxCell id="st-desc" value="post-race analysis &#183; chat &#183; voice&#10;FastMCP tools on top of FastAPI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F1D2D;strokeColor=#EC4899;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="st-desc" value="post-race analysis &#183; chat&#10;FastMCP tools on top of FastAPI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F1D2D;strokeColor=#EC4899;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1350" y="280" width="460" height="60" as="geometry"/>
         </mxCell>
         <mxCell id="st-api" value="FastAPI /api/v1/strategy/simulate (SSE)&#10;GET yields per-lap events from simulate_race()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#EC4899;fontColor=#F2B7D4;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1350" y="350" width="460" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="st-ui" value="pages/strategy.py &#183; race_analysis.py (5 tabs)&#10;chat charts inline &#183; voice: Whisper + Edge-TTS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#EC4899;fontColor=#F2B7D4;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="st-ui" value="React SPA, 5 tabs &#183; served by nginx&#10;chat renders tool results inline over SSE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#EC4899;fontColor=#F2B7D4;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1350" y="420" width="460" height="60" as="geometry"/>
         </mxCell>
 

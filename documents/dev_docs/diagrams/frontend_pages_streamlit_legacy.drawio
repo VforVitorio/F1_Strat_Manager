@@ -1,12 +1,12 @@
 <mxfile host="app.diagrams.net" modified="2026-04-13" agent="Claude" version="24.7.17">
-  <diagram id="fe-pages-1" name="Frontend Page Hierarchy">
+  <diagram id="fe-pages-1" name="Streamlit Frontend (retired v2.0.0)">
     <mxGraphModel dx="1400" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0" background="#0a0a1a">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
 
         <!-- TITLE -->
-        <mxCell id="title" value="Streamlit Frontend — Page Hierarchy &amp; Components" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="title" value="RETIRED &#8212; Streamlit Frontend, replaced by the React web app in v2.0.0. Kept as a record of what the surface was." style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="250" y="10" width="900" height="40" as="geometry"/>
         </mxCell>
 

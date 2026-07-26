@@ -1,0 +1,79 @@
+<mxfile host="app.diagrams.net" modified="2026-07-26" agent="Claude" version="24.7.17">
+  <diagram id="webapp-structure-1" name="Web App Structure">
+    <mxGraphModel dx="1400" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0" background="#0a0a1a">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="React Web App &#8212; src/telemetry/webapp/src/" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="360" y="20" width="680" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="Replaced the Streamlit frontend in v2.0.0. Vite + TypeScript + Tailwind + ECharts, served by nginx behind /api." style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontColor=#94a3b8;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="360" y="56" width="680" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="feat_box" value="features/ &#8212; one folder per tab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=13;fontStyle=1;verticalAlign=top;spacingTop=8;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="620" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_home" value="home&#10;session launcher, recent sessions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="160" width="180" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_dash" value="dashboard&#10;telemetry over a race" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="300" y="160" width="180" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_comp" value="comparison&#10;two drivers, 60 fps, synced" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="500" y="160" width="180" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_lab" value="lab&#10;the ML models and their calibration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="230" width="180" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_race" value="race&#10;the pit-wall call, per lap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="300" y="230" width="180" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_strat" value="strategy&#10;agent outputs and MC scores" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="500" y="230" width="180" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_chat" value="chat&#10;MCP client, SSE, tool results inline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#a78bfa;fontColor=#ddd6fe;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="300" width="280" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="f_dev" value="dev&#10;internal tooling, not shipped to users" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#111827;strokeColor=#475569;fontColor=#94a3b8;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="300" width="280" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="shared_box" value="shared" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#475569;fontColor=#94a3b8;fontSize=13;fontStyle=1;verticalAlign=top;spacingTop=8;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="740" y="120" width="300" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="s_charts" value="charts/&#10;ECharts wrappers, one per chart kind" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#475569;fontColor=#cbd5e1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="760" y="160" width="260" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="s_comp" value="components/&#10;design-system primitives" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#475569;fontColor=#cbd5e1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="760" y="214" width="260" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="s_stores" value="stores/&#10;zustand, incl. persisted recent sessions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#475569;fontColor=#cbd5e1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="760" y="268" width="260" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="s_lib" value="lib/&#10;api client, queryKeys, driver colours" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#475569;fontColor=#cbd5e1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="760" y="322" width="260" height="44" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="nginx" value="nginx&#10;serves the built SPA, reverse-proxies /api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#a78bfa;fontColor=#ddd6fe;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="440" width="300" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="backend" value="FastAPI backend :8000&#10;src/telemetry/backend/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#14532d;strokeColor=#22c55e;fontColor=#bbf7d0;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="530" width="300" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_lib_nginx" value="fetch /api/v1/&#8230;" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=9;" edge="1" parent="1" source="s_lib" target="nginx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_nginx_backend" value="proxy_pass, same origin, no CORS" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#22c55e;fontColor=#bbf7d0;fontSize=9;" edge="1" parent="1" source="nginx" target="backend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="note" value="Every feature folder reaches the backend through lib/api only. There is no second HTTP client and no direct fetch inside a component, which is what keeps the query keys and the caching in one place." style="text;html=1;align=left;verticalAlign=top;fontSize=10;fontColor=#94a3b8;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="80" y="620" width="960" height="40" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
