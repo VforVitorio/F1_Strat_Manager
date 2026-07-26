@@ -6,11 +6,18 @@ tests) and run locally where the weights are present. They lock the harness's
 retro-validation contract - the three claims #206 must keep true:
 
 - the registry reconciles the pace 0.392 -> 0.4104 divergence to the canonical;
-- calibration "finds" the known-broken pit P05-P95 coverage (0.7047) as drift;
+- calibration "finds" the known-broken pit P05-P95 coverage (177/252) as drift;
 - reproduction re-derives overtake AUC-PR back to its published 0.5491.
 
 They call the ``collect_*`` functions (pure, no report I/O) so the assertions
 test the harness logic, not the markdown writer.
+
+WARNING, and it has already cost this repo once. Because CI cannot run these, a
+red test here is INVISIBLE to every pull request. The pit-coverage golden was
+written against 0.7047, the holdout was regenerated to 0.7024 in the same week,
+and the assertion sat failing for months with every PR going green over it
+(#634). **Run this directory locally before promoting to main.** A green CI is
+not evidence that these passed; it is evidence that they did not run.
 """
 
 from __future__ import annotations
@@ -42,14 +49,26 @@ def test_registry_reconciles_pace_divergence():
 
 
 def test_calibration_flags_pit_coverage_drift():
-    """The pit P05-P95 coverage (0.7047) surfaces and is flagged as drift."""
+    """The pit P05-P95 coverage surfaces and is flagged as drift.
+
+    The drift assertion is what this test is FOR. The exact value is provenance,
+    and it moved once: this test was written against 0.7047, then `ccc213d`
+    regenerated the N15 holdout from raw laps, computed 0.7024, wrote that into
+    the report, and left the assertion on the old number. So the golden was born
+    red and stayed red, because `tests/eval/` is data-gated and CI runners have
+    no dataset to run it with. Nobody was ever told (#634).
+
+    177/252 is the current value, re-derived here rather than copied: the alias
+    fix in #629 was checked against it and moves it by exactly nothing (it moved
+    P50 MAE by -0.0045 s instead).
+    """
     from src.strategy.eval.calibration import collect_results
 
     pit = [
         r for r in collect_results() if r.model == "pit_duration" and r.metric == "p05_p95_coverage"
     ]
     assert len(pit) == 1
-    assert pit[0].value == pytest.approx(0.7047)
+    assert pit[0].value == pytest.approx(177 / 252, abs=1e-6)
     assert pit[0].status == "drift", "coverage below 0.90 nominal must flag drift"
 
 

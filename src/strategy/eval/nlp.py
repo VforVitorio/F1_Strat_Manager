@@ -41,6 +41,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from src.f1_strat_manager.data_cache import get_data_root, get_models_root
+from src.f1_strat_manager.rcm_events import RCMEvent, classify_rcm_event
 from src.strategy.eval.report import build_header, write_report
 
 NLP_NAME = "nlp"
@@ -587,103 +588,34 @@ def reproduce_ner() -> list[StageResult]:
 
 
 def _classify_rcm_event(category: str, flag: Any, scope: Any, sector: Any, message: str) -> str:
-    """Rule-based RCM event classifier ported from N23 (``_classify_event``).
+    """Adapt one persisted RCM row to the SHIPPED classifier and return its verdict.
 
-    Reads the persisted lowercase RCM schema (category/flag/scope/sector/
-    message). The branch logic is identical to the N23 notebook parser and the
-    inlined ``radio_agent`` copy; only the field access is adapted to the
-    on-disk column names. Kept in the harness because importing ``radio_agent``
-    loads every NLP model.
+    This used to be a hand-written PORT of the classifier, and the port drifted.
+    Over this very corpus the two disagreed on 427 of 1515 messages, 28.2 percent,
+    with the port on the wrong side of #305's ``SAFETY CAR IN THIS LAP`` fix. So the
+    coverage this harness published described a copy nobody runs, over-stating the
+    real parser by 2.24 points on a row whose status column read ``reproduced``
+    (#632). A reproduction harness measuring its own private fork is not reproducing
+    anything.
 
-    --- WHERE TO CHANGE IF THE PARSER CHANGES ---
-    ``notebooks/nlp/N23_rcm_parser.ipynb`` (_classify_event) is the source of
-    truth; mirror any edit there into this port and the radio_agent copy.
+    The port existed for a real reason, that importing ``radio_agent`` loads every
+    NLP model. ``src.f1_strat_manager.rcm_events`` now holds the logic with no model
+    behind it, so this is a thin field-name adapter and nothing more.
+
+    ``sector`` is accepted and deliberately UNUSED: the persisted schema carries it,
+    the shipped ``RCMEvent`` has no such field, and the old port branched on it while
+    the shipped parser decides sector-scoping from ``scope`` alone. Reconciling that
+    is a question about which behaviour is right, tracked separately; measuring what
+    ships is this function's only job.
     """
-    import pandas as pd
-
-    cat = str(category).strip()
-    flag_up = str(flag).strip().upper()
-    msg = str(message).upper()
-
-    if cat == "SafetyCar":
-        if "VIRTUAL" in msg:
-            return (
-                "VIRTUAL_SAFETY_CAR_DEPLOYED" if "DEPLOYED" in msg else "VIRTUAL_SAFETY_CAR_ENDING"
-            )
-        if "DEPLOYED" in msg:
-            return "SAFETY_CAR_DEPLOYED"
-        if "PIT LANE" in msg or "IN THIS LAP" in msg:
-            return "SAFETY_CAR_IN_PIT_LANE"
-        if "ENDING" in msg or "WITHDRAWN" in msg:
-            return "SAFETY_CAR_ENDING"
-        return "OTHER"
-
-    if cat == "Flag":
-        if flag_up == "CHEQUERED" or "CHEQUERED" in msg:
-            return "CHEQUERED_FLAG"
-        if flag_up == "BLUE":
-            return "BLUE_FLAG"
-        if flag_up == "BLACK AND WHITE":
-            return "BLACK_AND_WHITE_FLAG"
-        if flag_up in ("VIRTUAL_SAFETY_CAR", "VSC"):
-            return "VIRTUAL_SAFETY_CAR_DEPLOYED"
-        if flag_up == "SAFETY_CAR":
-            return "SAFETY_CAR_DEPLOYED"
-        if flag_up == "RED" or "RED FLAG" in msg:
-            return "RED_FLAG"
-        if flag_up == "GREEN" or "GREEN FLAG" in msg:
-            return "GREEN_FLAG"
-        if flag_up == "CLEAR":
-            return "CLEAR_FLAG"
-        if flag_up in ("YELLOW", "DOUBLE YELLOW"):
-            if str(scope).strip() == "Sector" or pd.notna(sector):
-                return "YELLOW_FLAG_SECTOR"
-            return "YELLOW_FLAG"
-        return "OTHER"
-
-    if cat == "Drs":
-        return "DRS_ENABLED" if "ENABLED" in msg else "DRS_DISABLED"
-
-    if cat == "CarEvent":
-        if "RETIRED" in msg or "ABANDON" in msg:
-            return "CAR_RETIRED"
-        if "COLLISION" in msg or "CONTACT" in msg:
-            return "CAR_COLLISION"
-        if "MECHANICAL" in msg or "ENGINE" in msg or "GEARBOX" in msg:
-            return "CAR_MECHANICAL"
-        return "OTHER"
-
-    if cat == "Other":
-        if "DRS ENABLED" in msg:
-            return "DRS_ENABLED"
-        if "DRS DISABLED" in msg:
-            return "DRS_DISABLED"
-        if (
-            "TRACK LIMITS" in msg
-            or "TIME DELETED" in msg
-            or "LAP DELETED" in msg
-            or "DELETED" in msg
-        ):
-            return "LAP_DELETED"
-        if "UNDER INVESTIGATION" in msg or "FIA STEWARDS" in msg or "NOTED" in msg:
-            return "INVESTIGATION"
-        if "PENALTY" in msg or ("TIME" in msg and "SECOND" in msg):
-            return "TIME_PENALTY"
-        if "PIT EXIT" in msg or "PIT LANE" in msg:
-            return "PIT_EXIT"
-        track_surface = "TRACK" in msg and (
-            "CONDITION" in msg or "SLIPPERY" in msg or "SURFACE" in msg
-        )
-        other_surface = any(k in msg for k in ("DEBRIS", "FLUID", "LOW GRIP", "RAIN", "AWNING"))
-        if track_surface or other_surface:
-            return "TRACK_CONDITION"
-        if "LAPPED" in msg and "OVERTAKE" in msg:
-            return "LAPPED_CARS_OVERTAKE"
-        if "ALL CARS MAY OVERTAKE" in msg:
-            return "SAFETY_CAR_ENDING"
-        return "OTHER"
-
-    return "OTHER"
+    event = RCMEvent(
+        message=str(message or ""),
+        flag=str(flag or ""),
+        category=str(category or ""),
+        lap=0,
+        scope=str(scope or ""),
+    )
+    return classify_rcm_event(event)
 
 
 def reproduce_rcm() -> list[StageResult]:
