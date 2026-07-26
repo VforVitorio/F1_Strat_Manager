@@ -1,4 +1,4 @@
-# `src/arcade/` — race replay + strategy dashboard
+# `src/arcade/`, race replay + strategy dashboard
 
 2D race replay (pyglet via the `arcade` library) plus the PySide6
 dashboard subprocess spawned from the same command. One invocation of

@@ -9,12 +9,12 @@ Three long-lived branches, in increasing order of stability:
 
 | Branch | Meaning |
 |---|---|
-| `test` | Active development — day-to-day work lands here first. |
-| `dev`  | Good but not-yet-stable — the integration / promotion target. |
-| `main` | Ultra-stable, release-only — release-please tags from here. |
+| `test` | Active development, day-to-day work lands here first. |
+| `dev`  | Good but not-yet-stable, the integration / promotion target. |
+| `main` | Ultra-stable, release-only, release-please tags from here. |
 
 **For any change: branch off (`feat/…`, `fix/…`, `docs/…`) and open a pull
-request against `dev`.** Never commit straight to `main` — it is
+request against `dev`.** Never commit straight to `main`, it is
 release-only. Promotion flows `feature → dev → main`. Delete the branch
 after merge.
 
@@ -53,11 +53,11 @@ Five entry points after install (`pyproject.toml::[project.scripts]`):
   messages.
 - **Prose docstrings** explaining WHY + WHAT and what each field
   enables for downstream code. No code examples inline.
-- **No floating logic at module level** — only imports, setup,
+- **No floating logic at module level**, only imports, setup,
   constants. Anything else belongs inside a function or class.
 - **Type hints everywhere** on public function signatures; annotate
   variables only when the type is non-obvious.
-- **Comments only when the WHY is non-obvious** — hidden constraints,
+- **Comments only when the WHY is non-obvious**, hidden constraints,
   subtle invariants, workarounds. Do not narrate what well-named code
   already says.
 
@@ -70,21 +70,21 @@ they exist to catch regressions, not to style-police.
 
 Some code carries hard rules set by the TFG author:
 
-- **`scripts/run_simulation_cli.py`** — the TFG's PMV (first working
+- **`scripts/run_simulation_cli.py`**, the TFG's PMV (first working
   CLI). Duplicate before modifying; do not refactor in-place.
-- **`src/agents/` internals** — stable contract for the CLI, the Arcade
+- **`src/agents/` internals**, stable contract for the CLI, the Arcade
   and the web app backend. Additive entry points are welcome (see
   `src/strategy/inference/engine.py::run_lap`, the shared per-lap pipeline
   call all three surfaces route through), but do not refactor existing
   agent modules in place.
-- **`notebooks/**`** and **`legacy/**`** — exploration / historical
+- **`notebooks/**`** and **`legacy/**`**, exploration / historical
   archive, different conventions.
 
 ## Platform safeguards (Windows)
 
 A few load-bearing patches live near the top of the CLI to keep
 `f1-sim` / `f1-strat` usable on Windows hosts. **Do not remove them
-without testing on Windows first** — they paper over real issues that
+without testing on Windows first**, they paper over real issues that
 only surface there:
 
 - **`threading.excepthook` filter** in
@@ -134,7 +134,7 @@ Four jobs run on every push and PR (`.github/workflows/ci.yml`):
 
 | Job | Installs | Runs |
 |---|---|---|
-| `lint` | nothing — ruff via `uvx` | `ruff check .` + `ruff format --check .` |
+| `lint` | nothing, ruff via `uvx` | `ruff check .` + `ruff format --check .` |
 | `typecheck` | `uv sync --extra dev` (mypy + project deps, no voice extras) | `mypy src/rag/` |
 | `test` | `uv sync --all-extras` (full ML/voice/arcade stack) | `pytest -v --cov=src` + a collected-test-count floor (guards against a refactor silently dropping the suite) |
 | `pip-audit` | `uv export` to a requirements file | `pip-audit` against the locked deps (advisory, `continue-on-error: true` while baselining) |
@@ -142,12 +142,12 @@ Four jobs run on every push and PR (`.github/workflows/ci.yml`):
 `test` and `typecheck` are additionally gated by `dorny/paths-filter`:
 they skip their real work (still reporting green) when the diff touches
 neither `src/`, `tests/`, `pyproject.toml`, `uv.lock`, nor the workflow
-file itself — a docs-only or CI-only PR does not pay for a full ML-stack
+file itself, a docs-only or CI-only PR does not pay for a full ML-stack
 install. `lint` and `pip-audit` stay always-on.
 
 All jobs share uv's wheel cache (`enable-cache: true`, keyed off
 `uv.lock`), so the cache only invalidates when the resolved graph
-actually changes — cosmetic edits to `pyproject.toml` (re-ordering,
+actually changes, cosmetic edits to `pyproject.toml` (re-ordering,
 tool config, comments) reuse the wheel store. Sync calls use
 `--frozen` to skip resolution and install the locked versions
 directly. The `typecheck` job additionally caches `.mypy_cache/` so
@@ -157,7 +157,7 @@ incremental runs only re-check files whose hash has changed.
 manually means running `uv lock` locally (or letting `uv add` /
 Dependabot do it for you) and committing the updated lockfile
 alongside the `pyproject.toml` change. CI runs `uv sync --frozen`,
-which fails when the lockfile and pyproject disagree — that is the
+which fails when the lockfile and pyproject disagree, that is the
 intended early-warning when someone forgets to re-lock. Subsequent runs drop "Install dependencies" from ~60s to
 <10s.
 
@@ -171,12 +171,12 @@ at once and stranded them for 20+ minutes.
 Every pull request gets auto-tagged with one or more `area:` labels by
 `.github/workflows/labeler.yml` (path-based via `actions/labeler@v6`).
 Dependabot PRs additionally get their label set by `dependabot.yml` so
-the tag is in place the moment the PR opens — no need to wait for the
+the tag is in place the moment the PR opens, no need to wait for the
 labeler workflow to run.
 
 | Label | Triggered by | Quick risk read |
 |---|---|---|
-| `area: codebase` | `src/`, `scripts/`, `notebooks/` | Default to careful review — touches product code |
+| `area: codebase` | `src/`, `scripts/`, `notebooks/` | Default to careful review, touches product code |
 | `area: deps` | `pyproject.toml`, `uv.lock`, pip Dependabot | Low-medium; `test_dep_imports.py` is the safety net |
 | `area: ci-cd` | `.github/workflows/`, `.github/dependabot.yml`, `.github/labeler.yml`, GitHub Actions Dependabot | Low impact on product; max damage is breaking the pipeline |
 | `area: docs` | `docs/`, root `.md` files | Merge and forget |
@@ -189,7 +189,7 @@ labels stay in sync with the actual file diff over the life of the PR.
 
 To add a new label, create it via `gh label create "area: <name>" --color <hex>`
 first, then add a matching block to `.github/labeler.yml`. Labels do
-not auto-create — the workflow silently skips entries pointing to
+not auto-create, the workflow silently skips entries pointing to
 non-existent labels.
 
 ### Auto-update of dependency PRs
@@ -212,19 +212,19 @@ publishes a release that does not fit the upper bound declared in
 `pyproject.toml`. Two layers guard the project against silently
 accepting a bump that breaks something:
 
-1. **Major bumps blocked on core ML libs** — `numpy`, `pandas`,
+1. **Major bumps blocked on core ML libs**: `numpy`, `pandas`,
    `scikit-learn`, `lightgbm`, `xgboost`. Dependabot will still propose
    minor and patch bumps; majors must be reviewed and applied manually.
 2. **`tests/test_dep_imports.py`** runs on every CI invocation (including
    Dependabot PRs). It is organised in three tiers:
-   - **Tier 1** — exercises the actual API surface of the most critical
+   - **Tier 1**, exercises the actual API surface of the most critical
      dependencies (fit/predict on a tiny matrix, parquet round-trips,
      tokeniser encode/decode). Catches breaking changes that a plain
      `import` would not see.
-   - **Tier 2** — parametrised plain-import smoke for every other
+   - **Tier 2**, parametrised plain-import smoke for every other
      declared dependency. Catches binary / DLL / wheel breakage at
      install time.
-   - **Tier 3** — pins specific API shapes that have bitten the project
+   - **Tier 3**, pins specific API shapes that have bitten the project
      before (`huggingface_hub.snapshot_download` kwargs, `langchain_core`
      import paths, `np.bool_` alias). Grows whenever a new upstream
      incident reveals a fragile call site.
@@ -235,13 +235,13 @@ Three additional workflows run independently of `ci.yml`, all scoped to
 the parent repo (the `src/telemetry` submodule has its own scanner
 coverage, tracked separately):
 
-- **CodeQL** (`.github/workflows/codeql.yml`) — SAST on Python and the
+- **CodeQL** (`.github/workflows/codeql.yml`): SAST on Python and the
   `docs/` React SPA, `security-extended` query suite, on push/PR to
   `main`/`dev` plus a weekly schedule.
-- **gitleaks** (`.github/workflows/gitleaks.yml`) — secret scanning over
+- **gitleaks** (`.github/workflows/gitleaks.yml`), secret scanning over
   full history on push/PR plus a weekly schedule, complementing GitHub's
   native secret scanning.
-- **OSV-Scanner** (`.github/workflows/osv-scanner.yml`) — cross-ecosystem
+- **OSV-Scanner** (`.github/workflows/osv-scanner.yml`), cross-ecosystem
   vulnerability scan against OSV.dev on `uv.lock`; blocking (any new,
   un-waived CVE fails the build). Known unfixable CVEs (Pillow, torch,
   ecdsa) are waived with documented reasons in `osv-scanner.toml`.
@@ -254,10 +254,10 @@ request, data issue, epic.
 
 ## Related reading
 
-- [`README.md`](README.md) — project overview.
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — one-page topology.
-- [`INSTALL.md`](INSTALL.md) — deep-dive install per surface.
-- [`ROADMAP.md`](ROADMAP.md) — release plan and completed phases.
+- [`README.md`](README.md), project overview.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md), one-page topology.
+- [`INSTALL.md`](INSTALL.md), deep-dive install per surface.
+- [`ROADMAP.md`](ROADMAP.md), release plan and completed phases.
 
 ## Commit message convention
 
@@ -281,7 +281,7 @@ Scopes are optional but encouraged for clarity, e.g. `feat(orchestrator): ...`,
 `fix(rag): ...`, `bench(whisper): ...`. Subjects should stay under 72
 characters; body text is free-form and goes after a blank line.
 
-Squash-merging on GitHub edits the squash commit subject — make sure
+Squash-merging on GitHub edits the squash commit subject, make sure
 that subject still follows the convention, otherwise release-please
 will miss the bump.
 

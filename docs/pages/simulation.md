@@ -1,8 +1,8 @@
-# src/simulation — Race Replay Engine
+# src/simulation: Race Replay Engine
 
 ## Purpose
 
-Offline replay of a race from a stored parquet snapshot. Emits `lap_state` dicts — the canonical data contract consumed by all seven strategy agents.
+Offline replay of a race from a stored parquet snapshot. Emits `lap_state` dicts, the canonical data contract consumed by all seven strategy agents.
 
 This is the **demo path** for the thesis defence. The live path (Kafka consumer feeding real telemetry) will replace the iterator in v0.14+ without touching any agent code, because agents only see `lap_state` dicts regardless of source.
 
@@ -24,7 +24,7 @@ RaceReplayEngine
     lap_state dict → all 7 agents → strategy orchestrator
 ```
 
-`RaceReplayEngine.to_arcade_frame()` still exists in `replay_engine.py`, but nothing calls it and its docstring's `/ws/replay` WebSocket route was never registered on the backend — the arcade's real live path is the direct in-process pipeline broadcasting over a local TCP socket, documented in [Arcade strategy pipeline](#/arcade-strategy-pipeline) and [Multi-agent system → Three-window arcade](#/multi-agent).
+`RaceReplayEngine.to_arcade_frame()` still exists in `replay_engine.py`, but nothing calls it and its docstring's `/ws/replay` WebSocket route was never registered on the backend, the arcade's real live path is the direct in-process pipeline broadcasting over a local TCP socket, documented in [Arcade strategy pipeline](#/arcade-strategy-pipeline) and [Multi-agent system → Three-window arcade](#/multi-agent).
 
 ## Data boundary (architectural constraint)
 
@@ -125,7 +125,7 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
 |---|---|
 | `Lap` | Lap number |
 | `Pos` | Our driver's position |
-| `Compound` | Tyre compound abbreviation + laps on tyre — `INT(20L)` = Intermediate, 20 laps; `HAR(2L)` = Hard, 2 laps; `MED` = Medium; `SOF` = Soft |
+| `Compound` | Tyre compound abbreviation + laps on tyre: `INT(20L)` = Intermediate, 20 laps; `HAR(2L)` = Hard, 2 laps; `MED` = Medium; `SOF` = Soft |
 | `LapTime` | Lap time in M:SS.mmm. `---.-` = deleted lap (red flag, pit-in lap, etc.) |
 | `Gap Leader` | Our gap to P1 in seconds. `+0.000` = we are the leader |
 | `Ahead / Behind` | Rival directly ahead/behind in position |
@@ -233,7 +233,7 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
 }
 ```
 
-## Future — Kafka integration (v0.14)
+## Future: Kafka integration (v0.14)
 
 Replace `RaceReplayEngine.replay()` with a `LiveKafkaConsumer.consume_lap()` iterator that emits the same `lap_state` dict from a live Kafka topic. Zero changes to agents or orchestrator.
 

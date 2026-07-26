@@ -4,7 +4,7 @@
 
 The backend is a FastAPI application at `src/telemetry/backend/`. It serves telemetry data, driver comparisons, chat (LM Studio proxy), and the N25–N31 strategy agent pipeline. All endpoints are prefixed with `/api/v1`.
 
-Entry point: `backend/main.py` — creates the FastAPI app and registers all routers.
+Entry point: `backend/main.py`, creates the FastAPI app and registers all routers.
 
 ## Router map
 
@@ -20,8 +20,8 @@ There is no `auth` router. Authentication is a single ASGI middleware wrapping e
 
 Two more mount points sit outside the router list:
 
-- **`GET /`** and **`GET /health`** — unauthenticated liveness endpoints, registered directly on the `FastAPI` app in `main.py`.
-- **`/mcp`** — the FastMCP Streamable-HTTP server, mounted only when `F1_MCP_ENABLED=true` (off by default). The chat pipeline reaches the same tools in-process regardless of this flag, so leaving it unmounted removes an open network surface, not a feature. See "Authentication" and "MCP-Driven Tool Routing" below.
+- **`GET /`** and **`GET /health`**, unauthenticated liveness endpoints, registered directly on the `FastAPI` app in `main.py`.
+- **`/mcp`**, the FastMCP Streamable-HTTP server, mounted only when `F1_MCP_ENABLED=true` (off by default). The chat pipeline reaches the same tools in-process regardless of this flag, so leaving it unmounted removes an open network surface, not a feature. See "Authentication" and "MCP-Driven Tool Routing" below.
 
 ## Authentication
 
@@ -29,14 +29,14 @@ Every router (and the `/mcp` mount, when enabled) sits behind a single shared-se
 
 - **Header**: `X-API-Key`, compared against the `F1_API_KEY` env var with `hmac.compare_digest`.
 - **Open paths**: `/` and `/health` always pass unauthenticated (uptime probes). `OPTIONS` (CORS preflight) always passes.
-- **Safe-by-default when unset**: if `F1_API_KEY` is not set, every other request also passes — this is the local-dev default. The dangerous combination is a non-loopback bind (`F1_HOST` other than `127.0.0.1`/`localhost`/`::1`) with no key set: `enforce_startup_security()` refuses to boot in that case rather than come up open on the network.
+- **Safe-by-default when unset**: if `F1_API_KEY` is not set, every other request also passes, this is the local-dev default. The dangerous combination is a non-loopback bind (`F1_HOST` other than `127.0.0.1`/`localhost`/`::1`) with no key set: `enforce_startup_security()` refuses to boot in that case rather than come up open on the network.
 - **WebSocket**: gated the same way; an unauthorized WS handshake gets a policy-violation close (code 1008) instead of a 401 body.
 
 This means `F1_API_KEY` and `F1_HOST` (see [Setup and deployment](#/setup)) are the two env vars that decide whether the backend is safe to expose beyond localhost.
 
 ## Rate limiting
 
-Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`, Security C2 / S-7) keyed on client IP. No external dependency — a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket.
+Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`, Security C2 / S-7) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket.
 
 | Route | Burst capacity | Refill rate |
 |---|---|---|
@@ -111,9 +111,9 @@ Each tool is mapped to a `DisplayType` hint via `TOOL_DISPLAY_MAP` (`models/tool
 
 ### Tool risk tiers and the chat allowlist (Security A2, #224)
 
-`models/tool_schemas.py` classifies every dispatchable MCP tool into a `ToolRisk` tier — `READ_SAFE` (cheap, e.g. `predict_pace`), `READ_EXPENSIVE` (heavy but still read-only, e.g. `recommend_strategy`'s 500-sample Monte Carlo, or `query_regulations`'s RAG lookup), or `MUTATING` (writes/exports; none exist today). `CHAT_ALLOWED_TOOLS` is the default-deny set built from the first two tiers: a tool absent from `TOOL_RISK_MAP` — hallucinated by the LLM, or a newly added tool nobody classified yet — is refused by both `mcp_bridge` (before it reaches the LLM's tool list) and `chat_engine`'s dispatch guard (before it runs), and a `MUTATING` tool can never join the allowlist. The hard rule: no write/export tool may be added to the MCP server until it has a `TOOL_RISK_MAP` entry.
+`models/tool_schemas.py` classifies every dispatchable MCP tool into a `ToolRisk` tier: `READ_SAFE` (cheap, e.g. `predict_pace`), `READ_EXPENSIVE` (heavy but still read-only, e.g. `recommend_strategy`'s 500-sample Monte Carlo, or `query_regulations`'s RAG lookup), or `MUTATING` (writes/exports; none exist today). `CHAT_ALLOWED_TOOLS` is the default-deny set built from the first two tiers: a tool absent from `TOOL_RISK_MAP`, hallucinated by the LLM, or a newly added tool nobody classified yet, is refused by both `mcp_bridge` (before it reaches the LLM's tool list) and `chat_engine`'s dispatch guard (before it runs), and a `MUTATING` tool can never join the allowlist. The hard rule: no write/export tool may be added to the MCP server until it has a `TOOL_RISK_MAP` entry.
 
-Every Phase 1 tool (`predict_pace`/`predict_tire`/`predict_situation`/`predict_pit`/`analyze_radio`/`recommend_strategy`) also normalises its `gp`/`driver`/`lap`/`year` arguments in `mcp_tools.py` before building the `lap_state` (`_normalize_gp_name`, `_normalize_driver_code`, `_normalize_lap`, `_normalize_year`). An unparseable lap number used to silently become lap 1 (#442); it now raises `ToolInputError`, which the `_catch_tool_input_error` decorator turns into a plain "X is invalid, here are the valid options" string for the LLM instead of a traceback — the same REFUSED shape the agent-level tool guards described in [Agents API reference](#/agents-api) already use.
+Every Phase 1 tool (`predict_pace`/`predict_tire`/`predict_situation`/`predict_pit`/`analyze_radio`/`recommend_strategy`) also normalises its `gp`/`driver`/`lap`/`year` arguments in `mcp_tools.py` before building the `lap_state` (`_normalize_gp_name`, `_normalize_driver_code`, `_normalize_lap`, `_normalize_year`). An unparseable lap number used to silently become lap 1 (#442); it now raises `ToolInputError`, which the `_catch_tool_input_error` decorator turns into a plain "X is invalid, here are the valid options" string for the LLM instead of a traceback, the same REFUSED shape the agent-level tool guards described in [Agents API reference](#/agents-api) already use.
 
 ### Smart-spinner stage tracker
 
@@ -123,11 +123,11 @@ The frontend mints a UUID, sends it on every chat request via the `X-Request-Id`
 
 `services/chatbot/` now contains only what the MCP-driven flow needs:
 
-- `chat_engine.py` — async orchestrator (stream + sync entry points).
-- `mcp_bridge.py` — async adapter to the FastMCP server (`list_openai_tools`, `call_mcp_tool`).
-- `llm_service.py` — provider abstraction (LM Studio + OpenAI), now with `tools=` support.
-- `stage_tracker.py` — per-request stage dict for the smart-spinner.
-- `utils/` — empty placeholder; the legacy `tool_param_extractor`, `query_classifier`, `validators`, the per-handler files, the `router/` package and the `prompts/` directory were deleted along with the `/chat/query` endpoint.
+- `chat_engine.py`, async orchestrator (stream + sync entry points).
+- `mcp_bridge.py`, async adapter to the FastMCP server (`list_openai_tools`, `call_mcp_tool`).
+- `llm_service.py`, provider abstraction (LM Studio + OpenAI), now with `tools=` support.
+- `stage_tracker.py`, per-request stage dict for the smart-spinner.
+- `utils/`, empty placeholder; the legacy `tool_param_extractor`, `query_classifier`, `validators`, the per-handler files, the `router/` package and the `prompts/` directory were deleted along with the `/chat/query` endpoint.
 
 ## Voice endpoints (retired)
 
@@ -139,7 +139,7 @@ All strategy endpoints live under `/api/v1/strategy/`. They accept JSON bodies a
 
 ### Consumers
 
-The `/api/v1/strategy/simulate` SSE endpoint is consumed by the web app and by `curl` / `TestClient` smoke tests. The arcade replay no longer calls this endpoint — as of Phase 3.5 Proceso B (April 2026), the arcade owns its own strategy pipeline via [`src/arcade/strategy_pipeline.py`](#/arcade-strategy-pipeline).
+The `/api/v1/strategy/simulate` SSE endpoint is consumed by the web app and by `curl` / `TestClient` smoke tests. The arcade replay no longer calls this endpoint, as of Phase 3.5 Proceso B (April 2026), the arcade owns its own strategy pipeline via [`src/arcade/strategy_pipeline.py`](#/arcade-strategy-pipeline).
 
 ### `POST /api/v1/strategy/simulate`
 
@@ -206,9 +206,9 @@ None of these are read by the projection, which needs `interval_to_driver_s` and
 | `/api/v1/strategy/rag` | `RagRequest` | N30 | Regulation retrieval |
 | `/api/v1/strategy/recommend` | `RecommendRequest` | N31 | Full orchestrator pipeline |
 
-`/tire-range` reuses `PaceRangeRequest` — same `{year, gp, driver, lap_start, lap_end}` shape as `/pace-range`, just routed to the TCN instead of the XGBoost model.
+`/tire-range` reuses `PaceRangeRequest`, same `{year, gp, driver, lap_start, lap_end}` shape as `/pace-range`, just routed to the TCN instead of the XGBoost model.
 
-Every POST endpoint above (plus `/pace-range` and `/tire-range`) sits behind its own rate-limit bucket — see "Rate limiting" above.
+Every POST endpoint above (plus `/pace-range` and `/tire-range`) sits behind its own rate-limit bucket, see "Rate limiting" above.
 
 ### Request schemas
 
@@ -258,7 +258,7 @@ class RecommendRequest(BaseModel):
 
 ### Response schemas
 
-All agent endpoints return the generic `StrategyResponse` envelope. Swagger also exposes a typed result model per agent (`PaceResult`, `TireResult`, `SituationResult`, `PitResult`, `RadioResult`, `RagResult` — mirroring the dataclass fields in [Agents API reference](#/agents-api)) for self-documentation, but the actual response body is the untyped envelope below:
+All agent endpoints return the generic `StrategyResponse` envelope. Swagger also exposes a typed result model per agent (`PaceResult`, `TireResult`, `SituationResult`, `PitResult`, `RadioResult`, `RagResult`, mirroring the dataclass fields in [Agents API reference](#/agents-api)) for self-documentation, but the actual response body is the untyped envelope below:
 
 ```python
 class StrategyResponse(BaseModel):
@@ -282,7 +282,7 @@ Strategy endpoints catch `(KeyError, TypeError, ValueError)` from the underlying
 
 ## CORS
 
-`CORSMiddleware` allows a single origin — `FRONTEND_URL` (default `http://localhost:8501`) — not a wildcard. Credentials are dropped (`allow_credentials=False`; the web app reaches the backend same-origin through its nginx / Vite `/api` proxy, so cross-origin browser requests are the exception, not the rule), and both the method and header allowlists are enumerated rather than `"*"`: `GET`/`POST`/`OPTIONS` and `Content-Type`/`Accept`/`X-Request-Id`. The `ApiKeyMiddleware` described under "Authentication" wraps CORS from the outside (registered after it in `main.py`), so an unauthenticated request is rejected before any CORS or routing logic runs; `OPTIONS` preflight is exempted so it still completes.
+`CORSMiddleware` allows a single origin: `FRONTEND_URL` (default `http://localhost:8501`), not a wildcard. Credentials are dropped (`allow_credentials=False`; the web app reaches the backend same-origin through its nginx / Vite `/api` proxy, so cross-origin browser requests are the exception, not the rule), and both the method and header allowlists are enumerated rather than `"*"`: `GET`/`POST`/`OPTIONS` and `Content-Type`/`Accept`/`X-Request-Id`. The `ApiKeyMiddleware` described under "Authentication" wraps CORS from the outside (registered after it in `main.py`), so an unauthenticated request is rejected before any CORS or routing logic runs; `OPTIONS` preflight is exempted so it still completes.
 
 ## Swagger / OpenAPI
 

@@ -1,4 +1,4 @@
-# src/strategy — Strategy Model Modules
+# src/strategy: Strategy Model Modules
 
 **Read this first:** this package holds two different things with opposite statuses.
 

@@ -16,7 +16,7 @@ One command launches everything: the arcade replay window (pyglet), the strategy
 - **Dependencies**: run `uv sync` from the repo root. The lockfile pulls `arcade`, `PySide6`, `pyqtgraph`, `fastf1`, `langchain-openai`, the model stack (`xgboost`, `lightgbm`, `torch`), and the NLP stack (`transformers`, `sentence-transformers`, `setfit`). No manual install steps required beyond `uv sync`.
 - **LLM credentials**: either set `OPENAI_API_KEY` in a repo-root `.env` (the canonical TFG setup) or run LM Studio locally on `http://localhost:1234/v1` and pass `--provider lmstudio` on the command line (the arcade's own flag; its default is `openai`, independent of the `F1_LLM_PROVIDER` env var the backend and CLI read). Only the wording of the orchestrator's reasoning changes.
 - **Race data cache**: the replay reads `data/raw/{year}/{Location}/laps.parquet` and optionally `weather.parquet`. The parquet files are produced by FastF1 on first run. Expect a 20–40 second delay on the first launch of a round.
-- **Vector store (optional)**: the N30 RAG agent reads a local Qdrant index under `data/rag/`. If missing, the orchestrator degrades gracefully — regulation lookups return an empty context. Run `python scripts/build_rag_index.py` once to build it.
+- **Vector store (optional)**: the N30 RAG agent reads a local Qdrant index under `data/rag/`. If missing, the orchestrator degrades gracefully, regulation lookups return an empty context. Run `python scripts/build_rag_index.py` once to build it.
 
 ## One-command launch
 
@@ -47,7 +47,7 @@ Track outline with the DRS zones drawn in green, two driver icons (our driver in
 A `QSplitter` divides the window into two halves.
 
 - **Left panel (540 px wide)**: orchestrator card on top (action badge, confidence bar, pace/risk chips, plan strip with compound pill, and a guardrail line that shows when the no-LLM hard guard overrode the LLM pick), scenario bars in the middle (four bars for STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT), reasoning tabs on the bottom (six tabs with syntax highlighting).
-- **Right panel (740 px wide)**: a 3x2 grid of sub-agent cards. Pace (N25), Tire (N26), Situation (N27), Radio (N29), Pit (N28, dimmed when inactive), RAG (N30, dimmed when inactive). Each card has a headline, a short body, and a reserved chart slot — Pace and Tire host embedded `pyqtgraph` plots.
+- **Right panel (740 px wide)**: a 3x2 grid of sub-agent cards. Pace (N25), Tire (N26), Situation (N27), Radio (N29), Pit (N28, dimmed when inactive), RAG (N30, dimmed when inactive). Each card has a headline, a short body, and a reserved chart slot: Pace and Tire host embedded `pyqtgraph` plots.
 
 ### Telemetry window (PySide6)
 
@@ -78,11 +78,11 @@ Pass `--driver2 LEC` and:
 
 Hotkeys handled by `F1ArcadeView.on_key_press`:
 
-- `Space` — pause / resume
-- `Right Arrow` — step one lap forward
-- `Left Arrow` — step one lap backward
-- `+` / `-` — increase / decrease playback speed
-- `Escape` — return to the menu (or exit if launched with `--viewer`)
+- `Space`, pause / resume
+- `Right Arrow`, step one lap forward
+- `Left Arrow`, step one lap backward
+- `+` / `-`, increase / decrease playback speed
+- `Escape`, return to the menu (or exit if launched with `--viewer`)
 
 ## Known limitations
 
@@ -103,6 +103,6 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 
 ## Related reading
 
-- [Arcade dashboard](#/arcade-dashboard) — developer-level architecture deep dive on the dashboard package.
-- [Arcade strategy pipeline](#/arcade-strategy-pipeline) — why the arcade keeps its own copy of the orchestrator body.
-- [Multi-agent system](#/multi-agent) — N25–N31 multi-agent pipeline reference.
+- [Arcade dashboard](#/arcade-dashboard), developer-level architecture deep dive on the dashboard package.
+- [Arcade strategy pipeline](#/arcade-strategy-pipeline), why the arcade keeps its own copy of the orchestrator body.
+- [Multi-agent system](#/multi-agent): N25–N31 multi-agent pipeline reference.

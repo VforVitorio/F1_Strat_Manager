@@ -1,4 +1,4 @@
-# src/vision — Computer vision experiments (archived)
+# src/vision: Computer vision experiments (archived)
 
 **Status: archived.** The computer-vision direction (broadcast frame
 analysis with YOLO + OpenCV) was abandoned during the early phases of the
@@ -13,7 +13,7 @@ the multi-agent system.
 
 | File | Description |
 |---|---|
-| [`gap_calculation.py`](gap_calculation.py) | Jupytext export of the broadcast-frame gap-calculation prototype. Loads a YOLOv8 checkpoint, runs detection on each frame, and infers inter-car distances from bounding-box geometry plus track scale. Uses absolute paths from the original development machine — not runnable as-is, kept as a design reference for the YOLO pipeline |
+| [`gap_calculation.py`](gap_calculation.py) | Jupytext export of the broadcast-frame gap-calculation prototype. Loads a YOLOv8 checkpoint, runs detection on each frame, and infers inter-car distances from bounding-box geometry plus track scale. Uses absolute paths from the original development machine, not runnable as-is, kept as a design reference for the YOLO pipeline |
 | `__init__.py` | Empty package marker |
 
 ---

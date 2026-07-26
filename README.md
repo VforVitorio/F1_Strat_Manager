@@ -76,14 +76,14 @@ The Arcade is in the hero above. Here are the other two:
     <img src="docs/assets/demo/cli-demo.gif" alt="F1 StratLab CLI demo: headless Rich live inference panel" width="100%"/>
   </a>
   <br/>
-  <sub><strong>CLI</strong> — headless Rich panel, one race, no GUI. <a href="docs/assets/demo/cli-demo.mp4">Play ▶</a></sub>
+  <sub><strong>CLI</strong>, headless Rich panel, one race, no GUI. <a href="docs/assets/demo/cli-demo.mp4">Play ▶</a></sub>
 </td>
 <td width="50%" align="center">
   <a href="docs/assets/demo/webapp-demo.mp4">
     <img src="docs/assets/demo/webapp-demo.gif" alt="F1 StratLab v2 web app demo: head-to-head 60fps replay, ML model lab, a multi-agent pit-wall call, and a streaming AI strategist rendering charts inline" width="100%"/>
   </a>
   <br/>
-  <sub><strong>Web app</strong> — post-race analytics and the AI strategist. <a href="docs/assets/demo/webapp-demo.mp4">Full ~30s tour ▶</a></sub>
+  <sub><strong>Web app</strong>, post-race analytics and the AI strategist. <a href="docs/assets/demo/webapp-demo.mp4">Full ~30s tour ▶</a></sub>
 </td>
 </tr>
 </table>
@@ -168,11 +168,11 @@ If F1 StratLab is useful in your research, your writing or your own project, ple
 
 > Vega Sobral, V. (2026). *F1 StratLab: an open multi-agent system for Formula 1 race strategy* (Version 2.0.1) [Computer software]. https://github.com/VforVitorio/F1-StratLab
 
-**Plain text** — a link is enough for a blog post or a talk:
+**Plain text**, a link is enough for a blog post or a talk:
 
-> F1 StratLab by Víctor Vega Sobral — https://github.com/VforVitorio/F1-StratLab
+> F1 StratLab by Víctor Vega Sobral, https://github.com/VforVitorio/F1-StratLab
 
-If you build on a specific part, citing the version you used helps: the strategy engine changes between releases, so the numbers in a v1 run are not the numbers in a v2 one. And if you do use it for something, an issue or a message saying so is genuinely welcome — it is the only way to find out where this ends up.
+If you build on a specific part, citing the version you used helps: the strategy engine changes between releases, so the numbers in a v1 run are not the numbers in a v2 one. And if you do use it for something, an issue or a message saying so is genuinely welcome, it is the only way to find out where this ends up.
 
 ---
 

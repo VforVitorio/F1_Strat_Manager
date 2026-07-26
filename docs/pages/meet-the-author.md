@@ -17,20 +17,20 @@ a digital twin of an F1 race.
 
 ## Where to find me
 
-- **GitHub** — [@VforVitorio](https://github.com/VforVitorio)
-- **Project landing** — [f1stratlab.com](https://f1stratlab.com/)
-- **DeepWiki** — [F1 StratLab on DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab)
-- **LinkedIn** — [victorvegasobral](https://www.linkedin.com/in/victorvegasobral/)
-- **Hugging Face dataset** — [f1-strategy-dataset](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset)
-- **Portfolio** — [victorvegasobral.com](https://victorvegasobral.com)
+- **GitHub**, [@VforVitorio](https://github.com/VforVitorio)
+- **Project landing**, [f1stratlab.com](https://f1stratlab.com/)
+- **DeepWiki**, [F1 StratLab on DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab)
+- **LinkedIn**, [victorvegasobral](https://www.linkedin.com/in/victorvegasobral/)
+- **Hugging Face dataset**, [f1-strategy-dataset](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset)
+- **Portfolio**, [victorvegasobral.com](https://victorvegasobral.com)
 
 ## About the project
 
 F1 StratLab is a multi-agent system that turns a live (or replayed)
 Formula 1 race into actionable strategy. Seven ML models cover the
-quantitative core — lap-time delta, tire degradation with MC Dropout,
+quantitative core, lap-time delta, tire degradation with MC Dropout,
 overtake probability, safety-car prior, pit duration and undercut
-success — and feed six LangGraph sub-agents (pace, tire, race
+success, and feed six LangGraph sub-agents (pace, tire, race
 situation, pit strategy, radio, RAG) which a single orchestrator
 (N31) fuses into a
 Pydantic-typed decision per lap: action, pace target, risk level,
@@ -45,20 +45,20 @@ under Apache-2.0 and shipped as wheels and GitHub releases through
 release-please automation.
 
 This documentation site is the engineering companion to the thesis
-memoria — every notebook, model, agent and surface is wired into the
+memoria, every notebook, model, agent and surface is wired into the
 graph view so you can navigate by topic, by tag, or by cross-reference.
 
 ## Acknowledgements
 
-- **Academic** — UIE Campus Coruña, Intelligent Systems Engineering
+- **Academic**: UIE Campus Coruña, Intelligent Systems Engineering
   faculty and thesis advisors.
-- **Open data community** — [FastF1](https://docs.fastf1.dev) and
+- **Open data community**, [FastF1](https://docs.fastf1.dev) and
   [OpenF1](https://openf1.org) provide the telemetry, lap and timing
   data this entire project depends on.
-- **Open-source libraries** — LangGraph, LightGBM, XGBoost, PyTorch,
+- **Open-source libraries**: LangGraph, LightGBM, XGBoost, PyTorch,
   Pydantic, FastAPI, React, Vite, ECharts, PySide6, pyglet, Qdrant, and
   the Hugging Face ecosystem.
-- **Reference work** — TUMFTM race-simulation for the pit-delta
+- **Reference work**: TUMFTM race-simulation for the pit-delta
   framing, plus the wider F1 analytics community whose public
   notebooks shaped the early modelling decisions.
 
