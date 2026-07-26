@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2026-04-13" agent="Claude" version="24.7.17">
+<mxfile host="app.diagrams.net" modified="2026-07-26" agent="Claude" version="24.7.17">
   <diagram id="docker-1" name="Docker Deployment">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0" background="#0a0a1a">
       <root>
@@ -30,15 +30,15 @@
         <mxCell id="fe_container" value="" style="swimlane;html=1;startSize=35;fillColor=#1e1b4b;strokeColor=#7c3aed;strokeWidth=2;rounded=1;arcSize=6;swimlaneLine=0;" vertex="1" parent="1">
           <mxGeometry x="100" y="150" width="440" height="350" as="geometry"/>
         </mxCell>
-        <mxCell id="fe_label" value="f1_telemetry_frontend" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="fe_container">
+        <mxCell id="fe_label" value="f1_webapp" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="fe_container">
           <mxGeometry x="10" y="0" width="250" height="35" as="geometry"/>
         </mxCell>
 
-        <mxCell id="fe_img" value="&lt;b&gt;Image&lt;/b&gt;: python:3.11-slim&lt;br&gt;&lt;b&gt;Dockerfile&lt;/b&gt;: frontend/Dockerfile&lt;br&gt;&lt;b&gt;Context&lt;/b&gt;: ./src/telemetry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#312e81;strokeColor=#6366f1;fontColor=#a5b4fc;fontSize=10;align=left;spacingLeft=8;verticalAlign=top;spacingTop=4;" vertex="1" parent="fe_container">
+        <mxCell id="fe_img" value="&lt;b&gt;Image&lt;/b&gt;: nginx (multi-stage node build)&lt;br&gt;&lt;b&gt;Dockerfile&lt;/b&gt;: webapp/Dockerfile&lt;br&gt;&lt;b&gt;Context&lt;/b&gt;: ./src/telemetry/webapp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#312e81;strokeColor=#6366f1;fontColor=#a5b4fc;fontSize=10;align=left;spacingLeft=8;verticalAlign=top;spacingTop=4;" vertex="1" parent="fe_container">
           <mxGeometry x="20" y="45" width="400" height="60" as="geometry"/>
         </mxCell>
 
-        <mxCell id="fe_port" value="&lt;font style=&quot;font-size:16px&quot;&gt;:8501&lt;/font&gt;&lt;br&gt;Streamlit" style="ellipse;whiteSpace=wrap;html=1;fillColor=#3b0764;strokeColor=#a855f7;fontColor=#e9d5ff;fontSize=11;fontStyle=1;" vertex="1" parent="fe_container">
+        <mxCell id="fe_port" value="&lt;font style=&quot;font-size:16px&quot;&gt;:8501&lt;/font&gt;&lt;br&gt;React SPA via nginx" style="ellipse;whiteSpace=wrap;html=1;fillColor=#3b0764;strokeColor=#a855f7;fontColor=#e9d5ff;fontSize=11;fontStyle=1;" vertex="1" parent="fe_container">
           <mxGeometry x="20" y="120" width="100" height="60" as="geometry"/>
         </mxCell>
 
@@ -113,7 +113,7 @@
         </mxCell>
 
         <!-- Port mapping annotations -->
-        <mxCell id="port_note_fe" value="&lt;font style=&quot;font-size:9px&quot;&gt;host 8501 &amp;rarr; container 8501&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;fontColor=#818cf8;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="port_note_fe" value="&lt;font style=&quot;font-size:9px&quot;&gt;host 8501 &amp;rarr; container 80&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;fontColor=#818cf8;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="100" y="530" width="180" height="18" as="geometry"/>
         </mxCell>
         <mxCell id="port_note_be" value="&lt;font style=&quot;font-size:9px&quot;&gt;host 8000 &amp;rarr; container 8000&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;fontColor=#5eead4;fillColor=none;strokeColor=none;" vertex="1" parent="1">

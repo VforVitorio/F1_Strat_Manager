@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2026-04-13" agent="Claude" version="24.7.17">
+<mxfile host="app.diagrams.net" modified="2026-07-26" agent="Claude" version="24.7.17">
   <diagram id="be-api-1" name="Backend API Endpoint Map">
     <mxGraphModel dx="1600" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0" background="#0a0a1a">
       <root>
@@ -121,17 +121,8 @@
         <mxCell id="r_voice" value="" style="swimlane;html=1;startSize=30;fillColor=#121127;strokeColor=#a78bfa;strokeWidth=2;rounded=1;arcSize=6;swimlaneLine=0;" vertex="1" parent="1">
           <mxGeometry x="800" y="170" width="220" height="270" as="geometry"/>
         </mxCell>
-        <mxCell id="r_voice_title" value="/voice" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="r_voice">
-          <mxGeometry x="5" y="0" width="200" height="30" as="geometry"/>
-        </mxCell>
         <mxCell id="v1" value="POST /transcribe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=9;align=left;spacingLeft=6;" vertex="1" parent="r_voice">
           <mxGeometry x="10" y="40" width="200" height="30" as="geometry"/>
-        </mxCell>
-        <mxCell id="v2" value="POST /process-voice" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=9;align=left;spacingLeft=6;" vertex="1" parent="r_voice">
-          <mxGeometry x="10" y="78" width="200" height="30" as="geometry"/>
-        </mxCell>
-        <mxCell id="v3" value="POST /complete-voice" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=9;align=left;spacingLeft=6;" vertex="1" parent="r_voice">
-          <mxGeometry x="10" y="116" width="200" height="30" as="geometry"/>
         </mxCell>
         <mxCell id="v4" value="GET /models" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=9;align=left;spacingLeft=6;" vertex="1" parent="r_voice">
           <mxGeometry x="10" y="154" width="200" height="30" as="geometry"/>
