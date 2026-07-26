@@ -114,7 +114,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 
 ### `src/agents/`
 
-**Production multi-agent system** (N25–N31): `pace_agent.py`, `tire_agent.py`, `race_situation_agent.py`, `pit_strategy_agent.py`, `radio_agent.py`, `rag_agent.py`, `strategy_orchestrator.py` — each exposes a `run_*_agent_from_state(lap_state)` entry point consumed by the CLI, Arcade and Streamlit surfaces.
+**Production multi-agent system** (N25–N31): `pace_agent.py`, `tire_agent.py`, `race_situation_agent.py`, `pit_strategy_agent.py`, `radio_agent.py`, `rag_agent.py`, `strategy_orchestrator.py`. Each exposes a `run_*_agent_from_state(...)` adapter consumed by the CLI, the Arcade and the web app backend. The adapters do **not** share one signature: most take `(lap_state, laps_df)`, but `run_pace_agent_from_state` takes only `lap_state` and the orchestrator takes a third `lap_state` argument. The authoritative list is in [src/agents/README.md](src/agents/README.md), regenerated from `inspect.signature`.
 
 **Production support module** for the orchestrator:
 

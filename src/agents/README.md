@@ -9,26 +9,27 @@ Each module is importable without a FastF1 session via its `*_from_state` RSM ad
 
 | File | Notebook | Role | Entry points |
 |---|---|---|---|
-| `pace_agent.py` | N25 | XGBoost lap-time prediction + bootstrap CI | `run_pace_agent(**kwargs)` · `run_pace_agent_from_state(lap_state, laps_df)` |
-| `tire_agent.py` | N26 | TireDegTCN + MC Dropout cliff estimation | `run_tire_agent(lap_state)` · `run_tire_agent_from_state(lap_state, laps_df)` |
+| `pace_agent.py` | N25 | XGBoost lap-time prediction + bootstrap CI | `run_pace_agent(driver_number, lap_number, stint, ...)` (23 positional features) · `run_pace_agent_from_state(lap_state)` |
+| `tire_agent.py` | N26 | TireDegTCN + MC Dropout cliff estimation | `run_tire_agent(stint_state)` · `run_tire_agent_from_state(lap_state, laps_df)` |
 | `race_situation_agent.py` | N27 | LightGBM overtake prob + SC prob (N12 + N14) | `run_race_situation_agent(lap_state)` · `run_race_situation_agent_from_state(lap_state, laps_df)` |
 | `pit_strategy_agent.py` | N28 | N15 pit quantiles + N16 undercut + compound recommendation | `run_pit_strategy_agent(lap_state)` · `run_pit_strategy_agent_from_state(lap_state, laps_df)` |
-| `radio_agent.py` | N29 | RoBERTa sentiment + SetFit intent + BERT-large NER + RCM parser | `run_radio_agent(lap_state)` · `run_radio_agent_from_state(lap_state, laps_df)` |
-| `rag_agent.py` | N30 | FIA regulation retrieval (Qdrant + BGE-M3 + LangGraph ReAct) | `run_rag_agent(question)` · `run_rag_agent_from_state(lap_state)` |
+| `radio_agent.py` | N29 | RoBERTa sentiment + SetFit intent + BERT-large NER + RCM parser | `run_radio_agent(lap_state, persist=False)` · `run_radio_agent_from_state(lap_state, laps_df, persist=False)` |
+| `rag_agent.py` | N30 | FIA regulation retrieval (Qdrant + BGE-M3 + LangGraph ReAct) | `run_rag_agent(question)` · `run_rag_agent_from_state(lap_state, laps_df=None)` |
 | `position_projection.py` | — | Pure primitive: turns per-rival gaps into a projected end-of-window track position, so the decision layer scores in cars rather than in seconds. Loads no model, reads no file. | `project_positions(rivals, plan, config, pit_loss_s, cliff_laps, stop_is_neutralised=False)` · `payoff(result, current_position, config)` · `rank_targets(rivals, config, our_pit_loss_s)` |
-| `strategy_orchestrator.py` | N31 | MoE routing + MC simulation + LLM synthesis | `run_strategy_orchestrator(race_state, lap_state)` · `run_strategy_orchestrator_from_state(race_state, laps_df)` |
+| `strategy_orchestrator.py` | N31 | MoE routing + MC simulation + LLM synthesis | `run_strategy_orchestrator(race_state, lap_state)` · `run_strategy_orchestrator_from_state(race_state, laps_df, lap_state=None)` |
 
-### Arcade duplication
+### The arcade does not carry a copy
 
-`src/arcade/strategy_pipeline.py` carries a copy of the N31 orchestrator body that
-returns verbose per-stage outputs the arcade dashboard cards need (raw sub-agent
-payloads, MC scenario tables, guardrail overrides). The arcade runs this local pipeline
-instead of calling the FastAPI backend, which keeps the arcade installable as a
-standalone process.
+`src/arcade/strategy_pipeline.py` delegates to the shared inference engine
+(`src/strategy/inference/engine.py`), the same `run_lap` the CLI and the FastAPI
+backend call. It adds only the verbose per-stage payloads the arcade dashboard
+cards need on top of that one result.
 
-**If you change the orchestrator body in `strategy_orchestrator.py`, mirror the change
-in `src/arcade/strategy_pipeline.py`.** See [docs/strategy-pipeline-arcade.md](../../docs/strategy-pipeline-arcade.md)
-for the full rationale and the audit checklist.
+There is nothing to mirror by hand. This README previously instructed
+contributors to transcribe every orchestrator edit into the arcade, which is
+exactly the drift the shared engine was introduced to eliminate, and it pointed
+at a page that no longer exists. See
+[docs/pages/arcade-strategy-pipeline.md](../../docs/pages/arcade-strategy-pipeline.md).
 
 ---
 
@@ -83,19 +84,26 @@ RaceState (Pydantic)
 
 ## RSM adapter pattern
 
-Every agent exposes two entry points:
+Every agent exposes two entry points: one that expects populated module globals
+from a FastF1 session, and an RSM adapter that needs no session because it
+builds `SESSION_META` from the laps frame and calls the same core logic.
 
-```python
-# FastF1 entry point (requires populated module globals from setup_session)
-run_*_agent(lap_state)
+**The two are not uniform, and assuming they are will break your call.** The
+table above carries the real signatures, taken from `inspect.signature`. Three
+of them differ from what a reader would guess:
 
-# RSM adapter (no FastF1 session required)
-run_*_agent_from_state(lap_state, laps_df)
-```
+| entry point | the surprise |
+|---|---|
+| `run_pace_agent_from_state(lap_state)` | takes no `laps_df`, unlike every other adapter |
+| `run_tire_agent(stint_state)` | its parameter is a stint state, not a lap state |
+| `run_strategy_orchestrator_from_state(race_state, laps_df, lap_state=None)` | a third argument, and the projection needs it |
 
-The RSM adapter builds `SESSION_META` from `laps_df` and calls the same core logic.
-Use `run_strategy_orchestrator_from_state(race_state, laps_df)` to run the full
-pipeline from a pre-loaded parquet DataFrame.
+That last one matters most: without `lap_state` the orchestrator has no rival
+gaps, so the Monte Carlo falls back to the legacy seconds path instead of
+scoring in projected track position.
+
+Regenerate this table with `inspect.signature` rather than by hand. It has been
+wrong before.
 
 ---
 

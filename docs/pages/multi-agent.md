@@ -225,17 +225,22 @@ Dirty air is priced at the moment the car ahead boxes and not continuously, so r
 
 ## RSM adapter pattern
 
-Every agent exposes two entry points:
+Every agent exposes two entry points: one that expects populated module globals from a FastF1 session, and an RSM adapter that works straight from a parquet frame because it builds `SESSION_META` itself and then calls the same core logic.
+
+**They are not uniform.** The shapes below come from `inspect.signature`, and three of them differ from what the pattern would lead you to guess:
 
 ```python
-# FastF1 entry point (requires populated module globals)
-run_*_agent(lap_state)
-
-# RSM adapter (no FastF1 session required, works from parquet)
-run_*_agent_from_state(lap_state, laps_df)
+run_pace_agent_from_state(lap_state)                                  # no laps_df, unlike every other adapter
+run_tire_agent(stint_state)                                           # a stint state, not a lap state
+run_tire_agent_from_state(lap_state, laps_df)
+run_race_situation_agent_from_state(lap_state, laps_df)
+run_pit_strategy_agent_from_state(lap_state, laps_df)
+run_radio_agent_from_state(lap_state, laps_df, persist=False)
+run_rag_agent_from_state(lap_state, laps_df=None)
+run_strategy_orchestrator_from_state(race_state, laps_df, lap_state=None)
 ```
 
-The RSM adapter builds `SESSION_META` from `laps_df` and calls the same core logic. The orchestrator uses `run_strategy_orchestrator_from_state(race_state, laps_df)` for the full pipeline.
+That last argument is the one worth remembering: without `lap_state` the orchestrator never sees the rival gaps, so the Monte Carlo falls back to the legacy seconds path instead of scoring in projected track position. See [agents-api.md](#/agents-api) for the full per-agent reference.
 
 ## LLM configuration
 
