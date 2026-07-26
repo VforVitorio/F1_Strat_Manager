@@ -89,6 +89,30 @@ Start LM Studio with a model loaded, serving on `http://localhost:1234/v1`. The 
 
 ## Docker deployment
 
+```mermaid
+graph TD
+    U[browser] -->|":8501"| NG
+    subgraph net["f1_network"]
+        subgraph wsvc["webapp service"]
+            NG[nginx<br/>serves the built SPA<br/>and reverse-proxies /api]
+        end
+        subgraph bsvc["backend service"]
+            API["uvicorn backend.main:app<br/>:8000, --reload"]
+        end
+        NG -->|"/api -> backend:8000"| API
+    end
+    API -->|F1_LLM_PROVIDER| LLM[["OpenAI, or LM Studio<br/>on the host"]]
+
+    V1["./src:/app/src :ro"] --> API
+    V2["./data:/app/data :ro"] --> API
+    V3["./data/rag :rw<br/>Qdrant writes its on-disk index here"] --> API
+    V4["backend_cache:/root/.cache<br/>named volume, survives a rebuild"] --> API
+```
+
+Two things are worth reading off that. **Qdrant is not a service:** it runs on-disk inside the backend process, which is why `data/rag` is the one mount that is read-write. And the browser only ever talks to `:8501`; `/api` is reverse-proxied, so there is no second origin and no CORS to configure.
+
+`f1-webapp` wraps `docker compose up` on this file. `F1_STRAT_DATA_ROOT=/app/data` is what makes the container agree with a local checkout about where data lives.
+
 Two equivalent compose files exist, one at the repo root and one path-relative copy inside the submodule — both already mount volumes for live code reload and data access, so pick whichever working directory is convenient.
 
 ### Root `docker-compose.yml`

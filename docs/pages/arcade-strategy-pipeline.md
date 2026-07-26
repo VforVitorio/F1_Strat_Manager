@@ -4,6 +4,34 @@
 
 ## One engine, three surfaces
 
+```mermaid
+graph LR
+    subgraph cli["CLI"]
+        C1[f1-strat<br/>interactive menu] -->|subprocess| C2[f1-sim<br/>run_simulation_cli.py]
+    end
+    subgraph arc["Arcade"]
+        A1[SimConnector thread] --> A2[strategy_pipeline.py]
+    end
+    subgraph web["Web app"]
+        W1[React SPA] -->|HTTP| W2["/api/v1/strategy/recommend"]
+        W1 -->|SSE| W3["/api/v1/strategy/simulate"]
+    end
+
+    C2 --> ENG
+    A2 --> ENG
+    W2 --> ENG
+    W3 --> ENG
+
+    ENG["run_lap<br/>src/strategy/inference/engine.py"]
+    ENG --> P1["profile=rich<br/>LLM synthesis, full per-stage payloads"]
+    ENG --> P2["profile=no-llm<br/>MC argmax plus the regulatory guard-rails,<br/>no provider call"]
+    P1 --> SUBS[six sub-agents through their<br/>public *_from_state entry points]
+    P2 --> SUBS
+    SUBS --> OUT[StrategyRecommendation<br/>plus agent_outputs and stage timings]
+```
+
+The arrow that matters is the one that is missing: no surface has its own copy. **A strategy call in the web app is the same call the CLI would print for that lap.** If they ever disagree, that is a bug, not a difference of surface.
+
 Every surface needs the same six sub-agents, the same MoE routing, the same Monte Carlo pass and the same synthesis. They differ only in what they render. So the pipeline lives in one place and the surfaces choose how much of its output to consume:
 
 ```
