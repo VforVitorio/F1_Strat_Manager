@@ -186,6 +186,8 @@ Three-layer pipeline:
 
 - **Output**: `StrategyRecommendation` (action, reasoning, confidence, scenario_scores, contingencies)
 - **Action values**: STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, ALERT
+- **Pace modes**: PUSH, NEUTRAL, MANAGE, LIFT_AND_COAST
+- **Risk levels**: AGGRESSIVE, BALANCED, DEFENSIVE
 
 ## What the Monte Carlo actually scores
 
@@ -203,7 +205,7 @@ Candidates carry **explicit eligibility**. An undercut with no live rival inside
 
 **Where the overcut works, and why.** Inside one window an overcut takes the same stop and pays the same pit lane as PIT_NOW, so it forfeits exactly one lap of fresh rubber. What it buys instead is a lap of **clean air**, and whether that is a good trade is a property of the circuit rather than of the strategy.
 
-Both sides are measured. A fresh set is worth 0.25 s/lap; clean air is measured per circuit over 479 cases where a car sat within two seconds of, and directly behind, a driver who then pitted — **+0.77 s/lap at Suzuka, +0.65 at Monaco, +0.63 at Silverstone**, down to **−0.02 at Monza and −0.29 at Spielberg**, where losing the car ahead costs a slipstream worth more than the clear track. The ordering is high-downforce circuits first and slipstream circuits last, and nothing in the measurement knows what downforce is.
+Both sides are measured. A fresh set is worth 0.25 s/lap; clean air is measured per circuit over 479 cases where a car sat within two seconds of, and directly behind, a driver who then pitted — **+0.77 s/lap at Suzuka, +0.65 at Monaco, +0.63 at Silverstone**, down to **−0.015 at Monza and −0.285 at Spielberg**, where losing the car ahead costs a slipstream worth more than the clear track. The ordering is high-downforce circuits first and slipstream circuits last, and nothing in the measurement knows what downforce is.
 
 Clean air is one of two reasons to hold a car out. The other is **option value**: one more lap before the stop is one more lap of exposure to a neutralisation that would make that stop cheap, worth the circuit's measured onset hazard times what a neutralised stop saves. **Melbourne** separates the two cleanly — its clean-air gain is +0.008 s, effectively nothing, but Albert Park throws more neutralisations per lap than any circuit in the sample, so an overcut pays there on Safety Car odds alone.
 
@@ -220,8 +222,6 @@ Together the two terms decide it against the 0.25 s/lap the delay costs:
 The invariant tests assert both directions, comparing the overcut against the same stop taken now: it must out-score a plain stop at Suzuka and at Melbourne, and must lose to one at Monza.
 
 Dirty air is priced at the moment the car ahead boxes and not continuously, so running a whole window stuck in traffic is still under-penalised. That one is named in the module docstring rather than hidden here.
-- **Pace modes**: PUSH, NEUTRAL, MANAGE, LIFT_AND_COAST
-- **Risk levels**: AGGRESSIVE, BALANCED, DEFENSIVE
 
 ## RSM adapter pattern
 

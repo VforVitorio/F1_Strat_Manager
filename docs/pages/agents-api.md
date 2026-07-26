@@ -22,7 +22,7 @@ Every agent has two entry points:
 `lap_state`, which is why the stint fuel baseline is carried there rather than derived from a
 frame. The adapters are not uniform, so check the signature before assuming.
 
-Each agent also exposes a `get_*_react_agent()` factory that returns a compiled LangGraph `CompiledGraph` for direct LangGraph usage.
+Every agent except N29 also exposes a `get_*_react_agent()` factory returning a compiled LangGraph `CompiledGraph`, for callers that want to drive the graph directly. The radio agent has none: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.
 
 ## Output dataclasses
 
@@ -182,8 +182,10 @@ result = process_radio_tool.invoke({
 
 **Agent-level (no LLM needed):**
 
-The `*_from_state` entry points take **only** a `lap_state`, and it must be the real
-nested dict (`driver` / `rivals` / `weather` / `session_meta`), not a flat one. Build it
+Whatever else a `*_from_state` entry point takes, its `lap_state` must be the real
+nested dict (`driver` / `rivals` / `weather` / `session_meta`), not a flat one. Most of
+them take a `laps_df` alongside it; the table above has the exact shapes, and they are
+not uniform. Build it
 with `RaceStateManager` rather than by hand: it is the component that owns the contract,
 and hand-rolling one is how the second, buggy implementation of this got written.
 

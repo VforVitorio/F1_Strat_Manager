@@ -47,14 +47,14 @@ uv sync --all-extras
 Run the simulation against a saved race:
 
 ```bash
-uv run scripts/run_simulation_cli.py Bahrain NOR McLaren --no-llm
+uv run scripts/run_simulation_cli.py Sakhir NOR McLaren --no-llm
 ```
 
 Drop `--no-llm` once you have an LLM provider configured (LM Studio at `http://localhost:1234/v1` or `OPENAI_API_KEY` in `.env`).
 
 ## 3. Docker
 
-For a reproducible all-in-one setup, see [Setup and deployment](#/setup) for the Docker compose recipe that boots the FastAPI backend, the React web app and the Qdrant store in one command.
+For a reproducible all-in-one setup, see [Setup and deployment](#/setup) for the Docker compose recipe that boots the FastAPI backend and the React web app in one command. Qdrant runs on-disk inside the backend process rather than as its own container, so there is nothing extra to start.
 
 ## Where to next
 

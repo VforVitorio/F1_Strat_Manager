@@ -138,6 +138,11 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
 {
     "lap_number": int,
     "driver": {
+        # Identity, repeated inside the sub-dict so a consumer that has been
+        # handed only this slice still knows whose lap it is holding.
+        "driver": str,
+        "team": str,
+        "lap_number": int,
         "lap_time_s": float | None,
         # This lap's Prev_LapTime feature, never last lap's own lap_time_s
         # reused as a stand-in — that self-reference used to feed the pace
@@ -168,7 +173,7 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
     # Only cars classified on this lap. A car that has retired, crashed or has
     # not yet completed the lap has no row for it, so it is simply ABSENT from
     # `rivals` — never present with a filled-in default. See "Who counts as a
-    # rival" below.
+    # rival" above.
     "rivals": [
         {
             "driver": str,
