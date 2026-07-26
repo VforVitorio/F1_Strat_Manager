@@ -11,6 +11,26 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.1.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.1.0...v2.1.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* **readme:** animate the CLI demo instead of showing a still frame ([3c9bcfc](https://github.com/VforVitorio/F1-StratLab/commit/3c9bcfcd122ed239d9e221adfdf5e5d6d6f9c1a3))
+* **readme:** animate the CLI demo instead of showing a still frame ([34d16c6](https://github.com/VforVitorio/F1-StratLab/commit/34d16c6cce77fbdb5fb456f129ec43f69b0b50f0))
+
+
+### Documentation
+
+* **agents:** correct the agent signatures and delete a ritual that recreates deleted drift ([18c2933](https://github.com/VforVitorio/F1-StratLab/commit/18c2933c97a5d098e08b5bb71d522e0764fb5e8c)), closes [#585](https://github.com/VforVitorio/F1-StratLab/issues/585)
+* caveat the two-compound article, and state what the API lap_state really carries ([5a0bb3f](https://github.com/VforVitorio/F1-StratLab/commit/5a0bb3f89d00ef50d84216d06eac83490244251c)), closes [#590](https://github.com/VforVitorio/F1-StratLab/issues/590)
+* correct the package READMEs against the packages they describe ([c6ed75c](https://github.com/VforVitorio/F1-StratLab/commit/c6ed75c9c559a844837bc5e9b10c8559b63826cb)), closes [#589](https://github.com/VforVitorio/F1-StratLab/issues/589)
+* diagram the three things the docs site had no picture of ([a1045f7](https://github.com/VforVitorio/F1-StratLab/commit/a1045f776933934bb884b71c897de610152e3c6b)), closes [#592](https://github.com/VforVitorio/F1-StratLab/issues/592)
+* make the first example runnable, and stop describing fields that do not exist ([e6d52a3](https://github.com/VforVitorio/F1-StratLab/commit/e6d52a3b5a2597bd725c8cb963b03ef6e91f5d9a)), closes [#588](https://github.com/VforVitorio/F1-StratLab/issues/588) [#567](https://github.com/VforVitorio/F1-StratLab/issues/567)
+* remove em-dashes from prose across every documentation surface ([eb5c380](https://github.com/VforVitorio/F1-StratLab/commit/eb5c380f377dae55338d26241889b20f3abccced)), closes [#594](https://github.com/VforVitorio/F1-StratLab/issues/594)
+* send contributors at dev, and repair six links that resolve nowhere ([0d5983a](https://github.com/VforVitorio/F1-StratLab/commit/0d5983ada82c0e8384a4ad8f4beb5a6212af16be))
+* stop describing Streamlit as a live surface, and document the one that replaced it ([f01bd55](https://github.com/VforVitorio/F1-StratLab/commit/f01bd55e811188b3f1198d7590c4e3e0b297639c)), closes [#587](https://github.com/VforVitorio/F1-StratLab/issues/587)
+
 ## [2.1.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.0.1...v2.1.0) (2026-07-25)
 
 
