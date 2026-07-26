@@ -68,8 +68,11 @@ TIRE_COMPOUNDS: dict = (
 )
 
 # ── Module-level constants ─────────────────────────────────────────────────────
-# FastF1 team name variants → N15 training names
-_TEAM_ALIASES: dict[str, str] = {'Racing Bulls': 'RB'}
+# FastF1 team name variants -> N15 training names. Imported rather than declared:
+# this map used to live here alone, and the eval harness that reproduces N15's
+# published MAE never got it, so 20 of 252 rows in the 2025 pit holdout were scored
+# as a different team (#629). One map, two consumers, no drift.
+from src.f1_strat_manager.team_aliases import TEAM_ALIASES as _TEAM_ALIASES  # noqa: E402
 
 # Fallback color→compound_id when TIRE_COMPOUNDS has no entry for the circuit/year
 _COMPOUND_FALLBACK: dict[str, int] = {'HARD': 1, 'MEDIUM': 3, 'SOFT': 5}
