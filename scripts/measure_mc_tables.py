@@ -12,7 +12,7 @@ Six tables, each value carrying its sample size and a 95% interval:
 - ``neutralisation_rate``  per-circuit onset hazard, the input to
                       ``q_f = 1 - exp(-rate * laps_remaining)`` (clamped to [0, 1]).
 - ``gap_density``     measured seconds between consecutive cars while racing and
-                      under neutralisation — the empirical answer to the
+                      under neutralisation, the empirical answer to the
                       ``POS_GAP_S = 1.5`` constant the redesign retires.
 - ``undercut_band``   undercut success by gap-to-target in SECONDS, so target
                       eligibility stops being the ad-hoc "within 5 positions".
@@ -20,7 +20,7 @@ Six tables, each value carrying its sample size and a 95% interval:
                       neutralisation), for the surfaces whose rivals list carries
                       no ``is_pitting`` flag.
 - ``clean_air``       per-circuit seconds a follower gains once the car DIRECTLY
-                      ahead pits — the term that decides whether an overcut has
+                      ahead pits, the term that decides whether an overcut has
                       anything to win, and the one v1 of the projection lacks.
 
 Why RAW and never the featured parquet: N04's ``IsAccurate`` gate drops laps run
@@ -31,7 +31,7 @@ source of truth for track status.
 
 RACING, not "green": a lap counts as racing when it is not neutralised, which
 includes laps run under a local yellow (4.1% of all laps). A yellow flag covers
-one marshalling sector — cars lift there and race the rest of the lap — so for
+one marshalling sector, cars lift there and race the rest of the lap, so for
 "how much of this window is still worth racing" it belongs with the clear laps,
 and for "is this lap at risk of a Safety Car" it belongs there even more firmly,
 being the usual precursor. The distinction is kept in the status mix rather than
@@ -153,7 +153,7 @@ CLEAN_AIR_LAPS = 3
 
 
 # ---------------------------------------------------------------------------
-# Statistics helpers — every measured value ships with n and an interval
+# Statistics helpers, every measured value ships with n and an interval
 # ---------------------------------------------------------------------------
 
 
@@ -274,7 +274,7 @@ class RaceLaps:
         return self.status_by_lap.get(lap, CLEAR) in NEUTRALISED_STATUSES
 
     def is_racing(self, lap: int) -> bool:
-        """Whether ``lap`` was raced — clear or under a local yellow."""
+        """Whether ``lap`` was raced, clear or under a local yellow."""
         return not self.is_neutralised(lap)
 
 
@@ -287,8 +287,8 @@ def _status_by_lap(laps: pd.DataFrame) -> dict[int, str]:
     a lap that saw an SC deployed and withdrawn is an SC lap for the decision
     layer, since no racing happened on it.
 
-    That precedence is also why the usual incident sequence — yellow first, then
-    the Safety Car — mostly does not show up as a yellow lap followed by an SC
+    That precedence is also why the usual incident sequence (yellow first, then
+    the Safety Car) mostly does not show up as a yellow lap followed by an SC
     lap: at ~90 s per lap, race control escalates inside the same lap, and this
     function labels it by the stronger flag. Only 27% of onsets are preceded by a
     lap that was yellow and nothing else.
@@ -372,7 +372,7 @@ def load_races(years: tuple[int, ...] = YEARS) -> list[RaceLaps]:
 
 
 # ---------------------------------------------------------------------------
-# Table 1 — the neutralisation window (racing laps left, and spell length)
+# Table 1, the neutralisation window (racing laps left, and spell length)
 # ---------------------------------------------------------------------------
 
 
@@ -458,7 +458,7 @@ def measure_sc_window(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dict[
 
 
 # ---------------------------------------------------------------------------
-# Table 2 — neutralisation onset hazard (the q_f input)
+# Table 2, neutralisation onset hazard (the q_f input)
 # ---------------------------------------------------------------------------
 
 
@@ -467,7 +467,7 @@ def measure_neutralisation_rate(races: list[RaceLaps]) -> dict[str, Any]:
 
     Feeds the option-value term: ``q_f = 1 - exp(-rate * laps_remaining)`` is the
     probability that a future neutralisation turns up to cover a stop we have not
-    taken yet. The exponential form is what keeps q_f a probability — the naive
+    taken yet. The exponential form is what keeps q_f a probability: the naive
     ``rate * laps_remaining`` exceeds 1 on a long racing run and would hand the MC
     a nonsense certainty.
 
@@ -511,7 +511,7 @@ def measure_neutralisation_rate(races: list[RaceLaps]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Table 3 — how many seconds a position is actually worth
+# Table 3, how many seconds a position is actually worth
 # ---------------------------------------------------------------------------
 
 
@@ -531,7 +531,7 @@ def measure_gap_density(races: list[RaceLaps]) -> dict[str, Any]:
     time loss into positions. This measures what that constant approximates, and
     separates the two regimes: under a Safety Car the field closes up, so the
     same 20-second pit loss costs a very different number of cars. The projection
-    needs no such constant — it counts the actual cars — but publishing the
+    needs no such constant: it counts the actual cars. But publishing the
     measurement is what retires the constant honestly instead of by assertion.
     """
     intervals: dict[str, list[float]] = {RACING: [], SAFETY_CAR: []}
@@ -561,7 +561,7 @@ def measure_gap_density(races: list[RaceLaps]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Table 4 — the undercut band, in seconds
+# Table 4, the undercut band, in seconds
 # ---------------------------------------------------------------------------
 
 
@@ -600,7 +600,7 @@ def measure_undercut_band(races: list[RaceLaps]) -> dict[str, Any]:
     Reuses N16's own labelled attempts (``undercut_clean.parquet``) rather than
     re-deriving what counts as an undercut: a second definition would drift from
     the model the MC already samples from. What this adds is the gap in SECONDS,
-    which the labels do not carry — they encode the gap in positions, and the
+    which the labels do not carry: they encode the gap in positions, and the
     projection reasons in time.
 
     The keyspace trap: those labels are keyed by FastF1 event name while the raw
@@ -672,7 +672,7 @@ def measure_undercut_band(races: list[RaceLaps]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Table 5 — will that rival stop soon?
+# Table 5, will that rival stop soon?
 # ---------------------------------------------------------------------------
 
 
@@ -695,8 +695,8 @@ def measure_stop_hazard(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dic
 
     It is deliberately a prior and not a prediction: it answers "how often does a
     car on this compound at this tyre age stop within five laps", never "will this
-    car stop", which would need the rival's strategy — the full-race modelling the
-    redesign rules out.
+    car stop", which would need the rival's strategy (the full-race modelling the
+    redesign rules out).
     """
     cells: dict[tuple[str, str, str], list[bool]] = defaultdict(list)
 
@@ -740,7 +740,7 @@ def measure_stop_hazard(races: list[RaceLaps], window: int = WINDOW_LAPS) -> dic
 
 
 # ---------------------------------------------------------------------------
-# Table 6 — what clean air is worth, per circuit
+# Table 6, what clean air is worth, per circuit
 # ---------------------------------------------------------------------------
 
 

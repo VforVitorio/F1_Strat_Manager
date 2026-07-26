@@ -1,7 +1,16 @@
-"""
+"""Albumentations pipeline that balances the YOLO team-logo training set by class.
 
-Data augmentation file for the train training set of the image dataset.
+Archived (see ``src/shared/README.md``): an early iteration of the extraction
+layer, superseded by ``src/data_extraction/legacy/image_augmentation.py``.
+Kept here only because a notebook under ``src/vision/`` still imports it by
+name; not part of any active pipeline.
 
+For every team under ``TARGET_PER_CLASS`` training images, repeatedly picks a
+random existing image for that team and writes a transformed copy (flip,
+brightness/contrast, shift-scale-rotate, Gaussian blur) until the target is
+reached, so no team's detector is starved of examples relative to the others.
+``BASE_DIR`` is a machine-local path from an earlier university term and will
+not resolve elsewhere.
 """
 
 
@@ -19,7 +28,7 @@ CLASS_NAMES = [
 TARGET_PER_CLASS = 250
 BASE_DIR = r"C:\Users\victo\Desktop\Documents\Tercer año\Segundo Cuatrimestre\Finales\f1-strategy\f1-dataset"
 
-# Transformaciones con Albumentations
+# Albumentations transform pipeline
 transform = A.Compose(
     [
         A.HorizontalFlip(p=0.5),
@@ -40,7 +49,12 @@ transform = A.Compose(
 
 
 def get_dominant_class_id(label_path):
-    """Obtiene la clase dominante de las etiquetas YOLO"""
+    """Return the most frequent class id in a YOLO label file, or None if absent/empty.
+
+    Majority vote rather than the first line: a frame can carry boxes for more
+    than one team (overlapping cars), and the image is filed under whichever
+    team dominates it for the per-class counting in ``main``.
+    """
     if not os.path.exists(label_path):
         return None
 
@@ -60,7 +74,11 @@ def get_dominant_class_id(label_path):
 
 
 def read_yolo_labels(label_path):
-    """Lee archivos de etiquetas YOLO"""
+    """Read a YOLO label file into a list of normalized ``[x, y, w, h]`` boxes.
+
+    Returns an empty list when the file is missing rather than raising, so
+    ``augment_image`` can still transform an image with no labelled boxes.
+    """
     bboxes = []
     if os.path.exists(label_path):
         with open(label_path, 'r') as f:
@@ -72,36 +90,46 @@ def read_yolo_labels(label_path):
 
 
 def write_yolo_labels(label_path, bboxes, class_id):
-    """Escribe etiquetas en formato YOLO"""
+    """Write ``bboxes`` to a YOLO-format label file, one line per box, all tagged with ``class_id``.
+
+    Opens in write mode, so any prior contents at ``label_path`` are discarded.
+    """
     with open(label_path, 'w') as f:
         for bbox in bboxes:
             f.write(f"{class_id} {' '.join(map(str, bbox))}\n")
 
 
 def augment_image(img_path, label_path, output_img_path, output_label_path, class_id):
-    """Realiza el aumento de datos usando Pillow"""
+    """Apply the Albumentations transform to one image and its boxes, write the result.
+
+    When the transform drops every box (``ShiftScaleRotate`` can push a box
+    fully out of frame), an empty label file is written anyway rather than
+    skipping the pair, so a YOLO training run never hits an image with no
+    matching label file. Any failure is caught and logged per image so one
+    corrupt source file does not abort the whole class's augmentation pass.
+    """
     try:
-        # Cargar imagen con Pillow
+        # Load the image with Pillow
         with Image.open(img_path) as img:
             image_np = np.array(img.convert('RGB'))
             height, width = image_np.shape[:2]
 
-            # Leer bounding boxes
+            # Read the bounding boxes
             bboxes = read_yolo_labels(label_path)
             class_labels = [class_id] * len(bboxes)
 
-            # Aplicar transformaciones
+            # Apply the transform
             transformed = transform(
                 image=image_np,
                 bboxes=bboxes,
                 class_labels=class_labels
             )
 
-            # Guardar imagen aumentada
+            # Save the augmented image
             aug_img = Image.fromarray(transformed['image'])
             aug_img.save(output_img_path, quality=95)
 
-            # Guardar etiquetas
+            # Save the labels
             if transformed['bboxes']:
                 write_yolo_labels(output_label_path,
                                   transformed['bboxes'], class_id)
@@ -113,10 +141,17 @@ def augment_image(img_path, label_path, output_img_path, output_label_path, clas
 
 
 def main():    # Configure directories
+    """Top up every team's training images to ``TARGET_PER_CLASS``.
+
+    Groups the existing images by dominant class, then for each team short of
+    the target, repeatedly augments a random source image from that team
+    until it is reached. Teams already at or above target are left alone; no
+    image is ever deleted.
+    """
     train_images_dir = os.path.join(BASE_DIR, "train", "images")
     train_labels_dir = os.path.join(BASE_DIR, "train", "labels")
 
-    # Verify directories
+    # Verify the directories exist
     if not os.path.exists(train_images_dir):
         raise FileNotFoundError(
             f"Directory not found: {train_images_dir}")
@@ -142,7 +177,7 @@ def main():    # Configure directories
         if class_id is not None and class_id in class_files:
             class_files[class_id].append((img_path, label_path))
 
-    # Balancear clases
+    # Balance the classes
     for class_id, files in class_files.items():
         class_name = CLASS_NAMES[class_id]
         current_count = len(files)

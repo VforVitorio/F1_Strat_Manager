@@ -1,10 +1,10 @@
-"""Dashboard theme — palette, compound colours, action classification.
+"""Dashboard theme: palette, compound colours, action classification.
 
 Constants are duplicated from ``src/arcade/config.py`` on purpose: the
 dashboard runs in its own process and importing the arcade config would
 pull pyglet / arcade / fastf1 into the Qt process (cold start ~2 s and
 no way to ever call the API without paying the price). Keep both files
-in sync when the palette changes upstream — they are the two sources
+in sync when the palette changes upstream: they are the two sources
 of truth for the TFG's visual identity.
 
 Values here mirror ``src/telemetry/frontend/app/styles.py`` (the
@@ -209,7 +209,7 @@ def flag_chip_html(intent: str | None) -> str:
 def apply_dark_palette(app) -> None:
     """Apply the dashboard dark palette to ``QApplication`` and install a
     global stylesheet that widgets inherit without having to set colours
-    one by one. Keep the widget tree declarative — child widgets only
+    one by one. Keep the widget tree declarative: child widgets only
     override specific roles (action badges, cliff lines, etc.).
     """
     palette = QPalette()

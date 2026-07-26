@@ -15,7 +15,7 @@ do not necessarily match the country (``Sakhir``, ``Imola``, ``Marina Bay``,
 those friendly names to the on-disk slugs, so the runner, the FastAPI
 endpoints, and the lazy first-run downloader (``data_cache``) all stay in
 sync. Both ``src/nlp/radio_runner.py`` and
-``src/f1_strat_manager/data_cache.py`` import the resolver from here —
+``src/f1_strat_manager/data_cache.py`` import the resolver from here,
 keeping it in this module (not under ``src/agents/`` or ``src/nlp/``)
 avoids dragging the radio-NLP package init (Whisper, librosa, the
 sentiment / intent / NER classifiers) into the lightweight data-bootstrap
@@ -35,9 +35,9 @@ logger = logging.getLogger(__name__)
 # two double-header countries (Italy = Imola + Monza, United States = Miami
 # + Austin + Las Vegas). Adding another double-header country in a future
 # season is a one-line change here followed by a Phase 0 rebuild of the
-# affected GPs — no agent code needs to know.
+# affected GPs, no agent code needs to know.
 COUNTRY_SLUG_BY_GP: dict[str, str] = {
-    # Single-race countries — slug is just the lowercased country name
+    # Single-race countries, slug is just the lowercased country name
     "Sakhir": "bahrain",
     "Jeddah": "saudi_arabia",
     "Melbourne": "australia",
@@ -59,7 +59,7 @@ COUNTRY_SLUG_BY_GP: dict[str, str] = {
     "Sao Paulo": "brazil",  # ASCII fallback for CLI input
     "Lusail": "qatar",
     "Yas Island": "united_arab_emirates",
-    # Multi-race countries — slug carries the circuit suffix from Phase 0
+    # Multi-race countries, slug carries the circuit suffix from Phase 0
     "Imola": "italy_imola",
     "Monza": "italy_monza",
     "Miami": "united_states_miami",
@@ -69,7 +69,7 @@ COUNTRY_SLUG_BY_GP: dict[str, str] = {
 
 
 # On-disk raw folder names that differ from the friendly key by more than the
-# underscore substitution — a mid-season circuit rename. Keyed by the folder
+# underscore substitution, a mid-season circuit rename. Keyed by the folder
 # name under ``data/raw/{year}/``, value is the canonical friendly name used by
 # both :data:`COUNTRY_SLUG_BY_GP` and ``data/tire_compounds_by_race.json``. The
 # space-vs-underscore forms (``Las_Vegas`` → ``Las Vegas``) are handled generically
@@ -110,15 +110,15 @@ def canonical_gp_name(name: str) -> str:
 # ── Featured-parquet slug ⇄ FastF1 event name ────────────────────────────────
 # A THIRD GP keyspace, distinct from the radio-corpus slugs above. The featured
 # laps parquet (and therefore RaceStateManager's session_meta.gp_name, and every
-# agent lookup key) uses circuit slugs — 'Budapest', 'Lusail'. But the circuit
-# lookup TABLES the agents index into use FastF1 full event names —
+# agent lookup key) uses circuit slugs, 'Budapest', 'Lusail'. But the circuit
+# lookup TABLES the agents index into use FastF1 full event names:
 # 'Hungarian Grand Prix', 'Qatar Grand Prix': circuit_traversal_lookup in N15's
 # model_config.json, undercut_clean.parquet's GP_Name (which feeds
 # circuit_undercut_rate), and the SC-labelled frame.
 #
 # The overlap between the two keyspaces is EXACTLY ZERO, so every circuit lookup
 # missed and silently took its default: pit-lane traversal was permanently 20.0 s,
-# circuit_undercut_rate 0.38, circuit_sc_rate 0.10 — Monaco and Monza given
+# circuit_undercut_rate 0.38, circuit_sc_rate 0.10, Monaco and Monza given
 # identical pit-lane physics, three trained per-circuit features frozen (#448).
 #
 # No mechanical derivation works: the full names are adjectival ('Hungarian', not
@@ -165,7 +165,7 @@ def slug_from_event_name(event_name: str) -> Optional[str]:
     once at the boundary beats translating at each call site: there is one place
     to keep correct, and the tables then speak the agents' native keyspace.
 
-    Returns ``None`` for an unknown name — callers should log it rather than drop
+    Returns ``None`` for an unknown name, callers should log it rather than drop
     the row silently, since a miss means the keyspaces have drifted again (#448).
     Already-slugged input passes through, keeping the call reentrant.
     """
@@ -177,7 +177,7 @@ def slug_from_event_name(event_name: str) -> Optional[str]:
 def rekey_by_slug(table: dict, table_name: str) -> dict:
     """Re-key a circuit lookup table from FastF1 event names to parquet slugs.
 
-    The agents query these tables with ``session_meta.gp_name`` — a circuit slug —
+    The agents query these tables with ``session_meta.gp_name``, a circuit slug,
     but the tables ship keyed by full event names, and the two keyspaces do not
     overlap at all, so every lookup missed and quietly returned its default (#448).
     Normalising once at load is why the call sites need almost no change: the tables
@@ -221,7 +221,7 @@ def resolve_gp_slug(gp_name: str) -> str:
     builder for the corpus directories under
     ``data/processed/race_radios/{year}/`` and
     ``data/raw/radio_audio/{year}/``. Falls through silently when the
-    input is *already* a slug, which keeps callers reentrant — passing
+    input is *already* a slug, which keeps callers reentrant, passing
     the canonical form a second time is a no-op instead of an error,
     which matters for ``ensure_radio_corpus`` retrying after a partial
     download.

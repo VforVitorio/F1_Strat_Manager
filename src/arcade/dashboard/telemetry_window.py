@@ -1,4 +1,4 @@
-"""Live telemetry window — independent QMainWindow subscribing to the
+"""Live telemetry window: independent QMainWindow subscribing to the
 same TCP stream the strategy dashboard uses.
 
 Two subscribers (strategy + telemetry) share a broadcast so the user
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class TelemetryWindow(QMainWindow):
     """Standalone window showing the ``TelemetryPanel`` over the TCP stream.
 
-    Owns its own ``TelemetryStreamClient`` — the arcade's
+    Owns its own ``TelemetryStreamClient``: the arcade's
     ``TelemetryStreamServer`` supports N clients, so the telemetry
     window and the strategy dashboard connect independently. Both can
     survive a restart of the other."""

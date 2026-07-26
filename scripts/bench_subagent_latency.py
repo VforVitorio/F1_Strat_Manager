@@ -1,9 +1,9 @@
-"""Sub-agent isolated latency benchmark — six agents, one fixed lap_state.
+"""Sub-agent isolated latency benchmark: six agents, one fixed lap_state.
 
 Builds a single ``lap_state`` from Suzuka 2025 NOR lap 21 (or the
 documented Bahrain fallback) and times every ``run_*_from_state``
 entry point in isolation. The orchestrator (N31) is intentionally
-excluded — the goal is to characterise each sub-agent's per-call cost
+excluded: the goal is to characterise each sub-agent's per-call cost
 rather than the end-to-end pipeline.
 
 Some agents make external calls at runtime: ``RadioAgent`` and
@@ -48,7 +48,7 @@ try:
 except ImportError:
     pass
 
-# Library log noise — silence aggressive INFO from transformers / setfit
+# Library log noise: silence aggressive INFO from transformers / setfit
 warnings.filterwarnings("ignore", category=FutureWarning)
 for noisy in ("transformers", "setfit", "sentence_transformers", "torch", "src"):
     logging.getLogger(noisy).setLevel(logging.ERROR)
@@ -133,7 +133,7 @@ class SubAgentLatencyRunner:
         self.lap_state["lap"] = fixture["lap_number"]
         self.lap_state["question"] = "What is the minimum pit stop duration under Safety Car?"
 
-        # Featured 2025 laps — required by Tire / RaceSituation / Pit / Radio
+        # Featured 2025 laps: required by Tire / RaceSituation / Pit / Radio
         # agents because they pull historical context out of the laps frame. Route through
         # the shared augmenter so Time_s is present; a raw read collapses the overtake gap
         # to a lap-time delta (#486), which would skew the very latencies this bench reports.
@@ -165,7 +165,7 @@ class SubAgentLatencyRunner:
         """Return ``(agent_name, call_closure, notes)`` for each measured row.
 
         Imports happen here so a missing optional dependency only
-        breaks the affected row — every other agent still gets timed.
+        breaks the affected row; every other agent still gets timed.
         Each closure captures ``self.lap_state`` and any per-agent
         DataFrame so the timed call surface is exactly the public
         ``run_*_from_state`` entry point.
@@ -213,7 +213,7 @@ class SubAgentLatencyRunner:
 
         Runs the agent sequence in declaration order. A failure inside
         any single agent is captured into the artefact with a NaN
-        latency and the exception message in ``notes`` — this is rare
+        latency and the exception message in ``notes``. This is rare
         in practice but lets the bench surface a partial failure
         without aborting the whole run.
         """
@@ -234,7 +234,7 @@ class SubAgentLatencyRunner:
                         },
                     )
                 )
-            except Exception as exc:  # noqa: BLE001 — log + continue
+            except Exception as exc:  # noqa: BLE001 - log + continue
                 rows.append(
                     BenchResult(
                         name=agent_name,

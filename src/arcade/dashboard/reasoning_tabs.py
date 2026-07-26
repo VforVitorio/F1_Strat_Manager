@@ -10,8 +10,8 @@ string at the top (the LLM-authored explanation the CLI shows), then
 an auto-formatted block of the agent's key metrics below it, so even
 when the agent did not emit a reasoning (stub path, conditional agent
 not fired, older checkpoint) the tab still surfaces the raw numbers.
-The RAG agent has no LLM reasoning — its retrieved text lives in the
-RAG card already — so it is not tabbed here.
+The RAG agent has no LLM reasoning; its retrieved text lives in the
+RAG card already, so it is not tabbed here.
 """
 
 from __future__ import annotations

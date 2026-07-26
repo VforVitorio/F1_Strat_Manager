@@ -1050,7 +1050,7 @@ if __name__ == "main":
     predictions_history = simulate_real_time_predictions(
         csv_path='../../outputs/week3/lap_prediction_data.csv',
         models_path='../../outputs/week5/models/',
-        interval=0.1,  # 5 seconds between updates
+        interval=0.1,  # seconds between updates
         compound_start_laps=compound_start_laps,
         max_rows=200,  # Optional: limit number of rows for testing
         prediction_horizon=3  # Show predictions for next 3 laps

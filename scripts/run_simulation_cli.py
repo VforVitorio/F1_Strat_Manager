@@ -1207,9 +1207,11 @@ def _make_inference_panel(
         None; each row helper no-ops when its input is missing, so a failed
         sub-agent does not crash the panel.
     active_agents:
-        Set of conditional agent keys ({'N28', 'N30'}) returned by the MoE
-        routing layer. When None the routing row is omitted (LLM mode does
-        not expose the routing set through the orchestrator output).
+        Accepted for backward compatibility with older call sites but not
+        read by this function anymore: the routing row it used to drive was
+        removed (see the ``_AGENT_DISPLAY`` comment above), and every
+        sub-agent row now renders unconditionally via its own ``_add_*_row``
+        helper, idle or not. Safe to pass ``None`` or omit.
     rival_data:
         Dict in the RaceStateManager rival format when a rival is tracked,
         otherwise None.

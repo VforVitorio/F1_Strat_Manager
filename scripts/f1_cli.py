@@ -1,5 +1,5 @@
 """
-F1 StratLab — Interactive CLI Launcher
+F1 StratLab: Interactive CLI Launcher
 
 Usage
 -----
@@ -7,14 +7,14 @@ Usage
 
 Menu
 ----
-    1  Single Driver   — lap-by-lap strategy for one driver
-    2  Head-to-Head    — two drivers, same race, shown back-to-back
+    1  Single Driver   : lap-by-lap strategy for one driver
+    2  Head-to-Head    : two drivers, same race, shown back-to-back
     3  Quit
 
 All UI logic lives in scripts/cli/:
-    theme.py    — colors, console, ASCII banner
-    pickers.py  — Rich prompts (mode / race / driver / laps / provider)
-    runner.py   — subprocess helpers + mode handlers
+    theme.py    : colors, console, ASCII banner
+    pickers.py  : Rich prompts (mode / race / driver / laps / provider)
+    runner.py   : subprocess helpers + mode handlers
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def _run_wizard() -> None:
         if is_first_run():
             ensure_setup()
     except ImportError:
-        # Package not installed (extremely rare — only if the user copied
+        # Package not installed (extremely rare: only if the user copied
         # scripts/ in isolation). Fall through and let discover_races error.
         pass
 

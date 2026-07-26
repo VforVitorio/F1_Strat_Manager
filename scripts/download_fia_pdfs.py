@@ -9,7 +9,7 @@ Tries two strategies in order:
 Downloaded files are renamed to the project naming convention:
   <doc_type>_<year>.pdf   e.g. sporting_regs_2025.pdf
 
-Only the most recent issue of each (doc_type, year) pair is kept — if the FIA
+Only the most recent issue of each (doc_type, year) pair is kept: if the FIA
 publishes a corrected version, re-running this script replaces the old file.
 
 Usage:
@@ -51,7 +51,7 @@ class DownloadConfig:
     Attributes:
         supported_years:  List of regulation years to consider when scraping
                           and downloading. Passed as-is to the scraper and used
-                          to filter links — add a new year here when the FIA
+                          to filter links: add a new year here when the FIA
                           publishes a new season's regulations.
         request_timeout:  Maximum seconds to wait for a single HTTP response.
                           Set conservatively because FIA PDFs can be large and
@@ -89,7 +89,7 @@ class DownloadConfig:
 CFG = DownloadConfig()
 
 # FIA regulation category pages for Formula 1.
-# Only Sporting Regulations are indexed — they cover the rules relevant to
+# Only Sporting Regulations are indexed: they cover the rules relevant to
 # race strategy: safety car procedures, pit lane, tyre allocations, penalties,
 # blue flags, DRS, and race director directives. Technical Regulations (car
 # construction) are not needed by the strategy agents.
@@ -127,7 +127,7 @@ class RegulationLink:
 
     Attributes:
         url:      Full URL of the PDF file to download. May be relative on the
-                  FIA website — resolved to absolute before storage.
+                  FIA website, resolved to absolute before storage.
         doc_type: Regulatory domain inferred from the page title or link text
                   (``"sporting_regs"`` or ``"technical_regs"``).
         year:     Regulation year parsed from the document title or URL. Used
@@ -177,7 +177,7 @@ def _make_session() -> requests.Session:
     """Create a requests session with browser-like headers.
 
     The FIA website returns 403 for requests without a User-Agent, so we
-    mimic a standard browser request. No authentication is needed — all
+    mimic a standard browser request. No authentication is needed: all
     regulation PDFs are publicly accessible.
     """
     session = requests.Session()
@@ -319,7 +319,7 @@ def save_known_urls_template() -> None:
 
     Creates the file with one commented example entry so the operator knows
     exactly what format to use when adding URLs manually. The file is only
-    written on first run — subsequent runs never overwrite it so manually
+    written on first run: subsequent runs never overwrite it so manually
     added entries are preserved.
     """
     if CFG.known_urls_file.exists():
@@ -348,7 +348,7 @@ def save_known_urls_template() -> None:
 
 
 def deduplicate_links(links: list[RegulationLink]) -> list[RegulationLink]:
-    """Keep only one link per (doc_type, year) pair — the first one seen.
+    """Keep only one link per (doc_type, year) pair: the first one seen.
 
     The FIA category pages list issues from newest to oldest, so the first
     link encountered for a given (doc_type, year) is the most recent issue.
@@ -389,8 +389,9 @@ def download_link(
     """Download a single regulation PDF and save it to ``CFG.docs_dir``.
 
     Skips the download if a file with the same name already exists, assuming
-    it is the correct version. Re-running the script after a FIA erratum
-    requires manually deleting the old file first, or using ``--force``.
+    it is the correct version. There is no force-overwrite flag: re-running
+    the script after a FIA erratum requires manually deleting the old file
+    first.
 
     Args:
         link:    The ``RegulationLink`` describing what to download and where.
@@ -454,7 +455,7 @@ def download_all(
     Args:
         years:   List of years to download (e.g. ``[2024, 2025]``). When
                  ``None``, downloads all ``CFG.supported_years``.
-        dry_run: Pass through to ``download_link`` — logs actions without
+        dry_run: Pass through to ``download_link``, logs actions without
                  writing files.
     """
     target_years = set(years) if years else set(CFG.supported_years)

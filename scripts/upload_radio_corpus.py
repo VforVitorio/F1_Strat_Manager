@@ -3,12 +3,12 @@
 The corpus is built locally by ``scripts/build_radio_dataset.py`` and lives in
 two parallel trees on disk:
 
-* ``data/processed/race_radios/{year}/{slug}/{radios.parquet, rcm.parquet}``
-  — small metadata parquets (~22 KB per GP, ~536 KB total) that the runner
+* ``data/processed/race_radios/{year}/{slug}/{radios.parquet, rcm.parquet}``:
+  small metadata parquets (~22 KB per GP, ~536 KB total) that the runner
   reads to enumerate the team-radio rows and the FIA race-control messages
   for a given lap.
 
-* ``data/raw/radio_audio/{year}/{slug}/*.mp3`` — the original OpenF1 MP3
+* ``data/raw/radio_audio/{year}/{slug}/*.mp3``: the original OpenF1 MP3
   files that Whisper transcribes on the consumer side. ~3 MB per GP,
   ~82 MB total for the full 2025 calendar.
 
@@ -37,7 +37,7 @@ Usage
         export HF_TOKEN=hf_xxx
         python scripts/upload_radio_corpus.py
 
-    # Dry run — list what would be uploaded without touching the Hub::
+    # Dry run: list what would be uploaded without touching the Hub::
 
         python scripts/upload_radio_corpus.py --dry-run
 
@@ -63,7 +63,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Repo root walker — same pattern used everywhere else in the codebase so the
+# Repo root walker: same pattern used everywhere else in the codebase so the
 # script keeps running when invoked from any sub-directory.
 _HERE = Path(__file__).resolve()
 _REPO_ROOT = next(
@@ -138,7 +138,7 @@ def _upload_tree(
     """Upload one local folder to the dataset preserving the relative layout.
 
     Wraps ``HfApi.upload_folder`` so the two trees (parquets + audio) can be
-    pushed by a single call site. The function is intentionally chatty —
+    pushed by a single call site. The function is intentionally chatty:
     this is a one-shot operation, not a hot path, so the user benefits from
     knowing exactly which folder is in flight and where it lands on the Hub.
     """
@@ -205,7 +205,7 @@ def _parse_args() -> argparse.Namespace:
 def run(args: argparse.Namespace) -> None:
     """Resolve folders, validate auth, and upload the requested trees in order.
 
-    Parquets go first because they are tiny — if the auth handshake or the
+    Parquets go first because they are tiny: if the auth handshake or the
     network is broken the user finds out in seconds instead of waiting for
     the 80 MB MP3 transfer to fail. The audio tree only kicks off after the
     parquet upload succeeds.
@@ -313,7 +313,7 @@ def run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    """Console entry point — parses argv and dispatches to :func:`run`."""
+    """Console entry point: parses argv and dispatches to :func:`run`."""
     run(_parse_args())
 
 

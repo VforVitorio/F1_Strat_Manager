@@ -1,4 +1,4 @@
-"""Whisper transcription latency benchmark — overall bucket only.
+"""Whisper transcription latency benchmark: overall bucket only.
 
 Loads the production :class:`WhisperTranscriber` (model ``turbo``) the
 same way :mod:`src.nlp.radio_runner` does at simulation time, samples
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 # ---------------------------------------------------------------------------
-# Repo-root path injection — must happen before any src.* import
+# Repo-root path injection: must happen before any src.* import
 # ---------------------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = next(
@@ -113,7 +113,7 @@ class WhisperLatencyRunner:
         """Return up to ``sample_size`` distinct mp3 paths drawn with a fixed seed.
 
         The seed is hard-coded so the benchmark is reproducible across
-        runs — a different seed would change which clips contribute to
+        runs: a different seed would change which clips contribute to
         the latency distribution and therefore the final P95. When
         fewer than ``sample_size`` files exist on disk every available
         file is returned and the script proceeds with a smaller

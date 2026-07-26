@@ -272,6 +272,11 @@ class PaceAgent:
             total_laps: Total scheduled race laps.
             prev_speed_st: Speed trap reading in km/h from the previous lap.
             mean_sector_speed: Average sector speed; None → use prev_speed_st.
+            stint_baseline_tyre_life: TyreLife recorded at the start of the
+                current stint. None means the caller has not been updated to
+                supply it, in which case FuelEffect is forced to NaN instead
+                of falling back to the old (wrong) formula — see the comment
+                in the body for why NaN is the safe default here (#446).
 
         Returns:
             Dict with keys FreshTyre, FuelEffect, laps_remaining,
@@ -581,6 +586,9 @@ class PaceAgent:
             prev_deg_rate: Degradation rate from the previous lap (s/lap).
             prev_cum_deg: Cumulative degradation at the previous lap.
             prev_deg_accel: Second derivative of degradation (s/lap²).
+            stint_baseline_tyre_life: TyreLife at the start of the current
+                stint. None forces FuelEffect to NaN rather than a fabricated
+                estimate — see _compute_derived.
 
         Returns:
             PaceOutput with all fields populated and a reasoning string.

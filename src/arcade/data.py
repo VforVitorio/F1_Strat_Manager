@@ -9,7 +9,7 @@ stops DNF'd drivers from sitting as ghosts at their crash position.
 Output is a `SessionData` dataclass holding per-driver lists of `FrameData`
 plus the geometry of a single reference lap that `track.py` consumes for the
 circuit outline. All telemetry is kept in raw FastF1 units (1/10 mm for X/Y,
-km/h for speed, seconds for time) — conversion happens at render boundaries.
+km/h for speed, seconds for time); conversion happens at render boundaries.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ class SessionData:
     `ref_lap_xy` is the raw (non-rotated) fastest-lap polyline used by
     `track.py` for circuit geometry; rotation is applied at render time via
     `circuit_rotation_deg`. `timeline` is the common 25 Hz grid shared by
-    every driver — its length is the total frame count of the replay."""
+    every driver; its length is the total frame count of the replay."""
 
     version: str = CACHE_VERSION
     gp_name: str = ""
@@ -114,7 +114,7 @@ class SessionData:
 
 
 def _enable_fastf1_cache() -> None:
-    """Point FastF1 at our repo-local cache. Idempotent — safe across spawn."""
+    """Point FastF1 at our repo-local cache. Idempotent, safe across spawn."""
     FASTF1_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     fastf1.Cache.enable_cache(str(FASTF1_CACHE_DIR))
 
@@ -425,7 +425,7 @@ class SessionLoader:
         Rationale (cf. f1_replay/main.py:43-68): in qualifying, drivers open
         their DRS wing in every activation zone because they are on a push
         lap, so a single quali telemetry has the full DRS picture. A race
-        fastest lap only has DRS open where the driver had a car to catch —
+        fastest lap only has DRS open where the driver had a car to catch,
         producing the fragmented zones we saw earlier. Falls back to race
         fastest if qualifying data cannot be loaded."""
         quali_result = self._try_quali_reference(year, round_)
@@ -501,7 +501,7 @@ class SessionLoader:
         """Pick the most trustworthy circuit length we can derive.
 
         Preferred path: the fastest lap's FastF1 ``add_distance()``
-        telemetry — that column is cumulative metres within the lap, so
+        telemetry: that column is cumulative metres within the lap, so
         its last value IS the track length (Suzuka ≈ 5807 m, Monaco ≈
         3337 m, Las Vegas ≈ 6201 m). Falls back to the reference-lap
         polyline estimator when the fastest-lap query fails (qualifying
