@@ -126,8 +126,8 @@ The two files below are the **legacy** `experta` rule engine, kept for reference
 
 | File                                                         | Description                                                                                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| [src/agents/base_agent.py](src/agents/base_agent.py)         | `Fact` subclasses (`TelemetryFact`, `DegradationFact`, `GapFact`, `RadioFact`, `RaceStatusFact`) for the `experta` rule engine |
-| [src/agents/strategy_agent.py](src/agents/strategy_agent.py) | Legacy rule-based Strategy Agent integrating tire / lap time / radio / gap rule sets via `experta` (superseded by N31)         |
+| [legacy/experta_engine/base_agent.py](legacy/experta_engine/base_agent.py)         | `Fact` subclasses (`TelemetryFact`, `DegradationFact`, `GapFact`, `RadioFact`, `RaceStatusFact`) for the `experta` rule engine |
+| [legacy/experta_engine/strategy_agent.py](legacy/experta_engine/strategy_agent.py) | Legacy rule-based Strategy Agent integrating tire / lap time / radio / gap rule sets via `experta` (superseded by N31)         |
 
 ### `src/simulation/` and `src/arcade/`
 
@@ -143,10 +143,10 @@ The two files below are the **legacy** `experta` rule engine, kept for reference
 | File                                                       | Description                                                                                                                |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | [src/nlp/radio_runner.py](src/nlp/radio_runner.py)         | `RadioPipelineRunner` — replay-time consumer of the static OpenF1 radio corpus built by N33; lazily transcribes per-lap MP3 slices with Whisper (cached under `data/processed/radio_nlp/…/transcripts.json` keyed by model name) and feeds the N29 Radio Agent via `run_radio_agent_from_state`. Wired into `scripts/run_simulation_cli.py` by default |
-| [src/nlp/pipeline.py](src/nlp/pipeline.py)                 | Legacy jupytext-exported NLP pipeline (pre-N24); uses old model paths and `roberta-large` intent model — superseded by N24 |
-| [src/nlp/ner.py](src/nlp/ner.py)                           | NER inference wrapper                                                                                                      |
-| [src/nlp/sentiment.py](src/nlp/sentiment.py)               | Sentiment inference wrapper                                                                                                |
-| [src/nlp/radio_classifier.py](src/nlp/radio_classifier.py) | Radio intent classification wrapper                                                                                        |
+| [legacy/nlp_standalone/pipeline.py](legacy/nlp_standalone/pipeline.py)                 | Legacy jupytext-exported NLP pipeline (pre-N24); uses old model paths and `roberta-large` intent model — superseded by N24 |
+| [legacy/nlp_standalone/ner.py](legacy/nlp_standalone/ner.py)                           | NER inference wrapper                                                                                                      |
+| [legacy/nlp_standalone/sentiment.py](legacy/nlp_standalone/sentiment.py)               | Sentiment inference wrapper                                                                                                |
+| [legacy/nlp_standalone/radio_classifier.py](legacy/nlp_standalone/radio_classifier.py) | Radio intent classification wrapper                                                                                        |
 
 ### `src/strategy/`
 
