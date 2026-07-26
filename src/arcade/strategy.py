@@ -578,6 +578,7 @@ class SimConnector(threading.Thread):
         ``radio_msgs`` / ``rcm_events`` from the ``RadioPipelineRunner``
         corpus so the Radio agent sees the real OpenF1 team messages
         (same as the CLI); empty lists when the corpus could not load."""
+        from src.agents.position_projection import GAP_UNKNOWN_FALLBACK_S
         from src.agents.strategy_orchestrator import RaceState
 
         driver_st = lap_state.get("driver", {})
@@ -601,7 +602,26 @@ class SimConnector(threading.Thread):
                 "should have skipped this lap before calling _build_race_state (#465)"
             )
         car_ahead = next((r for r in rivals if r.get("position") == our_pos - 1), None)
-        gap_ahead_s = abs(car_ahead.get("interval_to_driver_s") or 0.0) if car_ahead else 0.0
+        # Two different zeros used to hide under one expression. No car ahead means we
+        # lead, and 0.0 is honest there. A car ahead whose interval was never measured
+        # is NOT a zero gap: 0.0 reads as side by side, which the orchestrator's
+        # clean-air band and N27's sub-1.0s DRS window both act on. It degrades to
+        # GAP_UNKNOWN_FALLBACK_S instead, matching the CLI and the telemetry backend.
+        #
+        # Be honest about what that fallback still is: 2.0 is fabricated, and a real
+        # 2.0s gap is common, so it does not satisfy the rule that a default must never
+        # be a value the code can also legitimately find. It is less harmful than 0.0,
+        # not correct. The real fix is RaceState.gap_ahead_s becoming `float | None`,
+        # which RivalState in position_projection.py already is and whose consumers
+        # already guard with `is not None`. That is a Pydantic contract change.
+        if car_ahead is None:
+            gap_ahead_s = 0.0
+        else:
+            measured_interval = car_ahead.get("interval_to_driver_s")
+            if measured_interval is None:
+                gap_ahead_s = GAP_UNKNOWN_FALLBACK_S
+            else:
+                gap_ahead_s = abs(measured_interval)
 
         lap_num = int(lap_state.get("lap_number", 1) or 1)
         radio_msgs: list[dict] = []

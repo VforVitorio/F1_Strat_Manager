@@ -2149,11 +2149,16 @@ def run_strategy_orchestrator_from_state(
         # first row of the whole-season frame): the latter blends one race's GP with
         # another race's stint/team — the #465 wrong-GP bug engine._build_default_lap_state
         # also has to avoid. Fall back to iloc[0] only when the row is absent.
-        gp_name     = (
-            str(lap_row["GP_Name"].iloc[0])
-            if not lap_row.empty and "GP_Name" in lap_row
-            else (str(laps_df["GP_Name"].iloc[0]) if "GP_Name" in laps_df.columns else "")
-        )
+        # Flattened from a nested ternary. The middle branch reads as redundant and
+        # is not: lap_row can be non-empty and still lack GP_Name, which happens only
+        # when laps_df lacks it too, since lap_row is a slice of it. Written as three
+        # branches the reader sees that without having to re-derive it.
+        if not lap_row.empty and "GP_Name" in lap_row:
+            gp_name = str(lap_row["GP_Name"].iloc[0])
+        elif "GP_Name" in laps_df.columns:
+            gp_name = str(laps_df["GP_Name"].iloc[0])
+        else:
+            gp_name = ""
         stint = int(lap_row["Stint"].iloc[0]) if not lap_row.empty else 1
         team  = (
             str(lap_row["Team"].iloc[0]) if not lap_row.empty and "Team" in lap_row else "Unknown"

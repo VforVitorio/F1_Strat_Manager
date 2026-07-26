@@ -1287,6 +1287,13 @@ def _make_inference_panel(
 # RaceState builder
 # ---------------------------------------------------------------------------
 
+# Imported, not redeclared: this number had grown a copy in the CLI, the arcade and
+# the telemetry backend, and three copies of one convention is how the next drift
+# starts. Its rationale and its honest limitation live with it (#628).
+from src.agents.position_projection import (  # noqa: E402
+    GAP_UNKNOWN_FALLBACK_S as _GAP_UNKNOWN_FALLBACK_S,
+)
+
 
 def _build_race_state(
     lap_state: dict[str, Any],
@@ -1298,9 +1305,29 @@ def _build_race_state(
     rivals = lap_state.get("rivals", [])
     weather = lap_state.get("weather", {})
 
-    our_pos = driver_st.get("position", 99)
+    our_pos = driver_st.get("position")
+    # The incomplete-lap guard in run()'s main loop (`_pos_raw is None or ...`)
+    # already skips any lap where the driver's position is unknown before
+    # _build_race_state is ever called. Reaching here with a None position
+    # means that invariant broke. Fail loudly instead of defaulting to a
+    # searchable P99: a fabricated position is exactly the value the
+    # `our_pos - 1` lookup below searches by, so an unknown position and a
+    # genuinely-last car would silently resolve to the same rival — the #428
+    # bug shape. Mirrors src/arcade/strategy.py's _build_race_state (fixed for
+    # the identical shape under #465); the caller's per-lap try/except (in
+    # run()) turns this into an [ERROR] row for the lap, not a crashed run.
+    if our_pos is None:
+        raise ValueError(
+            "_build_race_state: driver position is None; the incomplete-lap "
+            "guard should have skipped this lap before it reached "
+            "_build_race_state (#628)"
+        )
     car_ahead = next((r for r in rivals if r.get("position") == our_pos - 1), None)
-    gap_ahead_s = abs(car_ahead.get("interval_to_driver_s") or 0.0) if car_ahead else 0.0
+    if car_ahead is not None:
+        _interval = car_ahead.get("interval_to_driver_s")
+        gap_ahead_s = abs(_interval) if _interval is not None else _GAP_UNKNOWN_FALLBACK_S
+    else:
+        gap_ahead_s = 0.0
 
     cur_lap_time = driver_st.get("lap_time_s") or 0.0
     pace_delta_s = cur_lap_time - prev_lap_time if prev_lap_time else 0.0
