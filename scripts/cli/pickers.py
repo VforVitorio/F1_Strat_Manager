@@ -43,6 +43,11 @@ if _IS_WIN:
         # ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING
         _k32.SetConsoleMode(_k32.GetStdHandle(-11), 7)
     except Exception:
+        # Best-effort cosmetic setup only: on failure the console just falls
+        # back to plain (non-ANSI) output, which is harmless. The failure
+        # surface here is ctypes/OS-level (unsupported console host, sandboxed
+        # environment) rather than a specific Python exception type worth
+        # enumerating.
         pass
 
 
@@ -213,13 +218,30 @@ def discover_races(repo_root: Path, year: int = 2025) -> list[str]:
 _DRIVER_TEAM_CACHE: dict[str, str] | None = None
 
 
+def _resolve_laps_parquet_path(repo_root: Path) -> Path:
+    """Resolve the featured-laps parquet path, preferring ``get_data_root``.
+
+    Routes through ``get_data_root`` when the f1_strat_manager package is
+    importable so ``uv tool install`` cached layouts work; otherwise falls
+    back to the repo-relative path for bare dev checkouts (e.g. running
+    ``scripts/f1_cli.py`` before ``uv sync``).
+    """
+    try:
+        from src.f1_strat_manager.data_cache import get_data_root
+
+        return get_data_root() / "processed" / "laps_featured_2025.parquet"
+    except ImportError:
+        return repo_root / "data" / "processed" / "laps_featured_2025.parquet"
+
+
 def _load_driver_team_map(repo_root: Path) -> dict[str, str]:
     """Return {driver_code: team} built from laps_featured_2025.parquet (cached).
 
-    Resolves the parquet path through ``get_data_root`` when the
-    f1_strat_manager package is importable so that ``uv tool install``
-    cached layouts work; otherwise falls back to the repo-relative path
-    for bare dev checkouts.
+    Best-effort only: any failure to read or parse the parquet (file
+    missing, corrupt parquet, unexpected schema) degrades to an empty map
+    rather than raising. ``pick_driver``/``pick_rival_code`` already fall
+    back to asking the user to type the team manually whenever the code is
+    not found in this map, so a read failure here is never fatal to the CLI.
     """
     global _DRIVER_TEAM_CACHE
     if _DRIVER_TEAM_CACHE is not None:
@@ -227,12 +249,7 @@ def _load_driver_team_map(repo_root: Path) -> dict[str, str]:
     try:
         import pandas as pd
 
-        try:
-            from src.f1_strat_manager.data_cache import get_data_root
-
-            parquet = get_data_root() / "processed" / "laps_featured_2025.parquet"
-        except ImportError:
-            parquet = repo_root / "data" / "processed" / "laps_featured_2025.parquet"
+        parquet = _resolve_laps_parquet_path(repo_root)
         if parquet.exists():
             df = pd.read_parquet(parquet, columns=["Driver", "Team"])
             _DRIVER_TEAM_CACHE = (
@@ -244,6 +261,10 @@ def _load_driver_team_map(repo_root: Path) -> dict[str, str]:
         else:
             _DRIVER_TEAM_CACHE = {}
     except Exception:
+        # pandas/pyarrow raise a wide, version-dependent set of types for a
+        # malformed or unreadable parquet (OSError variants, pyarrow's own
+        # ArrowInvalid/ArrowIOError, KeyError on an unexpected schema) - not
+        # worth enumerating for a best-effort convenience lookup.
         _DRIVER_TEAM_CACHE = {}
     return _DRIVER_TEAM_CACHE
 

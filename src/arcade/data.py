@@ -273,7 +273,12 @@ class SessionLoader:
         # round number.
         try:
             location = str(session.event.get("Location", "") or "")
-        except Exception:
+        except (AttributeError, KeyError):
+            # session.event is a pandas Series (fastf1.events.Event); its
+            # .get() already returns the default instead of raising for a
+            # missing key. The only realistic failure is session.event
+            # itself not being Series-like (AttributeError on .get) or a
+            # custom __getitem__ override raising KeyError internally.
             location = ""
 
         driver_nums = list(session.drivers)
@@ -440,7 +445,11 @@ class SessionLoader:
             y = tel["Y"].to_numpy().astype(float)
             drs = tel["DRS"].to_numpy().astype(float) if "DRS" in tel.columns else np.zeros(len(x))
             return x, y, drs
-        except Exception as exc:
+        except (KeyError, ValueError, AttributeError) as exc:
+            # Same enumeration as _process_driver_data's get_telemetry() catch
+            # above: pick_fastest() returning None -> AttributeError,
+            # get_car_data/get_pos_data doing DriverNumber/column lookups ->
+            # KeyError, numeric casts on malformed telemetry -> ValueError.
             logger.warning("Reference lap extraction failed (%s) - using empty geometry", exc)
             return np.zeros(0), np.zeros(0), np.zeros(0)
 
@@ -485,7 +494,12 @@ class SessionLoader:
                 return {}
             grouped = subset.groupby("LapNumber")["TrackStatus"].first()
             return {int(lap): str(code) for lap, code in grouped.items()}
-        except Exception:
+        except (KeyError, ValueError, TypeError) as exc:
+            # KeyError: "LapNumber" missing despite the "TrackStatus" presence
+            # check above. ValueError/TypeError: a lap value int() cannot
+            # convert. Pure pandas indexing beyond this is not expected to
+            # raise anything else.
+            logger.debug("Track-status-by-lap extraction failed (%s) - panel stays hidden", exc)
             return {}
 
     def _safe_rotation(self, session: Any) -> float:
@@ -494,7 +508,13 @@ class SessionLoader:
             if info is None or not hasattr(info, "rotation"):
                 return 0.0
             return float(info.rotation)
-        except Exception:
+        except Exception as exc:
+            # session.get_circuit_info() fetches from the MultiViewer API
+            # (fastf1.mvapi.get_circuit_info) — genuine network I/O with an
+            # undocumented exception surface (HTTP/connection/JSON errors),
+            # so this stays broad. Logged so a real regression still leaves
+            # a trace instead of silently flattening every rotation to 0.
+            logger.debug("Circuit rotation lookup failed (%s) - defaulting to 0.0", exc)
             return 0.0
 
     def _session_circuit_length(self, session, ref_x: np.ndarray, ref_y: np.ndarray) -> float:
@@ -514,8 +534,12 @@ class SessionLoader:
             length = float(tel["Distance"].iloc[-1])
             if 1500.0 < length < 12000.0:
                 return length
-        except Exception:
-            pass
+        except (KeyError, ValueError, IndexError, AttributeError) as exc:
+            # pick_fastest() may return None (AttributeError on
+            # .get_car_data()); get_car_data/add_distance do DriverNumber
+            # and channel lookups (KeyError), numeric casts (ValueError),
+            # and .iloc[-1] on a possibly-empty Distance column (IndexError).
+            logger.debug("Fastest-lap circuit length failed (%s) - using polyline estimate", exc)
         return self._estimate_circuit_length(ref_x, ref_y)
 
     def _estimate_circuit_length(self, ref_x: np.ndarray, ref_y: np.ndarray) -> float:

@@ -333,7 +333,10 @@ class F1ArcadeView(arcade.View):
                 creationflags=creationflags,
             )
             logger.info("Dashboard subprocess spawned (pid=%s)", self._dashboard_proc.pid)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
+            # subprocess.Popen documents OSError (e.g. the interpreter path
+            # cannot be executed) and ValueError (bad argument combination)
+            # as its failure modes; nothing else escapes a plain Popen() call.
             logger.warning(
                 "Dashboard spawn failed (%s) — arcade continues without it",
                 exc,
@@ -369,7 +372,10 @@ class F1ArcadeView(arcade.View):
             except subprocess.TimeoutExpired:
                 logger.warning("Dashboard did not exit in 3s — killing")
                 self._dashboard_proc.kill()
-            except Exception as exc:
+            except OSError as exc:
+                # terminate()/wait() on an already-dead or inaccessible
+                # process raise OSError subclasses (e.g. ProcessLookupError);
+                # nothing else is documented for these two calls.
                 logger.warning("Dashboard teardown error: %s", exc)
             self._dashboard_proc = None
 

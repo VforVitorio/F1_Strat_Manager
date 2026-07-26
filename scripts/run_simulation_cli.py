@@ -51,12 +51,17 @@ if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
+        # Some hosts (IDE consoles, pytest capture, certain CI runners) replace
+        # sys.stdout with an object that supports reconfigure() but raises for
+        # this particular stream/arg combination (ValueError, OSError). Not
+        # worth enumerating for this best-effort setting; on failure the
+        # stream just keeps its original encoding.
         pass
 if hasattr(sys.stderr, "reconfigure"):
     try:
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
-        pass
+        pass  # same rationale as sys.stdout above
 
 # Suppress stray SWIG DeprecationWarnings from C-extension imports.
 warnings.filterwarnings("ignore", message=".*builtin type.*__module__.*")
@@ -124,7 +129,7 @@ try:
     if _env.exists():
         load_dotenv(_env)
 except ImportError:
-    pass
+    pass  # python-dotenv not installed - rely on env vars being set manually
 
 # ---------------------------------------------------------------------------
 # Imports — NLP models load eagerly when strategy_orchestrator imports radio_agent
@@ -1338,6 +1343,9 @@ def run(args: argparse.Namespace) -> None:
             if is_first_run():
                 ensure_setup()
         except ImportError:
+            # Package not installed (extremely rare: only if the user copied
+            # scripts/ in isolation). Fall through and let the race-dir/
+            # featured-parquet existence checks below error with a clear message.
             pass
 
     raw_dir = Path(args.raw_dir)
