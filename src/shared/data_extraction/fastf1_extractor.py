@@ -1,5 +1,10 @@
-"""
-Archive for extracting data from Spanish Grand Prix 2023
+"""First-iteration FastF1 wrapper, archived (see ``src/shared/README.md``).
+
+Superseded by ``src/data_extraction/fastf1/session_extractor.py`` and
+``scripts/download_data.py``. ``extract_f1_data`` takes any year/GP/session,
+but the ``__main__`` block below only ever ran it against the 2023 Spanish
+GP, the first race this project pulled data for. Kept because
+``notebooks/data_engineering/N01_data_download.ipynb`` still imports it.
 """
 
 import fastf1 as ff1
@@ -8,7 +13,14 @@ from pathlib import Path
 
 
 def extract_f1_data(year: int, gp: str, session_type: str = 'R'):
-    """Extrae datos de FastF1 y los guarda en Parquet."""
+    """Load one FastF1 session and write its laps, pit stops, and weather to Parquet.
+
+    Pit stops are derived from ``laps`` by filtering on a non-null
+    ``PitInTime``, not fetched separately, so they are always a strict subset
+    of the laps file. Any failure (bad GP name, missing session, network
+    error) is caught and printed rather than raised, so a batch of calls over
+    several GPs does not stop at the first one that fails to load.
+    """
     Path("f1_cache").mkdir(parents=True, exist_ok=True)
     ff1.Cache.enable_cache("f1_cache")
 

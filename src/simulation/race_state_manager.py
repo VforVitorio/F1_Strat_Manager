@@ -366,9 +366,12 @@ class RaceStateManager:
 
         ``TrackStatus`` is always present (sourced from laps). Optional
         ``weather_df`` (from weather.parquet) adds temperature, humidity,
-        wind, and rainfall when available. The row is selected by linear
-        interpolation of the lap fraction — weather changes slowly enough
-        that a simple fractional index is sufficient for a replay demo.
+        wind, and rainfall when available. The row is picked by mapping the
+        lap fraction onto ``weather_df``'s row index (``int(lap_frac *
+        (len(weather_df) - 1))``): a proportional lookup, not an
+        interpolation between two samples. Weather changes slowly enough
+        over a race that a single nearest row is close enough for a replay
+        demo.
 
         Args:
             lap_number:  1-indexed lap number.

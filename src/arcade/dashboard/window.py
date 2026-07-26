@@ -3,17 +3,19 @@
 Subscribes to the arcade telemetry stream and routes updates to three
 areas:
 
-- Header bar (top, 40 px) — session label, driver, connection chip,
+- Header bar (top, 44 px): session label, driver, connection chip,
   playback chip, lap counter. Populated from ``arcade`` + ``strategy.start``
   + ``playback`` keys of each broadcast.
-- Central ``QSplitter(Qt.Horizontal)`` — two content panels that future
-  commits fill with the orchestrator card, the six sub-agent cards,
-  charts, alerts feed and reasoning view.
-- Status bar (bottom) — last error from the stream, last payload size.
+- Central ``QSplitter(Qt.Horizontal)``: left panel holds the
+  orchestrator card, the scenario-score bars and the six-tab reasoning
+  view; right panel holds the 3x2 grid of sub-agent cards (Pace and
+  Tire carry an embedded pyqtgraph chart).
+- Status bar (bottom): last pipeline error, or the current lap while
+  streaming normally.
 
-The scaffold deliberately leaves the content panels empty so later
-commits can add widgets one at a time without touching the window
-class.
+``_on_data`` is the single router: one incoming broadcast dict fans out
+to every widget below, plus the two rolling history dicts
+(``_pace_history`` / ``_tire_history``) the charts read from.
 """
 
 from __future__ import annotations
@@ -126,12 +128,14 @@ class HeaderBar(QWidget):
 
 
 class MainWindow(QMainWindow):
-    """Dashboard shell with header + QSplitter + status bar.
+    """Dashboard shell: header + QSplitter (left panel / right panel) + status bar.
 
-    Placeholder widgets in the left / right panels expose a stable public
-    API (``set_left_content`` / ``set_right_content``) that later commits
-    use to inject the orchestrator card, agent grid and charts without
-    having to touch this class.
+    Owns the ``TelemetryStreamClient`` connection and every widget the
+    left and right panels hold. ``_on_data`` is the sole entry point for
+    a new broadcast; it updates the header, the left-panel widgets, the
+    right-panel agent cards, and the two chart history dicts in that
+    order, then sets the status-bar message last so it reflects whatever
+    the pipeline reported for this tick.
     """
 
     def __init__(self) -> None:
@@ -209,7 +213,7 @@ class MainWindow(QMainWindow):
         self._client.start()
 
     def _on_data(self, data: dict[str, Any]) -> None:
-        """Router for incoming broadcasts — fans out to widgets."""
+        """Router for incoming broadcasts: fans out to widgets."""
         self._header.update_from(data)
         strategy = data.get("strategy") or {}
         latest = strategy.get("latest") or {}
@@ -236,7 +240,7 @@ class MainWindow(QMainWindow):
         """Backfill chart dicts with lap_time_s / tyre_life actuals from the
         broadcast history_tail. ``per_agent`` is stripped there (wire-size
         trade-off) so predicted / CI values stay empty for past laps until
-        we observe them via ``latest`` — that's an accepted limitation of
+        we observe them via ``latest``, an accepted limitation of
         the mid-stream reconnect path."""
         for row in tail:
             lap = row.get("lap_number")

@@ -1,5 +1,5 @@
 """
-Single-agent debug harness — run and inspect any agent in isolation.
+Single-agent debug harness: run and inspect any agent in isolation.
 
 Builds a minimal lap_state from CLI arguments (no replay engine, no
 full pipeline), loads the featured parquet once, and calls the selected
@@ -11,13 +11,13 @@ Usage
 
 Agents
 ------
-    pace        N25 — lap time prediction + CI
-    tire        N26 — tire degradation + laps to cliff
-    situation   N27 — overtake probability + SC risk
-    pit         N28 — pit duration, undercut score, compound recommendation
-    radio       N29 — sentiment, intent, NER, RCM parsing
-    rag         N30 — regulation context retrieval
-    orchestrator N31 — full multi-agent synthesis (calls all sub-agents)
+    pace        N25: lap time prediction + CI
+    tire        N26: tire degradation + laps to cliff
+    situation   N27: overtake probability + SC risk
+    pit         N28: pit duration, undercut score, compound recommendation
+    radio       N29: sentiment, intent, NER, RCM parsing
+    rag         N30: regulation context retrieval
+    orchestrator N31: full multi-agent synthesis (calls all sub-agents)
 
 Examples
 --------
@@ -67,7 +67,7 @@ try:
     if _env_path:
         load_dotenv(_env_path)
 except ImportError:
-    pass  # python-dotenv not installed — rely on env vars being set manually
+    pass  # python-dotenv not installed - rely on env vars being set manually
 
 # ---------------------------------------------------------------------------
 # Repo-root sys.path injection

@@ -75,6 +75,11 @@ _MEASURED_TABLES = Path(__file__).resolve().parents[2] / "data" / "mc_measured_v
 DEFAULT_UNDERCUT_BAND_S = 4.91
 DEFAULT_NEUTRALISATION_RATE = 0.0179
 DEFAULT_RACING_LAPS_UNDER_SC = 2.61
+# Measured separately from the SC figure because a VSC leaves more of the window
+# raceable (2.90 laps against 2.61). This constant was REFERENCED at the bottom of
+# measured_racing_laps and never defined, so the fallback that exists to survive a
+# missing data/ raised NameError on exactly the VSC branch it was there to serve.
+DEFAULT_RACING_LAPS_UNDER_VSC = 2.90
 
 # How close we must be for the car ahead to be costing us downforce. This is not
 # a tuning knob: it is the proximity the clean-air table was measured at, so

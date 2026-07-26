@@ -3,7 +3,7 @@
 One instance per N25/N26/N27/N28/N29/N30 card in the dashboard's right
 grid. Formatter functions in ``agent_formatters`` produce the data
 tuple the card renders; the card itself is a dumb view that does not
-know which agent it represents — caller sets the title + icon at
+know which agent it represents: caller sets the title + icon at
 construction time.
 
 Visual sections:
@@ -160,7 +160,7 @@ class AgentCard(QFrame):
     def attach_chart(self, widget: QWidget) -> None:
         """Drop a pyqtgraph ``PlotWidget`` (or similar) inside the body.
 
-        Bumps the card height caps so the chart + body text both fit —
+        Bumps the card height caps so the chart + body text both fit:
         the tighter max set in ``__init__`` is for text-only cards
         (Situation, Radio, RAG) where charts would dominate."""
         while self._chart_layout.count():

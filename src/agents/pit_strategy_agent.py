@@ -66,7 +66,13 @@ _TEAM_ALIASES: dict[str, str] = {'Racing Bulls': 'RB'}
 # Fallback color→compound_id when TIRE_COMPOUNDS has no entry for the circuit/year
 _COMPOUND_FALLBACK: dict[str, int] = {'HARD': 1, 'MEDIUM': 3, 'SOFT': 5}
 
-# Pirelli average stint capacities — Heilmeier et al. (2020, SAE 2020-01-1413)
+# Pirelli-typical stint capacities, used as a modelling assumption and NOT a
+# sourced measurement. This carried a citation to "Heilmeier et al. (2020, SAE
+# 2020-01-1413)" that nothing corroborates: the identifier appears only here and
+# in the notebook this module was extracted from, and the repo has already
+# corrected one wrong blanket attribution to the same author, whose real paper
+# holds none of the constants once cited to it. Treat these as assumptions with
+# the same standing as VSC_PIT_BONUS and WINDOW_LAPS in strategy_orchestrator.
 _STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
 
 # N16 trained Lap_gap as the offset between the two stops (lap_y - lap_x), never the
@@ -132,8 +138,10 @@ class PitAgentCFG:
     this constant used to stand in for EVERY call regardless of team or year (#450).
     __post_init__ now aggregates the real medians from raw pit data
     (_load_team_year_medians); this constant only backstops a (team, year) combo with
-    no raw data (e.g. a team's rookie season). It is the centre of the [2.0, 4.5 s]
-    training range, chosen so an unseen combo still lands in-distribution.
+    no raw data (e.g. a team's rookie season). It sits inside N15's [2.0, 4.5 s]
+    training range so an unseen combo still lands in-distribution. It is NOT the
+    centre of that range, which would be 3.25 s: real stop times are skewed toward
+    the fast end, so 2.8 is nearer the typical stop than the midpoint is.
 
     circuit_undercut_rate and team_x_undercut_rate are pre-aggregated at startup
     from undercut_clean.parquet so tool calls are stateless.
@@ -857,9 +865,15 @@ class PitStrategyAgent:
         Returns None if either driver has no lap row at lap_number or if either
         compound is not dry (wet/intermediate conditions are out of N16's scope).
 
-        pit_delta_X estimates total stop cost as circuit_traversal + 4.5 s
-        (conservative physical stop median), representing inlap + outlap minus
-        two representative race laps.
+        pit_delta_X estimates total stop cost as circuit_traversal + 4.5 s,
+        representing inlap + outlap minus two representative race laps.
+
+        The 4.5 s is `_NORMAL_STOP_MAX_S`, the UPPER bound of N15's normal-stop
+        window, not a median: a median over [2.0, 4.5] on a right-skewed stop-time
+        distribution sits well below it. It is deliberately pessimistic, which
+        biases every pit_delta_X-driven undercut probability toward "the undercut
+        costs more than it does". Calling it a median hid that bias behind a word
+        that implies the estimate is centred when it is not.
 
         Args:
             driver_x: FastF1 abbreviation of the driver considering pitting first.

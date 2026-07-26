@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "0c95c1b",
+    "harness_sha": "863c6f1",
     "dataset": "data/raw laps 2023-2025 (RAW, not featured)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-26T11:39:52+00:00",
+    "generated_at": "2026-07-26T15:26:04+00:00",
     "artifacts": {}
   },
   "ground_truth": {

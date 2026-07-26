@@ -1,4 +1,4 @@
-"""NLP pipeline CPU latency benchmark — replicates N24 inline.
+"""NLP pipeline CPU latency benchmark, replicates N24 inline.
 
 Loads the three N24 NLP models (sentiment, intent, NER) using the
 exact same loaders the notebook uses, then times two entry points
@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 # ---------------------------------------------------------------------------
-# Repo-root path injection — must happen before any src.* import
+# Repo-root path injection: must happen before any src.* import
 # ---------------------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = next(
@@ -47,7 +47,7 @@ for noisy in ("transformers", "setfit", "sentence_transformers", "torch"):
     logging.getLogger(noisy).setLevel(logging.ERROR)
 import transformers.training_args as _tra  # noqa: E402
 
-# SetFit compatibility shim — same one N24 applies at the top of the notebook.
+# SetFit compatibility shim: same one N24 applies at the top of the notebook.
 if not hasattr(_tra, "default_logdir"):
     _tra.default_logdir = lambda: "runs"
 
@@ -86,7 +86,7 @@ _BENCHMARK_MESSAGES: tuple[str, ...] = (
     "Safety car deployed, pit this lap.",
 )
 
-# RCM rows mirror those used in N24's RCM demo — kept identical so the
+# RCM rows mirror those used in N24's RCM demo, kept identical so the
 # rule-based parser sees the same input shape it does in the notebook.
 _RCM_ROWS: tuple[dict[str, Any], ...] = (
     {
@@ -322,7 +322,7 @@ def _predict_entities(text: str, models: _NlpModels) -> list[dict[str, str]]:
     ``is_split_into_words=True``, mapping the first sub-token of each
     word to its predicted tag, and stitching contiguous ``B-/I-``
     runs into spans is what the agent's :mod:`src.agents.radio_agent`
-    does at simulation time — the benchmark must match that surface
+    does at simulation time; the benchmark must match that surface
     so the latency is comparable.
     """
     words = text.split()
@@ -385,7 +385,7 @@ def _run_pipeline(text: str, models: _NlpModels) -> dict[str, Any]:
     """Run sentiment + intent + NER on a single team-radio string.
 
     Mirrors N24's ``run_pipeline``. The caller is responsible for
-    deciding whether the result is forwarded to the orchestrator —
+    deciding whether the result is forwarded to the orchestrator;
     this function only synthesises the structured analysis dict that
     the radio agent expects.
     """
@@ -407,7 +407,7 @@ def _run_pipeline(text: str, models: _NlpModels) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# RCM rule-based parser (no ML — direct transcription of N24)
+# RCM rule-based parser (no ML, direct transcription of N24)
 # ---------------------------------------------------------------------------
 
 
@@ -572,7 +572,7 @@ class NlpPipelineRunner:
         """Return one row per entry point on ``device``."""
         models = _build_models(device)
 
-        # ── run_pipeline — sentiment + intent + NER on every BENCHMARK message ──
+        # ── run_pipeline: sentiment + intent + NER on every BENCHMARK message ──
         msg_idx_pipe = {"i": 0}
 
         def _call_pipeline() -> None:
@@ -587,7 +587,7 @@ class NlpPipelineRunner:
             n_runs=n_total_pipeline,
         )
 
-        # ── run_rcm_pipeline — rule-based, iterate the RCM rows ──
+        # ── run_rcm_pipeline: rule-based, iterate the RCM rows ──
         msg_idx_rcm = {"i": 0}
 
         def _call_rcm() -> None:
@@ -667,8 +667,9 @@ def _resolve_devices(device_arg: str) -> list[str]:
     """Translate the CLI ``--device`` argument into a concrete device list.
 
     ``both`` expands to ``[cpu, cuda]`` only when CUDA is available;
-    otherwise it silently downgrades to CPU and prints a warning so
-    the operator notices the GPU row is missing.
+    otherwise it downgrades to CPU and prints a warning so the operator
+    notices the GPU row is missing rather than assuming it was skipped
+    on purpose.
     """
     if device_arg == "cpu":
         return ["cpu"]

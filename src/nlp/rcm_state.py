@@ -1,11 +1,11 @@
-"""Stateful Race Control tracker — fixes the Safety-Car override drop (NR-02, #305).
+"""Stateful Race Control tracker: fixes the Safety-Car override drop (NR-02, #305).
 
 ``sc_currently_active`` was derived per lap from ONLY that lap's Race Control
 Messages. A real "SAFETY CAR DEPLOYED" message is a one-shot FIA announcement (a
 single row at the deploy lap); it is never repeated on laps 8, 9, 10 of the same
 neutralisation, while the per-lap simulation loop rebuilds ``RaceState`` from
 scratch each lap with ``rcm_events=[]``. So a stateless classifier saw an empty
-window after the deploy lap and reported the Safety Car GONE mid-stint — exactly
+window after the deploy lap and reported the Safety Car GONE mid-stint, exactly
 when the STAY_OUT-under-SC pit override matters most.
 
 :class:`RaceControlStateTracker` persists the SC/VSC state across laps: it goes
@@ -42,7 +42,7 @@ def _event_types(rcm_events: list | None) -> list[str]:
     Mirrors ``race_situation_agent._sc_active_from_rcm``'s dispatch:
     pre-classified dicts (already carrying ``event_type``) pass through;
     ``RCMEvent`` instances and raw FastF1-shaped dicts are classified via
-    ``radio_agent`` — imported lazily to avoid the agents import loop.
+    ``radio_agent``, imported lazily to avoid the agents import loop.
     """
     if not rcm_events:
         return []

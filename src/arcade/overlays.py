@@ -5,7 +5,7 @@ leaderboard, driver info, progress bar, controls legend. Every `arcade.Text`
 is pre-allocated in each panel's `__init__` (which runs after the Window's
 GL context is active); `draw()` only mutates `.text / .x / .y / .color`.
 Creating `Text` inside `draw()` would leak glyph textures at 60 FPS × 20
-rows — a bug that bit both the reference and our earlier attempts.
+rows, a bug that bit both the reference and our earlier attempts.
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ class WeatherPanel:
 
     Visual identity: translucent CONTENT_BG card with a 1 px BORDER outline and
     a 3 px ACCENT top-strip. Readings are Inter body text, label in TERTIARY
-    and value in PRIMARY — same convention the Streamlit sidebar uses."""
+    and value in PRIMARY, the same convention the Streamlit sidebar uses."""
 
     PANEL_PADDING: int = 12
     STRIP_H: int = 3
@@ -340,7 +340,7 @@ class DriverInfoPanel:
 class LeaderboardPanel:
     """Right-edge list of all drivers ranked by race-cumulative progress.
 
-    Visual identity: same card language as Weather/DriverInfo — translucent
+    Visual identity: same card language as Weather/DriverInfo, translucent
     CONTENT_BG, 1 px BORDER outline, 3 px ACCENT top-strip, rank numbers in
     TERTIARY, codes in team colour, compound letter in compound colour on the
     right edge. Selected row is filled with SECONDARY_BG instead of a bare
@@ -518,7 +518,7 @@ class RaceEventsPanel:
     on ``SessionData.track_status_by_lap`` by ``SessionLoader``) and renders
     a Safety Car / VSC / Yellow / Red flag banner the same way a TV broadcast
     would.  The card is hidden when the status is clear (``"1"`` or empty)
-    and fades in / out over ~0.4 s on transitions so consecutive laps with
+    and fades in / out over ~0.35 s on transitions so consecutive laps with
     the same status do not flicker.
 
     Multi-digit codes are parsed with priority ``red > SC > VSC > yellow``,

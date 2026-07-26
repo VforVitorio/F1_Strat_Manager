@@ -3,8 +3,8 @@
 F1 brand colors, shared Rich Console singleton, and the ASCII banner.
 
 Exported symbols used by the rest of the cli package:
-  console   — single Rich Console for the whole session
-  F1_*      — color constants (#rrggbb)
+  console   : single Rich Console for the whole session
+  F1_*      : color constants (#rrggbb)
   make_banner() → Panel
 """
 
@@ -32,7 +32,7 @@ F1_GREEN = "#10b981"  # success / green flag
 F1_AMBER = "#f59e0b"  # warning / yellow flag / driver 2 accent
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ASCII art — "F1" + "STRAT" in Unicode block chars
+# ASCII art: "F1" + "STRAT" in Unicode block chars
 #
 # F1 part (red) + STRAT part (white), 6 rows, ~57 visual columns total.
 # Renders cleanly in any 80-column terminal with UTF-8 support.

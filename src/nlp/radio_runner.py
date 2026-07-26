@@ -8,7 +8,7 @@ under ``data/processed/race_radios/{year}/{slug}/`` (``radios.parquet`` +
 multi-agent system needs at simulation time, but it cannot be plugged into
 ``RaceState.radio_msgs`` / ``RaceState.rcm_events`` directly:
 
-* the radio rows reference an MP3 on disk, not a transcript — Whisper has
+* the radio rows reference an MP3 on disk, not a transcript, so Whisper has
   to run on every audio clip and turn it into text before N29 can do any
   NLP on it
 * the parquet uses ``driver_number`` (int), but ``RadioMessage.driver``
@@ -28,7 +28,7 @@ nothing in N29 itself needs to change.
 
 The module lives under ``src/nlp/`` rather than next to ``radio_agent.py``
 because its main job is **transcription** (Whisper) plus a thin
-parquet → dict adapter — no inference, no LangGraph, no LLM. Sitting next
+parquet -> dict adapter, no inference, no LangGraph, no LLM. Sitting next
 to ``src/nlp/pipeline.py`` and the sentiment / intent / NER classifiers
 keeps all the radio-NLP plumbing in one place and means the lazy
 first-run downloader (``src/f1_strat_manager/data_cache.py``) can call
@@ -82,15 +82,15 @@ class WhisperTranscriber:
     re-loading it on every :class:`RadioPipelineRunner` constructor would
     dominate the simulation startup cost. Wrapping the load behind
     :meth:`ensure_loaded` and stashing the result on the instance lets two
-    runners in the same process — e.g. the smoke notebook constructing one
-    runner per GP — share the weights once they have been paid for. The
+    runners in the same process (e.g. the smoke notebook constructing one
+    runner per GP) share the weights once they have been paid for. The
     module-level :func:`_get_whisper` factory takes care of returning the
     same instance for callers that ask for the same model name; passing a
     different ``model_name`` rebuilds the singleton because Whisper has no
     runtime way to swap weights in place.
 
     The class deliberately keeps no audio cache or transcript cache of its
-    own — those concerns belong to :class:`RadioPipelineRunner`, which knows
+    own: those concerns belong to :class:`RadioPipelineRunner`, which knows
     what to key the cache by (the relative ``audio_path`` from the parquet)
     and where to persist it (``data/processed/radio_nlp/...``). Keeping the
     transcriber stateless w.r.t. content makes it trivially reusable across
@@ -116,7 +116,7 @@ class WhisperTranscriber:
         Subsequent calls are no-ops, so the runner can put this at the
         top of every transcribe loop without worrying about repeated
         loads. The import is local to avoid pulling Whisper into module
-        import time — the radio_runner module is also imported by
+        import time: the radio_runner module is also imported by
         ``data_cache.ensure_radio_corpus`` (for ``resolve_gp_slug``) and
         we do not want bare-metal first-run downloads to cost a Whisper
         load that the user may never need.
@@ -134,7 +134,7 @@ class WhisperTranscriber:
         to Whisper's native 16 kHz mono via ``librosa.resample``. We
         avoid ``librosa.load`` because on Windows it can fall back to
         the ``audioread`` backend which spawns ``ffmpeg`` with a piped
-        stderr that emits cp1252 bytes — Python's subprocess reader
+        stderr that emits cp1252 bytes, and Python's subprocess reader
         thread then crashes trying to decode that as UTF-8. Going
         through ``soundfile`` directly skips that codepath entirely and
         is also faster on the OpenF1 MP3 corpus. ``fp16`` is only
@@ -220,7 +220,7 @@ class RadioPipelineRunner:
 
     1. resolves the GP name to its corpus slug via :func:`resolve_gp_slug`
     2. loads ``radios.parquet`` and ``rcm.parquet`` if they exist (empty
-       DataFrame + warning if either is missing — the simulation should
+       DataFrame + warning if either is missing, since the simulation should
        degrade gracefully, not crash)
     3. builds the per-GP ``driver_number → 3-letter code`` map from the
        featured laps DataFrame, falling back to ``D{n}`` for any number
@@ -231,7 +231,7 @@ class RadioPipelineRunner:
        re-transcribes the corpus that ``turbo`` left behind)
     5. eagerly transcribes every uncached radio when ``eager_transcribe``
        is True, lazily loading Whisper only if at least one row is
-       actually missing — a fully-warm cache pays zero Whisper cost
+       actually missing: a fully-warm cache pays zero Whisper cost
 
     The public API is :meth:`radios_for_lap`, which returns
     ``(radio_dicts, rcm_dicts)`` for the requested lap shaped exactly the
@@ -323,8 +323,8 @@ class RadioPipelineRunner:
         to the dict shape that
         ``strategy_orchestrator._to_radio_message`` and
         ``strategy_orchestrator._to_rcm_event`` accept. Radios always
-        carry a transcript field — empty string when the MP3 was
-        missing or transcription failed — so N29 sees a row even when
+        carry a transcript field (empty string when the MP3 was
+        missing or transcription failed), so N29 sees a row even when
         the corresponding audio is unavailable; this matches the
         contract the legacy mock generator has been honouring and lets
         the radio agent emit a ``no usable text`` warning instead of
@@ -355,7 +355,7 @@ class RadioPipelineRunner:
 
         A missing parquet is logged as a warning but never raises
         because the simulation should still be runnable when the
-        corpus is partial — e.g. the user is replaying a 2024 GP that
+        corpus is partial, e.g. the user is replaying a 2024 GP that
         we have not yet built radios for. The same logic applies to
         the RCM loader; both halves degrade independently.
         """
@@ -429,7 +429,7 @@ class RadioPipelineRunner:
         """Load the JSON cache from disk, dropping malformed or stale entries.
 
         The on-disk schema is a flat dict keyed by the **normalized**
-        relative ``audio_path`` (forward slashes — see the path-norm
+        relative ``audio_path`` (forward slashes, see the path-norm
         helper below) with values shaped as
         ``{text, duration_s, model}``. Entries are silently dropped
         when:
@@ -438,7 +438,7 @@ class RadioPipelineRunner:
         * the JSON parses but the top-level value is not a dict
         * an individual entry is missing the ``text`` field
         * the entry's ``model`` does not match
-          :attr:`whisper_model_name` — switching from ``turbo`` to
+          :attr:`whisper_model_name`: switching from ``turbo`` to
           ``base`` rebuilds the cache cleanly without any extra flag
 
         Always returns a dict so the rest of the runner can use it
@@ -499,7 +499,7 @@ class RadioPipelineRunner:
         (backslashes on the Windows build host, forward slashes
         elsewhere). Normalizing both on the read side and on the write
         side of the cache key keeps the JSON cache portable across
-        OSes — the file built on Windows still hits in the cache when
+        OSes: the file built on Windows still hits in the cache when
         the same parquet is loaded on macOS or Linux.
         """
         return rel.replace("\\", "/")
@@ -566,7 +566,7 @@ class RadioPipelineRunner:
         failed) and on any other Whisper exception, an empty-text
         entry is written to the cache so the runner does not retry
         the same broken file on every subsequent run. The radio row
-        is still emitted downstream — N29 sees a row with ``text=""``
+        is still emitted downstream: N29 sees a row with ``text=""``
         and treats it as "no usable transcript", which is the same
         behaviour as a clip Whisper genuinely could not understand.
         """
@@ -587,7 +587,7 @@ class RadioPipelineRunner:
         """Return the cached transcript text for one radio row.
 
         Returns the empty string when the row has no ``audio_path`` or
-        the cache key is missing — both cases mean N29 should see a
+        the cache key is missing: both cases mean N29 should see a
         row but treat it as having no usable text. Centralised here
         so the row-to-dict converter does not have to repeat the
         normalization + null handling.

@@ -106,6 +106,12 @@ def fetch_openf1_intervals(year, gp_name, max_interval=None):
 
                 if 'interval_in_seconds' in df_intervals.columns:
                     # Mark intervals in strategic zones
+                    # The 1.5 s cutoff is an unsourced guess kept only because this
+                    # module is archival and nothing imports it. The repo now has a
+                    # measured answer instead: `undercut_band` in
+                    # data/mc_measured_v1.json gives undercut success as a curve over
+                    # the gap in seconds, so there is no single threshold to pick.
+                    # Do not copy this line into live code.
                     df_intervals['undercut_window'] = df_intervals['interval_in_seconds'] < 1.5
                     df_intervals['drs_window'] = df_intervals['interval_in_seconds'] < 1.0
 

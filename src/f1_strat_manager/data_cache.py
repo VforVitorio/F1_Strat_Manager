@@ -3,7 +3,7 @@
 The CLI ships as two console scripts (``f1-strat``, ``f1-sim``) that can be
 installed globally via ``uv tool install git+https://…`` without cloning
 the repository. In that install mode the code arrives on disk but the
-~15 GB of trained models and FastF1 race dumps do not — they live on the
+~15 GB of trained models and FastF1 race dumps do not: they live on the
 HuggingFace Dataset ``VforVitorio/f1-strategy-dataset``. This module is
 the bridge: it resolves which on-disk directory should hold those assets
 (preferring an editable-dev checkout when one is present) and downloads
@@ -13,12 +13,12 @@ All resolution goes through :func:`get_data_root` so that sub-agents,
 scripts, and the CLI land on the same directory regardless of how the
 user installed the project. The order of precedence is:
 
-    1. ``$F1_STRAT_DATA_ROOT`` — explicit override for power users who
+    1. ``$F1_STRAT_DATA_ROOT``: explicit override for power users who
        want the cache on a different volume.
-    2. ``<repo>/data/`` — when the running module sits inside a git
+    2. ``<repo>/data/``: when the running module sits inside a git
        checkout, the walker finds the repo root and prefers the existing
        ``data/`` tree so editable-dev workflows never trigger downloads.
-    3. ``~/.f1-strat/data/`` — user cache directory for the global
+    3. ``~/.f1-strat/data/``: user cache directory for the global
        ``uv tool install`` scenario where there is no repo to live next to.
 
 Environment variables respected
@@ -68,8 +68,8 @@ DEFAULT_SENTINEL_RACE: tuple[int, str] = (2025, "Melbourne")
 
 # ── Critical files used to detect whether a setup has already happened ────────
 # If any of these are missing we consider the install "fresh" and trigger the
-# download flow. Kept deliberately small — only the load-bearing artefacts
-# that every sub-agent touches — so that a partially-populated cache still
+# download flow. Kept deliberately small: only the load-bearing artefacts
+# that every sub-agent touches, so that a partially-populated cache still
 # boots as long as it has the essentials.
 _CRITICAL_MODEL_FILES: tuple[str, ...] = (
     "tire_degradation/tiredeg_modelA_v4.pt",
@@ -105,20 +105,20 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     "data/models/xgb_laptime_final_feature_names.json",
     "data/models/xgb_laptime_global_v1.json",
     "data/models/model_registry.json",
-    # Featured parquet + supporting configs — the CLI loads these directly
+    # Featured parquet + supporting configs: the CLI loads these directly
     "data/processed/laps_featured_2025.parquet",
     "data/processed/feature_manifest_laptime.json",
     "data/processed/tiredeg_feature_manifest.json",
     "data/processed/tiredeg_sequence_config.json",
     "data/processed/circuit_clustering/**",
-    # Radio corpus metadata — small parquets (~430 KB total for the full
+    # Radio corpus metadata: small parquets (~430 KB total for the full
     # 2025 calendar) that the runner reads to enumerate per-lap team-radio
     # rows and FIA race-control messages. The matching MP3 audio tree under
     # data/raw/radio_audio/** is intentionally NOT pulled by default
-    # (~80 MB) — :func:`ensure_radio_corpus` downloads it lazily per GP
+    # (~80 MB); :func:`ensure_radio_corpus` downloads it lazily per GP
     # only when the simulation actually targets that race.
     "data/processed/race_radios/**",
-    # RAG index — optional, the Hub may not have it yet. snapshot_download
+    # RAG index: optional, the Hub may not have it yet. snapshot_download
     # ignores missing patterns silently.
     "data/rag/**",
 )
@@ -174,12 +174,12 @@ def get_data_root() -> Path:
 def get_models_root() -> Path:
     """Resolve the models directory using the same precedence as data root.
 
-    Returns ``<data_root>/../models`` when running from a repo checkout
-    (because the repo keeps models under ``data/models/``… actually the
-    on-disk layout is ``data/models/<family>/``) and mirrors that structure
-    under the user cache. In all cases the resolved path sits beneath
-    ``get_data_root()`` so a single HF ``snapshot_download`` call populates
-    both trees in one pass.
+    Returns ``<data_root>/models``: the same directory whether running from
+    a repo checkout (``<repo>/data/models``) or the user cache
+    (``~/.f1-strat/data/models``), since :func:`get_data_root` has already
+    resolved which one applies. Models sit inside the data root rather than
+    beside it, so a single HF ``snapshot_download`` call populates both
+    trees in one pass.
     """
     # Both editable-dev and user-cache layouts keep models under data/models/
     root = get_data_root() / "models"
@@ -195,7 +195,7 @@ def get_models_root() -> Path:
 def is_first_run() -> bool:
     """Return True when the essential data and models are not on disk yet.
 
-    The check is intentionally permissive — we only look for one race
+    The check is intentionally permissive: it only looks for one race
     folder under ``data/raw/<year>/`` and the handful of model files listed
     in ``_CRITICAL_MODEL_FILES``. Partial installs where only some of the
     extras are missing (e.g. the RAG Qdrant index) do NOT trigger the
@@ -277,7 +277,7 @@ def _snapshot_download(
         ) from exc
 
     data_root = get_data_root()
-    # snapshot_download writes into local_dir/ preserving the repo layout —
+    # snapshot_download writes into local_dir/ preserving the repo layout,
     # which already matches ``data/…`` + ``models/…`` on the remote, so we
     # point local_dir at the data_root parent (so ``models/`` lands next to
     # ``data/`` on disk) when running in user-cache mode, or at the repo
@@ -291,7 +291,7 @@ def _snapshot_download(
 
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    # tqdm on/off — ``snapshot_download`` does not accept a progress arg
+    # tqdm on/off: ``snapshot_download`` does not accept a progress arg
     # directly but respects the HF_HUB_DISABLE_PROGRESS_BARS env var.
     if not show_progress:
         os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
@@ -418,7 +418,7 @@ def ensure_race(year: int, gp_name: str, show_progress: bool = True) -> Path:
     ``scripts/cli/pickers.py``) that already know which GP they need but
     want to be robust to a partially-populated cache. Skips the download
     entirely when the folder already exists or when
-    ``F1_STRAT_OFFLINE=1`` — in the offline case the caller receives the
+    ``F1_STRAT_OFFLINE=1``: in the offline case the caller receives the
     (possibly empty) path and can decide whether to raise.
     """
     data_root = get_data_root()
@@ -461,14 +461,14 @@ def ensure_radio_corpus(
     importing huggingface_hub, so the hot path of an already-warm install
     pays no startup cost beyond the slug lookup itself.
     """
-    # Lightweight import — gp_slugs has zero heavy deps so this stays cheap
+    # Lightweight import: gp_slugs has zero heavy deps so this stays cheap
     # even when the rest of src.agents has not been touched yet.
     from src.f1_strat_manager.gp_slugs import resolve_gp_slug
 
     try:
         slug = resolve_gp_slug(gp_name)
     except ValueError:
-        # Unknown name even after canonical normalisation — a genuine typo or an
+        # Unknown name even after canonical normalisation: a genuine typo or an
         # as-yet-unmapped GP. We do NOT raise here (the runner may accept the raw
         # gp_name path and gives a clearer error), but warn so the miss is not
         # fully silent: a zero-radio simulation used to look identical to a

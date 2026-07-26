@@ -1021,37 +1021,3 @@ def simulate_real_time_predictions(csv_path, models_path, interval=5, compound_s
     print(f"Total predictions generated: {len(all_predictions)}")
 
     return all_predictions
-
-
-if __name__ == "main":
-    # Define path to the CSV file
-    csv_path = '../../outputs/week3/lap_prediction_data.csv'
-
-    # Define path to models
-    models_path = '../../outputs/week5/models/'
-
-    # Define monitoring thresholds by compound
-    compound_start_laps = {
-        1: 6,   # Soft tires: monitor from lap 6 onwards
-        2: 12,  # Medium tires: monitor from lap 12 onwards
-        3: 25   # Hard tires: monitor from lap 25 onwards
-    }
-
-    # Call the prediction function
-    predictions = predict_tire_degradation(
-        csv_path,
-        models_path,
-        compound_start_laps=compound_start_laps
-    )
-    # Display the predictions
-    predictions.head()
-
-    # Run simulation
-    predictions_history = simulate_real_time_predictions(
-        csv_path='../../outputs/week3/lap_prediction_data.csv',
-        models_path='../../outputs/week5/models/',
-        interval=0.1,  # 5 seconds between updates
-        compound_start_laps=compound_start_laps,
-        max_rows=200,  # Optional: limit number of rows for testing
-        prediction_horizon=3  # Show predictions for next 3 laps
-    )
