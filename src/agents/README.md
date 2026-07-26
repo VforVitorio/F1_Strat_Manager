@@ -161,10 +161,15 @@ from src.agents import RaceState, run_strategy_orchestrator_from_state
 
 ---
 
-## Legacy files (kept for reference)
+## The experta engine moved out
 
-| File | Description |
-|---|---|
+The original rule-based engine (`base_agent.py`, `strategy_agent.py` and the four
+`rules/` modules) now lives at [`legacy/experta_engine/`](../../legacy/experta_engine/).
+Nothing in the live pipeline imported it, and a near-identical copy was already
+archived under `legacy/app_streamlit_v1/`. It is kept because it is part of the
+thesis record, not because anything calls it.
+
+---|---|
 | `base_agent.py` | Experta `Fact` subclasses and `F1StrategyEngine` (CLIPS-style, legacy) |
 | `strategy_agent.py` | `F1CompleteStrategyEngine` — original rule-based engine, superseded by N31 |
 | `rules/degradation_rules.py` | Tyre degradation rules for legacy engine |
