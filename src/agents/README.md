@@ -1,4 +1,4 @@
-# src/agents — Multi-Agent Strategy System (v0.9)
+# src/agents — Multi-Agent Strategy System
 
 LangGraph-based multi-agent system extracted from notebooks N25–N31.
 Each module is importable without a FastF1 session via its `*_from_state` RSM adapter.
@@ -136,10 +136,16 @@ import pandas as pd
 laps_df = pd.read_parquet("data/processed/laps_featured_2025.parquet")
 race_state = RaceState(
     driver="NOR", lap=18, total_laps=57, position=3,
-    compound="C2", tyre_life=20, gap_ahead_s=1.2, pace_delta_s=-0.3,
+    compound="MEDIUM", tyre_life=20, gap_ahead_s=1.2, pace_delta_s=-0.3,
     air_temp=32.0, track_temp=48.0,
 )
-rec = run_strategy_orchestrator_from_state(race_state, laps_df)
+
+# Pass the lap_state too. Without it the orchestrator never sees the rival
+# gaps, so the Monte Carlo scores on the legacy seconds path instead of in
+# projected track position, and laps_df stays a whole season rather than one
+# race. Build it with RaceStateManager; hand-rolling one is how the second,
+# buggy implementation of this contract got written.
+rec = run_strategy_orchestrator_from_state(race_state, laps_df, lap_state)
 print(rec.action, rec.confidence, rec.reasoning)
 ```
 
@@ -172,7 +178,7 @@ thesis record, not because anything calls it.
 | `rules/nlp_rules.py` | NLP intent rules for legacy engine |
 | `rules/__init__.py` | Legacy rules package init |
 
-The legacy engine is not used in v0.9. Do not import from it in new code.
+The legacy engine is not used. Do not import from it in new code.
 
 ---
 
@@ -181,6 +187,6 @@ The legacy engine is not used in v0.9. Do not import from it in new code.
 | Layer | Model |
 |---|---|
 | Sub-agents N25–N29 | `gpt-4.1-mini` |
-| Orchestrator N31 | `gpt-4.1` (larger model — synthesises all sub-agent outputs) |
+| Orchestrator N31 | `gpt-5.4-mini` (`OrchestratorConfig.model_name`) |
 
 Notebooks default to `local-model` (LM Studio). Switch to the OpenAI model IDs above when deploying via FastAPI.

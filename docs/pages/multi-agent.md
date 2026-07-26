@@ -191,12 +191,69 @@ Three-layer pipeline:
 
 ## What the Monte Carlo actually scores
 
+```mermaid
+graph TD
+    LS[lap_state] --> CTX[race_context_from_lap_state<br/>gp_name, traversal_s, mandatory_stop_pending,<br/>rival_stop_pending per driver]
+    LS --> RIV[rivals list]
+    RIV --> GATE{any usable gap?}
+    GATE -->|no| LEG[legacy path<br/>seconds / 1.5, unchanged<br/>pinned by the strategy goldens]
+    GATE -->|yes| STATES[RivalState per car<br/>gap_s, is_pitting, stop_pending]
+
+    subgraph draws["Per-draw samples, n=500, seed 42"]
+        D1[cliff_s from N26]
+        D2[sc_s from N27]
+        D3[pit_s from N28 / N15]
+        D4[ucut_s from N28 / N16]
+    end
+
+    subgraph tables["data/mc_measured_v1.json"]
+        T1[undercut_band 4.91 s]
+        T2[neutralisation_rate per circuit<br/>floored: an observed zero means<br/>never seen, not impossible]
+        T3[clean_air per circuit]
+        T4[racing laps under SC 2.61]
+    end
+
+    STATES --> ELIG{eligibility}
+    T1 --> ELIG
+    ELIG -->|"ahead and inside the band<br/>and not already in the pit lane"| UC[UNDERCUT]
+    ELIG -->|"ahead and in the pit lane now"| OC[OVERCUT]
+    ELIG -->|"no target"| NULL["eligible: false, score: null<br/>never a numeric sentinel"]
+
+    CTX --> CFG[two ProjectionConfigs]
+    T2 --> CFG
+    T3 --> CFG
+    T4 --> CFG
+    CFG --> GC[racing config<br/>clean air and SC option value live here]
+    CFG --> NC[neutralised config<br/>both terms zero: the field runs to a delta]
+
+    D1 --> PROJ
+    D3 --> PROJ
+    STATES --> PROJ[project_positions per candidate<br/>gap_r + delta_r - delta_us,<br/>a crossing is a place]
+    GC --> PROJ
+    NC --> PROJ
+
+    D2 -->|selects which config each draw uses| PROJ
+    PROJ --> PAY[payoff<br/>positions plus a clipped margin tie-break]
+    PAY --> LIAB[terminal_liability<br/>only for candidates that do NOT stop:<br/>the deferred mandatory stop, discounted by q_f]
+    D4 -->|"only on racing draws, Art. 55.8"| PAY
+
+    LIAB --> SCORE["score = alpha·E + 1-alpha·P10"]
+    UC --> SCORE
+    OC --> SCORE
+    SCORE --> ARG[best_mc_candidate<br/>argmax over scoreable candidates only]
+    NULL --> ARG
+    LEG --> ARG
+    ARG --> OUT[scenario_scores into the LLM prompt]
+```
+
+Four things in that graph are the whole redesign. Eligibility can return **no number at all** rather than a sentinel. The measured tables enter as *configuration*, not as constants in the code. Each draw picks a racing or a neutralised config, which is what makes the Art. 55.17 endgame arithmetic rather than a rule. And the terminal liability applies only to the candidates that do not stop, because a deferred obligation is a cost only while it is still owed.
+
 The layer used to score in generic seconds divided by a flat 1.5 s/position, over a sampled state that contained **no cars at all**. That constant cannot be right in both regimes: measured across 71 races, the median gap between consecutive cars is **2.23 s while racing and 1.48 s under a Safety Car**, so a single figure was a bunched-field number applied to green-flag racing. And losing 20 s costs zero positions with a 25 s cushion behind but three positions with cars at +2 / +8 / +15 s — a difference only a model that knows *which cars are where* can see.
 
 Scoring now runs on a per-rival gap projection (`src/agents/position_projection.py`). Each candidate moves every gap by the difference between what a rival loses and what we lose; a gap crossing zero is a car changing sides, so counting the cars projected ahead gives the position directly. Three behaviours that used to need special cases now fall out of that arithmetic:
 
 - **Rejoining into traffic** is automatic — every rival within our pit loss behind us is a place lost, counted by name.
-- **The mandatory-stop cancellation** (Art. 30.5(m)) happens only when the rival genuinely stops too. Where the old model argued in a comment that the pit-lane traversal cancels, the projection charges it per car and lets it cancel when it actually does.
+- **The mandatory-stop cancellation** (Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023)) happens only when the rival genuinely stops too. Where the old model argued in a comment that the pit-lane traversal cancels, the projection charges it per car and lets it cancel when it actually does.
 - **The Art. 55.17 endgame** — a race finishing behind the Safety Car — emerges from the measured racing-lap count dropping to zero: fresh tyres have nothing left to pay themselves back over, so staying out wins on the numbers. This is the case a deleted guard-rail used to force, and it now needs no rail.
 
 A **terminal liability** replaces the flat Safety Car bonus with option value: a still-owed stop costs the cars it will release behind us, discounted by the measured probability that a later neutralisation covers it cheaply.

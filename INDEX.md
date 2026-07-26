@@ -135,7 +135,7 @@ The two files below are the **legacy** `experta` rule engine, kept for reference
 | ---- | ----------- |
 | [src/simulation/race_state_manager.py](src/simulation/race_state_manager.py) | `RaceStateManager` — builds the per-lap `lap_state` dict (single-driver telemetry + timing-only rivals) consumed by all agents |
 | [src/simulation/replay_engine.py](src/simulation/replay_engine.py) | `RaceReplayEngine` — iterates a race parquet lap by lap, yielding `lap_state` (same contract for replay or a future live feed) |
-| [src/simulation/stint_history.py](src/simulation/stint_history.py) | Art. 30.5(m) stint-history helpers: answers pit-stop count, compound history, and mandatory-two-dry-compound obligation per driver and lap |
+| [src/simulation/stint_history.py](src/simulation/stint_history.py) | Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023) stint-history helpers: answers pit-stop count, compound history, and mandatory-two-dry-compound obligation per driver and lap |
 | [src/arcade/](src/arcade/) | 2D pyglet replay + PySide6 strategy dashboard + `stream.py` TCP broadcast to the dashboard subprocess |
 
 ### `src/nlp/` (legacy)
