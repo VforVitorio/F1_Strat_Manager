@@ -45,9 +45,12 @@ Match the prefix you would use in the commit:
 
 - `feat/<short-slug>` — feature work
 - `fix/<short-slug>` — bug fixes
-- `chore/<short-slug>` — maintenance, including docs revamps and tooling
+- `docs/<short-slug>` — documentation
+- `chore/<short-slug>` — maintenance and tooling
 - `release-please--branches--main--components--f1-strat-manager` — managed by the bot
 
-Pull requests target `main`; required checks must pass (lint, build, docs build) before a maintainer merges.
+**Pull requests target `dev`, not `main`.** `main` is release-only: it is protected, and `release-please` tags from it. Work flows `feature branch -> dev -> main`, and only a promotion PR opens against `main`.
+
+The required checks are `test`, `lint` and `typecheck`. All three must pass before a merge.
 
 > **Two more references worth bookmarking.** The repo root carries [CONTRIBUTING.md](https://github.com/VforVitorio/F1-StratLab/blob/main/CONTRIBUTING.md) with the canonical contribution flow. For a code-level map of every module, open the [F1 StratLab DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab). It auto-regenerates on every push.

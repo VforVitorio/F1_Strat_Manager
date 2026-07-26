@@ -24,7 +24,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | NLP pipeline for radio       | N17-N24                                                                                                                                                             |
 | Multi-agent system           | N25 (Pace) → N30 (RAG) → N26-N29 → N31 (Orchestrator)                                                                                                               |
 | Query RAG at runtime         | [`src/rag/retriever.py`](src/rag/retriever.py) — `RagRetriever` + `query_rag_tool`                                                                                  |
-| Telemetry web app            | [`src/telemetry/backend/main.py`](src/telemetry/backend/main.py) (FastAPI) + [`src/telemetry/frontend/app/main.py`](src/telemetry/frontend/app/main.py) (Streamlit) |
+| Telemetry web app            | [`src/telemetry/backend/main.py`](src/telemetry/backend/main.py) (FastAPI) + [`src/telemetry/webapp/`](src/telemetry/webapp/) (React), launched together with `f1-webapp`                              |
 
 ---
 
@@ -164,8 +164,6 @@ are reference/historical only — see [`src/strategy/README.md`](src/strategy/RE
 | [src/strategy/inference/no_llm.py](src/strategy/inference/no_llm.py)                           | The deterministic `--no-llm` code path consumed by `run_lap` |
 | [src/strategy/eval/](src/strategy/eval/)                                                       | `f1-eval` CLI backend — regenerates the model evaluation reports (metrics registry, calibration, threshold hygiene, NLP per-stage eval, headline-number reproduction, LLM-judged alert precision) under `documents/eval_reports/` |
 | [src/strategy/inference/tire_predictor.py](src/strategy/inference/tire_predictor.py)           | Jupytext-exported tire degradation inference wrapper (N09 era; reference only) |
-| [src/strategy/models/lap_time_model.py](src/strategy/models/lap_time_model.py)                 | Jupytext-exported lap time model module (reference only) |
-| [src/strategy/models/tire_degradation_model.py](src/strategy/models/tire_degradation_model.py) | Jupytext-exported tire degradation model module (reference only) |
 
 ### `src/telemetry/`
 
@@ -174,11 +172,9 @@ A separate full-stack web application for live telemetry visualisation, independ
 | Component                                                                | Description                                                                                                                                |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | [src/telemetry/backend/main.py](src/telemetry/backend/main.py)           | FastAPI application entry point; mounts endpoints for telemetry, circuit domination, driver comparison, chat, voice, and strategy             |
-| `src/telemetry/backend/api/`                                             | Versioned API route handlers (`telemetry`, `circuit_domination`, `comparison`, `chat`, `voice`, `strategy` — the last exposes all N25-N31 agents + orchestrator over REST) |
-| `src/telemetry/backend/services/`                                        | Business logic: `telemetry/` (FastF1 client + session cache), `chatbot/` (chat engine, LLM service, MCP bridge), `simulation/` (SSE strategy-replay generator), `voice/` (STT/TTS/audio), plus `comparison_service.py` |
-| [src/telemetry/frontend/app/main.py](src/telemetry/frontend/app/main.py) | Streamlit multi-page app entry point (dashboard, comparison, chat pages)                                                                    |
-| `src/telemetry/frontend/app/pages/`                                      | Individual Streamlit pages                                                                                                                  |
-| `src/telemetry/frontend/app/components/`                                 | Reusable UI components (auth, layout, navbar)                                                                                               |
+| `src/telemetry/backend/api/`                                             | Versioned API route handlers (`telemetry`, `circuit_domination`, `comparison`, `chat`, `strategy` — the last exposes all N25-N31 agents + orchestrator over REST) |
+| `src/telemetry/backend/services/`                                        | Business logic: `telemetry/` (FastF1 client + session cache), `chatbot/` (chat engine, LLM service, MCP bridge), `simulation/` (SSE strategy-replay generator), plus `comparison_service.py` |
+| `src/telemetry/webapp/src/`                                              | React + TypeScript single-page app that replaced the Streamlit frontend in v2.0.0; served by nginx behind `/api` in the compose stack        |
 
 ### `src/data_extraction/`
 
@@ -204,7 +200,6 @@ historical reference scripts.
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | [src/data_extraction/legacy/image_augmentation.py](src/data_extraction/legacy/image_augmentation.py) | Albumentations augmentation pipeline for the YOLO car-team image dataset (early vision experiments)  |
 | [src/data_extraction/legacy/video_downloader.py](src/data_extraction/legacy/video_downloader.py)     | yt-dlp wrapper for downloading Creative Commons F1 highlight videos                                  |
-| [src/data_extraction/legacy/extract_radios.ipynb](src/data_extraction/legacy/extract_radios.ipynb)   | Original notebook radio dump (pre-N33), kept as a baseline reference for the OpenF1 pipeline         |
 
 ---
 

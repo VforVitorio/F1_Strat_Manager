@@ -69,4 +69,4 @@ See [`docs/pages/simulation.md`](docs/pages/simulation.md) for the wire-level vi
 - **Backend API:** [`docs/pages/backend-api.md`](docs/pages/backend-api.md).
 - **Streamlit frontend:** [`docs/pages/streamlit.md`](docs/pages/streamlit.md).
 - **Simulation engine:** [`docs/pages/simulation.md`](docs/pages/simulation.md).
-- **All draw.io diagrams:** [`docs/diagrams/`](docs/diagrams/).
+- **All draw.io diagrams:** [`documents/dev_docs/diagrams/`](documents/dev_docs/diagrams/).
