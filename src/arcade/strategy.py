@@ -606,7 +606,9 @@ class SimConnector(threading.Thread):
         # lead, and 0.0 is honest there. A car ahead whose interval was never measured
         # is NOT a zero gap: 0.0 reads as side by side, which the orchestrator's
         # clean-air band and N27's sub-1.0s DRS window both act on. It degrades to
-        # GAP_UNKNOWN_FALLBACK_S instead, matching the CLI and the telemetry backend.
+        # GAP_UNKNOWN_FALLBACK_S instead, which the CLI now shares. The telemetry
+        # backend still has its own copies and is a submodule, so this is a two-way
+        # unification, not the three-way one an earlier draft of this comment claimed.
         #
         # Be honest about what that fallback still is: 2.0 is fabricated, and a real
         # 2.0s gap is common, so it does not satisfy the rule that a default must never

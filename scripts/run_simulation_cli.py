@@ -1287,9 +1287,15 @@ def _make_inference_panel(
 # RaceState builder
 # ---------------------------------------------------------------------------
 
-# Imported, not redeclared: this number had grown a copy in the CLI, the arcade and
-# the telemetry backend, and three copies of one convention is how the next drift
-# starts. Its rationale and its honest limitation live with it (#628).
+# Imported, not redeclared. Its rationale and its honest limitation live with it.
+#
+# Be precise about how far this got, because a comment claiming a closed drift is
+# worse than no comment: the CLI and the arcade now share one constant, and the
+# telemetry BACKEND does not. It is a git submodule and cannot be changed from this
+# commit, and an adversarial gate counted SIX surviving copies of this convention
+# there and here, including one in `strategy.py` that defaults the same concept to
+# 2.0 on one request model and 0.0 on its sibling in the same file. Tracked, not
+# closed (#628).
 from src.agents.position_projection import (  # noqa: E402
     GAP_UNKNOWN_FALLBACK_S as _GAP_UNKNOWN_FALLBACK_S,
 )
@@ -1648,10 +1654,15 @@ def run(args: argparse.Namespace) -> None:
             # Gap to car directly ahead (from rivals list)
             rivals = lap_state.get("rivals", [])
             car_ahead = next((r for r in rivals if r.get("position") == position - 1), None)
+            # Display path, deliberately NOT using GAP_UNKNOWN_FALLBACK_S. Here a
+            # missing interval should read as missing, and the em-dash below does
+            # that: the fallback exists to stop the DECISION layer seeing a
+            # fabricated zero, and a table cell has no such problem. Keeping the
+            # two apart on purpose, rather than by oversight, which is what an
+            # adversarial gate flagged this line as.
             try:
-                gap_ahead = (
-                    abs(float(car_ahead.get("interval_to_driver_s") or 0.0)) if car_ahead else 0.0
-                )
+                measured = car_ahead.get("interval_to_driver_s") if car_ahead else None
+                gap_ahead = abs(float(measured)) if measured is not None else 0.0
             except (TypeError, ValueError):
                 gap_ahead = 0.0
             gap_str = f"{gap_ahead:.2f}" if gap_ahead > 0 else "—"

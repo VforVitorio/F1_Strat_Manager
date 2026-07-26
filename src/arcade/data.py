@@ -565,11 +565,24 @@ class SessionLoader:
             for _, row in merged.iterrows():
                 out[int(row["LapNumber"])] = self._weather_row_to_dict(row)
             return out
-        except (KeyError, ValueError, TypeError) as exc:
-            # KeyError: an expected weather/laps column absent. ValueError/
+        except Exception as exc:  # noqa: BLE001 - see the enumeration below
+            # KeyError: an expected weather/laps column absent. ValueError and
             # TypeError: int()/float() casts on a malformed row, or a dtype
-            # mismatch merge_asof rejects. Pure pandas indexing beyond this
-            # is not expected to raise anything else.
+            # mismatch merge_asof rejects.
+            #
+            # And the one that made this catch broad on purpose: reading
+            # `session.weather_data` raises fastf1's DataNotLoadedError when the
+            # weather channel is unavailable, and that subclasses Exception
+            # DIRECTLY, not any of the three above. An adversarial gate caught it
+            # by executing it: session.load() returns normally and the property
+            # raises afterwards, so a narrow tuple let it escape and killed the
+            # entire arcade load, after the full cold path, for a session that
+            # used to degrade quietly to the panel's own constants.
+            #
+            # The docstring above promises exactly that degradation. Catching
+            # narrowly here would have made the docstring a lie and turned a
+            # missing optional channel into a crash, which is the failure this
+            # repo has a written lesson about.
             logger.debug("Weather-by-lap extraction failed (%s) - panel keeps defaults", exc)
             return {}
 
