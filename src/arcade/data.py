@@ -650,4 +650,13 @@ class SessionLoader:
         dx = np.diff(ref_x)
         dy = np.diff(ref_y)
         length_raw = float(np.sum(np.hypot(dx, dy)))
-        return length_raw / 10000.0 if length_raw > 1e6 else length_raw
+        # ref_x/ref_y are FastF1 raw units (1/10 mm, see the module docstring), so a
+        # real circuit polyline sums into the tens of millions. The threshold exists
+        # to leave alone a caller that already handed us metres. Naming both numbers
+        # answers the question the ternary hid: what unit does this return, and can
+        # it silently return raw units instead of metres?
+        raw_units_per_metre = 10_000.0
+        looks_like_raw_units = length_raw > 1e6
+        if looks_like_raw_units:
+            return length_raw / raw_units_per_metre
+        return length_raw
