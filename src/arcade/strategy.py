@@ -609,7 +609,11 @@ class SimConnector(threading.Thread):
         if self._radio_runner is not None:
             try:
                 radio_msgs, rcm_events = self._radio_runner.radios_for_lap(lap_num)
-            except Exception as exc:
+            except (KeyError, ValueError, TypeError) as exc:
+                # radios_for_lap does plain pandas row indexing + int/str
+                # casts (see RadioPipelineRunner._radio_row_to_dict /
+                # _rcm_row_to_dict) — a malformed lap_number or a missing
+                # column are the only realistic failure modes here.
                 logger.debug("radios_for_lap(%d) failed: %s", lap_num, exc)
 
         # Re-assert an active Safety Car on the laps whose RCM window carries no

@@ -24,7 +24,12 @@ import sys
 import warnings
 from pathlib import Path
 
-# Ensure UTF-8 on Windows terminals
+# Ensure UTF-8 on Windows terminals. Some hosts (IDE consoles, pytest's
+# capture, certain CI runners) replace sys.stdout/stderr with objects that
+# support reconfigure() but raise ValueError/OSError for an unsupported
+# combination of args on that particular stream - not worth enumerating for
+# a best-effort cosmetic setting; on failure the stream just keeps its
+# original encoding.
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -67,7 +72,7 @@ try:
     if _env.exists():
         load_dotenv(_env)
 except ImportError:
-    pass
+    pass  # python-dotenv not installed - rely on env vars being set manually
 
 # ── CLI package imports ────────────────────────────────────────────────────────
 from cli.pickers import ask_again, discover_races, pick_mode  # noqa: E402

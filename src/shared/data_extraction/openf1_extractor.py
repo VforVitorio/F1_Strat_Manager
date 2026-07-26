@@ -193,8 +193,10 @@ def extract_openf1_intervals(year, gp_name, max_interval=None):
                 try:
                     # Try to convert to numeric
                     intervals_df[col] = pd.to_numeric(intervals_df[col])
-                except:
-                    # If it fails, ensure it's string
+                except (ValueError, TypeError):
+                    # pd.to_numeric raises ValueError for unparseable strings
+                    # and TypeError for incompatible element types. Either way,
+                    # ensure it's string.
                     intervals_df[col] = intervals_df[col].astype(str)
 
         # Save data in Parquet format

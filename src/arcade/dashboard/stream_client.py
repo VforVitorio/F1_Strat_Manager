@@ -132,5 +132,6 @@ class TelemetryStreamClient(QThread):
             try:
                 self._socket.close()
             except OSError:
+                # Socket may already be broken/closed on the far end — nothing to undo.
                 pass
             self._socket = None

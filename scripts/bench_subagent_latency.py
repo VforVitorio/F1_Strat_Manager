@@ -46,7 +46,7 @@ try:
     if _env.exists():
         load_dotenv(_env)
 except ImportError:
-    pass
+    pass  # python-dotenv not installed - rely on env vars being set manually
 
 # Library log noise: silence aggressive INFO from transformers / setfit
 warnings.filterwarnings("ignore", category=FutureWarning)

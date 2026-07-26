@@ -53,7 +53,18 @@ try:
     from src.f1_strat_manager.gp_slugs import FOLDER_ALIASES as _FOLDER_ALIASES
 
     _FRIENDLY_TO_FOLDER: Dict[str, str] = {v: k for k, v in _FOLDER_ALIASES.items()}
-except Exception:  # pragma: no cover
+except ImportError as exc:  # pragma: no cover
+    # gp_slugs failed to import, or FOLDER_ALIASES was renamed/removed there
+    # (a `from X import NAME` raises ImportError for both). FOLDER_ALIASES is
+    # a plain dict literal in gp_slugs.py, so the dict-comprehension line
+    # below cannot itself raise anything else. This falls back to a single
+    # stale entry, so it is worth a warning rather than a fully silent degrade.
+    logger.warning(
+        "Could not load FOLDER_ALIASES from gp_slugs (%s); falling back to a "
+        "single hardcoded Miami mapping. _raw_race_dir may misresolve other "
+        "renamed circuits.",
+        exc,
+    )
     _FRIENDLY_TO_FOLDER = {"Miami": "Miami_Gardens"}
 
 
