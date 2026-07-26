@@ -37,7 +37,15 @@ while not (_REPO_ROOT / '.git').exists():
 try:
     from src.f1_strat_manager.data_cache import get_data_root as _get_data_root
     _DATA_ROOT = _get_data_root()
-except Exception:
+except (ImportError, OSError, RuntimeError):
+    # Every way get_data_root() can fail, enumerated against its body in
+    # src/f1_strat_manager/data_cache.py: ImportError from the import itself on a
+    # bare dev checkout; OSError from the three mkdir() calls (read-only mount,
+    # permissions); RuntimeError from Path.home() and Path.expanduser(), which
+    # raise when no home directory resolves. That last one is not hypothetical:
+    # the Path.home() branch IS the `uv tool install` path this block exists to
+    # serve, and a container with no HOME would take it. Falling back to the
+    # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / 'data'
 
 from src.f1_strat_manager.gp_slugs import (  # noqa: E402
@@ -60,8 +68,11 @@ TIRE_COMPOUNDS: dict = (
 )
 
 # ── Module-level constants ─────────────────────────────────────────────────────
-# FastF1 team name variants → N15 training names
-_TEAM_ALIASES: dict[str, str] = {'Racing Bulls': 'RB'}
+# FastF1 team name variants -> N15 training names. Imported rather than declared:
+# this map used to live here alone, and the eval harness that reproduces N15's
+# published MAE never got it, so 20 of 252 rows in the 2025 pit holdout were scored
+# as a different team (#629). One map, two consumers, no drift.
+from src.f1_strat_manager.team_aliases import TEAM_ALIASES as _TEAM_ALIASES  # noqa: E402
 
 # Fallback color→compound_id when TIRE_COMPOUNDS has no entry for the circuit/year
 _COMPOUND_FALLBACK: dict[str, int] = {'HARD': 1, 'MEDIUM': 3, 'SOFT': 5}
@@ -600,7 +611,10 @@ PIT WINDOW — end of race:
   NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT when remaining laps <= 3.
   Exception: tyre failure is imminent (laps_to_cliff P10 < 2) or Safety Car deployed.
   Rationale: a pit stop costs ~22-25s; with ≤3 laps, fresh tyres recover at most ~1.5s
-  total. Net loss ≈ 20s = ~13 positions.
+  total. Net loss ≈ 20s. Under green-flag racing, where consecutive cars sit a
+  measured median 2.226s apart, that is worth ~9 positions, not 13: 13 positions
+  is the Safety Car bunched-field figure (median gap 1.4795s), and that case is
+  the exception handled above, not this rule.
 
 MINIMUM STINT LENGTH before a pit makes sense:
   SOFT: current tyre_life must be >= 8 laps before recommending a stop.
@@ -1170,7 +1184,14 @@ class PitStrategyAgent:
             Priority 1 — laps_to_cliff from N26 TireOutput: drives compound choice
             directly when available. Priority 2 — Pirelli average stint capacities
             (SOFT ~18 laps, MEDIUM ~30 laps, HARD ~38 laps) as fallback.
-            FIA mandatory two-compound rule is always applied.
+            Compound choice only excludes the compound currently fitted, it never
+            refits what you are on. That is not the FIA two-compound rule, Art.
+            30.5(m) for 2024-2025 (30.5(n) in 2023): this tool has no compound
+            history, so it cannot tell whether the obligation is already met, and
+            it forbids the legal, sometimes optimal same-compound refit, measured
+            in 629 of 2274 dry stints (27.7%) across data/raw/ 2023-2025. The real
+            obligation is `mandatory_stop_pending` in
+            src/agents/position_projection.py; this tool does not consult it.
 
             Args:
                 driver: FastF1 driver abbreviation.

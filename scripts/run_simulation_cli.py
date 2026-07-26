@@ -51,12 +51,17 @@ if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
+        # Some hosts (IDE consoles, pytest capture, certain CI runners) replace
+        # sys.stdout with an object that supports reconfigure() but raises for
+        # this particular stream/arg combination (ValueError, OSError). Not
+        # worth enumerating for this best-effort setting; on failure the
+        # stream just keeps its original encoding.
         pass
 if hasattr(sys.stderr, "reconfigure"):
     try:
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
-        pass
+        pass  # same rationale as sys.stdout above
 
 # Suppress stray SWIG DeprecationWarnings from C-extension imports.
 warnings.filterwarnings("ignore", message=".*builtin type.*__module__.*")
@@ -124,7 +129,7 @@ try:
     if _env.exists():
         load_dotenv(_env)
 except ImportError:
-    pass
+    pass  # python-dotenv not installed - rely on env vars being set manually
 
 # ---------------------------------------------------------------------------
 # Imports — NLP models load eagerly when strategy_orchestrator imports radio_agent
@@ -1282,6 +1287,19 @@ def _make_inference_panel(
 # RaceState builder
 # ---------------------------------------------------------------------------
 
+# Imported, not redeclared. Its rationale and its honest limitation live with it.
+#
+# Be precise about how far this got, because a comment claiming a closed drift is
+# worse than no comment: the CLI and the arcade now share one constant, and the
+# telemetry BACKEND does not. It is a git submodule and cannot be changed from this
+# commit, and an adversarial gate counted SIX surviving copies of this convention
+# there and here, including one in `strategy.py` that defaults the same concept to
+# 2.0 on one request model and 0.0 on its sibling in the same file. Tracked, not
+# closed (#628).
+from src.agents.position_projection import (  # noqa: E402
+    GAP_UNKNOWN_FALLBACK_S as _GAP_UNKNOWN_FALLBACK_S,
+)
+
 
 def _build_race_state(
     lap_state: dict[str, Any],
@@ -1293,9 +1311,29 @@ def _build_race_state(
     rivals = lap_state.get("rivals", [])
     weather = lap_state.get("weather", {})
 
-    our_pos = driver_st.get("position", 99)
+    our_pos = driver_st.get("position")
+    # The incomplete-lap guard in run()'s main loop (`_pos_raw is None or ...`)
+    # already skips any lap where the driver's position is unknown before
+    # _build_race_state is ever called. Reaching here with a None position
+    # means that invariant broke. Fail loudly instead of defaulting to a
+    # searchable P99: a fabricated position is exactly the value the
+    # `our_pos - 1` lookup below searches by, so an unknown position and a
+    # genuinely-last car would silently resolve to the same rival — the #428
+    # bug shape. Mirrors src/arcade/strategy.py's _build_race_state (fixed for
+    # the identical shape under #465); the caller's per-lap try/except (in
+    # run()) turns this into an [ERROR] row for the lap, not a crashed run.
+    if our_pos is None:
+        raise ValueError(
+            "_build_race_state: driver position is None; the incomplete-lap "
+            "guard should have skipped this lap before it reached "
+            "_build_race_state (#628)"
+        )
     car_ahead = next((r for r in rivals if r.get("position") == our_pos - 1), None)
-    gap_ahead_s = abs(car_ahead.get("interval_to_driver_s") or 0.0) if car_ahead else 0.0
+    if car_ahead is not None:
+        _interval = car_ahead.get("interval_to_driver_s")
+        gap_ahead_s = abs(_interval) if _interval is not None else _GAP_UNKNOWN_FALLBACK_S
+    else:
+        gap_ahead_s = 0.0
 
     cur_lap_time = driver_st.get("lap_time_s") or 0.0
     pace_delta_s = cur_lap_time - prev_lap_time if prev_lap_time else 0.0
@@ -1338,6 +1376,9 @@ def run(args: argparse.Namespace) -> None:
             if is_first_run():
                 ensure_setup()
         except ImportError:
+            # Package not installed (extremely rare: only if the user copied
+            # scripts/ in isolation). Fall through and let the race-dir/
+            # featured-parquet existence checks below error with a clear message.
             pass
 
     raw_dir = Path(args.raw_dir)
@@ -1613,10 +1654,15 @@ def run(args: argparse.Namespace) -> None:
             # Gap to car directly ahead (from rivals list)
             rivals = lap_state.get("rivals", [])
             car_ahead = next((r for r in rivals if r.get("position") == position - 1), None)
+            # Display path, deliberately NOT using GAP_UNKNOWN_FALLBACK_S. Here a
+            # missing interval should read as missing, and the em-dash below does
+            # that: the fallback exists to stop the DECISION layer seeing a
+            # fabricated zero, and a table cell has no such problem. Keeping the
+            # two apart on purpose, rather than by oversight, which is what an
+            # adversarial gate flagged this line as.
             try:
-                gap_ahead = (
-                    abs(float(car_ahead.get("interval_to_driver_s") or 0.0)) if car_ahead else 0.0
-                )
+                measured = car_ahead.get("interval_to_driver_s") if car_ahead else None
+                gap_ahead = abs(float(measured)) if measured is not None else 0.0
             except (TypeError, ValueError):
                 gap_ahead = 0.0
             gap_str = f"{gap_ahead:.2f}" if gap_ahead > 0 else "—"

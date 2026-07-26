@@ -81,6 +81,20 @@ DEFAULT_RACING_LAPS_UNDER_SC = 2.61
 # missing data/ raised NameError on exactly the VSC branch it was there to serve.
 DEFAULT_RACING_LAPS_UNDER_VSC = 2.90
 
+# What a gap becomes when a car ahead exists but its interval was never measured.
+# NOT zero: 0.0 reads as side by side, and both the clean-air band above and N27's
+# sub-1.0s DRS window act on that, so a missing measurement would look like the most
+# aggressive possible situation. Three places needed this number (the CLI, the arcade
+# and the telemetry backend) and each had grown its own, which is how they drift.
+#
+# It is still a FABRICATED number and a real 2.0s gap is common, so it does not meet
+# the rule that a default must never be a value the code can also legitimately find.
+# It is less harmful than 0.0, not correct. The correct fix is RaceState.gap_ahead_s
+# becoming `float | None` the way RivalState.gap_ahead_s already is here, where every
+# consumer guards with `is not None`. That is a Pydantic contract change, so it is
+# tracked rather than smuggled in.
+GAP_UNKNOWN_FALLBACK_S = 2.0
+
 # How close we must be for the car ahead to be costing us downforce. This is not
 # a tuning knob: it is the proximity the clean-air table was measured at, so
 # crediting the gain to a car eight seconds back would apply a number outside

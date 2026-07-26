@@ -20,10 +20,13 @@ published 0.487 (delta 0.0023, within tolerance).
 
 from __future__ import annotations
 
+import logging
+
 import json
 from typing import Any
 
 from src.f1_strat_manager.data_cache import get_data_root, get_models_root
+from src.f1_strat_manager.team_aliases import canonical_team
 
 _PIT_DIR = "pit_prediction"
 _COMPOUND_ORDER = {"SOFT": 0, "MEDIUM": 1, "HARD": 2, "INTERMEDIATE": 3, "WET": 4}
@@ -124,6 +127,35 @@ def _add_team_year_median(train: Any, target_slice: Any) -> Any:
     return target_slice
 
 
+
+logger = logging.getLogger(__name__)
+
+
+def _team_class_index(raw_team: str, team_classes: list[str]) -> int:
+    """Encoder index for a team name, resolving a rebrand first and warning if it fails.
+
+    The fallback is index 0, and index 0 is NOT "unknown": it is a real class the
+    frozen model trained on, so an unrecognised name is silently scored as another
+    team. That is what happened to the 2025 holdout, where FastF1 says `Racing Bulls`
+    and the 2024-fitted encoder knows `RB`: 20 of 252 rows were evaluated as
+    `Alfa Romeo` (#629). Measured impact on the published P50 MAE was -0.0045 s, so
+    the number stands, but a reproduction harness that quietly reinterprets its own
+    input is not reproducing anything, which is why the fallback now shouts.
+    """
+    resolved = canonical_team(raw_team)
+    if resolved in team_classes:
+        return team_classes.index(resolved)
+
+    logger.warning(
+        "Team %r is not in this artefact's label-encoder classes (%s) and has no alias; "
+        "scoring it as %r, which is a DIFFERENT team. Add it to TEAM_ALIASES in "
+        "src/f1_strat_manager/team_aliases.py or the metric is measuring the wrong car.",
+        raw_team,
+        ", ".join(team_classes),
+        team_classes[0],
+    )
+    return 0
+
 def load_pit_holdout(year: int = 2025) -> tuple[Any, dict[str, Any], list[str]] | None:
     """Rebuild the pit holdout and return ``(test_slice, quantile_models, features)``.
 
@@ -162,7 +194,7 @@ def load_pit_holdout(year: int = 2025) -> tuple[Any, dict[str, Any], list[str]] 
     features = cfg["features"]
     team_classes = list(cfg["label_encoder_classes"]["team"])
     target_slice["team"] = target_slice["team"].map(
-        lambda x: team_classes.index(x) if x in team_classes else 0
+        lambda raw: _team_class_index(raw, team_classes)
     )
 
     models = {}

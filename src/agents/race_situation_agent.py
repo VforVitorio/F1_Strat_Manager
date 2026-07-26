@@ -42,7 +42,15 @@ while not (_REPO_ROOT / '.git').exists():
 try:
     from src.f1_strat_manager.data_cache import get_data_root as _get_data_root
     _DATA_ROOT = _get_data_root()
-except Exception:
+except (ImportError, OSError, RuntimeError):
+    # Every way get_data_root() can fail, enumerated against its body in
+    # src/f1_strat_manager/data_cache.py: ImportError from the import itself on a
+    # bare dev checkout; OSError from the three mkdir() calls (read-only mount,
+    # permissions); RuntimeError from Path.home() and Path.expanduser(), which
+    # raise when no home directory resolves. That last one is not hypothetical:
+    # the Path.home() branch IS the `uv tool install` path this block exists to
+    # serve, and a container with no HOME would take it. Falling back to the
+    # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / 'data'
 
 from src.f1_strat_manager.gp_slugs import rekey_by_slug, slug_from_event_name  # noqa: E402
@@ -678,13 +686,19 @@ def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
 
     # Normalise TrackStatus: featured parquet has track_status_clean (int 0/1/2),
     # but feature builders call _dominant_status() which accesses TrackStatus (string).
+    #
+    # track_status_clean is documented as a 3-class signal (0=green, 1=yellow/VSC,
+    # 2=SC/red), but it is measured uniformly 0 across all 204366 rows of every
+    # published featured parquet (#615). The cause is structural, not a data bug:
+    # N04's IsAccurate gate drops neutralised and pit laps before a lap reaches the
+    # featured frame, so any lap that survives into it genuinely is green. A lap
+    # carrying this column cannot hold a 1 or a 2, not merely happens not to. A
+    # reverse map keyed on those two values would therefore never fire, and keeping
+    # it would advertise a 3-class reconstruction this frame cannot deliver. If a
+    # lap's real track status is needed (yellow/VSC/SC), it has to come from
+    # data/raw/, where the neutralised laps are still present.
     if 'TrackStatus' not in df.columns:
-        if 'track_status_clean' in df.columns:
-            # Reverse map: 0=green→'1', 1=yellow/VSC→'6', 2=SC/red→'4'
-            ts_reverse = {0: '1', 1: '6', 2: '4'}
-            df['TrackStatus'] = df['track_status_clean'].map(ts_reverse).fillna('1')
-        else:
-            df['TrackStatus'] = '1'
+        df['TrackStatus'] = '1'
 
     return df
 

@@ -333,7 +333,10 @@ class F1ArcadeView(arcade.View):
                 creationflags=creationflags,
             )
             logger.info("Dashboard subprocess spawned (pid=%s)", self._dashboard_proc.pid)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
+            # subprocess.Popen documents OSError (e.g. the interpreter path
+            # cannot be executed) and ValueError (bad argument combination)
+            # as its failure modes; nothing else escapes a plain Popen() call.
             logger.warning(
                 "Dashboard spawn failed (%s) — arcade continues without it",
                 exc,
@@ -369,7 +372,10 @@ class F1ArcadeView(arcade.View):
             except subprocess.TimeoutExpired:
                 logger.warning("Dashboard did not exit in 3s — killing")
                 self._dashboard_proc.kill()
-            except Exception as exc:
+            except OSError as exc:
+                # terminate()/wait() on an already-dead or inaccessible
+                # process raise OSError subclasses (e.g. ProcessLookupError);
+                # nothing else is documented for these two calls.
                 logger.warning("Dashboard teardown error: %s", exc)
             self._dashboard_proc = None
 
@@ -642,18 +648,18 @@ class F1ArcadeView(arcade.View):
             if code == self._driver_main:
                 main_frame = f
 
+        lap = main_frame.lap if main_frame else 1
         return {
-            "lap": main_frame.lap if main_frame else 1,
+            "lap": lap,
             "t": main_frame.t if main_frame else 0.0,
             "drivers": drivers_dict,
-            "weather": {
-                "track_temp": 45.0,
-                "air_temp": 18.0,
-                "humidity": 55.0,
-                "wind_speed": 12.0,
-                "wind_direction": 180.0,
-                "rain_state": "DRY",
-            },
+            # Real per-lap FastF1 weather (#616), built once at session load
+            # by SessionLoader._extract_weather_by_lap and cached on
+            # SessionData.weather_by_lap. An older cache or a session with no
+            # weather data resolves to {}; WeatherPanel.draw already falls
+            # back to its own constants per missing key, so this degrades to
+            # exactly the old hardcoded display instead of raising.
+            "weather": self._session.weather_by_lap.get(lap, {}),
         }
 
     def _draw_background_cars(self, frame_idx: int) -> None:

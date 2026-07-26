@@ -64,6 +64,7 @@ class TelemetryStreamServer:
             try:
                 self._server_socket.close()
             except OSError:
+                # Already closed/broken (e.g. peer reset first) — nothing to undo.
                 pass
             self._server_socket = None
         with self._clients_lock:
@@ -71,6 +72,7 @@ class TelemetryStreamServer:
                 try:
                     client.close()
                 except OSError:
+                    # Same idempotent-close rationale as the server socket above.
                     pass
             self._clients.clear()
         logger.info("TelemetryStreamServer stopped")
@@ -139,6 +141,7 @@ class TelemetryStreamServer:
             try:
                 client_socket.close()
             except OSError:
+                # Remote end may have already dropped the connection.
                 pass
             self._prune_clients([client_socket])
 
@@ -148,4 +151,5 @@ class TelemetryStreamServer:
                 try:
                     self._clients.remove(client)
                 except ValueError:
+                    # Another thread already pruned this socket first — fine.
                     pass

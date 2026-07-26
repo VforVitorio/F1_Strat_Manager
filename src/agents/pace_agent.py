@@ -43,7 +43,15 @@ while not (_REPO_ROOT / '.git').exists():
 try:
     from src.f1_strat_manager.data_cache import get_data_root as _get_data_root
     _DATA_ROOT = _get_data_root()
-except Exception:
+except (ImportError, OSError, RuntimeError):
+    # Every way get_data_root() can fail, enumerated against its body in
+    # src/f1_strat_manager/data_cache.py: ImportError from the import itself on a
+    # bare dev checkout; OSError from the three mkdir() calls (read-only mount,
+    # permissions); RuntimeError from Path.home() and Path.expanduser(), which
+    # raise when no home directory resolves. That last one is not hypothetical:
+    # the Path.home() branch IS the `uv tool install` path this block exists to
+    # serve, and a container with no HOME would take it. Falling back to the
+    # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / 'data'
 
 _MODELS_DIR = _DATA_ROOT / 'models' / 'lap_time'
@@ -318,7 +326,7 @@ class PaceAgent:
         stint: int,
         tyre_life: int,
         compound: str,
-        position: int,
+        position: Optional[int],
         team: str,
         laps_since_pit: int,
         fuel_load: float,
@@ -536,7 +544,7 @@ class PaceAgent:
         stint: int,
         tyre_life: int,
         compound: str,
-        position: int,
+        position: Optional[int],
         team: str,
         laps_since_pit: int,
         fuel_load: float,
@@ -568,7 +576,12 @@ class PaceAgent:
             stint: Stint number (1-indexed), forwarded as a raw feature.
             tyre_life: Laps on current tyre set; drives FreshTyre flag.
             compound: Pirelli compound name.
-            position: Current race position (1-based).
+            position: Current race position (1-based). None when the source
+                telemetry has no reading for this lap; propagates as a missing
+                'Position' feature (NaN after _build_feature_row's numeric
+                coercion) rather than a fabricated grid slot, since XGBoost
+                splits natively on missing values (see the belt-and-braces
+                comment in _build_feature_row).
             team: Team name matching self.team_id encoding map.
             laps_since_pit: Laps since most recent pit stop.
             fuel_load: Estimated fuel fraction in [0, 1].
@@ -678,7 +691,17 @@ class PaceAgent:
             stint          = d.get('stint') or 1,
             tyre_life      = d.get('tyre_life') or 1,
             compound       = d.get('compound') or 'MEDIUM',
-            position       = d.get('position') or 1,
+            # Plain .get, no `or` fallback: `d.get('position') or 1` collapsed a
+            # missing telemetry reading AND the #428 sentinel (a stored `0`)
+            # into P1, the race leader, straight into the live N06 XGBoost
+            # feature (#628). Unlike race_situation_agent/pit_strategy_agent,
+            # this value is never used in a `position - 1` rival lookup here,
+            # so there is no lookup to fool — the honest fix is simply to let
+            # an unknown position propagate as None. _build_feature_row's
+            # existing pd.to_numeric(errors='coerce') turns that into NaN, and
+            # XGBoost handles a missing 'Position' natively via its
+            # default-left split direction, so no fabricated value is needed.
+            position       = d.get('position'),
             team           = meta.get('team') or 'Unknown',
             laps_since_pit = d.get('tyre_life') or 1,
             fuel_load      = laps_remaining / max(total_laps, 1),

@@ -71,7 +71,12 @@ class RagConfig:
             from src.f1_strat_manager.data_cache import get_data_root
 
             return get_data_root() / "rag"
-        except Exception:
+        except (ImportError, OSError):
+            # ImportError: helper not on sys.path (uv tool install layout).
+            # OSError: get_data_root()/_find_repo_root() only ever touch the
+            # local filesystem (env var, path resolve, mkdir) — read in full,
+            # neither does network I/O, so OSError is the only realistic
+            # runtime failure besides the import itself.
             return self._repo_root / "data" / "rag"
 
     @property
