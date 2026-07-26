@@ -43,12 +43,22 @@ def test_cli_no_llm_smoke():
         capture_output=True,
         text=True,
         timeout=600,
-        # Force UTF-8 stdout: capture_output pipes stdout, so on Windows the
-        # Rich header's non-ASCII glyphs would hit the cp1252 codec and crash
-        # for reasons unrelated to #166 (redirect-encoding is DevEx #252, not
-        # this test's subject).
+        # Both halves of this are needed, and only one of them was here.
+        #
+        # PYTHONUTF8 tells the CHILD to emit UTF-8: capture_output pipes stdout,
+        # so on Windows the Rich header's non-ASCII glyphs would otherwise hit
+        # the cp1252 codec and crash for reasons unrelated to this test.
+        #
+        # encoding tells the PARENT how to read it back. Without it, text=True
+        # decodes using the parent's locale, which on Windows is cp1252, and the
+        # decode raises inside subprocess. The visible symptom is not an error:
+        # returncode comes back 0 and proc.stdout comes back None, so the test
+        # died on `None + str` while the run underneath had actually succeeded.
+        encoding="utf-8",
+        errors="replace",
         env={**os.environ, "PYTHONUTF8": "1"},
     )
+    assert proc.stdout is not None, "the CLI produced no capturable stdout"
     combined = proc.stdout + proc.stderr
     assert proc.returncode == 0, f"exit {proc.returncode}\n{combined[-2000:]}"
     assert "[ERROR]" not in combined, "no-LLM run logged [ERROR]"

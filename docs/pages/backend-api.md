@@ -57,7 +57,7 @@ An exhausted bucket returns `429` with a `Retry-After` hint. Set `F1_RATE_LIMIT_
 | GET | `/api/v1/telemetry/drivers` | List drivers for a session |
 | GET | `/api/v1/telemetry/race-data` | Full-field featured-parquet frame for a GP (positions, lap times, inter-driver gaps), optionally filtered to driver codes |
 
-**Query parameters**: `year` (int), `gp` (str), `session` (str), `drivers` (comma-separated).
+**Query parameters** vary by endpoint. `year` (int) and `gp` (str) are common to all of them; `session` (str) applies to the lap-time and telemetry endpoints; `drivers` (comma-separated) to the comparison ones. `/race-data` takes `driver`, **singular**, and treats it as an optional filter over the full-field frame.
 
 `/race-data` computes the inter-driver gap columns (`GapToCarAhead`, `GapToCarBehind`) over the whole field first, then applies the optional `driver` filter afterwards: a single-car frame has no second car to measure a gap against, so filtering before computing the gaps used to return `null` on every lap whenever a `driver` was supplied. The gap-annotated frame is cached per `(year, gp)`, since it is a pure function of the static featured parquet.
 
