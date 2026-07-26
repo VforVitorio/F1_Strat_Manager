@@ -9,6 +9,7 @@ one-line summary of where it landed and what it flagged.
     f1-eval models         # reproduce headline numbers vs the model_configs
     f1-eval hygiene        # E-02 threshold provenance + leakage verdicts (#207)
     f1-eval nlp            # NLP per-stage eval: sentiment + gated stages (#304)
+    f1-eval projection     # MC projection accuracy vs real stops + the measured tables
     f1-eval alert-llm      # PROXY alert precision via an LLM judge (#304; spends API calls)
     f1-eval all            # every report EXCEPT alert-llm (opt-in: it spends API calls)
 """
@@ -22,6 +23,7 @@ from src.strategy.eval.alert_llm import build_alert_llm_report
 from src.strategy.eval.calibration import build_calibration_report
 from src.strategy.eval.hygiene import build_hygiene_report
 from src.strategy.eval.nlp import build_nlp_report
+from src.strategy.eval.projection import build_projection_report
 from src.strategy.eval.registry import build_registry
 from src.strategy.eval.reproduce import build_reproduction_report
 
@@ -64,6 +66,17 @@ def _run_nlp() -> None:
     print("nlp " + _summarise(payload, "results", ("flagged", "delta", "blocked", "pending")))
 
 
+def _run_projection() -> None:
+    payload = build_projection_report()
+    truth = payload["ground_truth"]
+    accuracy = (
+        "not measured (no data/raw)"
+        if truth is None
+        else f"{truth.within_one:.1%} within one position over {truth.sample_size} real stops"
+    )
+    print(f"projection -> {payload['md_path']} ({accuracy}; {len(payload['tables'])} tables)")
+
+
 def _run_alert_llm() -> None:
     payload = build_alert_llm_report()
     result = payload["result"]
@@ -80,6 +93,7 @@ _COMMANDS: dict[str, Callable[[], None]] = {
     "models": _run_models,
     "hygiene": _run_hygiene,
     "nlp": _run_nlp,
+    "projection": _run_projection,
 }
 
 

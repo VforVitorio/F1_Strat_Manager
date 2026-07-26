@@ -25,7 +25,7 @@ f1-strat       # interactive launcher (recommended starting point)
 f1-sim         # headless CLI simulation against a saved race
 f1-arcade      # three-window PySide6 + pyglet experience
 f1-webapp      # post-race web app (wraps `docker compose up`)
-f1-eval        # regenerate the evaluation reports (registry, calibration, hygiene, ...)
+f1-eval        # regenerate the evaluation reports (registry, calibration, hygiene, projection, ...)
 ```
 
 `f1-eval` is a developer/thesis tool, not an end-user surface, it writes versioned markdown + JSON reports under `documents/eval_reports/` (`f1-eval registry`, `f1-eval calibration`, `f1-eval all`, ...). The first four are what a new user actually runs.

@@ -162,7 +162,7 @@ are reference/historical only, see [`src/strategy/README.md`](src/strategy/READM
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | [src/strategy/inference/engine.py](src/strategy/inference/engine.py)                           | `run_lap()`, the shared strategy inference engine consumed by the CLI, Arcade, and backend; dispatches on `profile` (`"rich"` re-drives the full N31 orchestrator sequence, `"no-llm"` is the deterministic zero-LLM-client path) |
 | [src/strategy/inference/no_llm.py](src/strategy/inference/no_llm.py)                           | The deterministic `--no-llm` code path consumed by `run_lap` |
-| [src/strategy/eval/](src/strategy/eval/)                                                       | `f1-eval` CLI backend, regenerates the model evaluation reports (metrics registry, calibration, threshold hygiene, NLP per-stage eval, headline-number reproduction, LLM-judged alert precision) under `documents/eval_reports/` |
+| [src/strategy/eval/](src/strategy/eval/)                                                       | `f1-eval` CLI backend, regenerates the model evaluation reports (metrics registry, calibration, threshold hygiene, NLP per-stage eval, headline-number reproduction, Monte Carlo projection accuracy, LLM-judged alert precision) under `documents/eval_reports/` |
 | [src/strategy/inference/tire_predictor.py](src/strategy/inference/tire_predictor.py)           | Jupytext-exported tire degradation inference wrapper (N09 era; reference only) |
 
 ### `src/telemetry/`
