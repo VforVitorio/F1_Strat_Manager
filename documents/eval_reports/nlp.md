@@ -1,6 +1,6 @@
 # nlp
 
-- harness `81656b0` · schema v1 · generated 2026-07-26T18:47:28+00:00
+- harness `02ed796` · schema v1 · generated 2026-07-26T19:30:49+00:00
 - era 2022-2025 · dataset radio + intent labeled CSVs, entity annotations, 2025 RCM corpus · seed deterministic · llm none
 - artifacts: roberta_sentiment=`d7d0ada739c6`, intent_head=`7c995ba21bc0`, ner_bert_bio=`9e60de9bf538`
 
@@ -15,4 +15,4 @@
 | alert_precision | precision | 0.9185 | - | reproduced | n=529 (145 gold alerts); radio PROBLEM/WARNING channel from hand-labeled gold intent; R 0.855/F1 0.886; full-set optimistic |
 | intent | predict_proba_order | 1.0000 | 1 | reproduced | head.classes_=[0, 1, 2, 3, 4] map to intent_names via intent_mapping; 5/5 columns aligned (no swap) |
 | ner | entity_f1 | 0.4248 | 0.4151 | reproduced | n=529; micro entity-F1 (P 0.304/R 0.704); full-set optimistic; 4 dead classes flagged separately |
-| rcm | coverage | 0.9644 | - | reproduced | n=1515 across 24 2025 races; per-category [Drs 1.000, Flag 0.997, Other 0.924, SafetyCar 1.000]; vs config Flag 1.0/Other 0.928/Drs 1.0/SafetyCar 1.0 (N23 sample differs) |
+| rcm | coverage | 0.9657 | - | reproduced | n=1515 across 24 2025 races; per-category [Drs 1.000, Flag 1.000, Other 0.924, SafetyCar 1.000]; vs config Flag 1.0/Other 0.928/Drs 1.0/SafetyCar 1.0 (N23 sample differs) |

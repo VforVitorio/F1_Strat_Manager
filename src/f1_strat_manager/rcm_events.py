@@ -29,6 +29,14 @@ _FLAG_MAP = {
     "CLEAR": "CLEAR_FLAG",
     "BLUE": "BLUE_FLAG",
     "CHEQUERED": "CHEQUERED_FLAG",
+    # The FIA's formal warning for unsportsmanlike driving, and the step that
+    # PRECEDES a penalty. It was missing here while the eval port #632 replaced did
+    # carry it, which is how that drift turned out to run both ways: this side was
+    # ahead on SAFETY CAR IN THIS LAP and behind on this. Two real instances in the
+    # 2025 corpus, and they were the ONLY two Flag messages falling through to
+    # OTHER, so this one key is the whole difference between Flag scoring 0.9972
+    # and 1.0000 (#641).
+    "BLACK AND WHITE": "BLACK_AND_WHITE_FLAG",
 }
 
 # NR-03 (#398) — flag values that resolve through the same scope-aware branch as
