@@ -10,7 +10,7 @@ prerequisites are on the machine.
 - Python **3.10, 3.11, or 3.12** (the project pins `>=3.10,<3.13` in
   `pyproject.toml`; CI runs on 3.12).
 - `OPENAI_API_KEY` in a `.env` at the repo root (or exported in the
-  shell) for OpenAI `gpt-4.1-mini`, the default model on every provider
+  shell) for OpenAI `gpt-4.1-mini`, the sub-agent default on every provider
   path. Arcade and the web app backend read `F1_LLM_PROVIDER` from `.env`
   (`.env.example` ships `openai`). **The CLI is the exception:** `f1-sim`'s
   `--provider` flag overrides `.env` and defaults to `lmstudio` (a local

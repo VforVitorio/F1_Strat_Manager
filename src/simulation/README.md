@@ -14,7 +14,7 @@ parquet or a live topic.
 
 The `single-driver data boundary` enforced here is the critical
 architectural constraint: agents see full telemetry for *our* driver but
-only timing-screen-equivalent fields (position, gap, compound, tyre life)
+timing-screen-equivalent fields (position, gap to leader, interval to our car, compound, tyre life, stint, trap speed and whether they are in the pit lane)
 for rivals, mirroring what a real team strategy wall observes during a
 race.
 
@@ -36,13 +36,17 @@ race.
 
 ```python
 from src.simulation.replay_engine import RaceReplayEngine
+from src.strategy.inference.engine import run_lap
 
 engine = RaceReplayEngine("data/raw/2025/Melbourne", "NOR", "McLaren")
 for lap_state in engine.replay():
-    rec = run_strategy_orchestrator_from_state(...)
-    frame = engine.to_arcade_frame(lap_state, rec)
-    # do something with `frame` (websocket, log, render)
+    rec, agent_outputs, _ = run_lap(race_state, laps_df, lap_state, profile="no-llm")
+    # rec is a StrategyRecommendation; agent_outputs carries each sub-agent's payload
 ```
+
+`to_arcade_frame` also exists on the engine, but nothing calls it and the
+`/ws/replay` route its docstring names was never registered. The arcade's real
+path is the in-process pipeline broadcasting over a local TCP socket.
 
 ```bash
 # CLI replay (no agents, just iterates and prints)
