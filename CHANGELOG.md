@@ -11,6 +11,18 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.2.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.1.2...v2.2.0) (2026-07-26)
+
+
+### Features
+
+* **eval:** publish the projection accuracy and the measured tables as a report ([00e66ba](https://github.com/VforVitorio/F1-StratLab/commit/00e66babd39ecc07dc0bb80fb7d1aa18dc4b38d1)), closes [#609](https://github.com/VforVitorio/F1-StratLab/issues/609)
+
+
+### Bug Fixes
+
+* **engine:** thread cliff_p50 and total_laps so the stint-end guard is not dead ([0c95c1b](https://github.com/VforVitorio/F1-StratLab/commit/0c95c1b5eaa2fea3eabbcb576e9087ddcccb7f48)), closes [#566](https://github.com/VforVitorio/F1-StratLab/issues/566)
+
 ## [2.1.2](https://github.com/VforVitorio/F1-StratLab/compare/v2.1.1...v2.1.2) (2026-07-26)
 
 
