@@ -5,7 +5,7 @@ same ``RaceReplayEngine`` + featured-laps parquet the backend SSE endpoint
 uses, and mutates a shared ``StrategyState`` so ``F1ArcadeView.on_draw``
 and the dashboard subprocess can pick up the latest ``LapDecision`` plus
 every raw sub-agent output without blocking. The arcade no longer depends
-on the FastAPI backend at runtime — it owns its own simulation loop, which
+on the FastAPI backend at runtime: it owns its own simulation loop, which
 keeps the TFG's CLI/Streamlit path isolated from any arcade change.
 
 Lap loop order matches ``backend/services/simulation/simulator.py::simulate_race``
@@ -82,7 +82,7 @@ class PerAgentOutputsDTO:
     """Raw per-agent outputs for one lap, ready to be rendered by the
     dashboard. Each field is the dict form of the corresponding agent
     dataclass (``PaceOutput``, ``TireOutput``, ``RaceSituationOutput``,
-    ``RadioOutput``, ``PitStrategyOutput``) — obtained via
+    ``RadioOutput``, ``PitStrategyOutput``), obtained via
     ``dataclasses.asdict`` so the DTO stays pure-Python and
     JSON-serialisable without pulling ``src/agents/`` types into the
     dashboard process.
@@ -161,7 +161,7 @@ class StrategyState:
         cliff percentiles, overtake/SC probabilities, etc. ``history_tail``
         strips ``per_agent`` from each past decision to keep the wire
         payload small (charts accumulate their own per-agent history from
-        successive ``latest`` updates — the backend does not need to
+        successive ``latest`` updates; the backend does not need to
         replay 30 copies of the dataclass on every broadcast).
         """
         with self._lock:
@@ -187,13 +187,13 @@ class SimConnector(threading.Thread):
     the backend uses, builds a ``RaceState`` per lap, invokes
     ``run_strategy_pipeline`` (verbose wrapper that returns both the
     synthesised ``StrategyRecommendation`` and every raw sub-agent
-    output), and pushes the merged decision into ``StrategyState`` — so
+    output), and pushes the merged decision into ``StrategyState`` so
     the arcade replay panel and the dashboard subprocess both get the
     full model telemetry without the arcade depending on the FastAPI
     backend at runtime.
 
     Class name kept for backwards-compatibility with ``F1ArcadeView``'s
-    wiring (``self._strategy_connector = SimConnector(...)``) — that call
+    wiring (``self._strategy_connector = SimConnector(...)``); that call
     site does not need to know the driver is now local.
     """
 
@@ -240,7 +240,7 @@ class SimConnector(threading.Thread):
 
         Returns ``True`` when the wait succeeded (arcade caught up or no
         provider was wired) and ``False`` when ``stop()`` was called while
-        we were waiting — the caller propagates that as a clean exit.
+        we were waiting; the caller propagates that as a clean exit.
         Polls instead of using a condition variable because the arcade
         view's frame index is read from a different thread without a lock
         and we only need lap-level granularity, not frame-level.
@@ -262,7 +262,7 @@ class SimConnector(threading.Thread):
     def _should_skip_stale(self, lap_num: int) -> bool:
         """True when arcade has seeked far enough ahead to drop this lap.
 
-        Always ``False`` when no playback provider is wired — CLI / smoke
+        Always ``False`` when no playback provider is wired: CLI / smoke
         tests must keep processing every lap end-to-end.
         """
         if self._current_lap_provider is None:
@@ -571,7 +571,7 @@ class SimConnector(threading.Thread):
         return candidate  # report the primary miss so error messaging stays clean
 
     def _build_race_state(self, lap_state: dict[str, Any], prev_lap_time: float):
-        """Duplicate of ``_local_build_race_state`` from simulator.py — small
+        """Duplicate of ``_local_build_race_state`` from simulator.py, small
         enough to inline so the arcade stays independent of
         ``backend.utils.race_state_builder`` (which requires a sys.path
         shim that only the FastAPI startup provides). Populates
@@ -721,7 +721,7 @@ def _dump_dataclass(obj: Any) -> dict[str, Any] | None:
     """Convert an agent-output dataclass to a plain dict, tolerating ``None``.
 
     ``dataclasses.asdict`` recurses into nested dataclasses, which is what
-    we want for the per-agent serialisation — ``PaceOutput``, ``TireOutput``,
+    we want for the per-agent serialisation: ``PaceOutput``, ``TireOutput``,
     etc. turn into JSON-ready dicts without hand-written field mappings."""
     if obj is None:
         return None

@@ -12,7 +12,7 @@ where ``body_lines`` is ``list[tuple[str, color]]`` (one line per
 pair) and ``status`` is ``"OK" | "WATCH" | "ALERT" | "IDLE"``. The card
 widget maps ``status`` to the glyph + colour.
 
-No agent package imports — formatters accept plain dicts already
+No agent package imports: formatters accept plain dicts already
 serialised by ``src/arcade/strategy.py::_dump_dataclass``.
 """
 
@@ -74,7 +74,7 @@ def _truncate(text: str | None, limit: int = 70) -> str:
 
 
 def format_pace(p: dict[str, Any] | None) -> Formatted:
-    """CLI §1.1 — pace delta to next predicted lap, with absolute predicted lap time.
+    """CLI §1.1: pace delta to next predicted lap, with absolute predicted lap time.
 
     The headline pairs the signed delta vs the previous lap with the
     absolute predicted lap time in parentheses. The delta is the actionable
@@ -121,7 +121,7 @@ _TIRE_CLIFF_MAX_SANE: float = 100.0  # laps — anything above this is early-sti
 
 
 def format_tire(t: dict[str, Any] | None) -> Formatted:
-    """CLI §1.2 — cliff p50, range p10-p90, deg rate, warning_level, and stint length.
+    """CLI §1.2: cliff p50, range p10-p90, deg rate, warning_level, and stint length.
 
     The headline pairs the cliff projection (median laps remaining before
     the compound falls off) with the laps already run on the current set,
@@ -184,7 +184,7 @@ def format_tire(t: dict[str, Any] | None) -> Formatted:
 
 
 def format_situation(s: dict[str, Any] | None) -> Formatted:
-    """CLI §1.3 — threat level headline, with overtake / SC probabilities and gap-plus-pace context.
+    """CLI §1.3: threat level headline, with overtake / SC probabilities and gap-plus-pace context.
 
     The headline carries the categorical threat level and is colour-coded
     by the same status mapping used for the other agent cards. Body rows
@@ -266,7 +266,7 @@ def radio_tooltip_html(r: dict[str, Any] | None) -> str:
     """Build the Qt rich-text tooltip listing every radio and RCM in the lap.
 
     The tooltip exists because the body ticker only shows the most recent
-    radio and the most recent RCM — the strategist sometimes needs the
+    radio and the most recent RCM, and the strategist sometimes needs the
     full transcript of the lap (e.g. several PROBLEM radios in a row, or
     a chain of yellow flags clearing) and the body labels do not have the
     vertical budget for that. Returning the empty string is the documented
@@ -310,7 +310,7 @@ def radio_tooltip_html(r: dict[str, Any] | None) -> str:
 
 
 def format_radio(r: dict[str, Any] | None) -> Formatted:
-    """CLI §1.4 — alert intents headline, plus a per-lap transcript ticker.
+    """CLI §1.4: alert intents headline, plus a per-lap transcript ticker.
 
     The headline branches the same way as the CLI: chip row when the
     deterministic alert filter fires (PROBLEM / WARNING radios or
@@ -390,7 +390,7 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
 
 
 def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
-    """CLI §1.5 — active shows pit p50 → compound; idle shows trigger hint.
+    """CLI §1.5: active shows pit p50 → compound; idle shows trigger hint.
 
     When the upstream ``PitDecision`` flags ``sc_reactive=True`` the
     headline is suffixed with ``" · SC"`` to disclose to the engineer
@@ -400,7 +400,7 @@ def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
     reactive SC-window opportunism, which carry different risk profiles
     (an SC stop saves around ten seconds but only pays off if the SC
     actually deploys within the window). The headline colour stays
-    ``WARNING`` in both active sub-cases — the suffix alone communicates
+    ``WARNING`` in both active sub-cases: the suffix alone communicates
     SC reactivity, preserving non-SC active rendering exactly as before.
     """
     if not active or not p:
@@ -443,7 +443,7 @@ def _format_article_refs(articles: list[Any] | None) -> str:
     available in the tooltip.
 
     Returns the empty string when no usable identifier survives the
-    filtering — callers then skip the body line and ``AgentCard`` hides
+    filtering; callers then skip the body line and ``AgentCard`` hides
     it automatically.
     """
     if not articles:
@@ -521,7 +521,7 @@ def rag_tooltip_html(r: dict[str, Any] | None) -> str:
 
 
 def format_rag(rag: dict[str, Any] | str | None, active: bool) -> Formatted:
-    """CLI §1.6 — answer snippet plus article references for the active branch.
+    """CLI §1.6: answer snippet plus article references for the active branch.
 
     The active branch surfaces a 70-character snippet of the LLM answer
     on body line 1 and the first three deduplicated article references

@@ -1,6 +1,6 @@
 """Pre-replay menu view: keyboard-navigable form for session selection.
 
-No `arcade.gui` dependency — each field is a pre-allocated `arcade.Text`
+No `arcade.gui` dependency: each field is a pre-allocated `arcade.Text`
 object that reads its current value from a `LaunchConfig` dataclass. UP/DOWN
 move focus between fields, LEFT/RIGHT mutate discrete fields (year, round,
 mode, strategy toggle), typing appends to driver/team strings, ENTER

@@ -1,13 +1,13 @@
-"""N31 orchestrator card — the top-left decision panel.
+"""N31 orchestrator card: the top-left decision panel.
 
 Reads one ``latest`` LapDecision dict per update and renders:
 
 - Action badge (big, coloured by ``classify_action``).
 - Confidence bar (red → amber → green based on value).
-- Plan strip — pace_mode · risk_posture chips + pit target + undercut
+- Plan strip: pace_mode · risk_posture chips + pit target + undercut
   target, matching the CLI's execution-plan table (``06_cli_inference_panel.md``
   §3) so the dashboard reads as a visual extension of the CLI view.
-- Guardrail line — DANGER-coloured when ``guardrail_reason`` is set so
+- Guardrail line: DANGER-coloured when ``guardrail_reason`` is set so
   the user sees *why* the orchestrator overrode the MC winner.
 
 Idle state (``latest is None``) keeps the layout intact with ``"--"``

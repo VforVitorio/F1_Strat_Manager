@@ -1,9 +1,9 @@
 """Circuit geometry + rendering for the Arcade race replay.
 
 Ported from Tom Shaw's f1-race-replay reference (see
-`c:/tmp/arcade_analysis/01_track_rendering.md`). The heavy lifting —
-reference-lap interpolation, shoelace-corrected normals, DRS zone index
-remap, world-to-screen with rotation about the bbox centre — mirrors that
+`c:/tmp/arcade_analysis/01_track_rendering.md`). The heavy lifting
+(reference-lap interpolation, shoelace-corrected normals, DRS zone index
+remap, world-to-screen with rotation about the bbox centre) mirrors that
 source but expects raw (non-rotated) telemetry from `SessionLoader`. We
 rotate ONCE inside this class: the previous round's bug was rotating both
 here and in the loader, which collapsed the outline into a pseudo-circle.

@@ -97,12 +97,13 @@ class ScenarioBars(QFrame):
     def update_from(self, scores: dict[str, Any] | None) -> None:
         """Paint the four bars from a ``scenario_scores`` dict.
 
-        MC scores are computed as ``mean - α·std`` and can go negative.
-        We shift the four values so the worst one lands at 0 then scale
-        by the (positive) range — so the winner always reaches full
-        width and the loser draws an empty bar, regardless of whether
-        all four are negative. The raw score is printed with two
-        decimals on the right so the sign and magnitude stay readable.
+        MC scores are computed as ``alpha * E[S] + (1 - alpha) * P10[S]``
+        (``src/agents/strategy_orchestrator.py::_run_mc_simulation``) and can
+        go negative. We shift the four values so the worst one lands at 0
+        then scale by the (positive) range, so the winner always reaches
+        full width and the loser draws an empty bar, regardless of whether
+        all four are negative. The raw score is printed with two decimals
+        on the right so the sign and magnitude stay readable.
         """
         raw: dict[str, float] = {}
         if scores:

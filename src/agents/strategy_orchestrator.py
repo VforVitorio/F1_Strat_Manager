@@ -16,9 +16,9 @@ Entry points
 ------------
 run_strategy_orchestrator(race_state, lap_state)
     Primary entry point. Accepts a RaceState Pydantic model and a lap_state dict
-    (compatible with the FastF1 entry points of the sub-agents). The sub-agents
-    are called with their standard entry points — requires populated FastF1 session
-    globals inside each sub-agent module.
+    (compatible with the FastF1 entry points of the sub-agents). Every sub-agent
+    is self-contained through the arguments passed to it here — nothing needs to
+    be set up on any sub-agent module beforehand.
 
 run_strategy_orchestrator_from_state(race_state, laps_df)
     RSM adapter. Calls the *_from_state entry points of each sub-agent so no
@@ -2010,9 +2010,11 @@ def run_strategy_orchestrator(
 ) -> "StrategyRecommendation":
     """Run the Strategy Orchestrator for one lap and return a StrategyRecommendation.
 
-    Primary entry point. Uses the FastF1-dependent entry points of each sub-agent,
-    which require the sub-agent LAPS/SESSION_META globals to be populated in advance
-    (i.e. each sub-agent's setup_session or equivalent must have been called).
+    Primary entry point. Uses the FastF1-dependent entry points of each sub-agent
+    (run_pace_agent, run_tire_agent, run_race_situation_agent, run_radio_agent,
+    run_pit_strategy_agent). Each one is self-contained through the lap_state
+    dict it receives here — no pre-populated globals or setup call is needed on
+    any sub-agent module.
 
     race_state:
         Validated Pydantic RaceState for this lap. Contains driver, position,
@@ -2128,7 +2130,9 @@ def run_strategy_orchestrator_from_state(
         Validated Pydantic RaceState for this lap.
     laps_df:
         Full lap DataFrame from RaceStateManager. Forwarded to each sub-agent's
-        RSM adapter to populate LAPS / SESSION_META globals.
+        RSM adapter (run_pace_agent_from_state, run_tire_agent_from_state, etc.),
+        each of which derives its own laps_df / session_meta state from the call
+        arguments — no shared globals involved.
     lap_state:
         Optional supplementary scalar dict. When None, a minimal lap_state is
         derived automatically from race_state and laps_df. Provide it when

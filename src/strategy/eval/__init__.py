@@ -11,6 +11,8 @@ Public API:
 - ``build_registry`` / ``load_registry`` - the consolidated metrics table.
 - ``build_calibration_report`` - reliability/Brier/ECE + quantile coverage.
 - ``build_reproduction_report`` - headline numbers re-derived vs the configs.
+- ``build_hygiene_report`` - data-leakage / train-serve-skew checks.
+- ``build_nlp_report`` - sentiment/intent/NER holdout metrics for the radio pipeline.
 """
 
 from src.strategy.eval.calibration import build_calibration_report

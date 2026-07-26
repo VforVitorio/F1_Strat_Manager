@@ -37,10 +37,10 @@ class RagConfig:
     Attributes:
         collection_name: Name of the Qdrant collection that holds the FIA
                          regulation vectors. Must match the name used in
-                         ``build_rag_index.py`` — a mismatch means queries
+                         ``build_rag_index.py``: a mismatch means queries
                          silently hit an empty or wrong collection.
         embedding_model: Sentence-transformers model identifier. Must be the
-                         same model used at index build time — mixing models
+                         same model used at index build time. Mixing models
                          produces meaningless similarity scores because the
                          vector spaces are incompatible.
         top_k:           Default number of chunks returned per query. Five is
@@ -97,13 +97,13 @@ class RegulationChunk:
     by regulatory domain without having to re-parse the text themselves.
 
     Attributes:
-        text:          The regulation passage itself — the verbatim paragraph
+        text:          The regulation passage itself, the verbatim paragraph
                        extracted from the FIA document after chunking.
         article:       The article or section identifier found inside the chunk
                        (e.g. ``"Article 48.3"``). Used by the LLM to cite the
                        source precisely and by callers to filter by article range.
                        Empty string when no reference could be extracted.
-        doc_type:      Which FIA document the chunk comes from — distinguishes
+        doc_type:      Which FIA document the chunk comes from: distinguishes
                        sporting rules (race procedures, penalties) from technical
                        rules (equipment, pit stop mechanics). Callers can restrict
                        queries to a specific document type when the context is clear.
@@ -148,8 +148,8 @@ class RagRetriever:
     Both the Qdrant client and the embedding model are loaded eagerly on
     construction so that the first call to ``query()`` has no cold-start
     penalty. Instantiate once at module level (or via ``get_retriever()``)
-    and reuse across all agent calls — re-creating the encoder on every query
-    would add ~2–3 s of overhead per call.
+    and reuse across all agent calls: re-creating the encoder on every query
+    would add ~2-3 s of overhead per call.
     """
 
     def __init__(
@@ -170,7 +170,7 @@ class RagRetriever:
                              ``RuntimeError`` with an actionable message rather than
                              a cryptic Qdrant error.
             embedding_model: Sentence-transformers model identifier used to encode
-                             queries. Must be the same model used during indexing —
+                             queries. Must be the same model used during indexing:
                              mixing models produces meaningless similarity scores.
             top_k:           Default number of chunks to return per query. Can be
                              overridden per call in ``query()`` when a broader or
@@ -197,7 +197,7 @@ class RagRetriever:
         Normalisation (L2) is applied so that dot product and cosine similarity
         are equivalent in Qdrant, which is the convention used during indexing.
         Returns a plain Python list because that is what ``QdrantClient.search``
-        expects — passing a numpy array causes a silent type error in some versions.
+        expects. Passing a numpy array causes a silent type error in some versions.
 
         Args:
             text: The string to embed. Typically a user query, but can also be
@@ -221,7 +221,7 @@ class RagRetriever:
         Args:
             question: The natural-language query to answer. Can be a full sentence
                       ("What are the pit lane speed limits?") or a short phrase
-                      ("safety car restart procedure") — the embedding handles both
+                      ("safety car restart procedure"): the embedding handles both
                       equally well.
             top_k:    Number of chunks to return. When ``None``, falls back to the
                       instance default set at construction time. Pass a larger value
@@ -258,7 +258,7 @@ class RagRetriever:
         """Return a summary of the collection's current state for diagnostics.
 
         Useful at notebook startup to confirm the index was built correctly before
-        running agent demos — reports the number of indexed vectors, the embedding
+        running agent demos. Reports the number of indexed vectors, the embedding
         model in use, and the Qdrant storage path so misconfigurations are caught
         early rather than at query time.
 
@@ -293,8 +293,8 @@ def get_retriever(
     Wrapped in ``functools.lru_cache`` so the embedded Qdrant client is
     instantiated exactly once per process. A second ``QdrantClient(path=...)``
     on the same storage directory raises ``AlreadyLocked`` (local mode holds a
-    file lock), which would break any caller — N31 orchestrator, the chat tool
-    ``query_rag_tool`` — that reaches into the retriever more than once.
+    file lock), which would break any caller (N31 orchestrator, the chat tool
+    ``query_rag_tool``) that reaches into the retriever more than once.
 
     Args:
         qdrant_path:     Path to the on-disk Qdrant storage. Defaults to
@@ -320,7 +320,7 @@ def query_rag_tool(question: str) -> str:
 
     This is the LangGraph-compatible wrapper around ``RagRetriever.query()``.
     The output is a plain string rather than a list of ``RegulationChunk`` objects
-    because the LLM receives tool results as text — structured formatting here
+    because the LLM receives tool results as text: structured formatting here
     (article reference on its own line, score in brackets) makes it easy for the
     model to cite specific articles in its final answer.
 

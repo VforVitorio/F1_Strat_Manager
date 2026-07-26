@@ -200,7 +200,7 @@ def discover_races(repo_root: Path, year: int = 2025) -> list[str]:
 
     if not raw_dir.exists():
         return []
-    # Only return folders that actually contain race files — empty
+    # Only return folders that actually contain race files: empty
     # placeholders from a partial download would otherwise crash the
     # downstream RaceReplayEngine.
     return sorted(d.name for d in raw_dir.iterdir() if d.is_dir() and any(d.iterdir()))

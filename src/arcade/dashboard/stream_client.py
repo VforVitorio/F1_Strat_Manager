@@ -4,7 +4,7 @@ Mirrors ``TelemetryStreamServer`` in ``src/arcade/stream.py``: the arcade
 process (pyglet + arcade) broadcasts newline-delimited JSON to all
 connected clients; this QThread reads the socket, splits on ``\\n`` and
 emits one ``dict`` per message via ``data_received``. The dashboard
-never talks to the arcade in the other direction — it is a pure
+never talks to the arcade in the other direction: it is a pure
 subscriber.
 
 Port of the ``TelemetryStreamClient`` class from
@@ -30,10 +30,10 @@ class TelemetryStreamClient(QThread):
     """Subscriber thread for the arcade telemetry stream.
 
     Signals:
-        ``data_received(dict)`` — one payload per decoded JSON line.
-        ``connection_status(str)`` — ``"Connecting..."``, ``"Connected"``
+        ``data_received(dict)``: one payload per decoded JSON line.
+        ``connection_status(str)``: ``"Connecting..."``, ``"Connected"``
         or ``"Disconnected"``; suitable for a status chip.
-        ``error_occurred(str)`` — human-readable error, routed to the
+        ``error_occurred(str)``: human-readable error, routed to the
         status bar.
 
     Lifecycle:

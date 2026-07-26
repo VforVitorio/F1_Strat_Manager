@@ -2,15 +2,15 @@
 
 The race replay hosts this server (when strategy mode is on) and publishes
 a merged arcade+strategy state as newline-delimited JSON on each arcade
-frame. A separate PySide6 dashboard process (to be added in a later
-session) subscribes via a `TelemetryStreamClient` and reacts to updates on
-its Qt event loop.
+frame. The PySide6 dashboard subprocess subscribes via
+`src.arcade.dashboard.stream_client.TelemetryStreamClient` and reacts to
+updates on its Qt event loop.
 
 Pattern ported from Tom Shaw's `f1_replay/f1-race-replay/src/services/stream.py`
 and trimmed to stdlib-only: the arcade process must not import PySide6 so
 we can launch the dashboard as a subprocess without pulling Qt into the
-replay window. The client class lives in the dashboard package (Qt-aware)
-and is added when that package lands.
+replay window. The client class lives in the dashboard package (Qt-aware),
+kept separate so this module never needs to import PySide6.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class TelemetryStreamServer:
 
     Runs in a daemon thread, accepts up to many simultaneous connections,
     writes `json.dumps(data).encode() + b"\\n"` to every live socket on
-    `broadcast()`. Dead sockets are pruned on the next broadcast — no
+    `broadcast()`. Dead sockets are pruned on the next broadcast; no
     heartbeat needed because the replay pushes at ≥5 Hz. Designed to be
     started inside `F1ArcadeView._init_strategy_layer` and torn down in
     `on_hide_view`."""

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 # ---------------------------------------------------------------------------
-# Repo-root path injection — must happen before any src.* import
+# Repo-root path injection: must happen before any src.* import
 # ---------------------------------------------------------------------------
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = next(

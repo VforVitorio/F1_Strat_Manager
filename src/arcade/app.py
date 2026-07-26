@@ -100,7 +100,7 @@ class F1ArcadeView(arcade.View):
     """Renders the race replay and owns the playback state machine.
 
     Lives inside a `arcade.Window` provided by `main.py`. The window is
-    passed in so self.window is populated immediately — every arcade.Text
+    passed in so self.window is populated immediately: every arcade.Text
     created in this __init__ or its child panels sees the active GL context
     right away. Call via `window.show_view(F1ArcadeView(window, ...))`."""
 
@@ -269,7 +269,7 @@ class F1ArcadeView(arcade.View):
         """Start the local strategy driver, the TCP broadcast server and
         the PySide6 dashboard subprocess.
 
-        The strategy UI lives entirely in the dashboard subprocess — the
+        The strategy UI lives entirely in the dashboard subprocess: the
         arcade replay keeps the track, leaderboard and car animations
         (the replay-first concerns) and broadcasts merged
         arcade+strategy state over TCP so the dashboard can render the
@@ -661,7 +661,7 @@ class F1ArcadeView(arcade.View):
 
         Skips the main and rival codes (they draw later with the full
         radius + label + outline, so they always sit on top of the
-        field). Small cars are unlabeled — 20 labels at once would turn
+        field). Small cars are unlabeled: 20 labels at once would turn
         the track into a tag cloud. Alpha is applied so the featured
         dots still dominate visually."""
         featured = {self._driver_main}
