@@ -24,7 +24,15 @@ from typing import Any
 from src.f1_strat_manager.data_cache import _find_repo_root
 
 SCHEMA_VERSION = "1"
-ERA_TAG = "2022-2025"  # regulation era these numbers are valid for
+
+# The regulation era these numbers are valid for, and NOT the range of seasons they
+# were measured on. The ground-effect ruleset runs 2022 to 2025, so a number measured
+# on 2023-2025 cars is valid across it; but there is no 2022 season anywhere in
+# `data/`, every model trains on 2023-2024 and tests on 2025, the measured Monte
+# Carlo tables cover 2023-2025, and the RAG corpus holds the 2023/24/25 rulebooks
+# only. Two independent readers took this tag for a data range, so it is worth the
+# sentence: a 2022-specific question has no authoritative source in this repo.
+ERA_TAG = "2022-2025"
 
 
 def _harness_sha() -> str:

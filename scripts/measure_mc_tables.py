@@ -95,8 +95,17 @@ FOLDER_SLUG_ALIASES: dict[str, str] = {"Spain": "Barcelona"}
 # Track-status digits, verified across 79k raw laps 2023-25: '4' only ever means
 # Safety Car and '6' only ever means VSC deployed, so a substring test over the
 # concatenated per-lap statuses is sound (#438 round 2).
+#
+# '7' means VSC ENDING and is matched here too, because a lap still under a
+# withdrawing VSC is not a lap anyone raced on. Measured impact is small and worth
+# stating so nobody expects the tables to move: of 4279 race-laps across the three
+# seasons, 48 carry a '7' and only ONE carries it without also carrying a 4, 5 or 6,
+# so 47 of them were already caught by the stronger flags. The reason to handle it
+# is that a bucket named "clear" must not contain a lap that was not clear; that
+# naming defect is the one this repo keeps paying for (#486).
 STATUS_SAFETY_CAR = "4"
 STATUS_VSC = "6"
+STATUS_VSC_ENDING = "7"
 STATUS_RED_FLAG = "5"
 STATUS_YELLOW = "2"
 
@@ -291,7 +300,7 @@ def _status_by_lap(laps: pd.DataFrame) -> dict[int, str]:
             statuses[int(lap)] = RED_FLAG
         elif STATUS_SAFETY_CAR in joined:
             statuses[int(lap)] = SAFETY_CAR
-        elif STATUS_VSC in joined:
+        elif STATUS_VSC in joined or STATUS_VSC_ENDING in joined:
             statuses[int(lap)] = VIRTUAL_SAFETY_CAR
         elif STATUS_YELLOW in joined:
             statuses[int(lap)] = YELLOW
@@ -910,10 +919,13 @@ def measure_clean_air(races: list[RaceLaps], window: int = CLEAN_AIR_LAPS) -> di
             "Improvement in the follower's mean lap time after the car DIRECTLY "
             "ahead pits, measured over W raced laps either side of the stop, for "
             "followers within PROXIMITY seconds. Positive means the follower got "
-            "faster once the air cleared. Raw values are a lower bound because the "
-            "follower's own tyres age across the comparison; corrected values add "
-            "back the measured degradation slope over the span between window "
-            "centres."
+            "faster once the air cleared. Raw values also contain whatever the "
+            "follower's own lap times were doing anyway across the comparison, so "
+            "corrected values subtract the measured lap-to-lap trend over the span "
+            "between window centres. Over these three seasons that trend is "
+            "NEGATIVE (p50 -0.02 s/lap): burning fuel outweighs ageing the tyre, so "
+            "the correction lowers the estimate and the raw figure is an upper "
+            "bound, not a lower one."
         ),
         "window_laps": window,
         "proximity_s": CLEAN_AIR_PROXIMITY_S,

@@ -1,6 +1,6 @@
 # projection
 
-- harness `0c95c1b` · schema v1 · generated 2026-07-26T11:39:52+00:00
+- harness `863c6f1` · schema v1 · generated 2026-07-26T15:26:04+00:00
 - era 2022-2025 · dataset data/raw laps 2023-2025 (RAW, not featured) · seed deterministic · llm none
 - artifacts: —
 

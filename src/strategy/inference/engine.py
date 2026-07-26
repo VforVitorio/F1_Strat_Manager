@@ -20,9 +20,10 @@ Design (per documents/audits/P2B_ENGINE_DESIGN.md, #169 Phases 1.1 + 1.2)
                  discards. Importing the functions removes body drift, but not
                  call drift: re-driving a sequence means every argument is
                  threaded by hand. This is why the docstring no longer claims
-                 "byte-for-byte" parity — one argument (`live_drivers`) was once
-                 missed here, which disabled #462's guard on this profile, the
-                 default for every surface.
+                 "byte-for-byte" parity. It has now happened twice: `live_drivers`
+                 was missed, disabling #462's guard, and `cliff_p50`/`total_laps`
+                 were missed, leaving #433's stint-end guard with no anchor. Both
+                 on this profile, the default for every surface.
   * ``no-llm`` — the deterministic, zero-LLM-client path (see ``no_llm.py``); fixes
                  #166 by construction (it never calls ``_run_conditional_agents``).
 
@@ -216,9 +217,18 @@ def _run_rich(
 
     Statement for statement this mirrors ``run_strategy_orchestrator_from_state``
     (always-on agents -> routing -> conditional agents -> Monte Carlo -> LLM
-    synthesis), but every step is an IMPORTED orchestrator function, so the result
-    is byte-identical to the orchestrator's while the intermediate agent outputs
-    are returned instead of discarded.
+    synthesis), and every step is an IMPORTED orchestrator function rather than a
+    copy, so the bodies cannot drift. The intermediate agent outputs are returned
+    instead of discarded.
+
+    It does NOT produce byte-identical output, and this docstring used to say it
+    did. Importing the functions removes body drift, not CALL drift: the arguments
+    still have to be threaded here, and twice they were not. ``live_drivers`` was
+    missed, which disabled #462's guard on this profile, and ``cliff_p50`` with
+    ``total_laps`` were missed, which left #433's stint-end guard with no anchor.
+    Both bugs were invisible precisely because the docstring promised parity.
+    ``tests/test_engine_threads_every_argument.py`` is the real claim now: it
+    checks the arguments, which is the thing that actually breaks.
     """
     timings: dict[str, float] = {}
     if lap_state is None:
