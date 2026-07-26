@@ -11,6 +11,19 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.2.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.0...v2.2.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* **agents:** define DEFAULT_RACING_LAPS_UNDER_VSC and turn on the check that would have caught it ([14093cc](https://github.com/VforVitorio/F1-StratLab/commit/14093cc7c9c7a6ddcf974358dcf315115fb53feb)), closes [#619](https://github.com/VforVitorio/F1-StratLab/issues/619)
+* **domain:** correct eight places that assert a stronger F1 fact than the code measures ([f1c3f1c](https://github.com/VforVitorio/F1-StratLab/commit/f1c3f1cc9a4f830c460dcd08f873660689e08b10)), closes [#617](https://github.com/VforVitorio/F1-StratLab/issues/617)
+
+
+### Documentation
+
+* **src:** fix contradicting docstrings, thin prose, and LLM-sounding wording ([3c6f038](https://github.com/VforVitorio/F1-StratLab/commit/3c6f0383d21708fb6e52a7b6e494a78cf9f8ba01)), closes [#621](https://github.com/VforVitorio/F1-StratLab/issues/621)
+
 ## [2.2.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.1.2...v2.2.0) (2026-07-26)
 
 
