@@ -147,9 +147,15 @@ def _build_lap_state(args: argparse.Namespace, laps_df: pd.DataFrame) -> dict[st
     # Try to find actual lap data from the featured parquet
     real_row = None
     if laps_df is not None and not laps_df.empty:
-        mask = (laps_df.get("Driver", laps_df.get("driver", pd.Series(dtype=str))) == driver) & (
-            laps_df.get("LapNumber", laps_df.get("lap_number", pd.Series(dtype=int))) == lap_num
-        )
+        # Named before combining. Four .get() calls joined by & hid an edge case:
+        # when neither spelling of a column exists the comparison runs against a
+        # Series with NO index, and its alignment against laps_df is easy to get
+        # wrong without noticing.
+        driver_col = laps_df.get("Driver", laps_df.get("driver", pd.Series(dtype=str)))
+        lap_col = laps_df.get("LapNumber", laps_df.get("lap_number", pd.Series(dtype=int)))
+        driver_match = driver_col == driver
+        lap_match = lap_col == lap_num
+        mask = driver_match & lap_match
         if "GrandPrix" in laps_df.columns:
             mask &= laps_df["GrandPrix"].str.contains(gp_name, case=False, na=False)
         candidates = laps_df[mask]
