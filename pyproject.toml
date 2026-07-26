@@ -196,23 +196,44 @@ target-version = ['py310', 'py311']
 
 [tool.ruff]
 line-length = 100
+# These packages predate the style rules and carry notebook-extracted code, so they
+# are not style-policed. They are NOT skipped outright: see per-file-ignores below,
+# which keeps undefined-name checking on. An undefined name is not a style opinion,
+# it is code that raises, and one had been sitting in src/agents/ unnoticed (#619).
 exclude = [
     "legacy/",
     ".nb_py/",
     "notebooks/",
-    "src/agents/",
-    "src/nlp/",
     "src/data_extraction/",
-    "src/strategy/",
     "src/telemetry/",
     "src/vision/",
-    "src/shared/",
     ".venv/",
 ]
+
+# The formatter does NOT read lint.per-file-ignores, so dropping these paths from the
+# global exclude above would have pulled them into `ruff format` as well: 15 files, a
+# reformat diff nobody asked for, on packages whose layout is deliberate. Keep the
+# formatter off them and let only the linter in.
+[tool.ruff.format]
+exclude = ["src/agents/**", "src/nlp/**", "src/strategy/**", "src/shared/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 ignore = ["E501"]
+
+# The formerly-excluded packages, now checked for ONE thing: F821, undefined name.
+# Everything else these files would trip is silenced, because enabling the full rule
+# set here means 40 style findings (27 unused imports, 7 import-position, 3 ambiguous
+# names) against the single real bug, and drowning a gate is how a gate gets ignored.
+#
+# Measured 2026-07-26: with only F821 live, these paths report exactly one finding,
+# which is #619 and is fixed in the same commit as this config. So this costs nothing
+# today and catches the next one on the first CI run.
+[tool.ruff.lint.per-file-ignores]
+"src/agents/**" = ["E", "I", "W", "F401", "F811", "F541", "F841", "F601", "F632"]
+"src/nlp/**" = ["E", "I", "W", "F401", "F811", "F541", "F841", "F601", "F632"]
+"src/strategy/**" = ["E", "I", "W", "F401", "F811", "F541", "F841", "F601", "F632"]
+"src/shared/**" = ["E", "I", "W", "F401", "F811", "F541", "F841", "F601", "F632"]
 
 [tool.mypy]
 python_version = "3.10"
