@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "bc0350d",
+    "harness_sha": "81656b0",
     "dataset": "radio + intent labeled CSVs, entity annotations, 2025 RCM corpus",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T16:38:31+00:00",
+    "generated_at": "2026-07-26T18:47:28+00:00",
     "artifacts": {
       "roberta_sentiment": "d7d0ada739c6",
       "intent_head": "7c995ba21bc0",
@@ -81,10 +81,10 @@
     {
       "stage": "rcm",
       "metric": "coverage",
-      "value": 0.9868,
+      "value": 0.9644,
       "reference": null,
       "status": "reproduced",
-      "detail": "n=1515 across 24 2025 races; per-category [Drs 1.000, Flag 1.000, Other 0.971, SafetyCar 1.000]; vs config Flag 1.0/Other 0.928/Drs 1.0/SafetyCar 1.0 (N23 sample differs)"
+      "detail": "n=1515 across 24 2025 races; per-category [Drs 1.000, Flag 0.997, Other 0.924, SafetyCar 1.000]; vs config Flag 1.0/Other 0.928/Drs 1.0/SafetyCar 1.0 (N23 sample differs)"
     },
     {
       "stage": "ner",
