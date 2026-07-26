@@ -1,10 +1,10 @@
-# Driver Colors — Year-Aware System
+# Driver Colors: Year-Aware System
 
 ## Location
 
 `src/telemetry/frontend/components/common/driver_colors.py`
 
-**This is not shared with the backend.** `src/telemetry/backend/core/driver_colors.py` is a separate, older implementation — a single flat `DRIVER_COLORS` dict labelled "F1 2024 Driver Colors" with its own (different) hex values and no `year` parameter at all: `get_driver_color(driver_code, default='#A259F7')`. It predates the 2025 driver-swap handling described below (it still maps `HAM` to a Mercedes-silver hex and has no entry for `ANT`, `BOR`, `HAD`, or the 2025 `SAI`-to-Williams move). Used only by `backend/api/v1/endpoints/comparison.py` and `backend/services/telemetry_service.py`. Treat the two files as independent palettes to keep in sync by hand, not one shared module — a known piece of tech debt, not a design intent.
+**This is not shared with the backend.** `src/telemetry/backend/core/driver_colors.py` is a separate, older implementation, a single flat `DRIVER_COLORS` dict labelled "F1 2024 Driver Colors" with its own (different) hex values and no `year` parameter at all: `get_driver_color(driver_code, default='#A259F7')`. It predates the 2025 driver-swap handling described below (it still maps `HAM` to a Mercedes-silver hex and has no entry for `ANT`, `BOR`, `HAD`, or the 2025 `SAI`-to-Williams move). Used only by `backend/api/v1/endpoints/comparison.py` and `backend/services/telemetry_service.py`. Treat the two files as independent palettes to keep in sync by hand, not one shared module, a known piece of tech debt, not a design intent.
 
 ## Purpose
 
@@ -14,7 +14,7 @@ F1 driver lineups change every season. A driver may switch teams between years, 
 
 ### Team base colors
 
-Each team has two hex constants — one for the primary driver, one for the secondary. For example:
+Each team has two hex constants, one for the primary driver, one for the secondary. For example:
 
 ```python
 _RED_BULL   = '#3671C6'   # Primary (e.g., VER)
@@ -45,7 +45,7 @@ Returns the hex color for a driver in a given season. Falls back to the 2025 fla
 
 ### `get_driver_colors_for_list(driver_codes, year=None) -> list`
 
-Batch version — returns a list of hex colors matching the input list of driver codes.
+Batch version, returns a list of hex colors matching the input list of driver codes.
 
 The backend's `core/driver_colors.py` exposes the same two function names but without the `year` parameter (`get_driver_color(driver_code, default='#A259F7')`), always reading its own static 2024-era `DRIVER_COLORS` dict.
 
@@ -66,17 +66,17 @@ color = get_driver_color("VER")  # '#3671C6'
 
 Frontend (year-aware module, `components/common/driver_colors.py`):
 
-- `pages/race_analysis.py` — tire and gap chart color assignment
-- `pages/strategy.py` — strategy tab driver color assignment
-- `components/race_analysis/tire_charts.py` — per-driver tire degradation plots
-- `components/race_analysis/gap_charts.py` — gap evolution charts
-- `components/chatbot/chart_builders.py` — chat tool-result chart colors
-- `components/common/data_selectors.py` and `components/dashboard/data_selectors.py` — driver selectors
-- `components/dashboard/css_styles.py` — dashboard CSS color injection
-- `utils/race_viz.py` — general race visualization helpers
-- `utils/chat_navigation.py` — chat navigation color tagging
+- `pages/race_analysis.py`, tire and gap chart color assignment
+- `pages/strategy.py`, strategy tab driver color assignment
+- `components/race_analysis/tire_charts.py`, per-driver tire degradation plots
+- `components/race_analysis/gap_charts.py`, gap evolution charts
+- `components/chatbot/chart_builders.py`, chat tool-result chart colors
+- `components/common/data_selectors.py` and `components/dashboard/data_selectors.py`, driver selectors
+- `components/dashboard/css_styles.py`, dashboard CSS color injection
+- `utils/race_viz.py`, general race visualization helpers
+- `utils/chat_navigation.py`, chat navigation color tagging
 
 Backend (static module, `backend/core/driver_colors.py`):
 
-- `backend/api/v1/endpoints/comparison.py` — comparison endpoint color assignment
-- `backend/services/telemetry_service.py` — telemetry data color tagging
+- `backend/api/v1/endpoints/comparison.py`, comparison endpoint color assignment
+- `backend/services/telemetry_service.py`, telemetry data color tagging

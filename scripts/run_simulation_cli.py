@@ -17,7 +17,7 @@ Examples
     python scripts/run_simulation_cli.py Melbourne NOR McLaren --no-llm
 
     # Laps 15-25 with LLM synthesis (LM Studio must be running)
-    python scripts/run_simulation_cli.py Bahrain NOR McLaren --laps 15-25
+    python scripts/run_simulation_cli.py Sakhir NOR McLaren --laps 15-25
 
     # Custom data paths
     python scripts/run_simulation_cli.py Monaco LEC Ferrari \\
@@ -2045,7 +2045,7 @@ def _parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    p.add_argument("gp_name", help="Grand Prix folder name (e.g. Melbourne, Bahrain)")
+    p.add_argument("gp_name", help="Grand Prix folder name (e.g. Melbourne, Sakhir)")
     p.add_argument("driver", help="FIA three-letter driver code (e.g. NOR, HAM)")
     p.add_argument("team", help="Team name as stored in laps parquet (e.g. McLaren)")
     p.add_argument(

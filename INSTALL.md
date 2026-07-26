@@ -1,4 +1,4 @@
-# Install Guide — F1 StratLab
+# Install Guide: F1 StratLab
 
 Three install paths, one per surface, each a **single command** once the
 prerequisites are on the machine.
@@ -10,11 +10,11 @@ prerequisites are on the machine.
 - Python **3.10, 3.11, or 3.12** (the project pins `>=3.10,<3.13` in
   `pyproject.toml`; CI runs on 3.12).
 - `OPENAI_API_KEY` in a `.env` at the repo root (or exported in the
-  shell) for OpenAI `gpt-4.1-mini`, the default model on every provider
+  shell) for OpenAI `gpt-4.1-mini`, the sub-agent default on every provider
   path. Arcade and the web app backend read `F1_LLM_PROVIDER` from `.env`
   (`.env.example` ships `openai`). **The CLI is the exception:** `f1-sim`'s
   `--provider` flag overrides `.env` and defaults to `lmstudio` (a local
-  LM Studio server on `http://localhost:1234`) — pass `--provider openai`
+  LM Studio server on `http://localhost:1234`), pass `--provider openai`
   to use OpenAI instead, or `--no-llm` to skip the LLM step entirely.
 - For the web app Docker flow: **Docker Desktop** (Windows/Mac) or
   `docker + compose` plugin (Linux).
@@ -32,7 +32,7 @@ prerequisites are on the machine.
 
 ---
 
-## CLI — headless strategy replay with Rich live panels
+## CLI, headless strategy replay with Rich live panels
 
 ```bash
 uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
@@ -60,7 +60,7 @@ Already installed from a source checkout? `uv sync && uv run f1-strat`
 
 ---
 
-## Arcade — 3-window race replay + live dashboard + telemetry
+## Arcade, 3-window race replay + live dashboard + telemetry
 
 ```bash
 uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
@@ -69,21 +69,21 @@ f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" -
 
 Three windows spawn from that one command:
 
-1. Arcade replay (pyglet) — track · leaderboard · weather · driver info
-2. Strategy Dashboard (PySide6) — orchestrator + 6 agent cards + charts
-3. Live Telemetry (PySide6) — 2×2 grid Delta / Speed / Brake / Throttle
+1. Arcade replay (pyglet), track · leaderboard · weather · driver info
+2. Strategy Dashboard (PySide6), orchestrator + 6 agent cards + charts
+3. Live Telemetry (PySide6), 2×2 grid Delta / Speed / Brake / Throttle
 
 **Docker is NOT recommended for Arcade**: pyglet + Qt need a host OpenGL
 context and a native display. Cross-platform X forwarding from a
 container is fragile on Windows / Mac and has no benefit over a local
 install. Use `uv tool install` and run on the host.
 
-See [`docs/arcade-quick-start.md`](docs/arcade-quick-start.md) for the
+See [`docs/pages/arcade-quick-start.md`](docs/pages/arcade-quick-start.md) for the
 controls legend, troubleshooting and window tour.
 
 ---
 
-## Web app — post-race analysis UI (backend + React SPA)
+## Web app, post-race analysis UI (backend + React SPA)
 
 ```bash
 git clone --recurse-submodules https://github.com/VforVitorio/F1-StratLab.git
@@ -93,7 +93,7 @@ uv run f1-webapp              # wraps `docker compose up` and prints the URLs
 ```
 
 `--recurse-submodules` is required: both containers build from `src/telemetry`,
-which is empty without it. `cp .env.example .env` is required too — Compose
+which is empty without it. `cp .env.example .env` is required too: Compose
 aborts with "env file ./.env not found" otherwise. The backend also serves race
 data from a **read-only** `./data` mount, so seed `data/` on the host first (see
 [Data bootstrap](#data-bootstrap)) or the data endpoints return 404.
@@ -125,21 +125,21 @@ branch. `f1-webapp` is the single launcher for the post-race surface.
 
 All three surfaces read from `data/`:
 
-- `data/processed/laps_featured_<year>.parquet` — featured lap data
-- `data/raw/<year>/<Location>/` — per-race FastF1 pickle cache
-- `data/processed/race_radios/<year>/<slug>/` — OpenF1 radio corpus +
+- `data/processed/laps_featured_<year>.parquet`, featured lap data
+- `data/raw/<year>/<Location>/`, per-race FastF1 pickle cache
+- `data/processed/race_radios/<year>/<slug>/`: OpenF1 radio corpus +
   `rcm.parquet` for Race Control messages
-- `data/tire_compounds_by_race.json` — canonical per-year GP calendar
+- `data/tire_compounds_by_race.json`, canonical per-year GP calendar
   and compound allocation
 
 The CLI and Arcade call `ensure_radio_corpus()` and FastF1's cache on
 first run; a warm cache is zero-cost. The Docker web app stack does not
 yet have an equivalent auto-download step for a production deploy without
-a host-side repo clone — that gap is a known, deferred follow-up; seed
+a host-side repo clone, that gap is a known, deferred follow-up; seed
 `data/` on the host as described below in the meantime.
 
 For the **Docker web app stack**, `./data` is mounted read-only, so the
-container cannot populate it — seed it on the host before `docker compose up`,
+container cannot populate it, seed it on the host before `docker compose up`,
 either by running the CLI path once (`uv run f1-sim Melbourne VER "Red Bull Racing" --year 2025 --no-llm --laps 1-1`)
 or directly:
 

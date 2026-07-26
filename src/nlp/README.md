@@ -1,19 +1,24 @@
-# src/nlp — Radio NLP modules
+# src/nlp: Radio NLP modules
 
-Two layers live here:
+Two modules, both live:
 
-1. **`radio_runner.py`** — the **active** replay-time consumer of the static
-   OpenF1 radio corpus. This is the one piece of `src/nlp/` that the live
-   simulation pipeline imports today.
-2. Everything else (`pipeline.py`, `sentiment.py`, `ner.py`,
-   `radio_classifier.py`) — Jupytext exports from the early NLP development
-   notebooks (week 4). They predate the unified N24 pipeline and are kept
-   for reference only.
+1. **`radio_runner.py`**, the replay-time consumer of the static OpenF1 radio
+   corpus: transcription via Whisper, plus the adapter that turns raw MP3s into
+   the dict shape N29 expects.
+2. **`rcm_state.py`**, the race-control state tracker that decides whether a
+   neutralisation is currently active.
 
-The N24 inference pipeline itself (sentiment + intent + NER + RCM parser) is
-loaded inside the N29 Radio Agent at `src/agents/radio_agent.py`, not from
-this folder. The active modules here only cover the *transcription* +
-*adapter* steps that turn raw OpenF1 MP3s into the dict shape N29 expects.
+**The inference models are not here.** Sentiment, intent and NER are loaded and
+run inside the N29 Radio Agent at `src/agents/radio_agent.py`, which is
+self-contained. If you are looking for the code that classifies a radio message,
+that is the file to open.
+
+The Jupytext exports that used to sit alongside these two (`pipeline.py`,
+`sentiment.py`, `ner.py`, `radio_classifier.py`) moved to
+[`legacy/nlp_standalone/`](../../legacy/nlp_standalone/). They predated the
+unified N24 pipeline and nothing imported them, but their presence here made this
+folder look like the implementation, which is how someone ends up editing the
+wrong file.
 
 ---
 
@@ -28,7 +33,7 @@ Replay-time bridge from the static OpenF1 radio corpus to the N29 Radio Agent.
 | `RadioPipelineRunner` | dataclass | One per simulation run. Loads the per-GP `radios.parquet` + `rcm.parquet`, lazily transcribes each referenced MP3 with Whisper, exposes `radios_for_lap(lap_number)` for the CLI loop |
 | `WhisperTranscriber` | class | Process-local Whisper holder. `ensure_loaded()` defers the model load until the first transcription so a fully-warm cache pays zero load cost |
 | `_get_whisper(model_name)` | factory | Module-level singleton accessor. Returns the same Whisper instance across runners as long as the requested model name matches |
-| `COUNTRY_SLUG_BY_GP` | dict | Re-exported from `src.f1_strat_manager.gp_slugs` for convenience — friendly GP name → on-disk corpus slug |
+| `COUNTRY_SLUG_BY_GP` | dict | Re-exported from `src.f1_strat_manager.gp_slugs` for convenience, friendly GP name → on-disk corpus slug |
 | `resolve_gp_slug(name)` | function | Re-exported resolver. CLI / FastF1 GP name → corpus slug |
 
 **JSON transcript cache:** keyed by the *normalised* (forward-slash) relative
@@ -38,7 +43,7 @@ the Whisper model name so a `--whisper-model base` re-run cleanly invalidates
 a cache that `turbo` populated. Stale-model entries are dropped on load.
 
 **Why the runner lives here, not under `src/agents/`:** the runner does no
-inference, no LangGraph, no LLM — just transcription + a thin parquet → dict
+inference, no LangGraph, no LLM, just transcription + a thin parquet → dict
 adapter. Sitting next to the legacy NLP modules keeps all the radio-NLP
 plumbing in one place and lets the lazy first-run downloader
 (`src/f1_strat_manager/data_cache.ensure_radio_corpus`) call `resolve_gp_slug`
@@ -47,7 +52,7 @@ BERT / Whisper at module-import time).
 
 **End-to-end smoke test:**
 [`notebooks/agents/N34_radio_runner_smoke.ipynb`](../../notebooks/agents/N34_radio_runner_smoke.ipynb)
-— 13 cells validating cache hit/miss, per-lap distribution, transcript
+,  13 cells validating cache hit/miss, per-lap distribution, transcript
 sanity, and the N29 round-trip via `run_radio_agent_from_state` on
 Bahrain 2025 (28 radios + 76 RCMs, lap 4 emits a PROBLEM alert).
 

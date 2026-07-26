@@ -1,4 +1,4 @@
-# src/strategy — Strategy Model Modules
+# src/strategy: Strategy Model Modules
 
 **Read this first:** this package holds two different things with opposite statuses.
 
@@ -11,7 +11,7 @@
 
 ## Status of the Jupytext exports: reference only
 
-These are Jupytext `.py` exports from early strategy notebooks. They contain the
+These are the Jupytext `.py` exports left in `inference/` alongside the production files. They contain the
 model architectures and prediction utilities developed before the LightGBM-based
 strategy models (N06–N16) replaced the earlier TCN and XGBoost experiments.
 
@@ -19,22 +19,24 @@ strategy models (N06–N16) replaced the earlier TCN and XGBoost experiments.
 
 ## Subdirectories
 
-### `models/`
-
-| File | Source | Description |
-|---|---|---|
-| `lap_time_model.py` | N05-N06 era | `load_lap_prediction_model()`, `predict_lap_times()`; XGBoost/pickle-based lap time predictor; hard-coded compound color maps |
-| `tire_degradation_model.py` | N01-N08 era | `calculate_fuel_adjusted_metrics()` and supporting helpers; analytical fuel-adjusted degradation baseline used before the TCN |
-
 ### `inference/`
 
-| File | Source | Description |
+| File | Status | Description |
 |---|---|---|
-| `tire_predictor.py` | N09 era | `EnhancedTCN` PyTorch module (dilated conv1d, multi-scale, MC Dropout); `predict_tire_degradation()` inference function; loads `.pth` state dict |
+| `engine.py` | **production** | `run_lap`, the single implementation of the N31 lap pipeline. The CLI, the Arcade and the backend all route through it, and it exposes two profiles: `rich` returns the verbose per-stage payloads the Arcade dashboard renders, `no-llm` runs the deterministic path with no provider call |
+| `no_llm.py` | **production** | The deterministic decision path used by `profile="no-llm"`: MC argmax plus the regulatory guard-rails, no LLM synthesis |
+| `tire_predictor.py` | reference | N09-era `EnhancedTCN` PyTorch module (dilated conv1d, multi-scale, MC Dropout) and `predict_tire_degradation()`; loads a `.pth` state dict. Superseded by the per-compound models from N10 |
+
+### `eval/`
+
+Backend for the `f1-eval` CLI. Regenerates the model evaluation reports under
+`documents/eval_reports/`: the metrics registry, calibration, threshold hygiene,
+per-stage NLP evaluation, headline-number reproduction, and LLM-judged alert
+precision.
 
 ### `training/`
 
-Empty — training code lives in the notebooks.
+Empty. Training code lives in the notebooks.
 
 ---
 

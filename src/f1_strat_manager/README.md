@@ -1,12 +1,12 @@
-# src/f1_strat_manager — CLI infrastructure package
+# src/f1_strat_manager: CLI infrastructure package
 
 Cross-cutting infrastructure that does not belong to any single domain
 sub-package under `src/`. Hosts the first-run data bootstrap (HuggingFace
 Hub downloader) and the friendly-name → on-disk-slug resolver used by the
 radio corpus pipeline.
 
-The package is intentionally **lightweight** — zero pandas, no NLP models,
-no agent imports — so the bootstrap path stays cheap on first install and
+The package is intentionally **lightweight**, zero pandas, no NLP models,
+no agent imports, so the bootstrap path stays cheap on first install and
 the slug resolver can be imported by both the data-cache layer and the
 NLP runner without circular dependencies.
 
@@ -22,7 +22,7 @@ NLP runner without circular dependencies.
 
 ---
 
-## `data_cache.py` — first-run bootstrap
+## `data_cache.py`, first-run bootstrap
 
 Resolves `data/` and `data/models/` to project-relative paths and lazily
 downloads a curated subset from `VforVitorio/f1-strategy-dataset` on the
@@ -31,7 +31,7 @@ Two trees are pulled differently to keep the first-run footprint small (around 7
 
 | Tree | When it downloads | Why |
 |---|---|---|
-| `data/processed/race_radios/**` (radio parquets) | Eagerly via `_DEFAULT_MODEL_PATTERNS` | ~430 KB total — negligible vs the rest of the bundle |
+| `data/processed/race_radios/**` (radio parquets) | Eagerly via `_DEFAULT_MODEL_PATTERNS` | ~430 KB total, negligible vs the rest of the bundle |
 | `data/raw/radio_audio/{year}/{slug}/**` (MP3s) | Lazily, per-GP, via `ensure_radio_corpus(year, gp_name)` | ~3 MB per race; only fetched when the user actually simulates that GP |
 | `data/raw/{year}/{gp}/**` (FastF1 race dump) | Lazily, per-race, via `ensure_race(year, gp_name)` | Same per-race fetch pattern |
 | Models tree (`data/models/**`) | Eagerly on `is_first_run()` | The orchestrator needs every model loaded at startup |
@@ -52,7 +52,7 @@ install pays zero startup cost beyond the existence checks.
 
 ---
 
-## `gp_slugs.py` — friendly name → slug
+## `gp_slugs.py`, friendly name → slug
 
 The CLI passes friendly GP names (`Sakhir`, `Marina Bay`, `Yas Island`,
 `Imola`, …) but the radio dataset builder writes folders by lower-cased
@@ -62,20 +62,20 @@ runner, the FastAPI endpoints, and the lazy first-run downloader stay in
 sync.
 
 Multi-race countries (Italy = Imola + Monza, United States = Miami + Austin
-+ Las Vegas) get a circuit suffix appended to the country slug — see
++ Las Vegas) get a circuit suffix appended to the country slug, see
 `src/data_extraction/openf1/radio_dataset_builder.py` for the static
 `_MULTI_RACE_COUNTRIES = {"Italy", "United States"}` set on the build side.
 
 `resolve_gp_slug` accepts both forms (friendly name *and* canonical slug)
 and falls through silently for the canonical form, so callers can pass the
-output of a previous resolution back in without an error — useful for the
+output of a previous resolution back in without an error, useful for the
 retry-after-partial-download path inside `ensure_radio_corpus`.
 
 Imported by:
 
-- [`src/nlp/radio_runner.py`](../nlp/radio_runner.py) — re-exports
+- [`src/nlp/radio_runner.py`](../nlp/radio_runner.py), re-exports
   `COUNTRY_SLUG_BY_GP` and `resolve_gp_slug` so consumers can stay on the
   `radio_runner` namespace
-- [`src/f1_strat_manager/data_cache.py`](data_cache.py) — calls
+- [`src/f1_strat_manager/data_cache.py`](data_cache.py), calls
   `resolve_gp_slug` from inside `ensure_radio_corpus` to compute the
   per-GP audio directory path

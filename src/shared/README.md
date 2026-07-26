@@ -1,4 +1,4 @@
-# src/shared — Legacy data-extraction wrappers (archived)
+# src/shared: Legacy data-extraction wrappers (archived)
 
 **Status: archived.** Early iteration of the data-extraction layer that
 predates the cleaner `src/data_extraction/` reorganisation. The modules
@@ -29,7 +29,7 @@ src/shared/
 
 | File | Description | Successor |
 |---|---|---|
-| `data_extraction/fastf1_extractor.py` | `extract_f1_data(year, gp, session_type)` — initial FastF1 wrapper scoped to the 2023 Spanish GP. Writes laps + pit-stops + weather parquets under `f1_cache/` | [`src/data_extraction/fastf1/session_extractor.py`](../data_extraction/fastf1/session_extractor.py) and `scripts/download_data.py` |
+| `data_extraction/fastf1_extractor.py` | `extract_f1_data(year, gp, session_type)`, initial FastF1 wrapper scoped to the 2023 Spanish GP. Writes laps + pit-stops + weather parquets under `f1_cache/` | [`src/data_extraction/fastf1/session_extractor.py`](../data_extraction/fastf1/session_extractor.py) and `scripts/download_data.py` |
 | `data_extraction/openf1_extractor.py` | First-pass OpenF1 helper from the early intervals experiment | [`src/data_extraction/openf1/`](../data_extraction/openf1/) (intervals + radio dataset builders) |
 | `data_extraction/data_augmentation.py` | Albumentations augmentation pipeline for the YOLO car-team image dataset (vision direction, archived) | [`src/data_extraction/legacy/image_augmentation.py`](../data_extraction/legacy/image_augmentation.py) |
 | `data_extraction/video_processor.py` | Frame-extraction helper for the YOLO experiments | [`src/data_extraction/legacy/video_downloader.py`](../data_extraction/legacy/video_downloader.py) |

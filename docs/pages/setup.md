@@ -54,7 +54,7 @@ Create a `.env` file at the repo root:
 | `BACKEND_URL` | no | `http://localhost:8000` | Backend URL, read by the frontend |
 | `FRONTEND_URL` | no | `http://localhost:8501` | Frontend URL, read by the backend for CORS |
 | `F1_LLM_PROVIDER` | no | `lmstudio` | Set to `openai` for OpenAI API |
-| `OPENAI_API_KEY` | if provider=openai | — | OpenAI API key |
+| `OPENAI_API_KEY` | if provider=openai |, | OpenAI API key |
 | `F1_STRAT_DATA_ROOT` | no | repo `data/` | Override data directory |
 | `F1_API_KEY` | no | unset | Shared secret for the `X-API-Key` header. Unset = unauthenticated (safe only on a loopback bind, see `F1_HOST` below) |
 | `F1_HOST` | no | `127.0.0.1` | The host uvicorn binds to. A non-loopback bind (e.g. `0.0.0.0`) with `F1_API_KEY` unset refuses to start |
@@ -89,7 +89,31 @@ Start LM Studio with a model loaded, serving on `http://localhost:1234/v1`. The 
 
 ## Docker deployment
 
-Two equivalent compose files exist, one at the repo root and one path-relative copy inside the submodule — both already mount volumes for live code reload and data access, so pick whichever working directory is convenient.
+```mermaid
+graph TD
+    U[browser] -->|":8501"| NG
+    subgraph net["f1_network"]
+        subgraph wsvc["webapp service"]
+            NG[nginx<br/>serves the built SPA<br/>and reverse-proxies /api]
+        end
+        subgraph bsvc["backend service"]
+            API["uvicorn backend.main:app<br/>:8000, --reload"]
+        end
+        NG -->|"/api -> backend:8000"| API
+    end
+    API -->|F1_LLM_PROVIDER| LLM[["OpenAI, or LM Studio<br/>on the host"]]
+
+    V1["./src:/app/src :ro"] --> API
+    V2["./data:/app/data :ro"] --> API
+    V3["./data/rag :rw<br/>Qdrant writes its on-disk index here"] --> API
+    V4["backend_cache:/root/.cache<br/>named volume, survives a rebuild"] --> API
+```
+
+Two things are worth reading off that. **Qdrant is not a service:** it runs on-disk inside the backend process, which is why `data/rag` is the one mount that is read-write. And the browser only ever talks to `:8501`; `/api` is reverse-proxied, so there is no second origin and no CORS to configure.
+
+`f1-webapp` wraps `docker compose up` on this file. `F1_STRAT_DATA_ROOT=/app/data` is what makes the container agree with a local checkout about where data lives.
+
+Two equivalent compose files exist, one at the repo root and one path-relative copy inside the submodule, both already mount volumes for live code reload and data access, so pick whichever working directory is convenient.
 
 ### Root `docker-compose.yml`
 
@@ -99,7 +123,7 @@ docker-compose up --build
 
 Services:
 
-- **backend**: FastAPI on port 8000. Volumes: `./src:/app/src:ro` (read-only source — agents import from here), `./data:/app/data:ro` (read-only data), `./data/rag:/app/data/rag:rw` (writable RAG index, N30 may write here).
+- **backend**: FastAPI on port 8000. Volumes: `./src:/app/src:ro` (read-only source, agents import from here), `./data:/app/data:ro` (read-only data), `./data/rag:/app/data/rag:rw` (writable RAG index, N30 may write here).
 - **webapp**: React SPA served by nginx on port 8501; `/api` is reverse-proxied to `backend`, so the browser stays same-origin. Depends on `backend`.
 
 `uv run f1-webapp` wraps this compose invocation and prints the URLs.

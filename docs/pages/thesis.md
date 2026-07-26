@@ -1,6 +1,6 @@
 # Thesis results
 
-**This page reports the headline benchmark results for F1 StratLab — the accuracy and latency of its seven ML models and six sub-agents**, as referenced in chapter 5 of the TFG thesis. Every figure is regenerated automatically from the notebooks under `notebooks/agents/`, so it always tracks the latest model artefacts.
+**This page reports the headline benchmark results for F1 StratLab, the accuracy and latency of its seven ML models and six sub-agents**, as referenced in chapter 5 of the TFG thesis. Every figure is regenerated automatically from the notebooks under `notebooks/agents/`, so it always tracks the latest model artefacts.
 
 ## Threshold sweeps
 
@@ -22,7 +22,7 @@ The undercut classifier sees the highest positive prevalence of the three (>30 %
 
 The TCN tire-degradation model (N09 global + N10 per-compound fine-tunes) uses 50-pass MC Dropout to produce P10 / P50 / P90 percentile bands. Both the raw [P10, P90] coverage (epistemic only) and the calibrated coverage that adds the empirical residual sigma (aleatoric included) are reported.
 
-Raw coverage stays around **0.20** across all compounds — active dropout only captures the model-weight uncertainty, not the lap-to-lap aleatoric noise. The calibrated coverage matches the **0.80** nominal target by construction.
+Raw coverage stays around **0.20** across all compounds, active dropout only captures the model-weight uncertainty, not the lap-to-lap aleatoric noise. The calibrated coverage matches the **0.80** nominal target by construction.
 
 ## How to regenerate
 
