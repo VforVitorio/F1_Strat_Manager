@@ -11,6 +11,24 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.2.2](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.1...v2.2.2) (2026-07-26)
+
+
+### Bug Fixes
+
+* **agents,arcade:** land six filed behaviour bugs and kill the constant that kept drifting ([4000f84](https://github.com/VforVitorio/F1-StratLab/commit/4000f84e3f9f7a1d9363ab6fd8f9a1af1fba6c04)), closes [#613](https://github.com/VforVitorio/F1-StratLab/issues/613) [#614](https://github.com/VforVitorio/F1-StratLab/issues/614) [#615](https://github.com/VforVitorio/F1-StratLab/issues/615) [#616](https://github.com/VforVitorio/F1-StratLab/issues/616) [#620](https://github.com/VforVitorio/F1-StratLab/issues/620) [#628](https://github.com/VforVitorio/F1-StratLab/issues/628)
+* **arcade:** widen the weather catch and stop claiming a drift is closed when it is not ([3e56432](https://github.com/VforVitorio/F1-StratLab/commit/3e56432b527216cc5ee3877aa03e2971cc03123c))
+* **eval:** measure the RCM parser that ships, not a private copy of it ([10311f9](https://github.com/VforVitorio/F1-StratLab/commit/10311f9300c9a3e9ab1945452ec596d19c02ecba)), closes [#632](https://github.com/VforVitorio/F1-StratLab/issues/632)
+* **eval:** resolve team rebrands in the pit holdout and make an unknown team loud ([9366346](https://github.com/VforVitorio/F1-StratLab/commit/9366346202f7f6df4ff85a920c4d74940da12aa6)), closes [#629](https://github.com/VforVitorio/F1-StratLab/issues/629)
+* **nlp:** classify the black-and-white flag, which the copy we replaced could and we could not ([fb8c208](https://github.com/VforVitorio/F1-StratLab/commit/fb8c208f8b83aaa98143554d07fb28c226453e05)), closes [#641](https://github.com/VforVitorio/F1-StratLab/issues/641)
+* **tests:** correct a golden that was born red, and say why CI could never tell us ([fdf49bb](https://github.com/VforVitorio/F1-StratLab/commit/fdf49bb90e147b3d5cd28a0f0711e0302f31f7fc)), closes [#634](https://github.com/VforVitorio/F1-StratLab/issues/634)
+
+
+### Refactoring
+
+* **arcade:** name the unit conversion the previous commit claimed to have named ([8c419f8](https://github.com/VforVitorio/F1-StratLab/commit/8c419f8043e194390196fced64695744019053b1))
+* **readability:** apply the four findings that earn it and close the audit ([9d71873](https://github.com/VforVitorio/F1-StratLab/commit/9d71873ca5f6ae876a96ecf364d75704ac4f9454)), closes [#643](https://github.com/VforVitorio/F1-StratLab/issues/643)
+
 ## [2.2.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.0...v2.2.1) (2026-07-26)
 
 
