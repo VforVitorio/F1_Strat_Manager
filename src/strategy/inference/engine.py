@@ -289,6 +289,15 @@ def _run_rich(
             # /simulate, the arcade and the CLI. That is the whole class this engine
             # exists to prevent: one call sequence, or every caller drifts.
             live_drivers=_live_drivers_from(lap_state),
+            # Same class, same profile, two arguments further along. Without
+            # these `_clamp_expected_stint_end` has no physical anchor and
+            # returns the LLM's `expected_stint_end` unclamped, so #433's guard
+            # was dead everywhere the default profile runs. The fix for
+            # `live_drivers` above landed and these two were missed, which is
+            # the argument for the threading test rather than for reading the
+            # call twice.
+            cliff_p50=tire_out.laps_to_cliff_p50,
+            total_laps=race_state.total_laps,
         )
 
     timings["total"] = sum(timings.values())

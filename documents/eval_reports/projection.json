@@ -1,0 +1,65 @@
+{
+  "header": {
+    "harness_sha": "0c95c1b",
+    "dataset": "data/raw laps 2023-2025 (RAW, not featured)",
+    "seed_policy": "deterministic",
+    "era_tag": "2022-2025",
+    "llm": "none",
+    "schema_version": "1",
+    "generated_at": "2026-07-26T11:39:52+00:00",
+    "artifacts": {}
+  },
+  "ground_truth": {
+    "sample_size": 1810,
+    "races": 71,
+    "within_one": 0.8646408839779005,
+    "exact": 0.5911602209944752,
+    "mean_signed_error": 0.5718232044198895,
+    "mean_absolute_error": 0.6591160220994475
+  },
+  "tables": [
+    {
+      "table": "clean_air",
+      "answers": "seconds a lap a follower gains once the car directly ahead pits, per circuit",
+      "cells": "34",
+      "present": true
+    },
+    {
+      "table": "gap_density",
+      "answers": "seconds between consecutive cars, so a projected gap maps to a place",
+      "cells": "12",
+      "present": true
+    },
+    {
+      "table": "neutralisation_rate",
+      "answers": "chance a Safety Car arrives while a stop is being deferred",
+      "cells": "29",
+      "present": true
+    },
+    {
+      "table": "sc_window",
+      "answers": "green laps left inside the 5-lap decision window once neutralised",
+      "cells": "2",
+      "present": true
+    },
+    {
+      "table": "status_mix",
+      "answers": "share of laps that are actually racing, the denominator for the rest",
+      "cells": "5",
+      "present": true
+    },
+    {
+      "table": "stop_hazard",
+      "answers": "chance a rival stops in the window, by tyre life",
+      "cells": "36",
+      "present": true
+    },
+    {
+      "table": "undercut_band",
+      "answers": "undercut success against the gap to the target",
+      "cells": "15",
+      "present": true
+    }
+  ],
+  "measured_tables_path": "data/mc_measured_v1.json"
+}
