@@ -24,9 +24,39 @@ The TCN tire-degradation model (N09 global + N10 per-compound fine-tunes) uses 5
 
 Raw coverage stays around **0.20** across all compounds, active dropout only captures the model-weight uncertainty, not the lap-to-lap aleatoric noise. The calibrated coverage matches the **0.80** nominal target by construction.
 
+## Monte Carlo projection accuracy
+
+The strategy layer scores its four candidates in **projected track position**, not in seconds. That claim is directly checkable, because every real pit stop in the dataset is already a labelled example of it: project the stop from the lap before, then compare against where the car actually came out on the lap after. No hand-labelling is involved, which is what makes this a measured result rather than a plausibility argument.
+
+Over **1810 green-flag stops across 71 races** (2023 to 2025), the projection lands **within one position 86.5 %** of the time and is **exactly right 59.1 %** of the time, with a mean signed error of **+0.57 positions**. The bias is positive, so the projection is mildly pessimistic about the rejoin, which is the safer direction for a strategy call.
+
+Neutralised stops are excluded, and not to flatter the number. Under a Safety Car every lap is slow, so the "two normal laps" baseline used to reconstruct the realised pit loss is wrong there: that corrupts the measurement's **input** rather than the projection itself. Measured separately, those stops show a mean error of +1.54 positions against +0.57 under green, which is the signature of exactly that problem.
+
+### The tables the scorer reads
+
+Seven tables are counted off the same 71 races of raw laps rather than assumed, and the scorer reads them at runtime from `data/mc_measured_v1.json`.
+
+| Table | What it answers |
+|---|---|
+| `clean_air` | seconds a lap a follower gains once the car directly ahead pits, per circuit |
+| `gap_density` | seconds between consecutive cars, so a projected gap maps to a place |
+| `neutralisation_rate` | chance a Safety Car arrives while a stop is being deferred |
+| `sc_window` | green laps left inside the 5-lap decision window once neutralised |
+| `status_mix` | share of laps that are actually racing, the denominator for the rest |
+| `stop_hazard` | chance a rival stops in the window, by tyre life |
+| `undercut_band` | undercut success against the gap to the target |
+
+The source is the **raw** parquet and never the featured one, which drops the neutralised and pit laps these tables are precisely about.
+
 ## How to regenerate
 
 ```bash
+# Monte Carlo projection accuracy + the measured-table inventory (~1 min)
+uv run f1-eval projection
+
+# The measured tables themselves, from 71 races of raw laps (~10 min)
+uv run python scripts/measure_mc_tables.py
+
 # Threshold sweeps + MC Dropout figures (one notebook, ~5 min on GPU)
 uv run jupyter nbconvert --execute --inplace notebooks/agents/N33_thresholds_and_calibration.ipynb
 
@@ -39,6 +69,8 @@ Both notebooks emit CSV and Markdown tables alongside their PNGs:
 - Sweeps: `data/eval/threshold_sweep_{overtake,sc,undercut}.{csv,md}`
 - MC Dropout: `data/eval/mc_dropout_coverage.{csv,md}`
 - RAG benchmark: `data/rag_eval/results_v1.md`
+- Projection accuracy: `documents/eval_reports/projection.{md,json}`
+- Measured MC tables: `data/mc_measured_v1.json`, with thesis-facing extracts at `data/eval/mc_{clean_air,gap_density,sc_window,undercut_band}.{csv,md}`
 
 ## Numeric headline metrics
 
@@ -50,6 +82,7 @@ Both notebooks emit CSV and Markdown tables alongside their PNGs:
 | Sub-agent latency | min / max mean | **487 ms** (pace) / **4.4 s** (rag w/ LLM) | `data/eval/subagent_latency.{csv,md}` |
 | RAG agent | Content P@5 | **0.80** | `data/rag_eval/results_v1.md` |
 | MC Dropout (C2) | calibrated 80 % coverage | **0.840** | `data/eval/mc_dropout_coverage.{csv,md}` |
+| Position projection | within one place, 1810 real stops | **86.5 %** | `documents/eval_reports/projection.{md,json}` |
 
 All numbers reproducible with the commands above.
 

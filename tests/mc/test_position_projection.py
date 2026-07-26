@@ -32,6 +32,7 @@ from src.agents.position_projection import (
     rank_targets,
     undercut_targets,
 )
+from src.strategy.eval.projection import measure_projection_ground_truth
 
 ROOT = Path(__file__).parent.parent.parent
 
@@ -420,137 +421,24 @@ def test_the_projection_is_deterministic():
 # ---------------------------------------------------------------------------
 
 
-def _elapsed_pivot(laps):
-    """LapNumber x Driver table of elapsed session seconds."""
-    frame = laps[["LapNumber", "Driver", "Time"]].dropna()
-    frame = frame.assign(elapsed=frame["Time"].dt.total_seconds())
-    return frame.pivot_table(index="LapNumber", columns="Driver", values="elapsed", aggfunc="first")
-
-
-def _neutralised_laps(laps) -> set[int]:
-    neutralised = set()
-    for lap, group in laps.groupby("LapNumber"):
-        joined = "".join(group["TrackStatus"].dropna().astype(str))
-        if any(flag in joined for flag in ("4", "5", "6")):
-            neutralised.add(int(lap))
-    return neutralised
-
-
-def _project_one_stop(pivot, medians, pitters, driver, lap):
-    """Projected minus actual rejoin position for one real stop, or None to skip."""
-    before, after = lap - 1, lap + 1
-    if before < 1 or before not in pivot.index or after not in pivot.index:
-        return None
-
-    row_before, row_after = pivot.loc[before], pivot.loc[after]
-    ours_before, ours_after = row_before.get(driver), row_after.get(driver)
-    normal = medians.get(driver)
-    if any(value is None or np.isnan(value) for value in (ours_before, ours_after, normal)):
-        return None
-
-    realised_loss = (ours_after - ours_before) - 2 * normal
-    if realised_loss <= 0:
-        return None
-
-    rivals = []
-    for other in pivot.columns:
-        if other == driver:
-            continue
-        their_before, their_after = row_before.get(other), row_after.get(other)
-        if their_before is None or np.isnan(their_before):
-            continue
-        if their_after is None or np.isnan(their_after):
-            continue
-
-        also_pits = other in pitters.get(lap, ()) or other in pitters.get(lap + 1, ())
-        their_normal = medians.get(other)
-        their_loss = 0.0
-        if also_pits and their_normal and not np.isnan(their_normal):
-            their_loss = max(0.0, (their_after - their_before) - 2 * their_normal)
-
-        rivals.append(
-            RivalState(
-                driver=str(other),
-                gap_s=float(their_before - ours_before),
-                is_pitting=also_pits,
-                stop_loss_s=their_loss,
-            )
-        )
-
-    if not rivals:
-        return None
-
-    result = project_positions(
-        rivals, STOP_NOW, _flat_config(), np.array([realised_loss]), np.array([99.0])
-    )
-    actual = 1 + int(
-        sum(
-            1
-            for other in pivot.columns
-            if other != driver
-            and not np.isnan(row_after.get(other, np.nan))
-            and row_after[other] < ours_after
-        )
-    )
-    return int(result.positions[0]) - actual
-
-
 @_skip_no_raw
 def test_the_projection_reproduces_real_pit_stop_rejoins():
     """Project every real green-flag stop and compare with what actually happened.
 
-    Neutralised stops are excluded, and not to flatter the number: under a Safety
-    Car every lap is slow, so the "normal lap" baseline this test uses to
-    reconstruct the realised pit loss is wrong there. That corrupts the test's
-    INPUT rather than the projection, and measuring it separately showed exactly
-    that signature (mean error +1.54 positions under neutralisation against +0.57
-    under green). The geometry is what is under test here; pit-loss estimation
-    under a Safety Car is a different question.
+    The measurement lives in ``src/strategy/eval/projection.py`` and is imported
+    rather than repeated here, so the number this test gates is the same number
+    ``f1-eval projection`` publishes. A second copy would drift, and a floor
+    asserted against a drifted copy gates nothing.
     """
-    import pandas as pd
+    truth = measure_projection_ground_truth()
 
-    errors: list[int] = []
-    for year in (2023, 2024, 2025):
-        year_dir = ROOT / "data" / "raw" / str(year)
-        if not year_dir.is_dir():
-            continue
-
-        for race_dir in sorted(path for path in year_dir.iterdir() if path.is_dir()):
-            laps_path = race_dir / "laps.parquet"
-            if not laps_path.exists():
-                continue
-
-            laps = pd.read_parquet(laps_path)
-            if "PitInTime" not in laps.columns:
-                continue
-
-            pivot = _elapsed_pivot(laps)
-            medians = laps.groupby("Driver")["LapTime"].median().dt.total_seconds().to_dict()
-            neutralised = _neutralised_laps(laps)
-
-            stops = laps[laps["PitInTime"].notna()][["Driver", "LapNumber"]]
-            pitters: dict[int, set[str]] = {}
-            for _, row in stops.iterrows():
-                pitters.setdefault(int(row["LapNumber"]), set()).add(str(row["Driver"]))
-
-            for _, stop in stops.iterrows():
-                lap = int(stop["LapNumber"])
-                if lap in neutralised or lap + 1 in neutralised:
-                    continue
-                error = _project_one_stop(pivot, medians, pitters, str(stop["Driver"]), lap)
-                if error is not None:
-                    errors.append(error)
-
-    sample = np.array(errors)
-    assert sample.size >= MIN_GROUND_TRUTH_SAMPLE, (
-        f"only {sample.size} usable green-flag stops; the ground truth needs "
+    assert truth.sample_size >= MIN_GROUND_TRUTH_SAMPLE, (
+        f"only {truth.sample_size} usable green-flag stops; the ground truth needs "
         f"{MIN_GROUND_TRUTH_SAMPLE} to mean anything"
     )
-
-    within_one = float((np.abs(sample) <= 1).mean())
-    assert within_one >= MIN_WITHIN_ONE, (
-        f"the projection lands within one position on only {within_one:.1%} of "
-        f"{sample.size} real green-flag pit stops (floor {MIN_WITHIN_ONE:.0%}). "
+    assert truth.within_one >= MIN_WITHIN_ONE, (
+        f"the projection lands within one position on only {truth.within_one:.1%} of "
+        f"{truth.sample_size} real green-flag pit stops (floor {MIN_WITHIN_ONE:.0%}). "
         "A sign flip or a dropped rival looks exactly like this."
     )
 
