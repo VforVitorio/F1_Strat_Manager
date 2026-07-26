@@ -126,7 +126,8 @@ Requires Python 3.10-3.12 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudio`
 - [`src/rag/`](src/rag/): Qdrant retriever over FIA sporting regulations
 - [`src/f1_strat_manager/`](src/f1_strat_manager/): CLI infrastructure (data bootstrap, GP slug resolver)
 - [`scripts/`](scripts/): CLI entry points and maintenance tools
-- [`docs/`](docs/): architecture, API reference, arcade guides, draw.io diagrams
+- [`docs/`](docs/): architecture, API reference, arcade guides (the docs site source)
+- [`documents/dev_docs/diagrams/`](documents/dev_docs/diagrams/): draw.io diagram sources
 
 ## Contributing
 

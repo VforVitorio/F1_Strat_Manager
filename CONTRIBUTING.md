@@ -126,7 +126,7 @@ these safeguards trigger there. They are no-ops on POSIX.
 - [ ] One logical change per commit; imperative subject line; **no
       `Co-Authored-By` or AI-attribution trailers, ever.**
 - [ ] If you added a new sub-agent output, update
-      `docs/agents-api-reference.md`.
+      `docs/pages/agents-api.md`.
 
 ## CI pipeline
 

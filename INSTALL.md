@@ -78,7 +78,7 @@ context and a native display. Cross-platform X forwarding from a
 container is fragile on Windows / Mac and has no benefit over a local
 install. Use `uv tool install` and run on the host.
 
-See [`docs/arcade-quick-start.md`](docs/arcade-quick-start.md) for the
+See [`docs/pages/arcade-quick-start.md`](docs/pages/arcade-quick-start.md) for the
 controls legend, troubleshooting and window tour.
 
 ---
