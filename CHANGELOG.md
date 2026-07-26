@@ -16,7 +16,6 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 ### Bug Fixes
 
-* **readme:** animate the CLI demo instead of showing a still frame ([3c9bcfc](https://github.com/VforVitorio/F1-StratLab/commit/3c9bcfcd122ed239d9e221adfdf5e5d6d6f9c1a3))
 * **readme:** animate the CLI demo instead of showing a still frame ([34d16c6](https://github.com/VforVitorio/F1-StratLab/commit/34d16c6cce77fbdb5fb456f129ec43f69b0b50f0))
 
 
