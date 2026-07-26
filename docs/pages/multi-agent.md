@@ -196,7 +196,7 @@ The layer used to score in generic seconds divided by a flat 1.5 s/position, ove
 Scoring now runs on a per-rival gap projection (`src/agents/position_projection.py`). Each candidate moves every gap by the difference between what a rival loses and what we lose; a gap crossing zero is a car changing sides, so counting the cars projected ahead gives the position directly. Three behaviours that used to need special cases now fall out of that arithmetic:
 
 - **Rejoining into traffic** is automatic — every rival within our pit loss behind us is a place lost, counted by name.
-- **The mandatory-stop cancellation** (Art. 30.5(m)) happens only when the rival genuinely stops too. Where the old model argued in a comment that the pit-lane traversal cancels, the projection charges it per car and lets it cancel when it actually does.
+- **The mandatory-stop cancellation** (Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023)) happens only when the rival genuinely stops too. Where the old model argued in a comment that the pit-lane traversal cancels, the projection charges it per car and lets it cancel when it actually does.
 - **The Art. 55.17 endgame** — a race finishing behind the Safety Car — emerges from the measured racing-lap count dropping to zero: fresh tyres have nothing left to pay themselves back over, so staying out wins on the numbers. This is the case a deleted guard-rail used to force, and it now needs no rail.
 
 A **terminal liability** replaces the flat Safety Car bonus with option value: a still-owed stop costs the cars it will release behind us, discounted by the measured probability that a later neutralisation covers it cheaply.

@@ -168,14 +168,29 @@ Event stream: one `start` event, then one `lap` (or `error`) event per processed
 | `/api/v1/strategy/available-gps` | GP names in the featured parquet |
 | `/api/v1/strategy/available-drivers` | Driver codes for a GP |
 | `/api/v1/strategy/lap-range` | Min/max lap for a driver at a GP |
-| `/api/v1/strategy/lap-state` | Build canonical lap_state dict from parquet |
+| `/api/v1/strategy/lap-state` | Build a lap_state dict from parquet, agent-ready but not identical to the replay engine's (see below) |
 | `/api/v1/strategy/radio-available-gps` | GPs with a recorded radio/RCM corpus |
 | `/api/v1/strategy/radio-laps` | Laps with radio messages for a GP (optionally filtered by driver) |
 | `/api/v1/strategy/radio-transcript` | Cached Whisper transcript for one driver/lap |
 
-`/lap-state` also returns two Art. 30.5(m) stint-history keys the strategy layer's terminal-liability term depends on: `stint_flags` (the requested driver's `stops_made`, `compounds_used`, `mandatory_stop_pending`) and `rival_stop_pending` (a `{driver_code: mandatory_stop_pending}` map, one entry per rival in the response). Both come from `src/simulation/stint_history.py`, the same helper the replay engine calls, so the CLI, the Arcade and this endpoint read the same stop history and cannot disagree. Any of the three flags can be `null`: an unresolvable stint history (an invisible earlier stint that could hide a compound change) is reported as unknown rather than guessed.
+`/lap-state` also returns two Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023) stint-history keys the strategy layer's terminal-liability term depends on: `stint_flags` (the requested driver's `stops_made`, `compounds_used`, `mandatory_stop_pending`) and `rival_stop_pending` (a `{driver_code: mandatory_stop_pending}` map, one entry per rival in the response). Both come from `src/simulation/stint_history.py`, the same helper the replay engine calls, so the CLI, the Arcade and this endpoint read the same stop history and cannot disagree. Any of the three flags can be `null`: an unresolvable stint history (an invisible earlier stint that could hide a compound change) is reported as unknown rather than guessed.
 
 `/radio-laps` and `/radio-transcript` cache their parquet and transcript-JSON reads in memory per `(year, gp)`, since the underlying radio corpus is static for the life of the process; the first request for a race pays the read cost, later ones are served from the cache.
+
+### Where this `lap_state` differs from the replay engine's
+
+Both producers emit the same five top-level keys plus the two stint-history ones, and every agent accepts either. They are **not** field-identical, and it is worth knowing which way, because a producer that quietly diverged from this contract once made a whole strategy candidate permanently ineligible.
+
+Measured on Lusail 2025 lap 30:
+
+| | in `RaceStateManager` only | in this endpoint only |
+|---|---|---|
+| `driver` | `gap_to_leader_s`, `track_status`, `is_in_lap`, `is_out_lap` | `driver_number`, `gap_ahead_s` |
+| `rivals[*]` | `gap_to_leader_s`, `speed_st`, `stint` | `gap_ahead_s` |
+
+`weather.rainfall` also differs in type: this endpoint coerces it to `int`, the replay engine leaves it `None` when the reading is absent.
+
+None of these are read by the projection, which needs `interval_to_driver_s` and `is_pitting`, and both producers emit those. But if you are writing a new consumer, read this table rather than assuming the two are interchangeable.
 
 ### Agent endpoints (POST)
 

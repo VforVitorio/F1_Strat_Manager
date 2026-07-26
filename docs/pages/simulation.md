@@ -211,7 +211,7 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
         "team": str,
         "total_laps": int,
     },
-    # Art. 30.5(m) two-compound obligation, for our driver, as of this lap.
+    # Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023) two-compound obligation, for our driver, as of this lap.
     # Emitted here (rather than fetched separately) so the CLI, the arcade and
     # the backend cannot each derive their own, divergent view of who still
     # owes a stop. A lap with no row falls back to the nearest earlier lap,
