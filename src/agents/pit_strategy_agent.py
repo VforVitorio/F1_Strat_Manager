@@ -611,7 +611,10 @@ PIT WINDOW — end of race:
   NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT when remaining laps <= 3.
   Exception: tyre failure is imminent (laps_to_cliff P10 < 2) or Safety Car deployed.
   Rationale: a pit stop costs ~22-25s; with ≤3 laps, fresh tyres recover at most ~1.5s
-  total. Net loss ≈ 20s = ~13 positions.
+  total. Net loss ≈ 20s. Under green-flag racing, where consecutive cars sit a
+  measured median 2.226s apart, that is worth ~9 positions, not 13: 13 positions
+  is the Safety Car bunched-field figure (median gap 1.4795s), and that case is
+  the exception handled above, not this rule.
 
 MINIMUM STINT LENGTH before a pit makes sense:
   SOFT: current tyre_life must be >= 8 laps before recommending a stop.
@@ -1181,7 +1184,14 @@ class PitStrategyAgent:
             Priority 1 — laps_to_cliff from N26 TireOutput: drives compound choice
             directly when available. Priority 2 — Pirelli average stint capacities
             (SOFT ~18 laps, MEDIUM ~30 laps, HARD ~38 laps) as fallback.
-            FIA mandatory two-compound rule is always applied.
+            Compound choice only excludes the compound currently fitted, it never
+            refits what you are on. That is not the FIA two-compound rule, Art.
+            30.5(m) for 2024-2025 (30.5(n) in 2023): this tool has no compound
+            history, so it cannot tell whether the obligation is already met, and
+            it forbids the legal, sometimes optimal same-compound refit, measured
+            in 629 of 2274 dry stints (27.7%) across data/raw/ 2023-2025. The real
+            obligation is `mandatory_stop_pending` in
+            src/agents/position_projection.py; this tool does not consult it.
 
             Args:
                 driver: FastF1 driver abbreviation.

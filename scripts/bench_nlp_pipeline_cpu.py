@@ -456,7 +456,15 @@ def _classify_rcm_event(row: dict[str, Any]) -> str:
         if flag in ("YELLOW", "DOUBLE YELLOW"):
             scope = str(row.get("Scope", "")).strip()
             sector = row.get("Sector")
-            if scope == "Sector" or (pd.notna(sector) if not isinstance(sector, str) else sector):
+            # "Is a sector present?" means two different things by type, and packing
+            # both into one guard hid which: an empty string counts as absent, a NaN
+            # counts as absent, anything else counts as present.
+            if isinstance(sector, str):
+                has_sector = bool(sector)
+            else:
+                has_sector = bool(pd.notna(sector))
+
+            if scope == "Sector" or has_sector:
                 return "YELLOW_FLAG_SECTOR"
             return "YELLOW_FLAG"
         return "OTHER"

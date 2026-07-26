@@ -111,6 +111,17 @@ class SessionData:
     # Empty dict means the loader did not populate it (e.g. older cache);
     # the panel treats unknown laps as clear and stays hidden.
     track_status_by_lap: dict[int, str] = field(default_factory=dict)
+    # Per-lap weather reading built from FastF1's ``session.weather_data``
+    # (see #616): ``{lap_number: {"air_temp", "track_temp", "humidity",
+    # "wind_speed", "wind_direction", "rain_state"}}``. Before this field
+    # existed the weather was already fetched (``session.load(weather=True)``)
+    # and then thrown away; the arcade UI showed a hardcoded 45 C / 18 C / DRY
+    # constant on every lap of every race while the strategy pipeline used the
+    # real values from a different path. Empty dict means the loader could not
+    # extract weather (older cache, or the session genuinely has none); the
+    # panel's own ``.get(key, default)`` calls keep the old constants as the
+    # last-resort display instead of raising.
+    weather_by_lap: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
 def _enable_fastf1_cache() -> None:
@@ -298,6 +309,7 @@ class SessionLoader:
         rotation_deg = self._safe_rotation(session)
         circuit_length = self._session_circuit_length(session, ref_x, ref_y)
         track_status_by_lap = self._extract_track_status_by_lap(session)
+        weather_by_lap = self._extract_weather_by_lap(session)
 
         sd = SessionData(
             version=CACHE_VERSION,
@@ -316,6 +328,7 @@ class SessionLoader:
             ref_lap_drs=ref_drs,
             events=[],
             track_status_by_lap=track_status_by_lap,
+            weather_by_lap=weather_by_lap,
         )
 
         with cache_path.open("wb") as f:
@@ -501,6 +514,95 @@ class SessionLoader:
             # raise anything else.
             logger.debug("Track-status-by-lap extraction failed (%s) - panel stays hidden", exc)
             return {}
+
+    def _extract_weather_by_lap(self, session: Any) -> dict[int, dict[str, Any]]:
+        """Build ``{lap_number: {air_temp, track_temp, humidity, wind_speed,
+        wind_direction, rain_state}}`` from FastF1's ``session.weather_data``.
+
+        ``session.load(weather=True)`` already pulls this DataFrame (one row
+        roughly every 60 s, columns ``Time``, ``AirTemp``, ``TrackTemp``,
+        ``Humidity``, ``WindSpeed``, ``WindDirection``, ``Rainfall``); before
+        #616 the arcade UI paid that cost and then discarded the result,
+        showing a fixed 45 C / 18 C / DRY on every lap instead. ``Time`` in
+        both ``weather_data`` and ``session.laps`` is the same session-elapsed
+        timedelta, so each lap's completion time can be matched against the
+        closest weather sample with ``pd.merge_asof(..., direction="nearest")``:
+        weather changes slowly enough over a race that the nearest reading
+        (rather than an interpolation between two samples) is close enough for
+        a replay. Missing/malformed data returns an empty dict so the panel
+        falls back to its own built-in constants instead of raising at load
+        time, exactly as it did before this field existed.
+        """
+        try:
+            weather = session.weather_data
+            laps = session.laps
+            if weather is None or weather.empty or laps is None or laps.empty:
+                return {}
+            if "Time" not in weather.columns or "Time" not in laps.columns:
+                return {}
+            lap_times = laps[["LapNumber", "Time"]].dropna()
+            if lap_times.empty:
+                return {}
+            # One row per lap number: the last driver to cross the line that
+            # lap, close enough to "lap N is done" for a slowly-changing
+            # weather reading. Sorted ascending because merge_asof requires
+            # the "on" column to be sorted on both sides.
+            per_lap = lap_times.groupby("LapNumber")["Time"].max().reset_index()
+            per_lap = per_lap.sort_values("Time")
+            wx_columns = [
+                "Time",
+                "AirTemp",
+                "TrackTemp",
+                "Humidity",
+                "WindSpeed",
+                "WindDirection",
+                "Rainfall",
+            ]
+            wx = weather[wx_columns].sort_values("Time")
+            merged = pd.merge_asof(per_lap, wx, on="Time", direction="nearest")
+
+            out: dict[int, dict[str, Any]] = {}
+            for _, row in merged.iterrows():
+                out[int(row["LapNumber"])] = self._weather_row_to_dict(row)
+            return out
+        except Exception as exc:  # noqa: BLE001 - see the enumeration below
+            # KeyError: an expected weather/laps column absent. ValueError and
+            # TypeError: int()/float() casts on a malformed row, or a dtype
+            # mismatch merge_asof rejects.
+            #
+            # And the one that made this catch broad on purpose: reading
+            # `session.weather_data` raises fastf1's DataNotLoadedError when the
+            # weather channel is unavailable, and that subclasses Exception
+            # DIRECTLY, not any of the three above. An adversarial gate caught it
+            # by executing it: session.load() returns normally and the property
+            # raises afterwards, so a narrow tuple let it escape and killed the
+            # entire arcade load, after the full cold path, for a session that
+            # used to degrade quietly to the panel's own constants.
+            #
+            # The docstring above promises exactly that degradation. Catching
+            # narrowly here would have made the docstring a lie and turned a
+            # missing optional channel into a crash, which is the failure this
+            # repo has a written lesson about.
+            logger.debug("Weather-by-lap extraction failed (%s) - panel keeps defaults", exc)
+            return {}
+
+    def _weather_row_to_dict(self, row: "pd.Series") -> dict[str, Any]:
+        """Map one merged weather+lap row to the ``WeatherPanel``-facing shape.
+
+        Key names match ``WeatherPanel.draw``'s ``weather.get(key, default)``
+        calls exactly, so a row missing a single reading (rare, but possible
+        on an incomplete weather sample) only loses that one field to the
+        panel's own default instead of dropping the whole lap."""
+        return {
+            "air_temp": float(row["AirTemp"]) if pd.notna(row.get("AirTemp")) else None,
+            "track_temp": float(row["TrackTemp"]) if pd.notna(row.get("TrackTemp")) else None,
+            "humidity": float(row["Humidity"]) if pd.notna(row.get("Humidity")) else None,
+            "wind_speed": float(row["WindSpeed"]) if pd.notna(row.get("WindSpeed")) else None,
+            "wind_direction": (
+                float(row["WindDirection"]) if pd.notna(row.get("WindDirection")) else None
+            ),
+            "rain_state": "WET" if bool(row.get("Rainfall")) else "DRY",
+        }
 
     def _safe_rotation(self, session: Any) -> float:
         try:

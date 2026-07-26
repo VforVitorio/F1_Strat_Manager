@@ -19,6 +19,8 @@ from typing import Final
 
 from PySide6.QtGui import QColor, QPalette
 
+from src.arcade.strategy import _ALERT_SEVERITY
+
 # --- Palette (RGB tuples) ------------------------------------------------
 BG_COLOR: Final[tuple[int, int, int]] = (18, 17, 39)  # #121127 PRIMARY_BG
 CONTENT_BG: Final[tuple[int, int, int]] = (24, 22, 51)  # #181633 panel bg
@@ -65,16 +67,16 @@ _ACTION_STYLE: Final[dict[str, tuple[tuple[int, int, int], str]]] = {
     "ERROR": (DANGER, "ERROR"),
 }
 
-# --- Severity (mirrors src/arcade/strategy.py::_ALERT_SEVERITY) ---------
-_ALERT_SEVERITY: Final[dict[str, int]] = {
-    "SAFETY_CAR": 3,
-    "RED_FLAG": 3,
-    "VIRTUAL_SAFETY_CAR": 2,
-    "VSC": 2,
-    "YELLOW_FLAG": 2,
-    "PROBLEM": 1,
-    "WARNING": 1,
-}
+# --- Severity --------------------------------------------------------------
+# Imported from src.arcade.strategy (not duplicated): a hand-copied version of
+# this dict lived here until #620, and it drifted the moment #398 added the
+# "YELLOW_FLAG_SECTOR" key to the original without anyone updating the copy.
+# A double yellow rendered neutral grey in this dashboard while the arcade
+# banner showed it correctly, because a "mirrors X" comment told readers the
+# two dicts were already checked. Importing the single dict removes that
+# drift risk. The extra pandas import this pulls in from strategy.py is a
+# small addition next to the PySide6 + pyqtgraph cost this process already
+# pays on cold start.
 
 
 def classify_action(action: str) -> tuple[tuple[int, int, int], str]:
