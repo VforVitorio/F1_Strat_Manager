@@ -1,6 +1,6 @@
-# src/rag — FIA Regulation Retrieval
+# src/rag: FIA Regulation Retrieval
 
-**Status: Active** — imported by N30 and N31.
+**Status: Active**, imported by N30 and N31.
 
 Provides runtime retrieval-augmented generation (RAG) over FIA regulation PDFs.
 The Qdrant index must be built once with `scripts/build_rag_index.py` before any query.
@@ -20,9 +20,9 @@ The Qdrant index must be built once with `scripts/build_rag_index.py` before any
 
 ### `RagRetriever` methods
 
-- `__init__(qdrant_path, collection_name, embedding_model, top_k)` — loads encoder (~1-2 s); raises `RuntimeError` if collection missing
-- `query(question, top_k=None) -> list[RegulationChunk]` — cosine similarity search, ordered by descending score
-- `health_check() -> dict` — returns `{collection, vector_count, embedding_model, qdrant_path}` for diagnostics
+- `__init__(qdrant_path, collection_name, embedding_model, top_k)`, loads encoder (~1-2 s); raises `RuntimeError` if collection missing
+- `query(question, top_k=None) -> list[RegulationChunk]`, cosine similarity search, ordered by descending score
+- `health_check() -> dict`, returns `{collection, vector_count, embedding_model, qdrant_path}` for diagnostics
 
 ---
 
@@ -48,9 +48,9 @@ print(retriever.health_check())
 
 ## Key dependencies
 
-- `qdrant-client` — local on-disk vector store at `data/rag/qdrant_local/`
-- `sentence-transformers` — embedding model `BAAI/bge-m3` (1024-dim, ~8 GB VRAM)
-- `langchain-core` — `@tool` decorator for LangGraph integration
+- `qdrant-client`, local on-disk vector store at `data/rag/qdrant_local/`
+- `sentence-transformers`, embedding model `BAAI/bge-m3` (1024-dim, ~8 GB VRAM)
+- `langchain-core`: `@tool` decorator for LangGraph integration
 
 ---
 

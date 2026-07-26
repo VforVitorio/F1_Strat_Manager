@@ -59,7 +59,7 @@ graph TD
 - The orchestrator always runs the four always-on agents: N25 Pace, N26 Tire, N27 Race Situation and N29 Radio.
 - N28 Pit Strategy activates when N26 reports `tire_warning == PIT_SOON`, when N29 raises a PROBLEM or WARNING alert, or when N27 reports an active Safety Car.
 - N30 RAG activates when N27 reports `sc_prob > 0.30`, when N28 is active, or under an active Safety Car.
-- Monte Carlo then draws 500 samples over four candidates (STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT), scoring `score = α·E + (1−α)·P10`, and the LLM synthesises the final `StrategyRecommendation`. Since the projection redesign the score is measured in **projected track position**, not in seconds — see [What the Monte Carlo actually scores](#/multi-agent) below.
+- Monte Carlo then draws 500 samples over four candidates (STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT), scoring `score = α·E + (1−α)·P10`, and the LLM synthesises the final `StrategyRecommendation`. Since the projection redesign the score is measured in **projected track position**, not in seconds, see [What the Monte Carlo actually scores](#/multi-agent) below.
 
 ## Three-window arcade
 
@@ -96,14 +96,14 @@ See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the shared engine
 
 ## Agent details
 
-### N25 — Pace Agent (`pace_agent.py`)
+### N25: Pace Agent (`pace_agent.py`)
 
 Wraps the N06 XGBoost delta-lap-time model. Returns predicted lap time, delta signals against previous lap and session median, and bootstrap confidence intervals (N=200 draws with 2% Gaussian noise on continuous features).
 
 - **Model**: XGBoost trained on 2023–2025 lap data
 - **Output**: `PaceOutput` (lap_time_pred, delta_vs_prev, delta_vs_median, ci_p10, ci_p90)
 
-### N26 — Tire Agent (`tire_agent.py`)
+### N26: Tire Agent (`tire_agent.py`)
 
 Wraps per-compound TireDegTCN models (N09/N10) with MC Dropout inference. Answers: how many laps remain before the degradation cliff?
 
@@ -111,7 +111,7 @@ Wraps per-compound TireDegTCN models (N09/N10) with MC Dropout inference. Answer
 - **Output**: `TireOutput` (laps_to_cliff_p10/p50/p90, warning_level, deg_rate)
 - **Warning levels**: OK, MONITOR, PIT_SOON (derived from `laps_to_cliff_p10` against circuit-cluster-aware thresholds; there is no CRITICAL level)
 
-### N27 — Race Situation Agent (`race_situation_agent.py`)
+### N27: Race Situation Agent (`race_situation_agent.py`)
 
 Combines N12 (overtake probability via LightGBM) and N14 (safety car probability via LightGBM) into a single threat assessment per lap.
 
@@ -122,15 +122,15 @@ Combines N12 (overtake probability via LightGBM) and N14 (safety car probability
 
 The N14 LightGBM was trained to predict a *future* SC, not to recognise one already deployed. To close that gap, N27 inspects the lap's `rcm_events` (forwarded by the orchestrator from `RadioPipelineRunner`) and, when any event matches `SAFETY_CAR_DEPLOYED` or `VIRTUAL_SAFETY_CAR_DEPLOYED`, forces `sc_prob_3lap = 1.0`, sets `sc_currently_active = True`, and elevates `threat_level` to `HIGH`. Release events (`SAFETY_CAR_ENDING`, `SAFETY_CAR_IN_PIT_LANE`, `VIRTUAL_SAFETY_CAR_ENDING`) take priority in the same window so the override clears as soon as the neutralisation ends. The override is logged in the `reasoning` field with an `[RCM OVERRIDE: ...]` prefix so the audit trail survives the chat / arcade summary path.
 
-`sc_currently_active` is deliberately a single back-compat flag: true under **either** a full Safety Car (Art. 55) or a Virtual Safety Car (Art. 56). A second field, `vsc_active`, records whether the specific neutralisation is a VSC — a full SC and a VSC differ in the pit-time saving they offer, so the Monte Carlo and the N28 prompt need to tell them apart (#471), which the single flag could not. `sc_active` (a derived property, not stored) is true only for a full SC: `sc_currently_active and not vsc_active`.
+`sc_currently_active` is deliberately a single back-compat flag: true under **either** a full Safety Car (Art. 55) or a Virtual Safety Car (Art. 56). A second field, `vsc_active`, records whether the specific neutralisation is a VSC, a full SC and a VSC differ in the pit-time saving they offer, so the Monte Carlo and the N28 prompt need to tell them apart (#471), which the single flag could not. `sc_active` (a derived property, not stored) is true only for a full SC: `sc_currently_active and not vsc_active`.
 
-### N28 — Pit Strategy Agent (`pit_strategy_agent.py`)
+### N28: Pit Strategy Agent (`pit_strategy_agent.py`)
 
 Wraps N15 (physical pit stop duration P05/P50/P95 via HistGBT) and N16 (undercut success probability via LightGBM). Recommends when to pit, what compound to fit, and whether to undercut.
 
 - **Models**: HistGBT quantile pit duration + LightGBM undercut
 - **Output**: `PitStrategyOutput` (action, compound_recommendation, stop_duration_p05/p50/p95, undercut_prob, sc_reactive)
-- **Activation**: conditional — runs when tire_warning is PIT_SOON, radio flags PROBLEM/WARNING, **or N27 reports `sc_currently_active = True`** (the RCM-override path)
+- **Activation**: conditional, runs when tire_warning is PIT_SOON, radio flags PROBLEM/WARNING, **or N27 reports `sc_currently_active = True`** (the RCM-override path)
 
 #### Honoring an active Safety Car
 
@@ -149,7 +149,7 @@ What is forced are the rules:
 
 `overtake_prob = 0` is not an approximation. N12 models a *racing* overtake; of the eight exceptions in Art. 55.8, only "a car slows with an obvious problem" yields a real position gain, and N12 has no feature for it. Every input it does use is regulation-corrupted: DRS is off, the gap compresses toward ten car lengths (55.7/55.10), and `pace_delta` collapses to the FIA ECU delta. Under an SC the model is not imprecise, it is **inapplicable**.
 
-`target_lap_time_s` is the subtle one. It is grounded in N06's **green-flag** pace, and Art. 55.7 requires drivers to stay **above** the FIA ECU minimum time: shipping it instructs the driver to earn a penalty. We cannot source the real delta, so the field has no valid value. `None` is forced by **absence of a source** — which is the test that separates a fact from an opinion.
+`target_lap_time_s` is the subtle one. It is grounded in N06's **green-flag** pace, and Art. 55.7 requires drivers to stay **above** the FIA ECU minimum time: shipping it instructs the driver to earn a penalty. We cannot source the real delta, so the field has no valid value. `None` is forced by **absence of a source**, which is the test that separates a fact from an opinion.
 
 ##### Why the old rail was removed
 
@@ -161,22 +161,22 @@ Staying out under an SC is right whenever you have already stopped, you lead a p
 
 See `tests/mc/test_sc_regulatory_rails.py`.
 
-### N29 — Radio Agent (`radio_agent.py`)
+### N29: Radio Agent (`radio_agent.py`)
 
-Two-stream NLP pipeline. Driver radio goes through RoBERTa-base sentiment, SetFit intent classification, and BERT-large NER. Race Control Messages go through a deterministic rule-based parser. Alerts are built deterministically from NLP is_alert flags — the LLM cannot miss or hallucinate alerts.
+Two-stream NLP pipeline. Driver radio goes through RoBERTa-base sentiment, SetFit intent classification, and BERT-large NER. Race Control Messages go through a deterministic rule-based parser. Alerts are built deterministically from NLP is_alert flags, the LLM cannot miss or hallucinate alerts.
 
 - **Models**: RoBERTa-base, SetFit, BERT-large-conll03 (radio); rule parser (RCM)
 - **Output**: `RadioOutput` (radio_events, rcm_events, alerts, corrections)
 
-### N30 — RAG Agent (`rag_agent.py`)
+### N30: RAG Agent (`rag_agent.py`)
 
 Answers regulation questions by retrieving relevant FIA Sporting Regulation passages from a local Qdrant vector store (built by `scripts/build_rag_index.py`), using BGE-M3 embeddings and a LangGraph ReAct agent.
 
 - **Retriever**: Qdrant + BGE-M3 embeddings
 - **Output**: `RegulationContext` (answer, articles, chunks)
-- **Activation**: conditional — only runs when sc_prob > 0.30, N28 is active, **or N27 reports `sc_currently_active = True`** (so the orchestrator pulls the SC pit-lane regulation snippet into the recommendation context)
+- **Activation**: conditional, only runs when sc_prob > 0.30, N28 is active, **or N27 reports `sc_currently_active = True`** (so the orchestrator pulls the SC pit-lane regulation snippet into the recommendation context)
 
-### N31 — Strategy Orchestrator (`strategy_orchestrator.py`)
+### N31: Strategy Orchestrator (`strategy_orchestrator.py`)
 
 Three-layer pipeline:
 
@@ -248,23 +248,23 @@ graph TD
 
 Four things in that graph are the whole redesign. Eligibility can return **no number at all** rather than a sentinel. The measured tables enter as *configuration*, not as constants in the code. Each draw picks a racing or a neutralised config, which is what makes the Art. 55.17 endgame arithmetic rather than a rule. And the terminal liability applies only to the candidates that do not stop, because a deferred obligation is a cost only while it is still owed.
 
-The layer used to score in generic seconds divided by a flat 1.5 s/position, over a sampled state that contained **no cars at all**. That constant cannot be right in both regimes: measured across 71 races, the median gap between consecutive cars is **2.23 s while racing and 1.48 s under a Safety Car**, so a single figure was a bunched-field number applied to green-flag racing. And losing 20 s costs zero positions with a 25 s cushion behind but three positions with cars at +2 / +8 / +15 s — a difference only a model that knows *which cars are where* can see.
+The layer used to score in generic seconds divided by a flat 1.5 s/position, over a sampled state that contained **no cars at all**. That constant cannot be right in both regimes: measured across 71 races, the median gap between consecutive cars is **2.23 s while racing and 1.48 s under a Safety Car**, so a single figure was a bunched-field number applied to green-flag racing. And losing 20 s costs zero positions with a 25 s cushion behind but three positions with cars at +2 / +8 / +15 s, a difference only a model that knows *which cars are where* can see.
 
 Scoring now runs on a per-rival gap projection (`src/agents/position_projection.py`). Each candidate moves every gap by the difference between what a rival loses and what we lose; a gap crossing zero is a car changing sides, so counting the cars projected ahead gives the position directly. Three behaviours that used to need special cases now fall out of that arithmetic:
 
-- **Rejoining into traffic** is automatic — every rival within our pit loss behind us is a place lost, counted by name.
+- **Rejoining into traffic** is automatic, every rival within our pit loss behind us is a place lost, counted by name.
 - **The mandatory-stop cancellation** (Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023)) happens only when the rival genuinely stops too. Where the old model argued in a comment that the pit-lane traversal cancels, the projection charges it per car and lets it cancel when it actually does.
-- **The Art. 55.17 endgame** — a race finishing behind the Safety Car — emerges from the measured racing-lap count dropping to zero: fresh tyres have nothing left to pay themselves back over, so staying out wins on the numbers. This is the case a deleted guard-rail used to force, and it now needs no rail.
+- **The Art. 55.17 endgame**, a race finishing behind the Safety Car, emerges from the measured racing-lap count dropping to zero: fresh tyres have nothing left to pay themselves back over, so staying out wins on the numbers. This is the case a deleted guard-rail used to force, and it now needs no rail.
 
 A **terminal liability** replaces the flat Safety Car bonus with option value: a still-owed stop costs the cars it will release behind us, discounted by the measured probability that a later neutralisation covers it cheaply.
 
-Candidates carry **explicit eligibility**. An undercut with no live rival inside the measured band, or an overcut with nobody in the pit lane, is returned as `eligible: false` with a `score` of `null` — never a number it did not earn. Every constant the layer reads is measured and committed in `data/mc_measured_v1.json`, regenerated by `scripts/measure_mc_tables.py`.
+Candidates carry **explicit eligibility**. An undercut with no live rival inside the measured band, or an overcut with nobody in the pit lane, is returned as `eligible: false` with a `score` of `null`, never a number it did not earn. Every constant the layer reads is measured and committed in `data/mc_measured_v1.json`, regenerated by `scripts/measure_mc_tables.py`.
 
 **Where the overcut works, and why.** Inside one window an overcut takes the same stop and pays the same pit lane as PIT_NOW, so it forfeits exactly one lap of fresh rubber. What it buys instead is a lap of **clean air**, and whether that is a good trade is a property of the circuit rather than of the strategy.
 
-Both sides are measured. A fresh set is worth 0.25 s/lap; clean air is measured per circuit over 479 cases where a car sat within two seconds of, and directly behind, a driver who then pitted — **+0.77 s/lap at Suzuka, +0.65 at Monaco, +0.63 at Silverstone**, down to **−0.015 at Monza and −0.285 at Spielberg**, where losing the car ahead costs a slipstream worth more than the clear track. The ordering is high-downforce circuits first and slipstream circuits last, and nothing in the measurement knows what downforce is.
+Both sides are measured. A fresh set is worth 0.25 s/lap; clean air is measured per circuit over 479 cases where a car sat within two seconds of, and directly behind, a driver who then pitted, **+0.77 s/lap at Suzuka, +0.65 at Monaco, +0.63 at Silverstone**, down to **−0.015 at Monza and −0.285 at Spielberg**, where losing the car ahead costs a slipstream worth more than the clear track. The ordering is high-downforce circuits first and slipstream circuits last, and nothing in the measurement knows what downforce is.
 
-Clean air is one of two reasons to hold a car out. The other is **option value**: one more lap before the stop is one more lap of exposure to a neutralisation that would make that stop cheap, worth the circuit's measured onset hazard times what a neutralised stop saves. **Melbourne** separates the two cleanly — its clean-air gain is +0.008 s, effectively nothing, but Albert Park throws more neutralisations per lap than any circuit in the sample, so an overcut pays there on Safety Car odds alone.
+Clean air is one of two reasons to hold a car out. The other is **option value**: one more lap before the stop is one more lap of exposure to a neutralisation that would make that stop cheap, worth the circuit's measured onset hazard times what a neutralised stop saves. **Melbourne** separates the two cleanly, its clean-air gain is +0.008 s, effectively nothing, but Albert Park throws more neutralisations per lap than any circuit in the sample, so an overcut pays there on Safety Car odds alone.
 
 Together the two terms decide it against the 0.25 s/lap the delay costs:
 
@@ -324,6 +324,6 @@ data/raw/2025/<GP>/laps.parquet
 
 ## References
 
-- Heilmeier et al. (2020) ApplSci 10/4229 — MC motorsport simulation
-- Wang et al. (2024) arXiv:2406.04692 — MoA reasoning aggregation
-- Liu et al. (2024) arXiv:2402.02392 — DeLLMa decision under uncertainty with LLM
+- Heilmeier et al. (2020) ApplSci 10/4229: MC motorsport simulation
+- Wang et al. (2024) arXiv:2406.04692: MoA reasoning aggregation
+- Liu et al. (2024) arXiv:2402.02392: DeLLMa decision under uncertainty with LLM

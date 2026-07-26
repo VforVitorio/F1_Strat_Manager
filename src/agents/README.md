@@ -1,4 +1,4 @@
-# src/agents — Multi-Agent Strategy System
+# src/agents: Multi-Agent Strategy System
 
 LangGraph-based multi-agent system extracted from notebooks N25–N31.
 Each module is importable without a FastF1 session via its `*_from_state` RSM adapter.
@@ -15,7 +15,7 @@ Each module is importable without a FastF1 session via its `*_from_state` RSM ad
 | `pit_strategy_agent.py` | N28 | N15 pit quantiles + N16 undercut + compound recommendation | `run_pit_strategy_agent(lap_state)` · `run_pit_strategy_agent_from_state(lap_state, laps_df)` |
 | `radio_agent.py` | N29 | RoBERTa sentiment + SetFit intent + BERT-large NER + RCM parser | `run_radio_agent(lap_state, persist=False)` · `run_radio_agent_from_state(lap_state, laps_df, persist=False)` |
 | `rag_agent.py` | N30 | FIA regulation retrieval (Qdrant + BGE-M3 + LangGraph ReAct) | `run_rag_agent(question)` · `run_rag_agent_from_state(lap_state, laps_df=None)` |
-| `position_projection.py` | — | Pure primitive: turns per-rival gaps into a projected end-of-window track position, so the decision layer scores in cars rather than in seconds. Loads no model, reads no file. | `project_positions(rivals, plan, config, pit_loss_s, cliff_laps, stop_is_neutralised=False)` · `payoff(result, current_position, config)` · `rank_targets(rivals, config, our_pit_loss_s)` |
+| `position_projection.py` |, | Pure primitive: turns per-rival gaps into a projected end-of-window track position, so the decision layer scores in cars rather than in seconds. Loads no model, reads no file. | `project_positions(rivals, plan, config, pit_loss_s, cliff_laps, stop_is_neutralised=False)` · `payoff(result, current_position, config)` · `rank_targets(rivals, config, our_pit_loss_s)` |
 | `strategy_orchestrator.py` | N31 | MoE routing + MC simulation + LLM synthesis | `run_strategy_orchestrator(race_state, lap_state)` · `run_strategy_orchestrator_from_state(race_state, laps_df, lap_state=None)` |
 
 ### The arcade does not carry a copy
@@ -109,7 +109,7 @@ wrong before.
 
 ## Testing
 
-**Level 1 — NLP/model tools, no LLM:**
+**Level 1: NLP/model tools, no LLM:**
 
 ```python
 from src.agents.radio_agent import process_radio_tool
@@ -117,7 +117,7 @@ result = process_radio_tool.invoke({"driver": "NOR", "lap": 18, "text": "Box thi
 print(result)
 ```
 
-**Level 2 — Single agent, no LLM:**
+**Level 2: Single agent, no LLM:**
 
 ```python
 from src.agents.race_situation_agent import process_rcm_tool
@@ -127,7 +127,7 @@ result = process_rcm_tool.invoke({
 print(result)
 ```
 
-**Level 3 — Full orchestrator smoke test (requires LM Studio running):**
+**Level 3: Full orchestrator smoke test (requires LM Studio running):**
 
 ```python
 from src.agents.strategy_orchestrator import RaceState, run_strategy_orchestrator_from_state
@@ -171,7 +171,7 @@ thesis record, not because anything calls it.
 
 ---|---|
 | `base_agent.py` | Experta `Fact` subclasses and `F1StrategyEngine` (CLIPS-style, legacy) |
-| `strategy_agent.py` | `F1CompleteStrategyEngine` — original rule-based engine, superseded by N31 |
+| `strategy_agent.py` | `F1CompleteStrategyEngine`, original rule-based engine, superseded by N31 |
 | `rules/degradation_rules.py` | Tyre degradation rules for legacy engine |
 | `rules/laptime_rules.py` | Lap time rules for legacy engine |
 | `rules/gap_rules.py` | Gap/position rules for legacy engine |

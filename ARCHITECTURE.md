@@ -5,22 +5,22 @@ into the deep dives as needed.
 
 ## Three user-facing surfaces, one shared core
 
-- **CLI** (`f1-sim`) — headless Rich-based live inference panel.
-- **Arcade** (`f1-arcade`) — 2D race replay + PySide6 strategy dashboard
+- **CLI** (`f1-sim`), headless Rich-based live inference panel.
+- **Arcade** (`f1-arcade`), 2D race replay + PySide6 strategy dashboard
   + PySide6 telemetry window (one command spawns all three).
-- **Web app** (`f1-webapp`, a wrapper around `docker compose up`) —
+- **Web app** (`f1-webapp`, a wrapper around `docker compose up`):
   post-race analysis and chat (React SPA backed by FastAPI).
 
 All three consume the same core:
 
-- `src/agents/` — N25-N31 multi-agent stack (pace, tire, race situation,
+- `src/agents/`: N25-N31 multi-agent stack (pace, tire, race situation,
   pit strategy, radio NLP, RAG regulations, orchestrator).
-- `src/strategy/inference/engine.py::run_lap` — the single shared per-lap
+- `src/strategy/inference/engine.py::run_lap`, the single shared per-lap
   pipeline call that the CLI, Arcade, and backend all route through
   (profiles: `rich` for the full LLM-synthesis path, `no-llm` for the
   deterministic zero-LLM-client path). Replaces three hand-mirrored
   copies of the orchestrator sequence that used to drift out of sync.
-- `src/simulation/` — `RaceReplayEngine` + `RaceStateManager`.
+- `src/simulation/`: `RaceReplayEngine` + `RaceStateManager`.
 - `data/processed/laps_featured_<year>.parquet` + `data/raw/<year>/<Location>/` +
   `data/tire_compounds_by_race.json`.
 

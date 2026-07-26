@@ -1,4 +1,4 @@
-# Strategy Pipeline — the shared engine
+# Strategy Pipeline, the shared engine
 
 `src/strategy/inference/engine.py::run_lap` is the single implementation of the N31 lap pipeline. The CLI, the arcade and the backend all route through it. This page covers what it returns, the two profiles, and why the arcade is now a nine-line delegate instead of a copy.
 
@@ -41,9 +41,9 @@ src/strategy/inference/engine.py
         -> tuple[StrategyRecommendation, dict | None, dict[str, float]]
 ```
 
-- **`StrategyRecommendation`** — the synthesised decision (14 fields). What the CLI and the web app consume.
-- **`agent_outputs`** — the raw per-sub-agent dataclasses, keyed `pace_out`, `tire_out`, `situation_out`, `radio_out`, `pit_out`, `regulation_context`, `rag`, `active`, `guardrail_reason`. What the arcade dashboard renders its cards and charts from.
-- **stage timings** — per-stage seconds, for the surfaces that show them.
+- **`StrategyRecommendation`**, the synthesised decision (14 fields). What the CLI and the web app consume.
+- **`agent_outputs`**, the raw per-sub-agent dataclasses, keyed `pace_out`, `tire_out`, `situation_out`, `radio_out`, `pit_out`, `regulation_context`, `rag`, `active`, `guardrail_reason`. What the arcade dashboard renders its cards and charts from.
+- **stage timings**, per-stage seconds, for the surfaces that show them.
 
 The sub-agents are imported through their public `*_from_state` entry points; the output dataclasses come from `src/agents/strategy_orchestrator.py`. Nothing about them is engine-specific.
 

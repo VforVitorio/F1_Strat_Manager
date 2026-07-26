@@ -60,7 +60,7 @@ Three layers carry the system from raw telemetry to a strategy call: a machine-l
 
 ## What lives where
 
-The narratives on this site stop at the contract level. For per-file deep-dives — every function in `src/agents/`, every notebook from N06 to N34, every helper in `src/arcade/` — jump to the [F1 StratLab DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab). It is regenerated on every push to `main`.
+The narratives on this site stop at the contract level. For per-file deep-dives, every function in `src/agents/`, every notebook from N06 to N34, every helper in `src/arcade/`, jump to the [F1 StratLab DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab). It is regenerated on every push to `main`.
 
 ## Project status
 

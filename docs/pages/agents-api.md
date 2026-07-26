@@ -57,7 +57,7 @@ Every agent except N29 also exposes a `get_*_react_agent()` factory returning a 
 | `overtake_prob` | float | Probability of being overtaken (0–1) |
 | `sc_prob_3lap` | float | Safety car probability within 3 laps (0–1) |
 | `sc_currently_active` | bool | Any neutralisation (full Safety Car **or** Virtual Safety Car) is deployed **right now**. Not a prediction: it is read from the lap's RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces the regulatory facts (`sc_prob_3lap = 1.0`, `overtake_prob = 0` per Art. 55.8/56.6, `drs_window = 0` per Art. 22.1(c)) and activates N28. It does **not** force the action: whether to pit under a neutralisation is race state, not a rule. See [Multi-agent system](#/multi-agent). |
-| `vsc_active` | bool | The active neutralisation is specifically a **Virtual** Safety Car (Art. 56), only meaningful when `sc_currently_active` is true. Split out (#471) because a VSC and a full SC differ in pit-time saving, and the Monte Carlo / N28 prompt need to tell them apart — the single `sc_currently_active` flag could not. `sc_active` (a derived property, not a stored field) is true only under a full SC: `sc_currently_active and not vsc_active`. |
+| `vsc_active` | bool | The active neutralisation is specifically a **Virtual** Safety Car (Art. 56), only meaningful when `sc_currently_active` is true. Split out (#471) because a VSC and a full SC differ in pit-time saving, and the Monte Carlo / N28 prompt need to tell them apart, the single `sc_currently_active` flag could not. `sc_active` (a derived property, not a stored field) is true only under a full SC: `sc_currently_active and not vsc_active`. |
 | `threat_level` | str | LOW, MEDIUM, HIGH |
 | `gap_ahead_s` | float | Gap to car ahead in seconds |
 | `pace_delta_s` | float | Pace difference vs car ahead |
@@ -99,23 +99,23 @@ Every agent except N29 also exposes a `get_*_react_agent()` factory returning a 
 
 ### StrategyRecommendation (N31)
 
-The v2 schema (frozen at 14 fields) surrounds the primary `action` with execution detail, driver-side instructions and a contingency list — see [Multi-agent system](#/multi-agent) for the full rationale.
+The v2 schema (frozen at 14 fields) surrounds the primary `action` with execution detail, driver-side instructions and a contingency list, see [Multi-agent system](#/multi-agent) for the full rationale.
 
 | Field | Type | Description |
 |---|---|---|
-| `action` | str | STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, ALERT — the primary decision |
+| `action` | str | STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, ALERT, the primary decision |
 | `reasoning` | str | Multi-sentence LLM synthesis of all sub-agent inputs, MC scores and regulation constraints |
 | `confidence` | float | 0–1 LLM self-assessed certainty; treat as qualitative, not calibrated |
 | `pit_lap_target` | int or None | Absolute lap of the planned stop. Populated for PIT_NOW/UNDERCUT/OVERCUT, optionally for a forward-looking STAY_OUT plan |
 | `compound_next` | str or None | Compound (SOFT/MEDIUM/HARD) chosen for the next stint; None for STAY_OUT |
 | `undercut_target` | str or None | Rival code targeted by an UNDERCUT/OVERCUT (e.g. "SAI") |
-| `pace_mode` | str | PUSH, NEUTRAL, MANAGE, LIFT_AND_COAST — driving instruction for the next laps (default NEUTRAL) |
-| `target_lap_time_s` | float or None | Target lap time, grounded in N25's CI bounds so the LLM cannot invent a value far outside the model's prediction. Forced to `None` under an active SC/VSC (Art. 55.7 — see [Multi-agent system](#/multi-agent)) |
-| `risk_posture` | str | AGGRESSIVE, BALANCED, DEFENSIVE — the championship stance the LLM reasons under (default BALANCED) |
+| `pace_mode` | str | PUSH, NEUTRAL, MANAGE, LIFT_AND_COAST, driving instruction for the next laps (default NEUTRAL) |
+| `target_lap_time_s` | float or None | Target lap time, grounded in N25's CI bounds so the LLM cannot invent a value far outside the model's prediction. Forced to `None` under an active SC/VSC (Art. 55.7, see [Multi-agent system](#/multi-agent)) |
+| `risk_posture` | str | AGGRESSIVE, BALANCED, DEFENSIVE, the championship stance the LLM reasons under (default BALANCED) |
 | `contingencies` | list[Contingency] | Conditional branches for upcoming laps, capped at four. Each has `trigger` (plain-language event), `switch_to` (replacement action), `priority` (HIGH/MEDIUM/LOW), `rationale` (short justification) |
 | `key_risks` | list[str] | Up to five short bullets flagging risks the LLM wants to surface outside the narrative |
-| `expected_stint_end` | int or None | Lap the current stint is planned to end. Clamped against a physical anchor — `pit_lap_target` plus the shorter of the N26 cliff P50 and the next compound's Pirelli stint capacity, bounded by total race laps — accepting the LLM's value only within ±3 laps of that anchor (#433); falls through unclamped when no anchor (missing `pit_lap_target`/`compound_next`/cliff) is available |
-| `scenario_scores` | dict | Full MC output per candidate — `{"STAY_OUT": {"E", "P10", "P90", "score"}, ...}`. Attached in code after the LLM call, not filled by the LLM. On the projection path each candidate also carries `eligible` (bool) and `target` (str or null), and an **ineligible candidate has `score: null`** — an undercut with no reachable rival, or an overcut with nobody in the pit lane, is reported as not offered rather than given a number it did not earn. Consumers must skip nulls; coercing one to `0.0` draws a real-looking score for a strategy that was never on the table |
+| `expected_stint_end` | int or None | Lap the current stint is planned to end. Clamped against a physical anchor: `pit_lap_target` plus the shorter of the N26 cliff P50 and the next compound's Pirelli stint capacity, bounded by total race laps, accepting the LLM's value only within ±3 laps of that anchor (#433); falls through unclamped when no anchor (missing `pit_lap_target`/`compound_next`/cliff) is available |
+| `scenario_scores` | dict | Full MC output per candidate: `{"STAY_OUT": {"E", "P10", "P90", "score"}, ...}`. Attached in code after the LLM call, not filled by the LLM. On the projection path each candidate also carries `eligible` (bool) and `target` (str or null), and an **ineligible candidate has `score: null`**, an undercut with no reachable rival, or an overcut with nobody in the pit lane, is reported as not offered rather than given a number it did not earn. Consumers must skip nulls; coercing one to `0.0` draws a real-looking score for a strategy that was never on the table |
 | `regulation_context` | str | N30 RAG answer when activated, empty string otherwise. Attached in code after the LLM call |
 
 ## `RaceState` input (N31)
@@ -163,11 +163,11 @@ Every LangChain tool the LLM can call takes free-text arguments (`driver`, `lap_
 | N27 Situation | `predict_overtake_tool`, `predict_sc_tool` | `lap_number` is out of range, or (for `predict_overtake_tool`) either driver is unknown for that lap |
 | N28 Pit | `predict_pit_duration_tool`, `score_undercut_tool` | the named driver (`driver`/`driver_y`) is not present in the live roster for the current lap |
 
-The refusal is a plain string return (e.g. `"error: 'HAM' is not on track at lap 12; valid: [...]"` or `"... REFUSED — {driver} is not on track ..."`), not an exception — the LLM sees a normal-looking tool result it can react to, rather than a traceback. `predict_pit_duration_tool` additionally cross-checks the LLM-supplied `under_sc` flag against the RCM-confirmed `sc_currently_active` ground truth when a real orchestrator run has set it, and trusts the confirmed value over the guess (logging a warning) rather than the other way round.
+The refusal is a plain string return (e.g. `"error: 'HAM' is not on track at lap 12; valid: [...]"` or `"... REFUSED — {driver} is not on track ..."`), not an exception, the LLM sees a normal-looking tool result it can react to, rather than a traceback. `predict_pit_duration_tool` additionally cross-checks the LLM-supplied `under_sc` flag against the RCM-confirmed `sc_currently_active` ground truth when a real orchestrator run has set it, and trusts the confirmed value over the guess (logging a warning) rather than the other way round.
 
-"On track" is a **presence** check (the driver has a row in the live roster for this lap), the same convention `RaceStateManager` uses for `rivals` — see [Race replay engine → who counts as a rival](#/simulation). An age/lap-count cutoff cannot substitute for it: a finisher can go 20 laps without a row, and a retirement can surface as few as 9 laps in, so the ranges overlap.
+"On track" is a **presence** check (the driver has a row in the live roster for this lap), the same convention `RaceStateManager` uses for `rivals`, see [Race replay engine → who counts as a rival](#/simulation). An age/lap-count cutoff cannot substitute for it: a finisher can go 20 laps without a row, and a retirement can surface as few as 9 laps in, so the ranges overlap.
 
-The MCP-facing tools one layer up (`src/telemetry/backend/mcp_tools.py`, consumed by chat) apply an equivalent guard on `gp`/`driver`/`lap`/`year` before they even reach these agent-level tools — see [Backend API reference → Tool risk tiers and the chat allowlist](#/backend-api).
+The MCP-facing tools one layer up (`src/telemetry/backend/mcp_tools.py`, consumed by chat) apply an equivalent guard on `gp`/`driver`/`lap`/`year` before they even reach these agent-level tools, see [Backend API reference → Tool risk tiers and the chat allowlist](#/backend-api).
 
 ## Testing examples
 

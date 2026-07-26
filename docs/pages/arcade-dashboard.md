@@ -8,9 +8,9 @@ Phase 3.5 Proceso B shipped thirteen files under `src/arcade/dashboard/` plus a 
 
 Three windows, two processes.
 
-- **Arcade replay** — `pyglet`-backed, owned by `F1ArcadeView`. Drives the simulation loop, owns the `StrategyState`, runs `TelemetryStreamServer` on `127.0.0.1:9998`, and renders the track.
-- **Strategy dashboard** — `PySide6` `MainWindow`. Orchestrator card, six sub-agent cards with embedded `pyqtgraph` charts, scenario bars, six-tab reasoning panel.
-- **Telemetry window** — `PySide6` `TelemetryWindow`. Standalone `QMainWindow` with a 2x2 grid of `pyqtgraph` plots (Delta, Speed, Brake, Throttle) in F1-broadcast style.
+- **Arcade replay**: `pyglet`-backed, owned by `F1ArcadeView`. Drives the simulation loop, owns the `StrategyState`, runs `TelemetryStreamServer` on `127.0.0.1:9998`, and renders the track.
+- **Strategy dashboard**: `PySide6` `MainWindow`. Orchestrator card, six sub-agent cards with embedded `pyqtgraph` charts, scenario bars, six-tab reasoning panel.
+- **Telemetry window**: `PySide6` `TelemetryWindow`. Standalone `QMainWindow` with a 2x2 grid of `pyqtgraph` plots (Delta, Speed, Brake, Throttle) in F1-broadcast style.
 
 The pyglet window runs in the arcade process. The two Qt windows live together inside one subprocess spawned by the arcade.
 
@@ -28,7 +28,7 @@ The pyglet window runs in the arcade process. The two Qt windows live together i
 └────────────────────────────────┘        └──────────────────────────────┘
 ```
 
-Two processes, not three. Both Qt windows share the same `QApplication` event loop and Python interpreter — spawning a third process just to host the telemetry window would cost an extra Python startup (roughly 300 ms), another TCP socket, and another set of imported heavy modules (`torch`, `transformers`) with no gain.
+Two processes, not three. Both Qt windows share the same `QApplication` event loop and Python interpreter, spawning a third process just to host the telemetry window would cost an extra Python startup (roughly 300 ms), another TCP socket, and another set of imported heavy modules (`torch`, `transformers`) with no gain.
 
 The arcade process stays free of PySide6. Importing Qt into the pyglet process would double the memory footprint and couple the two event loops. Keeping Qt out of the arcade is the reason `stream.py` is stdlib-only; the subprocess launch preserves that separation.
 
@@ -52,11 +52,11 @@ Colour palette, compound pill colour map, flag chip styles, monospace font stack
 
 The flagship card. Four visual elements:
 
-- **Action badge** — large pill coloured by `classify_action`: green STAY_OUT, amber PIT_NOW, cyan UNDERCUT, magenta OVERCUT, red ALERT.
-- **Confidence bar** — `QProgressBar` with a `qlineargradient` stylesheet painting a traffic-light gradient.
-- **Pace and Risk chips** — two smaller pills, recoloured per regime.
-- **Plan strip** — one line: "Plan: PIT lap 28, fit C3, target UNDERCUT HAM". The compound is rendered as an inline pill.
-- **Guardrail line** — shown only when the no-LLM hard guard overrode the LLM pick.
+- **Action badge**, large pill coloured by `classify_action`: green STAY_OUT, amber PIT_NOW, cyan UNDERCUT, magenta OVERCUT, red ALERT.
+- **Confidence bar**: `QProgressBar` with a `qlineargradient` stylesheet painting a traffic-light gradient.
+- **Pace and Risk chips**, two smaller pills, recoloured per regime.
+- **Plan strip**, one line: "Plan: PIT lap 28, fit C3, target UNDERCUT HAM". The compound is rendered as an inline pill.
+- **Guardrail line**, shown only when the no-LLM hard guard overrode the LLM pick.
 
 ### `agent_card.py`
 
@@ -81,7 +81,7 @@ Four horizontal bars for STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT. The raw Monte 
 
 ### `reasoning_tabs.py`
 
-`QTabWidget` with six tabs: Pace, Tire, Situation, Radio, Pit, RAG. Each tab is a `QTextEdit` with a `QSyntaxHighlighter` subclass that paints regex patterns in accent colours — compound codes, flag keywords, numbers with units, and action verbs.
+`QTabWidget` with six tabs: Pace, Tire, Situation, Radio, Pit, RAG. Each tab is a `QTextEdit` with a `QSyntaxHighlighter` subclass that paints regex patterns in accent colours, compound codes, flag keywords, numbers with units, and action verbs.
 
 ### `telemetry_panel.py` and `telemetry_window.py`
 
@@ -123,7 +123,7 @@ The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-termi
 }
 ```
 
-Top-level keys: `arcade`, `strategy`, `playback`. The dashboard's fan-out router reads from these three roots and nothing else — extending the protocol is additive.
+Top-level keys: `arcade`, `strategy`, `playback`. The dashboard's fan-out router reads from these three roots and nothing else, extending the protocol is additive.
 
 ## Extension points
 
@@ -143,10 +143,10 @@ Top-level keys: `arcade`, `strategy`, `playback`. The dashboard's fan-out router
 
 Five threads cooperate.
 
-- **Arcade main thread** (pyglet) — runs the `F1ArcadeView.on_update` tick, mutates the `StrategyState` under `_lock`, calls `TelemetryStreamServer.broadcast(snapshot)`.
-- **SimConnector background thread** — iterates `RaceReplayEngine.replay()` and calls `run_strategy_pipeline(race_state, laps_df)` per lap. One thread, one lap at a time, so the main pyglet thread never blocks on LLM inference.
-- **TelemetryStreamServer accept thread** — daemon thread inside the arcade process. Blocks on `server_socket.accept()`.
-- **Qt main thread** (dashboard subprocess) — runs `QApplication.exec()`. Drives all UI updates. Never touches the network.
-- **QThread stream clients** (one per top-level Qt window) — each owns its own TCP socket.
+- **Arcade main thread** (pyglet), runs the `F1ArcadeView.on_update` tick, mutates the `StrategyState` under `_lock`, calls `TelemetryStreamServer.broadcast(snapshot)`.
+- **SimConnector background thread**, iterates `RaceReplayEngine.replay()` and calls `run_strategy_pipeline(race_state, laps_df)` per lap. One thread, one lap at a time, so the main pyglet thread never blocks on LLM inference.
+- **TelemetryStreamServer accept thread**, daemon thread inside the arcade process. Blocks on `server_socket.accept()`.
+- **Qt main thread** (dashboard subprocess), runs `QApplication.exec()`. Drives all UI updates. Never touches the network.
+- **QThread stream clients** (one per top-level Qt window), each owns its own TCP socket.
 
 The `StrategyState._lock` is the only contended mutex. Neither thread holds it across I/O.

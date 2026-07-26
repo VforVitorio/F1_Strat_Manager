@@ -20,7 +20,7 @@ Development follows an incremental approach. v0.1–v0.5 covered project setup a
 
 **Three-release distribution model (v0.12+):** The project ships as three independent artifacts because each has different distribution mechanics:
 - **R1: CLI wheel** (`f1-strat`, `f1-sim`): pip-installable wheel on GitHub Releases, lazy HF data download
-- **R2: Arcade**: `uv tool install` console script (`f1-arcade`) for interactive race replay visualization — container deploy was evaluated and descoped (pyglet + Qt need a host OpenGL context and native display; see `INSTALL.md`)
+- **R2: Arcade**: `uv tool install` console script (`f1-arcade`) for interactive race replay visualization, container deploy was evaluated and descoped (pyglet + Qt need a host OpenGL context and native display; see `INSTALL.md`)
 - **R3: Streamlit + Backend**: Docker Compose (FastAPI + Streamlit; Qdrant runs on-disk in-process, no separate container) or Streamlit Cloud
 
 ---

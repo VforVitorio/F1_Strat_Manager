@@ -76,9 +76,9 @@ The Strategy page (`pages/strategy.py`) is the primary interface for the N25–N
 1. **Selectors**: Year (hardcoded 2025), GP, Driver, Lap range, Analysis lap, Risk tolerance
 2. **Run button**: calls `StrategyService.get_recommend()` which hits `/api/v1/strategy/recommend`
 3. **Results**:
-   - `render_strategy_card()` — recommendation card with action, confidence, reasoning
-   - `render_scenario_chart()` — bar chart comparing MC scenario scores
-   - `render_agent_tabs()` — tabbed detail view for each sub-agent output
+   - `render_strategy_card()`, recommendation card with action, confidence, reasoning
+   - `render_scenario_chart()`, bar chart comparing MC scenario scores
+   - `render_agent_tabs()`, tabbed detail view for each sub-agent output
 
 ## Chat tool-result rendering
 
@@ -132,7 +132,7 @@ Timeout is set to 300 seconds because first-call model loading (RoBERTa + SetFit
 | `BACKEND_URL` | `http://localhost:8000` | FastAPI backend base URL |
 | `FRONTEND_URL` | `http://localhost:8501` | Frontend self-reference |
 
-## Appendix — CSS fixes
+## Appendix: CSS fixes
 
 ### Scroll fix on Plotly charts
 

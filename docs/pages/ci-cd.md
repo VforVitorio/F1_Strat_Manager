@@ -6,7 +6,7 @@ The pipeline is split across three GitHub Actions workflows, a release-please bo
 
 ## Branching strategy
 
-Three long-lived branches, in increasing order of stability. Every change branches off (`feat/…`, `fix/…`, `docs/…`) and opens a **pull request directly against `dev`** — `test` is a personal, day-to-day branch that is not part of the enforced PR chain (no PRs are opened against it in practice; `git log` shows feature branches merging straight into `dev`). `dev` is periodically promoted to `main` via its own PR, and `main` is release-only.
+Three long-lived branches, in increasing order of stability. Every change branches off (`feat/…`, `fix/…`, `docs/…`) and opens a **pull request directly against `dev`**: `test` is a personal, day-to-day branch that is not part of the enforced PR chain (no PRs are opened against it in practice; `git log` shows feature branches merging straight into `dev`). `dev` is periodically promoted to `main` via its own PR, and `main` is release-only.
 
 ```mermaid
 graph TD
@@ -37,10 +37,10 @@ Three workflows live under `.github/workflows/`. They run independently, on diff
 
 Triggered on push to `main`, `dev`, `test`, `feat/**`, `fix/**`, `docs/**`, and on pull request targeting `main` or `dev`. Four jobs run in parallel on `ubuntu-latest`:
 
-- `test` — path-filter gated on `src/**`, `tests/**`, `pyproject.toml`, `uv.lock` (via `dorny/paths-filter@v3`; skips entirely on a docs-only or unrelated diff). When triggered: `uv sync --all-extras --frozen` (Python 3.12), a "collected-count floor" check (`pytest --co -q` must collect at least 40 nodes, guarding against a refactor silently gutting the suite), then `uv run pytest -v --cov=src --cov-report=term-missing`.
-- `lint` — always runs, no `uv sync` needed. `uvx ruff check .` and `uvx ruff format --check .` as ephemeral tools, so it skips installing the whole ML/torch stack just to lint style.
-- `typecheck` — same path-filter gate as `test`. `uv sync --extra dev --frozen` then `uv run mypy src/rag/`. Narrow scope: only production-ready typed modules are checked. Caches `.mypy_cache/` keyed on `pyproject.toml` + `src/rag/**`.
-- `pip-audit` — always runs, no path filter. Exports the locked dependency set (`uv export --frozen --all-extras`) and runs `pip-audit` against it for same-day CVE alerts, independent of whether the diff touches `uv.lock`. Advisory (`continue-on-error: true`) while baselining.
+- `test`, path-filter gated on `src/**`, `tests/**`, `pyproject.toml`, `uv.lock` (via `dorny/paths-filter@v3`; skips entirely on a docs-only or unrelated diff). When triggered: `uv sync --all-extras --frozen` (Python 3.12), a "collected-count floor" check (`pytest --co -q` must collect at least 40 nodes, guarding against a refactor silently gutting the suite), then `uv run pytest -v --cov=src --cov-report=term-missing`.
+- `lint`, always runs, no `uv sync` needed. `uvx ruff check .` and `uvx ruff format --check .` as ephemeral tools, so it skips installing the whole ML/torch stack just to lint style.
+- `typecheck`, same path-filter gate as `test`. `uv sync --extra dev --frozen` then `uv run mypy src/rag/`. Narrow scope: only production-ready typed modules are checked. Caches `.mypy_cache/` keyed on `pyproject.toml` + `src/rag/**`.
+- `pip-audit`, always runs, no path filter. Exports the locked dependency set (`uv export --frozen --all-extras`) and runs `pip-audit` against it for same-day CVE alerts, independent of whether the diff touches `uv.lock`. Advisory (`continue-on-error: true`) while baselining.
 
 The jobs are deliberately decoupled. A red `lint` does not stop `test` from running. `test` and `typecheck` both checkout with `fetch-depth: 0` **before** the paths-filter step, because the filter falls back to `git diff` on `push` events and needs full history.
 
@@ -48,9 +48,9 @@ The jobs are deliberately decoupled. A red `lint` does not stop `test` from runn
 
 Triggered on push to `main`. Three jobs:
 
-1. **release-please** — runs `googleapis/release-please-action@v5` with the built-in `GITHUB_TOKEN` (not a PAT — `main` carries no required status checks on the release PR, so a PAT buys nothing here). Reads commits since the last tag and, if any commit uses a bumpable prefix (`feat:`, `fix:`, `feat!:`), opens or updates a `chore(main): release X.Y.Z` PR on the bot branch. When that PR is merged, the same job creates the tag and the GitHub Release.
-2. **publish-wheel** — gated by `if: needs.release-please.outputs.release_created == 'true'`. Checks out with `submodules: recursive` (so `src/telemetry`, the FastAPI backend, is baked into the wheel — a prior release shipped without it, PK-01), runs `uv build` to produce a wheel and an sdist, then **smoke-tests the wheel** before uploading: installs it with `--no-deps` into a scratch venv and asserts all five console scripts (`f1-strat`, `f1-sim`, `f1-arcade`, `f1-webapp`, `f1-eval`) resolve and their backing modules shipped. Only then does `gh release upload` attach the wheel and sdist.
-3. **sync-uv-lock** — gated by `if: needs.release-please.outputs.prs_created == 'true'`, so it runs every time release-please opens or updates the release PR (not only on merge). release-please bumps `pyproject.toml`'s version but never `uv.lock`'s own root `version` field (PK-02), which would otherwise leave the next `uv sync --frozen` CI run red on the mismatch. This job checks out the release PR's branch, runs `uv lock`, and commits the re-locked `uv.lock` back onto that branch if it changed.
+1. **release-please**, runs `googleapis/release-please-action@v5` with the built-in `GITHUB_TOKEN` (not a PAT: `main` carries no required status checks on the release PR, so a PAT buys nothing here). Reads commits since the last tag and, if any commit uses a bumpable prefix (`feat:`, `fix:`, `feat!:`), opens or updates a `chore(main): release X.Y.Z` PR on the bot branch. When that PR is merged, the same job creates the tag and the GitHub Release.
+2. **publish-wheel**, gated by `if: needs.release-please.outputs.release_created == 'true'`. Checks out with `submodules: recursive` (so `src/telemetry`, the FastAPI backend, is baked into the wheel, a prior release shipped without it, PK-01), runs `uv build` to produce a wheel and an sdist, then **smoke-tests the wheel** before uploading: installs it with `--no-deps` into a scratch venv and asserts all five console scripts (`f1-strat`, `f1-sim`, `f1-arcade`, `f1-webapp`, `f1-eval`) resolve and their backing modules shipped. Only then does `gh release upload` attach the wheel and sdist.
+3. **sync-uv-lock**, gated by `if: needs.release-please.outputs.prs_created == 'true'`, so it runs every time release-please opens or updates the release PR (not only on merge). release-please bumps `pyproject.toml`'s version but never `uv.lock`'s own root `version` field (PK-02), which would otherwise leave the next `uv sync --frozen` CI run red on the mismatch. This job checks out the release PR's branch, runs `uv lock`, and commits the re-locked `uv.lock` back onto that branch if it changed.
 
 ```yaml
 jobs:
@@ -159,16 +159,16 @@ uvx ruff check . && uvx ruff format --check .
 uv run mypy src/rag/
 ```
 
-`lint` uses `uvx` (ephemeral tool run, no `uv sync`), not `uv run` — matching the actual CI job saves a needless full-environment sync just to check style.
+`lint` uses `uvx` (ephemeral tool run, no `uv sync`), not `uv run`, matching the actual CI job saves a needless full-environment sync just to check style.
 
-Once the PR is open and green, target `dev` (see "Branching strategy" above — `main` is release-only) and queue it for auto-merge:
+Once the PR is open and green, target `dev` (see "Branching strategy" above: `main` is release-only) and queue it for auto-merge:
 
 ```bash
 gh pr create --base dev --title "feat(arcade): live telemetry chart" --body "..."
 gh pr merge <num> --auto --merge --body ""
 ```
 
-The repo does not squash merges (release-please relies on individual commit messages), so use `--merge`, not `--squash`. Pass `--body ""`: `gh pr merge --merge` otherwise puts the PR title into the merge commit's body, and release-please parses that body too — a Conventional-Commit PR title there duplicates the CHANGELOG entry the branch commit already produced (hit in production on release 1.10.5).
+The repo does not squash merges (release-please relies on individual commit messages), so use `--merge`, not `--squash`. Pass `--body ""`: `gh pr merge --merge` otherwise puts the PR title into the merge commit's body, and release-please parses that body too, a Conventional-Commit PR title there duplicates the CHANGELOG entry the branch commit already produced (hit in production on release 1.10.5).
 
 ## Failure modes and recovery
 

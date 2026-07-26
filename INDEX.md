@@ -1,8 +1,8 @@
-# F1 StratLab — Project Index
+# F1 StratLab: Project Index
 
 _Revolutionising strategic decision-making in Formula 1 through AI-powered predictive models, computer vision, NLP radio analysis, and a multi-agent expert system._
 
-The project integrates several ML stacks — XGBoost/LightGBM for race strategy signals, a TCN for tyre degradation, Whisper + BERT for radio communications, and YOLOv8 for team identification — into a unified **Strategy Orchestrator** that produces real-time race recommendations. A companion telemetry app (FastAPI + Streamlit) exposes the models interactively.
+The project integrates several ML stacks: XGBoost/LightGBM for race strategy signals, a TCN for tyre degradation, Whisper + BERT for radio communications, and YOLOv8 for team identification, into a unified **Strategy Orchestrator** that produces real-time race recommendations. A companion telemetry app (FastAPI + Streamlit) exposes the models interactively.
 
 The current development phase (N25–N31) replaces the legacy Experta rule engine with a **LangGraph multi-agent architecture**: specialised sub-agents (pace, tyre, overtake, safety car, pit strategy, radio NLP, regulation RAG) coordinate under a Supervisor Orchestrator.
 
@@ -23,7 +23,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | Strategy ML models           | N05-N06 (pace) → N07-N10 (tires) → N11-N16 (overtake / SC / pit)                                                                                                    |
 | NLP pipeline for radio       | N17-N24                                                                                                                                                             |
 | Multi-agent system           | N25 (Pace) → N30 (RAG) → N26-N29 → N31 (Orchestrator)                                                                                                               |
-| Query RAG at runtime         | [`src/rag/retriever.py`](src/rag/retriever.py) — `RagRetriever` + `query_rag_tool`                                                                                  |
+| Query RAG at runtime         | [`src/rag/retriever.py`](src/rag/retriever.py): `RagRetriever` + `query_rag_tool`                                                                                  |
 | Telemetry web app            | [`src/telemetry/backend/main.py`](src/telemetry/backend/main.py) (FastAPI) + [`src/telemetry/webapp/`](src/telemetry/webapp/) (React), launched together with `f1-webapp`                              |
 
 ---
@@ -35,7 +35,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | Notebook                                                                                  | Description                                                                                                                                                   |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [N01_data_download.ipynb](notebooks/data_engineering/N01_data_download.ipynb)             | Downloads 46 GPs (2023-2024) from FastF1 and OpenF1 APIs; outputs raw parquets under `data/raw/`                                                              |
-| [N02_eda_master.ipynb](notebooks/data_engineering/N02_eda_master.ipynb)                   | Global EDA across all 46 GPs — lap time distributions, data quality audit, cross-season patterns                                                              |
+| [N02_eda_master.ipynb](notebooks/data_engineering/N02_eda_master.ipynb)                   | Global EDA across all 46 GPs, lap time distributions, data quality audit, cross-season patterns                                                              |
 | [N03_circuit_clustering.ipynb](notebooks/data_engineering/N03_circuit_clustering.ipynb)   | K-means clustering of circuits into 4 archetypes (street / high-speed / technical / balanced); produces `circuit_clusters_k4.parquet`                         |
 | [N04_feature_engineering.ipynb](notebooks/data_engineering/N04_feature_engineering.ipynb) | Full feature engineering pipeline from raw parquets to `laps_featured_<year>.parquet`; integrates interval gaps, cluster assignments, and anti-drift features |
 
@@ -43,14 +43,14 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 
 | Notebook                                                                                  | Description                                                                                        |
 | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [N05_laptime_eda.ipynb](notebooks/strategy/lap_time_prediction/N05_laptime_eda.ipynb)     | EDA for the lap time model — concept drift analysis across seasons, feature selection for N06      |
+| [N05_laptime_eda.ipynb](notebooks/strategy/lap_time_prediction/N05_laptime_eda.ipynb)     | EDA for the lap time model, concept drift analysis across seasons, feature selection for N06      |
 | [N06_laptime_model.ipynb](notebooks/strategy/lap_time_prediction/N06_laptime_model.ipynb) | XGBoost delta-lap-time predictor; MAE 0.392 s on 2025 test set; exports to `data/models/lap_time/` |
 
 ### Tire Degradation (`notebooks/strategy/tire_degradation/`)
 
 | Notebook                                                                                                           | Description                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [N07_tiredeg_eda.ipynb](notebooks/strategy/tire_degradation/N07_tiredeg_eda.ipynb)                                 | EDA of tire degradation patterns by compound, stint length, and circuit — informs TCN architecture choices                                                     |
+| [N07_tiredeg_eda.ipynb](notebooks/strategy/tire_degradation/N07_tiredeg_eda.ipynb)                                 | EDA of tire degradation patterns by compound, stint length, and circuit, informs TCN architecture choices                                                     |
 | [N08_tiredeg_sequence_config.ipynb](notebooks/strategy/tire_degradation/N08_tiredeg_sequence_config.ipynb)         | Analytical determination of optimal TCN window size per compound from empirical stint length distributions                                                     |
 | [N09_tiredeg_tcn.ipynb](notebooks/strategy/tire_degradation/N09_tiredeg_tcn.ipynb)                                 | Global Causal TCN that predicts `FuelAdjustedDegAbsolute` (cumulative seconds lost to rubber wear) one step ahead; exports `tiredeg_modelA_v4.pt`              |
 | [N10_tiredeg_compound_finetuning.ipynb](notebooks/strategy/tire_degradation/N10_tiredeg_compound_finetuning.ipynb) | Per-compound fine-tuning of the N09 global TCN (C1-C5); MC Dropout uncertainty + Platt calibration; exports compound models to `data/models/tire_degradation/` |
@@ -61,7 +61,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [N11_overtake_eda.ipynb](notebooks/strategy/overtake_probability/N11_overtake_eda.ipynb)     | Builds the labeled car-pair dataset (28,494 pairs, 2023-2025); EDA of overtake rates by DRS window, gap, pace delta                                         |
 | [N12_overtake_model.ipynb](notebooks/strategy/overtake_probability/N12_overtake_model.ipynb) | LightGBM binary classifier for P(overtake\| lap state); AUC-PR 0.5491 / AUC-ROC 0.8758; exports to `data/models/overtake_probability/`                      |
-| [N12B_overtake_tcn.ipynb](notebooks/strategy/overtake_probability/N12B_overtake_tcn.ipynb)   | **Archived negative result** — Causal TCN on 8-lap battle sequences; AUC-PR ~0.10 vs LightGBM 0.55; confirms feature-engineered N12 is the production model |
+| [N12B_overtake_tcn.ipynb](notebooks/strategy/overtake_probability/N12B_overtake_tcn.ipynb)   | **Archived negative result**: Causal TCN on 8-lap battle sequences; AUC-PR ~0.10 vs LightGBM 0.55; confirms feature-engineered N12 is the production model |
 
 ### Safety Car Probability (`notebooks/strategy/sc_probability/`)
 
@@ -77,7 +77,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | [N15_pit_duration.ipynb](notebooks/strategy/pit_prediction/N15_pit_duration.ipynb) | HistGBT quantile regression (P05/P50/P95) for physical pit stop time; P50 MAE 0.487 s; exports three quantile models to `data/models/pit_prediction/`                  |
 | [N16_undercut.ipynb](notebooks/strategy/pit_prediction/N16_undercut.ipynb)         | LightGBM binary classifier for undercut success (driver X gains net position after pit sequence); AUC-PR 0.6739 (1.95× lift); exports to `data/models/pit_prediction/` |
 
-### NLP — Radio Analysis (`notebooks/nlp/`)
+### NLP: Radio Analysis (`notebooks/nlp/`)
 
 | Notebook                                                                     | Description                                                                                                                                            |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -95,11 +95,11 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 
 | Notebook                                                      | Description                                                                                                                                                                                 |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [N25_pace_agent.ipynb](notebooks/agents/N25_pace_agent.ipynb) | Pace Agent — wraps the N06 XGBoost model into a LangGraph ReAct agent; returns `PaceOutput` (lap time prediction + delta signals + bootstrap CI); first of seven sub-agents                 |
-| [N30_rag_agent.ipynb](notebooks/agents/N30_rag_agent.ipynb)   | RAG Agent — retrieval-augmented generation over FIA Sporting and Technical Regulations (2023-2025) via local Qdrant; returns structured `RegulationContext` objects with article references |
-| [N34_radio_runner_smoke.ipynb](notebooks/agents/N34_radio_runner_smoke.ipynb) | Radio runner smoke test — end-to-end validation of `src/nlp/radio_runner.py`: cache hit/miss, per-lap radio distribution, transcript sanity, and N29 round-trip via `run_radio_agent_from_state` on Bahrain 2025 (28 radios + 76 RCMs, lap 4 emits a PROBLEM alert) |
+| [N25_pace_agent.ipynb](notebooks/agents/N25_pace_agent.ipynb) | Pace Agent, wraps the N06 XGBoost model into a LangGraph ReAct agent; returns `PaceOutput` (lap time prediction + delta signals + bootstrap CI); first of seven sub-agents                 |
+| [N30_rag_agent.ipynb](notebooks/agents/N30_rag_agent.ipynb)   | RAG Agent, retrieval-augmented generation over FIA Sporting and Technical Regulations (2023-2025) via local Qdrant; returns structured `RegulationContext` objects with article references |
+| [N34_radio_runner_smoke.ipynb](notebooks/agents/N34_radio_runner_smoke.ipynb) | Radio runner smoke test, end-to-end validation of `src/nlp/radio_runner.py`: cache hit/miss, per-lap radio distribution, transcript sanity, and N29 round-trip via `run_radio_agent_from_state` on Bahrain 2025 (28 radios + 76 RCMs, lap 4 emits a PROBLEM alert) |
 
-> The full multi-agent system (N25–N31) is **complete**. The importable agent + orchestrator modules live in [`src/agents/`](src/agents/) (each exposes `run_*_agent_from_state`). Notebooks N26–N29, N30B (RAG benchmark), two N31 notebooks (`N31_strategy_orchestrator.ipynb` + `N31_mc_visualization.ipynb`), N32 (smoke test), N33 (decision thresholds + calibration benchmarks), and N34 (radio runner smoke) are under `notebooks/agents/`. A different, unrelated `N33_radio_dataset_builder.ipynb` lives under `notebooks/nlp/` (see the NLP table below) — the two share a number by coincidence, not by pipeline order.
+> The full multi-agent system (N25–N31) is **complete**. The importable agent + orchestrator modules live in [`src/agents/`](src/agents/) (each exposes `run_*_agent_from_state`). Notebooks N26–N29, N30B (RAG benchmark), two N31 notebooks (`N31_strategy_orchestrator.ipynb` + `N31_mc_visualization.ipynb`), N32 (smoke test), N33 (decision thresholds + calibration benchmarks), and N34 (radio runner smoke) are under `notebooks/agents/`. A different, unrelated `N33_radio_dataset_builder.ipynb` lives under `notebooks/nlp/` (see the NLP table below), the two share a number by coincidence, not by pipeline order.
 
 ---
 
@@ -133,8 +133,8 @@ The two files below are the **legacy** `experta` rule engine, kept for reference
 
 | File | Description |
 | ---- | ----------- |
-| [src/simulation/race_state_manager.py](src/simulation/race_state_manager.py) | `RaceStateManager` — builds the per-lap `lap_state` dict (single-driver telemetry + timing-only rivals) consumed by all agents |
-| [src/simulation/replay_engine.py](src/simulation/replay_engine.py) | `RaceReplayEngine` — iterates a race parquet lap by lap, yielding `lap_state` (same contract for replay or a future live feed) |
+| [src/simulation/race_state_manager.py](src/simulation/race_state_manager.py) | `RaceStateManager`, builds the per-lap `lap_state` dict (single-driver telemetry + timing-only rivals) consumed by all agents |
+| [src/simulation/replay_engine.py](src/simulation/replay_engine.py) | `RaceReplayEngine`, iterates a race parquet lap by lap, yielding `lap_state` (same contract for replay or a future live feed) |
 | [src/simulation/stint_history.py](src/simulation/stint_history.py) | Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023) stint-history helpers: answers pit-stop count, compound history, and mandatory-two-dry-compound obligation per driver and lap |
 | [src/arcade/](src/arcade/) | 2D pyglet replay + PySide6 strategy dashboard + `stream.py` TCP broadcast to the dashboard subprocess |
 
@@ -142,8 +142,8 @@ The two files below are the **legacy** `experta` rule engine, kept for reference
 
 | File                                                       | Description                                                                                                                |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| [src/nlp/radio_runner.py](src/nlp/radio_runner.py)         | `RadioPipelineRunner` — replay-time consumer of the static OpenF1 radio corpus built by N33; lazily transcribes per-lap MP3 slices with Whisper (cached under `data/processed/radio_nlp/…/transcripts.json` keyed by model name) and feeds the N29 Radio Agent via `run_radio_agent_from_state`. Wired into `scripts/run_simulation_cli.py` by default |
-| [legacy/nlp_standalone/pipeline.py](legacy/nlp_standalone/pipeline.py)                 | Legacy jupytext-exported NLP pipeline (pre-N24); uses old model paths and `roberta-large` intent model — superseded by N24 |
+| [src/nlp/radio_runner.py](src/nlp/radio_runner.py)         | `RadioPipelineRunner`, replay-time consumer of the static OpenF1 radio corpus built by N33; lazily transcribes per-lap MP3 slices with Whisper (cached under `data/processed/radio_nlp/…/transcripts.json` keyed by model name) and feeds the N29 Radio Agent via `run_radio_agent_from_state`. Wired into `scripts/run_simulation_cli.py` by default |
+| [legacy/nlp_standalone/pipeline.py](legacy/nlp_standalone/pipeline.py)                 | Legacy jupytext-exported NLP pipeline (pre-N24); uses old model paths and `roberta-large` intent model, superseded by N24 |
 | [legacy/nlp_standalone/ner.py](legacy/nlp_standalone/ner.py)                           | NER inference wrapper                                                                                                      |
 | [legacy/nlp_standalone/sentiment.py](legacy/nlp_standalone/sentiment.py)               | Sentiment inference wrapper                                                                                                |
 | [legacy/nlp_standalone/radio_classifier.py](legacy/nlp_standalone/radio_classifier.py) | Radio intent classification wrapper                                                                                        |
@@ -156,13 +156,13 @@ through it instead of maintaining hand-mirrored copies (a real drift bug once
 caused every `--no-llm` lap to crash, since a signature change was mirrored
 into two of the three copies but not the third). `eval/` backs the `f1-eval`
 console script. The jupytext-exported `models/` files and `training/` (empty)
-are reference/historical only — see [`src/strategy/README.md`](src/strategy/README.md).
+are reference/historical only, see [`src/strategy/README.md`](src/strategy/README.md).
 
 | File                                                                                           | Description                                          |
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [src/strategy/inference/engine.py](src/strategy/inference/engine.py)                           | `run_lap()` — the shared strategy inference engine consumed by the CLI, Arcade, and backend; dispatches on `profile` (`"rich"` re-drives the full N31 orchestrator sequence, `"no-llm"` is the deterministic zero-LLM-client path) |
+| [src/strategy/inference/engine.py](src/strategy/inference/engine.py)                           | `run_lap()`, the shared strategy inference engine consumed by the CLI, Arcade, and backend; dispatches on `profile` (`"rich"` re-drives the full N31 orchestrator sequence, `"no-llm"` is the deterministic zero-LLM-client path) |
 | [src/strategy/inference/no_llm.py](src/strategy/inference/no_llm.py)                           | The deterministic `--no-llm` code path consumed by `run_lap` |
-| [src/strategy/eval/](src/strategy/eval/)                                                       | `f1-eval` CLI backend — regenerates the model evaluation reports (metrics registry, calibration, threshold hygiene, NLP per-stage eval, headline-number reproduction, LLM-judged alert precision) under `documents/eval_reports/` |
+| [src/strategy/eval/](src/strategy/eval/)                                                       | `f1-eval` CLI backend, regenerates the model evaluation reports (metrics registry, calibration, threshold hygiene, NLP per-stage eval, headline-number reproduction, LLM-judged alert precision) under `documents/eval_reports/` |
 | [src/strategy/inference/tire_predictor.py](src/strategy/inference/tire_predictor.py)           | Jupytext-exported tire degradation inference wrapper (N09 era; reference only) |
 
 ### `src/telemetry/`
@@ -172,7 +172,7 @@ A separate full-stack web application for live telemetry visualisation, independ
 | Component                                                                | Description                                                                                                                                |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | [src/telemetry/backend/main.py](src/telemetry/backend/main.py)           | FastAPI application entry point; mounts endpoints for telemetry, circuit domination, driver comparison, chat, voice, and strategy             |
-| `src/telemetry/backend/api/`                                             | Versioned API route handlers (`telemetry`, `circuit_domination`, `comparison`, `chat`, `strategy` — the last exposes all N25-N31 agents + orchestrator over REST) |
+| `src/telemetry/backend/api/`                                             | Versioned API route handlers (`telemetry`, `circuit_domination`, `comparison`, `chat`, `strategy`, the last exposes all N25-N31 agents + orchestrator over REST) |
 | `src/telemetry/backend/services/`                                        | Business logic: `telemetry/` (FastF1 client + session cache), `chatbot/` (chat engine, LLM service, MCP bridge), `simulation/` (SSE strategy-replay generator), plus `comparison_service.py` |
 | `src/telemetry/webapp/src/`                                              | React + TypeScript single-page app that replaced the Streamlit frontend in v2.0.0; served by nginx behind `/api` in the compose stack        |
 
@@ -181,20 +181,20 @@ A separate full-stack web application for live telemetry visualisation, independ
 Organised by upstream provider so the active OpenF1 path is not buried under
 historical reference scripts.
 
-#### `openf1/` — active
+#### `openf1/`, active
 
 | File                                                                                                       | Description                                                                                                        |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | [src/data_extraction/openf1/radio_dataset_builder.py](src/data_extraction/openf1/radio_dataset_builder.py) | OpenF1 team-radio + RCM + MP3 dataset builder with lap mapping, Sprint-session filtering, and circuit-suffixed slugs for multi-race countries (Italy / United States); the corpus is consumed live by `src/nlp/radio_runner.py` and reaches N29 through `scripts/run_simulation_cli.py` |
 | [src/data_extraction/openf1/intervals_extractor.py](src/data_extraction/openf1/intervals_extractor.py)     | Pulls inter-car interval data from the OpenF1 `/v1/intervals` endpoint (reference script, Spain 2023 only)         |
 
-#### `fastf1/` — reference
+#### `fastf1/`, reference
 
 | File                                                                                               | Description                                                                                          |
 | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | [src/data_extraction/fastf1/session_extractor.py](src/data_extraction/fastf1/session_extractor.py) | FastF1 session loader (laps, pit stops, weather → parquet); superseded by `scripts/download_data.py` |
 
-#### `legacy/` — kept for history, not used by any active pipeline
+#### `legacy/`, kept for history, not used by any active pipeline
 
 | File                                                                                                 | Description                                                                                          |
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -211,7 +211,7 @@ historical reference scripts.
 | [scripts/download_fia_pdfs.py](scripts/download_fia_pdfs.py) | Scrapes and downloads FIA Sporting and Technical Regulation PDFs (2023-2025) into `data/rag/documents/`; falls back to known URLs |
 | [scripts/build_rag_index.py](scripts/build_rag_index.py)     | One-shot ingestion: PDF → article chunks → BGE-M3 embeddings → local Qdrant collection; idempotent (hash-based deduplication)     |
 | [scripts/build_radio_dataset.py](scripts/build_radio_dataset.py) | Multi-GP CLI wrapper around `RadioDatasetBuilder`; writes per-GP `radios.parquet` + `rcm.parquet` under `data/processed/race_radios/{year}/{slug}/` and downloads radio MP3s under `data/raw/radio_audio/{year}/{slug}/driver_{N}/` (default season: 2025; `--skip-audio` for parquets only) |
-| [scripts/upload_radio_corpus.py](scripts/upload_radio_corpus.py) | Publish-side helper — `HfApi.upload_folder` pushes both the parquet tree (`data/processed/race_radios/…`) and the MP3 tree (`data/raw/radio_audio/…`) to `VforVitorio/f1-strategy-dataset` preserving the on-disk layout. Idempotent (content-hash dedup). Flags: `--year`, `--dry-run`, `--skip-parquets`, `--skip-audio`, `--commit-message` |
+| [scripts/upload_radio_corpus.py](scripts/upload_radio_corpus.py) | Publish-side helper: `HfApi.upload_folder` pushes both the parquet tree (`data/processed/race_radios/…`) and the MP3 tree (`data/raw/radio_audio/…`) to `VforVitorio/f1-strategy-dataset` preserving the on-disk layout. Idempotent (content-hash dedup). Flags: `--year`, `--dry-run`, `--skip-parquets`, `--skip-audio`, `--commit-message` |
 | [scripts/measure_mc_tables.py](scripts/measure_mc_tables.py) | Measure six quantitative tables (neutralisation rates, gap densities, clean-air gains, undercut bands, pit hazards, SC window duration) from raw parquets; writes `data/mc_measured_v1.json` for the projection-based Monte Carlo layer |
 | [scripts/run_simulation_cli.py](scripts/run_simulation_cli.py) | Headless multi-agent simulator. Consumes the static radio corpus at replay time via `src/nlp/radio_runner.py`; `ensure_radio_corpus(year, gp_name)` lazily downloads the per-GP MP3 tree on first run. Flags: `--no-real-radios` (fall back to legacy mock injection), `--whisper-model NAME` (default `turbo`) |
 | [scripts/run_webapp.py](scripts/run_webapp.py) | Console script launcher for the post-race web app (FastAPI backend + React SPA); wraps `docker compose up` and forwards CLI arguments |

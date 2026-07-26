@@ -41,4 +41,4 @@ uv run python scripts/measure_mc_tables.py      # + data/mc_measured_v1.json
 
 Then open each notebook and use Restart Kernel -> Run All:
 
-- `notebooks/agents/N33_thresholds_and_calibration.ipynb` — produces all three `threshold_sweep_*` and `mc_dropout_coverage` artefact pairs.
+- `notebooks/agents/N33_thresholds_and_calibration.ipynb`, produces all three `threshold_sweep_*` and `mc_dropout_coverage` artefact pairs.
