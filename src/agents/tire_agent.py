@@ -578,7 +578,15 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     lap_time_pct_of_race_fastest: ratio to the race's fastest lap (~1.04 mean).
     lap_time_vs_cluster_mean: delta vs the cluster's typical lap time (seconds).
     mean_sector_speed: circuit-level mean of the three speed traps (km/h).
-    track_status_clean: 3-class int — 0=green, 1=yellow/VSC, 2=SC/red flag.
+    track_status_clean: 3-class int - 0=green, 1=yellow/VSC, 2=SC/red flag.
+        DEAD ON THE SHIPPING PATH: this column is uniformly 0 across all
+        204366 rows of every published featured parquet, laps_tiredeg.parquet
+        included, so the TCN's input for it is a constant. The cause is not a
+        broken recode: N04's IsAccurate gate drops neutralised laps, so every
+        lap that survives into the featured parquet genuinely IS green. The
+        three-class encoding is only reachable from the raw parquet, where the
+        neutralised laps still exist. Do not spend time debugging degradation
+        behaviour under a Safety Car through this feature; it cannot cause it.
 
     Two of these columns are trained per-circuit constants, not per-lap values.
     N04 built lap_time_vs_cluster_mean as LapTime_s minus a global per-cluster
