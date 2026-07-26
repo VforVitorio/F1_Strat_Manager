@@ -83,6 +83,15 @@ window.PAGES = [
     tags: ["api", "fastapi", "telemetry", "chat", "voice", "mcp", "rag", "pydantic"],
   },
   {
+    slug: "webapp",
+    title: "Web app",
+    section: "Surfaces",
+    file: "pages/webapp.md",
+    description: "React SPA over the FastAPI backend, launched with f1-webapp.",
+    eyebrow: "React",
+    tags: ["frontend", "ui", "telemetry", "chat", "mcp"],
+  },
+  {
     slug: "streamlit",
     title: "Streamlit frontend (legacy)",
     section: "Surfaces",

@@ -262,7 +262,7 @@ data/raw/2025/<GP>/laps.parquet
        |
   StrategyRecommendation --> FastAPI /api/v1/strategy/recommend
        |
-  JSON response --> Streamlit Strategy Page
+  JSON response --> web app Strategy tab
 ```
 
 ## References

@@ -13,7 +13,7 @@ src/strategy/inference/engine.py
         -> tuple[StrategyRecommendation, dict | None, dict[str, float]]
 ```
 
-- **`StrategyRecommendation`** — the synthesised decision (14 fields). What the CLI and Streamlit consume.
+- **`StrategyRecommendation`** — the synthesised decision (14 fields). What the CLI and the web app consume.
 - **`agent_outputs`** — the raw per-sub-agent dataclasses, keyed `pace_out`, `tire_out`, `situation_out`, `radio_out`, `pit_out`, `regulation_context`, `rag`, `active`, `guardrail_reason`. What the arcade dashboard renders its cards and charts from.
 - **stage timings** — per-stage seconds, for the surfaces that show them.
 
