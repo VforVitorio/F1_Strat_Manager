@@ -119,6 +119,13 @@ these safeguards trigger there. They are no-ops on POSIX.
 
 - [ ] Branch off `dev` (`main` is release-only).
 - [ ] `pytest tests/ -x` green.
+- [ ] **`pytest tests/eval/ -q` green, run LOCALLY.** CI cannot run this
+      directory: it needs `data/models/` and the labeled holdouts, which the
+      runners do not have, so those tests are skipped there and **a failure in
+      them is invisible to every pull request**. This is not hypothetical: a
+      golden asserting a pit coverage of 0.7047 sat red for months after the
+      holdout was regenerated to 0.7024, with every PR passing over it (#634).
+      A green CI means these did not run, not that they passed.
 - [ ] If you touched `src/telemetry/*`, commit inside the submodule and
       bump the submodule pointer in the parent repo.
 - [ ] `ROADMAP.md` and the relevant `docs/` file updated when behaviour
