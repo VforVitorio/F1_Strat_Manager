@@ -11,6 +11,13 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.1.2](https://github.com/VforVitorio/F1-StratLab/compare/v2.1.1...v2.1.2) (2026-07-26)
+
+
+### Documentation
+
+* bring the drawio sources back in line with the code ([9733ca8](https://github.com/VforVitorio/F1-StratLab/commit/9733ca8a842216c2ee26683ba0f0b82e0b2026e2)), closes [#592](https://github.com/VforVitorio/F1-StratLab/issues/592)
+
 ## [2.1.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.1.0...v2.1.1) (2026-07-26)
 
 
