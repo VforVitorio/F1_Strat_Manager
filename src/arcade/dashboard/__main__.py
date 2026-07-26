@@ -1,6 +1,6 @@
 """Dashboard entry point: ``python -m src.arcade.dashboard``.
 
-One Qt subprocess, two QMainWindows — ``MainWindow`` for the strategy
+One Qt subprocess, two QMainWindows: ``MainWindow`` for the strategy
 surface (orchestrator / agents / reasoning / charts) and
 ``TelemetryWindow`` for the live speed/throttle/brake/DRS view. Both
 subscribe to the same arcade TCP stream independently, so the user can

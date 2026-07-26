@@ -11,7 +11,7 @@ The output is the offline corpus the N29 Radio Agent will consume during
 race replay. Two parquets are produced per GP: one for team radios (driver,
 lap, recording_url, audio_path) and one for race control messages (driver?,
 lap, flag, category, message). Both are filtered with the same structural
-rule — formation lap, race-start lap and chequered-flag lap dropped — so
+rule: formation lap, race-start lap and chequered-flag lap dropped, so
 every row left in either parquet belongs to a normal race lap and could
 plausibly inform a strategy decision.
 
@@ -21,7 +21,7 @@ per year, GP slug, and driver number. The radio parquet's ``audio_path``
 column carries the path **relative to** the audio root so the on-disk
 corpus stays portable across machines. The actual transcription
 (Whisper / Nemotron) and NLP (sentiment / intent / NER) stays out of this
-script — those steps happen on demand at simulation runtime in the
+script: those steps happen on demand at simulation runtime in the
 ``RadioPipelineRunner`` consumed by the future N29 Radio Agent.
 
 Usage:
@@ -36,7 +36,7 @@ Usage:
 
 Rate limiting:
     Every HTTP call inherits a retry-with-exponential-backoff policy from a
-    shared ``requests.Session`` mounted in ``build_retry_session`` — 429 and
+    shared ``requests.Session`` mounted in ``build_retry_session``: 429 and
     5xx responses retry up to five times (1s, 2s, 4s, 8s, 16s). On top of
     that, the build loop sleeps ``--gp-delay`` seconds between consecutive
     GPs (default 1.0s) so the steady-state request rate stays below OpenF1's
@@ -214,8 +214,8 @@ class RaceMeta:
         circuit_short_name: OpenF1 circuit short name (e.g. ``"Imola"`` /
                             ``"Monza"`` / ``"Miami"`` / ``"COTA"``). Required
                             to disambiguate countries that host more than one
-                            GP per season — Italy (Imola + Monza) and the
-                            United States (Miami + Austin + Las Vegas) — so
+                            GP per season: Italy (Imola + Monza) and the
+                            United States (Miami + Austin + Las Vegas), so
                             the builder writes them to distinct ``italy_imola`` /
                             ``italy_monza`` / ``united_states_*`` slugs instead
                             of overwriting each other under a shared
@@ -241,7 +241,7 @@ class BuildResult:
     of raised exceptions because the CLI loop wants to keep going past
     individual GP errors and only report at the end.
 
-    Each successful build produces two parquets per GP — radios and RCMs —
+    Each successful build produces two parquets per GP, radios and RCMs,
     plus (when audio is enabled) one MP3 per radio row, so this result
     tracks all three numbers separately. The summary aggregates them into
     a single ``"(N radios, M RCMs, K audio)"`` line per GP and into
@@ -426,7 +426,7 @@ class RadioDatasetCLI:
         (Italy → Imola/Monza, United States → Miami/Austin/Las Vegas)
         because the country alone would rebuild every sibling race for
         that country. With circuit-name matching the operator can target a
-        single race precisely — ``--gps Imola`` only rebuilds Imola, while
+        single race precisely: ``--gps Imola`` only rebuilds Imola, while
         ``--gps Italy`` rebuilds both Imola and Monza in one go.
 
         Logs a warning for any GP name that did not match anything so a typo
@@ -499,8 +499,8 @@ class RadioDatasetCLI:
         because an earlier build ran before the RCM extension landed), the
         GP is rebuilt in full so the on-disk corpus stays internally
         consistent. Re-building a GP that already has both parquets is
-        idempotent — it simply overwrites the existing files with fresh
-        data — so the worst case of skipping incorrectly is a wasted
+        idempotent: it simply overwrites the existing files with fresh
+        data, so the worst case of skipping incorrectly is a wasted
         round trip, never data corruption.
         """
         results: list[BuildResult] = []
@@ -629,7 +629,7 @@ class RadioDatasetCLI:
     def _rcm_target_path(self, race: RaceMeta) -> Path:
         """Compute the RCM parquet path the builder will write for a race.
 
-        The RCM analogue of :meth:`_radio_target_path` — same per-GP
+        The RCM analogue of :meth:`_radio_target_path`, same per-GP
         directory, but the ``rcm.parquet`` filename
         :meth:`RadioDatasetBuilder.write_rcm_parquet` writes to. Both
         targets are checked together by the skip-existing logic so a GP

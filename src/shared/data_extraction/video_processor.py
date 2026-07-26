@@ -1,9 +1,25 @@
+"""YouTube downloader for the archived YOLO car-livery vision experiments.
+
+Archived (see ``src/shared/README.md``); superseded by
+``src/data_extraction/legacy/video_downloader.py``. Downloads full race
+videos, it does not extract frames, that step happened separately once a
+video had landed on disk.
+"""
+
 import subprocess
 from pathlib import Path
 
 
 def download_f1_video(url: str, filename: str):
-    """Download YouTube F1 Highlight videos (Creative Commons) using yt-dlp"""
+    """Download a Creative-Commons-licensed F1 highlight video via yt-dlp.
+
+    Writes to ``../f1-strategy/data/videos``, a path relative to wherever the
+    process is launched from and left over from an earlier repo layout; it
+    will not resolve unless run from that specific working directory. Any
+    failure (missing yt-dlp binary, network error, invalid URL) is caught
+    and printed rather than raised, so a batch of calls in ``__main__`` does
+    not stop at the first video that fails to download.
+    """
     try:
         output_path = Path("../f1-strategy/data/videos")
         output_path.mkdir(parents=True, exist_ok=True)

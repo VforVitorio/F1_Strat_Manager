@@ -1,4 +1,4 @@
-"""Tire chart — lap time over laps with per-stint colour and cliff projection.
+"""Tire chart: lap time over laps with per-stint colour and cliff projection.
 
 Embedded inside the Tire N26 ``AgentCard`` (chart slot reserved in C5).
 The previous version plotted ``tyre_life`` (laps on the current set) on
@@ -8,7 +8,7 @@ the user reads degradation the same way an engineer does on a pit-wall:
 
 - **X axis** is the lap number, identical to ``PaceChart`` so the two
   cards line up vertically and the eye does not have to recalibrate.
-- **Y axis** is the lap time in seconds — every climb on the curve is
+- **Y axis** is the lap time in seconds: every climb on the curve is
   literal degradation, every drop is a fresh tyre.
 - **One ``PlotDataItem`` per stint**, coloured with the Pirelli palette
   for that compound (red / yellow / white / green / blue). pyqtgraph
@@ -30,7 +30,7 @@ Data model (fed by ``MainWindow._tire_history``):
     [{lap: int, lap_time_s: float | None,
       tyre_life: float | None, compound: str | None}, ...]
 
-The widget keeps no domain state of its own — the per-stint segment list
+The widget keeps no domain state of its own: the per-stint segment list
 is rebuilt on every ``update_from`` call. At the dashboard's 30-lap
 window the cost is well under a millisecond.
 """
@@ -74,7 +74,7 @@ class TireChart(pg.PlotWidget):
     """PlotWidget that pairs per-stint lap-time segments with a cliff band.
 
     The widget is intentionally a thin renderer over ``MainWindow``'s
-    ``_tire_history`` dict — every render rebuilds segments and the
+    ``_tire_history`` dict: every render rebuilds segments and the
     cliff annotations from scratch so a stale stint cannot survive a
     pit stop or a mid-stream reconnect. Pre-allocated items (the cliff
     band edges, the median marker, the dashed smoothing overlay) keep
@@ -360,7 +360,7 @@ def _sane_cliff(value: Any, ceiling: float) -> float | None:
 def _rolling_mean(ys: list[float], window: int = 3) -> list[float]:
     """3-point centred rolling mean over a list of lap times.
 
-    The window is small on purpose — heavier smoothing (5 or more)
+    The window is small on purpose: heavier smoothing (5 or more)
     visibly lags the underlying trend in the 25-30-lap windows the
     dashboard renders, defeating the point of the overlay. ``min_periods=1``
     semantics: edges are averaged over whatever points exist so the line

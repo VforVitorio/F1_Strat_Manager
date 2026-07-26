@@ -1,4 +1,4 @@
-"""Pace chart — predicted lap time vs actual, with P10/P90 CI band.
+"""Pace chart: predicted lap time vs actual, with P10/P90 CI band.
 
 Embedded inside the Pace N25 AgentCard (the chart slot reserved in C5).
 pyqtgraph is used instead of matplotlib because PlotDataItem/FillBetweenItem
@@ -14,7 +14,7 @@ Data model (fed by ``MainWindow._pace_history``):
     }}
 
 ``update`` rebuilds the three plot items each lap (window size ≤30, so
-the cost is negligible). Missing values are simply skipped — laps before
+the cost is negligible). Missing values are simply skipped: laps before
 the dashboard connected will only have ``actual`` and the predicted line
 / CI band start from the first lap we saw the per-agent payload for.
 """
@@ -83,7 +83,7 @@ class PaceChart(pg.PlotWidget):
         Lap times outside the plausible F1 range (30-200 s) are dropped
         so an occasional stub value cannot blow the Y-axis autoscale and
         flatten the real series to a hairline. The whole 30-lap window
-        is rebuilt per update — cheap at these sizes (<1 ms)."""
+        is rebuilt per update, cheap at these sizes (<1 ms)."""
         if not history:
             self._clear()
             return

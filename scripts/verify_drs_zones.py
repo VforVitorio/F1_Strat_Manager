@@ -1,4 +1,4 @@
-"""Audit DRS zones per GP — sanity check against the FIA 2025 circuit docs.
+"""Audit DRS zones per GP: sanity check against the FIA 2025 circuit docs.
 
 Uses the same ``_extract_reference_lap`` pattern the arcade's
 ``SessionLoader`` relies on: fastest qualifying lap telemetry, ``DRS``
@@ -15,7 +15,7 @@ For each DRS activation zone the script reports:
 
 The FIA publishes a per-GP PDF with zones as "detection at X m before
 Turn Y, activation from Z m after Turn W". Cross-reference the corner
-tags and the metre offsets below with that PDF — they should match
+tags and the metre offsets below with that PDF: they should match
 within ~30 m (sampling resolution of FastF1 telemetry).
 
 Anomalies to expect:
@@ -56,7 +56,7 @@ def extract_zones(tel, corners_df=None, min_length_m: float = 80.0) -> list[dict
 
     FastF1 publishes ``DRS`` as a status byte; values ``>= 10`` mean the
     flap is open. A "zone" is any maximal run of open samples. Zones
-    shorter than ``min_length_m`` are dropped as telemetry blips — real
+    shorter than ``min_length_m`` are dropped as telemetry blips: real
     F1 DRS activation zones are always several hundred metres long.
 
     When ``corners_df`` is provided (from ``session.get_circuit_info()``)
@@ -122,7 +122,7 @@ def _nearest_corner(x: float, y: float, corners_df) -> str:
 
 
 def audit_one(year: int, round_: int, min_length_m: float) -> dict:
-    """Load quali, fastest lap, telemetry + add_distance — then
+    """Load quali, fastest lap, telemetry + add_distance, then
     extract zones with corner tags. Exceptions become error dicts so a
     single bad session does not halt the batch."""
     try:
@@ -144,7 +144,7 @@ def audit_one(year: int, round_: int, min_length_m: float) -> dict:
             corners_df = ci.corners
         except Exception:
             # Circuit info is only available on recent FastF1 versions /
-            # for circuits FastF1 has the corner database for — graceful
+            # for circuits FastF1 has the corner database for: graceful
             # degrade, the zone tags will read "—".
             pass
         zones = extract_zones(tel, corners_df=corners_df, min_length_m=min_length_m)

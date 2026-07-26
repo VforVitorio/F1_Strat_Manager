@@ -14,7 +14,7 @@ The LLM cannot miss or hallucinate alerts.
 Entry points
 ------------
 run_radio_agent(lap_state)
-    Requires LAPS/SESSION_META globals populated first via setup_session().
+    Self-contained — everything it needs comes from lap_state itself.
     lap_state keys: lap (int), radio_msgs (list[RadioMessage]),
     rcm_events (list[RCMEvent]).
 
@@ -80,7 +80,12 @@ try:
 except Exception:
     _DATA_ROOT = _REPO_ROOT / "data"
 
-# ── Module-level globals (populated by entry points) ──────────────────────────
+# ── Module-level globals ───────────────────────────────────────────────────────
+# Left over from the notebook's global-state design. Only run_radio_agent_from_state
+# writes LAPS/SESSION_META (for total_laps/year bookkeeping — see its docstring:
+# "not queried during inference"), and nothing in this module ever reads them back.
+# run_radio_agent itself is self-contained through lap_state and never touches
+# these. RCM_DF is declared here but not written or read anywhere.
 LAPS:         pd.DataFrame = pd.DataFrame()
 RCM_DF:       pd.DataFrame = pd.DataFrame()
 SESSION_META: dict         = {}

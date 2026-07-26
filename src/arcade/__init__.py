@@ -1,4 +1,4 @@
-"""F1 StratLab — Arcade race replay UI.
+"""F1 StratLab: Arcade race replay UI.
 
 This package exposes a Python Arcade window that consumes the backend
 SSE simulation stream (/api/v1/strategy/simulate) and renders the race

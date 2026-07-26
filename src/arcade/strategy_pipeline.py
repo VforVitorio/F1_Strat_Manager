@@ -1,4 +1,4 @@
-"""Arcade-local strategy pipeline — thin delegate over the shared engine.
+"""Arcade-local strategy pipeline: thin delegate over the shared engine.
 
 The arcade process runs the full N31 multi-agent pipeline in-process (no backend
 SSE hop) so its dashboard subprocess can subscribe to the arcade TCP stream and
@@ -7,7 +7,7 @@ outputs on the same wire.
 
 This module used to be a body-copy of
 ``src.agents.strategy_orchestrator.run_strategy_orchestrator_from_state`` with a
-"mirror the change here" warning — the exact drift the audit (AUDIT_P2B_CORE_COMPUTE
+"mirror the change here" warning: the exact drift the audit (AUDIT_P2B_CORE_COMPUTE
 F10) flagged and the #166 crash proved real. It now delegates to the single shared
 engine ``src.strategy.inference.engine.run_lap`` (``rich`` profile), which reproduces
 the orchestrator byte-for-byte AND returns the agent outputs. One code path, three

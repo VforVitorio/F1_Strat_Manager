@@ -2,7 +2,7 @@
 One-shot ingestion script: PDF → chunks → embeddings → Qdrant.
 
 Run this script once to build (or incrementally update) the local Qdrant index
-from FIA regulation PDFs. Subsequent runs are idempotent — each chunk is hashed
+from FIA regulation PDFs. Subsequent runs are idempotent: each chunk is hashed
 and skipped if it already exists in the collection, so adding a new PDF only
 indexes the new content without rebuilding from scratch.
 
@@ -50,11 +50,11 @@ class IndexConfig:
 
     Attributes:
         collection_name:  Name of the Qdrant collection to populate. Must match
-                          ``RagConfig.collection_name`` in ``retriever.py`` —
+                          ``RagConfig.collection_name`` in ``retriever.py``:
                           a mismatch means the retriever queries an empty collection.
         embedding_model:  Sentence-transformers model used to encode chunks. Must
-                          be the same model used at query time in ``retriever.py``
-                          — incompatible models produce meaningless similarity scores.
+                          be the same model used at query time in ``retriever.py``,
+                          since incompatible models produce meaningless similarity scores.
         embedding_dim:    Output vector size of the embedding model. BGE-M3 produces
                           1024-dim vectors; changing the model requires updating this
                           value or Qdrant will reject the upsert silently.
@@ -115,7 +115,7 @@ class PDFDocument:
     Attributes:
         path:     Absolute path to the source PDF, kept for error messages and
                   logging so failures can be traced back to a specific file.
-        doc_type: Regulatory domain of the document — either ``"sporting_regs"``
+        doc_type: Regulatory domain of the document: either ``"sporting_regs"``
                   or ``"technical_regs"``. Derived from the filename prefix and
                   stored on every chunk so downstream agents can filter by domain.
         year:     Season the document applies to (2023–2025). F1 regulations
@@ -145,12 +145,12 @@ class TextChunk:
     Attributes:
         text:          The regulation passage itself, trimmed and normalised.
                        This is the string that gets embedded and stored as the
-                       Qdrant payload — what the RAG agent returns to the LLM.
+                       Qdrant payload: what the RAG agent returns to the LLM.
         doc_type:      Inherited from the parent ``PDFDocument``. Lets callers
                        filter retrieval results by regulatory domain without
                        parsing the text.
         year:          Inherited from the parent ``PDFDocument``. Determines
-                       which season's rules apply — critical when regulations
+                       which season's rules apply, critical when regulations
                        changed between years (e.g. cost-cap rules 2023 vs 2025).
         article:       Article or section reference extracted by regex from the
                        chunk text (e.g. ``"Article 48.3"``). Empty string when
@@ -160,7 +160,7 @@ class TextChunk:
                        document, when available. Provides coarse context about
                        which part of the regulations the chunk belongs to.
         chunk_hash:    SHA-256 of the normalised text, used for idempotent
-                       upserts — chunks already present in Qdrant are skipped
+                       upserts: chunks already present in Qdrant are skipped
                        so re-running the script only indexes new content.
     """
 
@@ -183,7 +183,7 @@ def parse_pdf_filename(path: Path) -> tuple[str, int] | None:
     """Extract doc_type and year from a PDF filename following the naming convention.
 
     Returns ``None`` for files that do not match the expected pattern so the
-    caller can skip them with a warning rather than raising an exception — this
+    caller can skip them with a warning rather than raising an exception: this
     lets the script process a directory that may contain unrelated files without
     aborting the whole run.
 
@@ -198,7 +198,7 @@ def parse_pdf_filename(path: Path) -> tuple[str, int] | None:
 
 
 def extract_text_from_pdf(path: Path) -> str:
-    """Extract all plain text from a PDF file using PyMuPDF.
+    """Extract all plain text from a PDF file using pypdf.
 
     Concatenates text from every page separated by a newline so that page
     boundaries do not create artificial word splits during chunking. pypdf
@@ -207,7 +207,7 @@ def extract_text_from_pdf(path: Path) -> str:
 
     Args:
         path: Path to the PDF file to read. Raises ``FileNotFoundError`` if
-              the file does not exist — callers should validate the path first.
+              the file does not exist: callers should validate the path first.
     """
     reader = pypdf.PdfReader(str(path))
     pages = [page.extract_text() or "" for page in reader.pages]
@@ -293,7 +293,7 @@ def extract_section_title(text: str) -> str:
     Matches lines that look like numbered section headings in FIA documents:
     a number followed by all-caps words, e.g. ``"48 SAFETY CAR PROCEDURE"``.
     Returns the first match found, or an empty string when none is present.
-    This is a best-effort heuristic — not every chunk will have a heading.
+    This is a best-effort heuristic: not every chunk will have a heading.
 
     Args:
         text: The regulation chunk to search.
@@ -374,16 +374,17 @@ def ensure_collection(client: QdrantClient, name: str, dim: int) -> None:
     """Create the Qdrant collection if it does not already exist.
 
     Uses cosine distance to match the L2-normalised embeddings produced by
-    ``all-MiniLM-L6-v2``. Does nothing if the collection already exists, making
-    this function safe to call on every script run without risk of wiping the
-    existing index.
+    ``CFG.embedding_model`` (BGE-M3 by default; see :func:`embed_chunks`'s
+    ``normalize_embeddings=True`` call). Does nothing if the collection
+    already exists, making this function safe to call on every script run
+    without risk of wiping the existing index.
 
     Args:
         client: An initialised ``QdrantClient`` pointing to the local storage.
-        name:   Name of the collection to create. Must match ``COLLECTION_NAME``
+        name:   Name of the collection to create. Must match ``RagConfig.collection_name``
                 used in ``retriever.py`` or queries will hit the wrong collection.
         dim:    Embedding dimension. Must match the output size of the model
-                used during indexing — mismatches cause silent wrong results.
+                used during indexing: mismatches cause silent wrong results.
     """
     existing = {c.name for c in client.get_collections().collections}
     if name not in existing:
@@ -399,7 +400,7 @@ def ensure_collection(client: QdrantClient, name: str, dim: int) -> None:
 def get_existing_hashes(client: QdrantClient, name: str) -> set[str]:
     """Retrieve all chunk hashes currently stored in a Qdrant collection.
 
-    Used to determine which chunks are new before embedding — skipping already-
+    Used to determine which chunks are new before embedding: skipping already-
     indexed chunks avoids redundant embedding calls and prevents duplicates.
     Scrolls through the full collection in pages of 1000 to handle large indexes
     without loading everything into memory at once.
@@ -442,9 +443,10 @@ def embed_chunks(
 ) -> np.ndarray:
     """Embed a list of chunks in batches and return the embedding matrix.
 
-    Processes chunks in batches of ``EMBED_BATCH_SIZE`` to keep GPU/CPU memory
-    usage bounded. Normalisation is applied so cosine similarity equals dot
-    product, consistent with how the retriever queries the collection.
+    Processes chunks in batches of ``CFG.embed_batch_size`` to keep GPU/CPU
+    memory usage bounded. Normalisation is applied so cosine similarity
+    equals dot product, consistent with how the retriever queries the
+    collection.
 
     Args:
         chunks:  The chunks to embed. Their ``text`` field is used as input;

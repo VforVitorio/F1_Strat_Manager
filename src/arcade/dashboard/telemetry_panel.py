@@ -1,4 +1,4 @@
-"""Live telemetry panel — 2×2 grid of pyqtgraph charts with fixed axes.
+"""Live telemetry panel: 2×2 grid of pyqtgraph charts with fixed axes.
 
 Layout mirrors the Streamlit circuit-comparison page:
 
@@ -10,15 +10,15 @@ Layout mirrors the Streamlit circuit-comparison page:
     │ (main + rival)     │ (main + rival)     │
     └────────────────────┴────────────────────┘
 
-Axes are locked so only the lines move between updates — a moving
+Axes are locked so only the lines move between updates: a moving
 viewport on every broadcast is visually noisy and masks where on the
 lap the car actually is. X is fixed to ``[0, circuit_length]`` and Y
 is per-metric:
 
-- Speed: 0-340 km/h (modern F1 top speeds cluster below 340).
+- Speed: 0-360 km/h (Monza's straight tops out around 357).
 - Brake / Throttle: -5 to 105 % with tiny padding so traces at 0 and
   100 do not kiss the frame.
-- Delta: ±3 s — generous for one lap, clipped when the series wanders.
+- Delta: ±3 s, generous for one lap, clipped when the series wanders.
 
 Each chart carries a title label above the plot and a mini colour
 legend (``MAIN · VER`` · ``RIVAL · LEC``) so the user never has to
