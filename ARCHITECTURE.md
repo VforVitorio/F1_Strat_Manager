@@ -24,7 +24,7 @@ All three consume the same core:
 - `data/processed/laps_featured_<year>.parquet` + `data/raw/<year>/<Location>/` +
   `data/tire_compounds_by_race.json`.
 
-The Streamlit path also runs a FastAPI backend (`src/telemetry/backend/`).
+The web app path also runs a FastAPI backend (`src/telemetry/backend/`).
 The Arcade path calls `run_lap` in-process without going through the
 backend (see [`docs/pages/arcade-strategy-pipeline.md`](docs/pages/arcade-strategy-pipeline.md)).
 
@@ -67,6 +67,7 @@ See [`docs/pages/simulation.md`](docs/pages/simulation.md) for the wire-level vi
 - **Roadmap:** [`ROADMAP.md`](ROADMAP.md).
 - **Agents reference:** [`docs/pages/agents-api.md`](docs/pages/agents-api.md).
 - **Backend API:** [`docs/pages/backend-api.md`](docs/pages/backend-api.md).
-- **Streamlit frontend:** [`docs/pages/streamlit.md`](docs/pages/streamlit.md).
+- **Web app:** [`docs/pages/webapp.md`](docs/pages/webapp.md). The Streamlit surface it
+  replaced is recorded at [`docs/pages/streamlit.md`](docs/pages/streamlit.md).
 - **Simulation engine:** [`docs/pages/simulation.md`](docs/pages/simulation.md).
 - **All draw.io diagrams:** [`docs/diagrams/`](docs/diagrams/).

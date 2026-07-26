@@ -28,13 +28,13 @@ Tags that appear on a single page are listed under **Other** at the end.
 |---|---|
 | `arcade` | [Arcade quick start](#/arcade-quick-start), [Dashboard architecture](#/arcade-dashboard), [Strategy pipeline](#/arcade-strategy-pipeline) |
 | `pyside6` | [Arcade quick start](#/arcade-quick-start), [Dashboard architecture](#/arcade-dashboard) |
-| `frontend` | [Streamlit frontend](#/streamlit), [Driver colors](#/driver-colors) |
-| `ui` | [Streamlit frontend](#/streamlit), [Dashboard architecture](#/arcade-dashboard) |
+| `frontend` | [Web app](#/webapp), [Driver colors](#/driver-colors), [Streamlit frontend](#/streamlit) (legacy) |
+| `ui` | [Web app](#/webapp), [Dashboard architecture](#/arcade-dashboard), [Streamlit frontend](#/streamlit) (legacy) |
 | `api` | [Agents API reference](#/agents-api), [Backend API](#/backend-api) |
-| `telemetry` | [Race replay engine](#/simulation), [Backend API](#/backend-api), [Streamlit frontend](#/streamlit), [Dashboard architecture](#/arcade-dashboard) |
-| `chat` | [Backend API](#/backend-api), [Streamlit frontend](#/streamlit) |
+| `telemetry` | [Race replay engine](#/simulation), [Backend API](#/backend-api), [Web app](#/webapp), [Dashboard architecture](#/arcade-dashboard) |
+| `chat` | [Backend API](#/backend-api), [Web app](#/webapp) |
 | `voice` | [Streamlit frontend](#/streamlit) (legacy — the voice surface was retired in v2) |
-| `mcp` | [Backend API](#/backend-api), [Streamlit frontend](#/streamlit) |
+| `mcp` | [Backend API](#/backend-api), [Web app](#/webapp) |
 
 ## Operations
 

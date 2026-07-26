@@ -72,8 +72,8 @@ Some code carries hard rules set by the TFG author:
 
 - **`scripts/run_simulation_cli.py`** — the TFG's PMV (first working
   CLI). Duplicate before modifying; do not refactor in-place.
-- **`src/agents/` internals** — stable contract for the CLI + Streamlit
-  + Arcade paths. Additive entry points are welcome (see
+- **`src/agents/` internals** — stable contract for the CLI, the Arcade
+  and the web app backend. Additive entry points are welcome (see
   `src/strategy/inference/engine.py::run_lap`, the shared per-lap pipeline
   call all three surfaces route through), but do not refactor existing
   agent modules in place.
