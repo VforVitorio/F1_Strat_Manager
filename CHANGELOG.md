@@ -11,6 +11,19 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.2.3](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.2...v2.2.3) (2026-07-27)
+
+
+### Bug Fixes
+
+* **engine:** repath the test files the module docstring names after the move ([2502ec3](https://github.com/VforVitorio/F1-StratLab/commit/2502ec3be8e8a1e5ad999226515f9534297e2180))
+* **mc:** break an exact tie by a stated rule instead of by dict insertion order ([e1723bc](https://github.com/VforVitorio/F1-StratLab/commit/e1723bcb1411fcf9ba9df10f133b6f16bf37dcb1)), closes [#645](https://github.com/VforVitorio/F1-StratLab/issues/645)
+
+
+### Documentation
+
+* **audits:** record the MONITOR layer audit and the decision not to build it ([185d0f5](https://github.com/VforVitorio/F1-StratLab/commit/185d0f5335c6882c53675a4460552b5cd13adb47))
+
 ## [2.2.2](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.1...v2.2.2) (2026-07-26)
 
 
