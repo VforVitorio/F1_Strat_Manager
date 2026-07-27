@@ -51,8 +51,16 @@ def _score(strategy: str, state: tuple):
 
 
 def _argmax(state: tuple) -> str:
-    scores = {s: _score(s, state) for s in STRATEGIES}
-    return max(scores, key=scores.get)
+    """The winner, decided by the SHIPPED argmax rather than a second copy of it.
+
+    This used to be its own `max(scores, key=scores.get)`. That agreed with the
+    real one only because both happened to iterate STRATEGIES in the same order,
+    so a change to the shipped tie-break would have left this test still passing
+    while asserting the old behaviour. Importing it is the point (#645).
+    """
+    from src.agents.strategy_orchestrator import best_mc_candidate
+
+    return best_mc_candidate({s: {"score": _score(s, state)} for s in STRATEGIES})
 
 
 # ---------------------------------------------------------------------------
@@ -532,3 +540,55 @@ def test_the_named_target_is_the_car_we_will_be_racing_not_the_first_in_the_list
     )
     assert scores["UNDERCUT"]["eligible"]
     assert scores["UNDERCUT"]["target"] == "RACING_US"
+
+
+# ---------------------------------------------------------------------------
+# The tie-break is a stated rule, not an accident of dict order (#645)
+# ---------------------------------------------------------------------------
+
+
+def test_an_exact_tie_is_broken_by_the_stated_precedence_not_by_dict_order():
+    """The same tie must resolve the same way whichever key was inserted first.
+
+    Before #645 the winner came from `max`, which returns the first item it saw,
+    so the answer depended on the order `_run_mc_simulation` built its dict in.
+    It gave the right answer for the wrong reason, and this is the test that
+    would have caught someone reordering that list.
+    """
+    from src.agents.strategy_orchestrator import best_mc_candidate
+
+    stay_first = {"STAY_OUT": {"score": 0.0}, "PIT_NOW": {"score": 0.0}}
+    pit_first = {"PIT_NOW": {"score": 0.0}, "STAY_OUT": {"score": 0.0}}
+
+    assert best_mc_candidate(stay_first) == best_mc_candidate(pit_first)
+    assert best_mc_candidate(pit_first) == "STAY_OUT", (
+        "a genuine tie must resolve conservatively: staying out is recoverable "
+        "next lap, a stop is not"
+    )
+
+
+def test_the_margin_distinguishes_a_tie_from_a_clear_preference():
+    """A caller must be able to tell "barely won" from "won outright".
+
+    Both arrive as the same bare string from `best_mc_candidate`, and on a real
+    pit-stop lap that difference is the whole story.
+    """
+    from src.agents.strategy_orchestrator import mc_decision_margin
+
+    tie = {"STAY_OUT": {"score": 0.0}, "PIT_NOW": {"score": 0.0}}
+    clear = {"STAY_OUT": {"score": 1.0}, "PIT_NOW": {"score": 0.4}}
+
+    assert mc_decision_margin(tie) == 0.0
+    assert mc_decision_margin(clear) == pytest.approx(0.6)
+
+
+def test_the_margin_is_None_rather_than_zero_when_there_is_no_contest():
+    """One scoreable candidate is not a dead tie, and must not read as one.
+
+    Returning 0.0 here would be the sentinel-collision shape this repo keeps
+    paying for: a value the code can also legitimately find.
+    """
+    from src.agents.strategy_orchestrator import mc_decision_margin
+
+    assert mc_decision_margin({"STAY_OUT": {"score": 1.0}}) is None
+    assert mc_decision_margin({"STAY_OUT": {"score": 1.0}, "PIT_NOW": {"score": None}}) is None

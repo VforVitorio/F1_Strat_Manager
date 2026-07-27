@@ -905,6 +905,55 @@ def _lap_count_or_zero(reported) -> int:
     return int(number)
 
 
+# Which candidate wins when two score EXACTLY the same. This used to be decided by
+# `max`, which returns the first item it saw, so the answer came from the order
+# `_run_mc_simulation` happens to build its dict in. That produced the right answer
+# (STAY_OUT is first, and conservative is the right default for a genuine tie) for
+# the wrong reason, and it was invisible: nothing recorded that a tie had happened.
+#
+# It is not a rare corner either. Over 415 real laps the audit found six near-ties,
+# ALL SIX on decision laps, three of them exact and falling on real pit stops (#645).
+# The margin is smallest exactly where the call is hardest, which is the opposite of
+# the usual case, so this list decides real races and deserves to be a decision.
+#
+# Conservative first: doing nothing is recoverable next lap, a stop is not.
+_TIE_BREAK_ORDER: tuple[str, ...] = ("STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT")
+
+
+def _scoreable(mc_results: dict) -> dict:
+    """The candidates that actually carry a finite score.
+
+    A candidate with no valid target scores None by design, and it must not be
+    silently treated as zero: that is the sentinel-collision shape this codebase
+    keeps paying for.
+    """
+    return {
+        name: cell
+        for name, cell in mc_results.items()
+        if _finite_or_none(cell.get("score")) is not None
+    }
+
+
+def mc_decision_margin(mc_results: dict) -> float | None:
+    """How far the winner beat the runner-up, or None when there is no contest.
+
+    Exists because a caller could previously not tell "the model preferred this by
+    a clear margin" from "two candidates scored identically and one was picked".
+    Both arrive as the same bare string, and the second is a materially different
+    statement about the lap: a tie means the decision is genuinely balanced, which
+    is information a strategist wants rather than noise to hide.
+
+    Returns None when fewer than two candidates are scoreable, because there is no
+    margin to report and zero would read as "a dead tie" (#645).
+    """
+    scores = sorted(
+        (cell["score"] for cell in _scoreable(mc_results).values()), reverse=True
+    )
+    if len(scores) < 2:
+        return None
+    return float(scores[0] - scores[1])
+
+
 def best_mc_candidate(mc_results: dict) -> str:
     """The argmax over scored candidates, skipping the ones never offered.
 
@@ -914,18 +963,42 @@ def best_mc_candidate(mc_results: dict) -> str:
     helper is also what stops the four from drifting apart, which is how this
     codebase acquired most of its duplicate-logic bugs.
 
+    An exact tie is broken by ``_TIE_BREAK_ORDER`` rather than by whichever key the
+    caller inserted first. Same answer as before on today's dict order, different
+    reason: it is now a stated rule instead of an accident, and the tie is logged
+    so it stops being invisible. ``mc_decision_margin`` is the companion a caller
+    should read when it needs to know how close the call was.
+
     Falls back to the first key when nothing is scoreable at all (no rivals, every
     candidate ineligible): callers need a string, and an arbitrary-but-stable pick
     beats raising inside a race.
     """
-    scored = {
-        name: cell
-        for name, cell in mc_results.items()
-        if _finite_or_none(cell.get("score")) is not None
-    }
+    scored = _scoreable(mc_results)
     if not scored:
         return next(iter(mc_results), "STAY_OUT")
-    return max(scored, key=lambda name: scored[name]["score"])
+
+    best_score = max(cell["score"] for cell in scored.values())
+    tied = [name for name, cell in scored.items() if cell["score"] == best_score]
+    if len(tied) == 1:
+        return tied[0]
+
+    winner = min(tied, key=lambda name: _tie_break_rank(name))
+    logger.info(
+        "MC tie at %.6f between %s; %s wins by the stated precedence, not by dict "
+        "order. A tie means the lap is genuinely balanced (#645).",
+        best_score,
+        ", ".join(sorted(tied)),
+        winner,
+    )
+    return winner
+
+
+def _tie_break_rank(name: str) -> int:
+    """Position in the tie-break precedence; unknown candidates sort last."""
+    try:
+        return _TIE_BREAK_ORDER.index(name)
+    except ValueError:
+        return len(_TIE_BREAK_ORDER)
 
 
 def _format_mc_row(name: str, cell: dict) -> str:
