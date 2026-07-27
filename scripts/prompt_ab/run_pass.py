@@ -22,6 +22,11 @@ import pickle
 import warnings
 from pathlib import Path
 
+# Safe at module scope: decision_memory imports nothing but the standard library.
+# The orchestrator is the one that has to be deferred into main(), because importing
+# it pulls in the tire agent, which reads its routing config at import time.
+from src.strategy.inference.decision_memory import DecisionMemory
+
 from scripts.prompt_ab._common import (
     Usage,
     assemble,
@@ -58,7 +63,6 @@ def main() -> None:
     provider = load_env()
 
     from src.agents.strategy_orchestrator import CFG, _get_orchestrator_llm
-    from src.strategy.inference.decision_memory import DecisionMemory
 
     if args.model:
         # Must happen before the first _get_orchestrator_llm(), which caches the client.
