@@ -13,14 +13,29 @@ the only producer. If a block below is deliberately reworded, update the
 assertion rather than deleting it.
 """
 
+from pathlib import Path
+
 import pytest
 
-from src.agents.strategy_orchestrator import RaceState, _build_orchestrator_prompt
+# Importing the orchestrator pulls in the tire agent, which reads its routing
+# config at import time, so the whole module is unimportable without the HF
+# weights. That is why the import below lives inside the fixture rather than at
+# module scope: a module-level import raises during COLLECTION, which no skipif
+# can catch. Same guard as tests/agents/test_agents.py, same reason.
+ROOT = Path(__file__).parent.parent.parent
+_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
+
+pytestmark = pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="data/models/ not present (CI environment without model weights)",
+)
 
 
 @pytest.fixture
 def prompt() -> str:
     """A prompt with no sub-agent outputs, so only the static blocks remain."""
+    from src.agents.strategy_orchestrator import RaceState, _build_orchestrator_prompt
+
     race_state = RaceState(
         driver="NOR",
         lap=25,
