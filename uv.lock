@@ -1119,7 +1119,7 @@ wheels = [
 
 [[package]]
 name = "f1-strat-manager"
-version = "2.2.3"
+version = "2.2.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
