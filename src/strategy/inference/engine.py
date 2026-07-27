@@ -31,8 +31,8 @@ Untouchability: nothing in ``src/agents/`` is modified. Every strategy layer is 
 SAME code object the orchestrator runs (imported, never copied); the only
 engine-owned code is the call sequence itself and the default-lap_state builder.
 
-Anti-drift guards: ``tests/test_engine.py``, ``tests/test_engine_no_llm.py`` and
-``tests/test_engine_threads_every_argument.py`` (which checks, by AST, that this path
+Anti-drift guards: ``tests/engine/test_engine.py``, ``tests/engine/test_engine_no_llm.py`` and
+``tests/engine/test_engine_threads_every_argument.py`` (which checks, by AST, that this path
 passes ``_assemble_recommendation`` every argument the orchestrator does).
 
 These do not assert byte-level parity with the orchestrator. An earlier docstring cited
@@ -227,7 +227,7 @@ def _run_rich(
     missed, which disabled #462's guard on this profile, and ``cliff_p50`` with
     ``total_laps`` were missed, which left #433's stint-end guard with no anchor.
     Both bugs were invisible precisely because the docstring promised parity.
-    ``tests/test_engine_threads_every_argument.py`` is the real claim now: it
+    ``tests/engine/test_engine_threads_every_argument.py`` is the real claim now: it
     checks the arguments, which is the thing that actually breaks.
     """
     timings: dict[str, float] = {}
