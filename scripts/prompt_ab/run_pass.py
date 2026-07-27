@@ -22,11 +22,6 @@ import pickle
 import warnings
 from pathlib import Path
 
-# Safe at module scope: decision_memory imports nothing but the standard library.
-# The orchestrator is the one that has to be deferred into main(), because importing
-# it pulls in the tire agent, which reads its routing config at import time.
-from src.strategy.inference.decision_memory import DecisionMemory
-
 from scripts.prompt_ab._common import (
     Usage,
     assemble,
@@ -36,6 +31,11 @@ from scripts.prompt_ab._common import (
     load_env,
     recommendation_row,
 )
+
+# Safe at module scope: decision_memory imports nothing but the standard library.
+# The orchestrator is the one that has to be deferred into main(), because importing
+# it pulls in the tire agent, which reads its routing config at import time.
+from src.strategy.inference.decision_memory import DecisionMemory
 
 warnings.filterwarnings("ignore")
 
