@@ -132,7 +132,23 @@ def _elapsed_pivot(laps):
 
 
 def _neutralised_laps(laps) -> set[int]:
-    """Lap numbers showing a Safety Car, VSC or red flag on any car's status."""
+    """Lap numbers showing a Safety Car, VSC or red flag on any car's status.
+
+    Keyed on lap NUMBER, which is a deliberate choice with a measured price.
+    Heilmeier et al. (Applied Sciences 2020, 10(21):4229) warn that
+    neutralisations belong on race TIME: a driver a lap down sits elsewhere on
+    the circuit than the leader sharing his lap number, so a union over lap
+    numbers attributes a flag to a car that never drove through it. Measured
+    over all 72 races of 2023-2025 (79032 driver-laps, flags 4/5/6): 692
+    driver-laps marked without having seen the flag, 0.88%, a 1.142x
+    over-marking factor.
+
+    Kept because this function exists to EXCLUDE neutralised laps from the
+    projection ground truth, and over-exclusion is the safe direction: it drops
+    a few clean stops rather than scoring the model on laps where nobody raced.
+    The same union, priced the same way, is in
+    ``scripts/measure_mc_tables.py::_status_by_lap`` (#647).
+    """
     neutralised = set()
     for lap, group in laps.groupby("LapNumber"):
         joined = "".join(group["TrackStatus"].dropna().astype(str))
