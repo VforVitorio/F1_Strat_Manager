@@ -11,6 +11,18 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.2.4](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.3...v2.2.4) (2026-07-27)
+
+
+### Bug Fixes
+
+* **orchestrator:** frame a held STAY_OUT as monitoring instead of as a blocked pit ([3f0a118](https://github.com/VforVitorio/F1-StratLab/commit/3f0a118460a934df304670fa74ae8a726543480b))
+
+
+### Documentation
+
+* **mc:** price the lap-number neutralisation union in all three places it lives ([86c4659](https://github.com/VforVitorio/F1-StratLab/commit/86c4659c04e1f721fd1e5d307043269d9d3543c8))
+
 ## [2.2.3](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.2...v2.2.3) (2026-07-27)
 
 
