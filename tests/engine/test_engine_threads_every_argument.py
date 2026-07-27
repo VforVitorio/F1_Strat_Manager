@@ -1,4 +1,4 @@
-"""The engine must pass `_assemble_recommendation` everything the orchestrator does.
+"""The engine must pass the orchestrator's layer functions everything the orchestrator does.
 
 The engine removes duplication by importing the orchestrator's layer functions rather
 than copying their bodies, but it re-drives the call sequence, so every argument is
@@ -10,9 +10,18 @@ orchestrator threaded it at both call sites and the engine did not. `live_driver
 means "unknown" and passes the LLM value unchecked, so the guard was inactive on the
 `rich` profile, which is the default for /simulate, the arcade and the CLI.
 
+Two functions take hand-threaded arguments, and for a long time only one was checked.
+`_build_orchestrator_prompt` is the other, and it is the more exposed of the two: three
+production call sites (`strategy_orchestrator.py:2164`, `:2339`, `engine.py:277`) against
+the assembly's two. Every argument added to the prompt builder is therefore a chance to
+repeat #462 on the surface where it is hardest to see, because a prompt that silently
+lost a block still returns a perfectly well-formed recommendation.
+
 The guarantee this file provides is that the engine passes every keyword the orchestrator
-passes. The engine docstring previously cited a `tests/test_engine_parity.py` that does
-not exist; this test replaces that claim with an enforced one.
+passes, for both callees. Read the direction note on the test itself before trusting a
+green run for anything else. The engine docstring previously cited a
+`tests/test_engine_parity.py` that does not exist; this test replaces that claim with an
+enforced one.
 """
 
 from __future__ import annotations
@@ -30,8 +39,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _kwargs_passed_by(func) -> set[str]:
-    """The keyword names `func` passes to `_assemble_recommendation`."""
+# The engine re-drives the orchestrator's sequence, so it threads arguments by hand
+# into BOTH of the layer functions that take them. Only the assembly was covered until
+# the memory audit pointed out the omission: `_build_orchestrator_prompt` has three
+# production call sites (strategy_orchestrator.py:2164, :2339, engine.py:277), the same
+# shape that produced the two failures in this file's docstring.
+_THREADED_CALLEES = ("_assemble_recommendation", "_build_orchestrator_prompt")
+
+
+def _kwargs_passed_by(func, callee: str = "_assemble_recommendation") -> set[str]:
+    """The keyword names `func` passes to `callee`."""
     import ast
 
     tree = ast.parse(inspect.getsource(func).lstrip())
@@ -39,29 +56,39 @@ def _kwargs_passed_by(func) -> set[str]:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
-            and node.func.id == "_assemble_recommendation"
+            and node.func.id == callee
         ):
             return {kw.arg for kw in node.keywords if kw.arg}
     return set()
 
 
-def test_the_engine_threads_every_argument_the_orchestrator_does():
-    """A new argument on the assembly must reach the engine, or its guard is dead.
+@pytest.mark.parametrize("callee", _THREADED_CALLEES)
+def test_the_engine_threads_every_argument_the_orchestrator_does(callee: str):
+    """A new argument on a layer function must reach the engine, or its guard is dead.
 
     Compares the keywords the engine passes against the ones the orchestrator passes.
     Anything the orchestrator threads and the engine does not is, by construction, a
     feature that works everywhere except the default path.
+
+    KNOW WHICH DIRECTION THIS COVERS. It asserts `orch_kwargs - engine_kwargs`, i.e.
+    the orchestrator has something the engine lacks. That is the direction both real
+    failures took. An argument the ENGINE passes and the orchestrator deliberately does
+    not is invisible here and passes green - which is exactly the shape a per-lap memory
+    block would have, since /recommend and the MCP tool are stateless per request and
+    cannot carry one. Do not read a green run as "both prompt paths are equivalent".
     """
     import src.agents.strategy_orchestrator as orch
     from src.strategy.inference import engine
 
-    engine_kwargs = _kwargs_passed_by(engine._run_rich)
-    orch_kwargs = _kwargs_passed_by(orch.run_strategy_orchestrator_from_state)
+    engine_kwargs = _kwargs_passed_by(engine._run_rich, callee)
+    orch_kwargs = _kwargs_passed_by(orch.run_strategy_orchestrator_from_state, callee)
+
+    assert orch_kwargs, f"no call to {callee} found in run_strategy_orchestrator_from_state"
 
     missing = orch_kwargs - engine_kwargs
     assert not missing, (
         f"the engine's rich profile does not thread {sorted(missing)} into "
-        f"_assemble_recommendation, so whatever those arguments guard is dead on every "
+        f"{callee}, so whatever those arguments guard is dead on every "
         f"surface that uses the default profile"
     )
 
