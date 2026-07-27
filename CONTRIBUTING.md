@@ -222,7 +222,7 @@ accepting a bump that breaks something:
 1. **Major bumps blocked on core ML libs**: `numpy`, `pandas`,
    `scikit-learn`, `lightgbm`, `xgboost`. Dependabot will still propose
    minor and patch bumps; majors must be reviewed and applied manually.
-2. **`tests/test_dep_imports.py`** runs on every CI invocation (including
+2. **`tests/infra/test_dep_imports.py`** runs on every CI invocation (including
    Dependabot PRs). It is organised in three tiers:
    - **Tier 1**, exercises the actual API surface of the most critical
      dependencies (fit/predict on a tiny matrix, parquet round-trips,

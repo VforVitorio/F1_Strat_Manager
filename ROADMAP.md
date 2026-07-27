@@ -531,7 +531,7 @@ At session start, the user selects `TEAM` and `DRIVER` (e.g. McLaren / NOR). Thi
 **Test scope actually executed (absorbed into v1.0.0):**
 
 - [X] End-to-end CLI simulation with no-LLM and LLM modes on representative 2025 races
-- [X] Smoke tests for agent imports and Arcade dashboard subprocess (`tests/test_agents.py`, `tests/test_arcade_dashboard_imports.py`)
+- [X] Smoke tests for agent imports and Arcade dashboard subprocess (`tests/agents/test_agents.py`, `tests/surfaces/test_arcade_dashboard_imports.py`)
 - [X] FastAPI + FastMCP integration path validated via `TestClient` and manual chat interactions
 - [X] Historical replay of the Bahrain 2025 GP used as the primary qualitative demo
 
