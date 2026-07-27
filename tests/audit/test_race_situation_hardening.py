@@ -1,15 +1,17 @@
-"""Race Situation Agent (N27) hardening — #450 tuned thresholds, #476 unvalidated LLM input.
+"""Race Situation Agent (N27) hardening — #665 threat bands, #476 unvalidated LLM input.
 
 Two independent bugs closed here, both silent (no exception, just a wrong or
 unused number):
 
-- **#450**: ``RaceSituationConfig.high_overtake``/``high_sc`` were dataclass
-  literals (0.80 / 0.30) that ``__post_init__`` loaded the REAL tuned thresholds
-  (``overtake_threshold`` from N12's ``model_config.json``, ``sc_threshold`` from
-  N14's ``feature_list_v1.json``) right next to, and then never used. Every
-  ``threat_level`` ever computed by ``RaceSituationOutput.__post_init__`` was
-  thresholded against the untuned placeholder — most visibly for SC, where the
-  hardcoded 0.30 sat nowhere near the tuned 0.2335.
+- **#665**: ``RaceSituationConfig`` compared the CALIBRATED probabilities against
+  thresholds tuned on the RAW model output. N14 tunes ``best_threshold`` on
+  ``proba_test`` (cell 20, ``m.predict_proba(X_test)[:,1]``) and only calibrates in
+  cell 32; N12 does the same in cells 22/25/26 vs cell 36. #450 wired those raw
+  operating points onto ``high_overtake``/``high_sc``, which made both bands
+  unreachable — measured over real 2025 laps, SC HIGH fired 0/1420 and overtake
+  HIGH 0/8171, so the SC model contributed nothing to ``threat_level`` at any
+  level. The bands are now pit-wall alert levels set on the served calibrated
+  scale, kept separate from the classifier operating points.
 - **#476**: ``predict_overtake_tool``/``predict_sc_tool`` take free-text driver
   codes and a free-int lap number straight from the LLM. The only guard was an
   empty-dataframe check, which does not catch a driver who is not racing THIS
@@ -55,13 +57,14 @@ pytestmark = [
 ]
 
 
-def test_thresholds_loaded_from_model_config_not_hardcoded():
-    """#450: CFG.high_overtake/high_sc must be the TUNED thresholds, not 0.80/0.30.
+def test_bands_are_never_the_raw_classifier_operating_points():
+    """#665: the threat bands must NOT be the tuned thresholds, which are raw-scale.
 
-    Reads the two on-disk configs independently of the agent module (so the test
-    does not just compare the singleton against itself) and checks CFG matches
-    what was actually written to disk by N12/N14 — and does NOT match the old
-    dataclass literals, which is exactly the bug: they were never overwritten.
+    #450 assigned overtake_threshold/sc_threshold onto high_overtake/high_sc. Both
+    are tuned on the RAW model output (N14 cell 20/23, N12 cells 22/25/26) while
+    threat_level compares the CALIBRATED probability, so neither could ever fire.
+    Reads the on-disk configs independently of the agent module so the test cannot
+    pass by comparing the singleton against itself.
     """
     from src.agents.race_situation_agent import CFG
 
@@ -70,19 +73,66 @@ def test_thresholds_loaded_from_model_config_not_hardcoded():
     with open(ROOT / "data" / "models" / "safety_car_probability" / "feature_list_v1.json") as f:
         sc_cfg = json.load(f)
 
-    loaded_overtake_threshold = ov_cfg["optimal_threshold"]
-    loaded_sc_threshold = sc_cfg["best_threshold"]
+    assert CFG.high_overtake != pytest.approx(ov_cfg["optimal_threshold"])
+    assert CFG.high_sc != pytest.approx(sc_cfg["best_threshold"])
 
-    assert CFG.high_overtake == pytest.approx(loaded_overtake_threshold)
-    assert CFG.high_sc == pytest.approx(loaded_sc_threshold)
+    # The loads themselves stay — they are exported for anyone who wants to
+    # binarise a RAW score — but they must remain separate from the bands.
+    assert CFG.overtake_threshold == pytest.approx(ov_cfg["optimal_threshold"])
+    assert CFG.sc_threshold == pytest.approx(sc_cfg["best_threshold"])
 
-    # The pre-fix hardcoded literals. If CFG ever equals these again while the
-    # loaded config differs, #450 has regressed (the loaded value stopped being
-    # the one threat_level actually thresholds against).
-    if loaded_overtake_threshold != pytest.approx(0.80):
-        assert CFG.high_overtake != pytest.approx(0.80)
-    if loaded_sc_threshold != pytest.approx(0.30):
-        assert CFG.high_sc != pytest.approx(0.30)
+
+def test_every_band_is_reachable_on_the_calibrated_scale():
+    """#665: a band above the calibrator's ceiling is a constant False, not a band.
+
+    The pre-fix high_overtake (0.7976) sat above what the Platt calibrator can
+    emit at raw=1.0, so overtake could never reach HIGH by construction. Assert the
+    property directly: push raw 1.0 through each calibrator and require every band
+    to sit strictly below that ceiling.
+    """
+    import numpy as np
+
+    from src.agents.race_situation_agent import CFG
+
+    overtake_ceiling = float(CFG.overtake_calibrator.predict_proba(np.array([[1.0]]))[:, 1][0])
+    sc_ceiling = float(CFG.sc_calibrator.predict_proba(np.array([[1.0]]))[:, 1][0])
+
+    for band, ceiling, name in (
+        (CFG.high_overtake, overtake_ceiling, "high_overtake"),
+        (CFG.medium_overtake, overtake_ceiling, "medium_overtake"),
+        (CFG.high_sc, sc_ceiling, "high_sc"),
+        (CFG.medium_sc, sc_ceiling, "medium_sc"),
+    ):
+        assert band < ceiling, (
+            f"{name}={band} is at or above the calibrator ceiling {ceiling:.4f} — "
+            "no calibrated probability can ever reach it"
+        )
+
+
+def test_sc_bands_track_the_models_base_rate():
+    """#665: high_sc/medium_sc are defined as multiples of N14's own base rate.
+
+    N14 is too weak (AUC-PR 0.072, lift 1.67x) for its absolute probability to mean
+    much, so the bands are anchored on its base rate instead: MEDIUM at 1x, HIGH at
+    2x. Retraining N14 moves that baseline, and this test is what makes the bands
+    move with it rather than silently drifting into meaninglessness.
+    """
+    from src.agents.race_situation_agent import CFG
+
+    with open(ROOT / "data" / "models" / "safety_car_probability" / "feature_list_v1.json") as f:
+        sc_cfg = json.load(f)
+    base_rate = sc_cfg["target_comparison"]["3-lap"]["baseline"]
+
+    assert CFG.medium_sc == pytest.approx(base_rate, abs=1e-4)
+    assert CFG.high_sc == pytest.approx(2 * base_rate, abs=1e-4)
+
+
+def test_bands_are_ordered():
+    """A MEDIUM band above its HIGH band makes threat_level unreachable at the top."""
+    from src.agents.race_situation_agent import CFG
+
+    assert CFG.medium_overtake < CFG.high_overtake
+    assert CFG.medium_sc < CFG.high_sc
 
 
 @pytest.fixture(scope="module")
