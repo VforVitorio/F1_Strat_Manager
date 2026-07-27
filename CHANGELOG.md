@@ -11,6 +11,24 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.3.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.4...v2.3.0) (2026-07-27)
+
+
+### Features
+
+* **strategy:** add the per-race decision memory accumulator ([7ffd527](https://github.com/VforVitorio/F1-StratLab/commit/7ffd5277e008611586a0df05500b32cddeca02ad))
+
+
+### Bug Fixes
+
+* **agents:** band threat_level on the served calibrated scale, not raw-scale operating points ([ec0601e](https://github.com/VforVitorio/F1-StratLab/commit/ec0601e3aa2ca0876c020d199b2bb60257429fad)), closes [#665](https://github.com/VforVitorio/F1-StratLab/issues/665)
+* **orchestrator:** warn when the client discards the requested temperature ([169376e](https://github.com/VforVitorio/F1-StratLab/commit/169376e8bfda15fc3782a8cd5edf5b50c2ec0a34))
+
+
+### Documentation
+
+* **audits:** add the adversarial audit of the orchestrator memory layer ([25e8566](https://github.com/VforVitorio/F1-StratLab/commit/25e85668742c05bfc18909544ef8d4f997221bca))
+
 ## [2.2.4](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.3...v2.2.4) (2026-07-27)
 
 
