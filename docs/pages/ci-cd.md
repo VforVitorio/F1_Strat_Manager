@@ -123,7 +123,7 @@ The ignore list exists for hard technical reasons:
 
 - `torch` and `torchvision` are routed through CUDA-specific indexes (`[tool.uv.sources]`). Any automatic bump would invalidate the `cu128` wheel routing on Windows/Linux.
 - `transformers` major bumps are blocked because the production model artefacts under `data/models/nlp/` are saved with tokeniser and config layouts that are not forward-compatible across major versions; bump only alongside re-training the affected notebooks (N17-N24).
-- `numpy`, `pandas`, `scikit-learn`, `lightgbm`, `xgboost` block major bumps only (minor/patch flow through normally): their `2.x`/`3.x` releases have historically removed APIs the project relies on (e.g. `numpy` 2.0 dropped `np.bool_` aliases, `pandas` 3.0 removes several `DataFrame` methods). `tests/test_dep_imports.py` exercises the relied-on surface so silent breakage is caught even on allowed bumps.
+- `numpy`, `pandas`, `scikit-learn`, `lightgbm`, `xgboost` block major bumps only (minor/patch flow through normally): their `2.x`/`3.x` releases have historically removed APIs the project relies on (e.g. `numpy` 2.0 dropped `np.bool_` aliases, `pandas` 3.0 removes several `DataFrame` methods). `tests/infra/test_dep_imports.py` exercises the relied-on surface so silent breakage is caught even on allowed bumps.
 
 ## Documentation deployment
 

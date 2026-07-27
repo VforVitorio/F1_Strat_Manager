@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 _HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 pytestmark = pytest.mark.skipif(
     not _HAS_MODELS,

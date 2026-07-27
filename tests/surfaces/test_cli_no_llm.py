@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 _PARQUET = ROOT / "data" / "processed" / "laps_featured_2025.parquet"
 _RACE_DIR = ROOT / "data" / "raw" / "2025" / "Melbourne"
 _HAS_DATA = _PARQUET.exists() and _RACE_DIR.exists()

@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 
 # Guard: simulation service needs laps_featured_YYYY.parquet + raw race dir.
 _PARQUET = ROOT / "data" / "processed" / "laps_featured_2025.parquet"
