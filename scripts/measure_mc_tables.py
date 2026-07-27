@@ -292,6 +292,25 @@ def _status_by_lap(laps: pd.DataFrame) -> dict[int, str]:
     lap: at ~90 s per lap, race control escalates inside the same lap, and this
     function labels it by the stronger flag. Only 27% of onsets are preceded by a
     lap that was yellow and nothing else.
+
+    THE PRICE OF THE UNION, so the choice above stays deliberate rather than
+    invisible. Heilmeier et al. (Applied Sciences 2020, 10(21):4229) warn that
+    neutralisations belong on race TIME, not race PROGRESS: a driver a lap down
+    is somewhere else on the circuit than the leader sharing his lap number, so
+    a union over lap numbers hands him a flag he never drove through. Measured
+    over all 72 races of 2023-2025 (79032 driver-laps, flags 4/5/6/7):
+
+        carrying a flag on their own row     4993 (6.32%)
+        marked by the lap-number union       5575 (7.05%)
+        marked without having seen it         663 (0.84%)
+        over-marking factor                  1.135x
+
+    Keyed on the session clock the cost would be near zero, since FastF1 rows
+    carry ``Time``. It is not worth doing here: these tables are committed and
+    a golden test pins their values, so regenerating for 0.84% would move
+    published numbers for no decision-relevant gain. Measure the delta first if
+    that ever changes (#647). The same union, and the same price, applies in
+    ``src/strategy/eval/projection.py::_neutralised_laps``.
     """
     statuses: dict[int, str] = {}
     for lap, group in laps.groupby("LapNumber"):
