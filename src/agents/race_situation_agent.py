@@ -131,28 +131,45 @@ class RaceSituationConfig:
     the repo path contains non-ASCII characters that break LightGBM's native
     save_model on Windows.
 
-    Threat-level boundaries map raw calibrated probabilities to LOW/MEDIUM/HIGH
-    categorical signals for N31. high_overtake/high_sc are overwritten in
-    __post_init__ from the tuned optimal_threshold/best_threshold in each model's
-    on-disk config (#450) — the literals below are only a construction-time
-    placeholder, never the value actually used once the config has loaded.
+    Threat-level boundaries map the CALIBRATED probabilities to LOW/MEDIUM/HIGH
+    categorical signals for N31. They are pit-wall alert levels — a product
+    decision about how alarmed to be — and deliberately NOT the models' classifier
+    operating points, which live on the raw scale (see __post_init__ and #665).
+
+    Every band below was set on the served calibrated distribution, measured over
+    real 2025 laps with the models loaded, so each one is reachable and its firing
+    rate is known. The two models are banded on different terms because they are
+    not comparable: N12 is a decent ranker (AUC-PR 0.549) whose calibrated output
+    reads as a genuine probability, while N14 is weak (AUC-PR 0.072, lift 1.67x)
+    and only means something relative to its own base rate.
 
     Attributes:
         model_name: LM Studio model identifier for the ReAct agent LLM.
-        high_overtake: Probability above which threat_level is HIGH via overtake.
-            Overwritten from overtake_threshold (N12's model_config.json).
-        medium_overtake: Probability above which threat_level is MEDIUM via overtake.
-        high_sc: Probability above which threat_level is HIGH via SC risk.
-            Overwritten from sc_threshold (N14's feature_list_v1.json).
-        medium_sc: Probability above which threat_level is MEDIUM via SC risk.
+        high_overtake: Calibrated P(overtake) above which threat_level is HIGH.
+            0.65 = a strong opportunity in plain probability terms; fires on 1.36%
+            of real chaser/ahead pairs (n=8171). The calibrated output tops out at
+            0.751, so anything at or above 0.7659 is unreachable by construction.
+        medium_overtake: Calibrated P(overtake) above which threat_level is MEDIUM.
+            0.40 = a realistic shot; fires on 3.99% of pairs.
+        high_sc: Calibrated P(SC within 3 laps) above which threat_level is HIGH.
+            0.0864 = TWICE N14's 0.0432 base rate (feature_list_v1.json,
+            target_comparison['3-lap']['baseline']); fires on 1.27% of laps
+            (n=1420). The base rate is a class prevalence, not a value selected on
+            the test set, so anchoring here does not reintroduce the contamination
+            hygiene.py found in best_threshold. Retraining N14 moves the baseline —
+            move this with it, which test_sc_bands_track_the_models_base_rate
+            enforces.
+        medium_sc: Calibrated P(SC within 3 laps) above which threat_level is MEDIUM.
+            0.0432 = the base rate itself, i.e. "likelier than an average lap";
+            fires on 13.59% of laps.
     """
 
     model_name: str = 'gpt-4.1-mini'
 
-    high_overtake:   float = 0.80
+    high_overtake:   float = 0.65
     medium_overtake: float = 0.40
-    high_sc:         float = 0.30
-    medium_sc:       float = 0.15
+    high_sc:         float = 0.0864
+    medium_sc:       float = 0.0432
 
     def __post_init__(self) -> None:
         self.export_dir = _AGENTS
@@ -180,17 +197,26 @@ class RaceSituationConfig:
         self.sc_features: list[str] = sc_cfg['features']
         self.sc_threshold: float    = sc_cfg['best_threshold']
 
-        # #450: high_overtake/high_sc were dataclass literals (0.80/0.30) that this
-        # __post_init__ never touched, so the genuinely tuned thresholds loaded just
-        # above (overtake_threshold, sc_threshold) sat unused — every threat_level ever
-        # computed by RaceSituationOutput.__post_init__ was thresholded against the
-        # untuned placeholder, most visibly for SC (0.30 hardcoded vs 0.2335 tuned:
-        # a real SC risk between those two values was silently reported as MEDIUM
-        # instead of HIGH). Overwriting here means every downstream reader of
-        # CFG.high_overtake / CFG.high_sc (RaceSituationOutput, the system prompt
-        # string below) gets the value the model was actually tuned against.
-        self.high_overtake = self.overtake_threshold
-        self.high_sc       = self.sc_threshold
+        # DO NOT assign overtake_threshold/sc_threshold onto high_overtake/high_sc.
+        # #450 did exactly that and it is a unit error: both tuned thresholds are
+        # operating points on the RAW model output, while threat_level compares the
+        # CALIBRATED probability. N14 tunes best_threshold on `proba_test` (cell 20,
+        # `m.predict_proba(X_test)[:,1]`) and only calibrates afterwards in cell 32;
+        # N12 does the same in cells 22/25/26 vs cell 36. Pushed through each Platt
+        # calibrator, raw 0.2335 is calibrated 0.0158 and raw 0.7976 is calibrated
+        # 0.4183 — and the overtake calibrator's ceiling is 0.7659 at raw 1.0, so
+        # comparing a calibrated probability against 0.7976 could never be True.
+        # Measured on real 2025 laps: SC HIGH fired 0/1420, overtake HIGH 0/8171.
+        #
+        # There is a second, independent reason not to wire them: src/strategy/eval/
+        # hygiene.py already ruled BOTH thresholds test-contaminated (selected on the
+        # 2025 test set), and concluded N14 has no honest validation split for an
+        # operating threshold at all — the paper reports SC threshold-free. Promoting
+        # a leaked operating point into a runtime signal would put the contamination
+        # back into the decisions the paper's numbers describe.
+        #
+        # The bands below are deliberately NOT the classifier operating points; they
+        # are pit-wall alert levels, set on the served calibrated scale (#665).
 
         # Circuit cluster map (k=4 parquet from N05)
         _cl = pd.read_parquet(_PROCESSED / 'circuit_clustering' / 'circuit_clusters_k4.parquet')
@@ -254,12 +280,13 @@ class RaceSituationOutput:
 
     Attributes:
         overtake_prob: Calibrated P(overtake in next few laps) from N12 LightGBM
-            + Platt calibration. Above CFG.high_overtake (N12's tuned
-            optimal_threshold, ~0.80 — see RaceSituationConfig.__post_init__) =
-            strong opportunity.
+            + Platt calibration. Above CFG.high_overtake (0.65) = strong
+            opportunity. Compare only against the bands in RaceSituationConfig,
+            never against N12's optimal_threshold — that one lives on the raw
+            scale and is unreachable here (#665).
         sc_prob_3lap: Calibrated P(SC within 3 laps) from N14 LightGBM + Platt
-            calibration. Above CFG.high_sc (N14's tuned best_threshold, ~0.23 —
-            see RaceSituationConfig.__post_init__) = imminent SC risk.
+            calibration. Above CFG.high_sc (0.0864, twice the base rate) =
+            elevated SC risk. Same caveat: N14's best_threshold is raw-scale.
         threat_level: LOW / MEDIUM / HIGH derived from both probabilities in __post_init__.
         gap_ahead_s: Gap to the car directly ahead (seconds). < 1.0s = DRS range.
         pace_delta_s: 3-lap rolling pace delta vs car ahead (s/lap). Negative = faster.
@@ -762,11 +789,10 @@ except ImportError:
 # System prompt (module-level constant — interpolates CFG's loaded thresholds)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# f-string, not a plain triple-quoted constant: it must read the SAME thresholds
-# RaceSituationOutput.__post_init__ actually classifies against (CFG.high_overtake /
-# CFG.high_sc, loaded from each model's tuned config in RaceSituationConfig.__post_init__),
-# not the untuned dataclass literals. CFG is fully built by the time this module-level
-# constant is evaluated (CFG is constructed above, at import time). #450.
+# f-string, not a plain triple-quoted constant: the prompt must quote the SAME bands
+# RaceSituationOutput.__post_init__ actually classifies against, or the LLM is told a
+# rule the code no longer applies. CFG is fully built by the time this module-level
+# constant is evaluated (CFG is constructed above, at import time). #450/#665.
 _RACE_SITUATION_SYSTEM_PROMPT = f"""You are a Formula 1 race situation analyst embedded in a multi-agent strategy system.
 
 Your job is to assess two dimensions of strategic threat per lap:
