@@ -1547,6 +1547,21 @@ def _build_orchestrator_prompt(
         f"     Discount them one tier (HIGH→MEDIUM, MEDIUM→LOW) for decision-making.\n"
         f"  If a sub-agent recommends an action that violates these rules, override to\n"
         f"  STAY_OUT and explain why in reasoning.\n\n"
+        # Everything above reaches STAY_OUT by subtraction: "force", "override to",
+        # "no pit action". Measured on real races it is the call on the large majority
+        # of green-flag laps (39/41 at Lusail 2025, 414/415 across the projection set),
+        # so the prompt was teaching the LLM to treat its own most frequent output as a
+        # failure to decide. The prompt is also stateless: consecutive laps are 99.0%
+        # identical text, so nothing tells the model it is repeating itself and it
+        # re-argues the same case from scratch every lap (#646).
+        f"WHEN THE CALL IS STAY_OUT (the majority call, by design):\n"
+        f"  STAY_OUT is an ACTIVE monitoring posture, not the absence of a decision and\n"
+        f"  not merely what is left when a pit is blocked. Treat a repeated STAY_OUT as\n"
+        f"  CONTINUING a plan rather than making a fresh one, and do not re-argue the same\n"
+        f"  case from scratch. State (a) what you are watching, (b) the concrete threshold\n"
+        f"  that would change the call, and (c) how far the current numbers sit from it.\n"
+        f"  Carry the lap you are watching towards in pit_lap_target whenever the tyre\n"
+        f"  data supports one, so a hold reads as a plan with a horizon, not indecision.\n\n"
         f"RACE CONTEXT:\n"
         f"  Driver: {race_state.driver} | Lap: {race_state.lap}/{race_state.total_laps}\n"
         f"  Position: P{race_state.position} | Compound: {race_state.compound} "

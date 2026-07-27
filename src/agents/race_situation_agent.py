@@ -499,6 +499,13 @@ def _compute_track_status_features(all_laps: pd.DataFrame, lap_number: int) -> d
             'laps_since_last_yellow':  10,
         }
 
+    # Grouped by lap NUMBER across every car, so a driver a lap down inherits the
+    # leader's flag. #647 prices that union at 0.84% of driver-laps over 2023-2025
+    # and cites Heilmeier et al. 2020, who argue neutralisations belong on race
+    # TIME. DO NOT "fix" it here: N13 builds the training features with the same
+    # `groupby("LapNumber")` union, so keying this on the clock would feed N14 a
+    # distribution it never saw. Inference has to reproduce its notebook, and this
+    # repo has already paid for three bugs that were exactly that divergence.
     lap_status = (
         causal_laps
         .groupby('LapNumber')
