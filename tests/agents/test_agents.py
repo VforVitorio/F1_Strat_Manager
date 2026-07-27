@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 
 # Guard: skip agent-import tests when model files are absent (CI runner).
 _MODELS_DIR = ROOT / "data" / "models"

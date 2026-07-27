@@ -27,7 +27,7 @@ updates:
       # relies on (numpy 2.0 dropped np.bool_ aliases, pandas 3.0 removes
       # several DataFrame methods, sklearn 1.6+ deprecates several
       # estimators). Minor / patch bumps still flow through CI normally,
-      # and tests/test_dep_imports.py exercises the API surface we depend
+      # and tests/infra/test_dep_imports.py exercises the API surface we depend
       # on so silent breakage gets caught even on allowed bumps.
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]

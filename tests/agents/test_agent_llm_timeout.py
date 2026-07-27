@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-_AGENTS_DIR = Path(__file__).parent.parent / "src" / "agents"
+_AGENTS_DIR = Path(__file__).parent.parent.parent / "src" / "agents"
 _AGENT_FILES = [
     "pace_agent.py",
     "tire_agent.py",

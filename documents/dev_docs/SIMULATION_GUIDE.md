@@ -35,10 +35,10 @@ python -c "from src.agents.strategy_orchestrator import RaceState, run_strategy_
 
 ```powershell
 # Agent imports + Pydantic schemas + voice config
-pytest tests/test_agents.py -v
+pytest tests/agents/test_agents.py -v
 
 # Repo structure + simulation imports + Melbourne parquet
-pytest tests/test_smoke.py -v
+pytest tests/infra/test_smoke.py -v
 
 # All at once
 pytest tests/ -v

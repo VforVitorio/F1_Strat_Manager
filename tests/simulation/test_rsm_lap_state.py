@@ -21,7 +21,7 @@ import pytest
 
 from src.simulation.race_state_manager import RaceStateManager
 
-FIXTURE = Path(__file__).parent / "fixtures" / "mini_race.parquet"
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "mini_race.parquet"
 
 OUR_DRIVER = "VER"
 SC_LAP = 9  # inside the Safety Car window (laps 7-10)
