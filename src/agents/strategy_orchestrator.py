@@ -103,7 +103,21 @@ class OrchestratorCFG:
     risk_tolerance_default (α) weights expected value vs worst-case in the MC
     score: score(S) = α·E[S] + (1−α)·P10[S]. α=1.0 aggressive, α=0.0 conservative.
 
-    temperature=0.0 ensures deterministic structured output from Layer 3 LLM.
+    temperature is REQUESTED, not guaranteed. Whether it survives depends on the
+    model family: langchain_openai keeps it for gpt-4.1-mini (what the sub-agents
+    run) and silently discards it for the gpt-5.x family — the client attribute
+    comes back None and the key never reaches the request payload. So with the
+    default model_name below, Layer 3 samples at the provider default and this
+    value does nothing. Measured 2026-07-27 over 41 laps: two identical passes
+    disagreed on confidence in 36, on pit_lap_target in 23, and produced opposite
+    actions on the one lap where the call actually changed. An earlier version of
+    this docstring promised the setting guaranteed determinism here, which was
+    false for every model this project has shipped with.
+
+    _get_orchestrator_llm warns when the request is dropped rather than papering
+    over it. Do NOT read a surviving temperature as a promise of determinism
+    either — it narrows sampling, it does not remove it.
+    See documents/audits/AUDIT_ORCHESTRATOR_MEMORY.md §1.1.
     """
 
     model_name:             str   = "gpt-5.4-mini"
@@ -120,11 +134,31 @@ CFG = OrchestratorCFG()
 _orchestrator_llm = None
 
 
+def _temperature_was_dropped(llm, requested: float | None) -> bool:
+    """True when the client did not keep the temperature we asked it for.
+
+    Split out from _get_orchestrator_llm so the check is testable without an API
+    key, a network call or a provider: it only reads an attribute off whatever
+    object the client library handed back.
+
+    langchain_openai does not raise when a model family rejects the parameter, it
+    nulls the attribute and omits the key from the payload. So `None` on a client
+    we explicitly gave a number is the signal, and it is the only one available
+    short of inspecting the request.
+    """
+    return requested is not None and getattr(llm, "temperature", None) is None
+
+
 def _get_orchestrator_llm():
     """Return the cached structured-output LLM, creating it on first call.
 
     Checks F1_LLM_PROVIDER env var: 'openai' uses the real OpenAI API
     (requires OPENAI_API_KEY); anything else defaults to LM Studio at CFG.base_url.
+
+    Warns once, on creation, when CFG.temperature does not survive into the
+    client — see OrchestratorCFG. The warning is deliberately not a raise: the
+    project ships on a model that drops it, so raising would take the whole
+    orchestrator down over a setting Layer 3 has never actually had.
 
     Returns a Runnable that produces StrategyRecommendation Pydantic objects.
     Raises ImportError when langchain_openai is not installed.
@@ -150,6 +184,17 @@ def _get_orchestrator_llm():
                 model_kwargs={"parallel_tool_calls": False},
                 timeout=120,
                 max_retries=1,
+            )
+        if _temperature_was_dropped(llm, CFG.temperature):
+            # ASCII only: this line lands on Windows terminals, where the repo's
+            # cp1252 console renders an em-dash or a section sign as '?'.
+            logger.warning(
+                "Layer 3 temperature=%s was discarded by the client for model %r. The "
+                "orchestrator is sampling at the provider default, not running "
+                "deterministically: consecutive laps will disagree on confidence, "
+                "pit_lap_target and reasoning even when the prompt is identical. "
+                "See documents/audits/AUDIT_ORCHESTRATOR_MEMORY.md, section 1.1.",
+                CFG.temperature, CFG.model_name,
             )
         # _LLMSynthesis only has the 3 fields the LLM actually fills —
         # scenario_scores (dict) and regulation_context are attached in code after.
