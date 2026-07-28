@@ -231,6 +231,13 @@ class SimConnector(threading.Thread):
         from src.nlp.rcm_state import RaceControlStateTracker
 
         self._sc_tracker = RaceControlStateTracker()
+        # One DecisionMemory for the whole replay, same lifetime and shape as the
+        # SC tracker above: without it the Layer 3 prompt is stateless and
+        # re-argues an unrelated case every lap instead of building on its own
+        # previous call.
+        from src.strategy.inference.decision_memory import DecisionMemory
+
+        self._memory = DecisionMemory()
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -406,7 +413,10 @@ class SimConnector(threading.Thread):
         from src.arcade.strategy_pipeline import run_strategy_pipeline
 
         race_state = self._build_race_state(lap_state, prev_lap_time)
-        rec, agent_outputs = run_strategy_pipeline(race_state, laps_df, lap_state)
+        rec, agent_outputs = run_strategy_pipeline(
+            race_state, laps_df, lap_state, memory=self._memory
+        )
+        self._memory.record(race_state.lap, rec)
         lap_time_s = lap_state.get("driver", {}).get("lap_time_s")
         decision = _build_decision(rec, race_state, lap_time_s, agent_outputs)
         with self._state._lock:

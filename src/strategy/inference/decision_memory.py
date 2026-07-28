@@ -10,9 +10,15 @@ almost none**: across a race that is not one plan, it is 41 unrelated plans. Wit
 its own previous contingencies echoed back it settles on six.
 
 That is what this class is for, and it is a narrower claim than "memory makes the
-system smarter". It does not change what the orchestrator decides on a given lap
-(``action`` differed on 0 of 41 laps in the A/B). It changes whether consecutive
-laps are the same plan.
+system smarter" - but do not narrow it too far either, because the two halves blur
+easily. On an ORDINARY green-flag lap the block does not change the call:
+``action`` differed on 0 of 41 laps across a whole race. On the lap where a
+contingency the model itself declared actually FIRES, it does, and that is the
+entire point - under a Safety Car at Lusail 2025 lap 42 the orchestrator executed
+its own one-lap-old plan on 8 of 8 runs against 0 of 8 without the block.
+
+So: not a nudge applied to every lap, but a plan the model can still be holding
+when the trigger arrives.
 
 Where it lives, and why not in the engine
 -----------------------------------------
@@ -64,6 +70,17 @@ TARGET_HISTORY = 5
 COUNTERWEIGHT = (
     "  This history is context, NOT a commitment. Judge this lap on its own\n"
     "  evidence; a long hold is not itself a reason to keep holding.\n"
+)
+
+# Emitted only on a genuine repeated STAY_OUT. It used to live in the static
+# prompt, where it fired on every lap: on lap 1, when there was no previous call
+# to continue, and on the lap the call changed, when continuing was the wrong
+# answer. Nothing could condition it there because the prompt had no idea what the
+# last call was. Here the object that knows owns the claim, which is also why this
+# is not a second parameter on the prompt builder travelling next to the block.
+CONTINUATION = (
+    "  This is a CONTINUING plan, not a fresh one: do not re-argue the same case\n"
+    "  from scratch.\n"
 )
 
 
@@ -152,11 +169,24 @@ class DecisionMemory:
         return self._entries[-1].contingencies[:MAX_CONTINGENCIES]
 
     # ── rendering ─────────────────────────────────────────────────────────
+    def _is_continuing_a_hold(self) -> bool:
+        """True when the last call repeated a STAY_OUT, which is the only real hold.
+
+        Two decisions minimum: one STAY_OUT is a call, not a continuation. Restricted
+        to STAY_OUT because it is the only action a race can sit on. Repeating
+        PIT_NOW is not a plan being continued, it is a stop that has not happened.
+        """
+        if len(self._entries) < 2:
+            return False
+        action, _since_lap, decisions = self._current_run()
+        return action == "STAY_OUT" and decisions >= 2
+
     def _render_hold(self) -> str:
         action, since_lap, decisions = self._current_run()
         laps_spanned = self._entries[-1].lap - since_lap + 1
         if laps_spanned == decisions:
-            return f"  Last call: {action}, held since lap {since_lap} ({decisions} laps)."
+            unit = "lap" if decisions == 1 else "laps"
+            return f"  Last call: {action}, held since lap {since_lap} ({decisions} {unit})."
         # The two numbers disagree, which means the surface skipped laps. Say both
         # rather than picking one: "held for N laps" would be false, and dropping
         # the span would hide that the race moved on without a decision.
@@ -203,4 +233,9 @@ class DecisionMemory:
             self._render_targets(),
             *self._render_contingencies(),
         ]
-        return "\n".join(lines) + "\n" + COUNTERWEIGHT + "\n"
+        # CONTINUATION and COUNTERWEIGHT are deliberately adjacent and deliberately
+        # in this order: carry the plan, but do not treat carrying it as a promise.
+        # Shipping the first without the second is the configuration that measurably
+        # anchored the model at the decision lap.
+        tail = (CONTINUATION if self._is_continuing_a_hold() else "") + COUNTERWEIGHT
+        return "\n".join(lines) + "\n" + tail + "\n"

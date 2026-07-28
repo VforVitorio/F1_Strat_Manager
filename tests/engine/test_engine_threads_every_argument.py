@@ -26,10 +26,11 @@ enforced one.
 
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 
 import pytest
+
+from tests.engine.ast_helpers import kwargs_passed_by
 
 ROOT = Path(__file__).parent.parent.parent
 _HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
@@ -48,18 +49,8 @@ _THREADED_CALLEES = ("_assemble_recommendation", "_build_orchestrator_prompt")
 
 
 def _kwargs_passed_by(func, callee: str = "_assemble_recommendation") -> set[str]:
-    """The keyword names `func` passes to `callee`."""
-    import ast
-
-    tree = ast.parse(inspect.getsource(func).lstrip())
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == callee
-        ):
-            return {kw.arg for kw in node.keywords if kw.arg}
-    return set()
+    """The keyword names `func` passes to `callee`, with this file's default callee."""
+    return kwargs_passed_by(func, callee)
 
 
 @pytest.mark.parametrize("callee", _THREADED_CALLEES)
@@ -106,6 +97,12 @@ def test_the_docstring_does_not_name_a_test_that_does_not_exist():
     The docstring cited a `tests/test_engine_parity.py` that was never written. Naming a
     guard that does not exist is worse than naming none, because it discourages checking.
     This scans the "Anti-drift guards" section and asserts each file it points at is real.
+
+    The pattern allows a subdirectory. It did not, and every guard the docstring names
+    now lives in `tests/engine/`, so this test matched NOTHING and passed green while
+    asserting about zero files - the same defect it was written to catch, one level up.
+    The count assertion is what stops that recurring: a pattern that stops matching is
+    indistinguishable from a docstring with nothing to check.
     """
     import re
 
@@ -113,7 +110,10 @@ def test_the_docstring_does_not_name_a_test_that_does_not_exist():
 
     doc = engine.__doc__ or ""
     section = doc.split("Anti-drift guard", 1)[-1].split("\n\n", 1)[0]
-    for name in re.findall(r"tests/test_[a-z_]+\.py", section):
+    named = re.findall(r"tests/[a-z_/]*test_[a-z_]+\.py", section)
+
+    assert named, "the engine docstring's anti-drift section names no test files at all"
+    for name in named:
         assert (ROOT / name).exists(), (
             f"the engine docstring names {name} as an anti-drift guard, but it does not exist"
         )
