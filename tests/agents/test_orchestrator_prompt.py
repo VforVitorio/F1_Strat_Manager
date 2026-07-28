@@ -90,6 +90,24 @@ def test_a_held_stay_out_asks_for_a_threshold_rather_than_the_same_case_again(
 
 
 @pytest.mark.unit
+def test_the_continuation_instruction_is_not_in_the_unconditioned_prompt(prompt: str) -> None:
+    """ "Do not re-argue the same case" is only true when there IS a previous case.
+
+    It used to sit in the static block, so it fired on lap 1, when there was nothing
+    to continue, and on the lap the call changed, when continuing was the wrong
+    answer. It now lives in `DecisionMemory`'s block, which is the only place that
+    knows whether anything is being repeated. `/recommend` and the MCP tool are
+    stateless per request, so for them this instruction is now correctly absent
+    rather than unconditionally present.
+
+    If this fails, check whether the sentence was reintroduced here instead of being
+    conditioned there.
+    """
+    assert "CONTINUING a plan" not in prompt
+    assert "re-argue the same case" not in prompt
+
+
+@pytest.mark.unit
 def test_the_default_memory_block_leaves_the_prompt_byte_identical(race_state) -> None:
     """The memoryless surfaces must get exactly the prompt they got before the parameter existed.
 
