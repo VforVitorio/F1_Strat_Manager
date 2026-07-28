@@ -11,6 +11,23 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.4.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.3.0...v2.4.0) (2026-07-28)
+
+
+### Features
+
+* **engine:** accept a caller-owned DecisionMemory and render it into the prompt ([10e4832](https://github.com/VforVitorio/F1-StratLab/commit/10e4832429d39d6c5285ee8fabce73b510bdc67b)), closes [#684](https://github.com/VforVitorio/F1-StratLab/issues/684)
+* **orchestrator:** render a decision-memory block in the Layer 3 prompt ([5f8f789](https://github.com/VforVitorio/F1-StratLab/commit/5f8f789d378250b712dd87128728cf7e5e4a71a0)), closes [#680](https://github.com/VforVitorio/F1-StratLab/issues/680)
+* **orchestrator:** scope the STAY_OUT continuation framing to actual holds ([282f668](https://github.com/VforVitorio/F1-StratLab/commit/282f668c8f4265e61c65334a300cc55db3676b75)), closes [#685](https://github.com/VforVitorio/F1-StratLab/issues/685)
+* **surfaces:** give the CLI, arcade and backend a per-race decision memory ([c463c8c](https://github.com/VforVitorio/F1-StratLab/commit/c463c8c0a7e956679d789131c06b0196dbd13f16)), closes [#684](https://github.com/VforVitorio/F1-StratLab/issues/684)
+
+
+### Documentation
+
+* **audit:** record what Sprint 2 built and the three findings the build produced ([349384f](https://github.com/VforVitorio/F1-StratLab/commit/349384f409d4edc8ae0e4934f49467929593e745))
+* **memory:** say precisely when the block does and does not change the call ([b9a93c5](https://github.com/VforVitorio/F1-StratLab/commit/b9a93c52e3532be0bd6c8f3ffe9f734148a72194))
+* **orchestrator:** declare that /recommend and MCP have no decision memory ([243e6d2](https://github.com/VforVitorio/F1-StratLab/commit/243e6d2f81ed1f05d4c255ec9e9a1097b184ea50)), closes [#681](https://github.com/VforVitorio/F1-StratLab/issues/681)
+
 ## [2.3.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.4...v2.3.0) (2026-07-27)
 
 
