@@ -130,6 +130,14 @@ class LapDecisionDTO:
     # dashboard can render predicted vs actual, CI bounds, cliff percentiles
     # and every other model detail that used to live only in the CLI panel).
     per_agent: PerAgentOutputsDTO | None = None
+    # DecisionMemory prompt block as it was BEFORE this lap's pipeline call
+    # (None on lap 1 or the no-llm profile, where no prompt is built at all)
+    # and whether this lap's action differs from the previous one. The block
+    # never shows up in `reasoning` even when it changes the call, so the
+    # dashboard renders it directly rather than relying on the LLM to narrate
+    # its own continuity.
+    memory_block: str | None = None
+    plan_changed: bool = False
 
 
 # --- Shared state ---------------------------------------------------------
@@ -413,12 +421,20 @@ class SimConnector(threading.Thread):
         from src.arcade.strategy_pipeline import run_strategy_pipeline
 
         race_state = self._build_race_state(lap_state, prev_lap_time)
+        # Captured BEFORE the pipeline call: this is the block as the model
+        # actually saw it. `record()` below mutates the accumulator, so reading
+        # it after would show this lap's own decision back to the dashboard
+        # instead of the plan the model was given.
+        memory_block = self._memory.block()
         rec, agent_outputs = run_strategy_pipeline(
             race_state, laps_df, lap_state, memory=self._memory
         )
         self._memory.record(race_state.lap, rec)
+        plan_changed = self._memory.last_call_changed()
         lap_time_s = lap_state.get("driver", {}).get("lap_time_s")
-        decision = _build_decision(rec, race_state, lap_time_s, agent_outputs)
+        decision = _build_decision(
+            rec, race_state, lap_time_s, agent_outputs, memory_block, plan_changed
+        )
         with self._state._lock:
             self._state.latest = decision
             self._state.history.append(decision)
@@ -789,6 +805,8 @@ def _build_decision(
     race_state: Any,
     lap_time_s: float | None,
     agent_outputs: dict[str, Any],
+    memory_block: str | None = None,
+    plan_changed: bool = False,
 ) -> LapDecisionDTO:
     """Merge the synthesised ``StrategyRecommendation`` + raw agent outputs
     into the DTO consumed by ``StrategyState.history`` / the dashboard.
@@ -796,6 +814,10 @@ def _build_decision(
     ``agent_alerts`` is rebuilt from ``radio_out.alerts`` the same way
     ``simulator._parse_lap_decision`` does it (string-or-dict tolerant)
     so the dashboard's alerts feed stays schema-stable across paths.
+
+    ``memory_block`` / ``plan_changed`` come from ``DecisionMemory`` and are
+    just carried onto the DTO here; the caller (``_step_once``) is the one
+    that decides when each is captured relative to ``record()``.
     """
     radio_out = agent_outputs.get("radio_out")
     agent_alerts: list[str] = []
@@ -826,4 +848,6 @@ def _build_decision(
         agent_alerts=agent_alerts,
         guardrail_reason=None,
         per_agent=_build_per_agent(agent_outputs),
+        memory_block=memory_block,
+        plan_changed=plan_changed,
     )
