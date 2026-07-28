@@ -49,6 +49,17 @@ _skip_no_backend = pytest.mark.skipif(
     reason="src/telemetry/backend not present in this checkout",
 )
 
+# Importing `simulator` is not free: it pulls the agent modules, which read their
+# routing config at IMPORT time. So a test that needs nothing but the module still
+# needs the weights on disk, and `_skip_no_backend` alone is not enough — that
+# combination is what made the first version of the payload tests fail on CI while
+# passing locally.
+_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
+_skip_no_models = pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="data/models/ not present (importing the simulator reads model config)",
+)
+
 
 def _ensure_backend_on_path() -> None:
     """Insert ``src/telemetry`` at the front of ``sys.path``.
@@ -238,6 +249,7 @@ def test_simulate_request_rejects_invalid_provider():
 
 
 @_skip_no_backend
+@_skip_no_models
 def test_the_memory_block_reaches_the_lap_payload():
     """The block the orchestrator was shown must survive into the wire format.
 
@@ -281,6 +293,7 @@ def test_the_memory_block_reaches_the_lap_payload():
 
 
 @_skip_no_backend
+@_skip_no_models
 def test_a_lap_with_no_memory_still_carries_both_fields():
     """Absent memory is an explicit pair of values, never missing keys.
 
