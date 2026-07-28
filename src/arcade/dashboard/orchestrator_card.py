@@ -74,7 +74,15 @@ class OrchestratorCard(QFrame):
     def __init__(self) -> None:
         super().__init__()
         self.setProperty("card", True)
-        self.setMinimumHeight(220)
+        # 170, not 220. The rows below add up to roughly 165px (a 70px badge, the
+        # chip row, the plan line, the guardrail line, plus margins and spacing), so
+        # a 220 floor reserved around 50px of dead space under the plan line and took
+        # it from the only widget in this column that stretches: the reasoning tabs.
+        # With the decision-memory block appended on a changed lap, those 50px were
+        # the difference between the block fitting and being scrolled below the fold.
+        # The vertical policy stays Fixed, so a long wrapped guardrail line still
+        # grows the card past this floor. Lowering a MINIMUM cannot clip content.
+        self.setMinimumHeight(170)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         outer = QVBoxLayout(self)
