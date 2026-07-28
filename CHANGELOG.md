@@ -11,6 +11,18 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.5.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.5.0...v2.5.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **dashboard:** give the orchestrator tab the height the card was hoarding ([84b41c0](https://github.com/VforVitorio/F1-StratLab/commit/84b41c0ecbdd5cd57ca9cfa6fbb15ca9e42aad92))
+
+
+### Documentation
+
+* **roadmap:** renumber the planned milestones to v2.6.0, v2.8.0 and v3.0.0 ([48548a4](https://github.com/VforVitorio/F1-StratLab/commit/48548a443703e824758f05eb4f55dc5eae995efa))
+
 ## [2.5.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.4.0...v2.5.0) (2026-07-28)
 
 
