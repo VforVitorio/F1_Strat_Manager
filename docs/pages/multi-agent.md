@@ -299,6 +299,26 @@ run_strategy_orchestrator_from_state(race_state, laps_df, lap_state=None)
 
 That last argument is the one worth remembering: without `lap_state` the orchestrator never sees the rival gaps, so the Monte Carlo falls back to the legacy seconds path instead of scoring in projected track position. See [agents-api.md](#/agents-api) for the full per-agent reference.
 
+## Decision memory — three surfaces, not five
+
+The Layer 3 prompt is stateless: consecutive laps are 99% identical text, so the orchestrator re-argues the same case in fresh prose every lap and never reuses a plan it made. `DecisionMemory` (`src/strategy/inference/decision_memory.py`) fixes that by echoing this race's own previous calls — the last action and how long it has been held, recent `pit_lap_target` values, and the contingencies declared last lap — back into the prompt.
+
+It lives in the **caller**, not the engine, because `run_lap` is pure per lap and a test depends on that. Each surface that owns a race owns one accumulator, the same shape and lifetime as `RaceControlStateTracker`.
+
+| Surface | Decision memory | Why |
+|---|---|---|
+| CLI (`f1-sim`) | yes | owns a race-scoped loop |
+| Arcade | yes | owns a race-scoped connector |
+| Backend `/simulate` stream, `rich` profile | yes | owns a race-scoped simulator |
+| `/recommend` | **no** | stateless per request |
+| MCP `strategy` tool, and the webapp Strategy tab | **no** | stateless per request |
+
+The bottom two rows are a **declared limitation, not a gap to close**. Neither has a race-scoped object to accumulate on, so any memory they carried would be either empty or filled from something request-scoped that resembles a race and is not. `tests/engine/test_memory_scope_is_deliberate.py` fails if that asymmetry is ever "harmonised" away.
+
+Measured effect, on a client that honours `temperature=0`: under a Safety Car at Lusail 2025 lap 42, the orchestrator acted on a contingency it had itself declared one lap earlier on **8 of 8** runs, against **0 of 8** without the block (Fisher p=0.000155). Over a full race the echo cuts distinct contingency triggers from ~27 to 5. It does not change what a given lap decides — `action` differed on 0 of 41 laps — it changes whether consecutive laps are the same plan.
+
+One consequence worth knowing before debugging a call: **the effect does not show up in `reasoning`.** In the Safety Car runs, none of the eight memory recommendations mentioned the prior plan, yet all eight flipped the call. To understand why a recommendation changed, read the memory block, not the prose.
+
 ## LLM configuration
 
 | Layer | Model | Provider |
