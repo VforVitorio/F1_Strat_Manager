@@ -1015,3 +1015,75 @@ Two things the wiring must carry out of this section:
    in step 4 of the plan is correct as written.
 2. **The block must be inspectable at the surface.** An intervention that flips 8 of 8
    decisions without appearing in `reasoning` is one nobody can debug from the output alone.
+
+---
+
+# SPRINT 2 OUTCOME, 2026-07-28 — what was built, and what the build changed about the report
+
+The numbered plan above is now executed. This section records what shipped and, more
+usefully, the three places where building it produced a finding the audit did not have.
+
+| plan step | issue | PR | state |
+|---|---|---|---|
+| 2, re-run the harness after the temperature fix | — | #679 | done, GATE FOLLOW-UP 2 above |
+| 4, the accumulator | #672 | #676 | shipped in Sprint 1, inert |
+| the prompt seam | #680 | #682 | done |
+| 7, write the limitation down | #681 | #683 | done |
+| the three-surface wiring | #684 | #686 + submodule #204 | done |
+| 6, scope the STAY_OUT framing | #685 | #687 | done |
+
+## Three findings the wiring produced
+
+**1. An anti-drift guard in this repo was asserting nothing.**
+`test_the_docstring_does_not_name_a_test_that_does_not_exist` scans the engine docstring's
+anti-drift section and asserts each test file it names exists. Its pattern was
+`tests/test_[a-z_]+\.py`, and every guard the docstring names now lives in `tests/engine/`.
+It matched **zero files** and passed green — the same defect it was written to catch, one
+level up. Widened, plus a non-empty assertion so a pattern that silently stops matching
+fails instead of going quiet. Worth generalising: a guard whose subject can move needs an
+assertion that it still has a subject.
+
+**2. The memory path cannot be tested end to end on the `rich` profile, for a structural
+reason.** §2.7 predicted the purity test would give the memory path zero coverage, which is
+right, but the fix is not simply "write an integration test". Driving `run_lap(profile="rich")`
+in a test fails on a connection error long before the prompt exists, because the always-on
+sub-agents build LLM clients first. The chain is verified as three links instead — two at
+runtime, one static. Anyone adding to this path should expect the same wall.
+
+**3. The block rendered `(1 laps)`.** Cosmetic, but it appeared in the first held lap of
+every real run and none of the ten hermetic tests caught it, because they all record
+several laps before asserting. Fixed under #685.
+
+## What §3.1's fix actually looks like, and what it costs
+
+Step 6 said the continuation framing "can finally be conditional". It was implemented by
+moving the sentence out of the static prompt and into the memory block, rather than by
+adding a second prompt parameter — two arguments that must always travel together are two
+arguments that eventually do not.
+
+**Two consequences, stated because neither is measured:**
+
+- The block that GATE FOLLOW-UP 2 measured had **no continuation line**. The 0/8 → 8/8
+  Safety Car result was obtained on a slightly different artifact than the one that now
+  ships. The direction is not in doubt; the exact number was not re-taken.
+- `/recommend` and the MCP tool now lose the sentence entirely. That is correct — they have
+  no history, so the instruction was unconditioned there in the strongest sense — but it is
+  a behavioural change to the shipped prompt on two surfaces and nobody has measured it.
+
+## Verified on real runs, not only in tests
+
+Lusail 2025 / NOR, `rich` profile, prompts captured as sent to the provider. Lap 20 (the
+first lap decided) carries no block at all; lap 21 reports `held since lap 20 (1 lap)` with
+the counterweight and no continuation; laps 22+ carry both. The span is measured from the
+first lap the surface actually decided, not from lap 1, which is the `laps_held` honesty
+requirement in §2.4 holding up outside a unit test.
+
+## Still open from this report
+
+- **§3.7's three incidentals** are untouched: `mc_decision_margin` still has no production
+  consumer, the third `"ERROR"` default at `simulator.py:502`, and `max_retries=1` on a live
+  race surface.
+- **§3.3 stands**: nothing retires a contingency. The mitigation shipped is that only the
+  last lap's list is echoed, which bounds the block rather than solving the problem.
+- **The measurement is still one circuit, one driver, one race.** Nothing in Sprint 2
+  widened it.
