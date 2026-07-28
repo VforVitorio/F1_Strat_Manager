@@ -12,6 +12,11 @@ when the agent did not emit a reasoning (stub path, conditional agent
 not fired, older checkpoint) the tab still surfaces the raw numbers.
 The RAG agent has no LLM reasoning; its retrieved text lives in the
 RAG card already, so it is not tabbed here.
+
+The Orchestrator tab additionally appends the DecisionMemory prompt
+block on laps where the call just changed (``plan_changed``), so the
+one lap where memory actually drives the decision is visible even
+though it leaves no trace in ``reasoning`` itself.
 """
 
 from __future__ import annotations
@@ -214,10 +219,18 @@ class ReasoningTabs(QTabWidget):
                 ed.setPlainText("")
             return
 
-        # Orchestrator: just the reasoning string.
-        self._editors["orchestrator"].setPlainText(
-            _clean(latest.get("reasoning")) or "— no reasoning —"
-        )
+        # Orchestrator: the reasoning string, plus the DecisionMemory block
+        # when this lap's call just changed. The block never shows up in
+        # `reasoning` even when it drives the call (see DecisionMemory's
+        # module docstring), so it is rendered here directly rather than
+        # trusting the LLM to narrate its own continuity. Hidden on every
+        # other lap: unconditional display was measured as wallpaper (the
+        # action changes on a small minority of laps).
+        orchestrator_text = _clean(latest.get("reasoning")) or "— no reasoning —"
+        memory_block = latest.get("memory_block")
+        if latest.get("plan_changed") and memory_block:
+            orchestrator_text += "\n\n--- why this call changed ---\n" + str(memory_block)
+        self._editors["orchestrator"].setPlainText(orchestrator_text)
 
         per = latest.get("per_agent") or {}
         for _, key in self._TABS:
