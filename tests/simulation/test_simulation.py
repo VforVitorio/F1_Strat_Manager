@@ -120,6 +120,17 @@ def test_simulate_race_emits_start_lap_summary():
     assert "scenario_scores" in first_lap
     assert isinstance(first_lap["scenario_scores"], dict)
 
+    # The memory fields must be on the wire even on this branch, so the webapp can
+    # rely on their presence rather than probing for them. no-llm builds no prompt,
+    # so there is no block: the values are the explicit "no memory here" pair, not
+    # missing keys.
+    assert "memory_block" in first_lap, (
+        "LapDecision must always carry memory_block; the webapp reads it to explain "
+        "a changed recommendation and cannot branch on a key that sometimes exists"
+    )
+    assert first_lap["memory_block"] is None, "the no-llm branch builds no prompt to hold a block"
+    assert first_lap["plan_changed"] is False
+
 
 # ---------------------------------------------------------------------------
 # Integration — /api/v1/strategy/simulate SSE endpoint
@@ -224,3 +235,78 @@ def test_simulate_request_rejects_invalid_provider():
         SimulateRequest(
             year=2025, gp="Melbourne", driver="NOR", team="McLaren", provider="anthropic"
         )
+
+
+@_skip_no_backend
+def test_the_memory_block_reaches_the_lap_payload():
+    """The block the orchestrator was shown must survive into the wire format.
+
+    This is the whole point of #694: the memory layer changes decisions and leaves
+    no trace in `reasoning`, and asking the model to narrate it was measured and
+    made the decisions worse. So the explanation has to be the deterministic INPUT,
+    which means it has to reach the webapp intact.
+
+    Exercised through `_parse_lap_decision` rather than a live `rich` simulation
+    because a real run needs an LLM provider; what is under test here is the
+    transport, and the layer below it was verified on a real `f1-sim` run.
+    """
+    _ensure_backend_on_path()
+    from types import SimpleNamespace
+
+    from backend.services.simulation.simulator import _parse_lap_decision
+
+    block = "DECISION MEMORY (your own previous calls this race):\n  Last call: STAY_OUT.\n"
+    race_state = SimpleNamespace(
+        lap=42, compound="MEDIUM", tyre_life=20, position=3, gap_ahead_s=1.8
+    )
+    result = SimpleNamespace(
+        action="PIT_NOW",
+        confidence=0.9,
+        reasoning="stub",
+        scenario_scores={},
+        pace_mode=None,
+        risk_posture=None,
+        pit_lap_target=42,
+        compound_next="HARD",
+        undercut_target=None,
+    )
+
+    decision = _parse_lap_decision(
+        result, race_state, {}, 90.0, memory_block=block, plan_changed=True
+    )
+    payload = decision.model_dump()
+
+    assert payload["memory_block"] == block
+    assert payload["plan_changed"] is True
+
+
+@_skip_no_backend
+def test_a_lap_with_no_memory_still_carries_both_fields():
+    """Absent memory is an explicit pair of values, never missing keys.
+
+    The webapp has to render "no history for this call" rather than branch on a
+    key that sometimes exists. `/recommend` and the MCP tool are memoryless by
+    design, so that state is permanent, not transitional.
+    """
+    _ensure_backend_on_path()
+    from types import SimpleNamespace
+
+    from backend.services.simulation.simulator import _parse_lap_decision
+
+    race_state = SimpleNamespace(lap=1, compound="SOFT", tyre_life=1, position=5, gap_ahead_s=0.0)
+    result = SimpleNamespace(
+        action="STAY_OUT",
+        confidence=0.5,
+        reasoning="stub",
+        scenario_scores={},
+        pace_mode=None,
+        risk_posture=None,
+        pit_lap_target=None,
+        compound_next=None,
+        undercut_target=None,
+    )
+
+    payload = _parse_lap_decision(result, race_state, {}, None).model_dump()
+
+    assert payload["memory_block"] is None
+    assert payload["plan_changed"] is False
