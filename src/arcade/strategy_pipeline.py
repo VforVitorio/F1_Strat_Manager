@@ -24,21 +24,27 @@ from src.strategy.inference.engine import run_lap
 
 if TYPE_CHECKING:  # pragma: no cover — only for type hints
     from src.agents.strategy_orchestrator import RaceState, StrategyRecommendation
+    from src.strategy.inference.decision_memory import DecisionMemory
 
 
 def run_strategy_pipeline(
     race_state: "RaceState",
     laps_df: pd.DataFrame,
     lap_state: dict | None = None,
+    memory: "DecisionMemory | None" = None,
 ) -> tuple["StrategyRecommendation", dict]:
     """Run the full N31 pipeline; return the recommendation and per-agent outputs.
 
-    Public signature is unchanged so ``src/arcade/strategy.py`` and the dashboard
-    formatters keep working. The ``agent_outputs`` dict carries the same keys as
-    before (``pace_out``/``tire_out``/``situation_out``/``radio_out``/``pit_out``/
+    Public signature stays backward compatible: ``memory`` is optional and
+    defaults to ``None``, so ``src/arcade/strategy.py`` and the dashboard
+    formatters that already call this positionally keep working unchanged. The
+    ``agent_outputs`` dict carries the same keys as before (``pace_out``/
+    ``tire_out``/``situation_out``/``radio_out``/``pit_out``/
     ``regulation_context``/``rag``/``active``) plus ``guardrail_reason``; the
     engine's third return value (stage timings) is dropped here (a future arcade
     change may forward it on the TCP stream).
     """
-    rec, agent_outputs, _timings = run_lap(race_state, laps_df, lap_state, profile="rich")
+    rec, agent_outputs, _timings = run_lap(
+        race_state, laps_df, lap_state, profile="rich", memory=memory
+    )
     return rec, agent_outputs
