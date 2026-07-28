@@ -26,10 +26,11 @@ enforced one.
 
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 
 import pytest
+
+from tests.engine.ast_helpers import kwargs_passed_by
 
 ROOT = Path(__file__).parent.parent.parent
 _HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
@@ -48,18 +49,8 @@ _THREADED_CALLEES = ("_assemble_recommendation", "_build_orchestrator_prompt")
 
 
 def _kwargs_passed_by(func, callee: str = "_assemble_recommendation") -> set[str]:
-    """The keyword names `func` passes to `callee`."""
-    import ast
-
-    tree = ast.parse(inspect.getsource(func).lstrip())
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == callee
-        ):
-            return {kw.arg for kw in node.keywords if kw.arg}
-    return set()
+    """The keyword names `func` passes to `callee`, with this file's default callee."""
+    return kwargs_passed_by(func, callee)
 
 
 @pytest.mark.parametrize("callee", _THREADED_CALLEES)
