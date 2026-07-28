@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.strategy.inference.decision_memory import (
+    CONTINUATION,
     COUNTERWEIGHT,
     MAX_CONTINGENCIES,
     DecisionMemory,
@@ -144,6 +145,70 @@ def test_the_counterweight_is_always_present():
     memory = DecisionMemory()
     memory.record(5, _rec())
     assert COUNTERWEIGHT in memory.block()
+
+
+@pytest.mark.unit
+def test_a_single_call_is_not_a_continuation():
+    """One STAY_OUT is a call, not a plan being carried.
+
+    This is the case that made the instruction wrong in the static prompt: it also
+    fired on the very first decision of a race, telling the model not to re-argue a
+    case it had never argued.
+    """
+    memory = DecisionMemory()
+    memory.record(5, _rec())
+
+    block = memory.block()
+    assert CONTINUATION not in block
+    assert COUNTERWEIGHT in block, "the counterweight is unconditional; only this line is not"
+
+
+@pytest.mark.unit
+def test_a_repeated_stay_out_is_told_it_is_continuing_a_plan():
+    """The one case the instruction was always meant for (audit section 3.1)."""
+    memory = DecisionMemory()
+    memory.record(5, _rec())
+    memory.record(6, _rec())
+
+    assert CONTINUATION in memory.block()
+
+
+@pytest.mark.unit
+def test_a_changed_call_is_not_a_continuation():
+    """The other case it was wrong in: the lap the plan actually changed.
+
+    A STAY_OUT that follows an UNDERCUT is a new decision. Telling the model not to
+    re-argue it is telling it not to think about the only lap that moved.
+    """
+    memory = DecisionMemory()
+    memory.record(5, _rec())
+    memory.record(6, _rec(action="UNDERCUT"))
+    memory.record(7, _rec())
+
+    assert CONTINUATION not in memory.block()
+
+
+@pytest.mark.unit
+def test_a_repeated_pit_call_is_not_a_continuing_plan():
+    """STAY_OUT is the only action a race can sit on.
+
+    A repeated PIT_NOW is not a plan being carried, it is a stop that has not
+    happened, and it is the last thing that should be discouraged from re-arguing.
+    """
+    memory = DecisionMemory()
+    memory.record(5, _rec(action="PIT_NOW"))
+    memory.record(6, _rec(action="PIT_NOW"))
+
+    assert CONTINUATION not in memory.block()
+
+
+@pytest.mark.unit
+def test_the_span_reads_as_english_for_a_single_lap():
+    """It rendered "(1 laps)" on the first held lap of every real run."""
+    memory = DecisionMemory()
+    memory.record(20, _rec())
+
+    assert "held since lap 20 (1 lap)." in memory.block()
 
 
 @pytest.mark.unit
