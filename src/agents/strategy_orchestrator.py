@@ -1468,6 +1468,7 @@ def _build_orchestrator_prompt(
     pit_out              = None,
     radio_out            = None,
     regulation_context:  str = "",
+    memory_block:        str = "",
 ) -> str:
     """Build the LLM synthesis prompt for Layer 3.
 
@@ -1485,6 +1486,20 @@ def _build_orchestrator_prompt(
     best_mc is the MC argmax passed as a hint. The LLM may override it if
     regulation context, radio alerts, or a planned contingency justify a
     different action.
+
+    memory_block is what this race's own previous recommendations looked like,
+    rendered by DecisionMemory and empty by default. Empty is not a degraded
+    mode: two of the three call sites (/recommend and the MCP tool) are
+    stateless per request and have no race-scoped object to accumulate on, so
+    they keep this prompt exactly as it was. The default therefore has to
+    produce a byte-identical prompt, which tests/agents/test_orchestrator_prompt
+    asserts.
+
+    Measured effect when it IS supplied, on a client that honours temperature=0:
+    under a Safety Car at Lusail 2025 lap 42, the model acted on a contingency it
+    had itself declared one lap earlier on 8 of 8 runs, against 0 of 8 without
+    the block (Fisher p=0.000155). It changes whether consecutive laps are the
+    same plan, not what any single lap decides.
     """
     mc_table = "\n".join(_format_mc_row(name, cell) for name, cell in mc_results.items())
 
@@ -1607,6 +1622,11 @@ def _build_orchestrator_prompt(
         f"  that would change the call, and (c) how far the current numbers sit from it.\n"
         f"  Carry the lap you are watching towards in pit_lap_target whenever the tyre\n"
         f"  data supports one, so a hold reads as a plan with a horizon, not indecision.\n\n"
+        # Placed after the framing and before the per-lap facts, so the model reads
+        # what it decided before it reads this lap's numbers. `or ""` because the
+        # producer, DecisionMemory.block(), returns None before there is any history
+        # and an unguarded f-string would render the literal "None" into the prompt.
+        f"{memory_block or ''}"
         f"RACE CONTEXT:\n"
         f"  Driver: {race_state.driver} | Lap: {race_state.lap}/{race_state.total_laps}\n"
         f"  Position: P{race_state.position} | Compound: {race_state.compound} "
