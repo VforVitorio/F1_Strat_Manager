@@ -461,7 +461,7 @@
   <div class="rl-dot planned"></div>
   <div class="rl-card planned">
     <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v2.5.0</span>
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.6.0</span>
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Arcade, modernized: a web-native trackside frontend</p>
