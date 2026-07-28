@@ -31,6 +31,37 @@ if str(REPO_ROOT) not in sys.path:
 MEMORY_ANCHOR = "RACE CONTEXT:\n"
 
 
+MODEL_FLAG_HELP = (
+    "override CFG.model_name for this run only. The reason this exists: the "
+    "shipped model discards temperature, so the only way to ask 'would a "
+    "DETERMINISTIC client behave differently' is to measure one that keeps it. "
+    "A cross-model result is suggestive, not conclusive."
+)
+
+
+def add_model_flag(parser) -> None:
+    """Register ``--model`` on a harness stage.
+
+    Shared rather than copied into each stage: the flag and the override below are
+    a pair, and a stage that grew its own copy would be one more instance of the
+    failure this repo keeps hitting - a fix landing on one twin and not the other.
+    """
+    parser.add_argument("--model", default=None, help=MODEL_FLAG_HELP)
+
+
+def apply_model_flag(model: str | None) -> str:
+    """Point ``CFG.model_name`` at ``model`` and return the model actually in use.
+
+    Must run BEFORE the first ``_get_orchestrator_llm()``, which caches the client:
+    afterwards the assignment lands on config nothing reads again.
+    """
+    from src.agents.strategy_orchestrator import CFG
+
+    if model:
+        CFG.model_name = model
+    return CFG.model_name
+
+
 def load_env() -> str:
     """Load the repo ``.env`` and return the resolved provider.
 

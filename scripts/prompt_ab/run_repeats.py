@@ -8,14 +8,20 @@ way to measure those is repetition on one lap.
 The memory block is frozen at what a source pass held ENTERING the target lap, so
 every repeat sees the same history and the only thing varying is the sampler.
 
-This is the experiment that produced the audit's two significant results: at Lusail
-2025 lap 44 memory alone agreed with the deterministic Monte Carlo on 4 of 10 runs
-against 6 of 10 without it, and 10 of 10 once the counterweight was in the block;
-under an injected Safety Car, memory took the free stop on 7 of 8 runs against 1 of 8.
+This is the experiment that produced the audit's significant result: under a Safety
+Car injected at Lusail 2025 lap 42, memory took the free stop on 7 of 8 runs against
+1 of 8 without it. Re-run on ``--model gpt-4.1-mini``, which honours ``temperature=0``,
+it separates completely: **0 of 8 against 8 of 8** (Fisher p=0.000155), so the effect
+is not the sampler.
+
+Pass ``--model`` for that check. Note the companion experiment at lap 44 went
+DEGENERATE on the deterministic client — both arms stay out 10 of 10 — so a null
+result there measures the client, not the memory. Always read the no-memory arm first.
 
 Usage:
-    python -m scripts.prompt_ab.run_repeats --inputs .../lusail_nor.pkl \\
-        --history .../pass_a.json --lap 44 --repeats 10 --out .../transition.json
+    python -m scripts.prompt_ab.run_repeats --inputs .../lusail_nor_sc.pkl \\
+        --history .../gate_none.json --lap 42 --repeats 8 --model gpt-4.1-mini \\
+        --out .../sc.json
 """
 
 from __future__ import annotations
@@ -30,6 +36,8 @@ from types import SimpleNamespace
 
 from scripts.prompt_ab._common import (
     Usage,
+    add_model_flag,
+    apply_model_flag,
     assemble,
     build_prompt,
     checkpoint,
@@ -91,12 +99,15 @@ def main() -> None:
     parser.add_argument("--lap", required=True, type=int)
     parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--out", required=True, type=Path)
+    add_model_flag(parser)
     args = parser.parse_args()
 
     provider = load_env()
-    print(f"provider={provider}  lap={args.lap}  repeats={args.repeats}")
 
     from src.agents.strategy_orchestrator import _get_orchestrator_llm
+
+    model_name = apply_model_flag(args.model)
+    print(f"provider={provider}  model={model_name}  lap={args.lap}  repeats={args.repeats}")
 
     records = {r["lap"]: r for r in pickle.loads(args.inputs.read_bytes())}
     history_rows = json.loads(args.history.read_text(encoding="utf-8"))["rows"]
@@ -128,7 +139,15 @@ def main() -> None:
                 f"conf={row['confidence']:.2f} target={row['pit_lap_target']}",
                 flush=True,
             )
-            checkpoint(args.out, {"lap": args.lap, "usage": usage.as_dict(), "rows": rows})
+            checkpoint(
+                args.out,
+                {
+                    "lap": args.lap,
+                    "model": model_name,
+                    "usage": usage.as_dict(),
+                    "rows": rows,
+                },
+            )
 
     _summarise(rows, args.lap)
     print(f"\n{usage.calls} calls, {usage.prompt_tokens} in / {usage.completion_tokens} out")
