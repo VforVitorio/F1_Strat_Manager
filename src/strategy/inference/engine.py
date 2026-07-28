@@ -31,9 +31,19 @@ Untouchability: nothing in ``src/agents/`` is modified. Every strategy layer is 
 SAME code object the orchestrator runs (imported, never copied); the only
 engine-owned code is the call sequence itself and the default-lap_state builder.
 
-Anti-drift guards: ``tests/engine/test_engine.py``, ``tests/engine/test_engine_no_llm.py`` and
+Decision memory
+---------------
+``run_lap`` accepts an optional ``DecisionMemory`` and renders its block into the Layer 3
+prompt. The accumulator belongs to the CALLER — the CLI loop, the arcade connector, the
+backend simulator's stream — because this function has to stay pure per lap. The engine
+only ever calls ``block()``; the caller records the recommendation afterwards. The two
+stateless surfaces (``/recommend``, the MCP tool) get no memory by design, which
+``tests/engine/test_memory_scope_is_deliberate.py`` enforces.
+
+Anti-drift guards: ``tests/engine/test_engine.py``, ``tests/engine/test_engine_no_llm.py``,
 ``tests/engine/test_engine_threads_every_argument.py`` (which checks, by AST, that this path
-passes ``_assemble_recommendation`` every argument the orchestrator does).
+passes ``_assemble_recommendation`` every argument the orchestrator does) and
+``tests/engine/test_memory_scope_is_deliberate.py``.
 
 These do not assert byte-level parity with the orchestrator. An earlier docstring cited
 a ``tests/test_engine_parity.py`` that does not exist; the argument-threading test above
@@ -45,9 +55,14 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    # Type-only: importing it for real would put a strategy-layer import in the
+    # engine's import graph for a value the engine never constructs.
+    from src.strategy.inference.decision_memory import DecisionMemory
 
 from src.agents.strategy_orchestrator import (
     RaceState,
@@ -163,6 +178,7 @@ def run_lap(
     *,
     profile: Profile = "rich",
     return_agent_outputs: bool = True,
+    memory: "DecisionMemory | None" = None,
 ) -> tuple[StrategyRecommendation, dict[str, Any] | None, dict[str, float]]:
     """Run one lap of the N31 strategy pipeline and return everything a surface needs.
 
@@ -176,6 +192,12 @@ def run_lap(
             (deterministic, zero LLM clients). ``"fast"`` is reserved (raises).
         return_agent_outputs: When ``False``, slot 2 is ``None`` (compute is
             unchanged; only the assembly of the outputs dict is skipped).
+        memory: This race's ``DecisionMemory``, owned by the CALLER. Read here,
+            never written: the caller records each recommendation after the lap
+            returns, which is what keeps this function pure and
+            ``tests/engine/test_engine_no_llm.py``'s twice-on-lap-6 assertion true.
+            Ignored on ``no-llm``, which builds no prompt to put it in — passing
+            one there is harmless, and silent, so it is stated here.
 
     Returns:
         ``(recommendation, agent_outputs | None, stage_timings)`` where
@@ -195,7 +217,10 @@ def run_lap(
     laps_df = _scope_laps_to_gp(laps_df, lap_state, race_state)
 
     if profile == "rich":
-        return _run_rich(race_state, laps_df, lap_state, return_agent_outputs)
+        # Rendered here rather than inside _run_rich so the engine's only contact with
+        # the accumulator is one read, at one place, of a method that cannot mutate it.
+        memory_block = memory.block() if memory is not None else ""
+        return _run_rich(race_state, laps_df, lap_state, return_agent_outputs, memory_block)
     if profile == "no-llm":
         # Imported lazily so the rich path never pays the no_llm module's agent
         # class imports, and so a circular import can never form.
@@ -212,6 +237,7 @@ def _run_rich(
     laps_df: pd.DataFrame,
     lap_state: dict[str, Any] | None,
     return_agent_outputs: bool,
+    memory_block: str | None = "",
 ) -> tuple[StrategyRecommendation, dict[str, Any] | None, dict[str, float]]:
     """The rich profile: the orchestrator's five-step sequence, outputs retained.
 
@@ -284,6 +310,12 @@ def _run_rich(
             pit_out=pit_out,
             radio_out=radio_out,
             regulation_context=regulation_context,
+            # The one argument in this call the orchestrator deliberately does NOT
+            # pass: /recommend and the MCP tool are stateless per request and have no
+            # race to accumulate over. tests/engine/test_memory_scope_is_deliberate.py
+            # holds that asymmetry open, because the threading guard next to it only
+            # looks the other way and is green on this by construction.
+            memory_block=memory_block,
         )
         synth = _get_orchestrator_llm().invoke(prompt)
         rec = _assemble_recommendation(
