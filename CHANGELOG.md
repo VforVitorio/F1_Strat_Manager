@@ -11,6 +11,21 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.5.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.4.0...v2.5.0) (2026-07-28)
+
+
+### Features
+
+* **arcade:** show the decision-memory block when the call changes ([6877788](https://github.com/VforVitorio/F1-StratLab/commit/687778820b897aba724bed1a666682f2c120f827)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+* **backend:** bump telemetry to the lap payload carrying the decision-memory block ([c4d7bb4](https://github.com/VforVitorio/F1-StratLab/commit/c4d7bb4d52f0aa20fd580fbcb9cadab97dcdeb5d)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+* **cli:** show the decision-memory block when the call changes ([41dd804](https://github.com/VforVitorio/F1-StratLab/commit/41dd8041ba71e1056a9b805873ec956ad134bfb1)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+* **memory:** expose whether the last recorded call changed ([7b69c13](https://github.com/VforVitorio/F1-StratLab/commit/7b69c1358ce8f5535667ceaae4fc4b02ef93a7b3)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+
+
+### Bug Fixes
+
+* **tests:** skip the payload tests when model weights are absent ([4aa4424](https://github.com/VforVitorio/F1-StratLab/commit/4aa4424e432171730a8b5539f2d440ae9d596093))
+
 ## [2.4.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.3.0...v2.4.0) (2026-07-28)
 
 
