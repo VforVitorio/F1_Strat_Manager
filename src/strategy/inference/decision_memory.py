@@ -10,9 +10,15 @@ almost none**: across a race that is not one plan, it is 41 unrelated plans. Wit
 its own previous contingencies echoed back it settles on six.
 
 That is what this class is for, and it is a narrower claim than "memory makes the
-system smarter". It does not change what the orchestrator decides on a given lap
-(``action`` differed on 0 of 41 laps in the A/B). It changes whether consecutive
-laps are the same plan.
+system smarter" - but do not narrow it too far either, because the two halves blur
+easily. On an ORDINARY green-flag lap the block does not change the call:
+``action`` differed on 0 of 41 laps across a whole race. On the lap where a
+contingency the model itself declared actually FIRES, it does, and that is the
+entire point - under a Safety Car at Lusail 2025 lap 42 the orchestrator executed
+its own one-lap-old plan on 8 of 8 runs against 0 of 8 without the block.
+
+So: not a nudge applied to every lap, but a plan the model can still be holding
+when the trigger arrives.
 
 Where it lives, and why not in the engine
 -----------------------------------------

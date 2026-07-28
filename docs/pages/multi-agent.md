@@ -315,7 +315,9 @@ It lives in the **caller**, not the engine, because `run_lap` is pure per lap an
 
 The bottom two rows are a **declared limitation, not a gap to close**. Neither has a race-scoped object to accumulate on, so any memory they carried would be either empty or filled from something request-scoped that resembles a race and is not. `tests/engine/test_memory_scope_is_deliberate.py` fails if that asymmetry is ever "harmonised" away.
 
-Measured effect, on a client that honours `temperature=0`: under a Safety Car at Lusail 2025 lap 42, the orchestrator acted on a contingency it had itself declared one lap earlier on **8 of 8** runs, against **0 of 8** without the block (Fisher p=0.000155). Over a full race the echo cuts distinct contingency triggers from ~27 to 5. It does not change what a given lap decides — `action` differed on 0 of 41 laps — it changes whether consecutive laps are the same plan.
+Measured effect, on a client that honours `temperature=0`: under a Safety Car at Lusail 2025 lap 42, the orchestrator acted on a contingency it had itself declared one lap earlier on **8 of 8** runs, against **0 of 8** without the block (Fisher p=0.000155). Over a full race the echo cuts distinct contingency triggers from ~27 to 5.
+
+Stated precisely, because the two halves of that are easy to blur: on an **ordinary green-flag lap** the block does not change the call — `action` differed on 0 of 41 laps across a whole race — it changes whether consecutive laps are the same plan. On the lap where a **contingency the model itself declared actually fires**, it does change the call, and that is the entire point. Memory is not a nudge applied to every lap; it is a plan the model can still be holding when the trigger arrives.
 
 One consequence worth knowing before debugging a call: **the effect does not show up in `reasoning`.** In the Safety Car runs, none of the eight memory recommendations mentioned the prior plan, yet all eight flipped the call. To understand why a recommendation changed, read the memory block, not the prose.
 
