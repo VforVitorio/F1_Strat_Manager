@@ -212,6 +212,50 @@ def test_the_span_reads_as_english_for_a_single_lap():
 
 
 @pytest.mark.unit
+def test_the_first_call_of_a_race_is_not_a_change():
+    """Nothing to compare against, so a surface must not open the panel on lap one."""
+    memory = DecisionMemory()
+    memory.record(5, _rec())
+
+    assert memory.last_call_changed() is False
+
+
+@pytest.mark.unit
+def test_a_repeated_action_is_not_a_change():
+    memory = DecisionMemory()
+    memory.record(5, _rec())
+    memory.record(6, _rec())
+
+    assert memory.last_call_changed() is False
+
+
+@pytest.mark.unit
+def test_a_new_action_is_a_change():
+    """The lap the call actually moved: this is the one worth explaining."""
+    memory = DecisionMemory()
+    memory.record(5, _rec())
+    memory.record(6, _rec(action="PIT_NOW"))
+
+    assert memory.last_call_changed() is True
+
+
+@pytest.mark.unit
+def test_a_drifting_target_under_an_unchanged_call_is_NOT_a_change():
+    """Measured, not stylistic: this is what stops the signal becoming wallpaper.
+
+    Over 40 lap pairs of a real race the action changed on 0 and `pit_lap_target`
+    moved on 25 (62%). Counting the target would open the panel on two laps in
+    three. A target drifting under a held call is what the block's drift line
+    reports; it is not a change of plan.
+    """
+    memory = DecisionMemory()
+    memory.record(5, _rec(pit_lap_target=30))
+    memory.record(6, _rec(pit_lap_target=44))
+
+    assert memory.last_call_changed() is False
+
+
+@pytest.mark.unit
 def test_recording_backwards_raises_rather_than_producing_a_false_span():
     memory = DecisionMemory()
     memory.record(10, _rec())

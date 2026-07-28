@@ -1748,10 +1748,15 @@ def run(args: argparse.Namespace) -> None:
                 # deterministic, zero LLM clients (fixes #166). `outs` carries the
                 # six sub-agent outputs the detail panel renders — no second pass.
                 profile = "no-llm" if args.no_llm else "rich"
+                # Captured before run_lap, not after record: this is what the prompt
+                # actually saw this lap. record() below mutates the accumulator, so
+                # reading the block afterwards would show next lap's history instead.
+                memory_block = memory.block()
                 result, outs, _ = run_lap(
                     race_state, laps_df, lap_state, profile=profile, memory=memory
                 )
                 memory.record(lap_num, result)
+                memory_changed = memory.last_call_changed()
                 scores = getattr(result, "scenario_scores", {})
                 action = getattr(result, "action", "?")
                 confidence = getattr(result, "confidence", 0.0)
@@ -1865,6 +1870,27 @@ def run(args: argparse.Namespace) -> None:
                 row_tbl.add_row(*row)
                 live.console.print(row_tbl)
                 live.console.print()  # visual breathing room between rows
+
+                # Memory only earns screen space on the lap it moved something:
+                # on an ordinary lap the call does not change (measured 0/41 at
+                # Lusail 2025) and the block would be wallpaper. --no-llm builds
+                # no prompt at all, so memory_block is None there and nothing
+                # renders, and no special case is needed for it.
+                if memory_changed and memory_block is not None:
+                    live.console.print(
+                        Panel(
+                            Text(memory_block, style=COL_DIM),
+                            title=(
+                                "[dim]why this call changed - what the orchestrator "
+                                "was told about its own previous calls[/dim]"
+                            ),
+                            title_align="left",
+                            border_style=COL_DIM,
+                            padding=(0, 1),
+                            expand=False,
+                        )
+                    )
+                    live.console.print()
 
                 # Summary counters — cheap, per-lap increments so the final
                 # "Run complete" panel can show action mix, compound stints

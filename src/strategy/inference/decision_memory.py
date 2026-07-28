@@ -146,6 +146,28 @@ class DecisionMemory:
             )
         )
 
+    # ── what a surface needs to render the block ──────────────────────────
+    def last_call_changed(self) -> bool:
+        """True when the call just recorded differs from the one before it.
+
+        Call it AFTER ``record``. Surfaces use it to decide whether to show the
+        memory block already expanded: the block explains a decision, and the
+        decision worth explaining is the one that moved.
+
+        Only ``action`` counts, and that is a measured choice rather than a
+        stylistic one. Over 40 lap pairs of a real race the action changed on
+        0 of them while ``pit_lap_target`` moved on 25 (62%), so counting the
+        target would open the panel on two laps in three and turn a signal into
+        wallpaper. A target that drifts under an unchanged call is exactly what
+        the block's drift line is for; it is not a change of plan.
+
+        False with fewer than two entries: the first decision of a race is not
+        a change, and there is nothing to compare it against.
+        """
+        if len(self._entries) < 2:
+            return False
+        return self._entries[-1].action != self._entries[-2].action
+
     # ── derived views, each one line of the block ─────────────────────────
     def _current_run(self) -> tuple[str, int, int]:
         """The unbroken run of the latest action: (action, first lap, decisions)."""
