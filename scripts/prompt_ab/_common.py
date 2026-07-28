@@ -6,12 +6,10 @@ calls ``_build_orchestrator_prompt``, ``_get_orchestrator_llm`` and
 that measures a private copy of the code is a recorded failure in this repo, and
 two published numbers were produced that way.
 
---- WHERE TO CHANGE IF THE PROMPT GAINS A MEMORY PARAMETER ---
-``inject_memory_block`` splices the block in by string surgery, above the
-``RACE CONTEXT:`` heading. That is a harness-only workaround for the fact that
-``_build_orchestrator_prompt`` has no ``memory_block`` argument yet. The moment it
-gains one, delete the splice and pass the argument, or this harness starts
-measuring a prompt assembled differently from the one production builds.
+Earlier versions spliced the memory block in by string surgery above the
+``RACE CONTEXT:`` heading, because the builder had no parameter for it. It has one
+now and the splice is gone: every measurement here assembles the prompt through the
+same code path production uses, which is the whole point of this module.
 """
 
 from __future__ import annotations
@@ -25,11 +23,6 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-
-# The heading the memory block is spliced above: after the guard-rails and the
-# STAY_OUT framing, immediately before the per-lap facts.
-MEMORY_ANCHOR = "RACE CONTEXT:\n"
-
 
 MODEL_FLAG_HELP = (
     "override CFG.model_name for this run only. The reason this exists: the "
@@ -144,19 +137,11 @@ def invoke_with_retry(llm, prompt: str, usage: Usage, attempts: int = 4):
     raise AssertionError("unreachable")
 
 
-def inject_memory_block(prompt: str, block: str | None) -> str:
-    """Splice the memory block above ``RACE CONTEXT:``; a falsy block is a no-op."""
-    if not block:
-        return prompt
-    index = prompt.index(MEMORY_ANCHOR)
-    return prompt[:index] + block + prompt[index:]
-
-
 def build_prompt(record: dict[str, Any], memory_block: str | None = None) -> str:
     """Build one lap's orchestrator prompt from a cached record."""
     from src.agents.strategy_orchestrator import _build_orchestrator_prompt
 
-    prompt = _build_orchestrator_prompt(
+    return _build_orchestrator_prompt(
         race_state=record["race_state"],
         mc_results=record["mc_results"],
         best_mc=record["best_mc"],
@@ -166,8 +151,8 @@ def build_prompt(record: dict[str, Any], memory_block: str | None = None) -> str
         pit_out=record["pit_out"],
         radio_out=record["radio_out"],
         regulation_context=record["regulation_context"],
+        memory_block=memory_block,
     )
-    return inject_memory_block(prompt, memory_block)
 
 
 def assemble(record: dict[str, Any], synthesis):

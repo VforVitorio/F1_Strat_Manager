@@ -32,11 +32,11 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture
-def prompt() -> str:
-    """A prompt with no sub-agent outputs, so only the static blocks remain."""
-    from src.agents.strategy_orchestrator import RaceState, _build_orchestrator_prompt
+def race_state():
+    """The one RaceState every prompt in this file is built from."""
+    from src.agents.strategy_orchestrator import RaceState
 
-    race_state = RaceState(
+    return RaceState(
         driver="NOR",
         lap=25,
         total_laps=57,
@@ -49,6 +49,13 @@ def prompt() -> str:
         air_temp=22.7,
         track_temp=28.1,
     )
+
+
+@pytest.fixture
+def prompt(race_state) -> str:
+    """A prompt with no sub-agent outputs, so only the static blocks remain."""
+    from src.agents.strategy_orchestrator import _build_orchestrator_prompt
+
     return _build_orchestrator_prompt(race_state, {}, "STAY_OUT")
 
 
@@ -80,6 +87,85 @@ def test_a_held_stay_out_asks_for_a_threshold_rather_than_the_same_case_again(
     # and every demand below straddles a line break in the source.
     for demand in ("what you are watching", "the concrete threshold", "would change the call"):
         assert demand in prompt, f"the held-STAY_OUT block no longer asks for: {demand}"
+
+
+@pytest.mark.unit
+def test_the_default_memory_block_leaves_the_prompt_byte_identical(race_state) -> None:
+    """The memoryless surfaces must get exactly the prompt they got before the parameter existed.
+
+    ``/recommend`` and the MCP tool are stateless per request, so they will never
+    pass a block and must not be changed by the fact that others can. Byte
+    equality is the only assertion that proves it: a prompt that gained a stray
+    blank line still returns a well-formed recommendation, so nothing else in the
+    suite would notice.
+
+    Both spellings of "no memory" are checked, because ``DecisionMemory.block()``
+    returns ``None`` before there is any history and a caller passing it straight
+    through is the natural way to use it. Without the guard in the builder that
+    renders the literal string "None" above ``RACE CONTEXT:``, which equality with
+    the empty-block prompt is what catches. (A bare "None" not in prompt would not
+    work here: the field-schema instructions use the word legitimately.)
+    """
+    from src.agents.strategy_orchestrator import _build_orchestrator_prompt
+
+    baseline = _build_orchestrator_prompt(race_state, {}, "STAY_OUT")
+
+    assert _build_orchestrator_prompt(race_state, {}, "STAY_OUT", memory_block="") == baseline
+    assert _build_orchestrator_prompt(race_state, {}, "STAY_OUT", memory_block=None) == baseline
+
+
+@pytest.mark.unit
+def test_a_supplied_memory_block_lands_between_the_framing_and_the_facts(race_state) -> None:
+    """Position is the point: the model reads what it decided before it reads this lap.
+
+    Above ``RACE CONTEXT:`` and below the held-STAY_OUT framing, which is the anchor
+    the A/B harness spliced at while measuring this. If the block moves, the measured
+    result stops applying to the shipped prompt.
+    """
+    from src.agents.strategy_orchestrator import _build_orchestrator_prompt
+
+    block = "DECISION MEMORY (your own previous calls this race):\n  Last call: STAY_OUT.\n\n"
+    prompt = _build_orchestrator_prompt(race_state, {}, "STAY_OUT", memory_block=block)
+
+    assert block in prompt
+    assert prompt.index("ACTIVE monitoring posture") < prompt.index(block)
+    assert prompt.index(block) < prompt.index("RACE CONTEXT:")
+
+
+@pytest.mark.unit
+def test_the_real_decision_memory_block_renders_into_the_prompt(race_state) -> None:
+    """Against the shipping producer, not a hand-written string.
+
+    The two objects are wired together by nothing but a string, so a change to
+    ``DecisionMemory``'s rendering that broke the placement would otherwise be
+    caught by no test in either file.
+    """
+    from types import SimpleNamespace
+
+    from src.agents.strategy_orchestrator import _build_orchestrator_prompt
+    from src.strategy.inference.decision_memory import DecisionMemory
+
+    memory = DecisionMemory()
+    memory.record(
+        5,
+        SimpleNamespace(
+            action="STAY_OUT",
+            pit_lap_target=22,
+            contingencies=[
+                SimpleNamespace(
+                    trigger="SC deployed within 3 laps", switch_to="PIT_NOW", priority="HIGH"
+                )
+            ],
+        ),
+    )
+    prompt = _build_orchestrator_prompt(race_state, {}, "STAY_OUT", memory_block=memory.block())
+
+    assert "DECISION MEMORY" in prompt
+    assert "SC deployed within 3 laps" in prompt
+    # The counterweight is not optional decoration: without it the block measurably
+    # anchored the model at the decision lap.
+    assert "NOT a commitment" in prompt
+    assert prompt.index("DECISION MEMORY") < prompt.index("RACE CONTEXT:")
 
 
 @pytest.mark.unit
