@@ -24,6 +24,8 @@ from pathlib import Path
 
 from scripts.prompt_ab._common import (
     Usage,
+    add_model_flag,
+    apply_model_flag,
     assemble,
     build_prompt,
     checkpoint,
@@ -48,26 +50,15 @@ def main() -> None:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--variant", choices=VARIANTS, default="none")
     parser.add_argument("--laps", default=None, help="optional sub-range, e.g. 40-45")
-    parser.add_argument(
-        "--model",
-        default=None,
-        help=(
-            "override CFG.model_name for this run only. The reason this exists: the "
-            "shipped model discards temperature, so the only way to ask 'would a "
-            "DETERMINISTIC client behave differently' is to measure one that keeps it. "
-            "A cross-model result is suggestive, not conclusive."
-        ),
-    )
+    add_model_flag(parser)
     args = parser.parse_args()
 
     provider = load_env()
 
-    from src.agents.strategy_orchestrator import CFG, _get_orchestrator_llm
+    from src.agents.strategy_orchestrator import _get_orchestrator_llm
 
-    if args.model:
-        # Must happen before the first _get_orchestrator_llm(), which caches the client.
-        CFG.model_name = args.model
-    print(f"provider={provider}  variant={args.variant}  model={CFG.model_name}")
+    model_name = apply_model_flag(args.model)
+    print(f"provider={provider}  variant={args.variant}  model={model_name}")
 
     records = pickle.loads(args.inputs.read_bytes())
     if args.laps:
@@ -104,7 +95,7 @@ def main() -> None:
             args.out,
             {
                 "variant": args.variant,
-                "model": CFG.model_name,
+                "model": model_name,
                 "usage": usage.as_dict(),
                 "rows": rows,
             },

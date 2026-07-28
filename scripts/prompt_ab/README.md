@@ -62,6 +62,14 @@ minutes and ~120 calls for the three together.
   memory, 6 with) and total `pit_lap_target` movement (311 laps against 214).
 - **Repeats**: report the count, the variant split and a Fisher exact test. n=10 cannot
   separate a 6/10 from a 4/10.
+- **Read the no-memory arm before the result.** If it is already at 0/n or n/n, the lap has
+  no room to move and the comparison measures nothing. That is what happened to the lap-44
+  anchoring experiment on `--model gpt-4.1-mini`: both arms stayed out 10 of 10, which is a
+  degenerate experiment and not evidence that memory is harmless.
+
+`--model` overrides `CFG.model_name` for one run. It exists because the shipped model
+discards `temperature`, so the only way to ask "does this survive without the sampler" is to
+measure a model that keeps it. Cross-model results are directional, never absolute.
 
 ## Deviations you must state with any result
 

@@ -910,3 +910,108 @@ Stated so the next reader knows what does not need re-auditing.
   audit cannot attribute the effect to one of them except by the mechanism visible in §3.6,
   which points at the contingencies.
 
+
+---
+
+# GATE FOLLOW-UP 2, 2026-07-28 — the two repeat experiments, re-run on a deterministic client
+
+The first gate follow-up re-measured the whole-race passes and explicitly left this open:
+
+> Nothing here re-opens §3.5/§3.6, which were run on the shipped model with repeats. They
+> should be re-run on a deterministic client before the wiring PR, since both were measured
+> against a much noisier baseline than a fixed client would give.
+
+That is what this section does. It is the gate on Sprint 2's wiring: if memory stopped
+helping once the sampler was removed, nothing was to be wired.
+
+**Method.** Identical to §3.5/§3.6 except for the client: `--model gpt-4.1-mini` at
+`temperature=0.0`, which that family keeps. History for both experiments is `gate_none.json`,
+the deterministic no-memory pass from the first gate follow-up, so the block echoed back is
+the one a deterministic surface would actually have accumulated. 36 calls, 116k in / 13.5k out.
+
+Two variants, not three: the counterweight now ships **inside** `DecisionMemory.block()`, so
+what §3.5 called BC is what `memory` means from here on. There is no memory-without-
+counterweight configuration left to measure, by design.
+
+## Result 1 — the Safety Car experiment does NOT just survive, it sharpens
+
+**Lusail 2025 lap 42, Safety Car injected via RCM, deterministic MC = `PIT_NOW`, n=8.**
+
+| variant | takes the free stop | stays out | mean confidence | `pit_lap_target` |
+|---|---|---|---|---|
+| no memory | **0/8** | 8 | 0.856 | 57, 47, 57, 57, 50, 50, 57, 57 |
+| memory | **8/8** | 0 | 0.906 | 42 x8 |
+
+```
+Fisher two-sided, agreement with the deterministic layer: p = 0.000155
+```
+
+On the shipped sampling client this was 1/8 against 7/8 (p=0.0101). On a deterministic client
+it is total separation. **The load-bearing result is not a sampling artifact** — removing the
+sampler made it cleaner, which is the opposite of what a noise explanation predicts.
+
+The mechanism is unchanged and still legible: entering lap 42 the block carried
+`[HIGH] "SC deployed within 3 laps" -> PIT_NOW`, declared by the model itself on lap 41. The
+Safety Car then deployed. Without the echo the model does not act on its own plan; with it,
+every run does.
+
+**§3.5's severity finding also reproduces, and it got worse.** Of the 8 memory runs, **0**
+mention the prior plan, the contingency or continuity in `reasoning` — they argue from tyre
+cliff and pace delta and then pit. The one run that does reference a prior plan is in the
+**no-memory** arm. So the block changes the decision on 8 of 8 runs while leaving no trace a
+reviewer could find in the output. That is a monitoring requirement, not a reason not to ship:
+**whatever surface renders the recommendation cannot show WHY this flipped**, so the memory
+block itself has to be inspectable when a call is questioned.
+
+The §3.6 caveat stands verbatim and is not weakened by the sharper number: these SC laps route
+N28/N30 in production, so the prompts lack the pit block and the hard regulation constraint a
+`rich` run would carry. **The A-vs-B contrast is sound because both arms get the identical
+prompt; the absolute 0/8 is not a product finding** and must not be quoted as "the product
+ignores Safety Cars".
+
+## Result 2 — the anchoring experiment went DEGENERATE, and that is a limitation, not a clean bill
+
+**Lusail 2025 lap 44, Norris's real stop, deterministic MC = `UNDERCUT`, n=10.**
+
+| variant | agrees with MC (pits) | stays out | mean confidence | `pit_lap_target` |
+|---|---|---|---|---|
+| no memory | **0/10** | 10 | 0.860 | 57 x8, 50, 52 |
+| memory | **0/10** | 10 | 0.880 | 57 x10 |
+
+```
+Fisher two-sided: p = 1.0
+```
+
+**Both arms are on the floor, so this experiment measured nothing.** `gpt-4.1-mini` never takes
+the lap-44 undercut in any configuration; there is no variance for memory to move in either
+direction. Read precisely:
+
+- It does **not** show that memory is harmless at the decision lap. §3.5's 6/10 → 4/10 was
+  measured on a client where the baseline pitted at all; here the baseline never does, so the
+  harm this experiment exists to detect is undetectable by construction.
+- It does **not** reproduce §3.5's 10/10 counterweight result either. That result stays where
+  the first follow-up left it: measured on the shipped model, and not re-confirmed.
+- What it does show is that the block did not push a 0/10 baseline into a *wrong* action, and
+  that the target stopped scattering (57 x8, 50, 52 → 57 x10).
+
+Worth recording because it is the design's own worst case: this run's block reported
+**`STAY_OUT, held since lap 5 (39 laps)`** — the 39-lap hold §3.5 said it could not test,
+since that pass never left `STAY_OUT`. A 39-lap hold plus a counterweight did not produce a
+different call from no memory at all.
+
+**Residual noise at `temperature=0.0`:** the no-memory arms are not constant. Lap 44 gave
+confidences of 0.85/0.90 and targets 57/50/52; lap 42 gave 57/47/50. A kept temperature
+narrows sampling, it does not remove it — exactly as `OrchestratorCFG`'s docstring warns.
+
+## Gate verdict: PASS — wire it
+
+The gate was "if a deterministic client stops the memory improving agreement with the
+deterministic MC, or worsens it, stop". Neither happened: agreement is unchanged on the
+degenerate lap and goes 0/8 → 8/8 on the lap where the deterministic layer had a live call.
+
+Two things the wiring must carry out of this section:
+
+1. **The contingency echo is the field to ship**, confirmed twice on two clients. Field order
+   in step 4 of the plan is correct as written.
+2. **The block must be inspectable at the surface.** An intervention that flips 8 of 8
+   decisions without appearing in `reasoning` is one nobody can debug from the output alone.
