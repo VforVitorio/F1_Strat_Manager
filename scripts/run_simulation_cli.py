@@ -1589,10 +1589,14 @@ def run(args: argparse.Namespace) -> None:
     # history table was inside Live and eventually exceeded terminal height
     # (the terminal cursor cannot rewind above the topmost visible line).
     from src.nlp.rcm_state import RaceControlStateTracker
+    from src.strategy.inference.decision_memory import DecisionMemory
 
     # One Safety-Car tracker for the whole run: persists SC/VSC state across laps
     # so the deploy-once corpus message keeps the override active mid-stint (NR-02).
     sc_tracker = RaceControlStateTracker()
+    # One decision memory for the whole run: accumulates orchestrator recommendations
+    # so the Layer 3 prompt sees its own previous calls and can compose a continuous plan.
+    memory = DecisionMemory()
     with Live(
         _live_content(),
         console=console,
@@ -1744,7 +1748,10 @@ def run(args: argparse.Namespace) -> None:
                 # deterministic, zero LLM clients (fixes #166). `outs` carries the
                 # six sub-agent outputs the detail panel renders — no second pass.
                 profile = "no-llm" if args.no_llm else "rich"
-                result, outs, _ = run_lap(race_state, laps_df, lap_state, profile=profile)
+                result, outs, _ = run_lap(
+                    race_state, laps_df, lap_state, profile=profile, memory=memory
+                )
+                memory.record(lap_num, result)
                 scores = getattr(result, "scenario_scores", {})
                 action = getattr(result, "action", "?")
                 confidence = getattr(result, "confidence", 0.0)
