@@ -1087,3 +1087,70 @@ requirement in §2.4 holding up outside a unit test.
   last lap's list is echoed, which bounds the block rather than solving the problem.
 - **The measurement is still one circuit, one driver, one race.** Nothing in Sprint 2
   widened it.
+
+---
+
+# NEGATIVE RESULT, 2026-07-28 — asking the model to report its own continuity DESTROYS the effect
+
+§3.5 rated this HIGH and it is the one loose end Sprint 2 left: the block changes the
+decision and leaves **no trace in `reasoning`**. Under a Safety Car it flipped the call on
+8 of 8 runs and 0 of those 8 mentioned the prior plan. An effect you cannot see in the
+output is an effect you cannot debug in production, so the obvious follow-up (#691) was to
+ask for it: have `reasoning` open with `CONTINUING` or `DEPARTING`.
+
+**It does not work, and the failure is not subtle.** Three formulations, all measured on the
+same cached inputs, same deterministic client, n=8 on the Safety Car lap where the memory
+effect actually lives:
+
+| condition | takes the free stop | carries a label | says `DEPARTING` |
+|---|---|---|---|
+| **no instruction (shipped)** | **8/8** | 0/8 | 0/8 |
+| v1, label first | 6/8 | 2/8 | 0/8 |
+| v2, label first + worked examples | **0/8** | 8/8 | 0/8 |
+| v3, label LAST, explicitly after deciding | **0/8** | 7/8 | 0/8 |
+
+`8/8 → 0/8`, Fisher p = 0.000155.
+
+**The relationship is monotone in the wrong direction: the better the model complies with the
+labelling, the less it executes its own plan.** At full compliance (v2, v3) the Safety Car
+result — the entire justification for the memory layer — is gone.
+
+## Two things this rules out
+
+**It is not an ordering effect.** The first hypothesis was that classifying the call before
+reasoning forces a premature commitment to continuity. v3 tested exactly that: decide first,
+label as the last sentence, with "classify the decision you reached; do not let it steer the
+decision" stated outright. Identical damage. So it is not *when* the model is asked, it is
+*that* it is asked.
+
+**It is not a wording problem.** Three formulations spanning terse, exemplified and
+explicitly-guarded all produced the same outcome. Continuing to tune the sentence would be
+tuning against a mechanism that is not in the sentence.
+
+## What it says about how the block works
+
+`DEPARTING` was never emitted once — **0 of 65 calls** across every condition and both
+caches, including 41 green laps and 24 Safety Car runs. The model will label a call it is
+continuing and simply omits the label on a call it is changing (v1 shows this cleanly: the 2
+labels are on the 2 STAY_OUT runs, the 6 departures carry none).
+
+Read together with the decision damage, the working hypothesis is that **the echo does not
+operate through anything the model can introspect.** Asking it to describe its relationship
+to the history converts the block from context into a question about consistency, and a model
+asked whether it is being consistent answers yes — by being consistent, which on the Safety
+Car lap means not stopping.
+
+That also explains §3.5's original observation rather than merely restating it: the 8 runs
+that flipped the call did not mention the plan **because the mechanism is not available to
+them as a reason.**
+
+## Consequence for the product
+
+**Observability of this layer cannot be bought from the model.** #691 is closed unshipped.
+If a surface needs to explain why a recommendation changed, it must render **the block
+itself** next to the recommendation — the input, which is deterministic and already
+available — rather than ask the LLM to narrate it. That is a UI change, not a prompt change,
+and it costs nothing at inference.
+
+Anyone revisiting this should treat "just add an instruction asking it to say X about its own
+reasoning" as **measured and refuted for this prompt**, not untried.
