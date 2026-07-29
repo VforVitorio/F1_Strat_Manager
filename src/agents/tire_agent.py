@@ -394,6 +394,32 @@ class TireOutput:
         current_tyre_life: Laps completed on this tyre set at inference time.
             Used by N28 Pit Strategy as baseline for undercut feature construction.
         deg_rate: Predicted degradation rate in seconds per lap (median of MC passes).
+
+            Read this before using it as a tyre-wear signal: it is the last row of
+            the RAW lap-to-lap derivative, not a fuel-corrected one, and fuel
+            burn-off pushes lap times down at roughly the rate wear pushes them
+            up. Measured over 110 real laps it has median +0.006 s/lap, is
+            negative on 43 of them, and correlates +0.115 with tyre life — its
+            median by tyre-life band is not even monotonic. It does not separate
+            a worn tyre from a fresh one. ``cumulative_deg_s`` is the field that
+            does (#727).
+        cumulative_deg_s: The TCN's own prediction — seconds per lap this set is
+            slower than it was when fresh, fuel-corrected (N04's
+            ``FuelAdjustedDegAbsolute``). ``None`` when no TCN ran or the tool
+            output did not parse.
+
+            ``None`` and not ``0.0``, deliberately: 0.0 is a legitimate reading
+            here (a tyre at its baseline pace), so a sentinel of 0.0 would be a
+            value the code can also genuinely find. ``deg_rate`` already
+            demonstrates the collision — 12 of those 110 laps carry a parse miss
+            indistinguishable from a real zero.
+
+            This is the scalar the whole tyre-degradation model family exists to
+            produce, and until #727 it was computed on every call, printed into
+            the tool string, and dropped at the parser — so it reached neither
+            the Monte Carlo, nor the orchestrator prompt, nor any UI. Measured
+            over the same 110 laps it correlates +0.369 with tyre life and swings
+            0.411 s/lap across a stint.
         laps_to_cliff_p10: Pessimistic estimate (P10) of laps before the cliff.
             Drives PIT_SOON warning — conservative to avoid running too long.
         laps_to_cliff_p50: Median estimate of laps before the cliff.
@@ -415,6 +441,7 @@ class TireOutput:
     laps_to_cliff_p50: float
     laps_to_cliff_p90: float
     gp_name: str   = ''
+    cumulative_deg_s: float | None = None
     warning_level: str = field(init=False)
     reasoning: str = ''
 
@@ -682,6 +709,11 @@ def _parse_tool_outputs(messages: list) -> dict:
             # leading minus, so a negative degradation rate — real and expected
             # per the system prompt ("track evolution or fuel load reduction")
             # — silently failed to parse and fell through to the 0.0 default.
+            # predict_tire_deg_tool has printed this since the tool existed and
+            # nothing ever read it, so the TCN's actual output stopped at the
+            # parser (#727). The same `-?` applies for the same reason as below:
+            # a set faster than its own fresh baseline is real early in a stint.
+            (r'Cumulative degradation:\s*(-?[\d.]+)', 'cum_deg'),
             (r'Degradation rate:\s*(-?[\d.]+)', 'deg_rate'),
             (r'P10:\s*(-?[\d.]+)',              'p10'),
             (r'P50:\s*(-?[\d.]+)',              'p50'),
@@ -1476,6 +1508,12 @@ class TireAgent:
             current_tyre_life = tyre_life,
             gp_name           = gp_name,
             deg_rate          = round(parsed.get('deg_rate', 0.0), 4),
+            # `.get(...)` then an explicit None, rather than a numeric default:
+            # predict_tire_deg_tool can legitimately be skipped while the cliff
+            # tool ran, and 0.0 is a real reading for this quantity.
+            cumulative_deg_s  = (
+                round(parsed['cum_deg'], 4) if 'cum_deg' in parsed else None
+            ),
             laps_to_cliff_p10 = round(parsed['p10'], 1),
             laps_to_cliff_p50 = round(parsed.get('p50', 0.0), 1),
             laps_to_cliff_p90 = round(parsed.get('p90', 0.0), 1),
