@@ -10,6 +10,7 @@ one-line summary of where it landed and what it flagged.
     f1-eval hygiene        # E-02 threshold provenance + leakage verdicts (#207)
     f1-eval nlp            # NLP per-stage eval: sentiment + gated stages (#304)
     f1-eval projection     # MC projection accuracy vs real stops + the measured tables
+    f1-eval stint-lengths  # real stint-length distribution vs the guard rail's bound (#716)
     f1-eval alert-llm      # PROXY alert precision via an LLM judge (#304; spends API calls)
     f1-eval decision-modes # does the stack pick the right lap to STOP (#708; takes minutes)
     f1-eval all            # every report EXCEPT the two opt-in ones below
@@ -31,6 +32,7 @@ from src.strategy.eval.hygiene import build_hygiene_report
 from src.strategy.eval.nlp import build_nlp_report
 from src.strategy.eval.projection import build_projection_report
 from src.strategy.eval.registry import build_registry
+from src.strategy.eval.stint_lengths import build_stint_lengths_report
 from src.strategy.eval.reproduce import build_reproduction_report
 
 
@@ -83,6 +85,25 @@ def _run_projection() -> None:
     print(f"projection -> {payload['md_path']} ({accuracy}; {len(payload['tables'])} tables)")
 
 
+def _run_stint_lengths() -> None:
+    payload = build_stint_lengths_report()
+    sample = payload["sample"]
+    if sample is None:
+        print(f"stint-lengths -> {payload['md_path']} (not measured; no data/raw)")
+        return
+
+    # The share below the bound IS the finding, so it leads the line: a bound meant to
+    # catch absurdity should be near zero here, and it is not.
+    shares = ", ".join(
+        f"{compound} {stats.share_below_threshold:.1%}"
+        for compound, stats in sample.by_compound.items()
+    )
+    print(
+        f"stint-lengths -> {payload['md_path']} ({sample.total_counted} stints, "
+        f"{sample.races} races; below the guard-rail bound: {shares})"
+    )
+
+
 def _run_decision_modes() -> None:
     payload = build_decision_modes_report()
     agreement = payload["agreement"]
@@ -114,6 +135,7 @@ _COMMANDS: dict[str, Callable[[], None]] = {
     "hygiene": _run_hygiene,
     "nlp": _run_nlp,
     "projection": _run_projection,
+    "stint-lengths": _run_stint_lengths,
 }
 
 
