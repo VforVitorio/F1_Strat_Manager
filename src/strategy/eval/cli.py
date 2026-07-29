@@ -11,7 +11,12 @@ one-line summary of where it landed and what it flagged.
     f1-eval nlp            # NLP per-stage eval: sentiment + gated stages (#304)
     f1-eval projection     # MC projection accuracy vs real stops + the measured tables
     f1-eval alert-llm      # PROXY alert precision via an LLM judge (#304; spends API calls)
-    f1-eval all            # every report EXCEPT alert-llm (opt-in: it spends API calls)
+    f1-eval decision-modes # does the stack pick the right lap to STOP (#708; takes minutes)
+    f1-eval all            # every report EXCEPT the two opt-in ones below
+
+Two commands stay out of ``all`` because they cost something a routine run should
+not silently spend: ``alert-llm`` spends API calls, and ``decision-modes`` drives
+the whole agent stack over hundreds of laps and takes minutes.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from typing import Any, Callable
 
 from src.strategy.eval.alert_llm import build_alert_llm_report
 from src.strategy.eval.calibration import build_calibration_report
+from src.strategy.eval.decision_modes import build_decision_modes_report
 from src.strategy.eval.hygiene import build_hygiene_report
 from src.strategy.eval.nlp import build_nlp_report
 from src.strategy.eval.projection import build_projection_report
@@ -77,6 +83,20 @@ def _run_projection() -> None:
     print(f"projection -> {payload['md_path']} ({accuracy}; {len(payload['tables'])} tables)")
 
 
+def _run_decision_modes() -> None:
+    payload = build_decision_modes_report()
+    agreement = payload["agreement"]
+    accuracy = (
+        "not measured (no data/raw)"
+        if agreement is None
+        else (
+            f"{agreement.within_one:.1%} within one lap over {agreement.sample_size} "
+            f"of {agreement.eligible} real stops"
+        )
+    )
+    print(f"decision-modes -> {payload['md_path']} ({accuracy}; coverage {payload['status']})")
+
+
 def _run_alert_llm() -> None:
     payload = build_alert_llm_report()
     result = payload["result"]
@@ -104,14 +124,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "command",
-        choices=[*_COMMANDS, "alert-llm", "all"],
+        choices=[*_COMMANDS, "alert-llm", "decision-modes", "all"],
         help="which report to regenerate",
     )
     args = parser.parse_args(argv)
 
-    # alert-llm is opt-in only: it spends API calls, so `all` never runs it.
+    # Both of these are opt-in only, so `all` never runs them: alert-llm spends API
+    # calls, and decision-modes drives the agent stack over hundreds of laps.
     if args.command == "alert-llm":
         _run_alert_llm()
+        return 0
+    if args.command == "decision-modes":
+        _run_decision_modes()
         return 0
 
     commands = _COMMANDS.values() if args.command == "all" else [_COMMANDS[args.command]]
