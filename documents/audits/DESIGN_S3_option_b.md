@@ -1,6 +1,8 @@
 # Sprint 3 option B — consuming the tyre prediction without inventing a constant
 
-**Date:** 2026-07-29 · **Issue:** #727 · **Status:** design settled, pending empirical validation of the reference
+**Date:** 2026-07-29 · **Issue:** #727 · **Status:** ⛔ **the chosen reference was BUILT, MEASURED and REFUTED.** See §Result. The
+approach it was chosen over — a per-compound reference measured on the MODEL's own scale — is the
+remaining work, and it is a measurement task rather than a wiring one.
 
 Companion to `MEASURE_S3_tyre_channel.md`, which refuted the sprint's original premise. That document
 established what to consume; this one establishes **how**, and records two designs that were worked
@@ -98,16 +100,36 @@ If it is not, the padding concern is real and the rejected model-scale table bec
 So this is a replacement, not an addition, and the double-count trap the plan warned about is avoided
 by that fact rather than by a correction term.
 
-The arithmetic, worked out rather than assumed:
+### ⚠️ Correction to an earlier draft of this section
 
-- today, no stop: `worn·cliff_loss`
-- today, stop at offset *k*: `pit_loss + worn·cliff_loss − (racing−k)·0.25 − …`
+The first version of this document claimed that charging `deg_cost` on the old-set laps and dropping
+the fresh credit shifts **every** plan by the same `racing·deg_cost`, making the no-signal path
+argmax-identical to today. **Worked out properly, that is true for three of the four candidates and
+false for the fourth.**
 
-Charging `deg_cost` on the laps run on the old set and dropping the post-stop fresh credit shifts
-**every plan by the same `racing·deg_cost`** when `deg_cost = 0.25`. A uniform shift across all four
-candidates cancels in every comparison, so **the no-signal fallback path is argmax-identical to
-today** — which is exactly the property that makes the change safe to ship and testable against the
-existing goldens.
+Per candidate, with `c` the per-lap rate and `window = 5`: today's fresh credit covers `fresh_laps`,
+and the new charge covers `old_laps`, so each plan shifts by `−c·(old_laps + fresh_laps)`.
+
+| candidate | old laps | fresh laps today | shift |
+|---|---|---|---|
+| STAY_OUT | 5 | 0 | −5c |
+| PIT_NOW | 0 | 5 | −5c |
+| UNDERCUT | 0 | 5 | −5c |
+| OVERCUT, neutralised | 0 | 5 | −5c |
+| **OVERCUT, green** | **2** | **2** | **−4c** |
+
+The green overcut branch prices only **4 of the 5 window laps** — it charges the cliff over
+`window // 2 = 2` laps and credits freshness over `window // 2 = 2` — so it gains `+c` relative to
+the other three. At the fallback rate that is +0.25 s, or +0.167 positions.
+
+That asymmetry is **pre-existing**, not introduced here: it is a property of how OVERCUT-green counts
+its laps, and it is left alone deliberately rather than folded into a sprint about the tyre channel.
+Its practical weight is small — after #470 charged the stop in that branch, OVERCUT takes **0%** of
+the argmax on the documented sweep.
+
+So the honest claim is narrower than the original one, and it is the one the tests assert: with no
+tyre signal the fallback path is argmax-identical to today for STAY_OUT, PIT_NOW and UNDERCUT, and
+shifts OVERCUT-green by a known `+c`.
 
 `FRESH_GAIN` therefore survives as the fallback when `cumulative_deg_s` is `None`, in the same spirit
 as the module's other `DEFAULT_*` constants: not an invented number, but the value the system held
@@ -123,6 +145,57 @@ strategy.py:882`** — and `_has_usable_gaps` also demotes to the legacy path wh
 Connecting only the projection branch would fix arcade and the CLI and silently leave the backend on
 the old behaviour: the twin defect this repo keeps paying for. Both move, and the legacy golden is
 re-frozen deliberately rather than treated as breakage.
+
+## Result — the self-referential design was built, measured, and refuted
+
+The code was written (a `_fresh_reference_degradation` pass on the agent, the second number printed
+into the tool string, `TireOutput.fresh_deg_s` and a derived `wear_vs_fresh_s`) and measured through
+the production path over the same 110 laps. **Both acceptance criteria failed**, and it was reverted
+before any scorer consumed it.
+
+| criterion | required | measured |
+|---|---|---|
+| (a) non-negative on the large majority | — | **64.8%** (68 of 105) |
+| (b) rising with tyre life | > +0.369, the raw level | **+0.291 — WORSE than the level** |
+
+Median by tyre-life band, and this is the disqualifying line:
+
+```
+ 0-5    0.000
+ 5-10  +0.076
+10-15  -0.125     <- non-monotonic
+15-20  +0.054
+20+    +0.331
+```
+
+**Why it failed, exactly as flagged in the risk section above.** The fresh reference is a prediction
+on a 3-lap stint tensor that is mostly padding, so it is itself noisy. Subtracting one noisy quantity
+from another raises the variance of the result, and here that noise swamped the trend the difference
+was supposed to isolate — the correlation *fell* from +0.369 to +0.291. The algebra that cancels the
+baseline is sound; the estimator on one side of it is not.
+
+Reverted rather than shipped with a caveat. A non-monotonic wear signal in the scorer would be the
+same mistake as wiring `deg_rate`, made a second time and with more machinery behind it.
+
+## What remains for option B
+
+The approach rejected above on cost grounds: **a per-compound fresh reference measured on the MODEL's
+own predictions**, pooled over the 2023-24 training seasons. Pooling is precisely what fixes the
+failure — thousands of stints average away the padding noise that one prediction cannot.
+
+It is a measurement task, not a wiring one:
+
+- a pass that runs the per-compound TCN bundles over training-season stints and takes the median
+  prediction at low tyre life, per compound;
+- a committed artefact plus accessor, following the `data/mc_measured_v1.json` /
+  `measured_tables()` / "a test asserts the committed file matches a fresh run" pattern already in
+  the repo;
+- **2023-24 only.** `src/strategy/eval/hygiene.py` already documents the 2025 test-season
+  contamination, and a calibration constant fitted on the test season would repeat it.
+
+The scorer side is unaffected by the choice and stays as designed: `deg_cost_s` threaded into
+**both** scorers, charged on old-set laps with the cliff term's own lap counts, replacing the
+`FRESH_GAIN` credit, with `FRESH_GAIN` surviving as the no-signal fallback.
 
 ## Out of scope, stated so it is not mistaken for an oversight
 
