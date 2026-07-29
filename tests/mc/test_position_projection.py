@@ -3,8 +3,9 @@
 Two layers:
 
 1. Unit tests that pin the contract — the sign convention, rejoining into
-   traffic, the terminal liability's three cases, target eligibility, the
-   far-field ranker. These run everywhere and are the regression bed.
+   traffic, the three cases the deleted Safety Car rail was patching, target
+   eligibility, the far-field ranker. These run everywhere and are the
+   regression bed.
 
 2. The ground-truth test: project every real green-flag pit stop across the 71
    races and compare the projected rejoin position against what actually
@@ -179,8 +180,21 @@ def test_an_unknown_gap_keeps_a_rival_out_of_the_count():
 
 
 # ---------------------------------------------------------------------------
-# The terminal liability — the three cases the deleted rail was patching
+# The terminal horizon — the three cases the deleted rail was patching, which
+# now fall out of race-end residual netting rather than out of a one-sided
+# liability. The contracts are the same; only their arithmetic moved.
 # ---------------------------------------------------------------------------
+
+
+def _terminal_cost(result) -> float:
+    """Cars the terminal horizon costs us beyond the window end, first draw.
+
+    Replaces the old ``liabilities`` reading. The contracts below are unchanged;
+    what changed is that the correction is now computed from projected gaps with
+    BOTH sides' outstanding stops carried forward, so it can also come out
+    negative — a rival who still owes a stop ends up behind us rather than free.
+    """
+    return float(result.terminal_positions[0] - result.positions[0])
 
 
 def test_a_pending_stop_costs_the_cars_it_will_release_behind_us():
@@ -190,61 +204,83 @@ def test_a_pending_stop_costs_the_cars_it_will_release_behind_us():
     ]
     pit_loss, cliff = _draws(22.0)
     config = _flat_config(mandatory_stop_pending=True)
-    liabilities = project_positions(rivals, NO_STOP, config, pit_loss, cliff).liabilities
-    assert liabilities[0] == 1.0, "only the car inside our pit loss should count"
+    result = project_positions(rivals, NO_STOP, config, pit_loss, cliff)
+    assert _terminal_cost(result) == 1.0, "only the car inside our pit loss should count"
 
 
 def test_leading_a_pack_that_still_owes_its_stop_is_free():
-    # #470's second case: every car behind must serve the same stop, so none of
-    # them is a threat, and holding the lead costs nothing.
+    # #470's second case, and it now falls out by CANCELLATION rather than by
+    # exemption: every car behind carries the same residual we do, so the two
+    # sides net to zero and holding the lead costs nothing.
     rivals = [
-        RivalState("BEHIND_1", gap_s=5.0, stop_pending=True),
-        RivalState("BEHIND_2", gap_s=9.0, stop_pending=True),
+        RivalState("BEHIND_1", gap_s=5.0, stop_pending=True, stop_loss_s=22.0),
+        RivalState("BEHIND_2", gap_s=9.0, stop_pending=True, stop_loss_s=22.0),
     ]
     pit_loss, cliff = _draws(22.0)
     config = _flat_config(mandatory_stop_pending=True)
-    assert project_positions(rivals, NO_STOP, config, pit_loss, cliff).liabilities[0] == 0.0
+    assert _terminal_cost(project_positions(rivals, NO_STOP, config, pit_loss, cliff)) == 0.0
 
 
-def test_having_already_stopped_removes_the_liability_entirely():
+def test_having_already_stopped_removes_the_cost_entirely():
     # #470's first case: a second set buys nothing, so staying out is free.
     rivals = [RivalState("BEHIND", gap_s=5.0, stop_pending=False)]
     pit_loss, cliff = _draws(22.0)
     config = _flat_config(mandatory_stop_pending=False)
-    assert project_positions(rivals, NO_STOP, config, pit_loss, cliff).liabilities[0] == 0.0
+    assert _terminal_cost(project_positions(rivals, NO_STOP, config, pit_loss, cliff)) == 0.0
 
 
 def test_an_unknown_obligation_makes_no_claim():
     rivals = [RivalState("BEHIND", gap_s=5.0, stop_pending=False)]
     pit_loss, cliff = _draws(22.0)
     config = _flat_config(mandatory_stop_pending=None)
-    assert project_positions(rivals, NO_STOP, config, pit_loss, cliff).liabilities[0] == 0.0
+    assert _terminal_cost(project_positions(rivals, NO_STOP, config, pit_loss, cliff)) == 0.0
 
 
-def test_a_rival_whose_obligation_is_unknown_is_exempted_silently():
-    """``None`` is excluded by the same identity check that excludes ``True``.
+def test_a_rivals_unknown_obligation_makes_no_claim_either():
+    """The rule the module stated for OUR obligation now holds for theirs too.
 
-    The filter is ``rival.stop_pending is False``, so an unknown obligation
-    exempts the rival exactly as a pending one does. The module states the
-    ``None`` rule for OUR obligation and never for a rival's, and the adapter
-    hands ``None`` to any driver absent from the ``rival_stop_pending`` map — so
-    a missing verdict quietly makes a car free and biases the liability down.
+    Before the netting, ``None`` was excluded by the same ``is False`` identity
+    check that excluded ``True``, so an unknown obligation exempted a rival by
+    accident rather than by decision — and the adapter hands ``None`` to any
+    driver missing from the ``rival_stop_pending`` map.
 
-    Pinned as CURRENT behaviour, not as desired behaviour. The redesign changes
-    what happens around this, and a before-picture is what makes that diff
-    legible instead of merely green.
+    It is still exempt, but now for the stated reason: an unsettled obligation
+    contributes no residual in either direction, because treating it as a
+    certainty would invent twenty-odd seconds of somebody else's race.
     """
     pit_loss, cliff = _draws(22.0)
     config = _flat_config(mandatory_stop_pending=True)
 
     settled = [RivalState("BEHIND", gap_s=5.0, stop_pending=False)]
-    unknown = [RivalState("BEHIND", gap_s=5.0, stop_pending=None)]
+    unknown = [RivalState("BEHIND", gap_s=5.0, stop_pending=None, stop_loss_s=22.0)]
 
-    assert project_positions(settled, NO_STOP, config, pit_loss, cliff).liabilities[0] == 1.0
-    assert project_positions(unknown, NO_STOP, config, pit_loss, cliff).liabilities[0] == 0.0
+    assert _terminal_cost(project_positions(settled, NO_STOP, config, pit_loss, cliff)) == 1.0
+    assert _terminal_cost(project_positions(unknown, NO_STOP, config, pit_loss, cliff)) == 1.0, (
+        "an unknown obligation must not earn a rival a residual it may not owe"
+    )
 
 
-def test_a_likely_future_neutralisation_shrinks_the_liability():
+def test_a_rival_who_still_owes_a_stop_is_no_longer_free_to_pass_us():
+    """The defect the netting exists to fix, asserted directly.
+
+    A rival who still owes the mandatory stop used to be exempt from the cost of
+    staying out while counting in full against the cost of stopping. Now their
+    residual is carried to the same horizon as ours, so a car that only passes us
+    because it has not stopped yet does not take the place.
+    """
+    pit_loss, cliff = _draws(22.0)
+    config = _flat_config(mandatory_stop_pending=False)
+    # Two seconds ahead of us on track, but a whole pit stop still owed.
+    pending_ahead = [RivalState("AHEAD", gap_s=-2.0, stop_pending=True, stop_loss_s=22.0)]
+
+    result = project_positions(pending_ahead, NO_STOP, config, pit_loss, cliff)
+    assert result.positions[0] == 2.0, "at the window end they are genuinely ahead"
+    assert result.terminal_positions[0] == 1.0, (
+        "once their own stop is served they fall behind, so the place was never really theirs"
+    )
+
+
+def test_a_likely_future_neutralisation_shrinks_the_cost():
     # The option value: if a Safety Car is likely to cover the stop later, the
     # deferred cost is smaller, so fewer cars fit inside the exposure window.
     rivals = [RivalState("BEHIND", gap_s=16.0, stop_pending=False)]
@@ -256,15 +292,17 @@ def test_a_likely_future_neutralisation_shrinks_the_liability():
         future_neutralisation_prob=0.9,
         neutralisation_saving_s=8.0,
     )
-    assert project_positions(rivals, NO_STOP, without_option, pit_loss, cliff).liabilities[0] == 1.0
-    assert project_positions(rivals, NO_STOP, with_option, pit_loss, cliff).liabilities[0] == 0.0
+    assert (
+        _terminal_cost(project_positions(rivals, NO_STOP, without_option, pit_loss, cliff)) == 1.0
+    )
+    assert _terminal_cost(project_positions(rivals, NO_STOP, with_option, pit_loss, cliff)) == 0.0
 
 
-def test_a_candidate_that_stops_carries_no_terminal_liability():
+def test_a_candidate_that_stops_carries_no_deferred_cost():
     rivals = [RivalState("BEHIND", gap_s=5.0, stop_pending=False)]
     pit_loss, cliff = _draws(22.0)
     config = _flat_config(mandatory_stop_pending=True)
-    assert project_positions(rivals, STOP_NOW, config, pit_loss, cliff).liabilities[0] == 0.0
+    assert _terminal_cost(project_positions(rivals, STOP_NOW, config, pit_loss, cliff)) == 0.0
 
 
 def test_the_future_neutralisation_probability_stays_a_probability():
@@ -422,8 +460,8 @@ def test_a_wet_race_exempts_the_mandatory_stop_so_staying_out_is_free():
     pit_loss, cliff = _draws(22.0)
     dry = _flat_config(mandatory_stop_pending=True)
     wet = _flat_config(mandatory_stop_pending=False)
-    assert project_positions(rivals, NO_STOP, dry, pit_loss, cliff).liabilities[0] == 1.0
-    assert project_positions(rivals, NO_STOP, wet, pit_loss, cliff).liabilities[0] == 0.0
+    assert _terminal_cost(project_positions(rivals, NO_STOP, dry, pit_loss, cliff)) == 1.0
+    assert _terminal_cost(project_positions(rivals, NO_STOP, wet, pit_loss, cliff)) == 0.0
 
 
 def test_the_undercut_band_covers_the_drs_range_and_stops_well_short_of_a_pit_cycle():

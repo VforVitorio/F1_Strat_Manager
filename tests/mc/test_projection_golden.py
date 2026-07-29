@@ -13,17 +13,23 @@ edit that broke its VALUES failed loudly on the legacy side and silently on this
 one — which is exactly the asymmetry that let a distribution collapse into a
 point mass without a single test noticing.
 
-WHAT THIS GOLDEN DELIBERATELY FREEZES
---------------------------------------
-Today's numbers, defect included. ``STAY_OUT`` below is a point mass
-(``E == P10 == P90``), because the layer's only tyre signal is a cliff that
-almost never falls inside the five-lap window and because a rival who still owes
-the mandatory stop is exempt from the cost of staying out while counting against
-the cost of stopping. Both are being fixed (#726, #727).
+WHAT THIS GOLDEN FREEZES, AND WHAT IT ALREADY CAUGHT
+-----------------------------------------------------
+It was created (#725) pinning the defect on purpose: ``STAY_OUT`` was a strict
+point mass, ``E == P10 == P90 == 1.3``. That was the whole design — a golden
+recording what we wished were true would prove nothing, while one recording the
+defect turns the next fix into a visible diff.
 
-Freezing the defect is the point. When those land, **the diff in this file is
-the fix**, stated in numbers rather than in a commit message. A golden that
-recorded what we wished were true would prove nothing.
+It worked. Race-end residual netting (#726) moved ``STAY_OUT``'s expected value
+off the point mass to 1.276 and lifted PIT_NOW from 0.582 to 0.678, and the
+tripwire below fired rather than the change slipping through.
+
+``P10`` and ``P90`` are still equal for STAY_OUT here, and that is honest rather
+than a leftover: in THIS geometry only a minority of draws see the correction,
+so the middle of the distribution does not move even though its mean does. The
+remaining flatness belongs to the tyre channel, which is #727's subject: the
+layer's only tyre signal is still a cliff that almost never falls inside the
+five-lap window.
 
 WHERE TO CHANGE IF THE PROJECTION CHANGES:
 - Regenerate by calling the same function with the same arguments and pasting
@@ -68,29 +74,40 @@ _RIVALS = [
     {"driver": "FAR", "interval_to_driver_s": 22.6, "is_pitting": False},
 ]
 
+# AHEAD still owes its stop, and that is the point of the entry: the race-end
+# netting only does anything when at least one rival carries an outstanding
+# obligation. An all-settled map would leave the branch that changed in #726
+# unpinned by the only golden that covers this path.
 _PIT_CONTEXT = {
     "gp_name": None,
     "traversal_s": 21.0,
     "mandatory_stop_pending": True,
-    "rival_stop_pending": {"BEHIND": False, "FAR": False},
+    "rival_stop_pending": {"AHEAD": True, "BEHIND": False, "FAR": False},
     "rival_pit_loss_s": 23.8,
 }
 
 _GOLDEN_PROJECTION_ALPHA_05 = {
-    "STAY_OUT": {"E": 1.3, "P10": 1.3, "P90": 1.3, "score": 1.3, "eligible": True, "target": None},
+    "STAY_OUT": {
+        "E": 1.276,
+        "P10": 1.3,
+        "P90": 1.3,
+        "score": 1.288,
+        "eligible": True,
+        "target": None,
+    },
     "PIT_NOW": {
-        "E": 0.582,
+        "E": 0.678,
         "P10": 0.0,
         "P90": 1.056,
-        "score": 0.291,
+        "score": 0.339,
         "eligible": True,
         "target": None,
     },
     "UNDERCUT": {
-        "E": 1.114,
+        "E": 1.21,
         "P10": 0.0,
-        "P90": 2.023,
-        "score": 0.557,
+        "P90": 2.049,
+        "score": 0.605,
         "eligible": True,
         "target": "AHEAD",
     },
@@ -148,16 +165,24 @@ def test_an_ineligible_candidate_carries_no_numbers_at_all():
     assert all(overcut[key] is None for key in ("E", "P10", "P90", "score"))
 
 
-def test_the_frozen_state_still_records_the_defect_being_fixed():
-    """STAY_OUT is a point mass here, and that is on purpose.
+def test_the_frozen_state_records_how_far_the_collapse_has_been_undone():
+    """A tripwire on the defect, updated once it partly fired.
 
-    If this assertion ever fails it means the collapse is gone — which is the
-    goal of #726/#727 and should arrive as a deliberate golden update, not as a
-    surprise. Keeping it explicit stops a future reader mistaking the frozen
-    numbers for a healthy distribution.
+    It began as ``E == P10 == P90``, the strict point mass #726 set out to
+    break. Netting broke it: the mean now differs from the quantiles. The
+    quantiles themselves are still equal, because in this geometry the
+    correction reaches only a minority of draws — that residual flatness is the
+    tyre channel, and it belongs to #727.
+
+    Kept as a tripwire rather than deleted, so the NEXT change to the collapse
+    also has to arrive as a deliberate golden update rather than as a surprise.
     """
     stay_out = _GOLDEN_PROJECTION_ALPHA_05["STAY_OUT"]
-    assert stay_out["E"] == stay_out["P10"] == stay_out["P90"]
+    assert stay_out["E"] != stay_out["P10"], "the netting's effect on the mean has vanished"
+    assert stay_out["P10"] == stay_out["P90"], (
+        "the quantile band has moved: the tyre channel (#727) is the expected cause, "
+        "and it should arrive as a deliberate update here"
+    )
 
 
 # ---------------------------------------------------------------------------
