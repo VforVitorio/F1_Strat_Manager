@@ -46,6 +46,35 @@ def _agreement(offsets, guard_railed=0, no_call=0, races=6, no_data=0) -> Decisi
     )
 
 
+# --- the import surface ----------------------------------------------------
+
+
+def test_importing_the_module_does_not_load_the_agent_stack():
+    """Importing this report must not require model weights on disk.
+
+    ``no_llm`` pulls in the agent stack, which loads LightGBM weights at import
+    time. Importing the guard rails from there turned every `f1-eval` subcommand
+    into something that could not even be COLLECTED without `data/models/`, and it
+    is what turned CI red on the first push of this tier.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys; import src.strategy.eval.decision_modes; "
+        "loaded = [m for m in sys.modules if m.startswith('src.agents')]; "
+        "print(','.join(sorted(loaded)))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=True,
+    )
+    assert out.stdout.strip() == "", f"agent modules imported eagerly: {out.stdout.strip()}"
+
+
 # --- guard rails: which stops can never be agreed with ---------------------
 
 
@@ -65,18 +94,48 @@ def test_guard_rail_block_names_the_rule(lap, total, compound, tyre_life, expect
     assert guard_rail_block(lap, total, compound, tyre_life) == expected
 
 
-def test_guard_rail_thresholds_track_the_rails_they_mirror():
-    """The boundary is the rail's, not a number retyped here.
+def test_block_agrees_with_the_rail_on_every_lap_of_a_race():
+    """The bucketer must agree with the rail itself, lap by lap, never re-derive it.
 
-    If ``no_llm`` moves a threshold this test moves with it; a hardcoded 5 or 3
-    would let this module drift away from the rails it claims to mirror.
+    The first version of ``guard_rail_block`` retyped the closing-laps boundary as
+    ``remaining < 3`` against the rail's ``remaining <= 3``, and the test that was
+    supposed to catch it re-derived the same boundary and so agreed with the bug.
+    Asserting equivalence with ``apply_guard_rails`` is the only formulation that
+    cannot drift, because there is nothing left to retype.
     """
-    from src.strategy.inference.no_llm import _NO_PIT_BEFORE_LAP, _NO_PIT_LAST_N_LAPS
+    from src.strategy.inference.guard_rails import apply_guard_rails
 
-    assert guard_rail_block(_NO_PIT_BEFORE_LAP - 1, 57, "HARD", 30) == "opening_laps"
-    assert guard_rail_block(_NO_PIT_BEFORE_LAP, 57, "HARD", 30) is None
-    assert guard_rail_block(57 - _NO_PIT_LAST_N_LAPS, 57, "HARD", 30) is None
-    assert guard_rail_block(57 - _NO_PIT_LAST_N_LAPS + 1, 57, "HARD", 30) == "closing_laps"
+    total = 57
+    for lap in range(1, total + 1):
+        for compound, tyre_life in (("SOFT", 20), ("MEDIUM", 4), ("HARD", 30)):
+            rail_action, _reason = apply_guard_rails("PIT_NOW", lap, total, compound, tyre_life)
+            blocked = guard_rail_block(lap, total, compound, tyre_life)
+            assert (rail_action == "STAY_OUT") == (blocked is not None), (
+                f"disagreement at lap {lap} on {compound}/{tyre_life}"
+            )
+
+
+def test_every_bucket_is_reachable_through_the_real_rail():
+    """Each named bucket is produced by a real rail firing, not by a stale string.
+
+    The bucketer keys on a fragment of the rail's reason. If a message is ever
+    reworded this fails here instead of silently raising in the middle of a
+    twenty-minute measurement run.
+    """
+    assert guard_rail_block(2, 57, "HARD", 30) == "opening_laps"
+    assert guard_rail_block(55, 57, "HARD", 30) == "closing_laps"
+    assert guard_rail_block(30, 57, "HARD", 2) == "min_stint"
+
+
+def test_closing_rail_includes_the_boundary_lap():
+    """Exactly three laps remaining is blocked: the rail is `<=`, not `<`."""
+    assert guard_rail_block(54, 57, "HARD", 30) == "closing_laps"
+
+
+def test_unknown_tyre_life_still_evaluates_the_lap_based_rails():
+    """A missing tyre life suspends only the stint rail, never the lap ones."""
+    assert guard_rail_block(2, 57, "SOFT", None) == "opening_laps"
+    assert guard_rail_block(30, 57, "SOFT", None) is None
 
 
 # --- picking the lap the stack would have chosen ---------------------------

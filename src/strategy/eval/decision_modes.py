@@ -61,13 +61,11 @@ from typing import Any
 import numpy as np
 
 from src.strategy.eval.report import build_header, write_report
-from src.strategy.inference.no_llm import (
-    _MIN_STINT_LAPS,
-    _NO_PIT_BEFORE_LAP,
-    _NO_PIT_LAST_N_LAPS,
-    _PIT_ACTIONS,
-    _DEFAULT_MIN_STINT,
-)
+
+# From the leaf module, never from ``no_llm``: that one imports the agent stack and
+# loads model weights at import time, which would make this report — and every other
+# ``f1-eval`` subcommand next to it — impossible to even import without ``data/models/``.
+from src.strategy.inference.guard_rails import _MIN_STINT_LAPS, _PIT_ACTIONS, apply_guard_rails
 
 # Laps either side of the real stop that the stack is asked about. Five matches
 # the Monte Carlo decision window, so the question posed to the model is the one
@@ -165,25 +163,44 @@ class DecisionAgreement:
         return self.sample_size / self.eligible if self.eligible else 0.0
 
 
+# Which rail fired, keyed on a stable fragment of the reason it returns. Matching
+# the message is not elegant, but re-deriving the boundaries is what produced an
+# off-by-one against the rail's own ``remaining <= 3`` the first time this was
+# written. ``test_every_bucket_is_reachable_through_the_real_rail`` fails loudly if
+# a message is ever reworded, so a silent mis-bucket is not possible.
+_RAIL_BUCKETS: tuple[tuple[str, str], ...] = (
+    ("pit window not open", "opening_laps"),
+    ("too late to pit", "closing_laps"),
+    ("minimum stint", "min_stint"),
+)
+
+
 def guard_rail_block(
     actual_lap: int, total_laps: int, compound: str | None, tyre_life: int | None
 ) -> str | None:
     """Name the guard rail that makes agreement with this stop impossible, else None.
 
-    ``apply_guard_rails`` structurally forbids a pit action in three situations. A
-    real stop inside one of them can never be agreed with no matter how good the
-    strategy is, so folding it into the headline would measure the rail rather
-    than the decision. Bucketed and reported instead of dropped in silence.
-    """
-    if actual_lap < _NO_PIT_BEFORE_LAP:
-        return "opening_laps"
-    if actual_lap > total_laps - _NO_PIT_LAST_N_LAPS:
-        return "closing_laps"
+    Asks ``apply_guard_rails`` itself whether a stop on this lap would have been
+    overridden, rather than restating its thresholds. A real stop inside a rail can
+    never be agreed with no matter how good the strategy is, so folding it into the
+    headline would measure the rail instead of the decision.
 
-    minimum = _MIN_STINT_LAPS.get((compound or "").upper(), _DEFAULT_MIN_STINT)
-    if tyre_life is not None and tyre_life < minimum:
-        return "min_stint"
-    return None
+    When tyre life is unknown the minimum-stint rail simply cannot be evaluated, so
+    the probe passes a life that satisfies every minimum and only the lap-based
+    rails apply. That is a stated assumption, not a sentinel: it never becomes a
+    value the caller can mistake for a measurement.
+    """
+    probe_life = max(_MIN_STINT_LAPS.values()) if tyre_life is None else tyre_life
+    action, reason = apply_guard_rails(
+        "PIT_NOW", actual_lap, total_laps, compound or "", probe_life
+    )
+    if action == "PIT_NOW" or reason is None:
+        return None
+
+    for marker, bucket in _RAIL_BUCKETS:
+        if marker in reason:
+            return bucket
+    raise ValueError(f"unmapped guard-rail reason: {reason!r}")
 
 
 def coverage_verdict(agreement: DecisionAgreement) -> str:
