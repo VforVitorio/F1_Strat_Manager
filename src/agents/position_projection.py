@@ -624,7 +624,12 @@ def _terminal_gaps(
     - already stopped (no obligation) -> our residual is zero, staying out costs
       nothing on this term;
     - leading a pack that all still owe a stop -> their residuals and ours are
-      the same size and cancel, so holding the lead is free;
+      the same size and cancel, so holding the lead is free. The cancellation is
+      EXACT only when the two losses match; in production ours is sampled and
+      theirs is a per-rival prior, so a tight pack costs a fraction of a position
+      on the draws where the sampled loss runs longer than the prior. That is a
+      real difference between two cars' pit stops, not a modelling artefact, but
+      "free" is the round-number version of it;
     - the race ending behind the Safety Car -> the config's racing laps go to
       zero, so nothing is gained by stopping in the first place.
 
@@ -633,10 +638,22 @@ def _terminal_gaps(
     asymmetric with charging it: an unsettled obligation treated as a certainty
     invents twenty-odd seconds of somebody's race.
 
+    **And that rule binds BOTH sides of the subtraction.** If we do not know
+    whether WE still owe a stop, then crediting a rival's fall-back is not a
+    claim about them, it is a claim that we will not fall back with them — a
+    fact we do not have. The first version applied their residual anyway and
+    handed a candidate that stays out a full terminal place on that bet: it
+    scored an unknown obligation exactly like a known-discharged one. A plan
+    that STOPS inside the window is settled either way, so the suppression is
+    narrow, covering only the deferring case.
+
     A rival already serving their stop is excluded too: ``rival_time_deltas``
     has charged them inside the window already, and charging the same stop twice
     would push them a full pit cycle further back than they will ever be.
     """
+    if not plan.stops_in_window and config.mandatory_stop_pending is None:
+        return projected_gaps
+
     our_residual = (
         _stop_residual_s(pit_loss_s, config)
         if not plan.stops_in_window and config.mandatory_stop_pending is True
