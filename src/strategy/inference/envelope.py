@@ -7,15 +7,21 @@ confidence whether the call falls inside what they were trained on or not.
 N26's tire TCN did exactly that: inference skipped the notebook's per-stint
 grouping and left-padded with a repeated first lap instead of zeros, so it was
 fed sequences the training run never produced in roughly 87% of its calls, for
-two years, before anyone noticed. Two call sites have since patched the
-symptom by hand, each its own one-off, neither reusable by the next model:
+two years, before anyone noticed.
 
-- ``src/agents/pit_strategy_agent.py`` clips ``tyre_life_in`` at 50 laps
-  because N15 clipped it at training time (cell 11).
-- ``src/agents/tire_agent.py`` computes a loose ``lap_out_of_range`` bool
-  inline before letting a tool proceed.
+Exactly ONE call site has since patched the symptom by hand:
+``src/agents/pit_strategy_agent.py`` clips ``tyre_life_in`` at 50 laps because
+N15 clipped it at training time (cell 11). That constant is an operating
+envelope written as a bare number.
 
-This module turns that pattern into a rule instead of a habit. An
+``src/agents/tire_agent.py``'s ``lap_out_of_range`` looks like a second
+instance and is **not** one, which is worth stating so nobody folds them
+together later: it tests ``1 <= lap <= total_laps`` and whether the driver is
+on track. Those are questions about whether the CALL makes sense, not about
+whether the MODEL was trained here. Data validity and operating envelope are
+different contracts, and only the second belongs in this module.
+
+This module turns the one real instance into a rule instead of a habit. An
 :class:`OperatingEnvelope` names the bounds a model was actually trained on;
 :meth:`OperatingEnvelope.check` compares a feature vector against them and
 returns an :class:`EnvelopeVerdict`.
