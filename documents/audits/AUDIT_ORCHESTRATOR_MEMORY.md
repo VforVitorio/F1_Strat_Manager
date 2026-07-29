@@ -614,6 +614,37 @@ you what to do about it.
 
 ## 3.5 HIGH — the anchoring effect is real in direction, and the counterweight reverses it
 
+> ## ⛔ SUPERSEDED 2026-07-28 — the headline number here did NOT replicate
+>
+> **Do not quote the "10/10 with counterweight" result below.** It came from n=10. Re-run on
+> the same shipped model (`gpt-5.4-mini`) at **n=50 per arm**, in two independent batches of 25
+> that agree with each other:
+>
+> | arm | takes the stop |
+> |---|---|
+> | no memory | **35/50 = 70 %** |
+> | memory, exactly as it ships today (counterweight included) | **28/50 = 56 %** |
+>
+> Fisher two-sided **p = 0.2137** · difference **-14 pp** · 95 % CI **[-32.7, +4.7] pp**.
+>
+> What that changes:
+>
+> 1. **The counterweight does not produce 10/10.** At n=50 the same configuration gives 56 %,
+>    and the interval excludes anything above roughly 61 %. The original figure was
+>    small-sample luck — the flattering-number failure mode this repo has a standing directive
+>    about.
+> 2. **Memory does NOT help on the green-flag decision lap.** The CI's upper bound is +4.7 pp,
+>    so a benefit there is essentially excluded. The layer's demonstrated value is §3.6's
+>    contingency echo firing under a Safety Car, not better stop calls in general.
+> 3. **Anchoring remains unproven AND unrefuted.** The point estimate is a 14-point harm and
+>    both batches lean the same way, but p=0.21. Settling it at p<0.05 needs n≈190 per arm
+>    (≈380 calls); worth spending only if the decision lap becomes load-bearing.
+>
+> Raw data: `data/eval/prompt_ab/anchor44_shipped{,_b}.json` (gitignored; regenerate with
+> `python -m scripts.prompt_ab.run_repeats --lap 44 --repeats 25`, no `--model`).
+>
+> The section below is kept as the original record. Its *direction* survived; its magnitude did not.
+
 **Lusail 2025, lap 44** — Norris's real stop, deterministic MC = `UNDERCUT`, n=10 per variant.
 
 | variant | pits (UNDERCUT) | stays out | mean confidence | `pit_lap_target` spread |
@@ -886,10 +917,12 @@ Stated so the next reader knows what does not need re-auditing.
 - **"Memory changes the action."** I could not find a single case in a full race: `action`
   differed on **0 of 41** laps between A and B. Whatever memory does, it does not do it by
   flipping the primary decision on ordinary laps.
-- **"The anchoring hypothesis is proven."** I could not prove it. The direction is right
-  (6/10 → 4/10 at the real stop lap) but Fisher gives p=0.6563 at n=10. Anyone quoting this
-  audit as evidence that memory delays stops is over-reading it; what IS significant is that
-  the counterweight fixes whatever is there (p=0.011).
+- **"The anchoring hypothesis is proven."** I could not prove it, and a later, much larger run
+  still could not: at n=50 per arm on the shipped model the difference is 70 % vs 56 %,
+  p=0.2137. The direction has now leaned the same way in three separate batches, so it is not
+  refuted either. Anyone quoting this audit as evidence that memory delays stops is
+  over-reading it. (The claim that "the counterweight fixes whatever is there" was in this
+  bullet and is **withdrawn** — see the superseded banner on §3.5.)
 - **The `no-llm` harness as a stand-in for production.** I tried to invalidate my own method
   and got a bounded answer instead: 39 of 41 green laps route no conditional agents at all, so
   those prompts are shape-identical to `rich`. The two exceptions (laps 33, 35) and all five
@@ -989,10 +1022,15 @@ direction. Read precisely:
 - It does **not** show that memory is harmless at the decision lap. §3.5's 6/10 → 4/10 was
   measured on a client where the baseline pitted at all; here the baseline never does, so the
   harm this experiment exists to detect is undetectable by construction.
-- It does **not** reproduce §3.5's 10/10 counterweight result either. That result stays where
-  the first follow-up left it: measured on the shipped model, and not re-confirmed.
+- It does **not** reproduce §3.5's 10/10 counterweight result either.
 - What it does show is that the block did not push a 0/10 baseline into a *wrong* action, and
   that the target stopped scattering (57 x8, 50, 52 → 57 x10).
+
+**Resolved 2026-07-28** by re-running the experiment on the shipped `gpt-5.4-mini`, where the
+baseline is NOT degenerate, at n=50 per arm: **70 % without memory vs 56 % with**, p=0.2137,
+95 % CI [-32.7, +4.7] pp. So the decision lap is settled as far as it is worth settling —
+memory does not help there, may cost up to a third of the stops, and the 10/10 figure is
+withdrawn. See the superseded banner at the top of §3.5.
 
 Worth recording because it is the design's own worst case: this run's block reported
 **`STAY_OUT, held since lap 5 (39 laps)`** — the 39-lap hold §3.5 said it could not test,
