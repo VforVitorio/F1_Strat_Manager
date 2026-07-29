@@ -11,6 +11,68 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.5.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.5.0...v2.5.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **dashboard:** give the orchestrator tab the height the card was hoarding ([84b41c0](https://github.com/VforVitorio/F1-StratLab/commit/84b41c0ecbdd5cd57ca9cfa6fbb15ca9e42aad92))
+
+
+### Documentation
+
+* **roadmap:** renumber the planned milestones to v2.6.0, v2.8.0 and v3.0.0 ([48548a4](https://github.com/VforVitorio/F1-StratLab/commit/48548a443703e824758f05eb4f55dc5eae995efa))
+
+## [2.5.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.4.0...v2.5.0) (2026-07-28)
+
+
+### Features
+
+* **arcade:** show the decision-memory block when the call changes ([6877788](https://github.com/VforVitorio/F1-StratLab/commit/687778820b897aba724bed1a666682f2c120f827)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+* **backend:** bump telemetry to the lap payload carrying the decision-memory block ([c4d7bb4](https://github.com/VforVitorio/F1-StratLab/commit/c4d7bb4d52f0aa20fd580fbcb9cadab97dcdeb5d)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+* **cli:** show the decision-memory block when the call changes ([41dd804](https://github.com/VforVitorio/F1-StratLab/commit/41dd8041ba71e1056a9b805873ec956ad134bfb1)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+* **memory:** expose whether the last recorded call changed ([7b69c13](https://github.com/VforVitorio/F1-StratLab/commit/7b69c1358ce8f5535667ceaae4fc4b02ef93a7b3)), closes [#694](https://github.com/VforVitorio/F1-StratLab/issues/694)
+
+
+### Bug Fixes
+
+* **tests:** skip the payload tests when model weights are absent ([4aa4424](https://github.com/VforVitorio/F1-StratLab/commit/4aa4424e432171730a8b5539f2d440ae9d596093))
+
+## [2.4.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.3.0...v2.4.0) (2026-07-28)
+
+
+### Features
+
+* **engine:** accept a caller-owned DecisionMemory and render it into the prompt ([10e4832](https://github.com/VforVitorio/F1-StratLab/commit/10e4832429d39d6c5285ee8fabce73b510bdc67b)), closes [#684](https://github.com/VforVitorio/F1-StratLab/issues/684)
+* **orchestrator:** render a decision-memory block in the Layer 3 prompt ([5f8f789](https://github.com/VforVitorio/F1-StratLab/commit/5f8f789d378250b712dd87128728cf7e5e4a71a0)), closes [#680](https://github.com/VforVitorio/F1-StratLab/issues/680)
+* **orchestrator:** scope the STAY_OUT continuation framing to actual holds ([282f668](https://github.com/VforVitorio/F1-StratLab/commit/282f668c8f4265e61c65334a300cc55db3676b75)), closes [#685](https://github.com/VforVitorio/F1-StratLab/issues/685)
+* **surfaces:** give the CLI, arcade and backend a per-race decision memory ([c463c8c](https://github.com/VforVitorio/F1-StratLab/commit/c463c8c0a7e956679d789131c06b0196dbd13f16)), closes [#684](https://github.com/VforVitorio/F1-StratLab/issues/684)
+
+
+### Documentation
+
+* **audit:** record what Sprint 2 built and the three findings the build produced ([349384f](https://github.com/VforVitorio/F1-StratLab/commit/349384f409d4edc8ae0e4934f49467929593e745))
+* **memory:** say precisely when the block does and does not change the call ([b9a93c5](https://github.com/VforVitorio/F1-StratLab/commit/b9a93c52e3532be0bd6c8f3ffe9f734148a72194))
+* **orchestrator:** declare that /recommend and MCP have no decision memory ([243e6d2](https://github.com/VforVitorio/F1-StratLab/commit/243e6d2f81ed1f05d4c255ec9e9a1097b184ea50)), closes [#681](https://github.com/VforVitorio/F1-StratLab/issues/681)
+
+## [2.3.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.4...v2.3.0) (2026-07-27)
+
+
+### Features
+
+* **strategy:** add the per-race decision memory accumulator ([7ffd527](https://github.com/VforVitorio/F1-StratLab/commit/7ffd5277e008611586a0df05500b32cddeca02ad))
+
+
+### Bug Fixes
+
+* **agents:** band threat_level on the served calibrated scale, not raw-scale operating points ([ec0601e](https://github.com/VforVitorio/F1-StratLab/commit/ec0601e3aa2ca0876c020d199b2bb60257429fad)), closes [#665](https://github.com/VforVitorio/F1-StratLab/issues/665)
+* **orchestrator:** warn when the client discards the requested temperature ([169376e](https://github.com/VforVitorio/F1-StratLab/commit/169376e8bfda15fc3782a8cd5edf5b50c2ec0a34))
+
+
+### Documentation
+
+* **audits:** add the adversarial audit of the orchestrator memory layer ([25e8566](https://github.com/VforVitorio/F1-StratLab/commit/25e85668742c05bfc18909544ef8d4f997221bca))
+
 ## [2.2.4](https://github.com/VforVitorio/F1-StratLab/compare/v2.2.3...v2.2.4) (2026-07-27)
 
 
