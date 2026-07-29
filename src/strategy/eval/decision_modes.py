@@ -98,6 +98,13 @@ SAMPLED_RACES: tuple[tuple[int, str], ...] = (
 # "unavailable" gate state invites if nobody polices it.
 MIN_SCORED_SHARE = 0.60
 
+# The `alpha` the Monte Carlo scores with: `score = alpha*E[S] + (1-alpha)*P10[S]`, taken
+# from `RaceState.risk_tolerance`. 0.5 is what every surface passes today, so it is what
+# the tier measures by default. It is exposed rather than buried because a decision layer
+# that declines 65% of real stops might simply be reading a cautious default as policy,
+# and that is answerable by sweeping it rather than by arguing about it (#715).
+DEFAULT_RISK_TOLERANCE = 0.5
+
 # Buckets that mean "the rails made agreement impossible", as opposed to
 # "the model declined to call it", which is a result and not an exclusion.
 _GUARD_RAIL_BUCKETS = frozenset({"opening_laps", "closing_laps", "min_stint"})
@@ -266,7 +273,14 @@ def lap_inputs(state: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _decisions_in_window(engine, laps_df, driver: str, low: int, high: int) -> dict[int, str]:
+def _decisions_in_window(
+    engine,
+    laps_df,
+    driver: str,
+    low: int,
+    high: int,
+    risk_tolerance: float = DEFAULT_RISK_TOLERANCE,
+) -> dict[int, str]:
     """Action the deterministic stack emits on each lap of ``[low, high]``.
 
     Only the laps inside the window are pushed through ``run_lap``; the replay
@@ -286,7 +300,9 @@ def _decisions_in_window(engine, laps_df, driver: str, low: int, high: int) -> d
         if inputs["lap"] > high:
             break
 
-        race_state = RaceState(driver=driver, pace_delta_s=0.0, risk_tolerance=0.5, **inputs)
+        race_state = RaceState(
+            driver=driver, pace_delta_s=0.0, risk_tolerance=risk_tolerance, **inputs
+        )
         recommendation, _outputs, _timings = inference_engine.run_lap(
             race_state, laps_df, state, profile="no-llm", return_agent_outputs=True
         )
@@ -325,8 +341,15 @@ def _is_missing(value: Any) -> bool:
 
 def measure_decision_agreement(
     races: tuple[tuple[int, str], ...] = SAMPLED_RACES,
+    risk_tolerance: float = DEFAULT_RISK_TOLERANCE,
 ) -> tuple[DecisionAgreement, list[StopVerdict]]:
     """Drive the deterministic stack over every real green-flag stop in ``races``.
+
+    Args:
+        risk_tolerance: the Monte Carlo's ``alpha``. Exposed so the decline rate can
+            be swept against it instead of argued about: if 65% of real stops go
+            uncalled at 0.5 and the number barely moves at 0.1 or 0.9, the default is
+            not what is deciding, and the search moves to the scorer itself (#715).
 
     Raises FileNotFoundError when ``data/raw/`` is absent rather than returning an
     empty sample, because a tier that reports perfect agreement over zero stops is
@@ -387,7 +410,7 @@ def measure_decision_agreement(
             low = max(1, min(stop_laps) - DECISION_WINDOW_LAPS)
             high = min(total_laps, max(stop_laps) + DECISION_WINDOW_LAPS)
             engine = RaceReplayEngine(str(race_dir), driver, team, interval_seconds=0)
-            actions = _decisions_in_window(engine, featured, driver, low, high)
+            actions = _decisions_in_window(engine, featured, driver, low, high, risk_tolerance)
 
             for stop_lap in stop_laps:
                 compound, tyre_life = _stop_context(laps, driver, stop_lap)
