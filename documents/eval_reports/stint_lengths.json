@@ -1,0 +1,59 @@
+{
+  "header": {
+    "harness_sha": "af96fb6",
+    "dataset": "data/raw laps 2023-2025 (RAW, not featured)",
+    "seed_policy": "deterministic",
+    "era_tag": "2022-2025",
+    "llm": "none",
+    "schema_version": "1",
+    "generated_at": "2026-07-29T09:39:31+00:00",
+    "artifacts": {}
+  },
+  "sample": {
+    "races": 71,
+    "total_counted": 1785,
+    "dropped_wet": 110,
+    "dropped_missing": 5,
+    "compounds": {
+      "SOFT": {
+        "sample_size": 341,
+        "threshold": 8,
+        "share_below_threshold": 0.15542521994134897,
+        "min": 1.0,
+        "p1": 1.0,
+        "p5": 2.0,
+        "p10": 5.0,
+        "p25": 9.0,
+        "median": 15.0,
+        "p75": 21.0,
+        "max": 50.0
+      },
+      "MEDIUM": {
+        "sample_size": 896,
+        "threshold": 12,
+        "share_below_threshold": 0.16964285714285715,
+        "min": 1.0,
+        "p1": 1.0,
+        "p5": 7.0,
+        "p10": 9.0,
+        "p25": 14.0,
+        "median": 19.0,
+        "p75": 25.0,
+        "max": 55.0
+      },
+      "HARD": {
+        "sample_size": 548,
+        "threshold": 15,
+        "share_below_threshold": 0.12226277372262774,
+        "min": 1.0,
+        "p1": 1.9399999999999995,
+        "p5": 8.0,
+        "p10": 13.0,
+        "p25": 18.0,
+        "median": 24.0,
+        "p75": 30.0,
+        "max": 72.0
+      }
+    }
+  }
+}
