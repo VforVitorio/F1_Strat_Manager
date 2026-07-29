@@ -33,6 +33,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.agents.tire_parsing import parse_tool_outputs
+
 # ── Repo root (module-relative) ───────────────────────────────────────────────
 # Walker with a root-stop guard so we don't spin forever when the module is
 # imported from outside a git checkout (e.g. uv tool install).
@@ -394,6 +396,32 @@ class TireOutput:
         current_tyre_life: Laps completed on this tyre set at inference time.
             Used by N28 Pit Strategy as baseline for undercut feature construction.
         deg_rate: Predicted degradation rate in seconds per lap (median of MC passes).
+
+            Read this before using it as a tyre-wear signal: it is the last row of
+            the RAW lap-to-lap derivative, not a fuel-corrected one, and fuel
+            burn-off pushes lap times down at roughly the rate wear pushes them
+            up. Measured over 110 real laps it has median +0.006 s/lap, is
+            negative on 43 of them, and correlates +0.115 with tyre life — its
+            median by tyre-life band is not even monotonic. It does not separate
+            a worn tyre from a fresh one. ``cumulative_deg_s`` is the field that
+            does (#727).
+        cumulative_deg_s: The TCN's own prediction — seconds per lap this set is
+            slower than it was when fresh, fuel-corrected (N04's
+            ``FuelAdjustedDegAbsolute``). ``None`` when no TCN ran or the tool
+            output did not parse.
+
+            ``None`` and not ``0.0``, deliberately: 0.0 is a legitimate reading
+            here (a tyre at its baseline pace), so a sentinel of 0.0 would be a
+            value the code can also genuinely find. ``deg_rate`` already
+            demonstrates the collision — 12 of those 110 laps carry a parse miss
+            indistinguishable from a real zero.
+
+            This is the scalar the whole tyre-degradation model family exists to
+            produce, and until #727 it was computed on every call, printed into
+            the tool string, and dropped at the parser — so it reached neither
+            the Monte Carlo, nor the orchestrator prompt, nor any UI. Measured
+            over the same 110 laps it correlates +0.369 with tyre life and swings
+            0.411 s/lap across a stint.
         laps_to_cliff_p10: Pessimistic estimate (P10) of laps before the cliff.
             Drives PIT_SOON warning — conservative to avoid running too long.
         laps_to_cliff_p50: Median estimate of laps before the cliff.
@@ -415,6 +443,7 @@ class TireOutput:
     laps_to_cliff_p50: float
     laps_to_cliff_p90: float
     gp_name: str   = ''
+    cumulative_deg_s: float | None = None
     warning_level: str = field(init=False)
     reasoning: str = ''
 
@@ -659,38 +688,11 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
 # Stateless helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _parse_tool_outputs(messages: list) -> dict:
-    """Extract numeric fields from ToolMessage strings in the agent message history.
-
-    Parses the structured output lines produced by predict_tire_deg_tool and
-    estimate_laps_to_cliff_tool rather than the LLM's free-text final answer,
-    guaranteeing the returned values are the exact numbers computed by inference.
-
-    Args:
-        messages: LangChain message objects from the agent's invoke result.
-
-    Returns:
-        Dict with keys deg_rate, p10, p50, p90 (all floats, defaulting to 0.0).
-    """
-    result: dict[str, float] = {}
-    for msg in messages:
-        content = getattr(msg, 'content', '')
-        if not isinstance(content, str):
-            continue
-        for pattern, key in [
-            # -?[\d.]+ (was [\d.]+, #477): the bare digit class can't match a
-            # leading minus, so a negative degradation rate — real and expected
-            # per the system prompt ("track evolution or fuel load reduction")
-            # — silently failed to parse and fell through to the 0.0 default.
-            (r'Degradation rate:\s*(-?[\d.]+)', 'deg_rate'),
-            (r'P10:\s*(-?[\d.]+)',              'p10'),
-            (r'P50:\s*(-?[\d.]+)',              'p50'),
-            (r'P90:\s*(-?[\d.]+)',              'p90'),
-        ]:
-            m = re.search(pattern, content)
-            if m and key not in result:
-                result[key] = float(m.group(1))
-    return result
+# Kept importable under its original private name so existing callers and the
+# hardening tests do not move. The body lives in the leaf module because importing
+# THIS module builds TireAgentConfig() and therefore needs data/models/ on disk,
+# which is what left a pure string parser with no CI coverage (#727).
+_parse_tool_outputs = parse_tool_outputs
 
 
 def _compound_name_to_id(compound_name: str, gp_name: str, year: int) -> str:
@@ -1476,6 +1478,12 @@ class TireAgent:
             current_tyre_life = tyre_life,
             gp_name           = gp_name,
             deg_rate          = round(parsed.get('deg_rate', 0.0), 4),
+            # `.get(...)` then an explicit None, rather than a numeric default:
+            # predict_tire_deg_tool can legitimately be skipped while the cliff
+            # tool ran, and 0.0 is a real reading for this quantity.
+            cumulative_deg_s  = (
+                round(parsed['cum_deg'], 4) if 'cum_deg' in parsed else None
+            ),
             laps_to_cliff_p10 = round(parsed['p10'], 1),
             laps_to_cliff_p50 = round(parsed.get('p50', 0.0), 1),
             laps_to_cliff_p90 = round(parsed.get('p90', 0.0), 1),

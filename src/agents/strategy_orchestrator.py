@@ -1458,6 +1458,40 @@ def _build_rag_question(
     return "What are the mandatory tyre compound regulations for a dry race?"
 
 
+def _build_tire_block(tire_out) -> str:
+    """N26's numeric block for the prompt, verbatim so the LLM can cite it.
+
+    Extracted from the prompt builder when the wear term was added (#727), so the
+    formatting decision below can be tested without assembling a whole prompt.
+
+    ``wear`` leads because it is the model's actual output — seconds per lap this
+    set is slower than it was fresh, fuel-corrected. ``deg_rate`` stays because
+    the LLM has cited it for two years and removing it silently would change the
+    synthesis for reasons unrelated to this change; it is the raw, uncorrected
+    lap-to-lap derivative and is close to noise (median +0.006 s/lap over 110
+    measured laps, negative on 43 of them).
+
+    A missing prediction prints ``unknown``, never ``0.000``. Zero is a real
+    reading for this quantity — a set sitting at its fresh baseline — so printing
+    it for an absent one would tell the LLM the tyre is pristine at the exact
+    moment the model failed to say anything.
+    """
+    if tire_out is None:
+        return "  [N26 Tire]      not activated"
+
+    cumulative = getattr(tire_out, "cumulative_deg_s", None)
+    wear = f"{cumulative:+.3f}s/lap vs fresh" if cumulative is not None else "unknown"
+    return (
+        f"  [N26 Tire]      wear={wear}  "
+        f"deg_rate={tire_out.deg_rate:.3f}s/lap  "
+        f"cliff P10={tire_out.laps_to_cliff_p10:.1f}  "
+        f"P50={tire_out.laps_to_cliff_p50:.1f}  "
+        f"P90={tire_out.laps_to_cliff_p90:.1f}  "
+        f"[{tire_out.warning_level}]\n"
+        f"                  reasoning: {tire_out.reasoning or '(empty)'}"
+    )
+
+
 def _build_orchestrator_prompt(
     race_state:          "RaceState",
     mc_results:          dict,
@@ -1527,17 +1561,7 @@ def _build_orchestrator_prompt(
     else:
         pace_block = "  [N25 Pace]      not activated"
 
-    if tire_out is not None:
-        tire_block = (
-            f"  [N26 Tire]      deg_rate={tire_out.deg_rate:.3f}s/lap  "
-            f"cliff P10={tire_out.laps_to_cliff_p10:.1f}  "
-            f"P50={tire_out.laps_to_cliff_p50:.1f}  "
-            f"P90={tire_out.laps_to_cliff_p90:.1f}  "
-            f"[{tire_out.warning_level}]\n"
-            f"                  reasoning: {tire_out.reasoning or '(empty)'}"
-        )
-    else:
-        tire_block = "  [N26 Tire]      not activated"
+    tire_block = _build_tire_block(tire_out)
 
     if situation_out is not None:
         sit_block = (

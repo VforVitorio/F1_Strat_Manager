@@ -61,14 +61,22 @@ def lusail_lap_30():
     Mid-stint on purpose. The first laps of a stint are where the degradation
     rate's own floor fires, so a lap chosen there could be repeatable for a
     reason that has nothing to do with the dropout seed.
+
+    Scoped to the GP the way ``engine.py`` scopes it (#429) before any agent sees
+    the frame. The first version of this fixture passed the season-wide parquet
+    straight in — the assertions held either way, because determinism does not
+    care, but it was measuring a configuration nothing runs. Unscoped, this same
+    lap reports a cumulative degradation of -33.840 s/lap against a real range of
+    roughly -0.9 to +0.5.
     """
     from src.f1_strat_manager.laps_augment import augment_featured_laps
     from src.simulation.replay_engine import RaceReplayEngine
+    from src.strategy.inference.engine import _scope_laps_to_gp
 
     replay = RaceReplayEngine(RACE_DIR, driver_code="NOR", team="McLaren", interval_seconds=0.0)
     lap_state = next(islice(replay.replay(), 29, 30))  # 0-indexed 29 -> lap 30
     laps = augment_featured_laps(pd.read_parquet(FEATURED), 2025)
-    return lap_state, laps
+    return lap_state, _scope_laps_to_gp(laps, lap_state)
 
 
 def test_two_identical_calls_return_an_identical_tyre_output(lusail_lap_30):
