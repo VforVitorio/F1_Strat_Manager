@@ -20,12 +20,20 @@ median-by-band that is not even monotonic.
 The discarded scalar is fuel-corrected (N04's ``FuelAdjustedDegAbsolute``),
 correlates +0.369 with tyre life, and swings 0.411 s/lap across a stint.
 
-THE TWO CHEAP TESTS RUN WITHOUT MODEL WEIGHTS, ON PURPOSE
----------------------------------------------------------
-``_parse_tool_outputs`` is a pure string parser. Keeping its tests ungated means CI
-covers the new field on a runner with no ``data/`` — unlike
-``tests/audit/test_tire_agent_hardening.py``, whose module-level skip takes its own
-parser test down with the rest of the file.
+THE PARSER TESTS RUN WITHOUT MODEL WEIGHTS, AND THAT TOOK A SECOND ATTEMPT
+--------------------------------------------------------------------------
+The parser is pure, so its tests were written ungated — and CI failed, because
+**importing** it was not pure: ``tire_agent`` builds ``TireAgentConfig()`` at module
+scope, which reads ``data/models/tire_degradation/routing_config.json``, a file that
+comes from Hugging Face and is not in git. That is precisely why
+``tests/audit/test_tire_agent_hardening.py`` skips its **entire module** and takes its
+own pure-parser test down with it.
+
+The fix is the one ``src/strategy/inference/guard_rails.py`` already made for the pit
+bounds: the parser moved to ``src/agents/tire_parsing.py``, a leaf module with nothing
+but ``re``. Now the ungated tests genuinely run on a bare runner. Anything touching
+``TireOutput`` itself still has to be gated, since the dataclass lives behind that
+import.
 """
 
 from __future__ import annotations
@@ -76,17 +84,44 @@ class _FakeToolMessage:
 # ---------------------------------------------------------------------------
 
 
+def test_the_parser_module_stays_a_leaf():
+    """Guards the whole point of the split: importing it must stay cheap.
+
+    A subprocess, not ``sys.modules`` in-process, because by the time this test runs
+    the suite has already imported torch for other reasons and the check would pass
+    on someone else's import. Same technique as
+    ``tests/eval/test_decision_modes.py``'s eager-import guard.
+
+    If this fails, the parser has grown a dependency and CI has silently lost its
+    only ungated coverage of the field extraction — which is the exact state #727
+    found it in.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys; import src.agents.tire_parsing; "
+        "heavy = [m for m in ('torch', 'pandas', 'numpy') if m in sys.modules]; "
+        "print(','.join(heavy))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, cwd=ROOT, check=True
+    )
+
+    assert out.stdout.strip() == "", f"tire_parsing pulled in heavy deps: {out.stdout.strip()}"
+
+
 @pytest.mark.parametrize("printed", ["-1.200", "0.000", "2.345"])
 def test_the_parser_captures_the_cumulative_prediction(printed):
     """Including a negative one: a set faster than its fresh baseline is real early."""
-    from src.agents.tire_agent import _parse_tool_outputs
+    from src.agents.tire_parsing import parse_tool_outputs
 
     message = _FakeToolMessage(
         "Driver NOR | Compound C2 | TyreLife 12\n"
         f"Cumulative degradation: {printed} s | Degradation rate: -0.05 s/lap"
     )
 
-    assert _parse_tool_outputs([message])["cum_deg"] == float(printed)
+    assert parse_tool_outputs([message])["cum_deg"] == float(printed)
 
 
 def test_an_absent_line_writes_no_key_at_all():
@@ -95,16 +130,21 @@ def test_an_absent_line_writes_no_key_at_all():
     ``estimate_laps_to_cliff_tool`` prints the quantiles and the rate but not the
     cumulative prediction, so the cliff tool alone must not manufacture one.
     """
-    from src.agents.tire_agent import _parse_tool_outputs
+    from src.agents.tire_parsing import parse_tool_outputs
 
     message = _FakeToolMessage(
         "Laps to cliff — P10: 3.0 | P50: 5.0 | P90: 7.0\n"
         "Degradation rate: 0.0400 s/lap | MC std: 0.1 s | Calibrated sigma: 0.2 s"
     )
 
-    assert "cum_deg" not in _parse_tool_outputs([message])
+    assert "cum_deg" not in parse_tool_outputs([message])
 
 
+@pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="TireOutput lives in tire_agent, whose import builds TireAgentConfig() and "
+    "reads data/models/tire_degradation/ (HF, not git)",
+)
 def test_the_field_defaults_to_none_and_never_to_zero():
     """0.0 is a real reading here — a set at its fresh baseline — so it cannot double
     as the sentinel. ``deg_rate`` already shows the collision this avoids: 12 of 110

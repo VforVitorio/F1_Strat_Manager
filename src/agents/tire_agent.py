@@ -33,6 +33,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.agents.tire_parsing import parse_tool_outputs
+
 # ── Repo root (module-relative) ───────────────────────────────────────────────
 # Walker with a root-stop guard so we don't spin forever when the module is
 # imported from outside a git checkout (e.g. uv tool install).
@@ -686,43 +688,11 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
 # Stateless helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _parse_tool_outputs(messages: list) -> dict:
-    """Extract numeric fields from ToolMessage strings in the agent message history.
-
-    Parses the structured output lines produced by predict_tire_deg_tool and
-    estimate_laps_to_cliff_tool rather than the LLM's free-text final answer,
-    guaranteeing the returned values are the exact numbers computed by inference.
-
-    Args:
-        messages: LangChain message objects from the agent's invoke result.
-
-    Returns:
-        Dict with keys deg_rate, p10, p50, p90 (all floats, defaulting to 0.0).
-    """
-    result: dict[str, float] = {}
-    for msg in messages:
-        content = getattr(msg, 'content', '')
-        if not isinstance(content, str):
-            continue
-        for pattern, key in [
-            # -?[\d.]+ (was [\d.]+, #477): the bare digit class can't match a
-            # leading minus, so a negative degradation rate — real and expected
-            # per the system prompt ("track evolution or fuel load reduction")
-            # — silently failed to parse and fell through to the 0.0 default.
-            # predict_tire_deg_tool has printed this since the tool existed and
-            # nothing ever read it, so the TCN's actual output stopped at the
-            # parser (#727). The same `-?` applies for the same reason as below:
-            # a set faster than its own fresh baseline is real early in a stint.
-            (r'Cumulative degradation:\s*(-?[\d.]+)', 'cum_deg'),
-            (r'Degradation rate:\s*(-?[\d.]+)', 'deg_rate'),
-            (r'P10:\s*(-?[\d.]+)',              'p10'),
-            (r'P50:\s*(-?[\d.]+)',              'p50'),
-            (r'P90:\s*(-?[\d.]+)',              'p90'),
-        ]:
-            m = re.search(pattern, content)
-            if m and key not in result:
-                result[key] = float(m.group(1))
-    return result
+# Kept importable under its original private name so existing callers and the
+# hardening tests do not move. The body lives in the leaf module because importing
+# THIS module builds TireAgentConfig() and therefore needs data/models/ on disk,
+# which is what left a pure string parser with no CI coverage (#727).
+_parse_tool_outputs = parse_tool_outputs
 
 
 def _compound_name_to_id(compound_name: str, gp_name: str, year: int) -> str:
