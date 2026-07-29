@@ -191,6 +191,27 @@ class TireAgentConfig:
     Attributes:
         n_mc: Number of Monte Carlo Dropout forward passes per inference call.
             50 passes give a stable P10/P50/P90 interval without excessive latency.
+        mc_seed: Torch seed applied before the MC Dropout passes, so two identical
+            race states yield an identical TireOutput (#735).
+
+            The choice is deliberate rather than incidental, because the opposite
+            is also arguable: MC Dropout exists to express epistemic uncertainty,
+            and a fixed seed makes that uncertainty identical on every call. What
+            settles it is what the interval is FOR here. Downstream wants a
+            P10/P50/P90 band, which is a property of the model and the input; the
+            run-to-run wobble is sampling noise in the ESTIMATE of that band, not
+            a second source of uncertainty. Seeding removes the noise and leaves
+            the band untouched.
+
+            The rest of the layer already assumes this: the Monte Carlo seeds its
+            own RNG at 42, shares draws across candidates, and is pinned by
+            byte-identical goldens. Leaving one stochastic step upstream made the
+            whole chain non-reproducible — measured at 53/57 and 52/57 on two
+            identical captures of the same commit.
+
+            ``src/strategy/eval/tire_holdout.py`` made the same choice for the
+            holdout sweep and takes its seed as an explicit argument. That is the
+            twin; if this decision is ever revisited, revisit both.
         model_name: LM Studio local model identifier for the ReAct agent LLM.
         cliff_pit_soon_laps: Global fallback threshold below which warning_level
             is PIT_SOON. Per-cluster values take precedence when available.
@@ -199,6 +220,7 @@ class TireAgentConfig:
     """
 
     n_mc: int = 50
+    mc_seed: int = 42
     model_name: str = 'gpt-4.1-mini'
     cliff_pit_soon_laps: int = 3
     cliff_monitor_laps: int  = 7
@@ -1092,6 +1114,11 @@ class TireAgent:
             tensor = agent._build_stint_tensor(stint, compound_id, agent.session_meta)
             model  = agent.bundles[compound_id]['model']
             model.train()  # keep dropout active for MC
+            # Seed the dropout masks so identical inputs give an identical band
+            # (#735). Order mirrors the holdout twin in src/strategy/eval/
+            # tire_holdout.py::mc_dropout_global_sigma; the reasoning for seeding
+            # at all is on TireAgentConfig.mc_seed.
+            torch.manual_seed(agent.cfg.mc_seed)
 
             preds = []
             try:
