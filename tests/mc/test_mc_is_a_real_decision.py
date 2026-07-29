@@ -636,26 +636,22 @@ def _sampled_projection_draws(n: int = _DRAWS, seed: int = 42):
     )
 
 
-# The two candidates draw their variance from DIFFERENT mechanisms, which is why
-# each needs its own rival placement and why one shared state would be a
-# knife-edge. STAY_OUT varies when a settled rival behind sits near the
-# q_f-discounted liability threshold (measured support 20.72-22.65 s); PIT_NOW
-# varies when a rival sits inside the total pit-loss support, traversal 21.0 s
-# plus the sampled stop (measured 21.95-24.15 s). The centres are ~1.4 s apart.
+# One state now serves both candidates, and that is a CONSEQUENCE of the
+# race-end netting rather than a convenience.
 #
-# A shared state does exist, over a window about 0.8 s wide, but the smaller of
-# the two spreads there peaks around 0.08 — and worse, inside that window
-# STAY_OUT's spread comes ENTIRELY from the margin/cliff channel, because the
-# liability crossing fraction drops to ~3% and stops reaching P10 at all. A
-# shared state would therefore pass STAY_OUT's assertion through a mechanism its
-# own name disclaims. Two states, each comfortably inside its own band.
+# Before it, the two drew variance from different places: STAY_OUT from a
+# settled rival near the q_f-discounted liability threshold (support
+# 20.72-22.65 s), PIT_NOW from a rival inside the total pit loss, traversal
+# 21.0 s plus the sampled stop (21.95-24.15 s). Centres ~1.4 s apart, so a
+# shared state existed only over an ~0.8 s window where the smaller spread
+# peaked around 0.08 — and there STAY_OUT passed through the margin channel
+# rather than the one its name claimed. Hence two states.
 #
-# The rival is placed where the liability crossing fraction is ~0.43, near the
-# middle of the (0.10, 0.90) percentile band rather than against its edge. An
-# earlier placement sat at 0.11 — two draws from the boundary — where a numpy
-# stream change would have silently removed the liability contribution and left
-# the test green on the margin channel alone.
-_LIABILITY_CROSSING_STATE = (-3.0, 3.5, False, 6.0, False, True, 3.2)
+# Netting carries OUR outstanding stop into the terminal gaps, and our residual
+# varies with the same pit-loss draw PIT_NOW is exposed to. So both candidates
+# now cross in the same band, and a single rival inside the pit-loss support
+# exercises both honestly. Measured across six seeds at this state: STAY_OUT
+# 1.000-1.014, PIT_NOW 1.069-1.080 — each better than twice the threshold.
 _PIT_LOSS_CROSSING_STATE = (-3.0, 5.2, False, 6.0, False, True, 3.2)
 
 # A whole car crossing the threshold moves the payoff by a full position. The
@@ -669,8 +665,9 @@ def _spread(cell: dict) -> float:
     return cell["P90"] - cell["P10"]
 
 
-def test_stay_out_spreads_when_the_liability_threshold_is_crossable():
-    """P90 must exceed P10 where the deferred stop's exposure is genuinely uncertain.
+@pytest.mark.parametrize("candidate", ["STAY_OUT", "PIT_NOW"])
+def test_the_projection_spreads_when_a_rival_sits_inside_the_pit_loss_support(candidate):
+    """P90 must exceed P10 where a rival is genuinely crossable.
 
     Deliberately NOT asserted on arbitrary states, and that scoping is the
     substance of the test rather than a hedge: positions are integers and the
@@ -684,32 +681,15 @@ def test_stay_out_spreads_when_the_liability_threshold_is_crossable():
     unconditional. Without it, a candidate whose distribution had collapsed
     would be indistinguishable from a healthy one in every test this repo has.
     """
-    cell = _projection_scores(_LIABILITY_CROSSING_STATE, draws=_sampled_projection_draws())[
-        "STAY_OUT"
+    cell = _projection_scores(_PIT_LOSS_CROSSING_STATE, draws=_sampled_projection_draws())[
+        candidate
     ]
     assert cell["eligible"]
     # A whole car, not a tie-break wobble. Asserting only `> 0` would stay green
-    # if the liability channel vanished and the capped margin term was all that
-    # was left — the test would then pass through a mechanism its name disclaims.
+    # on the capped margin term alone, so the test would pass through a mechanism
+    # its own name disclaims.
     assert _spread(cell) > _A_WHOLE_CAR, (
-        f"STAY_OUT lost the liability crossing this test exists to observe: "
-        f"E={cell['E']} P10={cell['P10']} P90={cell['P90']}"
-    )
-
-
-def test_pit_now_spreads_when_a_rival_sits_inside_the_pit_loss_support():
-    """The same assertion for the stopping candidate, in the regime that is ITS own.
-
-    A rival roughly a pit cycle behind is crossed on some sampled stop times and
-    not on others, which is the only thing that puts spread into a stopping
-    candidate's payoff.
-    """
-    cell = _projection_scores(_PIT_LOSS_CROSSING_STATE, draws=_sampled_projection_draws())[
-        "PIT_NOW"
-    ]
-    assert cell["eligible"]
-    assert _spread(cell) > _A_WHOLE_CAR, (
-        f"PIT_NOW lost the pit-loss crossing this test exists to observe: "
+        f"{candidate} lost the crossing this test exists to observe: "
         f"E={cell['E']} P10={cell['P10']} P90={cell['P90']}"
     )
 

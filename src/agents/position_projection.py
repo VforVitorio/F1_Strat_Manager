@@ -147,9 +147,7 @@ class RivalState:
         anyway, but stating it keeps the rule visible next to the comparison
         rather than resting on IEEE-754 happening to agree with us.
         """
-        return (
-            self.gap_s is not None and math.isfinite(float(self.gap_s)) and self.gap_s < 0
-        )
+        return self.gap_s is not None and math.isfinite(float(self.gap_s)) and self.gap_s < 0
 
     @property
     def gap_ahead_s(self) -> float | None:
@@ -235,16 +233,23 @@ class ProjectionResult:
     """Per-draw output of a projection for one candidate.
 
     Attributes:
-        positions:   Projected track position at the end of the window.
+        positions:   Projected track position at the end of the window. This is
+                     the REJOIN horizon, and it is what the 1810-stop ground
+                     truth grades, so it must keep meaning exactly that.
         margins_s:   Seconds of buffer to the nearest projected car behind,
                      clipped, and 0.0 when nothing is behind us.
-        liabilities: Cars the still-owed stop is projected to cost later.
+        terminal_positions:
+                     Projected position once every KNOWN outstanding stop has
+                     been served, ours and theirs. Scoring happens here rather
+                     than at the window end, because a candidate that skips the
+                     window has not avoided the mandatory stop, only deferred
+                     it, and a rival who still owes one has not really passed us.
         rivals_used: How many rivals had a usable gap and entered the count.
     """
 
     positions: np.ndarray
     margins_s: np.ndarray
-    liabilities: np.ndarray
+    terminal_positions: np.ndarray
     rivals_used: int
 
 
@@ -453,7 +458,9 @@ def measured_racing_laps(neutralisation: str = "sc") -> float:
     mean = (kinds.get(neutralisation) or {}).get("racing_laps_in_window", {}).get("mean")
     if mean is not None:
         return float(mean)
-    return DEFAULT_RACING_LAPS_UNDER_VSC if neutralisation == "vsc" else DEFAULT_RACING_LAPS_UNDER_SC
+    return (
+        DEFAULT_RACING_LAPS_UNDER_VSC if neutralisation == "vsc" else DEFAULT_RACING_LAPS_UNDER_SC
+    )
 
 
 def future_neutralisation_probability(rate_per_lap: float, laps_remaining: int) -> float:
@@ -480,9 +487,7 @@ def _usable_rivals(rivals: Sequence[RivalState]) -> list[RivalState]:
     ``nan`` while the payload still reports itself as scored.
     """
     return [
-        rival
-        for rival in rivals
-        if rival.gap_s is not None and math.isfinite(float(rival.gap_s))
+        rival for rival in rivals if rival.gap_s is not None and math.isfinite(float(rival.gap_s))
     ]
 
 
@@ -578,51 +583,77 @@ def rival_time_deltas(
     return deltas
 
 
-def terminal_liability(
-    rivals: Sequence[RivalState],
+def _stop_residual_s(stop_loss_s: np.ndarray | float, config: ProjectionConfig) -> np.ndarray:
+    """Seconds an outstanding stop still costs, after the option value of waiting.
+
+    A future neutralisation might cover the stop cheaply, and that possibility is
+    worth real seconds, so the raw pit loss is discounted by ``q_f * saving``.
+    Floored at zero: a stop cannot end up gaining time. This is what turned the
+    old flat Safety Car bonus into an option value and it is unchanged by the
+    netting; only who it is applied TO changed.
+    """
+    discounted = np.asarray(stop_loss_s, dtype=float) - (
+        config.future_neutralisation_prob * config.neutralisation_saving_s
+    )
+    return np.maximum(0.0, discounted)
+
+
+def _terminal_gaps(
+    usable: Sequence[RivalState],
     plan: DriverPlan,
+    projected_gaps: np.ndarray,
     pit_loss_s: np.ndarray,
     config: ProjectionConfig,
 ) -> np.ndarray:
-    """Cars that a still-owed stop is projected to cost us later, per draw.
+    """Window-end gaps carried forward to a race end where every KNOWN stop is served.
 
     The two-compound rule (Art. 30.5(m)) makes one stop mandatory, so a candidate
-    that skips the window has not avoided the cost, only deferred it. This counts
-    what that deferral will cost in cars: rivals close enough behind to come out
-    ahead when we finally stop, and only those who have ALREADY satisfied their
-    own obligation — a rival who must still stop pays the same price later, so
-    they are no threat.
+    that skips the window has not avoided the cost, only deferred it — and the
+    same is true of a rival. Charging our deferral while exempting theirs is what
+    made staying out look free and stopping look expensive: measured over real
+    races, 73-84% of the cars counted as passing us still owed a stop of their
+    own, and PIT_NOW won once in 110 laps.
 
-    The window is discounted by ``q_f * saving``: a future neutralisation might
-    cover the stop cheaply, and that possibility is worth real seconds. This is
-    what turns the old flat Safety Car bonus into an option value, and it is why
-    the three cases the deleted rail was patching now fall out of the arithmetic:
+    So both sides are carried to the same horizon::
 
-    - already stopped (no obligation) -> no liability, staying out is free;
-    - leading a pack that all still owe a stop -> every rival is exempt, so the
-      liability is zero and holding the lead costs nothing;
+        terminal_gap = projected_gap + their_residual - our_residual
+
+    and the three cases the deleted rail was patching still fall out of the
+    arithmetic, now by cancellation rather than by exemption:
+
+    - already stopped (no obligation) -> our residual is zero, staying out costs
+      nothing on this term;
+    - leading a pack that all still owe a stop -> their residuals and ours are
+      the same size and cancel, so holding the lead is free;
     - the race ending behind the Safety Car -> the config's racing laps go to
       zero, so nothing is gained by stopping in the first place.
 
-    An unknown obligation (``mandatory_stop_pending is None``) yields zero: the
-    liability is a claim about a fact, and without the fact we do not make it.
+    An unknown obligation contributes NOTHING in either direction, on the
+    module's standing rule that a claim needs a fact. That is deliberately
+    asymmetric with charging it: an unsettled obligation treated as a certainty
+    invents twenty-odd seconds of somebody's race.
+
+    A rival already serving their stop is excluded too: ``rival_time_deltas``
+    has charged them inside the window already, and charging the same stop twice
+    would push them a full pit cycle further back than they will ever be.
     """
-    if plan.stops_in_window or config.mandatory_stop_pending is not True:
-        return np.zeros(len(pit_loss_s), dtype=float)
+    our_residual = (
+        _stop_residual_s(pit_loss_s, config)
+        if not plan.stops_in_window and config.mandatory_stop_pending is True
+        else np.zeros(len(pit_loss_s), dtype=float)
+    )
 
-    discounted = pit_loss_s - config.future_neutralisation_prob * config.neutralisation_saving_s
-    exposure_s = np.maximum(0.0, discounted)
+    their_residual = np.array(
+        [
+            _stop_residual_s(rival.stop_loss_s, config)
+            if rival.stop_pending is True and not rival.is_pitting
+            else 0.0
+            for rival in usable
+        ],
+        dtype=float,
+    )
 
-    behind_and_settled = [
-        rival.gap_s
-        for rival in _usable_rivals(rivals)
-        if rival.gap_s > 0 and rival.stop_pending is False
-    ]
-    if not behind_and_settled:
-        return np.zeros(len(pit_loss_s), dtype=float)
-
-    gaps = np.asarray(behind_and_settled, dtype=float)
-    return (gaps[None, :] < exposure_s[:, None]).sum(axis=1).astype(float)
+    return projected_gaps + their_residual[None, :] - our_residual[:, None]
 
 
 def project_positions(
@@ -649,13 +680,14 @@ def project_positions(
     draws = len(pit_loss_s)
 
     our_delta = driver_time_delta(plan, pit_loss_s, cliff_laps, config, stop_is_neutralised)
-    liabilities = terminal_liability(rivals, plan, pit_loss_s, config)
 
     if not usable:
+        # Nobody to be passed by, at either horizon.
+        ones = np.ones(draws, dtype=float)
         return ProjectionResult(
-            positions=np.ones(draws, dtype=float),
+            positions=ones,
             margins_s=np.zeros(draws, dtype=float),
-            liabilities=liabilities,
+            terminal_positions=ones,
             rivals_used=0,
         )
 
@@ -671,26 +703,34 @@ def project_positions(
     nearest_behind = behind_gaps.min(axis=1)
     margins = np.clip(np.where(np.isinf(nearest_behind), 0.0, nearest_behind), 0.0, MARGIN_CLIP_S)
 
+    terminal_gaps = _terminal_gaps(usable, plan, projected_gaps, pit_loss_s, config)
+
     return ProjectionResult(
         positions=positions,
         margins_s=margins,
-        liabilities=liabilities,
+        terminal_positions=1.0 + (terminal_gaps < 0).sum(axis=1),
         rivals_used=len(usable),
     )
 
 
 def payoff(result: ProjectionResult, current_position: int, config: ProjectionConfig) -> np.ndarray:
-    """Per-draw payoff in positions gained, margin-adjusted and liability-charged.
+    """Per-draw payoff in positions gained at the terminal horizon, margin-adjusted.
 
     Positions are the currency, which is the point of the redesign. The margin
     term is deliberately small (a tenth of a position per second, capped): it
     breaks ties between candidates that land on the same car count and smooths
     the quantile steps that an integer-valued score would otherwise have, but it
     can never outvote an actual position.
+
+    Scored on ``terminal_positions``, not on the window-end ``positions``: both
+    sides of a comparison must be at the same horizon or the arithmetic favours
+    whichever one had its future cost left off. The margin stays on the WINDOW-end
+    gaps on purpose — it is a tie-break about track position now, not a claim
+    about the end of the race.
     """
-    gained = float(current_position) - result.positions
+    gained = float(current_position) - result.terminal_positions
     margin_bonus = config.margin_weight * result.margins_s
-    return gained + margin_bonus - result.liabilities
+    return gained + margin_bonus
 
 
 def undercut_targets(rivals: Sequence[RivalState], config: ProjectionConfig) -> list[str]:
