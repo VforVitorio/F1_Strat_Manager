@@ -42,10 +42,26 @@ from tests.mc.test_strategy_goldens import _canned_outputs
 ROOT = Path(__file__).parent.parent.parent
 _HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 
-# The rival geometry is chosen, not arbitrary: one car just ahead (a live
-# undercut target), one close behind, and one a pit cycle behind so the terminal
-# liability has something to charge. A field with nothing near the pit-loss
-# support would pin a set of point masses and hide any future collapse.
+# The rival geometry is chosen, not arbitrary, and the roles are the opposite of
+# the intuitive reading — measured, not assumed:
+#
+#   AHEAD  (-2.4 s)  a live undercut target, which is why UNDERCUT names it.
+#   BEHIND ( 4.6 s)  charged by the terminal liability on 100% of draws. Being
+#                    charged CONSTANTLY it contributes no spread at all; it pins
+#                    the level, not the distribution.
+#   FAR    (22.6 s)  sits inside the total pit-loss support and is crossed on
+#                    exactly 50% of draws. THIS is what gives PIT_NOW and
+#                    UNDERCUT their P10/P90 spread.
+#
+# So the pit-cycle-behind car is not here "so the liability has something to
+# charge" — that is BEHIND's job, and it is a constant. Stating it the wrong way
+# round would teach a false mechanism to whoever edits this next.
+#
+# Far-field control, executed: move BEHIND to 40 s and FAR to 60 s and STAY_OUT
+# and PIT_NOW both collapse to point masses (2.3/2.3/2.3). UNDERCUT does not,
+# because the N16 bonus is a Bernoulli draw that spreads regardless of geometry
+# and is not part of the projection. So the geometry is load-bearing for the
+# projection channels specifically, which is the claim worth making.
 _RIVALS = [
     {"driver": "AHEAD", "interval_to_driver_s": -2.4, "is_pitting": False},
     {"driver": "BEHIND", "interval_to_driver_s": 4.6, "is_pitting": False},

@@ -639,13 +639,30 @@ def _sampled_projection_draws(n: int = _DRAWS, seed: int = 42):
 # The two candidates draw their variance from DIFFERENT mechanisms, which is why
 # each needs its own rival placement and why one shared state would be a
 # knife-edge. STAY_OUT varies when a settled rival behind sits near the
-# q_f-discounted liability threshold; PIT_NOW varies when a rival sits inside the
-# total pit-loss support (traversal 21.0 s plus the sampled stop). Measured, the
-# two bands are about 1.2 s apart: at C=22.2 s STAY_OUT spreads 1.000 and PIT_NOW
-# 0.000; at C=23.2 s it is 0.002 and 1.076. A single state can catch both only at
-# a margin of 0.06, which is not a test, it is a coincidence waiting to break.
-_LIABILITY_CROSSING_STATE = (-3.0, 4.2, False, 6.0, False, True, 3.2)
+# q_f-discounted liability threshold (measured support 20.72-22.65 s); PIT_NOW
+# varies when a rival sits inside the total pit-loss support, traversal 21.0 s
+# plus the sampled stop (measured 21.95-24.15 s). The centres are ~1.4 s apart.
+#
+# A shared state does exist, over a window about 0.8 s wide, but the smaller of
+# the two spreads there peaks around 0.08 — and worse, inside that window
+# STAY_OUT's spread comes ENTIRELY from the margin/cliff channel, because the
+# liability crossing fraction drops to ~3% and stops reaching P10 at all. A
+# shared state would therefore pass STAY_OUT's assertion through a mechanism its
+# own name disclaims. Two states, each comfortably inside its own band.
+#
+# The rival is placed where the liability crossing fraction is ~0.43, near the
+# middle of the (0.10, 0.90) percentile band rather than against its edge. An
+# earlier placement sat at 0.11 — two draws from the boundary — where a numpy
+# stream change would have silently removed the liability contribution and left
+# the test green on the margin channel alone.
+_LIABILITY_CROSSING_STATE = (-3.0, 3.5, False, 6.0, False, True, 3.2)
 _PIT_LOSS_CROSSING_STATE = (-3.0, 5.2, False, 6.0, False, True, 3.2)
+
+# A whole car crossing the threshold moves the payoff by a full position. The
+# margin channel is capped at 0.3 by MARGIN_CLIP_S and in practice contributes
+# ~0.1, so requiring more than half a position is what separates "the liability
+# actually varied" from "a tie-break wobbled".
+_A_WHOLE_CAR = 0.5
 
 
 def _spread(cell: dict) -> float:
@@ -671,8 +688,11 @@ def test_stay_out_spreads_when_the_liability_threshold_is_crossable():
         "STAY_OUT"
     ]
     assert cell["eligible"]
-    assert _spread(cell) > 0.0, (
-        f"STAY_OUT collapsed to a point mass under varying draws: "
+    # A whole car, not a tie-break wobble. Asserting only `> 0` would stay green
+    # if the liability channel vanished and the capped margin term was all that
+    # was left — the test would then pass through a mechanism its name disclaims.
+    assert _spread(cell) > _A_WHOLE_CAR, (
+        f"STAY_OUT lost the liability crossing this test exists to observe: "
         f"E={cell['E']} P10={cell['P10']} P90={cell['P90']}"
     )
 
@@ -688,8 +708,8 @@ def test_pit_now_spreads_when_a_rival_sits_inside_the_pit_loss_support():
         "PIT_NOW"
     ]
     assert cell["eligible"]
-    assert _spread(cell) > 0.0, (
-        f"PIT_NOW collapsed to a point mass under varying draws: "
+    assert _spread(cell) > _A_WHOLE_CAR, (
+        f"PIT_NOW lost the pit-loss crossing this test exists to observe: "
         f"E={cell['E']} P10={cell['P10']} P90={cell['P90']}"
     )
 
