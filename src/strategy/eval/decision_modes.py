@@ -46,11 +46,14 @@ buildable is the other half of the same idea — that the not-scored buckets mus
 not quietly absorb the failures — and that is ``coverage_verdict``.
 
 WHERE TO CHANGE IF THINGS MOVE:
-- ``src/strategy/inference/no_llm.py`` owns the guard rails and the pit-action
-  set. Both are imported here rather than restated, so a change there changes
-  this report instead of silently disagreeing with it.
+- ``src/strategy/inference/guard_rails.py`` owns the rails and the pit-action
+  set. ``guard_rail_block`` CALLS the rail rather than restating its thresholds,
+  because the first version retyped one boundary and got it wrong by one lap.
 - ``SAMPLED_RACES`` is the subset and the reason it exists; see its comment
   before widening it.
+- ``lap_inputs`` decides which laps are answerable and is deliberately free of
+  agent imports, so the two bugs that lived there stay under test on a runner
+  with no model weights.
 """
 
 from __future__ import annotations
@@ -224,6 +227,45 @@ def _team_of(laps, driver: str) -> str | None:
     return str(rows.iloc[0]) if len(rows) else None
 
 
+def lap_inputs(state: dict[str, Any]) -> dict[str, Any] | None:
+    """The primitive fields a ``RaceState`` needs from a lap state, or None to skip.
+
+    Pure and free of any agent import on purpose: this is the part that decides
+    which laps are answerable at all, it is where two real bugs lived, and keeping
+    it separate is what lets those bugs stay under test on a runner with no model
+    weights on disk.
+
+    Skips, and why each is a skip rather than a default:
+    - no ``lap_number``: a retired car keeps yielding lap states with an EMPTY
+      driver dict for the remainder of the race. Presence is the signal, never a
+      lap-number threshold — a car that finished can be missing laps too, and the
+      two ranges overlap.
+    - no ``position``: the state manager returns None deliberately, because a
+      sentinel position has already collided with a real one in this codebase. A
+      lap with no position is not a lap the stack can be asked about.
+
+    ``tyre_life`` is read the long way for the same family of reason: ``or 10``
+    would turn a legitimate fresh tyre (0) into a ten-lap-old one and quietly move
+    what the tyre agent answers.
+    """
+    car = state.get("driver") or {}
+    if "lap_number" not in car or car.get("position") is None:
+        return None
+
+    tyre_life = car.get("tyre_life")
+    weather = state.get("weather") or {}
+    return {
+        "lap": int(car["lap_number"]),
+        "total_laps": int(state["session_meta"]["total_laps"]),
+        "position": int(car["position"]),
+        "compound": car.get("compound") or "MEDIUM",
+        "tyre_life": 10 if tyre_life is None else int(tyre_life),
+        "gap_ahead_s": car.get("gap_ahead_s") or 2.0,
+        "air_temp": weather.get("air_temp") or 25.0,
+        "track_temp": weather.get("track_temp") or 35.0,
+    }
+
+
 def _decisions_in_window(engine, laps_df, driver: str, low: int, high: int) -> dict[int, str]:
     """Action the deterministic stack emits on each lap of ``[low, high]``.
 
@@ -236,48 +278,19 @@ def _decisions_in_window(engine, laps_df, driver: str, low: int, high: int) -> d
 
     actions: dict[int, str] = {}
     for state in engine.replay():
-        car = state.get("driver") or {}
-        # A retired car keeps yielding lap states with an EMPTY driver dict for the
-        # rest of the race. Presence is the signal, never a lap-number threshold:
-        # a car that finished can be missing laps too, and the two ranges overlap.
-        if "lap_number" not in car:
+        inputs = lap_inputs(state)
+        if inputs is None:
             continue
-
-        lap = int(car["lap_number"])
-        if lap < low:
+        if inputs["lap"] < low:
             continue
-        if lap > high:
+        if inputs["lap"] > high:
             break
 
-        # Position is None when the state manager could not resolve it, and it is
-        # None on purpose rather than a number: a sentinel position has already
-        # collided with a real one in this codebase. A lap with no position is not
-        # a lap the stack can be asked about, so it is skipped and never defaulted.
-        if car.get("position") is None:
-            continue
-
-        # Tyre life is read the long way for the same reason: `or 10` would turn a
-        # legitimate fresh tyre (0) into a ten-lap-old one and quietly move what the
-        # tyre agent answers.
-        tyre_life = car.get("tyre_life")
-        weather = state.get("weather") or {}
-        race_state = RaceState(
-            driver=driver,
-            lap=lap,
-            total_laps=int(state["session_meta"]["total_laps"]),
-            position=int(car["position"]),
-            compound=car.get("compound") or "MEDIUM",
-            tyre_life=10 if tyre_life is None else int(tyre_life),
-            gap_ahead_s=car.get("gap_ahead_s") or 2.0,
-            pace_delta_s=0.0,
-            risk_tolerance=0.5,
-            air_temp=weather.get("air_temp") or 25.0,
-            track_temp=weather.get("track_temp") or 35.0,
-        )
+        race_state = RaceState(driver=driver, pace_delta_s=0.0, risk_tolerance=0.5, **inputs)
         recommendation, _outputs, _timings = inference_engine.run_lap(
             race_state, laps_df, state, profile="no-llm", return_agent_outputs=True
         )
-        actions[lap] = recommendation.action
+        actions[inputs["lap"]] = recommendation.action
     return actions
 
 
@@ -380,9 +393,7 @@ def measure_decision_agreement(
                 compound, tyre_life = _stop_context(laps, driver, stop_lap)
                 blocked = guard_rail_block(stop_lap, total_laps, compound, tyre_life)
                 if blocked is not None:
-                    verdicts.append(
-                        StopVerdict(year, race, driver, stop_lap, None, None, blocked)
-                    )
+                    verdicts.append(StopVerdict(year, race, driver, stop_lap, None, None, blocked))
                     continue
 
                 window_low = max(1, stop_lap - DECISION_WINDOW_LAPS)
@@ -405,14 +416,10 @@ def measure_decision_agreement(
                     continue
 
                 verdicts.append(
-                    StopVerdict(
-                        year, race, driver, stop_lap, chosen, chosen - stop_lap, "scored"
-                    )
+                    StopVerdict(year, race, driver, stop_lap, chosen, chosen - stop_lap, "scored")
                 )
 
-    offsets = np.array(
-        [v.offset_laps for v in verdicts if v.offset_laps is not None], dtype=int
-    )
+    offsets = np.array([v.offset_laps for v in verdicts if v.offset_laps is not None], dtype=int)
     agreement = DecisionAgreement(
         offsets=offsets,
         guard_railed=sum(1 for v in verdicts if v.bucket in _GUARD_RAIL_BUCKETS),
@@ -479,7 +486,7 @@ def _render_table(
         "  0.51 s per lap through the stack, so this is a stratified subset by circuit",
         "  archetype and **not** full coverage. Read every figure above as conditional",
         "  on these races.",
-        "- Decisions come from `profile=\"no-llm\"`: the deterministic Monte Carlo layer",
+        '- Decisions come from `profile="no-llm"`: the deterministic Monte Carlo layer',
         "  plus the guard rails, never the LLM synthesis.",
         "- Agreement with the real pit wall is evidence, not correctness. The team can",
         "  be wrong, and this tier cannot tell when it was.",

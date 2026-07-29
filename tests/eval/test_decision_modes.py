@@ -30,6 +30,7 @@ from src.strategy.eval.decision_modes import (
     _render_table,
     coverage_verdict,
     guard_rail_block,
+    lap_inputs,
 )
 
 ROOT = Path(__file__).parent.parent.parent
@@ -225,16 +226,6 @@ def test_coverage_unavailable_when_nothing_was_eligible():
 # --- which laps are evaluable at all ---------------------------------------
 
 
-class _FakeEngine:
-    """Replay stub: yields the lap states it was handed, nothing else."""
-
-    def __init__(self, states):
-        self._states = states
-
-    def replay(self):
-        return iter(self._states)
-
-
 def _lap_state(lap, position=4, tyre_life=12):
     return {
         "driver": {
@@ -249,50 +240,31 @@ def _lap_state(lap, position=4, tyre_life=12):
     }
 
 
-def test_laps_without_a_position_are_skipped_not_defaulted(monkeypatch):
+def test_laps_without_a_position_are_skipped_not_defaulted():
     """A None position skips the lap; it must never become a number.
 
-    This crashed the first real run. The state manager returns None on purpose
-    because a sentinel position has already collided with a real one here, so the
-    fix is to skip the lap, not to invent a plausible place.
+    This crashed the first real measurement run. The state manager returns None on
+    purpose because a sentinel position has already collided with a real one here,
+    so the fix is to skip the lap, not to invent a plausible place.
     """
-    import src.strategy.inference.engine as inference_engine
-    from src.strategy.eval.decision_modes import _decisions_in_window
-
-    seen: list[int] = []
-
-    def _fake_run_lap(race_state, laps_df, lap_state, **kwargs):
-        seen.append(race_state.lap)
-        return type("R", (), {"action": "STAY_OUT"})(), None, {}
-
-    monkeypatch.setattr(inference_engine, "run_lap", _fake_run_lap)
-
-    states = [
-        _lap_state(10, position=None),
-        _lap_state(11),
-        {"driver": {}},  # retired: empty driver dict for the rest of the race
-    ]
-    actions = _decisions_in_window(_FakeEngine(states), None, "NOR", 1, 57)
-
-    assert seen == [11]
-    assert actions == {11: "STAY_OUT"}
+    assert lap_inputs(_lap_state(10, position=None)) is None
+    assert lap_inputs(_lap_state(11))["position"] == 4
 
 
-def test_fresh_tyre_is_not_rounded_up_to_ten_laps(monkeypatch):
+def test_retired_cars_yield_nothing_to_evaluate():
+    """An empty driver dict is how a retirement shows up for the rest of the race."""
+    assert lap_inputs({"driver": {}}) is None
+    assert lap_inputs({}) is None
+
+
+def test_fresh_tyre_is_not_rounded_up_to_ten_laps():
     """`tyre_life=0` is a real reading, and `or 10` would silently age the tyre."""
-    import src.strategy.inference.engine as inference_engine
-    from src.strategy.eval.decision_modes import _decisions_in_window
+    assert lap_inputs(_lap_state(11, tyre_life=0))["tyre_life"] == 0
 
-    captured: list[int] = []
 
-    def _fake_run_lap(race_state, laps_df, lap_state, **kwargs):
-        captured.append(race_state.tyre_life)
-        return type("R", (), {"action": "STAY_OUT"})(), None, {}
-
-    monkeypatch.setattr(inference_engine, "run_lap", _fake_run_lap)
-    _decisions_in_window(_FakeEngine([_lap_state(11, tyre_life=0)]), None, "NOR", 1, 57)
-
-    assert captured == [0]
+def test_unknown_tyre_life_falls_back_but_a_known_one_never_does():
+    assert lap_inputs(_lap_state(11, tyre_life=None))["tyre_life"] == 10
+    assert lap_inputs(_lap_state(11, tyre_life=3))["tyre_life"] == 3
 
 
 # --- the report's honesty --------------------------------------------------
