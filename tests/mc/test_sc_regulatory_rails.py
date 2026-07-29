@@ -50,6 +50,10 @@ def test_sc_in_the_last_laps_does_not_force_a_stop():
     The guard-rail already knows this and returns STAY_OUT. This asserts that nothing
     downstream overrides it. Before the rail was removed, the pipeline shipped
     ``action=PIT_NOW`` carrying the reason "too late to pit".
+
+    ``sc_active=True`` is passed explicitly since #716 gave the bounds that parameter.
+    Until then this test named a Safety Car it never actually declared, so it was
+    asserting about a green lap while claiming to be about a neutralised one.
     """
     from src.strategy.inference.no_llm import apply_guard_rails
 
@@ -60,6 +64,7 @@ def test_sc_in_the_last_laps_does_not_force_a_stop():
         compound="MEDIUM",
         tyre_life=30,
         cliff_p10=99.0,
+        sc_active=True,
     )
     assert action == "STAY_OUT", "the guard-rail itself changed; this test's premise is gone"
     assert "too late to pit" in (reason or "")
@@ -90,6 +95,7 @@ def test_the_shipped_action_never_contradicts_its_own_reason():
         compound="MEDIUM",
         tyre_life=30,
         cliff_p10=99.0,
+        sc_active=True,
     )
     rec = _recommend_under_sc(action, reason)
 
