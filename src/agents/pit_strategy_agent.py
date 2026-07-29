@@ -25,6 +25,10 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
+# Safe in this direction: envelope.py is a leaf that imports nothing from src.agents, so
+# there is no cycle even though src/strategy/inference/no_llm.py imports this package.
+from src.strategy.inference.envelope import OperatingEnvelope
+
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
 while not (_REPO_ROOT / '.git').exists():
@@ -106,6 +110,18 @@ _N15_COMPOUND_UNKNOWN: int = -1  # matches the notebook's .fillna(-1)
 # N15 clipped tyre_life_in at 50 laps in training (cell 11); mirror that ceiling here so
 # an absurd stint cannot extrapolate outside the fitted range (#450).
 _MAX_TRAINED_TYRE_LIFE: int = 50
+
+# The same ceiling, declared rather than left as a bare number (#710). The envelope does
+# not clip and does not change what N15 is fed: the clip below still does that, byte for
+# byte. What it adds is that exceeding the trained range stops being SILENT, which is the
+# failure this contract exists for — N26 spent two years answering out-of-range calls
+# with full confidence because nothing ever said so out loud.
+#
+# The lower bound is 1 because a tyre on its first lap reads 1, never 0.
+_N15_TYRE_LIFE_ENVELOPE = OperatingEnvelope(
+    name="n15_pit_duration",
+    bounds={"tyre_life_in": (1.0, float(_MAX_TRAINED_TYRE_LIFE))},
+)
 
 # N15's tight_pit_box feature (notebook cell 4): {"Monaco Grand Prix", "Singapore Grand
 # Prix", "Hungarian Grand Prix"} — circuits with narrow/short pit boxes that cause minor
@@ -793,6 +809,19 @@ class PitStrategyAgent:
         if value is None or pd.isna(value):
             logger.warning('TyreLife missing on the lap row; N15 reads it as a fresh set')
             return 1
+
+        # Label the call BEFORE clipping, because after the clip the evidence is gone:
+        # every value reads as in-range once it has been forced there. The clip is what
+        # keeps N15 inside its fitted range and it is unchanged; this only makes the
+        # moment it bites visible instead of silent (#710).
+        verdict = _N15_TYRE_LIFE_ENVELOPE.check({'tyre_life_in': float(value)})
+        if not verdict:
+            logger.warning(
+                'N15 called outside its trained range: %s; the value is clipped to %d, '
+                'so the prediction is an extrapolation to the boundary rather than a fit',
+                dict(verdict.violations),
+                _MAX_TRAINED_TYRE_LIFE,
+            )
         return min(int(value), _MAX_TRAINED_TYRE_LIFE)
 
     def _build_pit_duration_features(
