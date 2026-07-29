@@ -149,12 +149,24 @@ _PROJECTION_STATES = tuple(
 )
 
 
-def _projection_scores(state: tuple, gp_name: str | None = None) -> dict:
+def _projection_scores(
+    state: tuple,
+    gp_name: str | None = None,
+    rival_stop_pending: dict | None = None,
+    draws: tuple[np.ndarray, np.ndarray] | None = None,
+) -> dict:
     """Score one projected race state, returning the four candidates' dicts.
 
     ``gp_name`` is left unset for the main sweep so the invariants below hold on
     the pooled measurements rather than on any one circuit's quirks. The
     clean-air tests pass it, because that is the only term that is per circuit.
+
+    ``rival_stop_pending`` and ``draws`` both default to what the sweep has
+    always passed, so every existing state scores exactly as before. They exist
+    because the defaults are two blind spots: the sweep only ever ran the
+    all-settled obligation map, in which the pending-rival asymmetry cannot
+    occur at all, and only ever passed identical draws, in which a distribution
+    cannot be seen to collapse.
     """
     from src.agents.strategy_orchestrator import _run_projection_mc
 
@@ -175,12 +187,14 @@ def _projection_scores(state: tuple, gp_name: str | None = None) -> dict:
             # No neutralisation_rate override: with no circuit the layer falls
             # back to the pooled measurement anyway, and pinning it here meant a
             # named circuit silently kept the pooled hazard instead of its own.
-            "rival_stop_pending": {"B": False, "C": False},
+            "rival_stop_pending": (
+                {"B": False, "C": False} if rival_stop_pending is None else rival_stop_pending
+            ),
             "rival_pit_loss_s": 23.8,
         },
-        cliff_s=np.full(_DRAWS, cliff),
+        cliff_s=np.full(_DRAWS, cliff) if draws is None else draws[1],
         sc_s=np.full(_DRAWS, neutralised),
-        pit_s=np.full(_DRAWS, stop_s),
+        pit_s=np.full(_DRAWS, stop_s) if draws is None else draws[0],
         ucut_s=(np.arange(_DRAWS) % 2 == 0),
         alpha=0.5,
         neutralisation_saving_s=8.0,
@@ -592,3 +606,158 @@ def test_the_margin_is_None_rather_than_zero_when_there_is_no_contest():
 
     assert mc_decision_margin({"STAY_OUT": {"score": 1.0}}) is None
     assert mc_decision_margin({"STAY_OUT": {"score": 1.0}, "PIT_NOW": {"score": None}}) is None
+
+
+# ---------------------------------------------------------------------------
+# The distribution itself — the layer's two structural blind spots
+#
+# Everything above varies the STATE and holds the draws identical, so a
+# candidate whose distribution has collapsed into a point mass scores exactly
+# as a healthy one does and no assertion notices. And every state above runs
+# the all-settled obligation map, in which a rival who still owes their stop
+# never appears. These two sections close those gaps.
+# ---------------------------------------------------------------------------
+
+# A rival gap inside this support is what makes different draws land
+# differently; outside it the projection is a point mass no matter how the
+# draws vary, which is correct behaviour and not a defect.
+_PIT_SUPPORT = (2.2, 3.2, 4.4)
+# A cliff straddling the five-lap window, so the tyre term is live rather than
+# clipped to zero on every draw.
+_CLIFF_STRADDLING_THE_WINDOW = (1.5, 3.0, 4.5)
+
+
+def _sampled_projection_draws(n: int = _DRAWS, seed: int = 42):
+    """Genuinely varying (pit, cliff) draws for the projection path."""
+    rng = np.random.default_rng(seed)
+    return (
+        rng.triangular(*_PIT_SUPPORT, n),
+        rng.triangular(*_CLIFF_STRADDLING_THE_WINDOW, n),
+    )
+
+
+# The two candidates draw their variance from DIFFERENT mechanisms, which is why
+# each needs its own rival placement and why one shared state would be a
+# knife-edge. STAY_OUT varies when a settled rival behind sits near the
+# q_f-discounted liability threshold (measured support 20.72-22.65 s); PIT_NOW
+# varies when a rival sits inside the total pit-loss support, traversal 21.0 s
+# plus the sampled stop (measured 21.95-24.15 s). The centres are ~1.4 s apart.
+#
+# A shared state does exist, over a window about 0.8 s wide, but the smaller of
+# the two spreads there peaks around 0.08 — and worse, inside that window
+# STAY_OUT's spread comes ENTIRELY from the margin/cliff channel, because the
+# liability crossing fraction drops to ~3% and stops reaching P10 at all. A
+# shared state would therefore pass STAY_OUT's assertion through a mechanism its
+# own name disclaims. Two states, each comfortably inside its own band.
+#
+# The rival is placed where the liability crossing fraction is ~0.43, near the
+# middle of the (0.10, 0.90) percentile band rather than against its edge. An
+# earlier placement sat at 0.11 — two draws from the boundary — where a numpy
+# stream change would have silently removed the liability contribution and left
+# the test green on the margin channel alone.
+_LIABILITY_CROSSING_STATE = (-3.0, 3.5, False, 6.0, False, True, 3.2)
+_PIT_LOSS_CROSSING_STATE = (-3.0, 5.2, False, 6.0, False, True, 3.2)
+
+# A whole car crossing the threshold moves the payoff by a full position. The
+# margin channel is capped at 0.3 by MARGIN_CLIP_S and in practice contributes
+# ~0.1, so requiring more than half a position is what separates "the liability
+# actually varied" from "a tie-break wobbled".
+_A_WHOLE_CAR = 0.5
+
+
+def _spread(cell: dict) -> float:
+    return cell["P90"] - cell["P10"]
+
+
+def test_stay_out_spreads_when_the_liability_threshold_is_crossable():
+    """P90 must exceed P10 where the deferred stop's exposure is genuinely uncertain.
+
+    Deliberately NOT asserted on arbitrary states, and that scoping is the
+    substance of the test rather than a hedge: positions are integers and the
+    margin saturates at its clip, so a CORRECT implementation returns a point
+    mass whenever nothing sits inside the draw support. Proved next door in
+    ``test_position_projection.py`` — the same varying draws give 250 distinct
+    payoffs against a rival inside the support and exactly 1 against one 60 s
+    away.
+
+    So the fixture constructs the regime and inside it the assertion is
+    unconditional. Without it, a candidate whose distribution had collapsed
+    would be indistinguishable from a healthy one in every test this repo has.
+    """
+    cell = _projection_scores(_LIABILITY_CROSSING_STATE, draws=_sampled_projection_draws())[
+        "STAY_OUT"
+    ]
+    assert cell["eligible"]
+    # A whole car, not a tie-break wobble. Asserting only `> 0` would stay green
+    # if the liability channel vanished and the capped margin term was all that
+    # was left — the test would then pass through a mechanism its name disclaims.
+    assert _spread(cell) > _A_WHOLE_CAR, (
+        f"STAY_OUT lost the liability crossing this test exists to observe: "
+        f"E={cell['E']} P10={cell['P10']} P90={cell['P90']}"
+    )
+
+
+def test_pit_now_spreads_when_a_rival_sits_inside_the_pit_loss_support():
+    """The same assertion for the stopping candidate, in the regime that is ITS own.
+
+    A rival roughly a pit cycle behind is crossed on some sampled stop times and
+    not on others, which is the only thing that puts spread into a stopping
+    candidate's payoff.
+    """
+    cell = _projection_scores(_PIT_LOSS_CROSSING_STATE, draws=_sampled_projection_draws())[
+        "PIT_NOW"
+    ]
+    assert cell["eligible"]
+    assert _spread(cell) > _A_WHOLE_CAR, (
+        f"PIT_NOW lost the pit-loss crossing this test exists to observe: "
+        f"E={cell['E']} P10={cell['P10']} P90={cell['P90']}"
+    )
+
+
+def test_identical_draws_still_collapse_the_spread():
+    """The control: the suite's own default draws produce no spread at all.
+
+    Without this, the test above could pass for a reason unrelated to sampling
+    and nobody would know the default fixtures were blind.
+    """
+    state = (-3.0, 2.5, False, 6.0, False, True, 3.2)
+    scores = _projection_scores(state)
+
+    assert scores["STAY_OUT"]["P90"] == scores["STAY_OUT"]["P10"]
+
+
+@pytest.mark.parametrize("pending", [True, False, None])
+def test_the_layer_scores_every_rival_obligation_state(pending):
+    """A rival's obligation may be owed, settled or unknown, and all three ship.
+
+    The sweep has only ever run the settled map, which is the one configuration
+    in which a pending rival cannot affect anything. Real races put most passing
+    cars in the other two states, so an entire regime went unexercised.
+
+    This asserts the layer stays coherent across all three rather than pinning a
+    number: the numbers are what the redesign is about to change deliberately.
+    """
+    state = (-3.0, 2.5, False, 6.0, False, True, 3.2)
+    scores = _projection_scores(
+        state, rival_stop_pending={"A": pending, "B": pending, "C": pending}
+    )
+
+    live = [cell["score"] for cell in scores.values() if cell["score"] is not None]
+    assert live, "every obligation state must leave at least one scoreable candidate"
+    assert all(np.isfinite(score) for score in live)
+
+
+def test_a_pending_rival_obligation_changes_the_score_it_is_supposed_to_change():
+    """Settled and pending must not produce identical numbers.
+
+    If they did, the obligation channel would be decorative — and that is
+    exactly the class of defect this file failed to catch before, so the
+    assertion is worth making explicitly rather than assuming.
+    """
+    state = (-3.0, 2.5, False, 6.0, False, True, 3.2)
+    settled = _projection_scores(state, rival_stop_pending={"B": False, "C": False})
+    pending = _projection_scores(state, rival_stop_pending={"B": True, "C": True})
+
+    assert settled["STAY_OUT"]["score"] != pending["STAY_OUT"]["score"], (
+        "a rival who still owes their stop must not score the same as one who has taken it"
+    )

@@ -58,6 +58,28 @@ def _draws(pit_loss: float, cliff: float = 99.0, n: int = 1) -> tuple[np.ndarray
     return np.full(n, pit_loss), np.full(n, cliff)
 
 
+def _sampled_draws(
+    pit_loss: tuple[float, float, float],
+    cliff: tuple[float, float, float],
+    n: int = 500,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Genuinely varying draws, for tests that care about the DISTRIBUTION.
+
+    The sibling of ``_draws``, which is degenerate on purpose. Until this
+    existed, every call into the primitive in the whole suite passed identical
+    draws, so no test could see a distribution collapse into a point mass — and
+    that is exactly the shape of the defect the projection layer turned out to
+    have. A suite that only ever asks about geometry cannot notice that the
+    sampling stopped mattering.
+
+    Each argument is the ``(left, mode, right)`` triple ``triangular`` wants, so
+    a caller states the support it needs rather than a spread it hopes for.
+    """
+    rng = np.random.default_rng(seed)
+    return rng.triangular(*pit_loss, n), rng.triangular(*cliff, n)
+
+
 def _flat_config(**overrides) -> ProjectionConfig:
     """Config with the tyre terms switched off, isolating the gap geometry."""
     settings = {
@@ -197,6 +219,29 @@ def test_an_unknown_obligation_makes_no_claim():
     pit_loss, cliff = _draws(22.0)
     config = _flat_config(mandatory_stop_pending=None)
     assert project_positions(rivals, NO_STOP, config, pit_loss, cliff).liabilities[0] == 0.0
+
+
+def test_a_rival_whose_obligation_is_unknown_is_exempted_silently():
+    """``None`` is excluded by the same identity check that excludes ``True``.
+
+    The filter is ``rival.stop_pending is False``, so an unknown obligation
+    exempts the rival exactly as a pending one does. The module states the
+    ``None`` rule for OUR obligation and never for a rival's, and the adapter
+    hands ``None`` to any driver absent from the ``rival_stop_pending`` map — so
+    a missing verdict quietly makes a car free and biases the liability down.
+
+    Pinned as CURRENT behaviour, not as desired behaviour. The redesign changes
+    what happens around this, and a before-picture is what makes that diff
+    legible instead of merely green.
+    """
+    pit_loss, cliff = _draws(22.0)
+    config = _flat_config(mandatory_stop_pending=True)
+
+    settled = [RivalState("BEHIND", gap_s=5.0, stop_pending=False)]
+    unknown = [RivalState("BEHIND", gap_s=5.0, stop_pending=None)]
+
+    assert project_positions(settled, NO_STOP, config, pit_loss, cliff).liabilities[0] == 1.0
+    assert project_positions(unknown, NO_STOP, config, pit_loss, cliff).liabilities[0] == 0.0
 
 
 def test_a_likely_future_neutralisation_shrinks_the_liability():
@@ -392,6 +437,34 @@ def test_the_undercut_band_covers_the_drs_range_and_stops_well_short_of_a_pit_cy
 # ---------------------------------------------------------------------------
 # Payoff
 # ---------------------------------------------------------------------------
+
+
+def test_varying_draws_reach_the_payoff_when_a_rival_sits_inside_the_pit_loss():
+    """Draw spread must survive into payoff spread, or P10 and P90 are decoration.
+
+    The regime has to be CONSTRUCTED and that is the point of the test, not a
+    weakness in it. Positions are integers and the margin saturates at
+    ``MARGIN_CLIP_S``, so a rival parked far from the pit-loss support returns
+    the same answer on every draw however wildly the draws vary — a correct
+    implementation produces point masses all the time. What makes different
+    draws land differently is a rival sitting INSIDE the support, so that some
+    draws cross them and others do not.
+
+    Asserting spread on an arbitrary state would therefore be false. Asserting
+    it here, where crossing is possible, is the strong form.
+    """
+    config = _flat_config(mandatory_stop_pending=False)
+    # 23.2 s sits inside the 22.0-24.4 s support: some draws clear this car, some
+    # do not, which is precisely the condition the assertion needs.
+    rivals = [RivalState("INSIDE_THE_SUPPORT", gap_s=23.2, stop_pending=False)]
+    pit_loss, cliff = _sampled_draws(pit_loss=(22.0, 23.2, 24.4), cliff=(1.5, 3.0, 4.5))
+
+    payoffs = payoff(project_positions(rivals, STOP_NOW, config, pit_loss, cliff), 2, config)
+
+    assert len(set(payoffs.tolist())) > 1, (
+        "identical payoffs across varying draws means the sampling is not reaching the score"
+    )
+    assert np.percentile(payoffs, 90) > np.percentile(payoffs, 10)
 
 
 def test_the_margin_can_break_a_tie_but_never_outvote_a_position():
