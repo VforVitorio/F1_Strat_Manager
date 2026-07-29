@@ -297,6 +297,11 @@ def run_no_llm_lap(
             race_state.compound,
             race_state.tyre_life,
             tire_out.laps_to_cliff_p10,
+            # Without this the offline path is STRICTER than the prompt it mirrors and
+            # refuses the cheapest stop in racing (#716). `sc_currently_active` is the
+            # flag every other consumer already reads, and it covers VSC as well as a
+            # full SC — both make the stop cheap, which is what the bounds are about.
+            sc_active=situation_out.sc_currently_active,
         )
         synth = _deterministic_synthesis(action, guardrail_reason)
         rec = _assemble_recommendation(
