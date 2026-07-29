@@ -280,6 +280,61 @@ def test_a_rival_who_still_owes_a_stop_is_no_longer_free_to_pass_us():
     )
 
 
+def test_an_unknown_obligation_of_OURS_suppresses_the_credit_too():
+    """The no-fact-no-claim rule binds both sides of the subtraction.
+
+    A rival ahead who still owes a stop will fall behind us when they take it —
+    but only if WE are not about to fall back with them. With our own obligation
+    unknown, crediting their fall-back is not a claim about them, it is a claim
+    that we do not owe one either, and we have no fact for that.
+
+    The first version of the netting credited it anyway and scored an unknown
+    obligation exactly like a known-discharged one, handing a full terminal
+    place to a bet. Found by the A-2 gate; prevalence was 0 of 110 replay laps,
+    so nothing but this test would have caught it before it mattered.
+    """
+    pit_loss, cliff = _draws(22.0)
+    ahead_owing = [RivalState("AHEAD", gap_s=-2.0, stop_pending=True, stop_loss_s=22.0)]
+
+    settled = _flat_config(mandatory_stop_pending=False)
+    unknown = _flat_config(mandatory_stop_pending=None)
+
+    earned = project_positions(ahead_owing, NO_STOP, settled, pit_loss, cliff)
+    assert earned.terminal_positions[0] == 1.0, (
+        "we have stopped and they have not: the place is ours"
+    )
+
+    claimed = project_positions(ahead_owing, NO_STOP, unknown, pit_loss, cliff)
+    assert claimed.terminal_positions[0] == claimed.positions[0], (
+        "an unknown obligation of ours must make no terminal claim in either direction"
+    )
+
+
+def test_a_candidate_that_stops_keeps_the_credit_even_when_our_obligation_is_unknown():
+    """Stopping settles us either way, so the suppression above must not reach it.
+
+    The case that matters is a car BEHIND us that our own stop lets past: at the
+    window end they are genuinely ahead, but they only got there by not having
+    stopped yet, and when they do they drop back behind. Suppressing their
+    residual here would leave the projection believing a stop costs a place it
+    does not really cost.
+
+    Note the arithmetic, because it is the reason the suppression is narrow: when
+    both cars stop, both pay, and the order is simply preserved — there is no
+    credit to win. The credit exists only against a car whose pass is entirely an
+    artefact of its own outstanding stop.
+    """
+    pit_loss, cliff = _draws(22.0)
+    behind_owing = [RivalState("BEHIND", gap_s=5.0, stop_pending=True, stop_loss_s=22.0)]
+    unknown = _flat_config(mandatory_stop_pending=None)
+
+    result = project_positions(behind_owing, STOP_NOW, unknown, pit_loss, cliff)
+    assert result.positions[0] == 2.0, "our stop lets them past inside the window"
+    assert result.terminal_positions[0] == 1.0, (
+        "they only passed us because they had not stopped; once they do, the place comes back"
+    )
+
+
 def test_a_likely_future_neutralisation_shrinks_the_cost():
     # The option value: if a Safety Car is likely to cover the stop later, the
     # deferred cost is smaller, so fewer cars fit inside the exposure window.
