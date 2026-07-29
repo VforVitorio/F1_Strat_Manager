@@ -157,6 +157,30 @@ def _neutralised_laps(laps) -> set[int]:
     return neutralised
 
 
+def green_flag_stops(laps, neutralised: set[int]) -> dict[str, list[int]]:
+    """Green-flag stop laps per driver, in lap order.
+
+    Public because it is the definition of the SAMPLE, and more than one eval
+    tier has to grade the same stops or their numbers are not comparable with
+    each other. ``decision_modes.py`` consumes it for exactly that reason;
+    restating the rule there would make a second copy of a filter this repo
+    already pays to keep correct, and the two would drift apart the first time
+    either moved.
+
+    Note this is not every stop: ``pitters`` (rival geometry) still wants the
+    neutralised ones, because a rival pitting under a Safety Car changes where
+    our car comes out even though it is not a decision worth grading.
+    """
+    stops = laps[laps["PitInTime"].notna()][["Driver", "LapNumber"]]
+    by_driver: dict[str, list[int]] = {}
+    for _, row in stops.iterrows():
+        lap = int(row["LapNumber"])
+        if lap in neutralised or lap + 1 in neutralised:
+            continue
+        by_driver.setdefault(str(row["Driver"]), []).append(lap)
+    return {driver: sorted(stop_laps) for driver, stop_laps in by_driver.items()}
+
+
 def _rivals_around(pivot, medians, pitters, driver, lap, row_before, row_after, ours_before):
     """Every car with a lap either side of the stop, with its own stop loss if it pitted."""
     rivals: list[RivalState] = []
@@ -283,13 +307,11 @@ def measure_projection_ground_truth(years: tuple[int, ...] = (2023, 2024, 2025))
             for _, row in stops.iterrows():
                 pitters.setdefault(int(row["LapNumber"]), set()).add(str(row["Driver"]))
 
-            for _, stop in stops.iterrows():
-                lap = int(stop["LapNumber"])
-                if lap in neutralised or lap + 1 in neutralised:
-                    continue
-                error = project_one_stop(pivot, medians, pitters, str(stop["Driver"]), lap)
-                if error is not None:
-                    errors.append(error)
+            for driver, stop_laps in green_flag_stops(laps, neutralised).items():
+                for lap in stop_laps:
+                    error = project_one_stop(pivot, medians, pitters, driver, lap)
+                    if error is not None:
+                        errors.append(error)
 
     return GroundTruth(errors=np.array(errors, dtype=int), races=races)
 

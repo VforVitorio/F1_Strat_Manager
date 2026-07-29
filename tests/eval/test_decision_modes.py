@@ -1,0 +1,279 @@
+"""Tests for the decision-agreement tier (#708).
+
+Two layers, deliberately split the same way ``test_position_projection.py`` splits:
+
+1. Pure tests that pin the contract — which stops the guard rails make
+   unanswerable, how an agreement is aggregated, when coverage is untrustworthy,
+   and that the report keeps saying it is a subset. These run everywhere.
+
+2. One data-tier test that refuses to believe a sample it has not counted. It
+   needs ``data/raw`` and skips without it.
+
+The report's honesty is itself under test here. ``test_render_states_the_subset``
+exists because the single most damaging edit anyone could make to this module is
+deleting the sentence that says the figures are conditional on six races.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from src.strategy.eval.decision_modes import (
+    MIN_SCORED_SHARE,
+    SAMPLED_RACES,
+    DecisionAgreement,
+    StopVerdict,
+    _first_pit_lap,
+    _render_table,
+    coverage_verdict,
+    guard_rail_block,
+)
+
+ROOT = Path(__file__).parent.parent.parent
+_HAS_RAW = (ROOT / "data" / "raw" / "2024").is_dir()
+
+
+def _agreement(offsets, guard_railed=0, no_call=0, races=6, no_data=0) -> DecisionAgreement:
+    return DecisionAgreement(
+        offsets=np.array(offsets, dtype=int),
+        guard_railed=guard_railed,
+        no_call=no_call,
+        races=races,
+        no_data=no_data,
+    )
+
+
+# --- guard rails: which stops can never be agreed with ---------------------
+
+
+@pytest.mark.parametrize(
+    ("lap", "total", "compound", "tyre_life", "expected"),
+    [
+        (3, 57, "MEDIUM", 20, "opening_laps"),
+        (56, 57, "MEDIUM", 20, "closing_laps"),
+        (30, 57, "SOFT", 5, "min_stint"),
+        (30, 57, None, 9, "min_stint"),
+        (30, 57, "SOFT", 20, None),
+        (30, 57, "MEDIUM", None, None),
+    ],
+)
+def test_guard_rail_block_names_the_rule(lap, total, compound, tyre_life, expected):
+    """Each rail is named, so an exclusion can be counted instead of vanishing."""
+    assert guard_rail_block(lap, total, compound, tyre_life) == expected
+
+
+def test_guard_rail_thresholds_track_the_rails_they_mirror():
+    """The boundary is the rail's, not a number retyped here.
+
+    If ``no_llm`` moves a threshold this test moves with it; a hardcoded 5 or 3
+    would let this module drift away from the rails it claims to mirror.
+    """
+    from src.strategy.inference.no_llm import _NO_PIT_BEFORE_LAP, _NO_PIT_LAST_N_LAPS
+
+    assert guard_rail_block(_NO_PIT_BEFORE_LAP - 1, 57, "HARD", 30) == "opening_laps"
+    assert guard_rail_block(_NO_PIT_BEFORE_LAP, 57, "HARD", 30) is None
+    assert guard_rail_block(57 - _NO_PIT_LAST_N_LAPS, 57, "HARD", 30) is None
+    assert guard_rail_block(57 - _NO_PIT_LAST_N_LAPS + 1, 57, "HARD", 30) == "closing_laps"
+
+
+# --- picking the lap the stack would have chosen ---------------------------
+
+
+def test_first_pit_lap_takes_the_earliest_call():
+    """Two pit calls in the window resolve to the first: that is the decision."""
+    actions = {28: "STAY_OUT", 29: "UNDERCUT", 30: "STAY_OUT", 31: "PIT_NOW"}
+    assert _first_pit_lap(actions, 27, 32) == 29
+
+
+def test_first_pit_lap_returns_none_when_the_stack_never_calls_it():
+    """No call in the window is a result, and it must not read as lap zero."""
+    assert _first_pit_lap({lap: "STAY_OUT" for lap in range(27, 33)}, 27, 32) is None
+
+
+def test_first_pit_lap_ignores_calls_outside_the_window():
+    """A pit action two laps past the window is not agreement with this stop."""
+    assert _first_pit_lap({35: "PIT_NOW"}, 27, 32) is None
+
+
+# --- aggregation -----------------------------------------------------------
+
+
+def test_agreement_reports_signed_bias_not_just_magnitude():
+    """A stack that always stops two laps early must not look unbiased."""
+    agreement = _agreement([-2, -2, -2, -2])
+    assert agreement.mean_signed_error == -2.0
+    assert agreement.mean_absolute_error == 2.0
+    assert agreement.exact == 0.0
+
+
+def test_agreement_tolerance_bands_are_nested():
+    offsets = [0, 1, -1, 2, 4]
+    agreement = _agreement(offsets)
+    assert agreement.exact == pytest.approx(0.2)
+    assert agreement.within_one == pytest.approx(0.6)
+    assert agreement.within_two == pytest.approx(0.8)
+
+
+def test_retired_cars_are_counted_apart_from_declined_calls():
+    """`no_data` and `no_call_in_window` must never be merged.
+
+    A car that had already retired gave the stack nothing to evaluate; a car the
+    stack looked at and declined to stop is a finding. Folding the first into the
+    second charges a retirement to the model as a missed call — the same shape as
+    the sentinel bugs this repo has paid for before.
+    """
+    agreement = _agreement([0, 1], no_call=3, no_data=5)
+    assert agreement.eligible == 10
+    assert agreement.no_call == 3
+    assert agreement.no_data == 5
+
+
+def test_no_data_counts_against_coverage():
+    """Stops the tier could not look at still shrink the share it can vouch for."""
+    assert coverage_verdict(_agreement([0] * 5, no_data=5)) == "masked"
+
+
+def test_empty_agreement_reports_zero_rather_than_dividing_by_zero():
+    """An empty sample is a reporting state, not a crash and not a perfect score."""
+    agreement = _agreement([])
+    assert agreement.sample_size == 0
+    assert agreement.within_one == 0.0
+    assert agreement.scored_share == 0.0
+
+
+# --- the coverage guard ----------------------------------------------------
+
+
+def test_coverage_ok_when_most_stops_were_scored():
+    assert coverage_verdict(_agreement([0] * 9, guard_railed=1)) == "ok"
+
+
+def test_coverage_masked_when_the_unscored_buckets_dominate():
+    """The adapted compensation guard: a headline drawn from a third of the sample
+    is a headline about whatever survived, and the survivors are not random."""
+    agreement = _agreement([0] * 3, guard_railed=4, no_call=3)
+    assert agreement.scored_share < MIN_SCORED_SHARE
+    assert coverage_verdict(agreement) == "masked"
+
+
+def test_coverage_unavailable_when_nothing_was_eligible():
+    assert coverage_verdict(_agreement([])) == "unavailable"
+
+
+# --- which laps are evaluable at all ---------------------------------------
+
+
+class _FakeEngine:
+    """Replay stub: yields the lap states it was handed, nothing else."""
+
+    def __init__(self, states):
+        self._states = states
+
+    def replay(self):
+        return iter(self._states)
+
+
+def _lap_state(lap, position=4, tyre_life=12):
+    return {
+        "driver": {
+            "lap_number": lap,
+            "position": position,
+            "compound": "MEDIUM",
+            "tyre_life": tyre_life,
+            "gap_ahead_s": 2.0,
+        },
+        "weather": {"air_temp": 25.0, "track_temp": 35.0},
+        "session_meta": {"total_laps": 57},
+    }
+
+
+def test_laps_without_a_position_are_skipped_not_defaulted(monkeypatch):
+    """A None position skips the lap; it must never become a number.
+
+    This crashed the first real run. The state manager returns None on purpose
+    because a sentinel position has already collided with a real one here, so the
+    fix is to skip the lap, not to invent a plausible place.
+    """
+    import src.strategy.inference.engine as inference_engine
+    from src.strategy.eval.decision_modes import _decisions_in_window
+
+    seen: list[int] = []
+
+    def _fake_run_lap(race_state, laps_df, lap_state, **kwargs):
+        seen.append(race_state.lap)
+        return type("R", (), {"action": "STAY_OUT"})(), None, {}
+
+    monkeypatch.setattr(inference_engine, "run_lap", _fake_run_lap)
+
+    states = [
+        _lap_state(10, position=None),
+        _lap_state(11),
+        {"driver": {}},  # retired: empty driver dict for the rest of the race
+    ]
+    actions = _decisions_in_window(_FakeEngine(states), None, "NOR", 1, 57)
+
+    assert seen == [11]
+    assert actions == {11: "STAY_OUT"}
+
+
+def test_fresh_tyre_is_not_rounded_up_to_ten_laps(monkeypatch):
+    """`tyre_life=0` is a real reading, and `or 10` would silently age the tyre."""
+    import src.strategy.inference.engine as inference_engine
+    from src.strategy.eval.decision_modes import _decisions_in_window
+
+    captured: list[int] = []
+
+    def _fake_run_lap(race_state, laps_df, lap_state, **kwargs):
+        captured.append(race_state.tyre_life)
+        return type("R", (), {"action": "STAY_OUT"})(), None, {}
+
+    monkeypatch.setattr(inference_engine, "run_lap", _fake_run_lap)
+    _decisions_in_window(_FakeEngine([_lap_state(11, tyre_life=0)]), None, "NOR", 1, 57)
+
+    assert captured == [0]
+
+
+# --- the report's honesty --------------------------------------------------
+
+
+def test_render_states_the_subset_and_refuses_to_imply_full_coverage():
+    """The scope caveats are part of the artifact, not decoration."""
+    body = _render_table(
+        _agreement([0, 1], guard_railed=1),
+        [StopVerdict(2025, "Lusail", "NOR", 30, 30, 0, "scored")],
+        "ok",
+    )
+    assert "not** full coverage" in body
+    assert "stratified subset" in body
+    assert "no-llm" in body
+    for _year, race in SAMPLED_RACES:
+        assert race in body
+
+
+def test_render_without_data_says_so_instead_of_printing_zeros():
+    body = _render_table(None, [], "unavailable")
+    assert "Not measured" in body
+    assert "0.0%" not in body
+
+
+# --- the one test that checks against the world ----------------------------
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not _HAS_RAW, reason="data/raw absent (CI runner without the dataset)")
+def test_measured_sample_is_non_empty_before_any_figure_is_believed():
+    """Guard against a green run that quietly graded nothing.
+
+    A tier iterating a DISCOVERED set can pass every assertion about the empty
+    set. This asserts the set exists first; the repo has shipped that bug before.
+    """
+    from src.strategy.eval.decision_modes import measure_decision_agreement
+
+    agreement, verdicts = measure_decision_agreement(races=((2025, "Lusail"),))
+    assert verdicts, "no real stops enumerated: the sample is empty, not accurate"
+    assert agreement.eligible == len(verdicts)
+    assert agreement.races == 1
+    assert all(v.offset_laps is None for v in verdicts if v.bucket != "scored")
