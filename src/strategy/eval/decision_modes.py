@@ -103,11 +103,18 @@ DECISION_WINDOW_LAPS = 5
 # track position dominates, one low-downforce low-stop circuit and one fast circuit
 # with variable weather. Widening this is a runtime decision, not a correctness one —
 # but the report must keep saying which races it used.
+#
+# ALL SIX ARE 2025, AND THAT IS THE CORRECTNESS HALF. The first version of this list
+# took four of its six races from 2023-24, which are TRAINING seasons for every model
+# in the stack. A decision tier scored there is partly reading back its own training
+# data, and the whole point of this report is what the shipped system does on the
+# season it actually infers on. The archetypes are unchanged; only the year moved, so
+# the stratification argument above still holds.
 SAMPLED_RACES: tuple[tuple[int, str], ...] = (
-    (2023, "Barcelona"),  # conventional, high degradation
-    (2023, "Monaco"),  # street, track position is everything
-    (2024, "Silverstone"),  # fast, weather-variable
-    (2024, "Marina_Bay"),  # street, high degradation
+    (2025, "Barcelona"),  # conventional, high degradation
+    (2025, "Monaco"),  # street, track position is everything
+    (2025, "Silverstone"),  # fast, weather-variable
+    (2025, "Marina_Bay"),  # street, high degradation
     (2025, "Lusail"),  # high degradation, stint-limited history
     (2025, "Monza"),  # low downforce, fewest stops
 )
@@ -594,8 +601,12 @@ def _render_table(
         f"| Within 1 lap | {agreement.within_one:.1%} | same call, one lap either side |",
         f"| Within 2 laps | {agreement.within_two:.1%} | same strategic window |",
         f"| Mean signed error | {agreement.mean_signed_error:+.2f} laps | "
-        "negative = stops earlier than the team |",
-        f"| Mean absolute error | {agreement.mean_absolute_error:.2f} laps | magnitude |",
+        "negative = earlier than the team. **Do not quote as a system property** "
+        f"— still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 "
+        "at w=3/5/10 on one race), because a wider window admits more distant, and "
+        "therefore earlier, transitions |",
+        f"| Mean absolute error | {agreement.mean_absolute_error:.2f} laps | magnitude, "
+        "same width caveat |",
         f"| Coverage verdict | **{status}** | `masked` when under "
         f"{MIN_SCORED_SHARE:.0%} of eligible stops were scored |",
         "",
@@ -630,7 +641,7 @@ def _render_table(
         "",
         "What they share is that the earliest pit ask has no evaluated non-pit lap before",
         "it, so any lap reported would be the window's left edge rather than the model's",
-        "choice - which is why the retired `mean_signed_error` moved with the window width",
+        "choice - which is why `mean_signed_error` used to move with the window width",
         "instead of with the model. A stop here is counted as looked-at and left unscored.",
         "The same applies at the opening guard rail: a transition on lap",
         f"{_NO_PIT_BEFORE_LAP} or earlier is the rail releasing, not the model deciding,",
@@ -639,6 +650,10 @@ def _render_table(
         "### Scope",
         "",
         f"- Sampled races ({agreement.races} measured): {races}.",
+        "- **All six are 2025, deliberately.** 2023 and 2024 are training seasons for",
+        "  every model in the stack, so a decision tier scored there is partly reading",
+        "  back its own training data. An earlier version of this list took four of its",
+        "  six races from those seasons; the archetypes are unchanged, only the year.",
         "- A full sweep of the real-stop sample is roughly 11.5 h of wall clock at",
         "  0.51 s per lap through the stack, so this is a stratified subset by circuit",
         "  archetype and **not** full coverage. Read every figure above as conditional",
