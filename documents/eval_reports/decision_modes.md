@@ -1,17 +1,17 @@
 # decision_modes
 
-- harness `80f1fa7` · schema v1 · generated 2026-07-29T08:43:26+00:00
+- harness `1f0ec9d` · schema v1 · generated 2026-07-30T08:37:07+00:00
 - era 2022-2025 · dataset data/raw laps, stratified 6-race subset (RAW, not featured) · seed deterministic · llm none
 - artifacts: —
 
 | Metric | Value | Meaning |
 | --- | --- | --- |
-| Stops scored | 40 of 198 (20.2%) | real green-flag stops the tier could grade |
-| Exact lap | 30.0% | chose the lap the team chose |
-| Within 1 lap | 37.5% | same call, one lap either side |
-| Within 2 laps | 47.5% | same strategic window |
-| Mean signed error | -2.23 laps | negative = stops earlier than the team |
-| Mean absolute error | 2.48 laps | magnitude |
+| Stops scored | 90 of 198 (45.5%) | real green-flag stops the tier could grade |
+| Exact lap | 17.8% | chose the lap the team chose |
+| Within 1 lap | 25.6% | same call, one lap either side |
+| Within 2 laps | 35.6% | same strategic window |
+| Mean signed error | -3.30 laps | negative = stops earlier than the team |
+| Mean absolute error | 3.30 laps | magnitude |
 | Coverage verdict | **masked** | `masked` when under 60% of eligible stops were scored |
 
 ### Buckets
@@ -20,9 +20,9 @@
 | --- | --- |
 | `closing_laps` | 4 |
 | `min_stint` | 22 |
-| `no_call_in_window` | 128 |
+| `no_call_in_window` | 78 |
 | `opening_laps` | 4 |
-| `scored` | 40 |
+| `scored` | 90 |
 
 `opening_laps` / `closing_laps` / `min_stint` are stops the guard rails make
 impossible to agree with, so they are excluded from the headline rather than

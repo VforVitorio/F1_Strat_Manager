@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "80f1fa7",
+    "harness_sha": "1f0ec9d",
     "dataset": "data/raw laps, stratified 6-race subset (RAW, not featured)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-29T08:43:26+00:00",
+    "generated_at": "2026-07-30T08:37:07+00:00",
     "artifacts": {}
   },
   "status": "masked",
@@ -38,22 +38,22 @@
     }
   ],
   "agreement": {
-    "sample_size": 40,
+    "sample_size": 90,
     "eligible": 198,
-    "scored_share": 0.20202020202020202,
+    "scored_share": 0.45454545454545453,
     "races": 6,
-    "exact": 0.3,
-    "within_one": 0.375,
-    "within_two": 0.475,
-    "mean_signed_error": -2.225,
-    "mean_absolute_error": 2.475
+    "exact": 0.17777777777777778,
+    "within_one": 0.25555555555555554,
+    "within_two": 0.35555555555555557,
+    "mean_signed_error": -3.3,
+    "mean_absolute_error": 3.3
   },
   "buckets": {
     "closing_laps": 4,
     "min_stint": 22,
-    "no_call_in_window": 128,
+    "no_call_in_window": 78,
     "opening_laps": 4,
-    "scored": 40
+    "scored": 90
   },
   "verdicts": [
     {
@@ -79,9 +79,9 @@
       "race": "Barcelona",
       "driver": "GAS",
       "actual_lap": 19,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 15,
+      "offset_laps": -4,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -97,9 +97,9 @@
       "race": "Barcelona",
       "driver": "PER",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 27,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -115,8 +115,8 @@
       "race": "Barcelona",
       "driver": "ALO",
       "actual_lap": 19,
-      "chosen_lap": 24,
-      "offset_laps": 5,
+      "chosen_lap": 14,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -133,9 +133,9 @@
       "race": "Barcelona",
       "driver": "LEC",
       "actual_lap": 16,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 15,
+      "offset_laps": -1,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -151,17 +151,17 @@
       "race": "Barcelona",
       "driver": "STR",
       "actual_lap": 14,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 9,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2023,
       "race": "Barcelona",
       "driver": "STR",
       "actual_lap": 34,
-      "chosen_lap": 34,
-      "offset_laps": 0,
+      "chosen_lap": 29,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -187,9 +187,9 @@
       "race": "Barcelona",
       "driver": "MAG",
       "actual_lap": 10,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 8,
+      "offset_laps": -2,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -214,9 +214,9 @@
       "race": "Barcelona",
       "driver": "DEV",
       "actual_lap": 9,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 9,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -232,9 +232,9 @@
       "race": "Barcelona",
       "driver": "TSU",
       "actual_lap": 10,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 8,
+      "offset_laps": -2,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -250,9 +250,9 @@
       "race": "Barcelona",
       "driver": "ALB",
       "actual_lap": 16,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 11,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -268,9 +268,9 @@
       "race": "Barcelona",
       "driver": "ZHO",
       "actual_lap": 9,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 8,
+      "offset_laps": -1,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -286,9 +286,9 @@
       "race": "Barcelona",
       "driver": "HUL",
       "actual_lap": 8,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 5,
+      "offset_laps": -3,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -313,9 +313,9 @@
       "race": "Barcelona",
       "driver": "OCO",
       "actual_lap": 13,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 8,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -358,9 +358,9 @@
       "race": "Barcelona",
       "driver": "HAM",
       "actual_lap": 24,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 22,
+      "offset_laps": -2,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -376,18 +376,18 @@
       "race": "Barcelona",
       "driver": "SAI",
       "actual_lap": 15,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 12,
+      "offset_laps": -3,
+      "bucket": "scored"
     },
     {
       "year": 2023,
       "race": "Barcelona",
       "driver": "SAI",
       "actual_lap": 41,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 41,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -430,9 +430,9 @@
       "race": "Barcelona",
       "driver": "PIA",
       "actual_lap": 17,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 12,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -448,9 +448,9 @@
       "race": "Monaco",
       "driver": "VER",
       "actual_lap": 55,
-      "chosen_lap": 55,
-      "offset_laps": 0,
-      "bucket": "scored"
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2023,
@@ -484,17 +484,17 @@
       "race": "Monaco",
       "driver": "PER",
       "actual_lap": 34,
-      "chosen_lap": 30,
-      "offset_laps": -4,
-      "bucket": "scored"
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2023,
       "race": "Monaco",
       "driver": "PER",
       "actual_lap": 53,
-      "chosen_lap": 48,
-      "offset_laps": -5,
+      "chosen_lap": 53,
+      "offset_laps": 0,
       "bucket": "scored"
     },
     {
@@ -538,9 +538,9 @@
       "race": "Monaco",
       "driver": "LEC",
       "actual_lap": 44,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 39,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -610,18 +610,18 @@
       "race": "Monaco",
       "driver": "DEV",
       "actual_lap": 53,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 48,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2023,
       "race": "Monaco",
       "driver": "TSU",
       "actual_lap": 53,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 51,
+      "offset_laps": -2,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -637,9 +637,9 @@
       "race": "Monaco",
       "driver": "ALB",
       "actual_lap": 52,
-      "chosen_lap": 48,
-      "offset_laps": -4,
-      "bucket": "scored"
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2023,
@@ -655,9 +655,9 @@
       "race": "Monaco",
       "driver": "ZHO",
       "actual_lap": 52,
-      "chosen_lap": 49,
-      "offset_laps": -3,
-      "bucket": "scored"
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2023,
@@ -691,9 +691,9 @@
       "race": "Monaco",
       "driver": "OCO",
       "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 31,
+      "offset_laps": -1,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -709,9 +709,9 @@
       "race": "Monaco",
       "driver": "NOR",
       "actual_lap": 50,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 47,
+      "offset_laps": -3,
+      "bucket": "scored"
     },
     {
       "year": 2023,
@@ -736,15 +736,6 @@
       "race": "Monaco",
       "driver": "HAM",
       "actual_lap": 54,
-      "chosen_lap": 52,
-      "offset_laps": -2,
-      "bucket": "scored"
-    },
-    {
-      "year": 2023,
-      "race": "Monaco",
-      "driver": "SAI",
-      "actual_lap": 33,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
@@ -753,10 +744,19 @@
       "year": 2023,
       "race": "Monaco",
       "driver": "SAI",
-      "actual_lap": 55,
-      "chosen_lap": 52,
-      "offset_laps": -3,
+      "actual_lap": 33,
+      "chosen_lap": 29,
+      "offset_laps": -4,
       "bucket": "scored"
+    },
+    {
+      "year": 2023,
+      "race": "Monaco",
+      "driver": "SAI",
+      "actual_lap": 55,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2023,
@@ -772,27 +772,27 @@
       "race": "Monaco",
       "driver": "BOT",
       "actual_lap": 51,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 46,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2023,
       "race": "Monaco",
       "driver": "PIA",
       "actual_lap": 54,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 49,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
       "race": "Silverstone",
       "driver": "VER",
       "actual_lap": 26,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 21,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -808,9 +808,9 @@
       "race": "Silverstone",
       "driver": "PER",
       "actual_lap": 19,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 15,
+      "offset_laps": -4,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -844,9 +844,9 @@
       "race": "Silverstone",
       "driver": "ALO",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 22,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -862,9 +862,9 @@
       "race": "Silverstone",
       "driver": "LEC",
       "actual_lap": 19,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 17,
+      "offset_laps": -2,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -889,9 +889,9 @@
       "race": "Silverstone",
       "driver": "STR",
       "actual_lap": 26,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 21,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -907,9 +907,9 @@
       "race": "Silverstone",
       "driver": "SAR",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 22,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -925,9 +925,9 @@
       "race": "Silverstone",
       "driver": "MAG",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 22,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -943,9 +943,9 @@
       "race": "Silverstone",
       "driver": "TSU",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 22,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -961,9 +961,9 @@
       "race": "Silverstone",
       "driver": "ALB",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 22,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1015,9 +1015,9 @@
       "race": "Silverstone",
       "driver": "HUL",
       "actual_lap": 26,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 21,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1033,9 +1033,9 @@
       "race": "Silverstone",
       "driver": "RIC",
       "actual_lap": 26,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 21,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1051,9 +1051,9 @@
       "race": "Silverstone",
       "driver": "OCO",
       "actual_lap": 19,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 14,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1087,9 +1087,9 @@
       "race": "Silverstone",
       "driver": "NOR",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 22,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1105,8 +1105,8 @@
       "race": "Silverstone",
       "driver": "HAM",
       "actual_lap": 27,
-      "chosen_lap": 26,
-      "offset_laps": -1,
+      "chosen_lap": 22,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -1123,9 +1123,9 @@
       "race": "Silverstone",
       "driver": "SAI",
       "actual_lap": 26,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 21,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1150,8 +1150,8 @@
       "race": "Silverstone",
       "driver": "RUS",
       "actual_lap": 27,
-      "chosen_lap": 26,
-      "offset_laps": -1,
+      "chosen_lap": 22,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -1186,8 +1186,8 @@
       "race": "Silverstone",
       "driver": "PIA",
       "actual_lap": 28,
-      "chosen_lap": 26,
-      "offset_laps": -2,
+      "chosen_lap": 23,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -1204,17 +1204,17 @@
       "race": "Marina_Bay",
       "driver": "VER",
       "actual_lap": 29,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 29,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2024,
       "race": "Marina_Bay",
       "driver": "GAS",
       "actual_lap": 37,
-      "chosen_lap": 34,
-      "offset_laps": -3,
+      "chosen_lap": 32,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -1222,26 +1222,26 @@
       "race": "Marina_Bay",
       "driver": "PER",
       "actual_lap": 28,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 23,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
       "race": "Marina_Bay",
       "driver": "ALO",
       "actual_lap": 25,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 21,
+      "offset_laps": -4,
+      "bucket": "scored"
     },
     {
       "year": 2024,
       "race": "Marina_Bay",
       "driver": "LEC",
       "actual_lap": 36,
-      "chosen_lap": 33,
-      "offset_laps": -3,
+      "chosen_lap": 31,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -1249,8 +1249,8 @@
       "race": "Marina_Bay",
       "driver": "STR",
       "actual_lap": 26,
-      "chosen_lap": 26,
-      "offset_laps": 0,
+      "chosen_lap": 22,
+      "offset_laps": -4,
       "bucket": "scored"
     },
     {
@@ -1258,9 +1258,9 @@
       "race": "Marina_Bay",
       "driver": "MAG",
       "actual_lap": 28,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 26,
+      "offset_laps": -2,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1285,9 +1285,9 @@
       "race": "Marina_Bay",
       "driver": "TSU",
       "actual_lap": 33,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 28,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1312,8 +1312,8 @@
       "race": "Marina_Bay",
       "driver": "ZHO",
       "actual_lap": 34,
-      "chosen_lap": 30,
-      "offset_laps": -4,
+      "chosen_lap": 29,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -1321,9 +1321,9 @@
       "race": "Marina_Bay",
       "driver": "HUL",
       "actual_lap": 29,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 28,
+      "offset_laps": -1,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1357,9 +1357,9 @@
       "race": "Marina_Bay",
       "driver": "OCO",
       "actual_lap": 29,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 27,
+      "offset_laps": -2,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1375,9 +1375,9 @@
       "race": "Marina_Bay",
       "driver": "COL",
       "actual_lap": 29,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 24,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2024,
@@ -1402,17 +1402,17 @@
       "race": "Marina_Bay",
       "driver": "RUS",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 26,
+      "offset_laps": -1,
+      "bucket": "scored"
     },
     {
       "year": 2024,
       "race": "Marina_Bay",
       "driver": "BOT",
       "actual_lap": 33,
-      "chosen_lap": 33,
-      "offset_laps": 0,
+      "chosen_lap": 29,
+      "offset_laps": -4,
       "bucket": "scored"
     },
     {
@@ -1447,9 +1447,9 @@
       "race": "Lusail",
       "driver": "ANT",
       "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 31,
+      "offset_laps": -1,
+      "bucket": "scored"
     },
     {
       "year": 2025,
@@ -1501,9 +1501,9 @@
       "race": "Lusail",
       "driver": "TSU",
       "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 27,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2025,
@@ -1573,27 +1573,27 @@
       "race": "Lusail",
       "driver": "BOR",
       "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 27,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2025,
       "race": "Lusail",
       "driver": "SAI",
       "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 32,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2025,
       "race": "Lusail",
       "driver": "HAD",
       "actual_lap": 32,
-      "chosen_lap": 32,
-      "offset_laps": 0,
-      "bucket": "scored"
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
@@ -1717,8 +1717,8 @@
       "race": "Monza",
       "driver": "STR",
       "actual_lap": 49,
-      "chosen_lap": 49,
-      "offset_laps": 0,
+      "chosen_lap": 44,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
@@ -1726,18 +1726,18 @@
       "race": "Monza",
       "driver": "TSU",
       "actual_lap": 19,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 19,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2025,
       "race": "Monza",
       "driver": "ALB",
       "actual_lap": 41,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 41,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2025,
@@ -1762,9 +1762,9 @@
       "race": "Monza",
       "driver": "NOR",
       "actual_lap": 46,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 42,
+      "offset_laps": -4,
+      "bucket": "scored"
     },
     {
       "year": 2025,
@@ -1780,9 +1780,9 @@
       "race": "Monza",
       "driver": "HAM",
       "actual_lap": 38,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 33,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2025,
@@ -1798,35 +1798,35 @@
       "race": "Monza",
       "driver": "SAI",
       "actual_lap": 30,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 30,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2025,
       "race": "Monza",
       "driver": "HAD",
       "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 27,
+      "offset_laps": -5,
+      "bucket": "scored"
     },
     {
       "year": 2025,
       "race": "Monza",
       "driver": "RUS",
       "actual_lap": 27,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "chosen_lap": 27,
+      "offset_laps": 0,
+      "bucket": "scored"
     },
     {
       "year": 2025,
       "race": "Monza",
       "driver": "PIA",
       "actual_lap": 45,
-      "chosen_lap": 41,
-      "offset_laps": -4,
+      "chosen_lap": 40,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
