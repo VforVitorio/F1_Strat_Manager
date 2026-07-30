@@ -137,6 +137,11 @@ class RaceStateManager:
         # same reason as the leader times: get_lap_state must stay an O(1) lookup.
         self._stint_baselines: dict[int, int] = self._precompute_stint_baselines()
 
+        # N04's Prev_LapTime, reconstructed for frames that do not carry it.
+        # Precomputed for the same reason as the two above: get_driver_state is an
+        # O(1) lookup and a per-lap rescan would break that promise.
+        self._derived_prev_lap: dict[int, float] = self._precompute_prev_lap_times()
+
         # Art. 30.5(m) flags, one timeline per driver, built on first ask.
         # `get_lap_state` needs ours plus one per rival, and the per-lap helper
         # rescans the whole frame each time, so a lap cost about twenty full
@@ -145,6 +150,75 @@ class RaceStateManager:
         # pass brings it back to 3.9 ms. Lazy per driver, because a caller asking
         # about three cars should not pay for twenty.
         self._stint_flags: dict[str, dict[int, dict[str, Any]]] = {}
+
+    def _precompute_prev_lap_times(self) -> dict[int, float]:
+        """Reconstruct N04's ``Prev_LapTime`` for a frame that has no such column.
+
+        The featured parquet carries the column; the RAW per-race parquet this class
+        is normally built from does not, and ``get_driver_state`` had no fallback.
+        The pace agent then substituted ``90.0`` (``pace_agent.py``), and because
+        ``_predict`` uses that value as an ANCHOR — the prediction is
+        ``prev + delta``, with no NaN branch — every absolute lap-time prediction
+        was pinned to 90 s regardless of circuit. Measured, the fallback fired on
+        100% of laps on the replay path (#728).
+
+        RECONSTRUCTION, NOT REINTERPRETATION
+        ------------------------------------
+        This applies N04's own transform rather than an equivalent-looking rule,
+        because two details of it are load-bearing and neither is guessable:
+
+        - the shift is grouped by ``Stint`` (N04 groups by
+          ``['Year','GP_Name','DriverNumber','Stint']``, and the first three are
+          constant for one driver in one race), so the first lap of a stint has no
+          previous lap and stays unknown;
+        - it runs AFTER ``filter_baseline_laps``: ``IsAccurate & ~Deleted &
+          LapTime_s < 180 & LapNumber > 1``. So the previous lap is the previous
+          SURVIVING one, not simply ``lap_number - 1``.
+
+        That second point decides the whole helper. An out-lap is excluded by
+        ``IsAccurate``, and it is not a rounding difference: measured at Lusail 2025,
+        NOR's out-lap is 107.6 s against 85.3 s on the lap that follows it. Anchoring
+        the lap after a stop on the out-lap would be **22 s wrong** — worse than the
+        90.0 it replaces. The same filter is what keeps a Safety Car lap from
+        becoming the anchor for a green one.
+
+        A cross-stint fallback is wrong for the same measured reason, not merely on
+        training-semantics grounds: the last lap of a stint is the in-lap, so it is
+        slow in exactly the same way.
+
+        Returns:
+            ``{lap_number: previous lap time in seconds}``, holding only laps whose
+            previous lap is known. An absent key means unknown, and the caller
+            keeps that as ``None`` rather than inventing a number. An empty map is
+            the honest result for a frame lacking the columns this needs.
+        """
+        needed = {"LapNumber", "LapTime", "Stint"}
+        if self._driver.empty or not needed <= set(self._driver.columns):
+            return {}
+
+        laps = self._driver.copy()
+        laps["_lap_time_s"] = laps["LapTime"].map(_to_seconds)
+
+        # N04's filter_baseline_laps, term for term. IsAccurate and Deleted are
+        # FastF1 quality flags absent from some hand-built frames, so a missing
+        # column is treated as "nothing excluded" rather than excluding everything.
+        surviving = laps["_lap_time_s"].notna() & (laps["_lap_time_s"] < 180)
+        surviving &= laps["LapNumber"] > 1
+        if "IsAccurate" in laps.columns:
+            surviving &= laps["IsAccurate"].fillna(False).astype(bool)
+        if "Deleted" in laps.columns:
+            surviving &= ~laps["Deleted"].fillna(False).astype(bool)
+
+        ordered = laps[surviving].sort_values("LapNumber")
+        if ordered.empty:
+            return {}
+
+        previous = ordered.groupby("Stint", sort=False)["_lap_time_s"].shift(1)
+        return {
+            int(lap): float(value)
+            for lap, value in zip(ordered["LapNumber"], previous, strict=True)
+            if pd.notna(value)
+        }
 
     def _precompute_stint_baselines(self) -> dict[int, int]:
         """Return our driver's TyreLife at the first lap of each stint.
@@ -255,7 +329,19 @@ class RaceStateManager:
             # same as every other optional column read via ``r.get(...)`` below.
             # NaN (no earlier lap, e.g. the first lap of a stint) -> None, same
             # handling as every other timing field in this method.
-            "prev_lap_time": _to_seconds(r.get("Prev_LapTime")),
+            #
+            # Falls back to the reconstruction when the column is absent OR its
+            # value is NaN. Both, deliberately: `Series.get` returns a stored NaN
+            # rather than the default, so a column-presence test alone would leave
+            # the RAW frame — which has no such column at all — on 90.0 forever,
+            # and that is exactly the state #728 found (the fallback fired on 100%
+            # of laps). See _precompute_prev_lap_times for why a reconstruction is
+            # not simply `lap_number - 1`.
+            "prev_lap_time": (
+                _to_seconds(r.get("Prev_LapTime"))
+                if pd.notna(r.get("Prev_LapTime"))
+                else self._derived_prev_lap.get(int(lap_number))
+            ),
             "sector1_s": _to_seconds(r.get("Sector1Time")),
             "sector2_s": _to_seconds(r.get("Sector2Time")),
             "sector3_s": _to_seconds(r.get("Sector3Time")),
