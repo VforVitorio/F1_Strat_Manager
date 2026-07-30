@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 
 from src.strategy.eval.decision_modes import (
+    DECISION_WINDOW_LAPS,
     MIN_SCORED_SHARE,
     SAMPLED_RACES,
     DecisionAgreement,
@@ -29,10 +30,12 @@ from src.strategy.eval.decision_modes import (
     _asks_to_stop,
     _pit_decision_lap,
     _render_table,
+    _replay_span,
     coverage_verdict,
     guard_rail_block,
     lap_inputs,
 )
+from src.strategy.inference.guard_rails import _NO_PIT_BEFORE_LAP
 
 ROOT = Path(__file__).parent.parent.parent
 _HAS_RAW = (ROOT / "data" / "raw" / "2024").is_dir()
@@ -154,9 +157,23 @@ def test_unknown_tyre_life_still_evaluates_the_lap_based_rails():
 
 
 def test_the_decision_lap_is_the_transition_not_the_earliest_call():
-    """Two pit calls in the window resolve to the first that FOLLOWS a stay-out."""
-    actions = {28: "STAY_OUT", 29: "UNDERCUT", 30: "STAY_OUT", 31: "PIT_NOW"}
-    assert _pit_decision_lap(actions, 27, 32) == 29
+    """The earliest pit call is NOT the answer when nothing declined before it.
+
+    Shaped after a real occupant of `no_boundary_in_window` (PIA, 2025 Monza):
+    committed when the window opened, withdrew mid-window, then re-committed. The
+    retired helper returned 27, the window's own left edge, because it reported the
+    first pit ACTION. The transition is at 30, where the stack actually changes its
+    mind, and lap 26 is evaluated as a pit call so the earlier asks are ruled out by
+    being committed rather than by being unwitnessed.
+    """
+    actions = {
+        26: "PIT_NOW",
+        27: "PIT_NOW",
+        28: "PIT_NOW",
+        29: "STAY_OUT",
+        30: "PIT_NOW",
+    }
+    assert _pit_decision_lap(actions, 27, 32) == 30
 
 
 def test_no_call_at_all_returns_none():
@@ -193,10 +210,19 @@ def test_an_unevaluated_predecessor_cannot_witness_a_transition():
 def test_the_decision_lap_does_not_move_when_only_the_window_widens():
     """The property that was missing, and the whole point of #752.
 
-    Same actions, three window widths. A stack whose transition lies inside all
-    three must report the SAME lap, because the transition is a property of the
-    model and the window is a property of the harness. Under the old helper the
-    answer was 27, 25 and 22 for these three windows — the left edge each time.
+    Same actions, three window widths. A stack whose transition lies strictly inside
+    all three must report the SAME lap, because the transition is a property of the
+    model and the window is a property of the harness.
+
+    This is the achievable half of the property, not width-invariance in general: a
+    wider window is a strictly larger observation, so it can legitimately reveal a
+    transition a narrower one could not reach. What it must never do is report its
+    own edge, and that is what this pins.
+
+    This fixture does NOT discriminate the retired helper, which returns 30 here too
+    (laps 20-29 are explicit stay-outs, so its first pit action is also 30). The
+    tests above are the ones that kill it; keeping that straight matters, because a
+    docstring naming the wrong mechanism is worse than no docstring at all.
     """
     actions = {lap: "STAY_OUT" for lap in range(20, 30)}
     actions.update({lap: "PIT_NOW" for lap in range(30, 38)})
@@ -204,6 +230,59 @@ def test_the_decision_lap_does_not_move_when_only_the_window_widens():
     assert _pit_decision_lap(actions, 27, 32) == 30
     assert _pit_decision_lap(actions, 25, 35) == 30
     assert _pit_decision_lap(actions, 22, 37) == 30
+
+
+def test_the_replay_span_opens_before_the_first_scoreable_lap():
+    """The one lap that a Fable gate found protected by a comment and nothing else.
+
+    Reverting it left all 34 tests green while flipping a real stop out of `scored`
+    and moving the published mean signed error by half its value. The property, not
+    the formula: the predecessor of the earliest lap this run can score must itself
+    be inside the replayed span, or that lap is unjudgeable by construction.
+    """
+    for stop_laps, total_laps in ([(32,), 53], [(18, 41), 60], [(9,), 50]):
+        low, high = _replay_span(list(stop_laps), total_laps)
+        earliest_scoreable = max(1, min(stop_laps) - DECISION_WINDOW_LAPS)
+        assert low <= earliest_scoreable - 1 or earliest_scoreable == 1
+        assert high >= max(stop_laps) + DECISION_WINDOW_LAPS or high == total_laps
+
+
+def test_the_replay_span_cannot_ask_for_laps_that_do_not_exist():
+    """Lap 1 has no predecessor and the race has no lap after the last one."""
+    low, high = _replay_span([2], 50)
+    assert low == 1
+
+    low, high = _replay_span([48], 50)
+    assert high == 50
+
+
+def test_a_transition_at_the_opening_rail_is_the_rail_releasing_not_a_decision():
+    """The retired defect's shape at a different boundary, found by gate G1.
+
+    Actions are recorded AFTER the guard rails, and the opening rail forces stay-out
+    below `_NO_PIT_BEFORE_LAP`. So a stack that wants to box from lap 1 is recorded as
+    stay-outs then a pit, and the "transition" lands on the rail boundary for every
+    such stop: a constant of the harness wearing a timing estimate, which is exactly
+    what #752 retired at `window_low`.
+    """
+    railed = {1: "STAY_OUT", 2: "STAY_OUT", 3: "STAY_OUT", 4: "STAY_OUT"}
+    railed.update({lap: "PIT_NOW" for lap in range(_NO_PIT_BEFORE_LAP, 12)})
+
+    assert _pit_decision_lap(railed, 1, 11) is None
+    assert _asks_to_stop(railed, 1, 11) is True
+
+
+def test_a_transition_after_the_rail_releases_is_still_a_decision():
+    """The guard above must not swallow a genuine mid-race change of mind.
+
+    Without this, rejecting the rail boundary could be widened into rejecting every
+    early lap, and the metric would go quiet on exactly the stops it is meant to
+    grade.
+    """
+    actions = {lap: "STAY_OUT" for lap in range(1, _NO_PIT_BEFORE_LAP + 2)}
+    actions.update({lap: "PIT_NOW" for lap in range(_NO_PIT_BEFORE_LAP + 2, 14)})
+
+    assert _pit_decision_lap(actions, 1, 13) == _NO_PIT_BEFORE_LAP + 2
 
 
 def test_the_new_bucket_counts_toward_eligible_so_the_share_is_not_inflated():
