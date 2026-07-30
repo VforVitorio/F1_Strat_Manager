@@ -1,38 +1,60 @@
 # Sprint 5 — re-measuring the decision layer, and a defect in the metric itself
 
-**Date:** 2026-07-30 · **Issue:** #729 · **Status:** the decline rate improved and is verified; **the
-timing metric is an artefact of its own window and cannot answer the `WINDOW_LAPS` question**
+**Date:** 2026-07-30 · **Issue:** #729 · **Status:** the decline rate improved and is verified on the
+IDENTICAL sample; **the timing metric is an artefact of its own window and cannot answer the
+`WINDOW_LAPS` question**
 
-Sprint 5 was specified as: re-run `f1-eval decision-modes`, compare with the committed baseline, and
-decide `WINDOW_LAPS` with a number. Two things happened on the way.
+> **This document was rewritten after the S5 adversarial gate** (`FABLE_S5_decision_modes.md`), which
+> found one HIGH and five MEDIUM defects in the first version — including that the strongest run in
+> the sprint was sitting uncommitted on disk while the write-up argued around not having it, and that
+> the central table compared two different samples column against column. Every correction is marked
+> **[gate]** so the record shows what was wrong rather than only what survived.
 
 ---
 
-## 1. The sample was redesigned first, and it needed to be
+## 1. The headline: the same sample, before and after
 
-The committed baseline runs on six races: 2023 Barcelona, 2023 Monaco, 2024 Silverstone, 2024
-Marina_Bay, 2025 Lusail, 2025 Monza. **Four of the six are the training seasons.** Every model the
-decision layer consumes (N06, N26, N27, N15, N16) trains on 2023-24 and tests on 2025, so on those
-four races the layer is fed in-sample predictions it will never see in production.
+**[gate F1]** The first version of this document claimed no same-sample comparison existed and built
+its causal argument on two races. It was wrong: a post-fix run over the **identical 198-stop mixed
+sample** had completed and written `documents/eval_reports/decision_modes.json`
+(`harness 1f0ec9d`, generated 2026-07-30T08:37 — i.e. after Sprint 4 and the seed fix). Two
+background runs had appeared to die; the completion notification arrived and was not acted on.
 
-The direction matters: in-sample the models are more accurate, so the layer should decline *less*.
-The committed 64.6% is therefore likely **optimistic**, which is the direction nobody audits because
-it flatters nobody.
-
-Redesigned as **the same six circuits, all in 2025**. That preserves the baseline's archetype spread
-(street, high-speed, low-downforce, high-degradation) and leaves the season as the only variable. All
-six exist under `data/raw/2025/`.
-
-## 2. The decline rate genuinely improved
-
-| | baseline (mixed seasons) | 2025-only |
+| identical 198-stop sample | baseline (`80f1fa7`) | post-fix (`1f0ec9d`) |
 |---|---|---|
-| eligible real green-flag stops | 198 | 178 |
-| **declined (`no_call_in_window`)** | **64.6%** | **46.1%** |
-| scored (coverage) | 40 (20.2%) | **75 (42.1%)** |
-| rail-blocked | 30 | 21 |
+| **declined** (`no_call_in_window`) | 128 (**64.6%**) | 78 (**39.4%**) |
+| scored (coverage) | 40 (20.2%) | 90 (**45.5%**) |
+| `min_stint` / `opening_laps` / `closing_laps` | 22 / 4 / 4 | **22 / 4 / 4** |
+| `no_data` | 0 | 0 |
 
-Per race:
+**The rail buckets are byte-identical, race by race.** So on this sample the guard rails contribute
+exactly nothing to the delta, and the whole `af3a24a` confound I worried about is empirically zero
+here — a stronger statement than the reasoning I replaced it with.
+
+## 2. The out-of-sample figure, and why the sample was redesigned
+
+Four of the baseline's six races are **2023-24, the training seasons**. Every model the decision layer
+consumes (N06, N26, N27, N15, N16) trains on 2023-24 and tests on 2025, so on those four the layer is
+fed in-sample predictions production will never see. Redesigned as **the same six circuits, all in
+2025** — preserves the archetype spread (street, high-speed, low-downforce, high-degradation) and
+leaves the season as the only variable.
+
+| | mixed sample (4/6 in-sample) | 2025-only (fully out-of-sample) |
+|---|---|---|
+| eligible stops | 198 | 178 |
+| **declined** | **39.4%** | **46.1%** |
+| coverage | 45.5% | 42.1% |
+
+**[gate, claim F]** The gate marked my in-sample *direction* argument UNSUPPORTED by the data the
+first version presented, and it was right — I had asserted a sign with nothing behind it. These two
+rows are the support: the partly-in-sample mixed set declines **less** (39.4%) than the fully
+out-of-sample season (46.1%). So the committed 64.6% was optimistic in the direction claimed, and
+**46.1% is the number that describes the shipped system.**
+
+Denominator drift 198 → 178 is fully accounted **[gate]**: Barcelona −2, Monaco −1, Marina_Bay −2,
+**Silverstone −15** (46 stops in 2024 against 31 in 2025), Lusail ±0, Monza ±0.
+
+Per race, 2025:
 
 | race | n | scored | declined | rails | decline % |
 |---|---|---|---|---|---|
@@ -43,106 +65,138 @@ Per race:
 | Lusail | 26 | 8 | 14 | 4 | 53.8% |
 | **Silverstone** | 31 | **1** | 22 | 8 | **71.0%** |
 
-### It is causally ours, not the sample
+## 3. Attribution, with the reasoning corrected
 
-The season change is a confound for the headline, so the causal claim rests on the two races present
-in **both** runs — same circuits, same season, same stops, matched per stop on
-`(year, race, driver, actual_lap)`:
+**[gate F4]** The first version said *"the transitions are `no_call -> scored`, which the rails cannot
+produce."* **That sentence is wrong in principle.** `af3a24a` suspends the early-race and min-stint
+bounds *inside the stack* when `sc_currently_active` is true (`pit_strategy_agent.py:530-564`), and a
+PIT that the old rails overrode into STAY_OUT on a window lap under a Safety Car is **exactly** a
+`no_call -> scored` transition. The conclusion happened to survive; the reasoning offered for it did
+not hold.
+
+What actually rescues it is a check the first version never ran, and the gate did: across all **64**
+moved stops, **no TrackStatus 4/5/6 lap falls inside the relevant ±5 window.** 2025 Lusail's Safety
+Car is laps 7-10 and its moved stops are at lap 32; the other five races have no neutralised laps in
+range. So the attribution to our code changes stands — on evidence, not on the argument I gave.
+
+Separately **[gate F4]**: `guard_rail_block` (`decision_modes.py:203-206`) never passes `sc_active`,
+and the eval's rail counts are identical between the two mixed runs. The `30 → 21` in §2's rails
+column is therefore the **season change**, not the commit.
+
+### The caveat that limits how hard this can be pushed
+
+**[gate F5]** The committed baseline was generated at `80f1fa7`, which is **not** an ancestor of the
+MC-Dropout seed fix `8d68a9e`. So every matched-stop transition against it compares a seeded run
+against **one draw of an unseeded process**, and "+N moved, from code changes alone" carries a noise
+term of unmeasured size.
+
+What *is* established: the **new** code is deterministic. Two independent Monza w=5 runs and a tree
+rerun against the sweep agree stop for stop, **46/46 and 20/20**.
+
+**The noise floor, measured rather than left open.** Reproducing the pre-#740 process on current code
+by neutralising `torch.manual_seed` in-process (never on disk) and running 2025 Monza twice:
 
 ```
-Lusail   26 stops matched, 5 moved bucket:  no_call -> scored  4
-                                            scored  -> no_call  1
-Monza    20 stops matched, 7 moved bucket:  no_call -> scored  7
-                                            (none the other way)
+unseeded run 1: 20 stops      unseeded run 2: 20 stops
+IDENTICAL verdicts: 20/20     DIFFERING: 0
 ```
 
-**Net +10 stops became callable on 46 matched stops, from code changes alone.** One harness commit
-(`af3a24a`, a Safety Car now suspends the pit bounds) also lands in that interval and moves the RAIL
-buckets, which is why the decomposition is by bucket transition rather than by summary table — the
-transitions above are `no_call -> scored`, which the rails cannot produce. `84dc4b6` was checked and
-is behaviour-identical at the default (it replaced a hardcoded `risk_tolerance=0.5` with a constant
-of the same value).
+So the dropout wobble — real, and measured at `laps_to_cliff_p90` alternating 3.00/3.10 in #735 — does
+**not** reach far enough to flip a bucket or a chosen lap on this race. Two caveats keep this honest:
+one race and 20 stops cannot establish a noise floor of zero everywhere, and the same wobble *was*
+shown to move an argmax census (53/57 versus 52/57 in #735), so it is not inert in general.
 
-### Silverstone is an outlier and it is the wet race
+What settles the attribution is magnitude rather than this measurement alone: the same-sample delta is
+**50 stops on 198**. A noise process invisible at 0/20 would have to be an order of magnitude larger
+than anything observed to account for that.
 
-1 scored of 31, 71% declined. The S4 gate had already quantified the mechanism from the other side:
-in the wet, ~40% of laps fail N04's quality filter, so N06's previous-lap anchor falls back to the
-90.0 constant for whole stints. Recorded rather than averaged away — but the owner's call is that wet
-races are out of scope, so it is not treated as a defect here.
+## 4. The timing metric does not measure timing
 
-## 3. The timing metric does not measure timing
+This retires a number published three times, so the evidence matters more than the conclusion.
 
-This is the finding that decides the sprint, and it invalidates a number we have published three
-times.
-
-`decision_modes.py:439` derives the chosen lap as **the first lap in the window on which the stack
-emits any pit action**:
+`decision_modes.py:434` **[gate F8 — the first version cited :439, which is stale]** derives the
+chosen lap as **the first lap in the window on which the stack emits any pit action**:
 
 ```python
 chosen = _first_pit_lap(actions, window_low, window_high)
 ```
 
-So a stack that would pit on *every* lap of the window pins to `window_low = actual_lap - WINDOW`.
-That is not a timing estimate; it is the window's left edge.
+A stack that would pit on *every* lap of the window therefore pins to
+`window_low = actual_lap − DECISION_WINDOW_LAPS`. That is the window's left edge, not a timing
+estimate.
 
-**Measured, and this is the disqualifying evidence.** Same two races, only `DECISION_WINDOW_LAPS`
-changed — production code untouched:
+**[gate F2] The first version's table was cross-sample and its headline "−5: 36 → 0" was not
+like-for-like** — the w=5 column was the full six-race sweep (75 scored) and the w=10 column was
+Monza + Marina_Bay alone (28 scored). Corrected to the same two races at every width, and the gate
+re-ran all three independently:
 
-| offset | window = 5 | window = 10 |
+| offset | w = 5 | w = 10 |
 |---|---|---|
-| −10 | — | **10** ← new edge |
-| −9 | — | 3 |
-| −8 | — | 1 |
-| −7 | — | 2 |
-| −5 | **36** ← old edge | **0** |
-| −4 | 9 | — |
-| −1 … −3 | 10 | — |
-| 0 | 20 | 11 |
-| +8 | — | 1 |
-| **mean signed** | **−3.08** | **−5.04** |
+| −10 | — | 10 ← new edge |
+| −9 … −7 | — | 6 |
+| **−5** | **12** ← old edge | **0** |
+| −4 | 1 | — |
+| −2 | 1 | — |
+| **0** | **13** | **11** |
 
-The mass at −5 does not survive widening: it goes to **zero**. Those calls were never "five laps
-early", they were "at or beyond five laps early, clipped to five". Widening the window relocates the
-pin rather than revealing a distribution.
+**The −5 mass goes to zero at w=10, and every −5 stop relocates to the new boundary.** Those calls
+were never "five laps early"; they were "at or beyond five laps early, clipped". So **−2.23**
+(baseline, w=5, mixed), **−3.08** (2025 sweep, w=5) and **−5.04** (two races, w=10) are three
+readings of one artefact, and `mean_signed_error` is a property of the window rather than of the
+model. The gate confirmed the pin at a third width and excluded the innocent explanations
+(eligibility, guard-rail bucketing, replay span).
 
-**So the mean signed error is a function of the window width, not a property of the model.** −2.23
-(baseline, w=5, mixed), −3.08 (2025, w=5), −5.04 (2025, w=10) are three readings of the same
-artefact.
+**[gate F3, identity-checked]** The first version claimed "11 stops sit at exactly 0 at both widths".
+At w=5 the same two races have **13**, and the 11 are a strict subset of them. So the statement is
+13 → 11, and **two of the published exact agreements are themselves window artefacts**: Marina_Bay NOR
+lap 26 (0 → −10) and Marina_Bay OCO lap 30 (0 → −8) — the stack would have called those stops 8-10
+laps earlier had it been asked. **15% of the exact-agreement bucket is artefact.** That strengthens the
+finding and weakens the consolation the first version drew from it.
 
-What *is* real is the second mode: **11 stops sit at exactly 0 and stay there at both window widths.**
-Those are genuine agreements. The picture after the epic's fixes is therefore not "the layer stops
-2-3 laps early" but:
+Two mechanisms that could have manufactured the edge mass were hunted and excluded: the only
+eligibility drift between widths is Marina_Bay GAS lap 51 (`no_call` at w=5 → **+8** at w=10), which
+adds a *late* call and therefore cannot produce an early pin; and overlapping-window cross-talk, where
+a second stop's wider window reaches back into the first stop's pit-call region (Marina_Bay HUL,
+windows [25, 44]), did not fire — HUL's second stop stays `no_call` at both widths.
+
+So the honest description of the layer after the epic's fixes is not "it stops 2-3 laps early" but:
 
 > on roughly half the stops it now calls, the layer has **no opinion about when** — it says PIT on the
-> first lap it is asked about, and would have said it earlier.
+> first lap it is asked, and would have said it earlier.
 
-## 4. The answer to `WINDOW_LAPS`, which is not the answer the plan expected
+## 5. The answer to `WINDOW_LAPS`
 
-**It cannot be decided from this data, and widening it is not the fix.**
+**It cannot be decided from this data, and widening it is not the fix**, because every candidate width
+produces its own answer. The prerequisite is a metric that locates a **decision** — a STAY_OUT → PIT
+transition — rather than a first occurrence, and that reports "no boundary inside the window" for a
+stack already committed. Filed as **#752**.
 
-The plan framed the question as a scoring-horizon problem: the 5-lap window prices 100% of a stop's
-cost against ~5 laps of its benefit, break-even ~92 laps. That framing may still be right. But it
-cannot be tested while the *measurement* pins to its own boundary, because every candidate window
-width produces its own answer.
+`DECISION_WINDOW_LAPS` (`decision_modes.py:76`) is the eval's own constant, separate from the MC's
+`WINDOW_LAPS` (`strategy_orchestrator.py:625`), so fixing the metric touches no production code and
+moves no golden.
 
-The prerequisite is a timing metric that locates a decision rather than a first occurrence. Two
-shapes worth considering, neither implemented here:
+## 6. Silverstone, with the causal claim withdrawn
 
-- score the **transition** (STAY_OUT on lap n−1 → PIT on lap n), which finds an actual boundary and
-  reports "no boundary in window" for a stack that is already committed;
-- score the **argmax margin** per lap, so a lap where PIT wins by 0.01 is not counted the same as one
-  where it wins by two positions.
+**[gate F7]** The first version said Silverstone 2025's 71% decline **is** the wet-race anchor
+mechanism. Wet is verified — 608/826 laps (73.6%) on INTERMEDIATE, rainfall in 18.1% of samples,
+`IsAccurate` share 0.600. But the mechanism is measured to be an **insufficient** explanation:
 
-Until then, `mean_signed_error` should not be quoted. `DECISION_WINDOW_LAPS = 5` is the eval's own
-constant (`decision_modes.py:76`), separate from the MC's `WINDOW_LAPS` (`strategy_orchestrator.py:625`),
-so fixing the metric touches no production code and moves no golden.
+- Silverstone: 274/592 evaluated laps (46.3%) still anchor N06 on 90.0 — but the **dry controls are
+  25-30%** (Monza 30.0%, Lusail 25.2%), so heavy anchoring is endemic to this tier's window shape,
+  not a wet-race special.
+- **Anchor share does not rank-order decline**: Lusail 25.2% anchored → 53.8% declined; Monza 30.0%
+  anchored → 35.0% declined.
+- Unexamined co-mechanisms: INTERMEDIATE takes the `_DEFAULT_MIN_STINT = 10` fallback in the rails
+  (`guard_rails.py:41-42`), and the tyre stack never trained on that compound at all.
 
-## 5. What was tried and did not hold
+So: wet, yes; *because of the anchor*, not established. Out of scope by the owner's call either way.
 
-- **That `84dc4b6` was a second confound.** It exposes `alpha` as `DEFAULT_RISK_TOLERANCE = 0.5`
-  where the code previously hardcoded `risk_tolerance=0.5`. Read the diff: behaviour-identical.
-- **That the full six-race sweep could be measured in one process.** Two background runs died
-  mid-race without writing anything, and one race is 133-495 s, so the sweep overruns the foreground
-  limit. Measured one race per invocation, appended to disk as each finished.
-- **That widening the window would reveal the real bias.** It does not — see §3. This was the
-  hypothesis that made the finding, and it was refuted in the useful direction.
+## 7. What was tried and did not hold
+
+- **That the six-race sweep could not be measured in one process.** It could, and it was — see §1.
+  One race is 133-495 s and the sweep overruns the foreground limit, which is true and was the reason
+  for measuring per race; it was not a reason to conclude the background run had died.
+- **That `84dc4b6` was a confound.** Verified behaviour-identical at the default, by diff and by
+  execution **[gate F6]**.
+- **That widening the window would reveal the real bias.** It does not — it relocates the pin. This
+  was the hypothesis that produced the finding, refuted in the useful direction.
