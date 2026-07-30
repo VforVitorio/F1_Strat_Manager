@@ -13,11 +13,20 @@ WHAT THIS MEASURES, EXACTLY
 ---------------------------
 For every real green-flag stop in the sampled races, the stack is driven over a
 window of laps either side of the real stop lap and asked, lap by lap, what it
-would do. The first lap inside the window on which it emits a pit action is
-"the lap it would have chosen"; the signed distance to the real lap is the
-error. Signed, not absolute, for the reason ``GroundTruth.mean_signed_error``
-exists: stopping consistently early or late is a fixable bug, and a magnitude
-hides it.
+would do. The lap it would have chosen is the first **transition** — the lap
+where it stops saying "stay out" and starts saying "box" — and the signed
+distance to the real lap is the error. Signed, not absolute, for the reason
+``GroundTruth.mean_signed_error`` exists: stopping consistently early or late is
+a fixable bug, and a magnitude hides it.
+
+A transition and not simply the first pit lap, because that is what #752
+retired. A stack that would pit on *every* lap of the window has no decision
+inside it, and reporting the window's left edge as its choice made the error a
+property of the window: widening it from 5 laps to 10 moved the entire mass from
+one boundary to the other and left zero at the old one. Those stops are now
+``no_boundary_in_window`` — looked at, deliberately unscored, because the honest
+statement is that the call came earlier than we asked, not that it came on the
+lap we happened to start asking.
 
 The stack runs on ``profile="no-llm"``, so the action comes from the Monte
 Carlo layer and the guard rails **deterministically**. This is a deliberate
@@ -138,6 +147,7 @@ class DecisionAgreement:
     no_call: int
     races: int
     no_data: int = 0
+    no_boundary: int = 0
 
     @property
     def sample_size(self) -> int:
@@ -145,8 +155,13 @@ class DecisionAgreement:
 
     @property
     def eligible(self) -> int:
-        """Every stop the tier looked at, scored or not."""
-        return self.sample_size + self.guard_railed + self.no_call + self.no_data
+        """Every stop the tier looked at, scored or not.
+
+        ``no_boundary`` joined this sum in #752 and it has to: those stops WERE
+        looked at. Leaving them out would shrink the denominator and inflate the
+        scored share by exactly the stops the old code used to score wrongly.
+        """
+        return self.sample_size + self.guard_railed + self.no_call + self.no_data + self.no_boundary
 
     @property
     def exact(self) -> float:
@@ -310,10 +325,50 @@ def _decisions_in_window(
     return actions
 
 
-def _first_pit_lap(actions: dict[int, str], low: int, high: int) -> int | None:
-    """Earliest lap in the window on which the stack asked to stop, or None."""
+def _asks_to_stop(actions: dict[int, str], low: int, high: int) -> bool:
+    """Whether the stack asked to stop anywhere in the window, transition or not.
+
+    Only used to tell "it never wanted to stop" from "it already wanted to stop
+    before we started asking". Those are opposite findings and the old bucketing
+    could not distinguish them.
+    """
+    return any(actions.get(lap) in _PIT_ACTIONS for lap in range(low, high + 1))
+
+
+def _pit_decision_lap(actions: dict[int, str], low: int, high: int) -> int | None:
+    """The lap the stack DECIDED to stop on — the first non-pit → pit transition.
+
+    WHY A TRANSITION AND NOT THE FIRST PIT LAP (#752)
+    -------------------------------------------------
+    This used to return the earliest lap in the window carrying a pit action. That
+    reports the window's left edge for any stack that would pit on *every* lap of
+    it, which is not a timing estimate — it is ``window_low`` wearing one.
+
+    Measured before the change, 2025 Monza + Marina_Bay, moving only the eval's own
+    window width:
+
+        window = 5     12 offsets at -5   (the edge)   mean signed -3.08
+        window = 10     0 offsets at -5, 10 at -10     mean signed -5.04
+
+    The mass at -5 does not survive widening; it goes to **zero** and reappears at
+    the new boundary. So the published -2.23 / -3.08 / -5.04 were three readings of
+    the window, not three readings of the model.
+
+    A transition is the smallest thing that is actually a decision: the stack said
+    "stay out" and then said "box". Where no transition exists, this returns None
+    and the caller records ``no_boundary_in_window`` rather than inventing a lap —
+    which is the honest report for a stack that was already committed when the
+    window opened, and the one the old code could not make.
+
+    Requires ``lap - 1`` to have been EVALUATED, not merely absent: an unevaluated
+    predecessor cannot witness a transition, so it is not counted as one. The
+    caller widens the replay span by a lap so ``low`` itself can be judged.
+    """
     for lap in range(low, high + 1):
-        if actions.get(lap) in _PIT_ACTIONS:
+        if actions.get(lap) not in _PIT_ACTIONS:
+            continue
+        previous = actions.get(lap - 1)
+        if previous is not None and previous not in _PIT_ACTIONS:
             return lap
     return None
 
@@ -407,7 +462,11 @@ def measure_decision_agreement(
             # One replay pass per (race, driver) spanning the union of the windows.
             # Two stops twenty laps apart still cost one pass, which is where the
             # runtime budget for a stratified subset comes from.
-            low = max(1, min(stop_laps) - DECISION_WINDOW_LAPS)
+            # One lap BEFORE the earliest window, so `window_low` itself can be
+            # judged: a transition into a pit action needs its predecessor to have
+            # been evaluated, and without this the first lap of every window would
+            # be permanently unjudgeable (#752). One extra lap per (race, driver).
+            low = max(1, min(stop_laps) - DECISION_WINDOW_LAPS - 1)
             high = min(total_laps, max(stop_laps) + DECISION_WINDOW_LAPS)
             engine = RaceReplayEngine(str(race_dir), driver, team, interval_seconds=0)
             actions = _decisions_in_window(engine, featured, driver, low, high, risk_tolerance)
@@ -431,11 +490,19 @@ def measure_decision_agreement(
                     )
                     continue
 
-                chosen = _first_pit_lap(actions, window_low, window_high)
+                chosen = _pit_decision_lap(actions, window_low, window_high)
                 if chosen is None:
-                    verdicts.append(
-                        StopVerdict(year, race, driver, stop_lap, None, None, "no_call_in_window")
+                    # Two opposite findings the old bucketing merged into one. "It
+                    # never asked to stop" is the model declining; "it asked on
+                    # every lap, including the first we offered" is the model
+                    # already committed before we started looking, and reporting
+                    # the window edge as its choice is what #752 retired.
+                    unscored = (
+                        "no_boundary_in_window"
+                        if _asks_to_stop(actions, window_low, window_high)
+                        else "no_call_in_window"
                     )
+                    verdicts.append(StopVerdict(year, race, driver, stop_lap, None, None, unscored))
                     continue
 
                 verdicts.append(
@@ -449,6 +516,7 @@ def measure_decision_agreement(
         no_call=sum(1 for v in verdicts if v.bucket == "no_call_in_window"),
         races=races_measured,
         no_data=sum(1 for v in verdicts if v.bucket == "no_data"),
+        no_boundary=sum(1 for v in verdicts if v.bucket == "no_boundary_in_window"),
     )
     return agreement, verdicts
 
@@ -501,6 +569,15 @@ def _render_table(
         "number to watch: the stack looked and declined to stop anywhere near the real",
         "lap. Charging a retirement to the model as a missed call would flatter neither",
         "side honestly, so the two are never merged.",
+        "",
+        "`no_boundary_in_window` is the third case and it is the one this tier used to",
+        "get wrong (#752). The stack asked to stop on every lap offered, including the",
+        "first, so there is no STAY_OUT -> PIT transition to locate: it was already",
+        "committed before the window opened. Scoring it reported the window's left edge",
+        "as the model's choice, which is why the retired `mean_signed_error` moved with",
+        "the window width instead of with the model. A stop here is counted as looked-at",
+        "and left unscored, because the honest statement is that we do not know when it",
+        "would have called the stop, only that it was earlier than we asked.",
         "",
         "### Scope",
         "",
