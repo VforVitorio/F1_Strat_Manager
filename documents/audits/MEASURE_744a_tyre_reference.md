@@ -79,6 +79,30 @@ value needs a bound.
 low-degradation ones — hard compounds in low-deg races — so the band draws from a different
 population than the ones below it. Every candidate dips there, including `none`.
 
+⚠️ **Say the consequence out loud, because it is a formal acceptance box on #744.** That dip means
+`monotonic_bands` is **False in-sample for what shipped**, so the "monotonic by tyre-life band" half
+of the criterion is strictly unmet on 2023-24. The mitigation above is real, and it is a mitigation,
+not a pass. Gate G2 found that #760 had also replaced the `monotone` column in the printed report
+with `p1`/`p99` in the same commit — not deliberately, but the effect was that the one place stating
+the criterion stopped stating it. The column is back.
+
+## The criterion PASSES on 2025, and the reference is roughly twice as strong there
+
+Measured by gate G2 with the same instrument, overriding only the season (15,005 laps):
+
+| | training 2023-24 | **2025** |
+|---|---|---|
+| non-negative | 73.9% | **83.7%** |
+| Spearman | +0.308 | **+0.603** |
+| monotonic by band | **False** | **True** |
+
+This was an adversarial attack that expected the opposite: 2025 is the test season, excluded from the
+measurement precisely so no constant could be fitted to it, so the honest prior was that an
+out-of-sample check would degrade. It improves. The reference is strongest on the season the layer
+actually serves, and the same direction showed up independently in the decision metric
+(`MEASURE_752_metric_and_sample.md`), where moving the sample to 2025 was worth +12.8 points of exact
+agreement. **No cause is claimed for either.**
+
 ## What this means for the reverted design
 
 `DESIGN_S3_option_b.md` reverted the same-stint reference on **110 laps at one race**: 64.8%

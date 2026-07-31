@@ -175,9 +175,21 @@ def test_with_no_reading_the_scorer_is_byte_identical_to_the_old_credit():
         assert delta == pytest.approx(np.full(DRAWS, -laps_after_stop * 0.25))
 
 
-def test_the_cliff_term_and_the_wear_term_do_not_overlap():
-    """They price different laps: the cliff bills only laps run PAST it, the wear
-    bills every old-set lap. A tyre ten laps from the cliff used to cost nothing."""
+def test_the_cliff_term_stacks_on_top_of_the_wear_rather_than_replacing_it():
+    """They price different THINGS, and past the cliff they are deliberately additive.
+
+    The wear is what an old set costs on every lap it is held. The cliff is an EXTRA
+    penalty once the set is past it. So before the cliff only the wear applies, and past
+    it both do — 5 laps charged 0.4 plus the same 5 charged 0.8.
+
+    Named for what it pins. An earlier version of this test was called "do_not_overlap"
+    and its docstring claimed the two bill disjoint laps, which is the opposite of the
+    second assertion below: they bill the SAME laps for different reasons. A test name
+    stating the reverse of its own assertion is worse than no name (gate G2, LOW).
+
+    The property that matters for #744b is not disjointness, it is that a tyre ten laps
+    from the cliff now costs something at all, where it used to cost exactly nothing.
+    """
     config = _config(deg_cost_s=0.4, cliff_loss_s=0.8)
     plan = DriverPlan(name="STAY_OUT", stops_in_window=False, stop_offset_laps=0)
 
@@ -189,14 +201,21 @@ def test_the_cliff_term_and_the_wear_term_do_not_overlap():
 
 
 # ---------------------------------------------------------------------------
-# The legacy scorer — the one the backend endpoint runs in production
+# The legacy scorer — reached whenever a caller has no usable rival gaps
 # ---------------------------------------------------------------------------
 #
-# Not a relic. Three shipping builders hardcode `"rivals": []`, which routes to it:
-# `engine.py`, `strategy_orchestrator.py`, and the backend's own
-# `api/v1/endpoints/strategy.py`. A fix that reached only the projection branch would
-# have connected the tyre channel for arcade and the CLI while leaving the backend on
-# the old constant.
+# Not a relic. TWO shipping builders hardcode `"rivals": []`, which routes here:
+# `engine.py::_build_default_lap_state` and `strategy_orchestrator.py`, both serving a
+# caller that supplies only a RaceState. `_has_usable_gaps` also demotes to this branch
+# whenever every rival interval is NaN.
+#
+# NOT the backend endpoint, despite what #744 says and despite what the first version of
+# this comment repeated. `api/v1/endpoints/strategy.py:882` also hardcodes an empty rival
+# list, but its only consumer calls `run_pace_agent_from_state`, so it never reaches the
+# Monte Carlo; the backend's own MC paths pass real rivals. Traced twice, once here and
+# once by the gate that found this comment still carrying the uncorrected claim after the
+# commit message had been fixed — one copy corrected, its twin not, inside the very PR
+# that was correcting it.
 
 
 @pytest.mark.skipif(
@@ -311,9 +330,9 @@ class TestTheValueReachesBothBranches:
         )
 
     def test_the_legacy_branch_receives_it(self):
-        """Reached whenever a caller passes no usable gaps, which three shipping
-        builders do by hardcoding an empty rival list — including the backend's own
-        endpoint. This is the branch that runs in production behind the API."""
+        """Reached whenever a caller passes no usable gaps, which two shipping builders
+        do by hardcoding an empty rival list, and which `_has_usable_gaps` also forces
+        whenever every rival interval is NaN."""
         without = self._score([], None)
         with_wear = self._score([], 0.4)
 
@@ -335,3 +354,95 @@ class TestTheValueReachesBothBranches:
 
         assert self._score([], None) == self._score([], None)
         assert self._score(rivals, None) == self._score(rivals, None)
+
+    def test_every_candidate_pays_at_its_own_call_site_not_just_the_helper(self):
+        """Gate G2's surviving mutant: zeroing OVERCUT's old-lap count AT THE CALL SITE
+        left all 232 tests green.
+
+        `test_the_overcut_green_branch_splits_the_window` above tests `_tyre_term` with
+        the right arguments. It cannot see whether `simulate_lap_window` passes them,
+        and nothing else evaluated OVERCUT with a reading present. So this reads the
+        four candidates through the public function and pins each one's charge as the
+        DIFFERENCE between a worn reading and a zero one, which isolates the tyre term
+        from the pit loss and the cliff without having to restate either.
+        """
+        from src.agents.strategy_orchestrator import WINDOW_LAPS, simulate_lap_window
+
+        deg = 0.4
+        # Cliff far away and no neutralisation, so only the tyre term differs.
+        kwargs = dict(cliff_i=99.0, sc_i=False, pit_i=22.0, ucut_i=False)
+
+        def charge(strategy: str) -> float:
+            """Positions the reading costs this candidate, positive = worse."""
+            return simulate_lap_window(strategy, deg_cost_s=0.0, **kwargs) - simulate_lap_window(
+                strategy, deg_cost_s=deg, **kwargs
+            )
+
+        from src.agents.strategy_orchestrator import POS_GAP_S
+
+        expected = {
+            "STAY_OUT": deg * WINDOW_LAPS / POS_GAP_S,
+            "PIT_NOW": 0.0,
+            "UNDERCUT": 0.0,
+            "OVERCUT": deg * (WINDOW_LAPS // 2) / POS_GAP_S,
+        }
+        for strategy, want in expected.items():
+            assert charge(strategy) == pytest.approx(want), strategy
+
+    def test_under_a_neutralisation_the_overcut_runs_no_old_set_laps(self):
+        """The SC arm of OVERCUT pits immediately, so it owes nothing for the old set.
+
+        Pinned separately from the green arm because the two are different branches of
+        the same `if`, and the green one is the only candidate in either scorer whose
+        laps split across the stop.
+        """
+        from src.agents.strategy_orchestrator import simulate_lap_window
+
+        kwargs = dict(cliff_i=99.0, sc_i=True, pit_i=22.0, ucut_i=False)
+
+        assert simulate_lap_window("OVERCUT", deg_cost_s=0.4, **kwargs) == pytest.approx(
+            simulate_lap_window("OVERCUT", deg_cost_s=0.0, **kwargs)
+        )
+
+    def test_the_neutralised_config_carries_the_reading_too(self):
+        """Gate G2's other surviving mutant: setting the value on the green config but
+        NOT the neutralised one left all 232 tests green.
+
+        The mutant I claimed to have run was not that mutant. It disabled the value
+        whenever `clean_air_gain_s == 0.0`, which is also true of the green config in
+        that fixture, so it took out both arms — which is why it went red for the wrong
+        reason. A genuine green-only mutant survived.
+
+        Catching it needs a FULLY neutralised scenario (`sc_prob_3lap = 1.0`, so every
+        draw takes the neutralised config) and rivals close enough that the neutralised
+        window's wear actually crosses a gap. Under a Safety Car the window is worth
+        ~2.6 racing laps, so the charge is small and a wide gap absorbs it silently —
+        which is exactly how the previous fixture passed while blind.
+        """
+        from dataclasses import replace
+
+        from src.agents.strategy_orchestrator import _run_mc_simulation
+
+        from .test_strategy_goldens import _canned_outputs
+
+        pace, tire, situation, pit = _canned_outputs()
+        rivals = [
+            {"driver": "VER", "interval_to_driver_s": -0.4, "is_pitting": False},
+            {"driver": "LEC", "interval_to_driver_s": 0.5, "is_pitting": False},
+        ]
+
+        def score(deg_cost_s):
+            return _run_mc_simulation(
+                pace_out=pace,
+                tire_out=replace(tire, deg_cost_s=deg_cost_s),
+                situation_out=replace(situation, sc_prob_3lap=1.0),
+                pit_out=pit,
+                alpha=0.5,
+                rivals=rivals,
+                position=5,
+                laps_remaining=25,
+                pit_context=None,
+            )
+
+        assert score(0.8)["STAY_OUT"]["E"] != score(None)["STAY_OUT"]["E"]
+        assert score(0.8)["STAY_OUT"]["E"] != score(0.0)["STAY_OUT"]["E"]

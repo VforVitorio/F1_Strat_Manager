@@ -341,3 +341,39 @@ def test_a_real_lap_carries_a_cost_that_the_raw_level_could_not_have_given():
     assert tire_out.cumulative_deg_s < tire_out.deg_cost_s
     # A five-lap-old set costs something small and non-negative, not a credit.
     assert 0.0 <= tire_out.deg_cost_s < 1.0
+
+
+@pytest.mark.skipif(
+    not (_HAS_MODELS and _HAS_DATA),
+    reason="needs data/models/tire_degradation/ and data/{raw/2025/Lusail,processed} (HF, not git)",
+)
+def test_the_reference_is_taken_from_the_stints_early_laps_and_not_from_all_of_them():
+    """Gate G2's third survivor, and the nastiest, because it disables the feature.
+
+    Widen `fresh_reference_tyre_life` past the current tyre life and the reference
+    tensor becomes the prediction tensor: `deg_cost_s` reads **exactly 0.0 on every
+    lap**, so both scorers charge nothing for the old set AND grant no fresh credit.
+    The channel is not degraded to the fallback, it is switched off — strictly worse
+    than before #744b — and 232 tests stayed green.
+
+    The real-lap test above cannot see it: its band is `0.0 <= deg_cost_s`, which the
+    degenerate value satisfies exactly at the boundary. That is this project's
+    catalogued "assertion passes for the wrong reason near a boundary" defect, so the
+    semantic gets its own assertion rather than a tighter band on that one.
+
+    Exact zero is the mutant's signature. It is not a value this fixture can produce
+    legitimately: the guard below pins that the car is past the reference tyre life, so
+    the reference prefix is strictly shorter than the prediction's and the two readings
+    come from different tensors.
+    """
+    from src.agents.tire_agent import CFG
+    from src.strategy.inference.no_llm import _tire_no_llm
+
+    lap_state, laps = _scoped_lusail_lap_30()
+    tire_out = _tire_no_llm(lap_state, laps)
+
+    assert tire_out.current_tyre_life > CFG.fresh_reference_tyre_life, (
+        "fixture no longer exercises the case: pick a lap deeper into the stint"
+    )
+    assert tire_out.deg_cost_s is not None
+    assert tire_out.deg_cost_s != 0.0

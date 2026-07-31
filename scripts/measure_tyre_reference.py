@@ -206,13 +206,22 @@ def report(results: dict, n_laps: int, correlation: float) -> str:
         f"laps scored: {n_laps}  (tyre life > {FRESH_MAX_TYRE_LIFE}, seasons {TRAINING_YEARS})",
         f"harness self-check: corr(pred, target) = {correlation:.3f}",
         "",
-        f"{'reference':<16}{'non-neg':>9}{'spearman':>10}{'pearson':>9}{'p1':>8}{'p99':>8}",
+        f"{'reference':<16}{'non-neg':>9}{'spearman':>10}{'monotone':>10}{'p1':>8}{'p99':>8}",
     ]
     for name, scores in results.items():
         lines.append(
             f"{name:<16}{scores['non_negative_pct']:>8.1f}%{scores['spearman']:>10.3f}"
-            f"{scores['pearson']:>9.3f}{scores['p1']:>8.2f}{scores['p99']:>8.2f}"
+            f"{str(scores['monotonic_bands']):>10}{scores['p1']:>8.2f}{scores['p99']:>8.2f}"
         )
+    lines += [
+        "",
+        "`monotone` is one of #744's two acceptance criteria and it reads False on the",
+        "training seasons for EVERY candidate, including having no reference at all: the",
+        "(25, 100] band dips because stints that reach 25 laps are the low-degradation ones,",
+        "so that band draws from a different population. It reads True on 2025. The column is",
+        "printed rather than argued away, because an earlier version of this script dropped it",
+        "in the same commit that shipped a candidate it reads False for.",
+    ]
     return "\n".join(lines)
 
 
