@@ -48,6 +48,28 @@ was an unmeasured constant, which is what the redesign exists to remove:
   matches the timing screen but does not model the unlapping procedure before a
   restart (Art. 55.13).
 
+THREE HORIZONS FOR ONE FACT, stated once and prominently because the module used
+to leave it implicit and that read as an inconsistency waiting to be "fixed"
+(#742). ``rival_time_deltas``, ``_terminal_gaps`` and ``rank_targets`` each ask
+whether a rival's outstanding pit stop should cost them time, and each answers
+correctly for a DIFFERENT horizon, not for the same one three times::
+
+    rival_time_deltas -> rival.is_pitting                              (inside the window)
+    _terminal_gaps     -> rival.stop_pending is True and not is_pitting (race end)
+    rank_targets        -> rival.stop_pending is True                   (after both pit cycles)
+
+A rival who owes a stop but is not taking it inside the window genuinely loses
+no time inside the window, so ``is_pitting`` is the right predicate there. The
+same rival genuinely falls back by the race end whether or not they stop this
+lap, so ``stop_pending`` is right at that horizon; ``_terminal_gaps`` then
+excludes a rival who IS pitting right now, because ``rival_time_deltas`` already
+charged that stop inside the window and charging it again would push them a
+full pit cycle further back than they will ever be. ``rank_targets`` looks past
+both pit cycles, where whether the stop happens on THIS lap stops mattering, so
+it drops the ``is_pitting`` guard entirely. Making the three agree would not fix
+a bug: it would delete the distinction between "now", "by the end of the race"
+and "once everyone has stopped" that the three horizons exist to carry.
+
 --- WHERE TO CHANGE IF THE RIVALS CONTRACT CHANGES ---
 ``RivalState`` mirrors the fields ``RaceStateManager.get_rival_states`` emits
 (``interval_to_driver_s``, ``is_pitting``, ``lap_time_s``). If that contract
@@ -187,8 +209,21 @@ class ProjectionConfig:
                           zero under a neutralisation, which is what makes the
                           Art. 55.17 endgame fall out of the arithmetic: with no
                           racing laps left, fresh tyres buy nothing.
-        fresh_gain_s:     Seconds per lap a fresh tyre gains.
-        cliff_loss_s:     Seconds per lap lost past the tyre cliff.
+        fresh_gain_s:     Seconds per lap a fresh tyre gains. The FALLBACK for
+                          ``deg_cost_s``, used only when the tyre model gave no
+                          reading; the two are the same quantity and are never
+                          charged together.
+        deg_cost_s:       Seconds per lap the CURRENT set costs versus fresh, read
+                          from the tyre model rather than assumed. ``None`` when
+                          the model had no reference to subtract, which leaves
+                          ``fresh_gain_s`` in charge. Measured, not tuned: this is
+                          a fact about the car's tyres, so it belongs here, whereas
+                          a hand-picked weight on it would not.
+        cliff_loss_s:     Seconds per lap lost past the tyre cliff. Charged only on
+                          laps run PAST the cliff, so it does not overlap
+                          ``deg_cost_s``, which is charged on every old-set lap.
+                          A tyre ten laps from the cliff but 0.4 s off the pace was
+                          previously priced identically to a fresh one.
         neutralisation_saving_s: Seconds a stop saves when taken under a
                           neutralisation (the field is queued, so the pit loss
                           costs less).
@@ -217,6 +252,7 @@ class ProjectionConfig:
     window_laps: int = 5
     racing_laps: float = 5.0
     fresh_gain_s: float = 0.25
+    deg_cost_s: float | None = None
     cliff_loss_s: float = 0.80
     neutralisation_saving_s: float = 8.0
     undercut_band_s: float = DEFAULT_UNDERCUT_BAND_S
@@ -491,6 +527,38 @@ def _usable_rivals(rivals: Sequence[RivalState]) -> list[RivalState]:
     ]
 
 
+def _tyre_cost_s(config: ProjectionConfig, *, old_laps: float, fresh_laps: float) -> float:
+    """Seconds this plan's tyre state costs, positive = worse for us.
+
+    Sign convention differs from ``strategy_orchestrator._tyre_term`` because this
+    module accumulates a LOSS while that one accumulates a gain. Same two mutually
+    exclusive prices for the same physical thing: a measured cost on the laps spent
+    on the old set, or the hardcoded fresh credit when the model gave no reading.
+
+    THE ASYMMETRY WITH RIVALS IS REAL, AND IT IS A LIMITATION, NOT A CORRECTION
+    ---------------------------------------------------------------------------
+    This scorer works in gaps, and ``rival_time_deltas`` moves each rival by
+    ``pace_delta_s * racing_laps``. That is not a reason to skip our own wear: a
+    pace delta is a SNAPSHOT of the rival's relative pace at the current lap, and it
+    says nothing about how the gap moves as our set degrades across the window.
+    Charging our wear is exactly that extrapolation, and without it the projection
+    prices a twenty-lap-old set identically to a fresh one for every lap it holds.
+
+    What is genuinely missing is the mirror: **their** degradation is not modelled,
+    because the single-driver boundary gives rivals timing-screen data only and there
+    is no per-rival tyre state to run a TCN on. So a rival on older tyres than ours
+    is credited with holding their current pace. That biases the comparison toward
+    stopping, in the same direction and for a different reason than the term above,
+    and it is a known limitation of the projection rather than something this
+    function should compensate for by silently halving a measured cost.
+
+    The legacy path has no rivals and never faced the question.
+    """
+    if config.deg_cost_s is None:
+        return -fresh_laps * config.fresh_gain_s
+    return old_laps * config.deg_cost_s
+
+
 def driver_time_delta(
     plan: DriverPlan,
     pit_loss_s: np.ndarray,
@@ -544,7 +612,7 @@ def driver_time_delta(
         worn_laps = np.maximum(0.0, laps_before_stop - cliff_laps)
         delta += effective_loss
         delta += worn_laps * config.cliff_loss_s
-        delta -= laps_after_stop * config.fresh_gain_s
+        delta += _tyre_cost_s(config, old_laps=laps_before_stop, fresh_laps=laps_after_stop)
         delta -= laps_before_stop * config.clean_air_gain_s
 
         waiting_pays = laps_before_stop * config.neutralisation_onset_rate * saving_if_it_comes
@@ -552,6 +620,7 @@ def driver_time_delta(
     else:
         worn_laps = np.maximum(0.0, racing - cliff_laps)
         delta += worn_laps * config.cliff_loss_s
+        delta += _tyre_cost_s(config, old_laps=racing, fresh_laps=0.0)
 
     return delta
 
@@ -821,8 +890,15 @@ def rank_targets(
     in front of us.
 
     Deterministic and run once (no sampling): it selects who to attack, and the
-    Monte Carlo then scores the attacking. Both consume the same definition of
-    "who we are racing", so the selector and the scorer can no longer disagree.
+    Monte Carlo then scores the attacking. Both go through the same
+    ``_usable_rivals`` filter, so the selector and the scorer can never disagree
+    about WHICH rivals are in play (a rival with an unknown gap cannot silently
+    show up in one and not the other). That is the only thing shared: this
+    function does NOT use the same stop-obligation predicate as the scorer's
+    ``rival_time_deltas`` / ``_terminal_gaps``, and it should not be made to.
+    See "THREE HORIZONS FOR ONE FACT" at the top of this module for why
+    ``rank_targets`` charges ``stop_pending`` alone rather than the
+    ``is_pitting`` guard the other two use (#742).
     """
     ranked: list[TargetRanking] = []
 

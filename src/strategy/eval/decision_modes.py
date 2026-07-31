@@ -13,11 +13,26 @@ WHAT THIS MEASURES, EXACTLY
 ---------------------------
 For every real green-flag stop in the sampled races, the stack is driven over a
 window of laps either side of the real stop lap and asked, lap by lap, what it
-would do. The first lap inside the window on which it emits a pit action is
-"the lap it would have chosen"; the signed distance to the real lap is the
-error. Signed, not absolute, for the reason ``GroundTruth.mean_signed_error``
-exists: stopping consistently early or late is a fixable bug, and a magnitude
-hides it.
+would do. The lap it would have chosen is the first **transition** — the lap
+where it stops saying "stay out" and starts saying "box" — and the signed
+distance to the real lap is the error. Signed, not absolute, for the reason
+``GroundTruth.mean_signed_error`` exists: stopping consistently early or late is
+a fixable bug, and a magnitude hides it.
+
+A transition and not simply the first pit lap, because that is what #752
+retired. A stack whose earliest pit ask has no evaluated non-pit lap before it
+has no decision inside the window, and reporting the window's left edge as its
+choice made the error a property of the window: widening it from 5 laps to 10
+moved the entire mass from one boundary to the other and left zero at the old
+one. Those stops are now ``no_boundary_in_window``: looked at, deliberately
+unscored, because the honest statement is that the call came earlier than we
+asked, not that it came on the lap we happened to start asking.
+
+That bucket means *no locatable decision*, and nothing more. It is NOT a
+description of what the stack did. On the measured 2025 Monza sample all four
+occupants were committed when the window opened and then WITHDREW inside it, one
+of them flipping to stay-out on the exact lap the team really stopped. See
+``_render_table`` for the three distinct shapes that land there.
 
 The stack runs on ``profile="no-llm"``, so the action comes from the Monte
 Carlo layer and the guard rails **deterministically**. This is a deliberate
@@ -68,7 +83,12 @@ from src.strategy.eval.report import build_header, write_report
 # From the leaf module, never from ``no_llm``: that one imports the agent stack and
 # loads model weights at import time, which would make this report — and every other
 # ``f1-eval`` subcommand next to it — impossible to even import without ``data/models/``.
-from src.strategy.inference.guard_rails import _MIN_STINT_LAPS, _PIT_ACTIONS, apply_guard_rails
+from src.strategy.inference.guard_rails import (
+    _MIN_STINT_LAPS,
+    _NO_PIT_BEFORE_LAP,
+    _PIT_ACTIONS,
+    apply_guard_rails,
+)
 
 # Laps either side of the real stop that the stack is asked about. Five matches
 # the Monte Carlo decision window, so the question posed to the model is the one
@@ -83,11 +103,18 @@ DECISION_WINDOW_LAPS = 5
 # track position dominates, one low-downforce low-stop circuit and one fast circuit
 # with variable weather. Widening this is a runtime decision, not a correctness one —
 # but the report must keep saying which races it used.
+#
+# ALL SIX ARE 2025, AND THAT IS THE CORRECTNESS HALF. The first version of this list
+# took four of its six races from 2023-24, which are TRAINING seasons for every model
+# in the stack. A decision tier scored there is partly reading back its own training
+# data, and the whole point of this report is what the shipped system does on the
+# season it actually infers on. The archetypes are unchanged; only the year moved, so
+# the stratification argument above still holds.
 SAMPLED_RACES: tuple[tuple[int, str], ...] = (
-    (2023, "Barcelona"),  # conventional, high degradation
-    (2023, "Monaco"),  # street, track position is everything
-    (2024, "Silverstone"),  # fast, weather-variable
-    (2024, "Marina_Bay"),  # street, high degradation
+    (2025, "Barcelona"),  # conventional, high degradation
+    (2025, "Monaco"),  # street, track position is everything
+    (2025, "Silverstone"),  # fast, weather-variable
+    (2025, "Marina_Bay"),  # street, high degradation
     (2025, "Lusail"),  # high degradation, stint-limited history
     (2025, "Monza"),  # low downforce, fewest stops
 )
@@ -138,6 +165,7 @@ class DecisionAgreement:
     no_call: int
     races: int
     no_data: int = 0
+    no_boundary: int = 0
 
     @property
     def sample_size(self) -> int:
@@ -145,8 +173,13 @@ class DecisionAgreement:
 
     @property
     def eligible(self) -> int:
-        """Every stop the tier looked at, scored or not."""
-        return self.sample_size + self.guard_railed + self.no_call + self.no_data
+        """Every stop the tier looked at, scored or not.
+
+        ``no_boundary`` joined this sum in #752 and it has to: those stops WERE
+        looked at. Leaving them out would shrink the denominator and inflate the
+        scored share by exactly the stops the old code used to score wrongly.
+        """
+        return self.sample_size + self.guard_railed + self.no_call + self.no_data + self.no_boundary
 
     @property
     def exact(self) -> float:
@@ -310,12 +343,92 @@ def _decisions_in_window(
     return actions
 
 
-def _first_pit_lap(actions: dict[int, str], low: int, high: int) -> int | None:
-    """Earliest lap in the window on which the stack asked to stop, or None."""
+def _asks_to_stop(actions: dict[int, str], low: int, high: int) -> bool:
+    """Whether the stack asked to stop anywhere in the window, transition or not.
+
+    Only used to tell "it never wanted to stop" from "it already wanted to stop
+    before we started asking". Those are opposite findings and the old bucketing
+    could not distinguish them.
+    """
+    return any(actions.get(lap) in _PIT_ACTIONS for lap in range(low, high + 1))
+
+
+def _pit_decision_lap(actions: dict[int, str], low: int, high: int) -> int | None:
+    """The lap the stack DECIDED to stop on — the first non-pit → pit transition.
+
+    WHY A TRANSITION AND NOT THE FIRST PIT LAP (#752)
+    -------------------------------------------------
+    This used to return the earliest lap in the window carrying a pit action. That
+    reports the window's left edge for any stack that would pit on *every* lap of
+    it, which is not a timing estimate — it is ``window_low`` wearing one.
+
+    Measured before the change, 2025 Monza + Marina_Bay, moving only the eval's own
+    window width:
+
+        window = 5     12 offsets at -5   (the edge)   mean signed -3.08
+        window = 10     0 offsets at -5, 10 at -10     mean signed -5.04
+
+    The mass at -5 does not survive widening; it goes to **zero** and reappears at
+    the new boundary. So the published -2.23 / -3.08 / -5.04 were three readings of
+    the window, not three readings of the model.
+
+    A transition is the smallest thing that is actually a decision: the stack said
+    "stay out" and then said "box". Where no transition exists, this returns None
+    and the caller records ``no_boundary_in_window`` rather than inventing a lap —
+    which is the honest report for a stack that was already committed when the
+    window opened, and the one the old code could not make.
+
+    Requires ``lap - 1`` to have been EVALUATED, not merely absent: an unevaluated
+    predecessor cannot witness a transition, so it is not counted as one. The
+    caller widens the replay span by a lap so ``low`` itself can be judged.
+
+    A RAILED PREDECESSOR IS NOT A WITNESS EITHER
+    ---------------------------------------------
+    Actions are recorded AFTER the guard rails (``no_llm.py``), and the opening
+    rail forces STAY_OUT on every lap below ``_NO_PIT_BEFORE_LAP`` outside a
+    neutralisation. So a stack that wants to box from lap 1 is recorded as
+    ``STAY_OUT, STAY_OUT, STAY_OUT, STAY_OUT, PIT`` and the transition lands on
+    ``_NO_PIT_BEFORE_LAP`` for every such stop — a constant of the rails wearing a
+    timing estimate, which is the shape #752 retired, relocated from ``window_low``
+    to the rail boundary. Those stops go to ``no_boundary_in_window`` instead.
+
+    Rejecting on the lap number alone over-rejects under a Safety Car, where the
+    rail is suspended and lap 5 may be a real transition. That is the conservative
+    direction and the same one this whole metric took: refusing to score is honest,
+    inventing a lap is not.
+    """
     for lap in range(low, high + 1):
-        if actions.get(lap) in _PIT_ACTIONS:
-            return lap
+        if actions.get(lap) not in _PIT_ACTIONS:
+            continue
+        previous = actions.get(lap - 1)
+        if previous is None or previous in _PIT_ACTIONS:
+            continue
+        if lap <= _NO_PIT_BEFORE_LAP:
+            continue
+        return lap
     return None
+
+
+def _replay_span(stop_laps: list[int], total_laps: int) -> tuple[int, int]:
+    """The laps to replay for one (race, driver), covering the union of the windows.
+
+    One pass per driver rather than one per stop: two stops twenty laps apart still
+    cost one replay, which is where the runtime budget for a stratified subset comes
+    from.
+
+    The span opens **one lap before** the earliest scoring window. A transition needs
+    its predecessor to have been evaluated, so without that extra lap the first lap of
+    every window would be permanently unjudgeable and the edge report would return
+    through the back door: on 2025 Monza it is the difference between HAD's stop
+    scoring at lap 27 and landing in ``no_boundary_in_window`` (#752).
+
+    It is a separate function because that one lap was previously asserted by a comment
+    and nothing else. Reverting it left the whole suite green while moving the published
+    error by half its value, so it now has a home a test can reach.
+    """
+    low = max(1, min(stop_laps) - DECISION_WINDOW_LAPS - 1)
+    high = min(total_laps, max(stop_laps) + DECISION_WINDOW_LAPS)
+    return low, high
 
 
 def _stop_context(laps, driver: str, lap: int) -> tuple[str | None, int | None]:
@@ -404,11 +517,7 @@ def measure_decision_agreement(
             if team is None:
                 continue
 
-            # One replay pass per (race, driver) spanning the union of the windows.
-            # Two stops twenty laps apart still cost one pass, which is where the
-            # runtime budget for a stratified subset comes from.
-            low = max(1, min(stop_laps) - DECISION_WINDOW_LAPS)
-            high = min(total_laps, max(stop_laps) + DECISION_WINDOW_LAPS)
+            low, high = _replay_span(stop_laps, total_laps)
             engine = RaceReplayEngine(str(race_dir), driver, team, interval_seconds=0)
             actions = _decisions_in_window(engine, featured, driver, low, high, risk_tolerance)
 
@@ -431,11 +540,21 @@ def measure_decision_agreement(
                     )
                     continue
 
-                chosen = _first_pit_lap(actions, window_low, window_high)
+                chosen = _pit_decision_lap(actions, window_low, window_high)
                 if chosen is None:
-                    verdicts.append(
-                        StopVerdict(year, race, driver, stop_lap, None, None, "no_call_in_window")
+                    # Two opposite findings the old bucketing merged into one. "It
+                    # never asked to stop" is the model declining; "it asked, but no
+                    # transition can be located" is the model already committed when
+                    # we started looking, and reporting the window edge as its choice
+                    # is what #752 retired. The second bucket says only that - it does
+                    # NOT say the stack asked on every lap, which measured false on
+                    # 4 of 4 real occupants (they withdrew mid-window).
+                    unscored = (
+                        "no_boundary_in_window"
+                        if _asks_to_stop(actions, window_low, window_high)
+                        else "no_call_in_window"
                     )
+                    verdicts.append(StopVerdict(year, race, driver, stop_lap, None, None, unscored))
                     continue
 
                 verdicts.append(
@@ -449,6 +568,7 @@ def measure_decision_agreement(
         no_call=sum(1 for v in verdicts if v.bucket == "no_call_in_window"),
         races=races_measured,
         no_data=sum(1 for v in verdicts if v.bucket == "no_data"),
+        no_boundary=sum(1 for v in verdicts if v.bucket == "no_boundary_in_window"),
     )
     return agreement, verdicts
 
@@ -481,8 +601,12 @@ def _render_table(
         f"| Within 1 lap | {agreement.within_one:.1%} | same call, one lap either side |",
         f"| Within 2 laps | {agreement.within_two:.1%} | same strategic window |",
         f"| Mean signed error | {agreement.mean_signed_error:+.2f} laps | "
-        "negative = stops earlier than the team |",
-        f"| Mean absolute error | {agreement.mean_absolute_error:.2f} laps | magnitude |",
+        "negative = earlier than the team. **Do not quote as a system property** "
+        f"— still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 "
+        "at w=3/5/10 on one race), because a wider window admits more distant, and "
+        "therefore earlier, transitions |",
+        f"| Mean absolute error | {agreement.mean_absolute_error:.2f} laps | magnitude, "
+        "same width caveat |",
         f"| Coverage verdict | **{status}** | `masked` when under "
         f"{MIN_SCORED_SHARE:.0%} of eligible stops were scored |",
         "",
@@ -502,9 +626,34 @@ def _render_table(
         "lap. Charging a retirement to the model as a missed call would flatter neither",
         "side honestly, so the two are never merged.",
         "",
+        "`no_boundary_in_window` is the third case and it is the one this tier used to",
+        "get wrong (#752). It means only this: the stack asked to stop somewhere in the",
+        "window, but no STAY_OUT -> PIT transition could be located inside it. Read it",
+        "as **no locatable decision**, never as a description of what the stack did.",
+        "Three different shapes land here and they are not the same finding:",
+        "",
+        "- already asking when the window opened, and still asking on every lap;",
+        "- already asking when the window opened, then **withdrawing** later - on the",
+        "  measured 2025 Monza sample this was 4 of 4 occupants, one of them flipping to",
+        "  STAY_OUT on the exact lap the team really stopped;",
+        "- a lap inside the window that was never evaluated, so the only pit ask has no",
+        "  witness for its predecessor.",
+        "",
+        "What they share is that the earliest pit ask has no evaluated non-pit lap before",
+        "it, so any lap reported would be the window's left edge rather than the model's",
+        "choice - which is why `mean_signed_error` used to move with the window width",
+        "instead of with the model. A stop here is counted as looked-at and left unscored.",
+        "The same applies at the opening guard rail: a transition on lap",
+        f"{_NO_PIT_BEFORE_LAP} or earlier is the rail releasing, not the model deciding,",
+        "so it is bucketed here too.",
+        "",
         "### Scope",
         "",
         f"- Sampled races ({agreement.races} measured): {races}.",
+        "- **All six are 2025, deliberately.** 2023 and 2024 are training seasons for",
+        "  every model in the stack, so a decision tier scored there is partly reading",
+        "  back its own training data. An earlier version of this list took four of its",
+        "  six races from those seasons; the archetypes are unchanged, only the year.",
         "- A full sweep of the real-stop sample is roughly 11.5 h of wall clock at",
         "  0.51 s per lap through the stack, so this is a stratified subset by circuit",
         "  archetype and **not** full coverage. Read every figure above as conditional",

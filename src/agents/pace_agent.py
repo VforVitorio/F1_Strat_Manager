@@ -54,6 +54,20 @@ except (ImportError, OSError, RuntimeError):
     # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / 'data'
 
+# What stands in for the previous lap when there genuinely is not one: the first lap
+# of a race, or of a stint, where N04's Prev_LapTime is NaN by construction.
+#
+# It is a module constant rather than a literal because it had already been restated:
+# strategy_orchestrator's dict path carried 92.0 for the same quantity, so the two
+# entry points of the same model disagreed about the same missing value. Exported so
+# a second copy cannot appear again (#766).
+#
+# `_predict` reads this straight into `prev + delta` with no NaN branch, so it cannot
+# be None. That is the whole reason a placeholder exists at all, and it is why every
+# caller must use `or` rather than the two-arg `dict.get`: the key is PRESENT with a
+# None value, which the two-arg form does not substitute for.
+MISSING_PREV_LAP_TIME_S = 90.0
+
 _MODELS_DIR = _DATA_ROOT / 'models' / 'lap_time'
 _PROCESSED  = _DATA_ROOT / 'processed'
 
@@ -722,7 +736,7 @@ class PaceAgent:
             # would turn lap_time_pred itself into NaN. 90.0 is the same
             # order-of-magnitude placeholder the old (wrong) code used, now only
             # reached on a genuinely missing previous lap.
-            prev_lap_time  = d.get('prev_lap_time') or 90.0,
+            prev_lap_time  = d.get('prev_lap_time') or MISSING_PREV_LAP_TIME_S,
             prev_tyre_life = max(0, (d.get('tyre_life') or 1) - 1),
             prev_speed_st  = float(_speed_st),
             air_temp       = float(_air_temp),

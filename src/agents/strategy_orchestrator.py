@@ -66,7 +66,11 @@ except ImportError:
     _LC_OK = False
 
 # ── Sub-agent imports ──────────────────────────────────────────────────────────
-from src.agents.pace_agent         import run_pace_agent, run_pace_agent_from_state
+from src.agents.pace_agent         import (
+    MISSING_PREV_LAP_TIME_S,
+    run_pace_agent,
+    run_pace_agent_from_state,
+)
 from src.agents.tire_agent         import run_tire_agent, run_tire_agent_from_state
 from src.agents.race_situation_agent import (
     run_race_situation_agent,
@@ -664,6 +668,28 @@ VSC_PIT_BONUS = 3.0  # seconds saved by pitting under a Virtual Safety Car (Art.
                      # measured.
 
 
+def _tyre_term(deg_cost_s: float | None, old_laps: int, fresh_laps: int) -> float:
+    """Seconds the tyre state is worth over one plan's window.
+
+    Two mutually exclusive ways of pricing the same physical thing, so this is a
+    REPLACEMENT and not an addition, and the double-count trap is avoided by that
+    fact rather than by a correction term.
+
+    With a measured signal, charge the laps spent on the OLD set: a tyre 0.4 s off
+    the pace costs 0.4 s every lap you keep it, whether or not the cliff is near.
+    Without one, fall back to ``FRESH_GAIN``, the hardcoded 0.25 s/lap credit for
+    the laps spent on the NEW set, which is the same quantity guessed at instead of
+    read. Both are seconds, applied before the conversion to positions.
+
+    ``None`` is a real state, not a defect: a stint whose early laps are outside the
+    replay has no reference to subtract, and the fallback keeps that case scoring
+    exactly as it did before #744b.
+    """
+    if deg_cost_s is None:
+        return FRESH_GAIN * fresh_laps
+    return -deg_cost_s * old_laps
+
+
 def simulate_lap_window(
     strategy: str,
     cliff_i:  float,
@@ -672,6 +698,7 @@ def simulate_lap_window(
     ucut_i:   bool,
     window:   int = WINDOW_LAPS,
     sc_pit_bonus: float = SC_PIT_BONUS,
+    deg_cost_s: float | None = None,
 ) -> float:
     """Estimate position gain vs STAY_OUT baseline over a W-lap window.
 
@@ -711,16 +738,16 @@ def simulate_lap_window(
     """
     if strategy == "STAY_OUT":
         cliff_laps = max(0.0, window - cliff_i)
-        time_delta = -cliff_laps * CLIFF_LOSS
+        time_delta = -cliff_laps * CLIFF_LOSS + _tyre_term(deg_cost_s, window, 0)
 
     elif strategy == "PIT_NOW":
         sc_saving  = sc_pit_bonus if sc_i else 0.0
-        time_delta = -pit_i + sc_saving + FRESH_GAIN * window
+        time_delta = -pit_i + sc_saving + _tyre_term(deg_cost_s, 0, window)
 
     elif strategy == "UNDERCUT":
         sc_saving  = sc_pit_bonus if sc_i else 0.0
         ucut_bonus = POS_GAP_S if ucut_i else 0.0
-        time_delta = -pit_i + sc_saving + FRESH_GAIN * window + ucut_bonus
+        time_delta = -pit_i + sc_saving + _tyre_term(deg_cost_s, 0, window) + ucut_bonus
 
     elif strategy == "OVERCUT":
         # An overcut still makes the stop, just later, so it pays for it like the others.
@@ -738,10 +765,17 @@ def simulate_lap_window(
         # -14 positions against a worst-case STAY_OUT of about -2.7 and suppresses pitting.
         # See tests/mc/test_mc_is_a_real_decision.py.
         if sc_i:
-            time_delta = -pit_i + sc_pit_bonus + FRESH_GAIN * window
+            time_delta = -pit_i + sc_pit_bonus + _tyre_term(deg_cost_s, 0, window)
         else:
             cliff_laps = max(0.0, (window // 2) - cliff_i)
-            time_delta = -pit_i + FRESH_GAIN * (window // 2) - cliff_laps * CLIFF_LOSS
+            # The only branch that splits the window: half on the old set, half on the
+            # new one. Getting these two counts wrong makes the wear term a constant
+            # offset that cancels in the argmax and looks like it did nothing.
+            time_delta = (
+                -pit_i
+                + _tyre_term(deg_cost_s, window // 2, window // 2)
+                - cliff_laps * CLIFF_LOSS
+            )
 
     else:
         time_delta = 0.0
@@ -1077,6 +1111,7 @@ def _run_projection_mc(
     ucut_s,
     alpha: float,
     neutralisation_saving_s: float,
+    deg_cost_s: float | None = None,
 ) -> dict:
     """Score the four candidates in projected track position instead of seconds.
 
@@ -1182,6 +1217,10 @@ def _run_projection_mc(
             window_laps=WINDOW_LAPS,
             racing_laps=racing_laps,
             fresh_gain_s=FRESH_GAIN,
+            # Set on BOTH configs the closure builds, green and neutralised. Setting
+            # only the green one would leave every Safety Car lap on the old constant
+            # while the report claimed the channel was connected.
+            deg_cost_s=deg_cost_s,
             cliff_loss_s=CLIFF_LOSS,
             neutralisation_saving_s=neutralisation_saving_s,
             undercut_band_s=measured_undercut_band_s(),
@@ -1349,6 +1388,11 @@ def _run_mc_simulation(
         tire_out.laps_to_cliff_p90,
     )
 
+    # `getattr` because a caller may still pass a stub TireOutput built before this
+    # field existed; `None` then keeps both scorers on the FRESH_GAIN fallback, which
+    # is the pre-#744b behaviour rather than a zero cost.
+    deg_cost_s = getattr(tire_out, "deg_cost_s", None)
+
     sc_prob = situation_out.sc_prob_3lap
 
     # A VSC is a neutralisation too (N27 forces sc_prob_3lap to 1.0, so every draw sees
@@ -1405,6 +1449,7 @@ def _run_mc_simulation(
             ucut_s=ucut_s,
             alpha=alpha,
             neutralisation_saving_s=sc_pit_bonus,
+            deg_cost_s=deg_cost_s,
         )
 
     strategies = ["STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT"]
@@ -1413,7 +1458,7 @@ def _run_mc_simulation(
     for s in strategies:
         outcomes = np.array([
             simulate_lap_window(s, cliff_s[i], sc_s[i], pit_s[i], ucut_s[i],
-                                sc_pit_bonus=sc_pit_bonus)
+                                sc_pit_bonus=sc_pit_bonus, deg_cost_s=deg_cost_s)
             for i in range(n)
         ])
         e_val   = float(np.mean(outcomes))
@@ -1620,12 +1665,26 @@ def _build_orchestrator_prompt(
         f"     or damage/puncture confirmed by radio. Fresh tyres cannot degrade in 1-4 laps;\n"
         f"     pit lane costs ~22-25s which is unrecoverable this early. Force STAY_OUT.\n"
         f"  2. NO pit action when remaining laps <= 3 unless tyre failure imminent\n"
-        f"     (cliff P10 < 2 laps). Pit cost ~22s vs ~1.5s recovery = ~13 positions lost.\n"
+        # ~9, not ~13. The 13 was 20 s / POS_GAP_S(1.50), and POS_GAP_S is the legacy
+        # scoring constant `measure_mc_tables.py` records as retired. The MEASURED
+        # median gap between consecutive cars under green flag is 2.227 s (n=69,487),
+        # which puts 20 s at about nine places; 1.4795 s, and therefore thirteen, is
+        # the SAFETY CAR bunched-field figure (n=3,658) and is the exception this rule
+        # excludes. The pit agent's prompt already said exactly that, so the two
+        # prompts were teaching one orchestrating LLM contradictory numbers in the
+        # same run (#766).
+        f"     (cliff P10 < 2 laps). Pit cost ~22s vs ~1.5s recovery = ~9 positions lost\n"
+        f"     under green flag (measured median gap 2.227s). The ~13 figure is the\n"
+        f"     Safety Car bunched field (1.4795s), which is the exception above.\n"
         f"  3. REACTIVE_SC only when SC IS deployed (confirmed). High sc_prob is a\n"
         f"     contingency trigger, not a primary action — use STAY_OUT with SC contingency.\n"
         f"  4. Minimum stint before pit: SOFT >= 8 laps, MEDIUM >= 12, HARD >= 15.\n"
         f"     If tyre_life is below minimum, override to STAY_OUT (current set has life left).\n"
-        f"  5. Compound must fit remaining laps: SOFT only if <= 15 laps remain,\n"
+        # SOFT bound derived from _STINT_CAPACITY_LAPS (imported above), not restated:
+        # this line and the pit agent's own system prompt used to disagree with the
+        # deterministic selector's table (18 vs 15), so laps_remaining=16-18 had the
+        # selector pass SOFT while both prompts told the LLM to refuse it (#741).
+        f"  5. Compound must fit remaining laps: SOFT only if <= {_STINT_CAPACITY_LAPS['SOFT']} laps remain,\n"
         f"     MEDIUM for 12-30, HARD for 20+. Wrong compound forces an extra stop.\n"
         f"  6. Opening laps 1-3: threat levels from N27 are inflated by start chaos.\n"
         f"     Discount them one tier (HIGH→MEDIUM, MEDIUM→LOW) for decision-making.\n"
@@ -1801,7 +1860,14 @@ def _run_always_on_agents(race_state: "RaceState", lap_state: dict) -> tuple:
             "fuel_load", 1 - race_state.lap / race_state.total_laps
         ),
         year           = lap_state["year"],
-        prev_lap_time  = lap_state.get("prev_lap_time", 92.0),
+        # `or`, NOT the two-arg get(key, default): `RaceStateManager` emits this key
+        # PRESENT with a None value whenever no surviving predecessor exists, and the
+        # two-arg form substitutes only for an absent KEY. `_predict` reads the value
+        # straight into `prev + delta` with no NaN branch, so a None reaching it turns
+        # the prediction into NaN and then raises on the subtraction. The twin of this
+        # line in `pace_agent` carries a fifteen-line comment saying exactly that; this
+        # one carried a bare 92.0 and got neither the form nor the same number (#766).
+        prev_lap_time  = lap_state.get("prev_lap_time") or MISSING_PREV_LAP_TIME_S,
         prev_tyre_life = race_state.tyre_life - 1,
         prev_speed_st  = lap_state.get("prev_speed_st", 300.0),
         air_temp       = race_state.air_temp,

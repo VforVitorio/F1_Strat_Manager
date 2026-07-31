@@ -34,7 +34,13 @@ import re
 # printed it since the tool existed and nothing ever read it, so the prediction the
 # whole N07-N10 family exists to produce stopped here. It takes the same `-?` for the
 # same reason: a set faster than its own fresh baseline is real early in a stint.
+#
+# `Fresh reference` (#744b) is the same model on the same stint's early laps. It is
+# printed only when those laps exist, so an absent key means "no reference could be
+# taken" and the wear it feeds stays None. Same `-?` for the same reason: the fresh
+# reference is itself measured against N04's slow baseline and is routinely negative.
 _PATTERNS: tuple[tuple[str, str], ...] = (
+    (r'Fresh reference:\s*(-?[\d.]+)',        'fresh_ref'),
     (r'Cumulative degradation:\s*(-?[\d.]+)', 'cum_deg'),
     (r'Degradation rate:\s*(-?[\d.]+)',       'deg_rate'),
     (r'P10:\s*(-?[\d.]+)',                    'p10'),

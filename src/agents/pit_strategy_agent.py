@@ -596,7 +596,14 @@ except ImportError:
 # System prompt (module-level constant — unchanged from N28)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PIT_STRATEGY_SYSTEM_PROMPT = """You are the Pit Strategy Agent for an F1 race.
+# f-string: the COMPOUND vs REMAINING LAPS section below derives its SOFT bound from
+# _STINT_CAPACITY_LAPS instead of restating it, so the prompt cannot drift from the
+# deterministic selector's own number the way it did in #741 (18 in the table, 15 here
+# and in strategy_orchestrator.py, so laps_remaining=16-18 had the selector pass SOFT
+# while the prompt told the LLM to refuse it). No other brace-sensitive text lives in
+# this constant (checked at the time of #741's fix), so widening it to an f-string is
+# safe.
+_PIT_STRATEGY_SYSTEM_PROMPT = f"""You are the Pit Strategy Agent for an F1 race.
 Your job is to decide whether a driver should pit now, and if so, what compound to fit.
 
 You have three tools:
@@ -652,7 +659,7 @@ MINIMUM STINT LENGTH before a pit makes sense:
   and time is running out. Decide on the race state, not on the SC alone.
 
 COMPOUND vs REMAINING LAPS:
-  SOFT: recommend only if remaining laps <= 15 (it won't last longer).
+  SOFT: recommend only if remaining laps <= {_STINT_CAPACITY_LAPS['SOFT']} (it won't last longer).
   MEDIUM: suitable for 12-30 remaining laps.
   HARD: suitable for 20+ remaining laps.
   Picking SOFT with 25 laps to go forces an extra pit stop — factor that cost in.

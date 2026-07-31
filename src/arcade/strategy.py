@@ -603,7 +603,15 @@ class SimConnector(threading.Thread):
         shim that only the FastAPI startup provides). Populates
         ``radio_msgs`` / ``rcm_events`` from the ``RadioPipelineRunner``
         corpus so the Radio agent sees the real OpenF1 team messages
-        (same as the CLI); empty lists when the corpus could not load."""
+        (same as the CLI); empty lists when the corpus could not load.
+
+        ``prev_lap_time`` is accepted but no longer read here: ``pace_delta_s``
+        used to be computed from it and that was the wrong axis (#750, fixed
+        below). Left in the signature rather than removed, since the caller's
+        per-lap bookkeeping that produces it (``_step_once`` /
+        ``_lap_time_from_state``) serves no other purpose today and dropping it
+        is a small cleanup outside this fix's scope.
+        """
         from src.agents.position_projection import GAP_UNKNOWN_FALLBACK_S
         from src.agents.strategy_orchestrator import RaceState
 
@@ -611,7 +619,6 @@ class SimConnector(threading.Thread):
         weather = lap_state.get("weather", {})
         meta = lap_state.get("session_meta", {})
         cur_lap_time = driver_st.get("lap_time_s") or 0.0
-        pace_delta = cur_lap_time - prev_lap_time if prev_lap_time else 0.0
 
         rivals = lap_state.get("rivals", [])
         our_pos = driver_st.get("position")
@@ -650,6 +657,22 @@ class SimConnector(threading.Thread):
                 gap_ahead_s = GAP_UNKNOWN_FALLBACK_S
             else:
                 gap_ahead_s = abs(measured_interval)
+
+        # pace_delta_s is contractually RIVAL-relative (this driver's lap time
+        # minus the car directly ahead's SAME lap, negative = we are faster) per
+        # race_situation_agent.py:292/904, the schema N27 itself computes. The
+        # old formula compared cur_lap_time against our OWN previous lap
+        # instead, a same-car same-driver quantity that reported roughly -20s
+        # of phantom "pace gain" on the lap after a pit stop, a green lap read
+        # against our own out-lap. car_ahead is already resolved above for
+        # gap_ahead_s, so no extra lookup is needed; 0.0 when it or its lap
+        # time is unknown is the schema's documented neutral, not a guess in
+        # either direction (#750).
+        ahead_lap_time = car_ahead.get("lap_time_s") if car_ahead is not None else None
+        if ahead_lap_time is not None and cur_lap_time:
+            pace_delta = cur_lap_time - float(ahead_lap_time)
+        else:
+            pace_delta = 0.0
 
         lap_num = int(lap_state.get("lap_number", 1) or 1)
         radio_msgs: list[dict] = []
