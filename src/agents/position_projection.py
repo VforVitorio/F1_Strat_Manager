@@ -667,6 +667,66 @@ def _stop_residual_s(stop_loss_s: np.ndarray | float, config: ProjectionConfig) 
     return np.maximum(0.0, discounted)
 
 
+def _deferral_tyre_liability_s(pit_loss_s: np.ndarray, config: ProjectionConfig) -> np.ndarray:
+    """Seconds a NON-stopping plan's tyres cost between the window edge and the flag.
+
+    The terminal netting already carries every KNOWN outstanding stop to a common
+    horizon. What it did not carry is what the rubber costs while you defer, and for a
+    car whose mandatory stop is already discharged that was the ONLY future cost it had
+    -- so an elective stop's full pit loss stood against nothing at all.
+
+    WHY THIS EXISTS, MEASURED RATHER THAN ARGUED
+    ---------------------------------------------
+    Over 694 real elective stops in 2023-24, the horizon a stop takes to repay itself
+    from its own pace advantage has a median of **13 laps** (95% CI [12, 14]), and only
+    **15.0%** repay inside five. So a five-lap window can price at most a seventh of the
+    decision, and the remaining six sevenths were being compared against zero. The
+    layer declined **69.9%** of elective stops against 26.7% of first stops; that gap
+    is what this term addresses.
+
+    The car's real choice is the cheaper of two futures, so the liability is their
+    minimum rather than a horizon someone picked:
+
+        stop later:   deg * k    + the residual that stop still costs
+        run it out:   deg * R    + the cliff over the laps past it
+
+    Both q_f-discounted the same way ``_stop_residual_s`` already discounts, because a
+    neutralisation that turns up covers a deferred stop whichever branch wins.
+
+    --- WHERE TO CHANGE IF THE SCOPING CHANGES ---
+    Scoped by the CALLER to plans with no residual, and that scoping is a measured
+    behaviour rather than a physical claim: the same unpriced wear exists for a car
+    that still owes its stop, but that population already measures balanced, and
+    charging it there moves first calls EARLIER -- the exact direction that cost five
+    exact agreements when the wear term landed. Extending it is a separate decision and
+    wants its own measurement, not symmetry.
+    """
+    if config.deg_cost_s is None:
+        return np.zeros(len(pit_loss_s), dtype=float)
+
+    remaining = float(max(0, config.laps_remaining - config.window_laps))
+    if remaining <= 0.0:
+        return np.zeros(len(pit_loss_s), dtype=float)
+
+    # Stopping later still costs the stop, so the best later lap is as soon as the
+    # window ends: every further lap adds wear without removing the pit loss. That
+    # makes k = 0 from the window edge, and the branch collapses to the residual.
+    stop_later = _stop_residual_s(pit_loss_s, config)
+
+    # Or hold this set to the flag: wear on every lap, plus the cliff on the laps
+    # past it. `cliff_laps` is a per-draw quantity the caller owns; the terminal
+    # horizon uses the config's own window as the earliest the cliff can bite, which
+    # keeps this function pure and its inputs already-measured.
+    run_it_out = remaining * config.deg_cost_s + max(0.0, remaining - config.window_laps) * (
+        config.cliff_loss_s
+    )
+    discounted_run = np.maximum(
+        0.0, run_it_out - config.future_neutralisation_prob * config.neutralisation_saving_s
+    )
+
+    return np.minimum(stop_later, np.full(len(pit_loss_s), discounted_run, dtype=float))
+
+
 def _terminal_gaps(
     usable: Sequence[RivalState],
     plan: DriverPlan,
@@ -723,11 +783,20 @@ def _terminal_gaps(
     if not plan.stops_in_window and config.mandatory_stop_pending is None:
         return projected_gaps
 
-    our_residual = (
-        _stop_residual_s(pit_loss_s, config)
-        if not plan.stops_in_window and config.mandatory_stop_pending is True
-        else np.zeros(len(pit_loss_s), dtype=float)
-    )
+    if plan.stops_in_window:
+        our_residual = np.zeros(len(pit_loss_s), dtype=float)
+    elif config.mandatory_stop_pending is True:
+        our_residual = _stop_residual_s(pit_loss_s, config)
+    elif config.mandatory_stop_pending is False:
+        # The obligation is discharged, so there is no stop residual to carry -- but
+        # deferring still costs rubber, and until this term existed an elective stop's
+        # full pit loss stood against exactly zero. See _deferral_tyre_liability_s.
+        our_residual = _deferral_tyre_liability_s(pit_loss_s, config)
+    else:
+        # `None` means the compound history could not settle it. The module's rule is
+        # that a claim needs a fact, so an unknown obligation buys no correction in
+        # either direction, exactly as it did before this term.
+        our_residual = np.zeros(len(pit_loss_s), dtype=float)
 
     their_residual = np.array(
         [
