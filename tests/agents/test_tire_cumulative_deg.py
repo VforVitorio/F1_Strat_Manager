@@ -210,3 +210,134 @@ def test_the_prompt_shows_the_wear_and_says_unknown_when_it_is_missing():
 
     assert "vs fresh" in _build_tire_block(tire_out)
     assert "wear=unknown" in _build_tire_block(replace(tire_out, cumulative_deg_s=None))
+
+
+# ===========================================================================
+# #744b — the level becomes a COST by subtracting the model's own fresh reading
+# ===========================================================================
+#
+# `cumulative_deg_s` is measured against N04's per-stint baseline, and those
+# baselines are not comparable between stints: over 2,343 training-season stints
+# the per-stint median has std 5.48 s and a 1st percentile of -32.87 s, against
+# the 0.411 s/lap signal being chased. So the level cannot be charged as a cost,
+# and a pooled per-compound table cannot fix it either — measured at Spearman
+# +0.188 against +0.191 for having no reference at all.
+#
+# Subtracting the model's own prediction on the same stint's early laps cancels
+# that baseline algebraically. Measured: 73.9% non-negative, Spearman +0.308.
+
+
+def test_the_parser_captures_the_fresh_reference_including_a_negative_one():
+    """The reference is itself measured against N04's slow baseline, so it is
+    routinely negative — the same reason the other patterns carry `-?`."""
+    from src.agents.tire_parsing import parse_tool_outputs
+
+    message = _FakeToolMessage(
+        "Driver NOR | Compound C2 | TyreLife 18\n"
+        "Cumulative degradation: 0.412 s | Degradation rate: 0.02 s/lap"
+        " | Fresh reference: -0.308 s"
+    )
+
+    parsed = parse_tool_outputs([message])
+
+    assert parsed["fresh_ref"] == -0.308
+    assert parsed["cum_deg"] == 0.412
+
+
+def test_no_reference_line_writes_no_reference_key():
+    """A replay starting mid-stint has no laps at the reference tyre life, so the
+    tool prints no reference at all. That must stay distinguishable from one that
+    happens to be zero."""
+    from src.agents.tire_parsing import parse_tool_outputs
+
+    message = _FakeToolMessage(
+        "Driver NOR | Compound C2 | TyreLife 18\n"
+        "Cumulative degradation: 0.412 s | Degradation rate: 0.02 s/lap"
+    )
+
+    assert "fresh_ref" not in parse_tool_outputs([message])
+
+
+@pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="_referenced_wear reads the measured bounds off TireAgentConfig, whose "
+    "construction needs data/models/tire_degradation/ (HF, not git)",
+)
+class TestReferencedWear:
+    """The arithmetic that turns two model readings into one charge."""
+
+    def test_a_set_at_its_own_fresh_pace_costs_exactly_zero(self):
+        """The reference IS the current prediction on a stint's first laps, so the
+        wear is 0.0 — correct, and pinned so nobody "fixes" it into a fallback."""
+        from src.agents.tire_agent import _referenced_wear
+
+        assert _referenced_wear({"cum_deg": -0.308, "fresh_ref": -0.308}) == 0.0
+
+    def test_a_missing_half_is_none_and_never_zero(self):
+        """Zero is a legitimate reading of this field — see the test above — so it
+        cannot double as the sentinel. This is the collision #436 fixed for the
+        cliff, where a parse miss became a confident call to box."""
+        from src.agents.tire_agent import _referenced_wear
+
+        assert _referenced_wear({"cum_deg": 0.412}) is None
+        assert _referenced_wear({"fresh_ref": -0.308}) is None
+        assert _referenced_wear({}) is None
+
+    def test_the_baseline_cancels_rather_than_being_approximated(self):
+        """Both readings carry the same per-stint offset, so it subtracts out
+        exactly. Shift both by a 30 s Safety-Car baseline and the cost is unmoved."""
+        from src.agents.tire_agent import _referenced_wear
+
+        normal = _referenced_wear({"cum_deg": 0.412, "fresh_ref": -0.308})
+        shifted = _referenced_wear({"cum_deg": -29.588, "fresh_ref": -30.308})
+
+        assert normal == shifted == 0.72
+
+    def test_the_tail_is_bounded_by_the_measured_percentiles(self):
+        """The raw quantity reaches +-15 s/lap because a few stints have an out-lap
+        or a Safety Car as their N04 baseline, and one of those reaching the scorer
+        prices a single lap like ten positions."""
+        from src.agents.tire_agent import CFG, _referenced_wear
+
+        assert _referenced_wear({"cum_deg": 60.0, "fresh_ref": 0.0}) == CFG.deg_cost_ceiling_s
+        assert _referenced_wear({"cum_deg": -60.0, "fresh_ref": 0.0}) == CFG.deg_cost_floor_s
+
+    def test_the_bound_does_not_clip_a_genuinely_worn_tyre(self):
+        """The measured median at 20-25 laps of tyre life is 1.03 s/lap, which is
+        already above CLIFF_LOSS. A bound set there would delete the signal instead
+        of the outliers, so this pins that the real range survives."""
+        from src.agents.tire_agent import _referenced_wear
+
+        assert _referenced_wear({"cum_deg": 1.03, "fresh_ref": 0.0}) == 1.03
+        assert _referenced_wear({"cum_deg": 2.5, "fresh_ref": 0.0}) == 2.5
+
+
+@pytest.mark.skipif(
+    not (_HAS_MODELS and _HAS_DATA),
+    reason="needs data/models/tire_degradation/ and data/{raw/2025/Lusail,processed} (HF, not git)",
+)
+def test_a_real_lap_carries_a_cost_that_the_raw_level_could_not_have_given():
+    """The whole point of #744b, on a real lap rather than an arithmetic fixture.
+
+    Lusail 2025 lap 30, five laps into the stint. The raw level reads NEGATIVE
+    because N04 measures it against this stint's own out-lap; charged directly it
+    would have PAID the car for staying out, which is why the level was never
+    consumable. The referenced cost is a small positive, which is what a nearly
+    fresh set should cost.
+
+    Ranges, not values: pinning a number here would break on any legitimate model
+    refresh while saying nothing about whether the reference is connected. What is
+    pinned is the SIGN RELATIONSHIP the fix exists to create.
+    """
+    from src.strategy.inference.no_llm import _tire_no_llm
+
+    lap_state, laps = _scoped_lusail_lap_30()
+
+    tire_out = _tire_no_llm(lap_state, laps)
+
+    assert tire_out.cumulative_deg_s is not None
+    assert tire_out.deg_cost_s is not None
+    # The level is measured against a slow baseline, so it is below the cost.
+    assert tire_out.cumulative_deg_s < tire_out.deg_cost_s
+    # A five-lap-old set costs something small and non-negative, not a credit.
+    assert 0.0 <= tire_out.deg_cost_s < 1.0

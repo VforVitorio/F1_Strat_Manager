@@ -219,6 +219,24 @@ class TireAgentConfig:
             is PIT_SOON. Per-cluster values take precedence when available.
         cliff_monitor_laps: Global fallback threshold below which warning_level
             is MONITOR. Per-cluster values take precedence when available.
+        fresh_reference_tyre_life: Tyre life that stands in for "fresh" when asking
+            the model what this set was worth before it wore. N04 defines the target
+            against the stint's own lowest-tyre-life lap, which is an out-lap or a
+            standing start, so the level is biased slow and cannot be charged as a
+            cost directly. Asking the same model on the same stint's early laps
+            cancels that baseline algebraically instead of approximately.
+        deg_cost_floor_s / deg_cost_ceiling_s: Bounds on the referenced wear, in
+            seconds per lap. MEASURED, not chosen: they are the 1st and 99th
+            percentiles over 31,624 training-season laps
+            (``scripts/measure_tyre_reference.py``). The raw quantity reaches
+            +-15 s/lap because a handful of stints have a Safety Car or an out-lap
+            as their N04 baseline, and one of those reaching the scorer prices a
+            single lap like ten positions.
+
+            Do NOT tighten these to ``CLIFF_LOSS = 0.80``. The measured median at
+            20-25 laps of tyre life is 1.03 s/lap, so that bound would delete the
+            signal rather than the outliers. These are a guard against nonsense,
+            not an opinion about how much a worn tyre costs.
     """
 
     n_mc: int = 50
@@ -226,6 +244,9 @@ class TireAgentConfig:
     model_name: str = 'gpt-4.1-mini'
     cliff_pit_soon_laps: int = 3
     cliff_monitor_laps: int  = 7
+    fresh_reference_tyre_life: int = 3
+    deg_cost_floor_s: float   = -2.33
+    deg_cost_ceiling_s: float = 3.67
 
     def __post_init__(self) -> None:
         self._model_dir = _MODEL_DIR
@@ -377,6 +398,21 @@ CLIFF_THRESHOLD: dict[str, int] = {
 MAX_RACE_LAPS: int = 78
 
 
+def _referenced_wear(parsed: dict) -> Optional[float]:
+    """Seconds per lap this set costs versus fresh, bounded, or ``None``.
+
+    Both halves must have parsed. ``.get`` with a numeric default would turn a
+    missing reference into "this tyre is exactly at its fresh pace", which is a
+    reading the scorer can also legitimately receive.
+    """
+    if 'cum_deg' not in parsed or 'fresh_ref' not in parsed:
+        return None
+
+    wear = parsed['cum_deg'] - parsed['fresh_ref']
+    bounded = min(max(wear, CFG.deg_cost_floor_s), CFG.deg_cost_ceiling_s)
+    return round(bounded, 4)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TireOutput
 # ─────────────────────────────────────────────────────────────────────────────
@@ -422,6 +458,20 @@ class TireOutput:
             the Monte Carlo, nor the orchestrator prompt, nor any UI. Measured
             over the same 110 laps it correlates +0.369 with tyre life and swings
             0.411 s/lap across a stint.
+        deg_cost_s: Seconds per lap staying out costs versus a fresh set, bounded.
+            This is ``cumulative_deg_s`` minus the model's own prediction on this
+            stint's early laps, which cancels N04's per-stint baseline instead of
+            approximating it — see ``TireAgent._fresh_reference`` for why a pooled
+            per-compound table was measured and refused.
+
+            **This is the field the scorers consume**, not ``cumulative_deg_s``:
+            the level carries a per-stint offset whose standard deviation across
+            stints is 5.48 s, so it is not comparable between cars or laps.
+
+            ``None`` when either side is missing, never 0.0, for the same reason
+            given above for ``cumulative_deg_s``: a genuinely fresh set reads 0.0
+            here, so the sentinel would collide with a real value. A ``None``
+            leaves both scorers on the ``FRESH_GAIN`` fallback.
         laps_to_cliff_p10: Pessimistic estimate (P10) of laps before the cliff.
             Drives PIT_SOON warning — conservative to avoid running too long.
         laps_to_cliff_p50: Median estimate of laps before the cliff.
@@ -444,6 +494,7 @@ class TireOutput:
     laps_to_cliff_p90: float
     gp_name: str   = ''
     cumulative_deg_s: float | None = None
+    deg_cost_s: float | None = None
     warning_level: str = field(init=False)
     reasoning: str = ''
 
@@ -858,6 +909,40 @@ class TireAgent:
 
         return df[self.bundles[compound_id]['feature_names']].astype(float)
 
+    def _fresh_reference(self, driver: str, compound_id: str) -> Optional[float]:
+        """What the model said about this same set before it wore, in seconds.
+
+        A second deterministic pass over the stint's own early laps. Subtracting it
+        from the current prediction gives *seconds per lap this set costs versus
+        fresh*, which is what a scorer needs and what the raw level is not: N04
+        measures against the stint's slowest lap, so the level is negative on most
+        laps and charging it directly would pay a car for staying out.
+
+        WHY THIS AND NOT A COMMITTED PER-COMPOUND TABLE
+        -----------------------------------------------
+        Because the baseline is per stint, not per compound. Measured over 2,343
+        training-season stints, the per-stint median target has a standard deviation
+        of 5.48 s and a 1st percentile of -32.87 s: 13x the 0.411 s/lap signal being
+        chased. A pooled constant cannot normalise 2,343 different zero points, and
+        measurement put it at Spearman +0.188 against +0.191 for having no reference
+        at all. This one measures +0.308 and 73.9% non-negative
+        (``scripts/measure_tyre_reference.py``, ``documents/audits/MEASURE_744a_*``).
+
+        Returns ``None``, never 0.0, when the stint has no lap at the reference tyre
+        life — a replay that starts mid-stint. Zero is a legitimate reading of the
+        wear it feeds, so collapsing "unknown" into it would be the same sentinel
+        collision that #436 fixed for the cliff.
+        """
+        early_laps = self._get_driver_stint(driver, self.cfg.fresh_reference_tyre_life)
+        if early_laps is None or not len(early_laps):
+            return None
+
+        tensor = self._build_stint_tensor(early_laps, compound_id, self.session_meta)
+        model = self.bundles[compound_id]['model']
+        with torch.no_grad():
+            model.eval()
+            return float(model(tensor).item())
+
     def _build_stint_tensor(
         self,
         stint_laps: pd.DataFrame,
@@ -1080,9 +1165,15 @@ class TireAgent:
             feat_df  = agent._build_stint_features(stint, compound_id, agent.session_meta)
             deg_rate = float(feat_df['DegradationRate'].iloc[-1])
 
+            reference = agent._fresh_reference(driver, compound_id)
+            reference_line = (
+                '' if reference is None else f' | Fresh reference: {reference:.3f} s'
+            )
+
             return (
                 f'Driver {driver} | Compound {compound_id} | TyreLife {tyre_life}\n'
                 f'Cumulative degradation: {pred:.3f} s | Degradation rate: {deg_rate:.4f} s/lap'
+                f'{reference_line}'
             )
 
         @lc_tool
@@ -1484,6 +1575,7 @@ class TireAgent:
             cumulative_deg_s  = (
                 round(parsed['cum_deg'], 4) if 'cum_deg' in parsed else None
             ),
+            deg_cost_s        = _referenced_wear(parsed),
             laps_to_cliff_p10 = round(parsed['p10'], 1),
             laps_to_cliff_p50 = round(parsed.get('p50', 0.0), 1),
             laps_to_cliff_p90 = round(parsed.get('p90', 0.0), 1),
