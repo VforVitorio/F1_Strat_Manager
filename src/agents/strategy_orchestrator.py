@@ -66,7 +66,11 @@ except ImportError:
     _LC_OK = False
 
 # ── Sub-agent imports ──────────────────────────────────────────────────────────
-from src.agents.pace_agent         import run_pace_agent, run_pace_agent_from_state
+from src.agents.pace_agent         import (
+    MISSING_PREV_LAP_TIME_S,
+    run_pace_agent,
+    run_pace_agent_from_state,
+)
 from src.agents.tire_agent         import run_tire_agent, run_tire_agent_from_state
 from src.agents.race_situation_agent import (
     run_race_situation_agent,
@@ -1661,7 +1665,17 @@ def _build_orchestrator_prompt(
         f"     or damage/puncture confirmed by radio. Fresh tyres cannot degrade in 1-4 laps;\n"
         f"     pit lane costs ~22-25s which is unrecoverable this early. Force STAY_OUT.\n"
         f"  2. NO pit action when remaining laps <= 3 unless tyre failure imminent\n"
-        f"     (cliff P10 < 2 laps). Pit cost ~22s vs ~1.5s recovery = ~13 positions lost.\n"
+        # ~9, not ~13. The 13 was 20 s / POS_GAP_S(1.50), and POS_GAP_S is the legacy
+        # scoring constant `measure_mc_tables.py` records as retired. The MEASURED
+        # median gap between consecutive cars under green flag is 2.227 s (n=69,487),
+        # which puts 20 s at about nine places; 1.4795 s, and therefore thirteen, is
+        # the SAFETY CAR bunched-field figure (n=3,658) and is the exception this rule
+        # excludes. The pit agent's prompt already said exactly that, so the two
+        # prompts were teaching one orchestrating LLM contradictory numbers in the
+        # same run (#766).
+        f"     (cliff P10 < 2 laps). Pit cost ~22s vs ~1.5s recovery = ~9 positions lost\n"
+        f"     under green flag (measured median gap 2.227s). The ~13 figure is the\n"
+        f"     Safety Car bunched field (1.4795s), which is the exception above.\n"
         f"  3. REACTIVE_SC only when SC IS deployed (confirmed). High sc_prob is a\n"
         f"     contingency trigger, not a primary action — use STAY_OUT with SC contingency.\n"
         f"  4. Minimum stint before pit: SOFT >= 8 laps, MEDIUM >= 12, HARD >= 15.\n"
@@ -1846,7 +1860,14 @@ def _run_always_on_agents(race_state: "RaceState", lap_state: dict) -> tuple:
             "fuel_load", 1 - race_state.lap / race_state.total_laps
         ),
         year           = lap_state["year"],
-        prev_lap_time  = lap_state.get("prev_lap_time", 92.0),
+        # `or`, NOT the two-arg get(key, default): `RaceStateManager` emits this key
+        # PRESENT with a None value whenever no surviving predecessor exists, and the
+        # two-arg form substitutes only for an absent KEY. `_predict` reads the value
+        # straight into `prev + delta` with no NaN branch, so a None reaching it turns
+        # the prediction into NaN and then raises on the subtraction. The twin of this
+        # line in `pace_agent` carries a fifteen-line comment saying exactly that; this
+        # one carried a bare 92.0 and got neither the form nor the same number (#766).
+        prev_lap_time  = lap_state.get("prev_lap_time") or MISSING_PREV_LAP_TIME_S,
         prev_tyre_life = race_state.tyre_life - 1,
         prev_speed_st  = lap_state.get("prev_speed_st", 300.0),
         air_temp       = race_state.air_temp,

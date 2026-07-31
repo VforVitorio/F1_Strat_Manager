@@ -45,13 +45,21 @@ pytestmark = pytest.mark.skipif(
     "data/models/ (HF, not git)",
 )
 
-# "SOFT only if <= 18 laps", "SOFT: recommend only if remaining laps <= 18", and any
-# future phrasing that puts a compound and a bound in the same clause.
-_BOUND = re.compile(r"\b(SOFT|MEDIUM|HARD)\b[^.\n]*?<=\s*(\d+)")
+# Two phrasings, because the prompts use both and the first version of this file only
+# read the first. Gate G3 executed the gap: mutating MEDIUM 30 -> 32 left this test
+# GREEN while both prompts still said "12-30", so the docstring's "every compound it
+# can find" found exactly one. A regex is a claim about coverage and has to be tested
+# like one.
+_LE_BOUND = re.compile(r"\b(SOFT|MEDIUM|HARD)\b[^.\n]*?<=\s*(\d+)")
+_RANGE_BOUND = re.compile(r"\b(SOFT|MEDIUM|HARD)\b[^.\n]*?\b\d+\s*-\s*(\d+)\b")
 
 
 def _stated_bounds(prompt: str) -> set[tuple[str, int]]:
-    return {(m.group(1), int(m.group(2))) for m in _BOUND.finditer(prompt)}
+    """Every (compound, upper bound) pair either phrasing states."""
+    pairs = set()
+    for pattern in (_LE_BOUND, _RANGE_BOUND):
+        pairs |= {(m.group(1), int(m.group(2))) for m in pattern.finditer(prompt)}
+    return pairs
 
 
 def _orchestrator_prompt() -> str:
@@ -93,20 +101,29 @@ def test_no_prompt_states_a_capacity_the_table_disagrees_with():
             )
 
 
-def test_the_soft_bound_is_actually_present_in_both_prompts():
-    """The guard above passes vacuously if the regex stops matching.
+def test_every_compound_the_prompts_bound_is_actually_seen_by_the_regex():
+    """The guard above passes vacuously on whatever the regex fails to match.
 
-    That is not hypothetical: the bound is now interpolated, so a refactor that drops
-    the clause, renames the compound or reflows the sentence would silently leave the
-    check asserting about the empty set — this project's catalogued way for a green
-    test to mean nothing.
+    Not hypothetical, and not caught by inspection: gate G3 EXECUTED the gap by
+    moving MEDIUM 30 -> 32 and watching this file stay green while both prompts still
+    said "12-30". So this asserts coverage, compound by compound, rather than trusting
+    the pattern — the same "asserting about the empty set" trap the SOFT-only version
+    of this test was written to avoid and then fell into for the other two.
     """
     from src.agents.pit_strategy_agent import _PIT_STRATEGY_SYSTEM_PROMPT, _STINT_CAPACITY_LAPS
 
-    soft = _STINT_CAPACITY_LAPS["SOFT"]
-
-    assert ("SOFT", soft) in _stated_bounds(_PIT_STRATEGY_SYSTEM_PROMPT)
-    assert ("SOFT", soft) in _stated_bounds(_orchestrator_prompt())
+    for name, prompt in (
+        ("pit agent", _PIT_STRATEGY_SYSTEM_PROMPT),
+        ("orchestrator", _orchestrator_prompt()),
+    ):
+        seen = {compound for compound, _ in _stated_bounds(prompt)}
+        for compound in ("SOFT", "MEDIUM"):
+            assert compound in seen, (
+                f"{name} prompt states a bound for {compound} that the pattern does not "
+                f"match, so the check above cannot see it. Saw: {sorted(seen)}"
+            )
+            stated = dict(_stated_bounds(prompt))[compound]
+            assert stated == _STINT_CAPACITY_LAPS[compound]
 
 
 def test_the_selector_and_the_prompt_agree_across_the_band_that_used_to_split_them(monkeypatch):
