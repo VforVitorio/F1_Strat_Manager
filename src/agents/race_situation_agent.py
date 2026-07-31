@@ -289,7 +289,11 @@ class RaceSituationOutput:
             elevated SC risk. Same caveat: N14's best_threshold is raw-scale.
         threat_level: LOW / MEDIUM / HIGH derived from both probabilities in __post_init__.
         gap_ahead_s: Gap to the car directly ahead (seconds). < 1.0s = DRS range.
-        pace_delta_s: 3-lap rolling pace delta vs car ahead (s/lap). Negative = faster.
+        pace_delta_s: SINGLE-lap pace delta vs the car ahead (s/lap), this driver's
+            lap time minus theirs, so negative = we are faster. The rolling version is
+            the separate ``pace_delta_rolling3`` field; this docstring used to describe
+            that one, and four surfaces fed a self-delta into this field partly because
+            the contract they were reading named the wrong quantity (#750).
         reasoning: LLM synthesis forwarded verbatim to N31 Orchestrator.
         sc_currently_active: Any neutralisation (SC OR VSC) confirmed deployed this lap
             by the RCM feed. Kept as the single back-compat flag every consumer already
