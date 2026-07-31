@@ -103,7 +103,9 @@ def test_terminal_horizon_charges_an_owed_stop_exactly_once():
     projected_gaps = current_gaps + window_deltas  # our own delta is 0 here
 
     pit_loss_s = np.zeros(1)
-    terminal_gaps = _terminal_gaps(rivals, STAY_OUT, projected_gaps, pit_loss_s, config)
+    terminal_gaps = _terminal_gaps(
+        rivals, STAY_OUT, projected_gaps, pit_loss_s, np.full_like(pit_loss_s, 999.0), config
+    )
 
     assert terminal_gaps[0, 0] - projected_gaps[0, 0] == pytest.approx(STOP_LOSS_S), (
         "terminal horizon: still owes the stop, so the residual lands even though "
