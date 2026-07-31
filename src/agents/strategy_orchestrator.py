@@ -1666,7 +1666,11 @@ def _build_orchestrator_prompt(
         f"     contingency trigger, not a primary action — use STAY_OUT with SC contingency.\n"
         f"  4. Minimum stint before pit: SOFT >= 8 laps, MEDIUM >= 12, HARD >= 15.\n"
         f"     If tyre_life is below minimum, override to STAY_OUT (current set has life left).\n"
-        f"  5. Compound must fit remaining laps: SOFT only if <= 15 laps remain,\n"
+        # SOFT bound derived from _STINT_CAPACITY_LAPS (imported above), not restated:
+        # this line and the pit agent's own system prompt used to disagree with the
+        # deterministic selector's table (18 vs 15), so laps_remaining=16-18 had the
+        # selector pass SOFT while both prompts told the LLM to refuse it (#741).
+        f"  5. Compound must fit remaining laps: SOFT only if <= {_STINT_CAPACITY_LAPS['SOFT']} laps remain,\n"
         f"     MEDIUM for 12-30, HARD for 20+. Wrong compound forces an extra stop.\n"
         f"  6. Opening laps 1-3: threat levels from N27 are inflated by start chaos.\n"
         f"     Discount them one tier (HIGH→MEDIUM, MEDIUM→LOW) for decision-making.\n"

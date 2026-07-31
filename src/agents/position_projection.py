@@ -48,6 +48,28 @@ was an unmeasured constant, which is what the redesign exists to remove:
   matches the timing screen but does not model the unlapping procedure before a
   restart (Art. 55.13).
 
+THREE HORIZONS FOR ONE FACT, stated once and prominently because the module used
+to leave it implicit and that read as an inconsistency waiting to be "fixed"
+(#742). ``rival_time_deltas``, ``_terminal_gaps`` and ``rank_targets`` each ask
+whether a rival's outstanding pit stop should cost them time, and each answers
+correctly for a DIFFERENT horizon, not for the same one three times::
+
+    rival_time_deltas -> rival.is_pitting                              (inside the window)
+    _terminal_gaps     -> rival.stop_pending is True and not is_pitting (race end)
+    rank_targets        -> rival.stop_pending is True                   (after both pit cycles)
+
+A rival who owes a stop but is not taking it inside the window genuinely loses
+no time inside the window, so ``is_pitting`` is the right predicate there. The
+same rival genuinely falls back by the race end whether or not they stop this
+lap, so ``stop_pending`` is right at that horizon; ``_terminal_gaps`` then
+excludes a rival who IS pitting right now, because ``rival_time_deltas`` already
+charged that stop inside the window and charging it again would push them a
+full pit cycle further back than they will ever be. ``rank_targets`` looks past
+both pit cycles, where whether the stop happens on THIS lap stops mattering, so
+it drops the ``is_pitting`` guard entirely. Making the three agree would not fix
+a bug: it would delete the distinction between "now", "by the end of the race"
+and "once everyone has stopped" that the three horizons exist to carry.
+
 --- WHERE TO CHANGE IF THE RIVALS CONTRACT CHANGES ---
 ``RivalState`` mirrors the fields ``RaceStateManager.get_rival_states`` emits
 (``interval_to_driver_s``, ``is_pitting``, ``lap_time_s``). If that contract
@@ -868,8 +890,15 @@ def rank_targets(
     in front of us.
 
     Deterministic and run once (no sampling): it selects who to attack, and the
-    Monte Carlo then scores the attacking. Both consume the same definition of
-    "who we are racing", so the selector and the scorer can no longer disagree.
+    Monte Carlo then scores the attacking. Both go through the same
+    ``_usable_rivals`` filter, so the selector and the scorer can never disagree
+    about WHICH rivals are in play (a rival with an unknown gap cannot silently
+    show up in one and not the other). That is the only thing shared: this
+    function does NOT use the same stop-obligation predicate as the scorer's
+    ``rival_time_deltas`` / ``_terminal_gaps``, and it should not be made to.
+    See "THREE HORIZONS FOR ONE FACT" at the top of this module for why
+    ``rank_targets`` charges ``stop_pending`` alone rather than the
+    ``is_pitting`` guard the other two use (#742).
     """
     ranked: list[TargetRanking] = []
 

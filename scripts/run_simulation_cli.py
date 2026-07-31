@@ -1306,7 +1306,14 @@ def _build_race_state(
     driver_code: str,
     prev_lap_time: float,
 ) -> RaceState:
-    """Map RaceStateManager's lap_state dict → RaceState Pydantic model."""
+    """Map RaceStateManager's lap_state dict → RaceState Pydantic model.
+
+    ``prev_lap_time`` is accepted but no longer read here: ``pace_delta_s`` used
+    to be computed from it and that was the wrong axis (#750, fixed below). Left
+    in the signature rather than removed, since the caller's per-lap bookkeeping
+    that produces it (`run()`'s ``prev_lap_time`` loop variable) serves no other
+    purpose today and dropping it is a small cleanup outside this fix's scope.
+    """
     driver_st = lap_state["driver"]
     rivals = lap_state.get("rivals", [])
     weather = lap_state.get("weather", {})
@@ -1336,7 +1343,20 @@ def _build_race_state(
         gap_ahead_s = 0.0
 
     cur_lap_time = driver_st.get("lap_time_s") or 0.0
-    pace_delta_s = cur_lap_time - prev_lap_time if prev_lap_time else 0.0
+    # pace_delta_s is contractually RIVAL-relative (this driver's lap time minus
+    # the car directly ahead's SAME lap, negative = we are faster) per
+    # race_situation_agent.py:292/904, the schema N27 itself computes. The old
+    # formula compared cur_lap_time against our OWN previous lap instead, a
+    # same-car same-driver quantity that reported roughly -20s of phantom "pace
+    # gain" on the lap after a pit stop, a green lap read against our own
+    # out-lap. car_ahead is already resolved above for gap_ahead_s, so no extra
+    # lookup is needed; 0.0 when it or its lap time is unknown is the schema's
+    # documented neutral, not a guess in either direction (#750).
+    ahead_lap_time = car_ahead.get("lap_time_s") if car_ahead is not None else None
+    if ahead_lap_time is not None and cur_lap_time:
+        pace_delta_s = cur_lap_time - float(ahead_lap_time)
+    else:
+        pace_delta_s = 0.0
 
     return RaceState(
         driver=driver_code,
