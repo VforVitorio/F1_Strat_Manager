@@ -664,6 +664,28 @@ VSC_PIT_BONUS = 3.0  # seconds saved by pitting under a Virtual Safety Car (Art.
                      # measured.
 
 
+def _tyre_term(deg_cost_s: float | None, old_laps: int, fresh_laps: int) -> float:
+    """Seconds the tyre state is worth over one plan's window.
+
+    Two mutually exclusive ways of pricing the same physical thing, so this is a
+    REPLACEMENT and not an addition, and the double-count trap is avoided by that
+    fact rather than by a correction term.
+
+    With a measured signal, charge the laps spent on the OLD set: a tyre 0.4 s off
+    the pace costs 0.4 s every lap you keep it, whether or not the cliff is near.
+    Without one, fall back to ``FRESH_GAIN``, the hardcoded 0.25 s/lap credit for
+    the laps spent on the NEW set, which is the same quantity guessed at instead of
+    read. Both are seconds, applied before the conversion to positions.
+
+    ``None`` is a real state, not a defect: a stint whose early laps are outside the
+    replay has no reference to subtract, and the fallback keeps that case scoring
+    exactly as it did before #744b.
+    """
+    if deg_cost_s is None:
+        return FRESH_GAIN * fresh_laps
+    return -deg_cost_s * old_laps
+
+
 def simulate_lap_window(
     strategy: str,
     cliff_i:  float,
@@ -672,6 +694,7 @@ def simulate_lap_window(
     ucut_i:   bool,
     window:   int = WINDOW_LAPS,
     sc_pit_bonus: float = SC_PIT_BONUS,
+    deg_cost_s: float | None = None,
 ) -> float:
     """Estimate position gain vs STAY_OUT baseline over a W-lap window.
 
@@ -711,16 +734,16 @@ def simulate_lap_window(
     """
     if strategy == "STAY_OUT":
         cliff_laps = max(0.0, window - cliff_i)
-        time_delta = -cliff_laps * CLIFF_LOSS
+        time_delta = -cliff_laps * CLIFF_LOSS + _tyre_term(deg_cost_s, window, 0)
 
     elif strategy == "PIT_NOW":
         sc_saving  = sc_pit_bonus if sc_i else 0.0
-        time_delta = -pit_i + sc_saving + FRESH_GAIN * window
+        time_delta = -pit_i + sc_saving + _tyre_term(deg_cost_s, 0, window)
 
     elif strategy == "UNDERCUT":
         sc_saving  = sc_pit_bonus if sc_i else 0.0
         ucut_bonus = POS_GAP_S if ucut_i else 0.0
-        time_delta = -pit_i + sc_saving + FRESH_GAIN * window + ucut_bonus
+        time_delta = -pit_i + sc_saving + _tyre_term(deg_cost_s, 0, window) + ucut_bonus
 
     elif strategy == "OVERCUT":
         # An overcut still makes the stop, just later, so it pays for it like the others.
@@ -738,10 +761,17 @@ def simulate_lap_window(
         # -14 positions against a worst-case STAY_OUT of about -2.7 and suppresses pitting.
         # See tests/mc/test_mc_is_a_real_decision.py.
         if sc_i:
-            time_delta = -pit_i + sc_pit_bonus + FRESH_GAIN * window
+            time_delta = -pit_i + sc_pit_bonus + _tyre_term(deg_cost_s, 0, window)
         else:
             cliff_laps = max(0.0, (window // 2) - cliff_i)
-            time_delta = -pit_i + FRESH_GAIN * (window // 2) - cliff_laps * CLIFF_LOSS
+            # The only branch that splits the window: half on the old set, half on the
+            # new one. Getting these two counts wrong makes the wear term a constant
+            # offset that cancels in the argmax and looks like it did nothing.
+            time_delta = (
+                -pit_i
+                + _tyre_term(deg_cost_s, window // 2, window // 2)
+                - cliff_laps * CLIFF_LOSS
+            )
 
     else:
         time_delta = 0.0
@@ -1077,6 +1107,7 @@ def _run_projection_mc(
     ucut_s,
     alpha: float,
     neutralisation_saving_s: float,
+    deg_cost_s: float | None = None,
 ) -> dict:
     """Score the four candidates in projected track position instead of seconds.
 
@@ -1182,6 +1213,10 @@ def _run_projection_mc(
             window_laps=WINDOW_LAPS,
             racing_laps=racing_laps,
             fresh_gain_s=FRESH_GAIN,
+            # Set on BOTH configs the closure builds, green and neutralised. Setting
+            # only the green one would leave every Safety Car lap on the old constant
+            # while the report claimed the channel was connected.
+            deg_cost_s=deg_cost_s,
             cliff_loss_s=CLIFF_LOSS,
             neutralisation_saving_s=neutralisation_saving_s,
             undercut_band_s=measured_undercut_band_s(),
@@ -1349,6 +1384,11 @@ def _run_mc_simulation(
         tire_out.laps_to_cliff_p90,
     )
 
+    # `getattr` because a caller may still pass a stub TireOutput built before this
+    # field existed; `None` then keeps both scorers on the FRESH_GAIN fallback, which
+    # is the pre-#744b behaviour rather than a zero cost.
+    deg_cost_s = getattr(tire_out, "deg_cost_s", None)
+
     sc_prob = situation_out.sc_prob_3lap
 
     # A VSC is a neutralisation too (N27 forces sc_prob_3lap to 1.0, so every draw sees
@@ -1405,6 +1445,7 @@ def _run_mc_simulation(
             ucut_s=ucut_s,
             alpha=alpha,
             neutralisation_saving_s=sc_pit_bonus,
+            deg_cost_s=deg_cost_s,
         )
 
     strategies = ["STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT"]
@@ -1413,7 +1454,7 @@ def _run_mc_simulation(
     for s in strategies:
         outcomes = np.array([
             simulate_lap_window(s, cliff_s[i], sc_s[i], pit_s[i], ucut_s[i],
-                                sc_pit_bonus=sc_pit_bonus)
+                                sc_pit_bonus=sc_pit_bonus, deg_cost_s=deg_cost_s)
             for i in range(n)
         ])
         e_val   = float(np.mean(outcomes))

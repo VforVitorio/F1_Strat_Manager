@@ -13,6 +13,10 @@ laps, monotonic by tyre-life band) plus a rank correlation with tyre life:
 * ``pooled``      — one median per compound, the artefact #744a proposed
 * ``stint_first`` — the model's prediction on this stint's first lap
 * ``stint_le3``   — the median of this stint's predictions at tyre life <= 3
+* ``stint_live``  — the prediction at the LAST lap with tyre life <= 3, which is the
+  only one the live path can produce: ``_get_driver_stint(driver, 3)`` returns the
+  whole prefix and ``_build_stint_tensor`` predicts from it once. It is what #744b
+  ships, so it is measured rather than assumed equivalent to ``stint_le3``.
 
 Training seasons only (2023-24). ``src/strategy/eval/hygiene.py`` documents why a
 constant fitted on the 2025 test season would repeat a leak this project already paid
@@ -163,6 +167,7 @@ def add_candidate_references(predictions: pd.DataFrame) -> pd.DataFrame:
     scored["ref_pooled"] = scored["compound"].map(fresh.groupby("compound")["pred"].median())
     scored["ref_stint_first"] = scored["stint"].map(scored.groupby("stint")["pred"].first())
     scored["ref_stint_le3"] = scored["stint"].map(fresh.groupby("stint")["pred"].median())
+    scored["ref_stint_live"] = scored["stint"].map(fresh.groupby("stint")["pred"].last())
     return scored
 
 
@@ -184,6 +189,14 @@ def score_candidate(scored: pd.DataFrame, reference: str | None) -> dict:
         "median": round(float(wear.median()), 3),
         "monotonic_bands": bool(by_band.is_monotonic_increasing),
         "band_medians": {str(k): round(float(v), 3) for k, v in by_band.items()},
+        # The bound a consumer needs, measured rather than chosen. The raw quantity
+        # reaches +-15 s/lap on real laps because a handful of stints have a Safety Car
+        # or an out-lap as their N04 baseline, and a scorer fed one of those prices a
+        # single lap like ten positions. Do NOT bound this at CLIFF_LOSS = 0.80: the
+        # measured median at 20-25 laps of tyre life is already above it, so that would
+        # delete the signal instead of the outliers.
+        "p1": round(float(wear.quantile(0.01)), 3),
+        "p99": round(float(wear.quantile(0.99)), 3),
     }
 
 
@@ -193,12 +206,12 @@ def report(results: dict, n_laps: int, correlation: float) -> str:
         f"laps scored: {n_laps}  (tyre life > {FRESH_MAX_TYRE_LIFE}, seasons {TRAINING_YEARS})",
         f"harness self-check: corr(pred, target) = {correlation:.3f}",
         "",
-        f"{'reference':<16}{'non-neg':>9}{'spearman':>10}{'pearson':>9}{'monotone':>10}",
+        f"{'reference':<16}{'non-neg':>9}{'spearman':>10}{'pearson':>9}{'p1':>8}{'p99':>8}",
     ]
     for name, scores in results.items():
         lines.append(
             f"{name:<16}{scores['non_negative_pct']:>8.1f}%{scores['spearman']:>10.3f}"
-            f"{scores['pearson']:>9.3f}{str(scores['monotonic_bands']):>10}"
+            f"{scores['pearson']:>9.3f}{scores['p1']:>8.2f}{scores['p99']:>8.2f}"
         )
     return "\n".join(lines)
 
@@ -220,6 +233,7 @@ def main() -> None:
         "pooled": score_candidate(usable, "ref_pooled"),
         "stint_first": score_candidate(usable, "ref_stint_first"),
         "stint_le3": score_candidate(usable, "ref_stint_le3"),
+        "stint_live": score_candidate(usable, "ref_stint_live"),
         "none": score_candidate(usable, None),
     }
 
