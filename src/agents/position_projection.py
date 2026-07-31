@@ -667,7 +667,9 @@ def _stop_residual_s(stop_loss_s: np.ndarray | float, config: ProjectionConfig) 
     return np.maximum(0.0, discounted)
 
 
-def _deferral_tyre_liability_s(pit_loss_s: np.ndarray, config: ProjectionConfig) -> np.ndarray:
+def _deferral_tyre_liability_s(
+    pit_loss_s: np.ndarray, cliff_laps: np.ndarray, config: ProjectionConfig
+) -> np.ndarray:
     """Seconds a NON-stopping plan's tyres cost between the window edge and the flag.
 
     The terminal netting already carries every KNOWN outstanding stop to a common
@@ -713,18 +715,27 @@ def _deferral_tyre_liability_s(pit_loss_s: np.ndarray, config: ProjectionConfig)
     # makes k = 0 from the window edge, and the branch collapses to the residual.
     stop_later = _stop_residual_s(pit_loss_s, config)
 
-    # Or hold this set to the flag: wear on every lap, plus the cliff on the laps
-    # past it. `cliff_laps` is a per-draw quantity the caller owns; the terminal
-    # horizon uses the config's own window as the earliest the cliff can bite, which
-    # keeps this function pure and its inputs already-measured.
-    run_it_out = remaining * config.deg_cost_s + max(0.0, remaining - config.window_laps) * (
-        config.cliff_loss_s
-    )
+    # Or hold this set to the flag: wear on every lap, plus the cliff over the laps
+    # actually run PAST it.
+    #
+    # `cliff_laps` is the per-draw onset the tyre model produced, and it has to be the
+    # one used here. An earlier version assumed everything past `window_laps` was past
+    # the cliff, which is not a simplification but a contradiction of the model whose
+    # output the caller is holding: measured on real elective laps it charged a median
+    # 19 laps of cliff, and on 189 laps where the model reports the set costs NOTHING
+    # per lap versus fresh it still charged a median 8.41 s, entirely invented. On 121
+    # more the model reported the set was FASTER than fresh and the liability was
+    # still positive.
+    #
+    # `driver_time_delta` has always used the per-draw value for the in-window half of
+    # the same quantity. One quantity, one rule, both horizons.
+    laps_past_cliff = np.maximum(0.0, remaining - cliff_laps)
+    run_it_out = remaining * config.deg_cost_s + laps_past_cliff * config.cliff_loss_s
     discounted_run = np.maximum(
         0.0, run_it_out - config.future_neutralisation_prob * config.neutralisation_saving_s
     )
 
-    return np.minimum(stop_later, np.full(len(pit_loss_s), discounted_run, dtype=float))
+    return np.minimum(stop_later, discounted_run)
 
 
 def _terminal_gaps(
@@ -732,6 +743,7 @@ def _terminal_gaps(
     plan: DriverPlan,
     projected_gaps: np.ndarray,
     pit_loss_s: np.ndarray,
+    cliff_laps: np.ndarray,
     config: ProjectionConfig,
 ) -> np.ndarray:
     """Window-end gaps carried forward to a race end where every KNOWN stop is served.
@@ -791,7 +803,7 @@ def _terminal_gaps(
         # The obligation is discharged, so there is no stop residual to carry -- but
         # deferring still costs rubber, and until this term existed an elective stop's
         # full pit loss stood against exactly zero. See _deferral_tyre_liability_s.
-        our_residual = _deferral_tyre_liability_s(pit_loss_s, config)
+        our_residual = _deferral_tyre_liability_s(pit_loss_s, cliff_laps, config)
     else:
         # `None` means the compound history could not settle it. The module's rule is
         # that a claim needs a fact, so an unknown obligation buys no correction in
@@ -858,7 +870,7 @@ def project_positions(
     nearest_behind = behind_gaps.min(axis=1)
     margins = np.clip(np.where(np.isinf(nearest_behind), 0.0, nearest_behind), 0.0, MARGIN_CLIP_S)
 
-    terminal_gaps = _terminal_gaps(usable, plan, projected_gaps, pit_loss_s, config)
+    terminal_gaps = _terminal_gaps(usable, plan, projected_gaps, pit_loss_s, cliff_laps, config)
 
     return ProjectionResult(
         positions=positions,
