@@ -392,8 +392,15 @@ def test_the_reference_is_taken_from_the_stints_early_laps_and_not_from_all_of_t
 # (documents/audits/MEASURE_fresh_reference_quality_gate.md).
 
 
+@pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="_reject_contaminated_laps is logically pure, but it lives in tire_agent, "
+    "whose import builds TireAgentConfig() and reads data/models/tire_degradation/ "
+    "(HF, not git) -- the same constraint TestReferencedWear is already under.",
+)
 class TestRejectContaminatedLaps:
-    """The gate as a pure function -- no model weights needed to test the threshold."""
+    """The gate's threshold logic -- no model weights needed to EVALUATE it, but the
+    import that defines it needs them regardless (see the skip reason)."""
 
     def test_a_lap_at_the_races_fastest_pace_survives(self):
         from src.agents.tire_agent import _reject_contaminated_laps
