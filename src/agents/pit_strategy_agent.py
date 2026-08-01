@@ -29,6 +29,17 @@ from sklearn.preprocessing import LabelEncoder
 # there is no cycle even though src/strategy/inference/no_llm.py imports this package.
 from src.strategy.inference.envelope import OperatingEnvelope
 
+# From the leaf guard-rails module, never restated. These four bounds were prose in the
+# system prompt while the deterministic rails computed against the constants, so the
+# prompt could tell the LLM to refuse what the rails had just allowed (#741, #766).
+# guard_rails imports nothing from this package, so there is no cycle.
+from src.strategy.inference.guard_rails import (
+    _CLIFF_P10_SAFE,
+    _MIN_STINT_LAPS,
+    _NO_PIT_BEFORE_LAP,
+    _NO_PIT_LAST_N_LAPS,
+)
+
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
 while not (_REPO_ROOT / '.git').exists():
@@ -141,6 +152,13 @@ _NORMAL_STOP_MAX_S: float = 4.5
 
 CLIFF_IMMINENT_LAPS = 3    # laps_to_cliff_p10 below this → PIT_NOW
 CLIFF_SOON_LAPS     = 10   # laps_to_cliff_p10 below this → prefer harder compound
+
+# Above this, an undeployed Safety Car is elevated enough to justify REACTIVE_SC rather
+# than a plain stop. It had no name at all: the value sat as a bare 0.30 in the routing
+# branch and twice more in the system prompt, three copies of a number nobody declared.
+# A constant with no definition cannot drift from its definition, but it can drift from
+# its other copies, which is the same defect wearing a different hat (#766).
+SC_REACTIVE_PROB_THRESHOLD = 0.30
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -615,15 +633,17 @@ Decision rules:
 1. Always call predict_pit_duration_tool first to know the stop cost.
 2. Call score_undercut_tool for each rival within 5 positions ahead.
 3. Call recommend_compound_tool to determine the optimal compound.
-4. If P(undercut_success) >= 0.522 for any rival → recommend UNDERCUT.
-5. If sc_prob context is provided and >= 0.30 → recommend REACTIVE_SC pit.
-6. If tyre_cliff context is provided and laps_to_cliff <= 3 → recommend PIT_NOW.
+4. If score_undercut_tool reports YES for any rival -> recommend UNDERCUT. The tool
+   prints the live threshold it compared against; do not carry your own number. It is
+   loaded from the model's calibration config and moves whenever the model is retuned.
+5. If sc_prob context is provided and >= {SC_REACTIVE_PROB_THRESHOLD} → recommend REACTIVE_SC pit.
+6. If tyre_cliff context is provided and laps_to_cliff <= {CLIFF_IMMINENT_LAPS} → recommend PIT_NOW.
 7. Otherwise → STAY_OUT unless a clear strategic window exists.
 
 ## Strategic guard-rails (HARD constraints — override any decision rule above)
 
 PIT WINDOW — early race:
-  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT before lap 5 of the race.
+  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT before lap {_NO_PIT_BEFORE_LAP} of the race.
   Exception: Safety Car IS currently deployed (prompt shows "SC STATUS: SAFETY
   CAR DEPLOYED RIGHT NOW"), or radio confirms damage/puncture/mechanical failure.
   Rationale: no tyre degrades enough in 1-4 laps to justify a stop; the pit lane time cost
@@ -631,8 +651,8 @@ PIT WINDOW — early race:
   in your reasoning.
 
 PIT WINDOW — end of race:
-  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT when remaining laps <= 3.
-  Exception: tyre failure is imminent (laps_to_cliff P10 < 2) or Safety Car deployed.
+  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT when remaining laps <= {_NO_PIT_LAST_N_LAPS}.
+  Exception: tyre failure is imminent (laps_to_cliff P10 < {_CLIFF_P10_SAFE}) or Safety Car deployed.
   Rationale: a pit stop costs ~22-25s; with ≤3 laps, fresh tyres recover at most ~1.5s
   total. Net loss ≈ 20s. Under green-flag racing, where consecutive cars sit a
   measured median 2.226s apart, that is worth ~9 positions, not 13: 13 positions
@@ -640,8 +660,8 @@ PIT WINDOW — end of race:
   the exception handled above, not this rule.
 
 MINIMUM STINT LENGTH before a pit makes sense:
-  SOFT: current tyre_life must be >= 8 laps before recommending a stop.
-  MEDIUM: >= 12 laps.  HARD: >= 15 laps.
+  SOFT: current tyre_life must be >= {_MIN_STINT_LAPS['SOFT']} laps before recommending a stop.
+  MEDIUM: >= {_MIN_STINT_LAPS['MEDIUM']} laps.  HARD: >= {_MIN_STINT_LAPS['HARD']} laps.
   If the driver has NOT completed the minimum stint, recommend STAY_OUT (the current
   set still has useful life; pitting now wastes a tyre allocation).
 
@@ -660,7 +680,7 @@ MINIMUM STINT LENGTH before a pit makes sense:
 
 COMPOUND vs REMAINING LAPS:
   SOFT: recommend only if remaining laps <= {_STINT_CAPACITY_LAPS['SOFT']} (it won't last longer).
-  MEDIUM: suitable for 12-30 remaining laps.
+  MEDIUM: suitable for {_MIN_STINT_LAPS['MEDIUM']}-{_STINT_CAPACITY_LAPS['MEDIUM']} remaining laps.
   HARD: suitable for 20+ remaining laps.
   Picking SOFT with 25 laps to go forces an extra pit stop — factor that cost in.
 
@@ -668,7 +688,7 @@ REACTIVE_SC usage:
   REACTIVE_SC is for the rare in-between case where sc_prob is elevated but the
   Safety Car is NOT yet deployed.  When the prompt states "SC STATUS: SAFETY CAR
   DEPLOYED RIGHT NOW", prefer PIT_NOW directly.  Use REACTIVE_SC only when
-  sc_prob >= 0.30 AND the prompt shows the legacy "SC probability" line.  A high
+  sc_prob >= {SC_REACTIVE_PROB_THRESHOLD} AND the prompt shows the legacy "SC probability" line.  A high
   sc_prob without confirmation is still a contingency — mention it in reasoning
   and set ACTION to STAY_OUT unless the SC is actually out.
 
@@ -1597,7 +1617,7 @@ class PitStrategyAgent:
         # the surrendered position unrecoverable). The regulatory facts an SC does
         # force live in N27; see tests/mc/test_sc_regulatory_rails.py.
         sc_reactive = sc_currently_active or (action == 'REACTIVE_SC') or (
-            sc_prob >= 0.30 and action in ('PIT_NOW', 'UNDERCUT')
+            sc_prob >= SC_REACTIVE_PROB_THRESHOLD and action in ('PIT_NOW', 'UNDERCUT')
         )
 
         return PitStrategyOutput(

@@ -81,6 +81,17 @@ from src.agents.pit_strategy_agent import (
     run_pit_strategy_agent_from_state,
     _STINT_CAPACITY_LAPS,
 )
+
+# From the leaf guard-rails module, so this prompt states the same bounds the rails
+# enforce rather than a prose copy of them. Every one of these was a literal here and a
+# constant there, which is how the SOFT capacity ended up telling the LLM to refuse what
+# the selector had just allowed (#741, #766).
+from src.strategy.inference.guard_rails import (
+    _CLIFF_P10_SAFE,
+    _MIN_STINT_LAPS,
+    _NO_PIT_BEFORE_LAP,
+    _NO_PIT_LAST_N_LAPS,
+)
 from src.agents.radio_agent        import (
     run_radio_agent,
     run_radio_agent_from_state,
@@ -1661,10 +1672,12 @@ def _build_orchestrator_prompt(
         f"(if present) one regulation signal. If evidence across agents disagrees, say so\n"
         f"and explain which signal you trusted and why.\n\n"
         f"STRATEGIC GUARD-RAILS (HARD — override any sub-agent or MC signal that conflicts):\n"
-        f"  1. NO pit action (PIT_NOW / UNDERCUT / OVERCUT) before lap 5 unless SC deployed\n"
+        f"  1. NO pit action (PIT_NOW / UNDERCUT / OVERCUT) before lap {_NO_PIT_BEFORE_LAP} "
+        f"unless SC deployed\n"
         f"     or damage/puncture confirmed by radio. Fresh tyres cannot degrade in 1-4 laps;\n"
         f"     pit lane costs ~22-25s which is unrecoverable this early. Force STAY_OUT.\n"
-        f"  2. NO pit action when remaining laps <= 3 unless tyre failure imminent\n"
+        f"  2. NO pit action when remaining laps <= {_NO_PIT_LAST_N_LAPS} unless tyre failure "
+        f"imminent\n"
         # ~9, not ~13. The 13 was 20 s / POS_GAP_S(1.50), and POS_GAP_S is the legacy
         # scoring constant `measure_mc_tables.py` records as retired. The MEASURED
         # median gap between consecutive cars under green flag is 2.227 s (n=69,487),
@@ -1673,19 +1686,22 @@ def _build_orchestrator_prompt(
         # excludes. The pit agent's prompt already said exactly that, so the two
         # prompts were teaching one orchestrating LLM contradictory numbers in the
         # same run (#766).
-        f"     (cliff P10 < 2 laps). Pit cost ~22s vs ~1.5s recovery = ~9 positions lost\n"
+        f"     (cliff P10 < {_CLIFF_P10_SAFE} laps). Pit cost ~22s vs ~1.5s recovery = "
+        f"~9 positions lost\n"
         f"     under green flag (measured median gap 2.227s). The ~13 figure is the\n"
         f"     Safety Car bunched field (1.4795s), which is the exception above.\n"
         f"  3. REACTIVE_SC only when SC IS deployed (confirmed). High sc_prob is a\n"
         f"     contingency trigger, not a primary action — use STAY_OUT with SC contingency.\n"
-        f"  4. Minimum stint before pit: SOFT >= 8 laps, MEDIUM >= 12, HARD >= 15.\n"
+        f"  4. Minimum stint before pit: SOFT >= {_MIN_STINT_LAPS['SOFT']} laps, "
+        f"MEDIUM >= {_MIN_STINT_LAPS['MEDIUM']}, HARD >= {_MIN_STINT_LAPS['HARD']}.\n"
         f"     If tyre_life is below minimum, override to STAY_OUT (current set has life left).\n"
         # SOFT bound derived from _STINT_CAPACITY_LAPS (imported above), not restated:
         # this line and the pit agent's own system prompt used to disagree with the
         # deterministic selector's table (18 vs 15), so laps_remaining=16-18 had the
         # selector pass SOFT while both prompts told the LLM to refuse it (#741).
         f"  5. Compound must fit remaining laps: SOFT only if <= {_STINT_CAPACITY_LAPS['SOFT']} laps remain,\n"
-        f"     MEDIUM for 12-30, HARD for 20+. Wrong compound forces an extra stop.\n"
+        f"     MEDIUM for {_MIN_STINT_LAPS['MEDIUM']}-{_STINT_CAPACITY_LAPS['MEDIUM']}, "
+        f"HARD for 20+. Wrong compound forces an extra stop.\n"
         f"  6. Opening laps 1-3: threat levels from N27 are inflated by start chaos.\n"
         f"     Discount them one tier (HIGH→MEDIUM, MEDIUM→LOW) for decision-making.\n"
         f"  If a sub-agent recommends an action that violates these rules, override to\n"
