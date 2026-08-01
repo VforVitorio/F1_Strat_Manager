@@ -8,7 +8,6 @@ Public API
 ----------
 run_pit_strategy_agent(lap_state)                     → PitStrategyOutput  (FastF1 session)
 run_pit_strategy_agent_from_state(lap_state, laps_df) → PitStrategyOutput  (RSM adapter)
-get_pit_strategy_react_agent(**kwargs)                 → CompiledGraph
 """
 
 from __future__ import annotations
@@ -39,6 +38,8 @@ from src.strategy.inference.guard_rails import (
     _NO_PIT_BEFORE_LAP,
     _NO_PIT_LAST_N_LAPS,
 )
+
+from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -1036,7 +1037,7 @@ class PitStrategyAgent:
 
         gp_name    = self.session_meta.get('gp_name', '')
         year       = self.session_meta.get('year', 2025)
-        total_laps = self.session_meta.get('total_laps', 57)
+        total_laps = self.session_meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         team_x_raw = self.session_meta.get('team_lookup', {}).get(driver_x, 'Unknown')
         team_x     = _TEAM_ALIASES.get(team_x_raw, team_x_raw)
 
@@ -1270,7 +1271,7 @@ class PitStrategyAgent:
                     f'Pick a driver from that list.'
                 )
 
-            total_laps       = agent.session_meta.get('total_laps', 57)
+            total_laps       = agent.session_meta.get('total_laps', DEFAULT_TOTAL_LAPS)
             laps_remaining   = total_laps - lap_number
             current_compound = current_compound.upper()
 
@@ -1451,9 +1452,9 @@ class PitStrategyAgent:
         lap_number = lap_state['lap_number']
         driver     = meta['driver']
         gp_name    = meta.get('gp_name', '')
-        # 57 = median/mode race length across the 2022-2025 dataset; the same fallback the
-        # other strategy surfaces use, so a missing key resolves to one value everywhere.
-        total_laps = meta.get('total_laps', 57)
+        # DEFAULT_TOTAL_LAPS: see src/agents/_shared_defaults.py for why this fallback
+        # exists and why it is single-sourced across the strategy agents.
+        total_laps = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         year       = meta.get('year', 2025)
         team       = meta.get('team', 'Unknown')
         compound   = d.get('compound', 'MEDIUM')
@@ -1697,31 +1698,3 @@ def run_pit_strategy_agent_from_state(
         PitStrategyOutput with all fields populated.
     """
     return _get_default_pit_agent().run_from_state(lap_state, laps_df)
-
-
-def get_pit_strategy_react_agent(
-    provider: str = 'lmstudio',
-    model_name: str = 'gpt-4.1-mini',
-    base_url: str = 'http://localhost:1234/v1',
-    api_key: str = 'lm-studio',
-):
-    """Return the LangGraph ReAct agent backed by the singleton PitStrategyAgent.
-
-    Avoids connecting to the LLM at import time — created only when N31 or tests
-    actually invoke the agent.
-
-    Args:
-        provider: 'lmstudio' or 'openai'.
-        model_name: Model identifier for ChatOpenAI.
-        base_url: Base URL for LM Studio (ignored when provider='openai').
-        api_key: API key; 'lm-studio' for local server.
-
-    Returns:
-        LangGraph CompiledGraph.
-    """
-    return _get_default_pit_agent().get_react_agent(
-        provider=provider,
-        model_name=model_name,
-        base_url=base_url,
-        api_key=api_key,
-    )

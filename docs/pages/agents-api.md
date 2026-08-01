@@ -22,7 +22,7 @@ Every agent has two entry points:
 `lap_state`, which is why the stint fuel baseline is carried there rather than derived from a
 frame. The adapters are not uniform, so check the signature before assuming.
 
-Every agent except N29 also exposes a `get_*_react_agent()` factory returning a compiled LangGraph `CompiledGraph`, for callers that want to drive the graph directly. The radio agent has none: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.
+Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory returning a compiled LangGraph `CompiledGraph`, for callers that want to drive the graph directly — it is genuinely invoked (the chat backend calls it). N25-N28 (pace, tire, race situation, pit strategy) used to have an equivalent free function each; all four were confirmed dead (zero callers anywhere in the repo) and removed in the 2026-08-01 cleanup pass. Each of those agents still has its own `get_react_agent()` *instance method*, called internally from its own `_run_core` — only the redundant module-level wrapper was removed. The radio agent (N29) never had one: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.
 
 ## Output dataclasses
 

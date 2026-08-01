@@ -8,7 +8,6 @@ Public API
 ----------
 run_tire_agent(stint_state)                   → TireOutput  (FastF1 session in stint_state)
 run_tire_agent_from_state(lap_state, laps_df) → TireOutput  (RSM adapter, no FastF1 session)
-get_tire_react_agent(**kwargs)                → CompiledGraph
 
 Module-level singletons
 -----------------------
@@ -33,6 +32,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
 from src.agents.tire_parsing import parse_tool_outputs
 
 # ── Repo root (module-relative) ───────────────────────────────────────────────
@@ -1478,7 +1478,7 @@ class TireAgent:
         compound    = d.get('compound', 'MEDIUM')
         tyre_life   = d.get('tyre_life', 1)
         gp_name     = meta.get('gp_name', '')
-        total_laps  = meta.get('total_laps', 57)
+        total_laps  = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         year        = meta.get('year', 2025)
         team        = meta.get('team', 'Unknown')
 
@@ -1538,6 +1538,26 @@ class TireAgent:
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)
 
+    @staticmethod
+    def _conservative_stub(
+        compound_id: str, tyre_life: int, gp_name: str, reason: str,
+    ) -> TireOutput:
+        """TireOutput with the fixed conservative defaults used whenever a real TCN
+        reading is unavailable (no bundle for this compound, or a tool-output parse
+        miss). ``reason`` is folded into ``reasoning`` so the degradation is visible
+        instead of masquerading as a genuine reading.
+        """
+        return TireOutput(
+            compound          = compound_id,
+            current_tyre_life = tyre_life,
+            gp_name           = gp_name,
+            deg_rate          = 0.03,
+            laps_to_cliff_p10 = 20.0,
+            laps_to_cliff_p50 = 30.0,
+            laps_to_cliff_p90 = 40.0,
+            reasoning         = reason,
+        )
+
     def _run_core(
         self,
         driver: str,
@@ -1563,15 +1583,9 @@ class TireAgent:
         # TCN bundles only exist for dry compounds (C1–C6). For wet/intermediate
         # compounds return a stub with conservative defaults — no TCN inference.
         if compound_id not in self.bundles:
-            return TireOutput(
-                compound          = compound_id,
-                current_tyre_life = tyre_life,
-                gp_name           = gp_name,
-                deg_rate          = 0.03,
-                laps_to_cliff_p10 = 20.0,
-                laps_to_cliff_p50 = 30.0,
-                laps_to_cliff_p90 = 40.0,
-                reasoning         = (
+            return self._conservative_stub(
+                compound_id, tyre_life, gp_name,
+                reason=(
                     f"[{compound_id} — TCN model not available for wet/intermediate compounds; "
                     f"conservative defaults used]"
                 ),
@@ -1606,15 +1620,9 @@ class TireAgent:
                 'Tire tool output did not parse for %s (tyre_life=%s) — using conservative '
                 'defaults instead of a 0.0 cliff', compound_id, tyre_life,
             )
-            return TireOutput(
-                compound          = compound_id,
-                current_tyre_life = tyre_life,
-                gp_name           = gp_name,
-                deg_rate          = 0.03,
-                laps_to_cliff_p10 = 20.0,
-                laps_to_cliff_p50 = 30.0,
-                laps_to_cliff_p90 = 40.0,
-                reasoning         = (
+            return self._conservative_stub(
+                compound_id, tyre_life, gp_name,
+                reason=(
                     f"[{compound_id} — tire tool output could not be parsed; conservative "
                     f"defaults used] {reasoning}"
                 ),
@@ -1698,31 +1706,3 @@ def run_tire_agent_from_state(lap_state: dict, laps_df: pd.DataFrame) -> TireOut
         TireOutput with all fields populated.
     """
     return _get_default_tire_agent().run_from_state(lap_state, laps_df)
-
-
-def get_tire_react_agent(
-    provider: str = 'lmstudio',
-    model_name: str = 'gpt-4.1-mini',
-    base_url: str = 'http://localhost:1234/v1',
-    api_key: str = 'lm-studio',
-):
-    """Return the LangGraph ReAct agent backed by the singleton TireAgent instance.
-
-    Avoids connecting to the LLM at import time — created only when N31 or tests
-    actually invoke the agent.
-
-    Args:
-        provider: 'lmstudio' or 'openai'.
-        model_name: Model identifier for ChatOpenAI.
-        base_url: Base URL for LM Studio (ignored when provider='openai').
-        api_key: API key; use 'lm-studio' for local server.
-
-    Returns:
-        LangGraph CompiledGraph — invoke with {"messages": [{"role": "user", "content": ...}]}.
-    """
-    return _get_default_tire_agent().get_react_agent(
-        provider=provider,
-        model_name=model_name,
-        base_url=base_url,
-        api_key=api_key,
-    )
