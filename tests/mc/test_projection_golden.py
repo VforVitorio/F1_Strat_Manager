@@ -43,10 +43,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.mc.test_strategy_goldens import _canned_outputs
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+from tests.mc.canned_outputs import canned_outputs as _canned_outputs
 
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 
 # The rival geometry is chosen, not arbitrary, and the roles are the opposite of
 # the intuitive reading — measured, not assumed:

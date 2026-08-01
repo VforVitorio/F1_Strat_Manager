@@ -25,53 +25,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import skip_no_tire_models as _skip_no_models
+from tests.mc.canned_outputs import canned_outputs as _canned_outputs
+
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
-_skip_no_models = pytest.mark.skipif(
-    not _HAS_MODELS,
-    reason="data/models/ not present (CI runner without model weights)",
-)
-
-
-def _canned_outputs():
-    """Four hand-built sub-agent outputs for a near-cliff pit-window lap.
-
-    Only the fields the Monte Carlo layer reads matter numerically (pace CI,
-    laps-to-cliff triangular, sc probability, pit-duration triangular, undercut
-    probability); the rest are filled with plausible values so the dataclasses
-    construct.
-    """
-    from src.agents.pace_agent import PaceOutput
-    from src.agents.pit_strategy_agent import PitStrategyOutput
-    from src.agents.race_situation_agent import RaceSituationOutput
-    from src.agents.tire_agent import TireOutput
-
-    pace = PaceOutput(
-        lap_time_pred=91.0, delta_vs_prev=-0.2, delta_vs_median=0.3, ci_p10=90.5, ci_p90=91.8
-    )
-    tire = TireOutput(
-        compound="MEDIUM",
-        current_tyre_life=18,
-        deg_rate=0.05,
-        laps_to_cliff_p10=3.0,
-        laps_to_cliff_p50=5.0,
-        laps_to_cliff_p90=8.0,
-        gp_name="",
-    )
-    situation = RaceSituationOutput(overtake_prob=0.2, sc_prob_3lap=0.10)
-    pit = PitStrategyOutput(
-        action="PIT_NOW",
-        recommended_lap=20,
-        compound_recommendation="HARD",
-        stop_duration_p05=2.2,
-        stop_duration_p50=2.8,
-        stop_duration_p95=3.6,
-        undercut_prob=0.55,
-        undercut_target="VER",
-        sc_reactive=False,
-        reasoning="",
-    )
-    return pace, tire, situation, pit
 
 
 # The exact MC output for the canned scenario at alpha=0.5 (seed 42, n=500),
