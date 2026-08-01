@@ -147,6 +147,35 @@ the 2023-24 ones, when describing what this buys in production.**
 This does not change the #763/#771 verdict either way: 0.712 s/lap is still far above
 the ~0.1 s/lap bar that decision needs.
 
+## What the remaining 2025 error actually is, and why it is closed rather than chased
+
+Decomposing the 2025 baseline the same way as the training-season one, the residual
+(`pred - target`) is **not** dominated by outlier stints — it grows smoothly and
+monotonically with tyre life across the whole dataset, from ~0 at the fresh band to
+**+0.78 s/lap mean at 30+ laps**, with no equivalent trend on 2023-24 (which stays flat
+at +0.05 beyond the fresh band). It also varies by circuit in both directions (Las
+Vegas/Baku/Montréal correlate +0.7 to +0.9 with tyre life; Miami/Sakhir/Shanghai
+correlate -0.5 to -0.6). Checked and ruled out: the same duplicate-`TyreLife`
+within-stint artefact found in 2023-24 (only 6 of 1134 2025 stints affected, far too few
+to produce this pattern).
+
+**This is a genuine train/2025 generalisation gap in the TCN itself, not a bug.** No
+further code fix chases it in this project's current scope — a system without a real
+F1 team's telemetry, spotter radio, or proprietary tyre data will not match one on this
+axis, and that is an accepted limitation rather than an open item.
+
+**It does not newly endanger the Monte Carlo.** `deg_cost_s` has been live in both
+scorers since #744b/#760, so the epic's own headline numbers (43.4% exact-lap agreement,
+52.8% within one lap) already have this error baked in — nothing here is a fresh risk on
+top of measured system behaviour. `_tyre_cost_s` (`position_projection.py`) multiplies
+`deg_cost_s` by `old_laps`, bounded by the projection window (~5 laps by default), so the
+mean 2025 bias (+0.221 s/lap) integrates to roughly 1.1 s of phantom cost per decision —
+small against the 22.8 s pit loss it is weighed against, and floored/ceilinged
+(`deg_cost_floor_s`/`deg_cost_ceiling_s`) regardless. The one place it bites hardest is
+long stints (30+ laps), which is exactly the regime the deferral term (#771, 40 laps of
+exposure, 8x this term's) is blocked from reaching — this finding reinforces that block,
+it does not add a new one.
+
 ## Reproducing
 
 ```bash
