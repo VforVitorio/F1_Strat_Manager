@@ -42,10 +42,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+
 ROOT = Path(__file__).parent.parent.parent
 RACE_DIR = ROOT / "data" / "raw" / "2025" / "Lusail"
 FEATURED = ROOT / "data" / "processed" / "laps_featured_2025.parquet"
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 _HAS_DATA = (RACE_DIR / "laps.parquet").exists() and FEATURED.exists()
 
 pytestmark = pytest.mark.skipif(

@@ -25,7 +25,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# ``.git``-search-with-fallback, not a fixed ``.parent.parent``: the latter
+# silently resolves to the wrong directory under a `uv tool install` layout,
+# where this file is not exactly one level below the repo root.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = next(
+    (p for p in [_SCRIPT_DIR, *_SCRIPT_DIR.parents] if (p / ".git").exists()),
+    _SCRIPT_DIR.parent,
+)
+sys.path.insert(0, str(_REPO_ROOT))
 
 from src.f1_strat_manager.data_cache import ensure_setup, get_data_root  # noqa: E402
 

@@ -3,8 +3,12 @@
 Superseded by ``src/data_extraction/fastf1/session_extractor.py`` and
 ``scripts/download_data.py``. ``extract_f1_data`` takes any year/GP/session,
 but the ``__main__`` block below only ever ran it against the 2023 Spanish
-GP, the first race this project pulled data for. Kept because
-``notebooks/data_engineering/N01_data_download.ipynb`` still imports it.
+GP, the first race this project pulled data for. No code imports this module
+today -- ``notebooks/data_engineering/N01_data_download.ipynb`` only
+LINK-references it in a markdown cell ("Legacy extraction: [fastf1_extractor.py]
+(../../src/shared/data_extraction/fastf1_extractor.py)"), it does not import it
+in any code cell. Kept per ``src/shared/README.md``'s stated reason: deleting it
+would break that historical link, not any running code.
 """
 
 import fastf1 as ff1

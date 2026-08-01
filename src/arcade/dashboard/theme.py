@@ -19,7 +19,9 @@ from typing import Final
 
 from PySide6.QtGui import QColor, QPalette
 
-from src.arcade.strategy import _ALERT_SEVERITY
+from src.arcade.strategy import (
+    classify_action,  # noqa: F401 -- re-exported for orchestrator_card.py
+)
 
 # --- Palette (RGB tuples) ------------------------------------------------
 BG_COLOR: Final[tuple[int, int, int]] = (18, 17, 39)  # #121127 PRIMARY_BG
@@ -56,40 +58,14 @@ COMPOUND_NAMES: Final[dict[str, tuple[int, int, int]]] = {
 STREAM_HOST: Final[str] = os.environ.get("F1_STREAM_HOST", "127.0.0.1")
 STREAM_PORT: Final[int] = int(os.environ.get("F1_STREAM_PORT", "9998"))
 
-# --- Action classification (mirrors src/arcade/strategy.py::classify_action)
-_ACTION_STYLE: Final[dict[str, tuple[tuple[int, int, int], str]]] = {
-    "STAY_OUT": (SUCCESS, "STAY OUT"),
-    "PIT_NOW": (DANGER, "PIT NOW"),
-    "UNDERCUT": (WARNING, "UNDERCUT"),
-    "OVERCUT": (WARNING, "OVERCUT"),
-    "ALERT": (INFO, "ALERT"),
-    "DNF": (TEXT_SECONDARY, "DNF"),
-    "ERROR": (DANGER, "ERROR"),
-}
-
-# --- Severity --------------------------------------------------------------
-# Imported from src.arcade.strategy (not duplicated): a hand-copied version of
-# this dict lived here until #620, and it drifted the moment #398 added the
-# "YELLOW_FLAG_SECTOR" key to the original without anyone updating the copy.
-# A double yellow rendered neutral grey in this dashboard while the arcade
-# banner showed it correctly, because a "mirrors X" comment told readers the
-# two dicts were already checked. Importing the single dict removes that
-# drift risk. The extra pandas import this pulls in from strategy.py is a
-# small addition next to the PySide6 + pyqtgraph cost this process already
-# pays on cold start.
-
-
-def classify_action(action: str) -> tuple[tuple[int, int, int], str]:
-    """Return (color, display-label) for a raw action string."""
-    return _ACTION_STYLE.get(action.upper(), (ACCENT, (action or "--").upper()))
-
-
-def severity_color(tags: list[str]) -> tuple[int, int, int]:
-    """Max severity colour for a list of alert tags. Grey when empty."""
-    if not tags:
-        return TEXT_TERTIARY
-    severity = max((_ALERT_SEVERITY.get(t.upper(), 0) for t in tags), default=0)
-    return {3: DANGER, 2: WARNING, 1: INFO}.get(severity, TEXT_SECONDARY)
+# --- Action classification ---------------------------------------------------
+# `classify_action` is imported from src.arcade.strategy (not duplicated): a
+# hand-copied version lived here until this cleanup (2026-08-01), mirrored
+# under a "mirrors X" comment -- the same drift mechanism #620 already fixed
+# once for `_ALERT_SEVERITY` (imported above, not defined here either), just
+# not yet triggered for this one. The extra pandas import this pulls in from
+# strategy.py is a small addition next to the PySide6 + pyqtgraph cost this
+# process already pays on cold start.
 
 
 def qcolor(rgb: tuple[int, int, int]) -> QColor:
@@ -187,6 +163,14 @@ _FLAG_BG_BY_INTENT: Final[dict[str, tuple[int, int, int]]] = {
     "VSC": WARNING,
     "VIRTUAL_SAFETY_CAR": WARNING,
     "YELLOW_FLAG": WARNING,
+    # Same tier as YELLOW_FLAG (matches _ALERT_SEVERITY's own severity-2 grouping
+    # in strategy.py). A sector-scoped double yellow (rcm_events.py's
+    # classify_rcm_event returns this exact event type) was missing this key and
+    # fell through to the neutral-grey default -- the same bug shape #398 fixed
+    # in _ALERT_SEVERITY, alive here independently because this is a third,
+    # separately maintained severity mapping (found by the 2026-08-01 cleanup's
+    # adversarial gate).
+    "YELLOW_FLAG_SECTOR": WARNING,
     "PROBLEM": INFO,
     "WARNING": INFO,
     "PENALTY": DANGER,

@@ -18,15 +18,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import skip_no_tire_models as _skip_no_models
+
 ROOT = Path(__file__).parent.parent.parent
 
-# Guard: skip agent-import tests when model files are absent (CI runner).
-_MODELS_DIR = ROOT / "data" / "models"
-_HAS_MODELS = (_MODELS_DIR / "tire_degradation" / "routing_config.json").exists()
-_skip_no_models = pytest.mark.skipif(
-    not _HAS_MODELS,
-    reason="data/models/ not present (CI environment without model weights)",
-)
 
 # Guard: skip backend tests when telemetry backend is not installed.
 _HAS_BACKEND = (ROOT / "src" / "telemetry" / "backend").exists()

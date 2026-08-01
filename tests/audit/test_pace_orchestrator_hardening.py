@@ -23,6 +23,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS
+
 ROOT = Path(__file__).parent.parent.parent
 RAW_LUSAIL = ROOT / "data" / "raw" / "2025" / "Lusail" / "laps.parquet"
 FEATURED_2025 = ROOT / "data" / "processed" / "laps_featured_2025.parquet"
@@ -244,8 +246,7 @@ def clamp_fn():
     a bare checkout (data/ comes from HF Hub). Skip rather than fail there, like every
     other data-dependent test in this suite; the pure clamp still runs locally.
     """
-    routing_cfg = ROOT / "data" / "models" / "tire_degradation" / "routing_config.json"
-    if not routing_cfg.exists():
+    if not HAS_TIRE_MODELS:
         pytest.skip(
             "importing strategy_orchestrator instantiates the tire agent, which needs "
             "data/models/tire_degradation/ (data/ comes from HF, not git)"

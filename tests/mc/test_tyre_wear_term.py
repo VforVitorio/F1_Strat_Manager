@@ -39,9 +39,9 @@ import numpy as np
 import pytest
 
 from src.agents.position_projection import DriverPlan, ProjectionConfig, driver_time_delta
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
 
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").is_file()
 
 DRAWS = 4
 
@@ -313,8 +313,7 @@ class TestTheValueReachesBothBranches:
         from dataclasses import replace
 
         from src.agents.strategy_orchestrator import _run_mc_simulation
-
-        from .test_strategy_goldens import _canned_outputs
+        from tests.mc.canned_outputs import canned_outputs as _canned_outputs
 
         pace, tire, situation, pit = _canned_outputs()
         return _run_mc_simulation(
@@ -422,8 +421,7 @@ class TestTheValueReachesBothBranches:
         from dataclasses import replace
 
         from src.agents.strategy_orchestrator import _run_mc_simulation
-
-        from .test_strategy_goldens import _canned_outputs
+        from tests.mc.canned_outputs import canned_outputs as _canned_outputs
 
         pace, tire, situation, pit = _canned_outputs()
         rivals = [
