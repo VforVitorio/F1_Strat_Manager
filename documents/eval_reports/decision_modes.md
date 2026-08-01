@@ -1,17 +1,17 @@
 # decision_modes
 
-- harness `311f234` · schema v1 · generated 2026-07-31T12:21:44+00:00
+- harness `110f4ed` · schema v1 · generated 2026-08-01T14:20:35+00:00
 - era 2022-2025 · dataset data/raw laps, stratified 6-race subset (RAW, not featured) · seed deterministic · llm none
 - artifacts: —
 
 | Metric | Value | Meaning |
 | --- | --- | --- |
-| Stops scored | 58 of 178 (32.6%) | real green-flag stops the tier could grade |
-| Exact lap | 27.6% | chose the lap the team chose |
-| Within 1 lap | 37.9% | same call, one lap either side |
-| Within 2 laps | 44.8% | same strategic window |
-| Mean signed error | -2.34 laps | negative = earlier than the team. **Do not quote as a system property** — still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 at w=3/5/10 on one race), because a wider window admits more distant, and therefore earlier, transitions |
-| Mean absolute error | 2.48 laps | magnitude, same width caveat |
+| Stops scored | 57 of 178 (32.0%) | real green-flag stops the tier could grade |
+| Exact lap | 28.1% | chose the lap the team chose |
+| Within 1 lap | 38.6% | same call, one lap either side |
+| Within 2 laps | 45.6% | same strategic window |
+| Mean signed error | -2.30 laps | negative = earlier than the team. **Do not quote as a system property** — still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 at w=3/5/10 on one race), because a wider window admits more distant, and therefore earlier, transitions |
+| Mean absolute error | 2.44 laps | magnitude, same width caveat |
 | Coverage verdict | **masked** | `masked` when under 60% of eligible stops were scored |
 
 ### Buckets
@@ -21,8 +21,8 @@
 | `closing_laps` | 4 |
 | `min_stint` | 17 |
 | `no_boundary_in_window` | 34 |
-| `no_call_in_window` | 65 |
-| `scored` | 58 |
+| `no_call_in_window` | 66 |
+| `scored` | 57 |
 
 `opening_laps` / `closing_laps` / `min_stint` are stops the guard rails make
 impossible to agree with, so they are excluded from the headline rather than

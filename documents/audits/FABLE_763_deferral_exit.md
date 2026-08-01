@@ -945,3 +945,221 @@ at the end. Baseline is now **175 tests** (173 + 2 added).
 **The disconnection HIGH is genuinely closed**, and closed by precisely the test written for it —
 not by an incidental assertion elsewhere. That is the strongest form of the check.
 
+
+---
+---
+
+# CONTINUATION 2 — after the q_f and docstring fixes, `feat/deferral-tyre-liability` @ `110f4ed`
+
+**Date:** 2026-07-31 (same session, resumed after an interruption) · Everything above is left
+untouched. The interrupted run's two outstanding jobs had in fact **completed** before the cut and
+their results are recovered from disk below, so nothing was restarted.
+
+**Working-tree discipline for this section:** a sweep is running against the working tree, so
+**no file was mutated while it was in flight.** The q_f test is attacked analytically first — each
+candidate mutant expressed as a standalone implementation and the shipped test's own assertions
+evaluated against it — and confirmed with real `pytest` only after the sweep lands. Every module
+load goes through a byte-copy pristine file via `importlib`. `git checkout --` never used.
+
+## Recovered: battery 3 completed before the cut (against `7dd4751`)
+
+| Mutant | Result |
+|---|---|
+| **M5 — the wiring deleted** | **CAUGHT** — `test_the_terminal_gap_of_a_deferring_car_actually_MOVES` |
+| **M1 — the assumed cliff onset, reintroduced verbatim** | **CAUGHT** — `test_the_cliff_half_uses_the_onset_the_model_supplied_not_an_assumed_one` |
+| M2 — the q_f discount deleted from the run branch | **SURVIVED** (175 passed) |
+| M3 — the option value deleted from the stop branch | **SURVIVED** (175 passed) |
+| restore | **verified byte-identical to the backup** |
+
+Both new tests killed exactly the mutant each was written for — the strongest form of that check.
+**M2 and M3 survived, which is the gap `110f4ed` then addressed.**
+
+## A. The q_f fix — attacked, and the test holds for a stronger reason than claimed
+
+The fix is right, and it is the one I argued for: a neutralisation cheapens the **stop**, not the
+rubber, and `_stop_residual_s` already carries that option value on the other branch. Charging it
+twice was a systematic under-charge of exactly the population the term exists to stop
+under-charging.
+
+**On the test — you asked me not to take your word, and the second version is sound, but the
+guard you added is not what makes it sound.** Executed, branch selection per regime:
+
+```
+heavy (deg 1.5, 45 laps)  q_f=0.0 -> liability 22.800   branch = STOP
+heavy (deg 1.5, 45 laps)  q_f=0.5 -> liability 18.800   branch = STOP
+light (deg 0.5, 25 laps)  q_f=0.0 -> liability 10.000   branch = RUN
+light (deg 0.5, 25 laps)  q_f=0.5 -> liability 10.000   branch = RUN
+```
+
+The two halves do read different branches. **But each half already self-pins its own branch, so
+the regimes cannot silently collapse even without assertion C:**
+
+- Half A asserts a **strict** decrease (`likely_sc < calm`). The run branch is q_f-invariant by
+  construction, so if the run branch won this regime the two values would be equal and the strict
+  `<` would fail. Passing A *proves* the stop branch won.
+- Half B asserts **equality** under `q_f=0.5`. If the stop branch won this regime, `q_f` would
+  reduce it and the two would differ. Passing B *proves* the run branch won.
+
+So `assert calm[0] != calm_run[0]` is belt-and-braces rather than load-bearing — worth keeping,
+but the test would be correct without it. **This is not the failure mode you feared**: your first
+version failed because *both halves were in the run regime*, and half A cannot pass there. The
+second version is genuinely testing what its name says.
+
+**And it kills more than it was written for.** Evaluating the shipped test's assertions against
+each mutant:
+
+| Mutant | Verdict | Killed by |
+|---|---|---|
+| SHIPPED (control) | passes | — |
+| **M2r — the q_f discount re-introduced on the run branch** | **KILLED** | half B (6.0 ≠ 10.0) |
+| **M3 — the option value deleted from the stop branch** | **KILLED** | half A (22.8 ≮ 22.8) |
+| M10 — the zero clamp removed from the run branch | **PASSES** | *nothing* |
+
+**M3 is now covered.** It survived battery 3 and the new test kills it, because moving the option
+value onto the stop branch alone made half A's strict inequality depend on `_stop_residual_s`
+being there. That is a real second-order win from the fix, and it answers "is any survivor left"
+for M3: no.
+
+### FINDING [MEDIUM] — the run branch's zero clamp guards a SIGN INVERSION on ~11% of real elective laps, and nothing tests it
+
+`position_projection.py`, `np.minimum(stop_later, np.maximum(0.0, run_it_out))`. The
+`np.maximum(0.0, ...)` is the only thing stopping a negative tyre reading from becoming a terminal
+**credit** — a liability below zero moves the terminal gap the wrong way, so *deferring would gain
+track position*. Removing it passes the entire suite, including the new q_f test.
+
+Measured on the real captures (read-only, 2,048 elective `(lap, config)` evaluations that reach
+the run branch):
+
+```
+clamp binds on EVERY draw : 220 laps (10.7%)
+clamp binds on SOME draw  : 248 laps (12.1%)
+worst unclamped run_it_out: -43.26 s   <- 43 seconds of terminal CREDIT for staying out
+```
+
+This is not a bug in the shipped code — the clamp is present and correct. It is an **unguarded
+guard**, on a code path this project has been bitten by before (a sign inversion that survived
+because nothing asserted the sign). `deg_cost_s` is negative on 19.4% of real elective laps and
+is floored at −2.33, so the regime is routine, not exotic. One test — negative `deg`, assert the
+liability is exactly zero and never negative — closes it.
+
+## ⭐ E4 RE-MEASURED on `110f4ed` — and it moved the WRONG way, against my own prediction
+
+The ship decision rests on the amplification, and my published figure was measured on `7dd4751`,
+**before** the q_f fix. The q_f fix enlarges the run-it-out branch (it no longer subtracts
+`q_f·saving`), which changes how often the `min` selects the deg-sensitive branch. Quoting the
+old number would have been quoting a stale measurement of a changed function, so I re-ran it.
+
+**I predicted the sensitivity would FALL.** Reasoning: a larger `run_it_out` means the stop branch
+wins the `min` more often, and the stop branch is deg-insensitive, so fewer laps should respond to
+a deg perturbation. **That prediction was wrong.** Measured, same harness, same 1,055 laps, stub
+signature asserted, positive control 92/200:
+
+| deg error | flips WITH the term | WITHOUT | **amplification** | on `7dd4751` |
+|---|---|---|---|---|
+| **±0.1 s/lap** | **75 (7.1%)** | 11 (1.0%) | **6.82×** | *6.2%, 5.91×* |
+| ±0.2 s/lap | 138 (13.1%) | 29 (2.7%) | **4.76×** | *11.8%, 4.31×* |
+| ±0.5 s/lap | 283 (26.8%) | 49 (4.6%) | **5.78×** | *26.4%, 5.69×* |
+
+The "WITHOUT" column is again byte-identical (11/29/49), as it must be — stubbing the liability
+makes every downstream fix unreachable — so the three runs are the same measurement on the same
+laps.
+
+**The likely mechanism, stated as a hypothesis rather than a finding:** removing the discount makes
+the liability uniformly larger, which pushes more laps toward the pitting candidates and therefore
+*into* the near-tie band where a small deg change can cross the argmax. The population near the
+boundary grew. I have not verified this and it should not be quoted as established.
+
+**Two cautions on reading the ratio.** The denominator is 11 laps of 1,055; a ±3-lap wobble in it
+swings the ratio between 5.4× and 9.4×. **The ratio is a fragile statistic and the absolute rate
+is the robust one.** Across the three perturbation sizes the amplification is **4.8-6.8×**, and
+quoting either the single best or single worst point would over-read it.
+
+## THE SHIP DECISION — you asked me to attack it, so here it is plainly
+
+**Your position:** ship the term, disclose the amplification as a measured property, file the
+missing `deg_cost_s` per-lap error bound as the blocker.
+
+**My verdict: do not ship it yet.** Not as a veto on the design — B3 is the right design and I
+have not found a defect in its physics — but the blocker you propose to file is not a paperwork
+item, and one measurement in this section is the reason.
+
+### Why, in the order the reasons actually weigh
+
+**1. The sensitivity moved in a direction nobody predicted, including me.** The q_f fix was
+correct on its own terms — it removed a real double-count that I flagged. Yet it pushed the flip
+rate from 6.2% to **7.1%** and the amplification from 5.91× to **6.82×**. I predicted the
+opposite, in writing, before running it. A term whose error behaviour moves the wrong way when you
+fix a genuine bug in it is **measured but not understood**. That is a different state from
+"understood and awaiting a bound", and it is the state that decides this for me.
+
+**2. The measurement cannot be converted into a risk.** 7.1% of elective decisions flip on ±0.1
+s/lap. Whether that is alarming or irrelevant depends entirely on whether `deg_cost_s`'s real
+per-lap error is nearer 0.01 or 0.5 — and #744a never published one. **You cannot disclose a
+sensitivity as a "measured property" when the input it is a sensitivity TO is unmeasured.** The
+disclosure would read as reassurance while carrying no information about actual exposure.
+
+**3. Your own gate wrote the rule for exactly this case**, and it is conditional rather than a
+threshold: *"if deg's CI cannot support the amplification, B4 (or B5 as the interim) is the honest
+fallback."* Today the CI does not exist, so the condition cannot be discharged in the term's
+favour. You set the bright line at 6-8× and asked me to say so plainly if it was still there: **at
+±0.1 s/lap it is 6.82×.** I will not lean on that number alone, because the ratio's denominator is
+11 laps and it is fragile — but I am not going to report it as having cleared the line either.
+
+### Where I think your reasoning is RIGHT, and where I'd push back on my own verdict
+
+**You are right that B5 is not a free fallback, and the report should stop implying it is.**
+Documenting the boundary leaves the measured defect in production: an elective stop's full pit
+loss priced against **exactly zero**, and 69.9% of them declined. That is a *larger, systematic*
+error than the variance the term introduces. Choosing B5 is choosing a known bias over a bounded
+variance, and that is not obviously the safer side.
+
+**Three things genuinely favour shipping and I want them on the record:**
+
+- The liability is **structurally capped** at the stop being deferred (the `min` against
+  `_stop_residual_s`). The term cannot produce an unbounded error however wrong `deg` is — worst
+  case it charges a whole pit stop, which is a real cost, not an invented one.
+- **Roughly half the sensitive laps were near-tied anyway**: 11.8% of real elective laps sit
+  within 0.01 positions of flipping. On a genuinely balanced lap either answer is defensible, so
+  part of the 7.1% is the population's own knife-edge rather than the term's instability.
+- The missing bound is an **input-level debt that other shipped code already depends on** —
+  `driver_time_delta`'s in-window wear term has consumed the same unbounded `deg_cost_s` since
+  #744b. Blocking only this term on it is inconsistent.
+
+**That third point is the strongest argument against my own verdict, and it is why my answer is
+"not yet" rather than "no".** If the bound is filed against `deg_cost_s` itself and its consumers
+as a class, the same evidence that unblocks this term unblocks the rest.
+
+### What would flip me to yes, and it is cheap
+
+1. **Measure `deg_cost_s`'s per-lap error** on 2023-24 (held-out seasons, the same hygiene E1
+   used). If it is materially **below 0.1 s/lap**, then 7.1% is an upper bound on real-world
+   flipping, the amplification is carryable, and the term should ship **with the table published
+   beside it**. That is the single missing measurement and it is a day's work, not a quarter's.
+2. **Re-run E4 once after any further change to the term.** It is ~10 minutes of compute and it
+   just caught a stale number that would otherwise have gone into the ship decision.
+
+Until (1) exists, "ship with the amplification disclosed" is disclosure without denominator. If
+you decide to ship anyway — a legitimate call that is yours, not mine — then the honest framing in
+the report must be *"this term trades a measured systematic bias for a bounded variance whose
+magnitude we cannot yet price,"* not *"the sensitivity is a disclosed measured property."*
+
+### The analytic mutants were themselves verified, because a hand-written mutant can lie
+
+Evaluating the test against hand-written implementations is only as good as those
+implementations. Each was checked against the real function two ways, over 400 randomised configs
+spanning `deg ∈ [-2.33, 3.67]`, `laps_remaining ∈ [0, 70)`, both cliff settings and both savings:
+
+```
+OK  M2r == shipped when q_f == 0  (mutation is a no-op)      mismatches 0/400
+OK  M3  == shipped when q_f == 0  (residual is identity)     mismatches 0/400
+OK  M10 == shipped when deg  > 0  (clamp never binds)        mismatches 0/400
+OK  M2r differs when q_f > 0 and the run branch wins    6.000 vs shipped 10.000
+OK  M3  differs when q_f > 0 and the stop branch wins  22.800 vs shipped 18.800
+OK  M10 differs when deg < 0 (the clamp binds)        -10.000 vs shipped  0.000
+```
+
+Each mutant is faithful: identical to the shipped function everywhere its mutation should not
+bite, and different exactly where it should. **These verdicts still get confirmed with real
+`pytest` once the sweep releases the working tree** — the analytic pass is the fast check, not a
+substitute for it.
+

@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "311f234",
+    "harness_sha": "110f4ed",
     "dataset": "data/raw laps, stratified 6-race subset (RAW, not featured)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-31T12:21:44+00:00",
+    "generated_at": "2026-08-01T14:20:35+00:00",
     "artifacts": {}
   },
   "status": "masked",
@@ -38,22 +38,22 @@
     }
   ],
   "agreement": {
-    "sample_size": 58,
+    "sample_size": 57,
     "eligible": 178,
-    "scored_share": 0.3258426966292135,
+    "scored_share": 0.3202247191011236,
     "races": 6,
-    "exact": 0.27586206896551724,
-    "within_one": 0.3793103448275862,
-    "within_two": 0.4482758620689655,
-    "mean_signed_error": -2.3448275862068964,
-    "mean_absolute_error": 2.4827586206896552
+    "exact": 0.2807017543859649,
+    "within_one": 0.38596491228070173,
+    "within_two": 0.45614035087719296,
+    "mean_signed_error": -2.2982456140350878,
+    "mean_absolute_error": 2.43859649122807
   },
   "buckets": {
     "closing_laps": 4,
     "min_stint": 17,
     "no_boundary_in_window": 34,
-    "no_call_in_window": 65,
-    "scored": 58
+    "no_call_in_window": 66,
+    "scored": 57
   },
   "verdicts": [
     {
@@ -223,8 +223,8 @@
       "race": "Barcelona",
       "driver": "HUL",
       "actual_lap": 45,
-      "chosen_lap": 40,
-      "offset_laps": -5,
+      "chosen_lap": 44,
+      "offset_laps": -1,
       "bucket": "scored"
     },
     {
@@ -241,9 +241,9 @@
       "race": "Barcelona",
       "driver": "LAW",
       "actual_lap": 44,
-      "chosen_lap": 43,
-      "offset_laps": -1,
-      "bucket": "scored"
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2025,

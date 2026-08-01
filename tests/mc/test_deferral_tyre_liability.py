@@ -243,3 +243,23 @@ def test_a_safety_car_cheapens_the_stop_and_not_the_rubber():
     # And the regimes really are different, or both halves would be asserting about
     # whichever branch happens to win everywhere.
     assert calm[0] != calm_run[0]
+
+
+def test_a_faster_than_fresh_set_never_becomes_a_terminal_CREDIT():
+    """The exit gate's last survivor: removing the zero clamp passes the whole suite.
+
+    `deg_cost_s` is negative on 19.4% of real elective laps -- a set genuinely faster
+    than its own fresh reference, early in a stint on a track that is still rubbering
+    in. Multiplied by the laps remaining that becomes a large negative number, and a
+    negative liability is not a small cost, it is a terminal CREDIT: the projection
+    would report that deferring GAINS track position, and the more laps remain the
+    more it would gain.
+
+    Measured, the clamp binds on 220 of 2,048 elective evaluations (10.7%), worst case
+    -43.26 s. Routine, not exotic, which is why it needs a test rather than a comment.
+    """
+    faster_than_fresh = _config(deg_cost_s=-1.0, laps_remaining=45)
+
+    liability = _deferral_tyre_liability_s(_pit_loss(), _no_cliff(), faster_than_fresh)
+
+    assert (liability >= 0.0).all()
