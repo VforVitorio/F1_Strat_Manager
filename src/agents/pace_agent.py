@@ -4,8 +4,8 @@ Extracted from N25_pace_agent.ipynb. Wraps the N06 XGBoost delta-lap-time
 model into a clean OOP agent interface that returns lap time predictions,
 delta signals, and bootstrap confidence intervals.
 
-Public API (unchanged — backward compatible)
---------------------------------------------
+Public API
+----------
 run_pace_agent(**kwargs)               → PaceOutput
 run_pace_agent_from_state(lap_state)   → PaceOutput
 
