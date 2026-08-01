@@ -72,6 +72,25 @@ site's own comment says "Fall back to the same conservative stub the wet/interme
 already uses" — the intent to share was explicit, the code never did. **Fixed** (Part 4): extracted
 `_conservative_tire_stub(...)` helper.
 
+### N4. `pace_agent.py`'s entire LangGraph ReAct scaffold is unreachable — flagged, not removed
+
+Beyond the dead `get_pace_react_agent()` free function (M1, fixed below), the whole
+subsystem it wrapped is unreachable too: the `get_react_agent()` instance method,
+`self._react_agent`, `PACE_TOOLS`, `predict_pace_tool`, `get_session_median_tool`, and
+`_PACE_SYSTEM_PROMPT` (`pace_agent.py:752-988`, confirmed via a repo-wide grep for
+`.get_react_agent(` — zero callers anywhere, unlike `tire_agent`/`race_situation_agent`/
+`pit_strategy_agent`, whose identical-shaped scaffolds ARE called internally from
+`_run_core`). `PaceAgent.run()`/`run_from_state()` call the XGBoost model directly and
+never touch any of it.
+
+**Not removed.** The section header directly above it reads `# LangGraph tools and ReAct
+agent (preserved 100% — no functional changes)` — a signal that a past change
+deliberately chose to keep this block untouched, most likely for eventual parity with
+the other three agents' ReAct capability. Deleting ~235 lines on the strength of "zero
+callers" alone would override that stated intent without knowing the reason behind it.
+Flagging for Víctor: either delete it (if the parity plan is abandoned) or wire it into
+`run()`/`run_from_state()` (if still planned) — this session does neither.
+
 ### N3. Weather-default divergence spans pace/tire/race_situation agents (3 different value sets) — folded into the architecture report
 
 `pace_agent.py` (`run_pace_agent_from_state`) defaults air/track temp to **25.0/35.0** reading the
@@ -105,16 +124,27 @@ over the shared `build_race_state` helper"), so it does not count as a fourth im
 | `track_temp` | `.get("track_temp", 40.0)` | `.get("track_temp", 35.0)` | `.get("track_temp", 35.0)` |
 | `position is None` | raises `ValueError` (#628) | raises `ValueError` (#465) | raises `ValueError` (#465) |
 | `gap_ahead_s` unknown fallback | `GAP_UNKNOWN_FALLBACK_S` (imported, single-sourced) | `GAP_UNKNOWN_FALLBACK_S` (imported, single-sourced) | `GAP_UNKNOWN_FALLBACK_S` (imported, single-sourced) |
-| `radio_msgs`/`rcm_events` | **not populated** (RaceState field left at its Pydantic default) | populated inline from `RadioPipelineRunner` | accepted as parameters, `None` → `[]` |
+| `radio_msgs`/`rcm_events` | left empty by `_build_race_state` itself, populated **370 lines later in the main loop** (`run_simulation_cli.py:1739-1762`, `.extend()`/`.append()` on the already-built `race_state` object) | populated **inline inside** `_build_race_state` from `RadioPipelineRunner` | accepted as **parameters** of `build_race_state`, `None` → `[]` |
 
 `compound` and `track_temp` are the two fields where CLI disagrees with BOTH other copies
 (`"UNKNOWN"` vs `"MEDIUM"`, `40.0` vs `35.0`), confirming the informal audit's claim with exact
 line numbers. `total_laps`'s CLI copy is actually the "more correct" one (fails loudly instead of
 guessing), which itself is a divergence in *error-handling philosophy*, not just in literal values.
-`radio_msgs`/`rcm_events` is a **new**, previously-unreported divergence this session found: the CLI
-path silently produces a `RaceState` with no radio/RCM context at all, while Arcade and the backend
-populate it — meaning the CLI's orchestrator input is missing information that the other two
-surfaces carry, not just different numbers for the same fields.
+
+**Correction (caught by this session's own adversarial gate, see the GATE report):** an earlier
+draft of this document claimed the CLI's `RaceState` ends up "radio-blind" — that claim was
+**refuted**. The CLI is not missing radio/RCM context: `run_simulation_cli.py`'s main loop mutates
+`race_state.radio_msgs`/`race_state.rcm_events` in place immediately after `_build_race_state`
+returns (lines 1739-1762 — real corpus radios/RCMs via `.extend()`, the SC-tracker's synthetic
+re-assertion, and simulated radios via `.append()`), and the arcade docstring's own words ("same as
+the CLI") already said as much. The real divergence is **structural, not functional**: Arcade and
+the backend build `radio_msgs`/`rcm_events` as part of the single `_build_race_state`/`build_race_state`
+call, while the CLI splits that responsibility — the builder returns an empty-list `RaceState` and a
+separate, later block in the caller fills it in. Whether that split is intentional (the CLI's
+main loop already owns the `sc_tracker`/`RadioPipelineRunner` instances for other reasons) or an
+artifact of the CLI predating the other two surfaces is exactly the kind of question the next
+dedicated session should resolve — but it is a "where does this responsibility live" question, not
+a missing-data one.
 
 ### The prior unification attempt, and its documented blocker
 
@@ -147,14 +177,15 @@ currently **not importable** without that shim.
    boundary (e.g. a new `src/shared_race_state.py` that the backend then imports, inverting today's
    direction), or (c) accept 3 copies and enforce parity with a test that diffs their literal
    defaults (cheapest, weakest).
-2. **`radio_msgs`/`rcm_events` in the CLI path** is a functional gap, not just a style one — worth
-   flagging to Víctor as its own question: is the CLI's `RaceState` deliberately radio-blind, or is
-   this an oversight from before Radio/RCM wiring existed?
-2. **`compound`/`track_temp`/`tyre_life`/`total_laps` fallback values** need one canonical answer
+2. **`radio_msgs`/`rcm_events` responsibility placement** — not a data gap (see the correction
+   above), but worth deciding: should the CLI's `_build_race_state` build these fields inline like
+   Arcade/backend do, or should Arcade/backend instead adopt the CLI's split (build empty, populate
+   from the caller)? Either answer removes one more structural difference between the three copies.
+3. **`compound`/`track_temp`/`tyre_life`/`total_laps` fallback values** need one canonical answer
    each — this session found the weather-default divergence extends further (`pace_agent.py`'s
    25.0/35.0 is a *fourth* value set for the same physical quantities, Part 2 §N3), so the "pick one
    number" scope is bigger than just the three `_build_race_state` copies.
-3. Whichever direction is chosen, it touches the untouchable CLI PMV (`run_simulation_cli.py`) and
+4. Whichever direction is chosen, it touches the untouchable CLI PMV (`run_simulation_cli.py`) and
    the `src/telemetry` submodule — per the project's issue-first rule for important/risky changes,
    file the issue before writing code, as `project_cleanup_audit_session_plan` already specifies.
 
@@ -162,4 +193,38 @@ currently **not importable** without that shim.
 
 ## Part 4 — Fixes applied in this session
 
-(Appended incrementally as each fix lands — see commit history on `fix/cleanup-anti-slop-scoped`.)
+| # | Finding | Fix | Files |
+|---|---|---|---|
+| 1 | M1: 3 dead constants (`_CLUSTER_PARQUET`, `_LAPS_FEATURED`, `_FEATURE_MANIFEST`) | Deleted — zero references anywhere in the repo, `_load_encoding_maps` builds the same paths inline | `src/agents/pace_agent.py` |
+| 2 | M1: 4 dead `get_*_react_agent()` free functions (~90 lines) | Deleted, plus their stale mentions in each file's own "Public API" module docstring | `pace_agent.py`, `tire_agent.py`, `race_situation_agent.py`, `pit_strategy_agent.py` |
+| 3 | M2: `total_laps` fallback literal `57` restated 6× across 3 files | Extracted `DEFAULT_TOTAL_LAPS` into a new leaf module `src/agents/_shared_defaults.py` (mirrors the existing `guard_rails.py` leaf-import pattern already used in `pit_strategy_agent.py`), imported everywhere | `pit_strategy_agent.py` (×3), `race_situation_agent.py` (×2), `tire_agent.py` (×1) |
+| 4 | N1: `race_situation_agent.py` disagreed with itself on `TrackTemp` fallback (35.0 vs 38.0) | Aligned `_compute_weather_features`'s fallback to 38.0, matching the file's own `run()`/`run_from_state()` | `src/agents/race_situation_agent.py` |
+| 5 | N2: `tire_agent.py::_run_core` restated the same "conservative stub" `TireOutput` twice | Extracted `_conservative_stub()` static helper, both call sites now pass only the differing `reason` string | `src/agents/tire_agent.py` |
+| 6 | M3: CLAUDE.md documented `f1-streamlit`/Streamlit (retired for `f1-webapp`/React SPA in #551) in 4 places, and described `src/shared/` as the live extraction home instead of the archived one | Updated §1 overview, §2 tech stack table, §3 project tree (added `data_extraction/`, marked `shared/` archived, corrected `telemetry/`'s description), §9 tooling note, §10 skills table | `CLAUDE.md` |
+
+### Findings detected but deliberately NOT fixed (flagged for follow-up, not silently dropped)
+
+| # | Finding | Why not fixed here |
+|---|---|---|
+| N4 | `pace_agent.py`'s entire LangGraph ReAct scaffold (~235 lines: `get_react_agent`, `_react_agent`, `PACE_TOOLS`, both tools, the system prompt) is unreachable — confirmed via repo-wide grep, zero callers | Its own section header says "preserved 100% — no functional changes", signalling deliberate intent (likely future parity with the other 3 agents). Deleting on "zero callers" alone would override that without knowing the reason. Flagged for Víctor to decide. |
+| N3 | Weather-default divergence across `pace_agent.py` (25.0/35.0) vs `tire_agent.py`/`race_situation_agent.py` (28.0/38.0) | Same disease as the architecture question (Part 3) — multiple independent "assemble race context with a plausible default" implementations. Picking one canonical value is a product decision, not a mechanical dedup; folded into the architecture report instead. |
+| A2/Part 3 | `_build_race_state` triplicated across CLI/Arcade/telemetry-backend | Explicit user instruction: detect and report only, fix in the dedicated follow-up session. |
+
+### Verification
+
+- `ruff check` on every touched Python file: clean (only `F821` is enforced inside `src/agents/**` per `pyproject.toml`'s deliberate per-file-ignores; nothing else applies there).
+- `ruff format --check` reports these files as "needs formatting" — **expected and not a regression**: `[tool.ruff.format]` explicitly excludes `src/agents/**` (deliberate hand-aligned `=` style), so this never runs in CI either.
+- AST parse + `importlib.import_module` on all 5 touched agent modules: clean.
+- `pytest tests/agents/ tests/audit/`: 129 passed.
+- `pytest tests/mc/ tests/simulation/ tests/eval/`: 286 passed.
+- Real `f1-sim Budapest NOR McLaren --no-real-radios --no-llm` run: all 70 laps OK, positions P5 → P1,
+  actions STAY_OUT·59 / PIT_NOW·5 / UNDERCUT·6, no errors.
+- Independent adversarial gate (Fable, separate agent, full details in
+  `documents/audits/AUDIT_cleanup_session_2026-08-01_GATE.md`): reproduced the test runs and the
+  real `f1-sim` run itself, re-verified every "zero callers" claim, confirmed all dedup sites
+  behaviourally identical, and found 1 HIGH (the radio_msgs/rcm_events claim corrected above), 3
+  MEDIUM (this branch's non-bisectable commit order, this section's then-unfilled placeholders, a
+  stale `docs/pages/agents-api.md` line), 3 LOW (a "2022-2025" vs "2023-2025" dataset-year slip in
+  the new constant's comment, a line-number-hardcoded comment, a stale "unchanged" docstring claim
+  in `pace_agent.py`). All 7 fixed post-gate; see the branch's commit history for the reordering and
+  follow-up commits.
