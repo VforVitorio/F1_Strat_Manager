@@ -17,12 +17,9 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import skip_no_tire_models as _skip_no_models
+
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
-_skip_no_models = pytest.mark.skipif(
-    not _HAS_MODELS,
-    reason="data/models/ not present (CI runner without model weights)",
-)
 
 
 @_skip_no_models
