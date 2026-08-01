@@ -81,6 +81,16 @@ def _orchestrator_prompt() -> str:
     return _build_orchestrator_prompt(race_state, {}, "STAY_OUT")
 
 
+def _prompts() -> dict[str, str]:
+    """Both rendered prompts, so every check below covers the pair rather than one."""
+    from src.agents.pit_strategy_agent import _PIT_STRATEGY_SYSTEM_PROMPT
+
+    return {
+        "pit agent prompt": _PIT_STRATEGY_SYSTEM_PROMPT,
+        "orchestrator prompt": _orchestrator_prompt(),
+    }
+
+
 def test_no_prompt_states_a_capacity_the_table_disagrees_with():
     """The relation, not the value. Both prompts, every compound they mention."""
     from src.agents.pit_strategy_agent import _PIT_STRATEGY_SYSTEM_PROMPT, _STINT_CAPACITY_LAPS
@@ -141,3 +151,75 @@ def test_the_selector_and_the_prompt_agree_across_the_band_that_used_to_split_th
         selector_allows = _STINT_CAPACITY_LAPS["SOFT"] >= laps_remaining
         prompt_allows = laps_remaining <= prompt_bound
         assert selector_allows == prompt_allows, laps_remaining
+
+
+# The four guard-rail bounds, each of which was prose in both prompts while the
+# deterministic rails computed against the constant. Gate G3 listed them; #741 had
+# derived exactly one number and left these.
+_MIN_STINT = re.compile(r"\b(SOFT|MEDIUM|HARD)\b[^.\n]*?>=\s*(\d+)\s*lap")
+_BEFORE_LAP = re.compile(r"before lap (\d+)")
+# Anchored on "when", because a looser pattern also matches the COMPOUND capacity line
+# ("recommend only if remaining laps <= 18") and then asserts the guard-rail bound
+# equals a stint capacity. Caught by this very test on its first run.
+_LAST_LAPS = re.compile(r"when remaining laps <=\s*(\d+)")
+_CLIFF_P10 = re.compile(r"cliff P10 <\s*(\d+)|laps_to_cliff P10 <\s*(\d+)")
+
+
+def test_no_prompt_states_a_minimum_stint_the_rails_disagree_with():
+    """`_MIN_STINT_LAPS` sat two sections above the one number #741 derived.
+
+    Same defect, same file, left in place because the fix was applied to the instance
+    in front of me rather than to the class. That is the pattern three gates have now
+    found, so this pins the whole table instead of one compound of it.
+    """
+    from src.strategy.inference.guard_rails import _MIN_STINT_LAPS
+
+    for name, prompt in _prompts().items():
+        stated = {m.group(1): int(m.group(2)) for m in _MIN_STINT.finditer(prompt)}
+        assert stated, f"{name} states no minimum stint the pattern can see"
+        for compound, value in stated.items():
+            assert value == _MIN_STINT_LAPS[compound], (
+                f"{name} says {compound} >= {value}, the rails enforce {_MIN_STINT_LAPS[compound]}"
+            )
+
+
+def test_no_prompt_states_a_pit_window_bound_the_rails_disagree_with():
+    """The two hard bounds an LLM is told to treat as inviolable.
+
+    If prose and rail disagree here the model is told to refuse an action the rails
+    would have allowed, or to allow one they will override, and either way the
+    disagreement is invisible until someone reads both files.
+    """
+    from src.strategy.inference.guard_rails import (
+        _CLIFF_P10_SAFE,
+        _NO_PIT_BEFORE_LAP,
+        _NO_PIT_LAST_N_LAPS,
+    )
+
+    for name, prompt in _prompts().items():
+        early = [int(m.group(1)) for m in _BEFORE_LAP.finditer(prompt)]
+        late = [int(m.group(1)) for m in _LAST_LAPS.finditer(prompt)]
+        cliff = [int(m.group(1) or m.group(2)) for m in _CLIFF_P10.finditer(prompt)]
+
+        assert early, f"{name}: the early-window bound is no longer visible"
+        assert late, f"{name}: the end-of-race bound is no longer visible"
+        assert cliff, f"{name}: the cliff exception is no longer visible"
+
+        assert set(early) == {_NO_PIT_BEFORE_LAP}, name
+        assert set(late) == {_NO_PIT_LAST_N_LAPS}, name
+        assert set(cliff) == {_CLIFF_P10_SAFE}, name
+
+
+def test_the_undercut_threshold_is_not_restated_at_all():
+    """This one cannot be interpolated, so it must not appear.
+
+    The threshold is loaded per-instance from the model's calibration config and the
+    tool PRINTS the live value into its own response. A module-level prompt cannot see
+    it, so restating it means the LLM can receive two different thresholds in one
+    conversation the moment the model is retuned. The prompt now points at what the
+    tool reports instead.
+    """
+    from src.agents.pit_strategy_agent import _PIT_STRATEGY_SYSTEM_PROMPT
+
+    assert "0.522" not in _PIT_STRATEGY_SYSTEM_PROMPT
+    assert "score_undercut_tool reports" in _PIT_STRATEGY_SYSTEM_PROMPT
