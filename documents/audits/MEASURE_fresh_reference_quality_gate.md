@@ -111,15 +111,50 @@ model-capacity* contribution to that bound, which was sitting inside the number
 
 **This is a genuine, if partial, improvement to `deg_cost_s` as it exists on `main`
 today** (the term `driver_time_delta` already consumes, at 5 laps of exposure), not
-only to the parked deferral term. The 33% mean-error reduction and 60% bias reduction
-apply to production `deg_cost_s` the moment this ships, independent of #763/#771.
+only to the parked deferral term. It is non-regressive: on both seasons measured, the
+gated numbers are never worse than the baseline. See the 2025 addendum below for the
+size of the improvement that actually ships.
+
+## ⚠️ 2025 addendum (2026-08-01) — the training-season numbers above overstate the effect
+
+The 33% mean-error / 60% bias reduction was measured on `laps_tiredeg.parquet`, 2023-24
+only — the only parquet carrying N04's training target. That is legitimate for CHOOSING
+the 1.10 threshold (fitting it on 2025 would repeat the leak `src/strategy/eval/
+hygiene.py` already documents), but it was reported as "the fix's benefit" without ever
+checking whether it holds on the season the system actually ships against. It does not,
+by a wide margin.
+
+`scripts/measure_fresh_reference_gate_2025.py` runs the identical diagnostic on
+`laps_featured_2025.parquet` — the real, full 24-race 2025 season — reusing the same
+production functions (`_add_compound_cols`, `_compound_name_to_id`,
+`_reject_contaminated_laps`) rather than a second implementation of compound resolution
+or the gate:
+
+| | mean abs error | signed bias | stints w/ reference |
+|---|---|---|---|
+| 2023-24 baseline | 0.650 s/lap | +0.351 s/lap | 1714 / 1714 |
+| 2023-24 gated @ 1.10 | 0.434 s/lap (**-33%**) | +0.139 s/lap (**-60%**) | 1665 / 1714 (49 lost, 2.9%) |
+| 2025 baseline | 0.723 s/lap | +0.233 s/lap | 738 / 738 |
+| 2025 gated @ 1.10 | 0.712 s/lap (**-1.5%**) | +0.221 s/lap (**-5%**) | 734 / 738 (4 lost, 0.5%) |
+
+**The contamination rate itself is ~5x lower in this 2025 sample than in 2023-24**
+(0.5% of stints lost their reference vs 2.9%) — not a sampling artefact, `laps_featured_
+2025.parquet` covers the entire 24-race calendar. The defect this PR fixes is real, the
+fix is correct and does not regress anything, but it is materially rarer in the season
+that ships than in the seasons used to characterise it. **Quote the 2025 numbers, not
+the 2023-24 ones, when describing what this buys in production.**
+
+This does not change the #763/#771 verdict either way: 0.712 s/lap is still far above
+the ~0.1 s/lap bar that decision needs.
 
 ## Reproducing
 
 ```bash
-uv run python scripts/measure_fresh_reference_gate.py
+uv run python scripts/measure_fresh_reference_gate.py        # 2023-24, the threshold's own training data
+uv run python scripts/measure_fresh_reference_gate_2025.py   # 2025, the held-out season that ships
 ```
 
 Related: `MEASURE_744a_tyre_reference.md` · `MEASURE_763_ship_decision.md`
 (`feat/deferral-tyre-liability`) · `scripts/measure_deg_error_bound.py`
-(same branch, the original bound this note decomposes)
+(same branch, the original bound this note decomposes) ·
+[[feedback_measure_on_the_season_that_ships]] (Claude memory — the general lesson)
