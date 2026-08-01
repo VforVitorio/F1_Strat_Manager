@@ -730,36 +730,18 @@ _ACTION_STYLE: dict[str, tuple[tuple[int, int, int], str]] = {
 
 
 def classify_action(action: str) -> tuple[tuple[int, int, int], str]:
-    """Map a raw action string to (colour, display-label) for the badge."""
-    return _ACTION_STYLE.get(action.upper(), (ACCENT, action.upper() or "--"))
+    """Map a raw action string to (colour, display-label) for the badge.
 
-
-_ALERT_SEVERITY: dict[str, int] = {
-    "SAFETY_CAR": 3,
-    "RED_FLAG": 3,
-    "VIRTUAL_SAFETY_CAR": 2,
-    "VSC": 2,
-    "YELLOW_FLAG": 2,
-    # A sector yellow is the same danger tier as a full-track yellow, and it is
-    # the form DOUBLE YELLOW resolves to (radio_agent folds DOUBLE YELLOW into the
-    # YELLOW branch → YELLOW_FLAG_SECTOR). Without this key the banner fell back to
-    # severity 0 (dim), hiding the highest-danger local flag (#398 follow-up).
-    "YELLOW_FLAG_SECTOR": 2,
-    "PROBLEM": 1,
-    "WARNING": 1,
-}
-
-
-def classify_alerts(
-    tags: list[str],
-) -> tuple[str, tuple[int, int, int]] | None:
-    """Collapse `agent_alerts` tags into one banner line. None when empty."""
-    if not tags:
-        return None
-    severity = max((_ALERT_SEVERITY.get(t.upper(), 0) for t in tags), default=0)
-    colour = {3: DANGER, 2: WARNING, 1: INFO}.get(severity, TEXT_SECONDARY)
-    text = " · ".join(t.upper() for t in tags[:4])
-    return text, colour
+    ``action`` was typed as a plain ``str`` but neither this function's original
+    body nor its theme.py twin (deduplicated 2026-08-01) actually guarded a
+    ``None`` -- both called ``.upper()`` on it unguarded as the dict lookup key
+    and crashed identically. No live caller currently passes ``None``
+    (`orchestrator_card.py` sanitises with `str(... or "--")` first), but the
+    signature invites it, so this is fixed now rather than left as a latent
+    crash the next caller could trigger.
+    """
+    action = (action or "--").upper()
+    return _ACTION_STYLE.get(action, (ACCENT, action))
 
 
 # --- Private helpers -----------------------------------------------------
