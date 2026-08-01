@@ -225,6 +225,27 @@ class TireAgentConfig:
             standing start, so the level is biased slow and cannot be charged as a
             cost directly. Asking the same model on the same stint's early laps
             cancels that baseline algebraically instead of approximately.
+        fresh_reference_max_pct_of_fastest: Reject a fresh-reference candidate lap
+            whose ``lap_time_pct_of_race_fastest`` exceeds this ratio. ``track_status_
+            clean`` (see ``_add_session_cols``) is supposed to be the signal for a
+            Safety-Car- or red-flag-affected lap, but it is dead on the shipping
+            path — a constant 0 across every featured parquet, because N04's
+            ``IsAccurate`` gate does not catch every neutralised lap (measured
+            counter-example: Mexico City 2023 car 4, lap 36, 137.8 s on a circuit
+            whose green-flag pace is ~83 s, ``track_status_clean == 0`` regardless).
+            When such a lap lands as the fresh reference, the model correctly
+            predicts it as an outlier and every later lap in the stint reads as
+            tens of seconds "faster than fresh" — not tyre wear, an artefact of a
+            contaminated zero point. ``lap_time_pct_of_race_fastest`` is already a
+            TCN input feature, computed unconditionally and cheaply from
+            ``session_meta['fastest_lap_s']``, so it is available at the same point
+            ``track_status_clean`` should have been. Threshold measured over 31,624
+            training-season laps: gating at 1.10 cuts the deg_cost_s error bound's
+            mean absolute error from 0.650 to 0.434 s/lap and its signed bias from
+            +0.351 to +0.139, at the cost of 49 of 1714 stints (2.9%) losing their
+            reference entirely and falling back to ``None`` (``scripts/
+            measure_deg_error_bound.py``, ``documents/audits/MEASURE_fresh_reference_
+            quality_gate.md``).
         deg_cost_floor_s / deg_cost_ceiling_s: Bounds on the referenced wear, in
             seconds per lap. MEASURED, not chosen: they are the 1st and 99th
             percentiles over 31,624 training-season laps
@@ -245,6 +266,7 @@ class TireAgentConfig:
     cliff_pit_soon_laps: int = 3
     cliff_monitor_laps: int  = 7
     fresh_reference_tyre_life: int = 3
+    fresh_reference_max_pct_of_fastest: float = 1.10
     deg_cost_floor_s: float   = -2.33
     deg_cost_ceiling_s: float = 3.67
 
@@ -396,6 +418,20 @@ CLIFF_THRESHOLD: dict[str, int] = {
 # session_meta.total_laps is present on every shipping path, so this only guards
 # hand-built states.
 MAX_RACE_LAPS: int = 78
+
+
+def _reject_contaminated_laps(
+    laps: pd.DataFrame, fastest_lap_s: float, max_pct: float,
+) -> pd.DataFrame:
+    """Drop candidate fresh-reference laps slower than ``max_pct`` times the
+    race's fastest lap -- a Safety-Car or red-flag-affected lap that
+    ``track_status_clean`` should flag but does not (see
+    ``TireAgentConfig.fresh_reference_max_pct_of_fastest``).
+
+    Pure and leaf-level so the threshold is testable without model weights --
+    the same split ``tire_parsing.py`` made, and for the same reason.
+    """
+    return laps[laps['LapTime_s'] <= max_pct * fastest_lap_s]
 
 
 def _referenced_wear(parsed: dict) -> Optional[float]:
@@ -932,9 +968,29 @@ class TireAgent:
         life — a replay that starts mid-stint. Zero is a legitimate reading of the
         wear it feeds, so collapsing "unknown" into it would be the same sentinel
         collision that #436 fixed for the cliff.
+
+        Also drops any candidate lap slower than ``cfg.fresh_reference_max_pct_of_
+        fastest`` times the race's fastest lap — a Safety-Car or red-flag-affected
+        lap that ``track_status_clean`` should have flagged but does not (see the
+        config docstring). Returns ``None`` rather than falling back to a
+        contaminated lap when every candidate is rejected, for the same reason: a
+        wrong reference is worse than none.
         """
         early_laps = self._get_driver_stint(driver, self.cfg.fresh_reference_tyre_life)
         if early_laps is None or not len(early_laps):
+            return None
+
+        # `_get_driver_stint` returns the raw slice of `self.laps_df` as-is, so
+        # `LapTime_s` does not exist yet on the FastF1 `run()` path (raw `LapTime`
+        # Timedelta) -- it is only created by `_add_timing_cols`, the first step
+        # inside `_build_stint_tensor`. Reuse it here rather than assume a column
+        # that `_build_stint_features` itself only guarantees after this point.
+        early_laps = _reject_contaminated_laps(
+            _add_timing_cols(early_laps),
+            self.session_meta['fastest_lap_s'],
+            self.cfg.fresh_reference_max_pct_of_fastest,
+        )
+        if not len(early_laps):
             return None
 
         tensor = self._build_stint_tensor(early_laps, compound_id, self.session_meta)
