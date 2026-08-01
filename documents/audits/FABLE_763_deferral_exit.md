@@ -1,6 +1,11 @@
 # FABLE EXIT GATE #763 — the deferral tyre liability, attacked before promotion
 
 **Date:** 2026-07-31 · **Branch:** `feat/deferral-tyre-liability` @ `4652c48` · **Gate type:** adversarial EXIT gate
+
+> ⚠️ **This first half describes `4652c48`. The three HIGH findings were fixed at `7dd4751` and
+> re-measured — see [RE-RUN AFTER THE FIX](#re-run-after-the-fix--branch-feat-deferral-tyre-liability--7dd4751)
+> at the bottom for the post-fix numbers, including the E4 amplification that decides whether the
+> term ships. The severity tally below is the PRE-fix state and is deliberately not edited.**
 **Mandate:** success = finding what is STILL broken. No repository file modified except this report
 (any temporary mutation is backed up with `cp` and restored from the backup, diffed, and stated).
 All evidence executed, `profile="no-llm"`, zero API calls. The agreement metric's direction is
@@ -744,3 +749,199 @@ distribution, saturation, branch shares, cliff variant) · `sensitivity_small.py
 amplification) · `rederive_e3_e5.py` + `first_stop_defs.py` (A/E re-derivation) ·
 `e1_green_filter_check.py` (E1's label) · `mutation_battery.py` + `mutation_battery2.py` (§G) ·
 `test_probe_positive_control.py` (the empty-set control).
+
+---
+---
+
+# RE-RUN AFTER THE FIX — branch `feat/deferral-tyre-liability` @ `7dd4751`
+
+**Date:** 2026-07-31 (same session) · **Prompted by:** the three HIGH findings above being fixed
+and pushed. Everything above this line describes `4652c48` and is left untouched so the before and
+after stay readable side by side.
+
+**What changed in the code** (`git diff 4652c48..7dd4751 -- src/agents/position_projection.py`,
++23/−11): `_deferral_tyre_liability_s` now takes `cliff_laps` as its second argument and computes
+`laps_past_cliff = max(0, remaining − cliff_laps)` from the tyre model's own per-draw onset,
+instead of assuming everything past `window_laps` was past the cliff. `_terminal_gaps` threads it
+from `project_positions`. Two tests added. This is exactly the D/HIGH finding, fixed at the point
+the finding named.
+
+## Method — what is comparable and what I had to change
+
+The captured `_run_projection_mc` kwargs are **inputs**: they come from the replay and the agents,
+not from the projection scorer, so the same 2,744 laps are valid against the fixed code and the
+comparison is lap-for-lap. Two harness changes were forced, and both are traps:
+
+1. **The zero-stub must take the new 3-arg signature.** A 2-arg stub would raise (loud, fine) —
+   but a stub with a `*args` catch-all would silently never bind and the "term off" column would
+   become a copy of the "term on" column. The re-run **asserts the real signature** before
+   sweeping (`inspect.signature(REAL) == ['pit_loss_s', 'cliff_laps', 'config']`) and runs a
+   **positive control**: term-on vs term-off must actually differ somewhere. It differs on
+   **87 of 200 sampled laps**, so the control column is real.
+2. **`mandatory_stop_pending=True` is NOT a "term off" control** — it swaps the liability for
+   `_stop_residual_s`, which is a different non-zero charge. The only valid control is stubbing
+   the function to zeros, which is what both runs do.
+
+## ⭐ E4 RE-RUN — the amplification, same harness, same 1,055 laps
+
+Identical procedure to the pre-fix run: the 1,055 `pending=False` laps carrying a tyre reading,
+`deg_cost_s` perturbed by ±0.1 / ±0.2 / ±0.5 s/lap in either direction, argmax via the production
+`best_mc_candidate`, each lap scored with the term wired and with it stubbed to zero.
+
+| deg error | flips WITH the term | flips WITHOUT | **amplification** | (was) |
+|---|---|---|---|---|
+| **±0.1 s/lap** | **65 (6.2%)** | 11 (1.0%) | **5.91×** | *(was 8.27×, 8.6%)* |
+| ±0.2 s/lap | 125 (11.8%) | 29 (2.7%) | **4.31×** | *(was 6.07×, 16.7%)* |
+| ±0.5 s/lap | 279 (26.4%) | 49 (4.6%) | **5.69×** | *(was 6.86×, 31.8%)* |
+
+**The "WITHOUT it" column is byte-identical to the pre-fix run (11 / 29 / 49).** It has to be —
+stubbing the liability to zero makes the cliff fix unreachable — and that identity is the
+strongest available check that the two runs are the same measurement on the same laps.
+
+### The answer to the ship question, plainly
+
+**It is no longer 6-8×. It is 4.3-5.9×.** The fix is real and material: at the plausible-error
+scale that matters most (±0.1 s/lap), flips fell from **8.6% → 6.2%** of elective decisions, a
+28% reduction, and the amplification fell from above the design gate's predicted band to inside
+it. The gate predicted "~4-6×"; the fixed code measures 4.31× / 5.69× / 5.91×.
+
+**But being inside the predicted band is not the same as passing E4, and I will not report it as
+one.** The gate's criterion was conditional, not a threshold: *"if deg's CI cannot support the
+amplification, B4 (or B5 as the interim) is the honest fallback."* Applying it needs `deg_cost_s`'s
+error bound — and **#744a never published one.** So the criterion remains formally unevaluable for
+the same reason it was before the fix, and what I can state is the two facts either side of it:
+
+- **A tenth of a second per lap of tyre error still flips 6.2% of elective decisions** — one in
+  sixteen — against 1.0% without the term.
+- **The flips are two-sided and near-symmetric** (`STAY_OUT→UNDERCUT` +161 / `UNDERCUT→STAY_OUT`
+  −111; `STAY_OUT→PIT_NOW` +89 / `PIT_NOW→STAY_OUT` −64), i.e. those laps still sit on the knife
+  edge rather than in a robust regime. The asymmetry did shrink with the fix.
+
+**My recommendation, as the gate rather than the implementer:** this is a judgement call that
+belongs to whoever owns the ship decision, and the number that should drive it is 6.2% at ±0.1
+s/lap, not the ratio. If the project can state a defensible bound on `deg_cost_s`'s per-lap error
+and it is materially under 0.1 s/lap, the term is carryable and should ship with the amplification
+table published beside it. If it cannot — and today it cannot, which is the honest position — then
+shipping means accepting that one elective call in sixteen turns on an unbounded input, and the
+gate's own fallback (document the boundary; never the window) is the consistent choice. **What is
+not defensible either way is shipping without publishing this table**, which was E4's entire
+purpose.
+
+## Does the cliff fix change my other findings? — two die, one is untouched, one is new
+
+Same 2,744 captured laps, same production functions, fixed module.
+
+### The invented charge is GONE — the D/HIGH finding is fully resolved
+
+| tyre reading (pending=False laps) | n | laps with liability > 0, **before** | **after** |
+|---|---|---|---|
+| `deg is None` | 784 | 0 | **0** |
+| `deg == 0.0` | 231 | **189** (median 8.41 s) | **0** |
+| `deg < 0` | 205 | **121** | **66** (median 0.00 s) |
+| `deg > 0` | 619 | 592 | 555 (median 18.89 s) |
+
+**Zero laps now charge a liability on a set the model prices at exactly fresh.** The 66 surviving
+`deg < 0` laps are **not** a residue of the bug: with the per-draw onset threaded, a set that is
+fast *today* but whose `cliff_laps` is small genuinely does cost time before the flag, and that is
+now the tyre model's claim rather than the scorer's assumption. That is the right answer, arrived
+at for the right reason.
+
+Knock-on effects, all in the conservative direction: the liability is now identically zero on
+**66.2%** of elective laps (was 51.0%), full saturation fell **28.8% → 20.6%**, and the positional
+cost fell at p75 (**2.00 → 0.99**) and p95 (**5.80 → 4.37**). The worst case is unchanged at
+**11.99 positions**, as it must be — the `min` still caps the liability at the stop being deferred.
+
+**One number went UP and it should have:** the cliff contribution's maximum rose **45.6 s →
+49.49 s** while its median collapsed **15.2 s → 0.49 s**. The fix is a redistribution, not a
+reduction: laps whose model-predicted cliff is far away now pay nothing, and laps already past
+their cliff pay for every remaining lap instead of being capped at `remaining − window_laps`.
+
+### Barcelona dominance — UNCHANGED, and the fix slightly sharpened it
+
+| race | laps | pending=False | deg known | liab > 0 (was) | flips (was) |
+|---|---|---|---|---|---|
+| **Barcelona** | 737 | 522 | 456 | **336** (425) | **179** (216) |
+| Monaco | 558 | 329 | 241 | 170 (213) | 64 (70) |
+| Marina Bay | 308 | 168 | 141 | 78 (128) | 25 (30) |
+| Lusail | 313 | 153 | 105 | 26 (82) | 6 (10) |
+| Monza | 219 | 86 | 59 | 11 (49) | 4 (11) |
+| **Silverstone** | 609 | **581** | **53** | **0** (5) | **0** (1) |
+
+Total flips 338 → **278**, still **every one `pending=False`**. Barcelona's share is **179/278 =
+64.4%**, statistically identical to the 64% before. **The finding stands unchanged** — and
+Silverstone has gone from 1 flip to **zero**, so the archetype that is 95% elective now receives
+the term on precisely no laps. The cliff fix does not touch the cause, which is that
+`_fresh_reference` has no reading for 528 of Silverstone's 581 elective laps.
+
+### `deg is None` inertness — UNCHANGED at 42.6%
+
+784 of 1,839 elective laps, identical before and after. The `deg_cost_s is None` guard was not
+touched by the fix and should not have been. **The reach statement in the report above still
+holds verbatim**: 67% of laps by obligation, 38% once a tyre reading is required.
+
+## What the fix did NOT touch — stated so nothing is assumed closed
+
+`git diff 4652c48..7dd4751` touches four files: `position_projection.py`, two test files, and
+this report. **Verified untouched**: `tests/mc/test_position_projection.py`,
+`src/agents/strategy_orchestrator.py`, `docs/pages/multi-agent.md`, and
+`documents/audits/MEASURE_763_deferral_effect.md`. Read from a pristine copy of the fixed module
+(the working tree held a mutant at the time — the same trap as before, avoided the same way):
+
+- **STILL OPEN [MEDIUM] — the stale docstring**, `position_projection.py:765-766`, verbatim:
+  *"already stopped (no obligation) -> our residual is zero, staying out costs nothing on this
+  term"*. This is the single most misleading line in the module and it sits 35 lines above the
+  branch that contradicts it. Fix-list item 2, untouched.
+- **STILL OPEN [MEDIUM] — the q_f discount on the run-it-out branch** (`:727-729`). Unchanged, and
+  its docstring justification ("a neutralisation that turns up covers a deferred stop whichever
+  branch wins") is still wrong for a branch containing no stop. Fix-list item 5.
+- **STILL OPEN [MEDIUM] — the two tests passing for the wrong reason**
+  (`test_position_projection.py:271-275, :509-517`, both asserting a discharged obligation makes
+  staying out free). `test_position_projection.py` is untouched by the fix, and `_flat_config`
+  still leaves `deg_cost_s` unset, so both still pass only because the term short-circuits.
+  Fix-list item 3.
+- **STILL OPEN [LOW]** — the dead `else` at `:807-811` (and its numpy-bool reachability), the
+  docs-site drift, the legacy scorer's comment, and the E1/E5 record corrections. Fix-list
+  items 7 and 8.
+- **STILL OPEN [MEDIUM] — E2 was never run.** The sign test on 2023-24 elective stops still has no
+  artifact. E4 now exists (this section); E2 does not.
+
+## Why the synthetic sweep read 0.8% where real laps read 6.2% — measured, not asserted
+
+The coordinator flagged their own re-measurement as invalid (400 synthetic parameter states
+through `project_positions`, 0.8% flips) and asked me not to use it. That judgement was right, and
+the reason is measurable rather than a matter of taste. **A flip needs the top two candidates to
+be close enough that a perturbation can cross them**, so the flip rate is a property of how near
+the population sits to its own decision boundaries — not of the parameter ranges swept.
+
+Measured on the 1,055 real elective laps (top-2 `score` margin, in positions):
+
+```
+p10 0.001   p25 0.254   p50 1.000   p75 4.003   p90 7.277
+margin <= 0.01 :  124 laps (11.8%)      <- effectively ties
+margin <= 0.10 :  189 laps (17.9%)
+margin <= 0.50 :  467 laps (44.3%)
+```
+
+**Almost one real elective lap in eight is within a hundredth of a position of flipping**, and the
+distribution is heavily bimodal — a dense cluster at the boundary and a long tail far from it. A
+uniform grid over parameter space reproduces the tail and badly under-samples the cluster, which
+is exactly the shape of a 0.8% result against a 6.2% one. The 6.2% flip rate is also *internally
+consistent* with this: it sits below the 11.8% of laps that are near-tied, as it must.
+
+**The reusable rule: sensitivity of a decision layer can only be measured on the distribution the
+layer actually faces.** Synthetic states measure the function; real laps measure the decision.
+
+## Battery 3 — do the new tests actually catch the mutants they were written for?
+
+A test added to close a mutation gap is worth exactly as much as its ability to kill that mutant,
+so both new tests were verified by re-running the surviving mutants against them. Same discipline:
+`cp` backup of the FIXED file first, restore from the backup after each, byte-identical assertion
+at the end. Baseline is now **175 tests** (173 + 2 added).
+
+| Mutant | Result | Killed by |
+|---|---|---|
+| **M5 — the wiring deleted** (`our_residual = _deferral_tyre_liability_s(...)` → zeros) | **CAUGHT** (1 failed, 174 passed) | `test_the_terminal_gap_of_a_deferring_car_actually_MOVES` |
+
+**The disconnection HIGH is genuinely closed**, and closed by precisely the test written for it —
+not by an incidental assertion elsewhere. That is the strongest form of the check.
+

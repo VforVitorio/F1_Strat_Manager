@@ -731,11 +731,15 @@ def _deferral_tyre_liability_s(
     # the same quantity. One quantity, one rule, both horizons.
     laps_past_cliff = np.maximum(0.0, remaining - cliff_laps)
     run_it_out = remaining * config.deg_cost_s + laps_past_cliff * config.cliff_loss_s
-    discounted_run = np.maximum(
-        0.0, run_it_out - config.future_neutralisation_prob * config.neutralisation_saving_s
-    )
 
-    return np.minimum(stop_later, discounted_run)
+    # The run-it-out branch is deliberately NOT q_f-discounted, and an earlier version
+    # of it was. A neutralisation does not make worn rubber cheaper; it makes a STOP
+    # cheaper. That option value belongs to the other branch, where `_stop_residual_s`
+    # already applies it, and the `min` below is exactly what lets a
+    # neutralisation-cheapened stop win when it becomes the better future. Discounting
+    # both sides credited the same Safety Car twice and handed a car that never stops
+    # a saving it has no way to collect.
+    return np.minimum(stop_later, np.maximum(0.0, run_it_out))
 
 
 def _terminal_gaps(
@@ -762,8 +766,12 @@ def _terminal_gaps(
     and the three cases the deleted rail was patching still fall out of the
     arithmetic, now by cancellation rather than by exemption:
 
-    - already stopped (no obligation) -> our residual is zero, staying out costs
-      nothing on this term;
+    - already stopped (no obligation) -> our STOP residual is zero, because there is
+      no stop left to owe. Since #763 that case is NOT free, though: the deferral
+      liability takes its place and charges what the rubber costs between the window
+      edge and the flag. Before that term existed an elective stop's full pit loss
+      stood against exactly zero, which is why the layer declined 69.9% of them
+      against 26.7% of first stops;
     - leading a pack that all still owe a stop -> their residuals and ours are
       the same size and cancel, so holding the lead is free. The cancellation is
       EXACT only when the two losses match; in production ours is sampled and

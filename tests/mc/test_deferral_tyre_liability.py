@@ -208,3 +208,38 @@ def test_the_cliff_half_uses_the_onset_the_model_supplied_not_an_assumed_one():
         np.zeros(DRAWS)
     )
     assert (_deferral_tyre_liability_s(_pit_loss(), early_cliff, config) > 0).all()
+
+
+def test_a_safety_car_cheapens_the_stop_and_not_the_rubber():
+    """The exit gate's q_f blind spot: nothing caught discounting BOTH branches.
+
+    A neutralisation makes a STOP cheaper. It does not make worn tyres cheaper. So the
+    option value belongs to the stop-later branch, where `_stop_residual_s` applies it,
+    and the `min` is what lets a cheapened stop win once it becomes the better future.
+    Discounting the run-it-out branch as well credited the same Safety Car twice and
+    handed a car that never stops a saving it has no way to collect.
+
+    Pinned as an invariance: raising the neutralisation odds must not move a liability
+    whose cheaper future is holding the set to the flag.
+    """
+    # Heavy wear over a long run, so holding the set to the flag costs far more than
+    # the stop and the STOP branch wins. That is where the option value belongs, so
+    # this is where raising the Safety Car odds must show.
+    heavy = dict(deg_cost_s=1.5, laps_remaining=45, neutralisation_saving_s=8.0)
+    calm = _deferral_tyre_liability_s(_pit_loss(), _no_cliff(), _config(**heavy))
+    likely_sc = _deferral_tyre_liability_s(
+        _pit_loss(), _no_cliff(), _config(**heavy, future_neutralisation_prob=0.5)
+    )
+    assert (likely_sc < calm).all(), "the stop branch must carry the option value"
+
+    # Now a regime where running it out is the cheaper future. The Safety Car odds must
+    # not touch it: no neutralisation reduces what the rubber costs.
+    light = dict(deg_cost_s=0.5, laps_remaining=25, neutralisation_saving_s=8.0)
+    calm_run = _deferral_tyre_liability_s(_pit_loss(), _no_cliff(), _config(**light))
+    sc_run = _deferral_tyre_liability_s(
+        _pit_loss(), _no_cliff(), _config(**light, future_neutralisation_prob=0.5)
+    )
+    assert sc_run == pytest.approx(calm_run)
+    # And the regimes really are different, or both halves would be asserting about
+    # whichever branch happens to win everywhere.
+    assert calm[0] != calm_run[0]
