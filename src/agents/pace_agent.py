@@ -8,7 +8,6 @@ Public API (unchanged — backward compatible)
 --------------------------------------------
 run_pace_agent(**kwargs)               → PaceOutput
 run_pace_agent_from_state(lap_state)   → PaceOutput
-get_pace_react_agent()                 → LangGraph ReAct agent (lazy, LLM required)
 
 Internal structure
 ------------------
@@ -83,11 +82,6 @@ _NOISE_PCT: float  = 0.02   # 2 % Gaussian noise on continuous features
 # lives in tire_agent._add_fuel_cols; deliberately duplicated rather than shared, since
 # unifying constants across agent modules is a wider refactor than this fix (#446).
 FUEL_GAIN_PER_LAP_S: float = 0.055
-
-# ── Artifact paths ────────────────────────────────────────────────────────────
-_CLUSTER_PARQUET  = _PROCESSED / 'circuit_clustering' / 'circuit_clusters_k4_2025.parquet'
-_LAPS_FEATURED    = _PROCESSED / 'laps_featured_2025.parquet'
-_FEATURE_MANIFEST = _PROCESSED / 'feature_manifest_laptime.json'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -990,38 +984,5 @@ Never invent numbers — use only the values returned by the tools."""
 
     PACE_TOOLS = [predict_pace_tool, get_session_median_tool]
 
-    def get_pace_react_agent(
-        provider: str = 'lmstudio',
-        model_name: str = 'gpt-4.1-mini',
-        base_url: str = 'http://localhost:1234/v1',
-        api_key: str = 'lmstudio',
-    ):
-        """Return the LangGraph ReAct agent for the Pace Agent (lazy singleton).
-
-        Delegates to the shared PaceAgent instance so model weights and the
-        LangGraph graph are only created once per process.
-
-        Args:
-            provider: 'lmstudio' or 'openai'.
-            model_name: Model identifier for ChatOpenAI.
-            base_url: Base URL for LM Studio (ignored when provider='openai').
-            api_key: API key; use 'lmstudio' for local server.
-
-        Returns:
-            LangGraph CompiledGraph — invoke with {"messages": [("user", query)]}.
-        """
-        return _get_default_pace_agent().get_react_agent(
-            provider=provider,
-            model_name=model_name,
-            base_url=base_url,
-            api_key=api_key,
-        )
-
 else:
     PACE_TOOLS = []
-
-    def get_pace_react_agent(**kwargs):
-        raise ImportError(
-            "LangGraph / LangChain not installed. "
-            "Install with: pip install langgraph langchain-openai"
-        )
