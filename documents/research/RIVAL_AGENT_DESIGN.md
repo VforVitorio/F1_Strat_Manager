@@ -105,11 +105,18 @@ integration design:
   `POS_GAP_S = 1.50` seconds per position and a single N16 success probability for OUR
   undercut. The rival's possible counter-move (pitting first, covering our stop) does not
   exist in the simulation. That is the concrete hole the agent fills.
-- The sub-agents are LangGraph ReAct agents (built via `create_agent` with tools wrapping
-  each ML model); the orchestrator itself is a plain Python pipeline that calls their
-  public entry points. "A new LangGraph node" therefore means: a new agent module in the
-  same ReAct style as N25-N29, invoked by an additive orchestration entry point, plus a
-  formalization of the whole graph for the multi-agent portion of the TFM (section 7).
+- Tire (N26), race situation (N27), pit strategy (N28) and RAG (N30) are LangGraph ReAct
+  agents (built via `create_agent` with tools wrapping each ML model); pace (N25) is
+  deliberately NOT — it has no qualitative judgment for an LLM to add, and its once-built
+  ReAct scaffold was formally retired in #781 (documents/audits/AUDIT_pace_agent_react_archaeology_779.md)
+  after archaeology showed it was never wired. Radio (N29) is a different shape again: a
+  deterministic NLP pipeline (RoBERTa/SetFit/BERT NER) followed by ONE
+  `with_structured_output()` synthesis call, not a ReAct tool loop. The orchestrator itself
+  is a plain Python pipeline that calls the sub-agents' public entry points. "A new
+  LangGraph node" for the Rival Agent should follow the ReAct pattern of N26-N28/N30 if it
+  needs qualitative judgment over its own tools — decide this on the Rival Agent's own
+  merits rather than assuming "same as N25-N29", which is no longer a uniform group — plus
+  a formalization of the whole graph for the multi-agent portion of the TFM (section 7).
 
 **The data already on disk.** Verified against `data/raw/2025/Budapest/` (and the P5
 audit, which verified this repo-wide):
@@ -622,11 +629,16 @@ nothing the MC cannot draw from directly**.
 `reasoning` is deliberately template-generated (from feature attributions), not
 LLM-generated, in v1: the agent then works identically in the no-LLM path (the project
 maintains a hard no-LLM mode in the CLI and programmatic guardrails; an agent whose
-output depends on an LLM would break that parity). Whether the Rival Agent gets an
-optional LLM synthesis layer like N25-N29 (nicer prose, tool-calling ReAct shape for
-architectural symmetry) is open question Q3; the default answer is: ReAct-wrapped like
-its siblings for the multi-agent narrative, but with the deterministic path as the
-guaranteed spine, mirroring how the existing agents degrade.
+output depends on an LLM would break that parity). This is precisely the shape N25 (pace)
+was formalized into by #781 (documents/audits/AUDIT_pace_agent_react_archaeology_779.md):
+a deterministic template-reasoning agent with no LLM step at all, once it was established
+the agent has no qualitative judgment for an LLM to add. Whether the Rival Agent instead
+gets an optional LLM synthesis layer like N26-N28/N30 (nicer prose, tool-calling ReAct
+shape for architectural symmetry) is open question Q3 — decide it the same way pace's was
+decided, on whether the Rival Agent's own output carries a qualitative judgment beyond its
+quantile triples and probabilities, not by defaulting to "ReAct because the siblings are."
+The deterministic path is the guaranteed spine either way, mirroring how the existing
+agents degrade.
 
 ---
 
@@ -967,11 +979,13 @@ per-circuit window as proposed?) and the overcut bounds (stay out >= 2 laps, pit
 L+6): fix them from the M1 sensitivity study, or pre-commit now for pre-registration
 cleanliness?
 
-**Q3: Does the Rival Agent get an LLM layer?** Recommended: ReAct wrapper for
-architectural symmetry with N25-N29, but the deterministic ML spine is the guaranteed
-path and the no-LLM mode ships first. Alternative: purely deterministic agent (cheaper,
-simpler, less symmetric). This also affects LLM cost per lap (about 6 rivals must NOT
-mean 6 extra LLM calls; the design assumes at most one).
+**Q3: Does the Rival Agent get an LLM layer?** Decide it on the Rival Agent's own merits
+(does its output carry a qualitative judgment beyond quantile triples and probabilities,
+per #781's precedent for pace), not by defaulting to architectural symmetry with a group
+that is no longer uniform (N26-N28/N30 are ReAct; N25 deliberately is not; N29 is NLP-first
++ one structured-output call). Either way the deterministic ML spine is the guaranteed
+path and the no-LLM mode ships first. This also affects LLM cost per lap (about 6 rivals
+must NOT mean 6 extra LLM calls; the design assumes at most one).
 
 **Q4: Schema discipline confirmation.** Keep `StrategyRecommendation` frozen at 14
 fields and integrate rival intent via prompt, contingencies, and `undercut_target`
