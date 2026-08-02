@@ -597,82 +597,30 @@ class SimConnector(threading.Thread):
         return candidate  # report the primary miss so error messaging stays clean
 
     def _build_race_state(self, lap_state: dict[str, Any], prev_lap_time: float):
-        """Duplicate of ``_local_build_race_state`` from simulator.py, small
-        enough to inline so the arcade stays independent of
-        ``backend.utils.race_state_builder`` (which requires a sys.path
-        shim that only the FastAPI startup provides). Populates
-        ``radio_msgs`` / ``rcm_events`` from the ``RadioPipelineRunner``
-        corpus so the Radio agent sees the real OpenF1 team messages
-        (same as the CLI); empty lists when the corpus could not load.
+        """Delegate to the canonical builder, keeping only the arcade-side inputs.
+
+        The lap_state -> RaceState mapping lives in
+        ``src.agents.race_state_builder.build_race_state`` (#784): one
+        implementation shared by all three surfaces — this arcade, the CLI, and
+        the telemetry backend, which reaches it through a re-export shim (#786)
+        rather than keeping the copy it used to carry. So the defaults the
+        models receive no longer drift per surface.
+        The #465 position guard, the gap fallback rationale and
+        the #750 pace-delta axis are all documented there now. What stays here
+        is exactly what needs arcade instance state: sourcing ``radio_msgs`` /
+        ``rcm_events`` from the ``RadioPipelineRunner`` corpus so the Radio
+        agent sees the real OpenF1 team messages (same as the CLI; empty lists
+        when the corpus could not load), and the stateful Safety-Car
+        re-injection. Both are passed to the builder as parameters.
 
         ``prev_lap_time`` is accepted but no longer read here: ``pace_delta_s``
-        used to be computed from it and that was the wrong axis (#750, fixed
-        below). Left in the signature rather than removed, since the caller's
-        per-lap bookkeeping that produces it (``_step_once`` /
-        ``_lap_time_from_state``) serves no other purpose today and dropping it
-        is a small cleanup outside this fix's scope.
+        used to be computed from it and that was the wrong axis (#750, now
+        enforced by the canonical builder). Left in the signature rather than
+        removed, since the caller's per-lap bookkeeping that produces it
+        (``_step_once`` / ``_lap_time_from_state``) serves no other purpose
+        today and dropping it is a small cleanup outside this fix's scope.
         """
-        from src.agents.position_projection import GAP_UNKNOWN_FALLBACK_S
-        from src.agents.strategy_orchestrator import RaceState
-
-        driver_st = lap_state.get("driver", {})
-        weather = lap_state.get("weather", {})
-        meta = lap_state.get("session_meta", {})
-        cur_lap_time = driver_st.get("lap_time_s") or 0.0
-
-        rivals = lap_state.get("rivals", [])
-        our_pos = driver_st.get("position")
-        # `_lap_skip_reason` (the DNF/incomplete-lap guard the driver loop runs before
-        # `_step_once` -> `_build_race_state`) already filters out laps where position
-        # is None, so reaching here with an unknown position means that invariant broke.
-        # Fail loudly instead of fabricating a searchable P99 car (the #428 bug shape:
-        # a sentinel that collides with a real rival's `position - 1`) — the caller's
-        # `except Exception` wraps this into a surfaced `state.error`, it does not crash
-        # the driver thread (#465).
-        if our_pos is None:
-            raise ValueError(
-                "_build_race_state: driver position is None; the incomplete-lap guard "
-                "should have skipped this lap before calling _build_race_state (#465)"
-            )
-        car_ahead = next((r for r in rivals if r.get("position") == our_pos - 1), None)
-        # Two different zeros used to hide under one expression. No car ahead means we
-        # lead, and 0.0 is honest there. A car ahead whose interval was never measured
-        # is NOT a zero gap: 0.0 reads as side by side, which the orchestrator's
-        # clean-air band and N27's sub-1.0s DRS window both act on. It degrades to
-        # GAP_UNKNOWN_FALLBACK_S instead, which the CLI now shares. The telemetry
-        # backend still has its own copies and is a submodule, so this is a two-way
-        # unification, not the three-way one an earlier draft of this comment claimed.
-        #
-        # Be honest about what that fallback still is: 2.0 is fabricated, and a real
-        # 2.0s gap is common, so it does not satisfy the rule that a default must never
-        # be a value the code can also legitimately find. It is less harmful than 0.0,
-        # not correct. The real fix is RaceState.gap_ahead_s becoming `float | None`,
-        # which RivalState in position_projection.py already is and whose consumers
-        # already guard with `is not None`. That is a Pydantic contract change.
-        if car_ahead is None:
-            gap_ahead_s = 0.0
-        else:
-            measured_interval = car_ahead.get("interval_to_driver_s")
-            if measured_interval is None:
-                gap_ahead_s = GAP_UNKNOWN_FALLBACK_S
-            else:
-                gap_ahead_s = abs(measured_interval)
-
-        # pace_delta_s is contractually RIVAL-relative (this driver's lap time
-        # minus the car directly ahead's SAME lap, negative = we are faster) per
-        # race_situation_agent.py:292/904, the schema N27 itself computes. The
-        # old formula compared cur_lap_time against our OWN previous lap
-        # instead, a same-car same-driver quantity that reported roughly -20s
-        # of phantom "pace gain" on the lap after a pit stop, a green lap read
-        # against our own out-lap. car_ahead is already resolved above for
-        # gap_ahead_s, so no extra lookup is needed; 0.0 when it or its lap
-        # time is unknown is the schema's documented neutral, not a guess in
-        # either direction (#750).
-        ahead_lap_time = car_ahead.get("lap_time_s") if car_ahead is not None else None
-        if ahead_lap_time is not None and cur_lap_time:
-            pace_delta = cur_lap_time - float(ahead_lap_time)
-        else:
-            pace_delta = 0.0
+        from src.agents.race_state_builder import build_race_state
 
         lap_num = int(lap_state.get("lap_number", 1) or 1)
         radio_msgs: list[dict] = []
@@ -696,22 +644,11 @@ class SimConnector(threading.Thread):
         if self._sc_tracker.should_inject(lap_num):
             rcm_events = list(rcm_events) + [self._sc_tracker.synthetic_event()]
 
-        return RaceState(
-            driver=driver_st.get("driver", "UNK"),
-            lap=lap_num,
-            # 57 = median/mode race length across the dataset; the shared strategy fallback.
-            total_laps=meta.get("total_laps", 57),
-            position=our_pos,
-            compound=driver_st.get("compound", "MEDIUM"),
-            tyre_life=driver_st.get("tyre_life", 1),
-            gap_ahead_s=float(gap_ahead_s),
-            pace_delta_s=float(pace_delta),
-            air_temp=float(weather.get("air_temp", 25.0)),
-            track_temp=float(weather.get("track_temp", 35.0)),
-            rainfall=bool(weather.get("rainfall", False)),
+        return build_race_state(
+            lap_state,
+            risk_tolerance=self._request.risk_tolerance,
             radio_msgs=radio_msgs,
             rcm_events=rcm_events,
-            risk_tolerance=float(self._request.risk_tolerance),
         )
 
 

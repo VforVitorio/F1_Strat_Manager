@@ -29,6 +29,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
+from src.agents._shared_defaults import reading_or_default
+
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
 while not (_REPO_ROOT / '.git').exists():
@@ -638,11 +640,14 @@ class PaceAgent:
         #     "DataFrame.dtypes for data must be int, float, bool or category"
         # That is exactly the crash observed on mid-stint laps. The ``or``
         # pattern handles both missing-key and None-value cases in one step.
+        # This file's inline guard was the ONLY one of the three agents that handled
+        # present-and-None, and it is now the shared helper the other two adopted rather
+        # than a fourth copy of the pattern (#788).
         _speed_st  = d.get('speed_st')   or 300.0
-        _air_temp  = wx.get('air_temp')  if wx.get('air_temp')  is not None else 25.0
-        _trk_temp  = wx.get('track_temp') if wx.get('track_temp') is not None else 35.0
-        _humidity  = wx.get('humidity')  if wx.get('humidity')  is not None else 50.0
-        _rainfall  = wx.get('rainfall', 0)
+        _air_temp  = reading_or_default(wx, 'air_temp',   25.0)
+        _trk_temp  = reading_or_default(wx, 'track_temp', 35.0)
+        _humidity  = reading_or_default(wx, 'humidity',   50.0)
+        _rainfall  = reading_or_default(wx, 'rainfall', 0)
 
         return self.run(
             driver_number  = d.get('driver_number') or 0,

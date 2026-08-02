@@ -28,7 +28,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
+from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS, reading_or_default
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -1399,9 +1399,13 @@ class RaceSituationAgent:
             'total_laps':       total_laps,
             'fastest_lap_s':    float(self.laps_df['LapTime'].dt.total_seconds().min())
                                 if len(self.laps_df) > 0 else 90.0,
-            'AirTemp':          wx.get('air_temp',   28.0),
-            'TrackTemp':        wx.get('track_temp', 38.0),
-            'Humidity':         wx.get('humidity',   50.0),
+            # reading_or_default, not .get(key, default): the producers report an
+            # unmeasured reading as the key PRESENT holding None, which .get's default
+            # never catches, and _compute_weather_features' float() then raises. That
+            # 422'd /recommend on every 2025 lap (#788) — see the helper's docstring.
+            'AirTemp':          reading_or_default(wx, 'air_temp',   28.0),
+            'TrackTemp':        reading_or_default(wx, 'track_temp', 38.0),
+            'Humidity':         reading_or_default(wx, 'humidity',   50.0),
             # The session's FIRST track temp, which the RSM now supplies. This used to
             # read `track_temp` — the CURRENT one — so `track_temp_delta` came out 0.0 on
             # every lap of every race, on every shipping path (CLI, arcade, backend,

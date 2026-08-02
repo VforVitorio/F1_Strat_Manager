@@ -32,7 +32,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
+from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS, reading_or_default
+from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE, normalise_compound
 from src.agents.tire_parsing import parse_tool_outputs
 
 # ── Repo root (module-relative) ───────────────────────────────────────────────
@@ -1475,8 +1476,15 @@ class TireAgent:
         wx   = lap_state.get('weather', {})
 
         driver      = meta['driver']
-        compound    = d.get('compound', 'MEDIUM')
-        tyre_life   = d.get('tyre_life', 1)
+        # This adapter reads the RAW lap_state, not the RaceState, so the canonical
+        # builder's normalisation does not reach it — it has to apply the same rules
+        # itself or the unification stops at the object boundary (#784). Both of the
+        # old two-arg defaults were also dead on the RSM path and wrong when they did
+        # fire: the key is always present, so a stored NaN arrives as the STRING "nan"
+        # and a None arrives as None, neither of which .get's default catches.
+        compound    = normalise_compound(d.get('compound'))
+        raw_tyre_life = d.get('tyre_life')
+        tyre_life   = UNKNOWN_TYRE_LIFE if raw_tyre_life is None else raw_tyre_life
         gp_name     = meta.get('gp_name', '')
         total_laps  = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         year        = meta.get('year', 2025)
@@ -1509,10 +1517,16 @@ class TireAgent:
             'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
             'team_id':            _encode_team_id(self.cfg.team_id_map, team),
             'year':               year,
-            'AirTemp':   wx.get('air_temp',   28.0),
-            'TrackTemp': wx.get('track_temp', 38.0),
-            'Humidity':  wx.get('humidity',   50.0),
-            'Rainfall':  float(wx.get('rainfall', 0)),
+            # reading_or_default, not .get(key, default): the producers report an
+            # unmeasured reading as the key PRESENT holding None, which .get's default
+            # never catches. These Nones do not crash here — they flow through
+            # _add_weather_cols into the TCN's feature frame and moved the cliff estimate
+            # 2.3 laps OPTIMISTIC on the 2025 reference lap, silently. Optimistic is the
+            # dangerous direction: it delays the pit call. See the helper's docstring.
+            'AirTemp':   reading_or_default(wx, 'air_temp',   28.0),
+            'TrackTemp': reading_or_default(wx, 'track_temp', 38.0),
+            'Humidity':  reading_or_default(wx, 'humidity',   50.0),
+            'Rainfall':  float(reading_or_default(wx, 'rainfall', 0.0)),
             f'{driver}_compound': compound,
             # The stint we are actually in, and the lap we are actually on. N10 trained
             # on windows grouped by ['Year','GP_Name','DriverNumber','Stint'], and the
