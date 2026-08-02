@@ -15,13 +15,13 @@ All of these were last edited on 2026-05-13, before two releases landed: v2.0.0 
 | `webapp_structure` | **new**: the React app's feature folders and how they reach the backend |
 | `frontend_pages_streamlit_legacy` | **renamed and marked retired**: it is the Streamlit page tree, kept as a record of a surface that no longer exists |
 | `arcade_3window_architecture` | current |
-| `multi_agent_architecture` | current |
+| `multi_agent_architecture` | updated 2026-08-02: N25's box no longer says "LangGraph ReAct" — pace's scaffold was formally retired in #781, N25 is now shown as a direct XGBoost call, same as the sub-agents header line |
 | `multi_agent_flow` | current, but predates the projection redesign |
 | `strategy_pipeline_flow` | predates the shared inference engine |
 | `subprocess_launch_sequence` | current |
 | `tcp_broadcast_dataflow` | current |
 | `data_pipeline` | current on the surfaces; note the FastF1 cache is one directory now, not two |
-| `agents/` | one per sub-agent (N25 to N30) plus the `StrategyRecommendation` schema |
+| `agents/` | one per sub-agent (N25 to N30) plus the `StrategyRecommendation` schema; `N25_pace_agent` updated 2026-08-02 to drop the ReAct-tool boxes it never actually used (#781) |
 
 Verified: every file parses as XML, and no label outside the file marked legacy names a retired surface.
 

@@ -100,11 +100,11 @@
         <mxCell id="e_fia_rag" value="build index" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=9;" edge="1" source="fia_pdf" target="m_qdrant" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
 
         <!-- ═══════════════════════════ SUB-AGENTS ═══════════════════════════ -->
-        <mxCell id="lbl_agents" value="SUB-AGENTS (LangGraph ReAct — except N29 which is NLP-first)" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontStyle=1;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="60" y="444" width="500" height="18" as="geometry" />
+        <mxCell id="lbl_agents" value="SUB-AGENTS (LangGraph ReAct — except N25, direct XGBoost call, and N29, NLP-first)" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontStyle=1;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="60" y="444" width="560" height="18" as="geometry" />
         </mxCell>
 
-        <mxCell id="n25" value="&lt;b&gt;N25 — Pace Agent&lt;/b&gt;&#xa;LangGraph ReAct&#xa;───────────&#xa;@tool predict_pace&#xa;@tool get_median&#xa;───────────&#xa;Output: PaceOutput&#xa;lap_time_pred&#xa;ci_p10 / ci_p90&#xa;reasoning" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="n25" value="&lt;b&gt;N25 — Pace Agent&lt;/b&gt;&#xa;Direct XGBoost call (no LLM)&#xa;───────────&#xa;No tools, no ReAct loop —&#xa;deterministic regression,&#xa;no judgment for an LLM to&#xa;add (#778/#780/#781)&#xa;───────────&#xa;Output: PaceOutput&#xa;lap_time_pred&#xa;ci_p10 / ci_p90&#xa;reasoning (f-string)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="60" y="464" width="160" height="176" as="geometry" />
         </mxCell>
 
