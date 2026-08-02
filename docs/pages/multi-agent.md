@@ -102,6 +102,7 @@ Wraps the N06 XGBoost delta-lap-time model. Returns predicted lap time, delta si
 
 - **Model**: XGBoost trained on 2023–2025 lap data
 - **Output**: `PaceOutput` (lap_time_pred, delta_vs_prev, delta_vs_median, ci_p10, ci_p90)
+- **No LLM step**: unlike its tire/pit/race-situation siblings below, pace calls the XGBoost model directly — `reasoning` is a deterministic f-string, not LLM output. Pace is the one always-on agent with no qualitative judgment to make (no `warning_level`/`action`/`threat_level` category alongside its numbers), so a `pace_agent.py` once carried a complete but never-wired LangGraph ReAct scaffold; it was formally retired in #781 after the #778/#779/#780 archaeology and decision. See [agents-api.md](#/agents-api) for the full record.
 
 ### N26: Tire Agent (`tire_agent.py`)
 
@@ -325,8 +326,10 @@ One consequence worth knowing before debugging a call: **the effect does not sho
 
 | Layer | Model | Provider |
 |---|---|---|
-| Sub-agents N25–N29 | gpt-4.1-mini | OpenAI or LM Studio |
+| Sub-agents N26–N29 | gpt-4.1-mini | OpenAI or LM Studio |
 | Orchestrator N31 | gpt-5.4-mini | OpenAI or LM Studio |
+
+N25 (pace) is not in this table — it never calls an LLM, see the "No LLM step" note under [N25: Pace Agent](#/multi-agent#n25-pace-agent-paceagentpy) above.
 
 Set `F1_LLM_PROVIDER=openai` env var to use the real OpenAI API. Default is LM Studio at `http://localhost:1234/v1`.
 

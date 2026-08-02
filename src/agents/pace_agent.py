@@ -129,8 +129,12 @@ class PaceAgent:
 
     All model artifacts (XGBoost weights, encoding maps, reference laps) are
     loaded once in __init__ and stored as instance attributes — no module-level
-    globals are used. The LangGraph ReAct agent is created lazily on first call
-    to get_react_agent() to avoid connecting to the LLM at import time.
+    globals are used.
+
+    Deliberately deterministic, unlike its tire/pit/race_situation siblings:
+    pace has no qualitative judgment to make (no warning_level/action/threat_level
+    category alongside its numbers), so there is no LLM step to wire — see #778/#780
+    for the archaeology and decision record.
 
     Instantiate via the module-level _get_default_pace_agent() factory to avoid
     redundant disk I/O; do not instantiate PaceAgent directly in hot paths.
@@ -153,7 +157,6 @@ class PaceAgent:
         self.team_id: dict            = {}
         self.compound_id, self.circuit_cluster, self.team_id = self._load_encoding_maps(processed_dir)
         self.laps_ref: pd.DataFrame   = self._load_reference_laps(processed_dir)
-        self._react_agent             = None   # lazy LangGraph agent
 
     # ── Loaders ───────────────────────────────────────────────────────────────
 
@@ -223,20 +226,18 @@ class PaceAgent:
     def _load_reference_laps(self, processed_dir: Path) -> pd.DataFrame:
         """Load the reference laps parquet used for session median computation.
 
-        Five columns are loaded to keep the in-memory footprint small. The median
-        baseline is used by N31 to contextualise absolute predictions. DriverNumber
-        is also kept so predict_pace_tool can refuse an LLM-invented car number for
-        a real GP/year instead of predicting from data that does not exist (#476).
+        Four columns are loaded to keep the in-memory footprint small. The median
+        baseline is used by N31 to contextualise absolute predictions.
 
         Args:
             processed_dir: Root of the processed data directory.
 
         Returns:
-            DataFrame with columns GP_Name, Year, Compound, LapTime_s, DriverNumber.
+            DataFrame with columns GP_Name, Year, Compound, LapTime_s.
         """
         return pd.read_parquet(
             processed_dir / 'laps_featured_2025.parquet',
-            columns=['GP_Name', 'Year', 'Compound', 'LapTime_s', 'DriverNumber'],
+            columns=['GP_Name', 'Year', 'Compound', 'LapTime_s'],
         )
 
     # ── Encoding helpers ──────────────────────────────────────────────────────
@@ -493,56 +494,6 @@ class PaceAgent:
         subset = self.laps_ref.loc[mask, 'LapTime_s'].dropna()
         return float(subset.median()) if len(subset) > 0 else None
 
-    def _validate_pace_inputs(
-        self, driver_number: int, lap_number: int, total_laps: int,
-        gp_name: str, year: int,
-    ) -> Optional[str]:
-        """Refuse an LLM-supplied pace query when the lap or driver cannot be real.
-
-        predict_pace_tool takes 19 raw scalar params straight from the LLM with no
-        closure over a live-drivers roster or a lap_state at all (#476) — unlike
-        score_undercut_tool in pit_strategy_agent.py, which checks its free-text
-        driver_y against self._live_drivers before scoring. This is the pace-side
-        equivalent: an out-of-range lap or an invented car number would otherwise
-        produce a confident-looking lap-time prediction from data that does not
-        exist.
-
-        laps_ref only carries the 2025 season (see _load_reference_laps), so a
-        legitimate 2023/2024 call, or a GP name outside the 2025 calendar, yields
-        an empty ``known`` set here. That means "the roster is unknown", not "no
-        cars are racing", so the driver check is skipped rather than rejecting
-        every call outside 2025 — the same unknown-disables-the-guard rule
-        score_undercut_tool follows for its own live_drivers=None case.
-
-        Args:
-            driver_number: Car number as supplied by the LLM caller.
-            lap_number: Lap number as supplied by the LLM caller.
-            total_laps: Total scheduled race laps, also LLM-supplied.
-            gp_name: GP name matching the laps_ref GP_Name column.
-            year: Race year integer.
-
-        Returns:
-            An error string when the query should be refused, None when it is
-            safe to run inference.
-        """
-        if not (1 <= lap_number <= total_laps):
-            return (
-                f'Pace prediction REFUSED — lap {lap_number} is out of range for a '
-                f'{total_laps}-lap race (valid range: 1-{total_laps}).'
-            )
-
-        known = self.laps_ref.loc[
-            (self.laps_ref['GP_Name'] == gp_name) & (self.laps_ref['Year'] == year),
-            'DriverNumber',
-        ].dropna().astype(int)
-        known_set = set(known)
-        if known_set and driver_number not in known_set:
-            return (
-                f'Pace prediction REFUSED — car number {driver_number} is not on '
-                f'track at {gp_name} {year}. Known car numbers: {sorted(known_set)}.'
-            )
-        return None
-
     # ── Main inference entrypoint ─────────────────────────────────────────────
 
     def run(
@@ -749,57 +700,6 @@ class PaceAgent:
             stint_baseline_tyre_life = d.get('stint_baseline_tyre_life'),
         )
 
-    # ── LangGraph ReAct agent ─────────────────────────────────────────────────
-
-    def get_react_agent(
-        self,
-        provider: str = None,
-        model_name: str = 'gpt-4.1-mini',
-        base_url: str = 'http://localhost:1234/v1',
-        api_key: str = 'lmstudio',
-    ):
-        """Return the LangGraph ReAct agent, creating it lazily on the first call.
-
-        Avoids connecting to the LLM at import time — the agent is only
-        created when actually needed (N31 orchestrator or tests).
-
-        Args:
-            provider: 'lmstudio' (default) or 'openai'.
-            model_name: Model identifier for the ChatOpenAI client.
-            base_url: Base URL for LM Studio (ignored when provider='openai').
-            api_key: API key; use 'lmstudio' for the local server.
-
-        Returns:
-            LangGraph CompiledGraph — invoke with {"messages": [("user", query)]}.
-        """
-        if self._react_agent is not None:
-            return self._react_agent
-
-        if not _LANGGRAPH_AVAILABLE:
-            raise ImportError(
-                "LangGraph / LangChain not installed. "
-                "Install with: pip install langgraph langchain-openai"
-            )
-
-        from langchain_openai import ChatOpenAI
-        from langchain.agents import create_agent
-
-        import os
-        if provider is None:
-            provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
-
-        if provider == 'lmstudio':
-            llm = ChatOpenAI(model=model_name, base_url=base_url, api_key=api_key, temperature=0, timeout=120, max_retries=1)
-        else:
-            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=1)
-
-        self._react_agent = create_agent(
-            model=llm,
-            tools=PACE_TOOLS,
-            system_prompt=_PACE_SYSTEM_PROMPT,
-        )
-        return self._react_agent
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level lazy singleton
@@ -840,8 +740,6 @@ def run_pace_agent(
     Thin entry point that delegates to the shared PaceAgent singleton. All
     inference logic lives in PaceAgent.run() — see its docstring for full
     parameter documentation.
-
-    This function is the primary call target for the LangGraph predict_pace_tool.
     """
     return _get_default_pace_agent().run(
         driver_number=driver_number, lap_number=lap_number, stint=stint,
@@ -869,120 +767,3 @@ def run_pace_agent_from_state(lap_state: dict) -> PaceOutput:
         PaceOutput with all fields populated.
     """
     return _get_default_pace_agent().run_from_state(lap_state)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LangGraph tools and ReAct agent (preserved 100% — no functional changes)
-# ─────────────────────────────────────────────────────────────────────────────
-
-try:
-    from langchain_core.tools import tool as lc_tool
-    from langchain_openai import ChatOpenAI  # noqa: F401
-    from langchain.agents import create_agent  # noqa: F401
-    _LANGGRAPH_AVAILABLE = True
-except ImportError:
-    _LANGGRAPH_AVAILABLE = False
-
-
-if _LANGGRAPH_AVAILABLE:
-
-    @lc_tool
-    def predict_pace_tool(
-        driver_number: int, lap_number: int, stint: int, tyre_life: int,
-        compound: str, position: int, team: str, laps_since_pit: int,
-        fuel_load: float, year: int, prev_lap_time: float, prev_tyre_life: int,
-        prev_speed_st: float, air_temp: float, track_temp: float,
-        humidity: float, rainfall: float, total_laps: int, gp_name: str,
-    ) -> dict:
-        """Predict the absolute lap time (seconds) for the current lap using the N06 XGBoost model.
-
-        Call this whenever a lap time prediction is needed for pace or strategy analysis.
-
-        Args:
-            driver_number: Car number used to look up TeamID encoding.
-            lap_number: Current race lap number (1-indexed).
-            stint: Stint number (1-indexed).
-            tyre_life: Laps on the current tyre set.
-            compound: Pirelli compound string ('SOFT', 'MEDIUM', 'HARD', etc.).
-            position: Current race position (1-based).
-            team: Team name matching TEAM_ID encoding map (e.g. 'McLaren').
-            laps_since_pit: Laps elapsed since the last pit stop.
-            fuel_load: Fuel fraction in [0, 1].
-            year: Race year integer (2023/2024/2025).
-            prev_lap_time: Previous lap time in seconds.
-            prev_tyre_life: TyreLife on the previous lap.
-            prev_speed_st: Speed trap reading in km/h from the previous lap.
-            air_temp: Air temperature in degrees C.
-            track_temp: Track surface temperature in degrees C.
-            humidity: Relative humidity in %.
-            rainfall: True if rain was recorded during this lap.
-            total_laps: Total scheduled race laps.
-            gp_name: GP name matching CIRCUIT_CLUSTER keys (e.g. 'Sakhir').
-
-        Returns:
-            Dict with keys: lap_time_pred, delta_vs_prev, delta_vs_median,
-            ci_p10, ci_p90 (all floats in seconds). Returns {'error': str}
-            instead, without running inference, when the driver is not on
-            track for the given GP/year or the lap is outside [1, total_laps]
-            (#476) — the LLM supplies every one of these 19 params as free
-            text with no server-side roster or range check otherwise.
-        """
-        agent = _get_default_pace_agent()
-        validation_error = agent._validate_pace_inputs(
-            driver_number, lap_number, total_laps, gp_name, year,
-        )
-        if validation_error is not None:
-            return {'error': validation_error}
-
-        out = run_pace_agent(
-            driver_number=driver_number, lap_number=lap_number, stint=stint,
-            tyre_life=tyre_life, compound=compound, position=position, team=team,
-            laps_since_pit=laps_since_pit, fuel_load=fuel_load, year=year,
-            prev_lap_time=prev_lap_time, prev_tyre_life=prev_tyre_life,
-            prev_speed_st=prev_speed_st, air_temp=air_temp, track_temp=track_temp,
-            humidity=humidity, rainfall=rainfall, total_laps=total_laps,
-            gp_name=gp_name,
-        )
-        return {
-            'lap_time_pred':   out.lap_time_pred,
-            'delta_vs_prev':   out.delta_vs_prev,
-            'delta_vs_median': out.delta_vs_median,
-            'ci_p10':          out.ci_p10,
-            'ci_p90':          out.ci_p90,
-        }
-
-    @lc_tool
-    def get_session_median_tool(gp_name: str, year: int, compound: str) -> dict:
-        """Return the historical median lap time (seconds) for a GP / year / compound.
-
-        Use this as a reference baseline to contextualise a predicted lap time from
-        predict_pace_tool. The median is computed from the N06 training parquet,
-        filtered to IsAccurate laps in non-SC, non-VSC conditions.
-
-        Args:
-            gp_name: GP name matching the parquet GP_Name column (e.g. 'Sakhir').
-            year: Race year integer (2023/2024/2025).
-            compound: Pirelli compound string ('SOFT', 'MEDIUM', 'HARD').
-
-        Returns:
-            Dict with key: median_lap_time (float, seconds). NaN when no data.
-        """
-        median = _get_default_pace_agent()._session_median(gp_name, year, compound)
-        return {'median_lap_time': median if median is not None else float('nan')}
-
-    _PACE_SYSTEM_PROMPT = """You are the Pace Agent in an F1 race strategy system.
-
-Your responsibility: answer the question "how fast is this car going this lap?"
-
-Tools available:
-- `predict_pace_tool` — predicts absolute lap time using the N06 XGBoost model
-- `get_session_median_tool` — returns the historical median for this GP/compound as a baseline
-
-Always call `predict_pace_tool` first, then `get_session_median_tool` to contextualise the result.
-Respond with a concise JSON summary: lap_time_pred, delta_vs_prev, delta_vs_median, ci_p10, ci_p90.
-Never invent numbers — use only the values returned by the tools."""
-
-    PACE_TOOLS = [predict_pace_tool, get_session_median_tool]
-
-else:
-    PACE_TOOLS = []

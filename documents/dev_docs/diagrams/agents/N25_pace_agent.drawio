@@ -14,29 +14,29 @@
           <mxGeometry x="295" y="70" width="310" height="60" as="geometry" />
         </mxCell>
 
-        <!-- AGENT -->
-        <mxCell id="agent" value="&lt;b&gt;LangGraph ReAct Agent&lt;/b&gt;&lt;br/&gt;Local/Cloud LLM&lt;br/&gt;Iterative tool calls until convergence" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+        <!-- AGENT (no LLM — direct call) -->
+        <mxCell id="agent" value="&lt;b&gt;PaceAgent.run() — direct call&lt;/b&gt;&lt;br/&gt;No LLM, no ReAct loop&lt;br/&gt;Deterministic: same input always yields the same output" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
           <mxGeometry x="295" y="195" width="310" height="70" as="geometry" />
         </mxCell>
 
-        <!-- TOOL 1 -->
-        <mxCell id="tool1" value="&lt;b&gt;predict_pace_tool&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Model: XGBoost N06&lt;/i&gt;&lt;br/&gt;N=200 bootstrap CI&lt;br/&gt;→ lap_time_pred, ci_p10, ci_p90" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+        <!-- STEP 1 -->
+        <mxCell id="tool1" value="&lt;b&gt;_predict() + _bootstrap_ci()&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Model: XGBoost N06&lt;/i&gt;&lt;br/&gt;N=200 bootstrap CI&lt;br/&gt;→ lap_time_pred, ci_p10, ci_p90" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="100" y="345" width="240" height="80" as="geometry" />
         </mxCell>
 
-        <!-- TOOL 2 -->
-        <mxCell id="tool2" value="&lt;b&gt;get_session_median_tool&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Race statistics&lt;/i&gt;&lt;br/&gt;Median lap time for GP/year/compound&lt;br/&gt;→ delta_vs_median" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+        <!-- STEP 2 -->
+        <mxCell id="tool2" value="&lt;b&gt;_session_median()&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Race statistics&lt;/i&gt;&lt;br/&gt;Median lap time for GP/year/compound&lt;br/&gt;→ delta_vs_median" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="560" y="345" width="240" height="80" as="geometry" />
         </mxCell>
 
         <!-- OUTPUT -->
-        <mxCell id="output" value="&lt;b&gt;PaceOutput&lt;/b&gt;&lt;br/&gt;lap_time_pred · delta_vs_prev · delta_vs_median&lt;br/&gt;ci_p10 · ci_p90 · reasoning" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+        <mxCell id="output" value="&lt;b&gt;PaceOutput&lt;/b&gt;&lt;br/&gt;lap_time_pred · delta_vs_prev · delta_vs_median&lt;br/&gt;ci_p10 · ci_p90 · reasoning (f-string, not LLM)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="295" y="500" width="310" height="60" as="geometry" />
         </mxCell>
 
         <!-- NOTE -->
-        <mxCell id="note" value="→ N31 Strategy Orchestrator (consumed via prompt and Monte Carlo dispersion)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=2;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="230" y="578" width="440" height="20" as="geometry" />
+        <mxCell id="note" value="→ N31 Strategy Orchestrator (consumed via prompt and Monte Carlo dispersion) — deliberately deterministic, see #778/#780/#781" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="180" y="578" width="540" height="20" as="geometry" />
         </mxCell>
 
         <!-- EDGES -->
