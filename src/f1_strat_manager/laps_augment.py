@@ -36,6 +36,8 @@ from typing import Callable, Dict, Optional
 
 import pandas as pd
 
+from src.f1_strat_manager.tyre_stint_repair import repair_tyre_stints
+
 logger = logging.getLogger(__name__)
 
 # Raw column -> the name the models were trained on.
@@ -96,6 +98,64 @@ def _raw_race_dir(data_root: Path, year: int, gp_name: str) -> Path:
     return base / gp_name
 
 
+STINT_COLUMNS = ("Stint", "TyreLife", "Compound")
+
+
+def _stint_corrections(repaired_raw: pd.DataFrame, path: Path, gp_name: object) -> pd.DataFrame:
+    """The repaired tyre-stint columns for one race, keyed for the featured join.
+
+    Carried separately from the `Time_s`/`TrackStatus` merge because these three columns
+    ALREADY exist on the featured frame: they have to overwrite, not be appended, and a
+    plain merge would silently produce `_x`/`_y` pairs that no consumer reads.
+    """
+    original = pd.read_parquet(path)
+    changed = pd.Series(False, index=repaired_raw.index)
+    for column in STINT_COLUMNS:
+        before, after = original[column], repaired_raw[column]
+        # A NaN on both sides is not a change; `!=` alone would call it one.
+        changed |= (before != after) & ~(before.isna() & after.isna())
+
+    corrections = repaired_raw.loc[changed, ["Driver", "LapNumber", *STINT_COLUMNS]].copy()
+    corrections["GP_Name"] = gp_name
+    # An explicit marker, because the repair's most important output is a NULL: nulling a
+    # fabricated age writes NaN, and a mask built from "the patched value is not NaN"
+    # would silently skip exactly those rows, leaving the invented integer in the featured
+    # frame. Today every affected lap also carries a numeric Stint, so such a mask happens
+    # to work -- on an accident of the data, not by construction.
+    corrections["_repaired"] = True
+    return corrections
+
+
+def _apply_stint_corrections(
+    augmented: pd.DataFrame,
+    corrections: list[pd.DataFrame],
+) -> pd.DataFrame:
+    """Overwrite only the laps the stint repair actually corrected.
+
+    Row-scoped on purpose: a lap the repair did not touch keeps its published value byte
+    for byte, so this cannot quietly rewrite the 69 healthy races.
+    """
+    if not corrections:
+        return augmented
+
+    patch = pd.concat(corrections, ignore_index=True)
+    merged = augmented.merge(patch, on=_JOIN_KEYS, how="left", suffixes=("", "_fixed"))
+
+    # The marker, not the patched values, decides which rows to overwrite: a repaired lap
+    # can legitimately carry NaN (that is what nulling a fabricated age produces), and
+    # inferring "touched" from the values would drop exactly those rows.
+    touched = merged["_repaired"].notna()
+    for column in STINT_COLUMNS:
+        merged.loc[touched, column] = merged.loc[touched, f"{column}_fixed"]
+    merged = merged.drop(columns=["_repaired", *[f"{c}_fixed" for c in STINT_COLUMNS]])
+
+    logger.info(
+        "Applied %d repaired tyre-stint lap(s) from the raw parquets (#790)",
+        int(touched.sum()),
+    )
+    return merged
+
+
 def augment_featured_laps(
     df: pd.DataFrame,
     year: int,
@@ -135,6 +195,7 @@ def augment_featured_laps(
     root = data_root or (root_resolver() if root_resolver else _default_data_root())
 
     frames = []
+    corrections: list[pd.DataFrame] = []
     missing: list[str] = []
     for gp_name in df["GP_Name"].dropna().unique():
         path = _raw_race_dir(root, year, str(gp_name)) / "laps.parquet"
@@ -145,6 +206,13 @@ def augment_featured_laps(
         if not set(RAW_COLUMNS_TO_RESTORE).issubset(raw.columns):
             missing.append(str(gp_name))
             continue
+        # Correct tyre-stint metadata the live-timing feed published wrong, BEFORE the
+        # merge, because the repair needs `PitInTime` and only the raw frame carries it
+        # (#790). It touches nothing on a healthy race, so this is a no-op for 69 of the
+        # 71 shipped races.
+        raw, stint_report = repair_tyre_stints(raw)
+        if stint_report.changed_anything:
+            corrections.append(_stint_corrections(raw, path, gp_name))
         slice_ = raw[["Driver", "LapNumber", *RAW_COLUMNS_TO_RESTORE]].copy()
         slice_["GP_Name"] = gp_name
         # `Time` is a session-elapsed timedelta; the models were trained on seconds.
@@ -163,6 +231,7 @@ def augment_featured_laps(
         return df
 
     augmented = df.merge(pd.concat(frames, ignore_index=True), on=_JOIN_KEYS, how="left")
+    augmented = _apply_stint_corrections(augmented, corrections)
     restored = int(augmented["Time_s"].notna().sum())
     logger.info(
         "Restored Time_s/TrackStatus onto %d/%d laps of %d from the raw parquets",
