@@ -108,7 +108,9 @@ class RepairReport:
 
     @property
     def changed_anything(self) -> bool:
-        return bool(self.boundaries_corrected or self.tyre_life_rebuilt or self.fabricated_ages_nulled)
+        return bool(
+            self.boundaries_corrected or self.tyre_life_rebuilt or self.fabricated_ages_nulled
+        )
 
 
 def _is_real_compound(value: object) -> bool:
@@ -283,7 +285,10 @@ def repair_tyre_stints(laps: pd.DataFrame) -> tuple[pd.DataFrame, RepairReport]:
     # dropna=False: a NaN driver key would otherwise be dropped by the groupby and come
     # back all-NaN through the reindex, destroying columns this repair has no business
     # touching. No shipped race carries one, but this runs on every future download.
-    groups = [_rebuild_driver(group, report) for _, group in laps.groupby("Driver", sort=False, dropna=False)]
+    groups = [
+        _rebuild_driver(group, report)
+        for _, group in laps.groupby("Driver", sort=False, dropna=False)
+    ]
     repaired = pd.concat(groups).reindex(laps.index)
 
     # Counted AFTER the repair, so the number means what the log says it means.

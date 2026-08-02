@@ -36,42 +36,50 @@ def _laps(rows):
     )
 
 
-HEALTHY = _laps([
-    (1, 1.0, "MEDIUM", 1.0, False),
-    (2, 1.0, "MEDIUM", 2.0, False),
-    (3, 1.0, "MEDIUM", 3.0, True),    # pits here
-    (4, 2.0, "HARD", 1.0, False),     # new stint starts on the out-lap: correct
-    (5, 2.0, "HARD", 2.0, False),
-])
+HEALTHY = _laps(
+    [
+        (1, 1.0, "MEDIUM", 1.0, False),
+        (2, 1.0, "MEDIUM", 2.0, False),
+        (3, 1.0, "MEDIUM", 3.0, True),  # pits here
+        (4, 2.0, "HARD", 1.0, False),  # new stint starts on the out-lap: correct
+        (5, 2.0, "HARD", 2.0, False),
+    ]
+)
 
 # Monaco 2025 RUS's shape: a stop-and-go serves no tyres, so the stint correctly does not
 # advance, and a LATER real stop is what changes the compound.
-STOP_AND_GO_THEN_REAL_STOP = _laps([
-    (1, 2.0, "MEDIUM", 5.0, False),
-    (2, 2.0, "MEDIUM", 6.0, True),    # penalty served: no new set
-    (3, 2.0, "MEDIUM", 7.0, False),
-    (4, 2.0, "MEDIUM", 8.0, True),    # the real stop
-    (5, 3.0, "HARD", 1.0, False),
-])
+STOP_AND_GO_THEN_REAL_STOP = _laps(
+    [
+        (1, 2.0, "MEDIUM", 5.0, False),
+        (2, 2.0, "MEDIUM", 6.0, True),  # penalty served: no new set
+        (3, 2.0, "MEDIUM", 7.0, False),
+        (4, 2.0, "MEDIUM", 8.0, True),  # the real stop
+        (5, 3.0, "HARD", 1.0, False),
+    ]
+)
 
 # A pit entry with no tyre change anywhere after it (a served penalty near race end).
-PENALTY_ONLY = _laps([
-    (1, 1.0, "HARD", 4.0, False),
-    (2, 1.0, "HARD", 5.0, True),
-    (3, 1.0, "HARD", 6.0, False),
-])
+PENALTY_ONLY = _laps(
+    [
+        (1, 1.0, "HARD", 4.0, False),
+        (2, 1.0, "HARD", 5.0, True),
+        (3, 1.0, "HARD", 6.0, False),
+    ]
+)
 
 # Miami 2025 NOR's shape: one stop on lap 3, but the metadata only starts stint 2 on
 # lap 6, so TyreLife counts through the stop and the new set's age is understated.
-MIAMI_SHAPE = _laps([
-    (1, 1.0, "MEDIUM", 1.0, False),
-    (2, 1.0, "MEDIUM", 2.0, False),
-    (3, 1.0, "MEDIUM", 3.0, True),    # real stop
-    (4, 1.0, "MEDIUM", 4.0, False),   # impossible: counting across the stop
-    (5, 1.0, "MEDIUM", 5.0, False),
-    (6, 2.0, "HARD", 1.0, False),     # boundary lands 3 laps late
-    (7, 2.0, "HARD", 2.0, False),
-])
+MIAMI_SHAPE = _laps(
+    [
+        (1, 1.0, "MEDIUM", 1.0, False),
+        (2, 1.0, "MEDIUM", 2.0, False),
+        (3, 1.0, "MEDIUM", 3.0, True),  # real stop
+        (4, 1.0, "MEDIUM", 4.0, False),  # impossible: counting across the stop
+        (5, 1.0, "MEDIUM", 5.0, False),
+        (6, 2.0, "HARD", 1.0, False),  # boundary lands 3 laps late
+        (7, 2.0, "HARD", 2.0, False),
+    ]
+)
 
 
 @pytest.mark.parametrize(
@@ -146,14 +154,16 @@ def test_a_missing_first_stint_stays_unknown_on_the_FIRING_path():
     frame the function never touched at all, so it passed without ever reaching the code
     it claimed to pin — the project's recorded wrong-reason-green scar.
     """
-    unknown_then_repairable = _laps([
-        (1, None, "nan", None, False),
-        (2, None, "nan", None, False),
-        (3, 1.0, "MEDIUM", 1.0, False),   # feed recovers mid-stint: age counts from zero
-        (4, 1.0, "MEDIUM", 2.0, True),    # real stop, on a now-known compound
-        (5, 1.0, "MEDIUM", 3.0, False),   # mislabelled: already the new set
-        (6, 2.0, "HARD", 1.0, False),     # boundary lands late
-    ])
+    unknown_then_repairable = _laps(
+        [
+            (1, None, "nan", None, False),
+            (2, None, "nan", None, False),
+            (3, 1.0, "MEDIUM", 1.0, False),  # feed recovers mid-stint: age counts from zero
+            (4, 1.0, "MEDIUM", 2.0, True),  # real stop, on a now-known compound
+            (5, 1.0, "MEDIUM", 3.0, False),  # mislabelled: already the new set
+            (6, 2.0, "HARD", 1.0, False),  # boundary lands late
+        ]
+    )
     repaired, report = repair_tyre_stints(unknown_then_repairable)
     by_lap = repaired.set_index("LapNumber")
 
@@ -176,14 +186,16 @@ def test_a_stop_made_while_the_feed_is_dark_is_left_unknown_rather_than_guessed(
     ages are nulled and nothing is rebuilt, rather than a stint being invented from a
     stop that might have been a penalty. Miami 2025 BOR/STR/HAD have exactly this shape.
     """
-    dark_at_the_stop = _laps([
-        (1, None, "nan", None, False),
-        (2, None, "nan", None, False),
-        (3, None, "nan", None, True),     # stop while the feed is dark
-        (4, None, "nan", None, False),
-        (5, 1.0, "HARD", 1.0, False),     # metadata reappears
-        (6, 1.0, "HARD", 2.0, False),
-    ])
+    dark_at_the_stop = _laps(
+        [
+            (1, None, "nan", None, False),
+            (2, None, "nan", None, False),
+            (3, None, "nan", None, True),  # stop while the feed is dark
+            (4, None, "nan", None, False),
+            (5, 1.0, "HARD", 1.0, False),  # metadata reappears
+            (6, 1.0, "HARD", 2.0, False),
+        ]
+    )
     repaired, report = repair_tyre_stints(dark_at_the_stop)
 
     assert report.boundaries_corrected == 0, "nothing confirms a tyre change here"
@@ -194,12 +206,14 @@ def test_a_stop_made_while_the_feed_is_dark_is_left_unknown_rather_than_guessed(
 # The feed going dark stringifies a missing compound rather than emitting NaN. Treating
 # that as "a different compound" would let data loss masquerade as a tyre change, and
 # writing it back would put a data-loss marker over a real compound (Montréal 2023 TSU).
-FEED_DIED_MID_STINT = _laps([
-    (1, 2.0, "HARD", 30.0, False),
-    (2, 2.0, "HARD", 31.0, True),
-    (3, 3.0, "None", None, False),
-    (4, 3.0, "None", None, False),
-])
+FEED_DIED_MID_STINT = _laps(
+    [
+        (1, 2.0, "HARD", 30.0, False),
+        (2, 2.0, "HARD", 31.0, True),
+        (3, 3.0, "None", None, False),
+        (4, 3.0, "None", None, False),
+    ]
+)
 
 
 def test_a_data_loss_sentinel_is_not_a_compound_change():
@@ -214,12 +228,14 @@ def test_a_real_compound_is_never_overwritten_by_a_sentinel():
 # The feed invents a stint mid-race: metadata reappears on a lap that is NOT a pit
 # out-lap, so its ages count from the wrong zero. This driver never pits, which is why a
 # boundary correction alone cannot reach him (Miami 2025 GAS/HUL/BEA).
-FABRICATED_NO_STOP = _laps([
-    (1, None, "nan", None, False),
-    (2, None, "nan", None, False),
-    (3, 1.0, "MEDIUM", 1.0, False),   # a 3-lap-old set reported as 1 lap old
-    (4, 1.0, "MEDIUM", 2.0, False),
-])
+FABRICATED_NO_STOP = _laps(
+    [
+        (1, None, "nan", None, False),
+        (2, None, "nan", None, False),
+        (3, 1.0, "MEDIUM", 1.0, False),  # a 3-lap-old set reported as 1 lap old
+        (4, 1.0, "MEDIUM", 2.0, False),
+    ]
+)
 
 
 def test_fabricated_ages_are_nulled_even_without_a_pit_stop():
@@ -238,12 +254,14 @@ def test_a_used_set_keeps_its_prior_usage():
     silently invent for stints 2+ the very offset the module refuses to invent for
     stint 1.
     """
-    used_set = _laps([
-        (1, 1.0, "MEDIUM", 1.0, False),
-        (2, 1.0, "MEDIUM", 2.0, True),    # real stop
-        (3, 1.0, "MEDIUM", 3.0, False),   # mislabelled: already the new set
-        (4, 2.0, "HARD", 4.0, False),     # feed says the set arrived with 3 laps on it
-    ])
+    used_set = _laps(
+        [
+            (1, 1.0, "MEDIUM", 1.0, False),
+            (2, 1.0, "MEDIUM", 2.0, True),  # real stop
+            (3, 1.0, "MEDIUM", 3.0, False),  # mislabelled: already the new set
+            (4, 2.0, "HARD", 4.0, False),  # feed says the set arrived with 3 laps on it
+        ]
+    )
     repaired, _ = repair_tyre_stints(used_set)
     by_lap = repaired.set_index("LapNumber")
     # Prior usage is 3 (published 4 minus the 1 it would carry if fresh), so the out-lap
@@ -277,12 +295,14 @@ def test_a_boundary_with_no_published_age_rebuilds_nothing():
     to subtract the prior usage from. An earlier version returned 0.0 in that case and
     filled the laps with fabricated fresh-set ages, contradicting the module's own rule.
     """
-    no_anchor = _laps([
-        (1, 1.0, "MEDIUM", 1.0, False),
-        (2, 1.0, "MEDIUM", 2.0, True),    # real stop
-        (3, 1.0, "MEDIUM", 3.0, False),
-        (4, 2.0, "HARD", None, False),    # boundary, but no published age
-    ])
+    no_anchor = _laps(
+        [
+            (1, 1.0, "MEDIUM", 1.0, False),
+            (2, 1.0, "MEDIUM", 2.0, True),  # real stop
+            (3, 1.0, "MEDIUM", 3.0, False),
+            (4, 2.0, "HARD", None, False),  # boundary, but no published age
+        ]
+    )
     repaired, report = repair_tyre_stints(no_anchor)
     assert report.boundaries_corrected == 0
     pd.testing.assert_frame_equal(repaired, no_anchor)
@@ -295,12 +315,14 @@ def test_a_boundary_with_no_stint_id_does_not_half_apply():
     while reporting no change — and the caller uses that report to decide whether to
     patch the featured frame, so raw and featured would end up disagreeing.
     """
-    no_stint = _laps([
-        (1, 1.0, "MEDIUM", 1.0, False),
-        (2, 1.0, "MEDIUM", 2.0, True),
-        (3, 1.0, "MEDIUM", 3.0, False),
-        (4, None, "HARD", 4.0, False),    # boundary compound is real, Stint is not
-    ])
+    no_stint = _laps(
+        [
+            (1, 1.0, "MEDIUM", 1.0, False),
+            (2, 1.0, "MEDIUM", 2.0, True),
+            (3, 1.0, "MEDIUM", 3.0, False),
+            (4, None, "HARD", 4.0, False),  # boundary compound is real, Stint is not
+        ]
+    )
     repaired, report = repair_tyre_stints(no_stint)
     assert not report.changed_anything
     # Reported no change, so there must BE no change.
