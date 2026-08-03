@@ -1,16 +1,21 @@
 """Eval report for the guard rail's own bound: how long do real stints actually run?
 
-``guard_rails.py`` refuses a pit call when ``tyre_life < _MIN_STINT_LAPS[compound]``
-(SOFT 8, MEDIUM 12, HARD 15 laps). Those numbers have never been checked against a
-single real race. This report answers the question that decides whether they are
-doing their job: over every green-flag pit stop in 2023-2025, what share of real
-stints were shorter than the bound that would have overridden them?
+``guard_rails.py`` refuses a pit call when ``tyre_life`` falls below the bound its
+``_MIN_STINT_LAPS.get(compound, _DEFAULT_MIN_STINT)`` lookup resolves. This report
+answers the question that decides whether those bounds are doing their job: over
+every green-flag pit stop in 2023-2025, what share of real stints were shorter than
+the bound that would have overridden them?
 
 If the answer is close to zero, the bound sits where professional strategy never
 goes and is a cheap safety net. If it is not close to zero, the bound is quietly
 vetoing calls a real pit wall has made, which is a very different finding from
-"the rail never fires" — this report exists because nobody had counted it either
-way.
+"the rail never fires". This report exists because nobody had counted it either way.
+
+It is now also the standing calibration check, not just a one-off measurement.
+`_MIN_STINT_LAPS` and `_DEFAULT_MIN_STINT` are IMPORTED, never restated, so every
+run re-measures the bounds actually shipping rather than the ones that were shipping
+when the report was written. #716 set them from this table against a 5% ceiling, and
+`tests/eval/test_stint_lengths.py` asserts that ceiling holds.
 
 WHAT COUNTS AS A STINT LENGTH
 ------------------------------
@@ -43,16 +48,40 @@ import numpy as np
 
 from src.strategy.eval.projection import _neutralised_laps, _raw_data_root, green_flag_stops
 from src.strategy.eval.report import build_header, write_report
-from src.strategy.inference.guard_rails import _MIN_STINT_LAPS
+from src.strategy.inference.guard_rails import _DEFAULT_MIN_STINT, _MIN_STINT_LAPS
 
 # Dry compounds the guard rail actually gates. Order also fixes the report's
 # row order, so a reader sees the softest, shortest-lived compound first.
 _COMPOUNDS: tuple[str, ...] = ("SOFT", "MEDIUM", "HARD")
 
-# Wet compounds run no minimum-stint rule at all (`_MIN_STINT_LAPS.get(compound,
-# _DEFAULT_MIN_STINT)` never fires the SOFT/MEDIUM/HARD boundaries for them), so a
-# wet stint answers a different question than the one this report asks.
+# INTERMEDIATE and WET, counted under the label of the bound they actually hit.
+#
+# This block used to claim wet compounds "run no minimum-stint rule at all", and
+# the report dropped their stints on that basis. The claim is false: the rail
+# resolves its bound with `_MIN_STINT_LAPS.get(compound, _DEFAULT_MIN_STINT)`, so
+# a wet compound misses the three named entries and lands on the FALLBACK, which
+# is a minimum-stint rule like any other. The parenthetical that followed was true
+# in isolation ("never fires the SOFT/MEDIUM/HARD boundaries"), and that is how the
+# wrong headline survived review. It cost this file its purpose on that one bound:
+# when every bound was finally calibrated (#716), the fallback was the worst of
+# them, and it was the only one nothing here had ever measured.
 _WET_COMPOUNDS: frozenset[str] = frozenset({"INTERMEDIATE", "WET"})
+_WET_BUCKET: str = "WET"
+
+# Every bucket the report measures, in row order: the three compounds the rail
+# names, then the fallback every other compound resolves to. Thresholds are read
+# back out of the rail's own lookup rather than restated here, so this report
+# cannot describe a bound the rail does not enforce.
+_REPORTED_BUCKETS: tuple[str, ...] = (*_COMPOUNDS, _WET_BUCKET)
+
+
+def _bound_for(bucket: str) -> int:
+    """The minimum-stint bound the rail resolves for this bucket.
+
+    The same expression `apply_guard_rails` evaluates, called here rather than
+    mirrored, because a retyped boundary has shipped wrong in this codebase before.
+    """
+    return _MIN_STINT_LAPS.get(bucket, _DEFAULT_MIN_STINT)
 
 # The eight points the task and the report both read: the extremes, the tails
 # that matter for a minimum-bound question, and the median. Kept as one ordered
@@ -119,33 +148,32 @@ class CompoundStints:
 
 @dataclass(frozen=True)
 class StintLengthSample:
-    """Completed green-flag stint lengths across the sampled seasons, by compound."""
+    """Completed green-flag stint lengths across the sampled seasons, by bucket."""
 
     by_compound: dict[str, CompoundStints]
-    dropped_wet: int
     dropped_missing: int
     races: int
 
     @property
     def total_counted(self) -> int:
-        """Real green-flag stints that fed one of the three dry-compound samples."""
+        """Real green-flag stints that fed one of the four measured samples."""
         return sum(stats.sample_size for stats in self.by_compound.values())
 
 
 def _compound_bucket(compound: str) -> str:
     """Which counting bucket a raw ``Compound`` reading belongs in.
 
-    Returns the compound name itself for a dry compound, ``"wet"`` for
+    Returns the compound name itself for a dry compound, ``"WET"`` for
     INTERMEDIATE/WET, or ``"unknown"`` for anything else (there is no other label
     on a real green-flag pit lap; this is a defensive catch-all, not a case this
-    dataset is expected to hit). Dataframe-free on purpose: this is the whole
-    rule behind "ignore wet compounds but report how many you dropped", and it
-    needs to be checkable without a parquet file.
+    dataset is expected to hit). Dataframe-free on purpose: this is the whole rule
+    behind which bound a stop is graded against, and it needs to be checkable
+    without a parquet file.
     """
     if compound in _COMPOUNDS:
         return compound
     if compound in _WET_COMPOUNDS:
-        return "wet"
+        return _WET_BUCKET
     return "unknown"
 
 
@@ -189,8 +217,7 @@ def measure_stint_lengths(years: tuple[int, ...] = (2023, 2024, 2025)) -> StintL
             "from the featured parquet)"
         )
 
-    lengths_by_compound: dict[str, list[float]] = {compound: [] for compound in _COMPOUNDS}
-    dropped_wet = 0
+    lengths_by_compound: dict[str, list[float]] = {bucket: [] for bucket in _REPORTED_BUCKETS}
     dropped_missing = 0
     races = 0
 
@@ -219,24 +246,21 @@ def measure_stint_lengths(years: tuple[int, ...] = (2023, 2024, 2025)) -> StintL
                         continue
 
                     bucket = _compound_bucket(compound)
-                    if bucket == "wet":
-                        dropped_wet += 1
-                    elif bucket == "unknown":
+                    if bucket == "unknown":
                         dropped_missing += 1
                     else:
                         lengths_by_compound[bucket].append(tyre_life)
 
     by_compound = {
-        compound: CompoundStints(
-            compound=compound,
-            lengths=np.array(lengths_by_compound[compound], dtype=float),
-            threshold=_MIN_STINT_LAPS[compound],
+        bucket: CompoundStints(
+            compound=bucket,
+            lengths=np.array(lengths_by_compound[bucket], dtype=float),
+            threshold=_bound_for(bucket),
         )
-        for compound in _COMPOUNDS
+        for bucket in _REPORTED_BUCKETS
     }
     return StintLengthSample(
         by_compound=by_compound,
-        dropped_wet=dropped_wet,
         dropped_missing=dropped_missing,
         races=races,
     )
@@ -267,27 +291,35 @@ def _render_table(sample: StintLengthSample | None) -> str:
         "",
         "Every completed stint that ended in a real green-flag pit stop, counted in",
         "tyre-age laps: the `TyreLife` reading at the moment of the stop, the exact",
-        "field `apply_guard_rails` compares against `_MIN_STINT_LAPS`. A stint that",
-        "ended because the race finished, or because the driver retired, is not a",
+        "field `apply_guard_rails` compares against its minimum-stint bound. A stint",
+        "that ended because the race finished, or because the driver retired, is not a",
         "decision to stop and is excluded by construction: neither ever produces a",
         "lap with `PitInTime` set.",
+        "",
+        "The last row is INTERMEDIATE and WET together. They carry no entry of their",
+        "own in `_MIN_STINT_LAPS`, so the rail's `.get(compound, _DEFAULT_MIN_STINT)`",
+        "resolves them to the fallback -- a minimum-stint bound like any other, and",
+        "one this report used to drop rather than measure.",
         "",
         f"| compound | n | threshold (laps) | shorter than threshold | {header_cells} |",
         f"|---|---|---|---|{divider_cells}",
     ]
-    lines += [_compound_row(sample.by_compound[compound]) for compound in _COMPOUNDS]
+    lines += [_compound_row(sample.by_compound[bucket]) for bucket in _REPORTED_BUCKETS]
     lines += [
         "",
         '"shorter than threshold" is the share of real stints the current guard rail',
         "would have overridden to STAY_OUT had a strategist tried to make that exact",
-        "call: `TyreLife < _MIN_STINT_LAPS[compound]`, the same strict inequality",
-        "`apply_guard_rails` itself uses. Close to zero means the bound sits where",
-        "real strategy essentially never goes; anywhere else means it is vetoing",
-        "calls a real pit wall has actually made.",
+        "call: `TyreLife < the bound`, the same strict inequality `apply_guard_rails`",
+        "itself uses.",
+        "",
+        "This share IS the calibration of a proscriptive bound, and the number the",
+        "bounds are set from (#716). A bound exists so a generative model cannot emit",
+        "nonsense, so it has to sit where real strategy essentially never goes; once it",
+        "is vetoing a meaningful share of what professional pit walls actually did, it",
+        "is separating unusual from usual rather than absurd from sane. The ceiling the",
+        "bounds are held to is **5%**, and every row above is expected to clear it.",
         "",
         f"- real green-flag stints counted: {sample.total_counted} across {sample.races} races",
-        "- wet-compound stops dropped (INTERMEDIATE/WET is not a dry-tyre-life "
-        f"question): {sample.dropped_wet}",
         f"- stops dropped for missing compound/tyre-life data: {sample.dropped_missing}",
         "",
     ]
@@ -312,7 +344,6 @@ def build_stint_lengths_report() -> dict[str, Any]:
             else {
                 "races": sample.races,
                 "total_counted": sample.total_counted,
-                "dropped_wet": sample.dropped_wet,
                 "dropped_missing": sample.dropped_missing,
                 "compounds": {
                     compound: {

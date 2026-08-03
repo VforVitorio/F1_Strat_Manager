@@ -17,8 +17,13 @@ a *prescriptive* rail that forces one (the Safety Car ``PIT_NOW`` rail, rejected
 in #464). A proscriptive bound on a generative model's output is legitimate with
 or without a regulation behind it; the test it must pass is CALIBRATION — the
 threshold has to sit where real strategy essentially never goes, so it separates
-absurd from sane rather than unusual from usual. See #716, where the
-minimum-stint threshold is measured against real stint lengths.
+absurd from sane rather than unusual from usual.
+
+#716 ran that test on all four bounds against 1900 real green-flag stops. The two
+lap-based ones passed untouched; the two minimum-stint ones overshot the ceiling by
+between two and four times and were reset from the measurement. Every bound now
+carries its measured veto share, or the article that makes it a fact, at its
+definition below. A bound with neither does not belong in this file.
 
 WHY THIS IS ITS OWN MODULE (#708):
 These rules used to live in ``no_llm.py``, which imports the agent stack and
@@ -35,11 +40,54 @@ the eval tier initially retyped ``remaining < 3`` against the rail's
 from __future__ import annotations
 
 _PIT_ACTIONS = frozenset({"PIT_NOW", "UNDERCUT", "OVERCUT", "REACTIVE_SC"})
+
+# THE CALIBRATION CEILING every bound below is set from and held to: a bound may
+# veto at most 5% of the real green-flag stops in the measured sample. Above that
+# it is separating unusual from usual rather than absurd from sane, which is the
+# one job an anti-hallucination bound has.
+#
+# The sample is `f1-eval stint-lengths` over 2023-2025 raw laps: 1900 real
+# green-flag stops across 71 races. Measured shares are quoted per bound below and
+# are reproducible from `documents/eval_reports/stint_lengths.md`, which imports
+# these constants rather than restating them, so the report always grades what is
+# actually shipping. `tests/eval/test_stint_lengths.py` asserts the ceiling holds.
+_CALIBRATION_CEILING = 0.05
+
+# Vetoes 42/1900 = 2.21% of real stops. Unchanged by #716: it already cleared the
+# ceiling. The four stops it blocks in the six-race decision-modes subset read as a
+# large share only because that subset is small; on the full sample it is not.
 _NO_PIT_BEFORE_LAP = 5
+
+# Vetoes 26/1900 = 1.37%. Also unchanged, and the one bound that is partly a FACT
+# rather than a calibration: under a Safety Car, Art. 55.17 ends the race behind it
+# if it is still deployed on the final lap, so the position a late stop surrenders
+# is unrecoverable BY REGULATION. That article does not reach a green-flag lap,
+# where the bound rests on the ~22-25 s cost instead, and on this measurement.
 _NO_PIT_LAST_N_LAPS = 3
+
 _CLIFF_P10_SAFE = 2
-_MIN_STINT_LAPS = {"SOFT": 8, "MEDIUM": 12, "HARD": 15}
-_DEFAULT_MIN_STINT = 10
+
+# Recalibrated by #716 from SOFT 8 / MEDIUM 12 / HARD 15, which vetoed 15.5% /
+# 17.0% / 12.2% of real stops: one stop in six, three times the ceiling. Each value
+# is now the largest integer whose veto share stays at or under 5%.
+#
+#   SOFT   2 -> 3.2% (341 stops)   MEDIUM 7 -> 4.6% (896)   HARD 8 -> 4.7% (548)
+#
+# SOFT lands lowest because real SOFT stints genuinely are the shortest: 11 of them
+# ran exactly one lap. The bound is not a model of degradation and must not be read
+# as one. It only forbids stopping on a set fitted so recently that no strategy
+# produced it, and where that line falls differs per compound because the evidence
+# differs per compound.
+_MIN_STINT_LAPS = {"SOFT": 2, "MEDIUM": 7, "HARD": 8}
+
+# The bound every compound with no entry above resolves to, which in practice means
+# INTERMEDIATE and WET. Recalibrated by #716 from 10, and it was the WORST of the
+# set at 20.0% of real wet stops vetoed, because it was also the only one nothing
+# had ever measured: the stint-length report dropped wet stops on the strength of a
+# comment claiming they ran no minimum-stint rule at all. They run this one.
+#
+#   6 -> 4.55% (110 wet stops)
+_DEFAULT_MIN_STINT = 6
 
 
 def apply_guard_rails(
@@ -53,9 +101,12 @@ def apply_guard_rails(
 ) -> tuple[str, str | None]:
     """Override *action* with STAY_OUT when a hard strategic constraint fires.
 
-    Rules: no pit before lap 5; no pit in the last 3 laps unless the cliff is
-    imminent (cliff_p10 < 2); minimum stint SOFT 8 / MEDIUM 12 / HARD 15. Returns
-    ``(action, reason)`` with ``reason=None`` when no rail fired.
+    Three bounds, in the order they are evaluated: the pit window is not open yet;
+    it is too late to matter unless the cliff is imminent; the set was fitted too
+    recently for any strategy to have produced this call. The numbers are the module
+    constants and are deliberately not restated here, because a retyped boundary has
+    shipped wrong in this codebase before. Returns ``(action, reason)`` with
+    ``reason=None`` when no bound fired.
 
     Args:
         sc_active: A neutralisation (Safety Car or VSC) is deployed right now.
