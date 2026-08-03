@@ -309,9 +309,23 @@ class PaceAgent:
 
         Read from the same `laps_featured_2025.parquet` the team map and the reference
         laps already come from rather than from `circuit_clustering/`: it is the artefact
-        N04 wrote the trained column into, so the value served is the value fitted, and
-        there is no second file to keep in step. Checked across the 22 GPs of the training
-        seasons against `circuit_features_with_clusters_k4.parquet`: identical to 0.0.
+        N04 writes the column into, and there is no second file to keep in step.
+
+        WHICH SEASON'S VALUE, because the two are not the same number and an earlier
+        draft of this docstring implied they were. The feature is recomputed per season
+        from that season's laps, so a GP's 2025 value differs from its 2023-2024 one:
+        across the 23 GPs in both, none match exactly, the mean absolute gap is 4.8 km/h
+        and Silverstone moves 18.4. Serving 2025 is deliberate and is the correct half of
+        that pair, because the quantity N04 would compute for a 2025 lap is the 2025
+        measurement; serving the training seasons' value would feed a stale reading of a
+        circuit that has since been resurfaced or re-regulated.
+
+        It follows that the ENVELOPE bound on this feature is the 2023-2024 range while
+        the value served is a 2025 measurement, and that is the right way round rather
+        than an oversight: the bound asks whether N06 was FITTED on inputs like this one,
+        so a 2025 circuit outside the fitted range is genuine extrapolation and should be
+        said out loud. Monza 2025 at 317.24 against a fitted maximum of 314.97 is exactly
+        that case, and it is the only one.
 
         A GP whose value is missing is simply absent from the map. It must NOT acquire a
         default here -- see `_resolve_mean_sector_speed` for why an absent circuit has to

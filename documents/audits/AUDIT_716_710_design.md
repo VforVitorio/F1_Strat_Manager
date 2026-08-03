@@ -373,3 +373,69 @@ undercut_clean.parquet`, which **does not exist in the Hugging Face dataset at a
 no clean install can pass them; the NLP goldens report `pending` because the 15.9 GB NLP
 weights are not downloaded here. The skip guards should require those artefacts instead
 of failing, which is a separate issue.
+
+---
+
+# #797 and #798, and one claim of mine I refuted myself
+
+## H1 — the fix: N06 was reading the speed trap where it was trained on a circuit mean
+
+`mean_sector_speed` is a property of the CIRCUIT, one value per GP.
+`PaceAgent._compute_derived` substituted `prev_speed_st` whenever none was supplied and
+`run_from_state` never supplied one, so on the path every real race takes N06 received a
+different physical quantity on every lap. Training means 256.8 against 303.0 km/h.
+
+Not an extraction slip: `N25_pace_agent.ipynb` documents the substitution as a proxy, and
+`pace_agent.py` already named the real source, calling it a fallback for when circuit
+features are unavailable. The lookup it described was never wired. It is now, per GP,
+with an unresolvable circuit yielding NaN and a warning rather than a substituted reading.
+
+**Measured impact, and a lesson about probes.** A single hand-built row moved the
+prediction by 0.002 s and I nearly reported the fix as cosmetic on that basis. Over 4000
+real 2025 laps it moves the delta prediction by a mean of +0.069 s, a p95 absolute of
+0.377 s, and more than 0.010 s on 38% of laps. The trees split on this feature only in
+some regions, so one probe is not a distribution.
+
+## H2 — REFUTED BY ME, after the commit message had already claimed it
+
+The commit says the value served is the value fitted, "identical to 0.0". What that
+number actually compared was `laps_featured_2023` against
+`circuit_features_with_clusters_k4.parquet` -- two artefacts of the TRAINING seasons. The
+code serves the **2025** map. Those are a different pair, and I checked the wrong one.
+
+Measured properly, across the 23 GPs present in both:
+
+| | |
+|---|---|
+| GPs matching exactly | **0 of 23** |
+| mean absolute gap | 4.82 km/h |
+| median | 2.91 km/h |
+| largest | Silverstone, 18.35 km/h |
+
+The FIX is still right, and serving 2025 is the correct half of the pair: the feature is
+recomputed per season, so the quantity N04 would compute for a 2025 lap is the 2025
+measurement, and serving the training seasons' value would feed a stale reading of a
+circuit since resurfaced or re-regulated. What was wrong was the claim of exact parity,
+which was true in isolation about a comparison nobody had asked for and false about the
+one that matters. That is the same defect class this session has been removing all day,
+committed in the sentence describing the removal.
+
+The docstring now states the seasonal seam and why the envelope bound is deliberately the
+2023-2024 range held against a 2025 value: the bound asks whether N06 was FITTED on inputs
+like this one, so a 2025 circuit outside the fitted range is genuine extrapolation. Monza
+2025 at 317.24 against a fitted maximum of 314.97 is the only such case.
+
+## H3 — the pit agent cannot be constructed on a clean install (#798)
+
+`PitStrategyAgent.__init__` reads `data/processed/undercut_labeled/undercut_clean.parquet`
+unconditionally. The Hugging Face dataset publishes `overtake_labeled/` and `sc_labeled/`
+and **not** `undercut_labeled/`, so on a checkout built from the published data the agent
+raises FileNotFoundError at construction. It stays hidden because every developer machine
+has run N16, and because `f1-sim --no-llm` at Lusail never triggers the pit agent.
+
+Six tests failed rather than skipped for the same reason, and one of them,
+`test_the_committed_tables_match_a_fresh_measurement`, regenerated
+`data/mc_measured_v1.json` with the entire measured `undercut_band` dropped to
+`available: false` and left the emptied file in the worktree. The guards now name the
+holdout. Publishing the artefact is the real fix and needs the file, which only exists on
+a machine that has run the notebook.
