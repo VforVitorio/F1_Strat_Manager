@@ -108,29 +108,65 @@ def test_a_missing_feature_is_not_reported_as_out_of_range(caplog):
 # --- the bounds describe features that have a range at all -------------------
 
 
-@pytest.mark.parametrize("labelled", ["DriverNumber", "TeamID", "CompoundID", "Cluster", "Year"])
-def test_no_bound_is_declared_over_an_identifier(labelled):
-    """A code is not a quantity: `TeamID` between 0 and 10 says nothing about range."""
+# Every N06 feature that carries NO bound, with the reason it carries none. Pinned as a
+# complete set rather than as a handful of examples, because the first version of this
+# file listed only eight of the fifteen and the gap is where the mistake lived: three
+# features were unbounded with no stated reason at all, and one of those (mean_sector_speed)
+# was bounded when it should not have been. An enumeration that does not add up is an
+# enumeration nobody has checked.
+_UNBOUNDED = {
+    # identifiers, codes and ranks: no range to be outside of
+    "DriverNumber": "identifier",
+    "TeamID": "code",
+    "CompoundID": "code",
+    "Cluster": "code",
+    "Year": "code",
+    "Stint": "ordinal",
+    "Position": "rank",
+    "FreshTyre": "flag",
+    "Rainfall": "flag",
+    # the value at inference is not the quantity the range describes
+    "Prev_DegradationRate": "hardcoded 0.0, and 0.0 is mid-distribution",
+    "Prev_CumulativeDeg": "hardcoded 0.0, and 0.0 is mid-distribution",
+    "Prev_DegAcceleration": "hardcoded 0.0, and 0.0 is mid-distribution",
+    "mean_sector_speed": "always carries the speed trap at inference",
+    # a bound would report the same event twice
+    "LapsSincePitStop": "equals TyreLife at inference",
+    # training and inference encode it differently
+    "FuelLoad": "artefact rounded to 4dp, inference computes it unrounded",
+}
+
+
+@pytest.mark.parametrize("feature", sorted(_UNBOUNDED))
+def test_the_unbounded_features_stay_unbounded(feature):
+    """Each of these is excluded on a stated reason, not by omission."""
     from src.agents.pace_agent import _N06_TRAINED_BOUNDS
 
-    assert labelled not in _N06_TRAINED_BOUNDS
+    assert feature not in _N06_TRAINED_BOUNDS, _UNBOUNDED[feature]
 
 
-@pytest.mark.parametrize(
-    "constant", ["Prev_DegradationRate", "Prev_CumulativeDeg", "Prev_DegAcceleration"]
-)
-def test_the_hardcoded_degradation_features_are_deliberately_unbounded(constant):
-    """`run_from_state` pins all three at 0.0, and 0.0 is INSIDE the trained range.
+def test_every_n06_feature_is_either_bounded_or_explicitly_unbounded():
+    """The two sets must partition the model's feature list exactly.
 
-    This reads like the classic out-of-range defect and is not one: roughly 42-47% of
-    training rows fall below zero for each, so a bound could never fire on the pinned
-    value. Declaring one would ship a check that looks like coverage and is not.
-    Feeding a constant where the model saw a distribution is a real problem with its
-    own shape, and this envelope is not the instrument for it.
+    This is the assertion the first version of this file lacked. Without it a feature can
+    be added to N06, or dropped from the bounds, and simply fall through: no test fails,
+    the enumeration comment goes stale, and the envelope quietly stops describing the
+    model it claims to describe.
     """
-    from src.agents.pace_agent import _N06_TRAINED_BOUNDS
+    import json
 
-    assert constant not in _N06_TRAINED_BOUNDS
+    from src.agents.pace_agent import _N06_TRAINED_BOUNDS
+    from src.f1_strat_manager.data_cache import get_models_root
+
+    names_path = get_models_root() / "lap_time" / "xgb_laptime_delta_feature_names.json"
+    if not names_path.exists():
+        pytest.skip("N06 feature-name artefact absent")
+    features = set(json.loads(names_path.read_text()))
+
+    accounted = set(_N06_TRAINED_BOUNDS) | set(_UNBOUNDED)
+    assert features - accounted == set(), "N06 features neither bounded nor excluded"
+    assert accounted - features == set(), "bounds or exclusions naming a feature N06 dropped"
+    assert set(_N06_TRAINED_BOUNDS).isdisjoint(_UNBOUNDED)
 
 
 # --- the one test that checks the bounds against the data they claim to describe ---

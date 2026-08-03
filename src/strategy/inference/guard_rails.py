@@ -41,21 +41,29 @@ from __future__ import annotations
 
 _PIT_ACTIONS = frozenset({"PIT_NOW", "UNDERCUT", "OVERCUT", "REACTIVE_SC"})
 
-# THE CALIBRATION CEILING every bound below is set from and held to: a bound may
-# veto at most 5% of the real green-flag stops in the measured sample. Above that
-# it is separating unusual from usual rather than absurd from sane, which is the
-# one job an anti-hallucination bound has.
+# THE CALIBRATION CEILING every bound below is HELD TO: a bound may veto at most 5%
+# of the real green-flag stops in the measured sample. Above that it is separating
+# unusual from usual rather than absurd from sane, which is the one job an
+# anti-hallucination bound has.
 #
-# The sample is `f1-eval stint-lengths` over 2023-2025 raw laps: 1900 real
-# green-flag stops across 71 races. Measured shares are quoted per bound below and
-# are reproducible from `documents/eval_reports/stint_lengths.md`, which imports
-# these constants rather than restating them, so the report always grades what is
-# actually shipping. `tests/eval/test_stint_lengths.py` asserts the ceiling holds.
+# Held to, not necessarily set from. The two minimum-stint bounds failed the ceiling
+# and were reset to the largest value that clears it, so for them the ceiling is also
+# the derivation. The two lap-based bounds already cleared it and were left exactly
+# where they were; they are NOT maximal under the rule, and moving them up to the
+# largest passing value would be a change nobody asked for on evidence that only says
+# they are not currently wrong.
+#
+# The sample is 1900 real green-flag stops across 71 races of 2023-2025 raw laps.
+# `documents/eval_reports/stint_lengths.md` regenerates the four minimum-stint shares
+# from these constants on every run, so that report always grades what is actually
+# shipping, and `tests/eval/test_stint_lengths.py` asserts the ceiling holds on them.
+# The two lap-based shares below have no such home: they were measured once over the
+# same sample and are recorded here rather than in an artefact, so treat them as a
+# dated finding rather than as something a report re-checks.
 _CALIBRATION_CEILING = 0.05
 
 # Vetoes 42/1900 = 2.21% of real stops. Unchanged by #716: it already cleared the
-# ceiling. The four stops it blocks in the six-race decision-modes subset read as a
-# large share only because that subset is small; on the full sample it is not.
+# ceiling comfortably.
 _NO_PIT_BEFORE_LAP = 5
 
 # Vetoes 26/1900 = 1.37%. Also unchanged, and the one bound that is partly a FACT
@@ -63,6 +71,12 @@ _NO_PIT_BEFORE_LAP = 5
 # if it is still deployed on the final lap, so the position a late stop surrenders
 # is unrecoverable BY REGULATION. That article does not reach a green-flag lap,
 # where the bound rests on the ~22-25 s cost instead, and on this measurement.
+#
+# This is also the bound behind the four excluded stops in the six-race
+# `decision-modes` subset (Monaco VER, Lusail STR and HAD, Monza OCO). #716's issue
+# body attributes four stops to the early-race bound as well; measured on that
+# subset the early-race bound excludes NONE, and `decision_modes.md` carries no
+# `opening_laps` row at all.
 _NO_PIT_LAST_N_LAPS = 3
 
 _CLIFF_P10_SAFE = 2
@@ -87,6 +101,14 @@ _MIN_STINT_LAPS = {"SOFT": 2, "MEDIUM": 7, "HARD": 8}
 # comment claiming they ran no minimum-stint rule at all. They run this one.
 #
 #   6 -> 4.55% (110 wet stops)
+#
+# KNOWN DIVERGENCE, and it is the reverse of the usual one: this bound has NO prose copy
+# in either prompt. N28 and N31 both state the three dry minimums and say nothing about
+# what happens on an INTERMEDIATE or a WET, so the offline path enforces a bound the LLM
+# path was never told about. Documented rather than closed, because adding it means
+# writing new prompt text and that is a behaviour change on the default path, not a
+# recalibration. It matters most in exactly the races where it is least likely to be
+# noticed.
 _DEFAULT_MIN_STINT = 6
 
 

@@ -102,36 +102,59 @@ FUEL_GAIN_PER_LAP_S: float = 0.055
 # `tests/agents/test_n06_envelope.py` re-runs that measurement and fails if any bound
 # below has drifted from it, so these cannot quietly become hand-typed numbers.
 #
-# Why these twelve and not all twenty-five:
-#   - The identifiers and codes (DriverNumber, TeamID, CompoundID, Cluster, Year) and
-#     the flags (FreshTyre, Rainfall) have no range to be outside of. A bound on a
-#     label is a category check wearing the wrong contract.
-#   - The three Prev_Deg* features are excluded DELIBERATELY, and the reason matters
-#     because it is the opposite of what it looks like. `run_from_state` hardcodes all
-#     three to 0.0 on every real call, which reads like the textbook out-of-range bug.
-#     Measured, it is not one: 0.0 sits mid-distribution for all three (42%/42%/47% of
-#     training rows fall below it), so an envelope would never fire and declaring one
-#     here would advertise a check that cannot work. Feeding a model a CONSTANT where
-#     it was trained on a distribution is a real defect, but it is a different defect
-#     and it needs its own instrument, not this one.
+# WHICH TEN OF THE TWENTY-FIVE, and why each of the other fifteen is out. A bound is a
+# claim that the value at inference is the same quantity, in the same units, as the
+# column the range was measured from. Where that is not true, a bound does not measure
+# extrapolation, it measures a wiring defect, and it reports it under the wrong name.
+#
+#   Excluded, no range to be outside of (8): DriverNumber, TeamID, CompoundID, Cluster,
+#   Year, Stint and Position are identifiers, codes or ranks; FreshTyre and Rainfall are
+#   flags. A bound on a label is a category check wearing the wrong contract.
+#
+#   Excluded, the value at inference is NOT the quantity the range describes (4):
+#     - The three Prev_Deg* features. `run_from_state` hardcodes all three to 0.0 on
+#       every real call, which reads like the textbook out-of-range bug. Measured, it is
+#       not one: 0.0 sits mid-distribution for each (42.6% / 41.9% / 46.7% of training
+#       rows fall below it), so a bound could never fire and declaring one would
+#       advertise a check that cannot work.
+#     - `mean_sector_speed`. `_compute_derived` falls back to `prev_speed_st` whenever a
+#       mean sector speed is absent, and `run_from_state` never supplies one, so at
+#       inference this feature ALWAYS carries the speed trap. They are different physical
+#       quantities with different distributions (training means 256.8 vs 303.0 km/h), and
+#       a bound over the first one applied to the second fires on 83% of laps at Monza
+#       while describing none of them correctly. This is the twin of the Prev_Deg* case
+#       and it was missed on the first pass precisely because only one of the pair was
+#       looked at, which is this repo's most reliable defect.
+#
+#   Excluded, a bound would report the same event twice (1): `LapsSincePitStop`.
+#   `run_from_state` passes `d.get('tyre_life') or 1` for BOTH it and `TyreLife`, so at
+#   inference they are the same number and a second bound is a second warning about one
+#   underlying cause.
+#
+#   Excluded, training and inference encode it differently (1): `FuelLoad`. The featured
+#   artefact stores it rounded to four decimals, giving a measured maximum of 0.9615,
+#   while inference computes `laps_remaining / total_laps` live and unrounded. A 78-lap
+#   race yields 0.96153..., above that maximum, so the bound would fire on a class of lap
+#   the model was trained on. Comparing two encodings of a quantity is not a range check.
+#
+# Feeding a model a constant, or the wrong quantity, or a differently-rounded one, are
+# all real defects. They are simply not THIS defect, and each needs its own instrument.
 #
 # The bounds are TRAINING-season ranges (2023-2024). This is not the same thing as the
 # "range 0..3.685 s" recorded next to FUEL_GAIN_PER_LAP_S above, which was measured on
 # laps_featured_2025: 2025 is the held-out TEST season, and an envelope sourced from it
 # would be describing where the model is asked to work rather than where it was fitted.
 _N06_TRAINED_BOUNDS: dict[str, tuple[float, float]] = {
-    'LapNumber':         (3.0, 78.0),
-    'TyreLife':          (3.0, 78.0),
-    'FuelLoad':          (0.0, 0.9615),
-    'FuelEffect':        (0.055, 4.125),
-    'Prev_LapTime':      (67.719, 148.991),
-    'Prev_TyreLife':     (2.0, 77.0),
-    'Prev_SpeedST':      (156.0, 362.0),
-    'AirTemp':           (14.5, 33.7),
-    'TrackTemp':         (16.7, 50.7),
-    'Humidity':          (18.0, 92.0),
-    'laps_remaining':    (0.0, 75.0),
-    'mean_sector_speed': (196.6292354740061, 314.9705586672411),
+    'LapNumber':      (3.0, 78.0),
+    'TyreLife':       (3.0, 78.0),
+    'FuelEffect':     (0.055, 4.125),
+    'Prev_LapTime':   (67.719, 148.991),
+    'Prev_TyreLife':  (2.0, 77.0),
+    'Prev_SpeedST':   (156.0, 362.0),
+    'AirTemp':        (14.5, 33.7),
+    'TrackTemp':      (16.7, 50.7),
+    'Humidity':       (18.0, 92.0),
+    'laps_remaining': (0.0, 75.0),
 }
 
 _N06_ENVELOPE = OperatingEnvelope(name='n06_laptime_delta', bounds=_N06_TRAINED_BOUNDS)

@@ -238,10 +238,23 @@ def test_no_minimum_stint_bound_vetoes_more_than_the_calibration_ceiling():
 
     sample = measure_stint_lengths()
 
+    # Pin the bucket set BEFORE filtering. Skipping empty buckets is right (a compound
+    # absent from the sample says nothing about its bound), but it is also how a bound
+    # stops being graded without anything failing: drop WET from the report and the
+    # ceiling would hold over three buckets while the fourth, the worst-calibrated one
+    # in #716, quietly left the measurement. The set is the claim; the shares come after.
+    from src.strategy.eval.stint_lengths import _REPORTED_BUCKETS
+
+    assert set(sample.by_compound) == set(_REPORTED_BUCKETS)
+    assert "WET" in sample.by_compound, "the fallback bound must stay measured"
+
     graded = {
         bucket: stats for bucket, stats in sample.by_compound.items() if stats.sample_size > 0
     }
-    assert graded, "no bucket carried a sample: the ceiling would hold vacuously"
+    assert set(graded) == set(_REPORTED_BUCKETS), (
+        f"only {sorted(graded)} carried a sample; a bound with no sample is a bound "
+        f"the ceiling holds over vacuously"
+    )
 
     for bucket, stats in graded.items():
         assert stats.share_below_threshold <= _CALIBRATION_CEILING, (
