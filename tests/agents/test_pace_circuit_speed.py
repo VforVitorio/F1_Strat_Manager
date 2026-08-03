@@ -78,18 +78,46 @@ def test_every_race_resolves_to_the_value_its_own_parquet_rows_carry(agent):
     parquet and served that one value for every season, so a 2023 Silverstone lap was fed
     a measurement taken two years after it, 18.4 km/h away.
     """
+    from src.agents.pace_agent import _FEATURED_SEASONS
     from src.f1_strat_manager.data_cache import get_data_root
 
-    laps = pd.read_parquet(
-        get_data_root() / "processed" / "laps_featured.parquet",
-        columns=["Year", "GP_Name", "mean_sector_speed"],
-    ).dropna()
-    per_race = laps.drop_duplicates(["Year", "GP_Name"])
+    checked = 0
+    for year in _FEATURED_SEASONS:
+        laps = pd.read_parquet(
+            get_data_root() / "processed" / f"laps_featured_{year}.parquet",
+            columns=["GP_Name", "mean_sector_speed"],
+        ).dropna()
+        for row in laps.drop_duplicates("GP_Name").itertuples():
+            checked += 1
+            served = agent._resolve_mean_sector_speed(str(row.GP_Name), year)
+            assert served == pytest.approx(float(row.mean_sector_speed)), f"{year} {row.GP_Name}"
 
-    assert len(per_race) > 0, "the featured artefact carried no circuit speeds"
-    for row in per_race.itertuples():
-        served = agent._resolve_mean_sector_speed(str(row.GP_Name), int(row.Year))
-        assert served == pytest.approx(float(row.mean_sector_speed)), f"{row.Year} {row.GP_Name}"
+    assert checked > 0, "the featured artefacts carried no circuit speeds"
+
+
+def test_a_2025_lap_is_not_served_the_training_seasons_measurement(agent):
+    """The regression a whole gate round was spent on, pinned as an EFFECT.
+
+    Switching the loader to the COMBINED `laps_featured.parquet` looked like a strict
+    improvement, because that file has no missing values. It broadcasts the training-era
+    number across all three seasons instead: its Silverstone row reads 249.71 for 2023 and
+    for 2025 alike, so keying by year became decorative and every 2025 lap silently
+    received the 2023 measurement.
+
+    The raw laps settle it. Silverstone 2025's own speed traps average 232.32 km/h, which
+    is the per-year artefact's 231.36 and not the combined file's 249.71.
+
+    Asserting that the two seasons DIFFER is what catches this; asserting either value on
+    its own passes happily against the wrong artefact.
+    """
+    served_2023 = agent._resolve_mean_sector_speed("Silverstone", 2023)
+    served_2025 = agent._resolve_mean_sector_speed("Silverstone", 2025)
+
+    assert abs(served_2025 - served_2023) > 1.0, (
+        f"Silverstone reads {served_2025} in 2025 and {served_2023} in 2023; if they are "
+        f"equal the loader is reading an artefact that broadcasts one season's value"
+    )
+    assert served_2025 == pytest.approx(231.36, abs=0.5)
 
 
 def test_the_training_seasons_are_one_artefact_generation_not_two(agent):
@@ -113,20 +141,19 @@ def test_the_training_seasons_are_one_artefact_generation_not_two(agent):
         ), gp
 
 
-def test_the_map_has_no_holes(agent):
-    """Las Vegas is the reason this reads the combined parquet, not the 2025 one.
+def test_las_vegas_2025_is_a_known_artefact_hole_and_stays_unknown(agent):
+    """The one race the correct artefact cannot answer, pinned so it is not "fixed" wrongly.
 
-    `laps_featured_2025.parquet` carries NaN on all 760 Las Vegas rows, so a `.dropna()`
-    over it drops a circuit N06 was fitted on and whose value sits in three other
-    artefacts. "Absent from the map" has to mean an unknown circuit, never an artefact
-    with a hole in it.
+    `laps_featured_2025.parquet` carries NaN on all 760 Las Vegas rows. The tempting repair
+    is to fall back to the training-era value, which sits in three other artefacts and is
+    228.96. That would be the same defect as the speed-trap substitution this whole fix
+    removes, only quieter: a 2025 lap served a measurement from a different season.
+
+    So it stays NaN, and the missing value belongs in the artefact rather than in a
+    fallback here.
     """
-    assert ("2025" not in {str(y) for y, _ in agent.circuit_mean_sector_speed}) is False
-    assert (2025, "Las Vegas") in agent.circuit_mean_sector_speed
-    for year in (2023, 2024, 2025):
-        assert agent._resolve_mean_sector_speed("Las Vegas", year) == pytest.approx(
-            228.9645, abs=1e-3
-        )
+    assert agent._resolve_mean_sector_speed("Las Vegas", 2023) == pytest.approx(228.9645, abs=1e-3)
+    assert math.isnan(agent._resolve_mean_sector_speed("Las Vegas", 2025))
 
 
 def test_the_row_fed_to_n06_carries_the_circuit_value_not_the_speed_trap(agent):
@@ -190,7 +217,13 @@ def test_every_race_on_disk_resolves(agent):
                 unresolved.append((year_dir.name, race_dir.name, gp_name))
 
     assert checked > 0, "no races found on disk: this would hold vacuously"
-    assert unresolved == [], f"{len(unresolved)} of {checked} races resolve to NaN: {unresolved}"
+    # Las Vegas 2025 is a hole in the artefact, not a resolution failure, and is pinned
+    # by its own test above. Listing it here rather than widening the assertion keeps a
+    # NEW unresolved race failing loudly.
+    known_holes = [("2025", "Las_Vegas", "Las Vegas")]
+    assert sorted(unresolved) == sorted(known_holes), (
+        f"{len(unresolved)} of {checked} races resolve to NaN: {unresolved}"
+    )
 
 
 # --- an unresolvable circuit stays unknown -----------------------------------

@@ -480,3 +480,57 @@ The lookup is now keyed by `(Year, GP)` from the combined parquet, which has 71 
 zero missing values. All 71 races on disk resolve, asserted by walking `data/raw/` rather
 than by fixing the two names an audit happened to mention. A real `f1-sim Miami_Gardens`
 run completes with zero unresolved-circuit warnings.
+
+## H5 — the resumed gate caught the fix for H4 introducing a regression of its own
+
+Switching the loader to the combined `laps_featured.parquet` closed the Las Vegas hole and
+looked like a strict improvement. It was not. That artefact **broadcasts the training-era
+value across all three seasons**: across every GP present in both eras the 2023-vs-2025
+difference is exactly 0.0, so keying by year became decorative and every 2025 lap silently
+received the 2023 measurement. The deliberate choice recorded in H2 was reverted by the
+commit that claimed to refine it.
+
+The raw laps settle which artefact is honest, and this is the check neither of my earlier
+measurements made:
+
+| | Silverstone 2025 | Melbourne 2025 |
+|---|---|---|
+| raw speed traps, mean of the three | **232.32** | **252.93** |
+| per-year artefact | 231.36 | 256.84 |
+| combined artefact | 249.71 (the 2023 value) | 272.44 |
+
+So the loader reads the three per-year artefacts, keyed by year. Las Vegas 2025 goes back to
+NaN, which is the correct failure: the alternative is serving a 2023 measurement for a 2025
+lap, the same defect class as the speed-trap substitution, only quieter. The hole belongs in
+the artefact, and there is now a test pinning it as a known hole so a NEW unresolved race
+still fails loudly.
+
+The test that would have caught this asserts an EFFECT: Silverstone's served value must
+DIFFER between 2023 and 2025. Asserting either value alone passes happily against the wrong
+artefact, which is exactly what happened.
+
+## H6 — the impact numbers, and the accuracy claim I must not make
+
+Re-measured on the full 2025 season with no sampling, comparing what the model receives now
+against what the bug fed it: mean **+0.0712 s**, p95 absolute **0.3767 s**, more than 0.010 s
+on **38.7%** of laps. The commit's figures reproduce.
+
+The gate measured smaller numbers because it measured `806cedd`, where the served value was
+the training-era one; that state is reverted.
+
+**What must not be claimed:** the fix does not make N06 more accurate. The published pace MAE
+still reproduces within tolerance, and the gate measured bug-versus-fix on the proper holdout
+at 0.4096 against 0.4097. This is a correctness fix, not an accuracy fix: the model is now
+being asked the question it was trained on, and the answer is about as good as before.
+
+## H7 — a third member of the family, found by the gate and left open
+
+`LapsSincePitStop` receives `TyreLife` at inference, and the two differ from the trained
+column on **19.8% of rows**, by a mean of 2.6 laps. That is the same shape as `Prev_Deg*` and
+`mean_sector_speed`: an inference value that is not the quantity its training column holds.
+Left open rather than fixed here, because it is a third instance and deserves its own issue
+and its own measurement rather than being folded into this branch.
+
+Also recorded by the gate and not fixed: the 2023 Spanish GP exists twice in `data/raw` and
+in the featured artefacts, as `Spain` and `Barcelona` with the same OpenF1 session key, so
+"71 races" is 70 plus one duplicate.

@@ -165,6 +165,11 @@ _N06_TRAINED_BOUNDS: dict[str, tuple[float, float]] = {
 _N06_ENVELOPE = OperatingEnvelope(name="n06_laptime_delta", bounds=_N06_TRAINED_BOUNDS)
 
 
+# The seasons that have a per-year featured artefact. Listed rather than globbed so a
+# stray file cannot silently widen what the agent claims to know.
+_FEATURED_SEASONS: tuple[int, ...] = (2023, 2024, 2025)
+
+
 def _normalise_gp_key(gp_name: str) -> str:
     """One spelling for a GP, applied to BOTH sides of the circuit-speed lookup.
 
@@ -331,14 +336,12 @@ class PaceAgent:
         N06 was trained on it and inference never had it, because `_compute_derived`
         substituted `prev_speed_st` and nothing ever supplied the real thing (#797).
 
-        KEYED BY YEAR, because the value is not constant across the dataset and the
-        replay engine can replay any of the three seasons. `laps_featured.parquet` carries
-        71 (year, GP) pairs and the value differs between the training era and 2025 on
-        every GP present in both: mean absolute gap 4.8 km/h, largest Silverstone at 18.4.
-        An earlier draft of this loader read only `laps_featured_2025.parquet` and served
-        that single value for every replay, which fed a 2023 Silverstone lap a measurement
-        taken two years after it. Keying by year makes the value served the value the lap
-        being replayed actually carries.
+        KEYED BY YEAR, because the value is not constant across seasons and the replay
+        engine can replay any of the three. Across the GPs present in both eras the
+        training-era and 2025 measurements differ on every one: mean absolute gap 4.8 km/h,
+        largest Silverstone at 18.3. An earlier draft read only the 2025 artefact and
+        served that value for every replay, feeding a 2023 Silverstone lap a measurement
+        taken two years after it.
 
         Beware the mechanism, which is NOT what an earlier draft of this docstring said:
         the value is recomputed per ARTEFACT GENERATION, not per season. 2023 and 2024 are
@@ -346,12 +349,23 @@ class PaceAgent:
         pooled both training seasons and a later build produced 2025. Anyone "completing"
         a per-season resolution between 2023 and 2024 would find nothing to resolve.
 
-        THE COMBINED FILE, not the per-year ones, and that is the whole reason this reads
-        `laps_featured.parquet`: `laps_featured_2025.parquet` carries NaN on all 760 Las
-        Vegas rows, so a `.dropna()` over it silently drops a circuit N06 was fitted on and
-        whose value sits in three other artefacts. The combined file has 71 pairs and ZERO
-        missing values, so "absent from the map" now means a genuinely unknown circuit
-        rather than an artefact with a hole in it.
+        THE PER-YEAR FILES, and NOT the combined `laps_featured.parquet`, which is the
+        trap that cost this lookup two rounds. The combined artefact BROADCASTS the
+        training-era value across all three seasons: its Silverstone row reads 249.71 for
+        2023 and for 2025 alike, and across every GP present in both eras the 2023-vs-2025
+        difference is exactly 0.0. Reading it therefore looks year-aware and is not.
+
+        The raw laps settle which artefact is telling the truth. Silverstone 2025's own
+        speed traps average 232.32 km/h: the per-year file says 231.36 and the combined
+        file says 249.71, the 2023 number. Melbourne 2025 is the same story, 252.93 raw
+        against 256.84 per-year and 272.44 combined. So the per-year artefacts carry the
+        season's own measurement and the combined one does not.
+
+        The cost of that correctness is a hole rather than a wrong number:
+        `laps_featured_2025.parquet` has NaN on all 760 Las Vegas rows, so that race
+        resolves to NaN. That is the right failure. The alternative is serving the
+        2023-2024 measurement for a 2025 lap, which is the same class of defect as the
+        speed-trap substitution this whole fix exists to remove, only quieter.
 
         It follows that the ENVELOPE bound stays the 2023-2024 range while a 2025 lap is
         served a 2025 measurement, and that is the right way round rather than an oversight:
@@ -359,15 +373,15 @@ class PaceAgent:
         outside the fitted range is genuine extrapolation and should be said out loud. Monza
         2025 at 317.24 against a fitted maximum of 314.97 is exactly that, and the only one.
         """
-        speeds = pd.read_parquet(
-            processed_dir / "laps_featured.parquet",
-            columns=["Year", "GP_Name", "mean_sector_speed"],
-        ).dropna()
-        by_race = speeds.drop_duplicates(["Year", "GP_Name"])
-        return {
-            (int(row.Year), _normalise_gp_key(str(row.GP_Name))): float(row.mean_sector_speed)
-            for row in by_race.itertuples()
-        }
+        by_race: dict[tuple[int, str], float] = {}
+        for year in _FEATURED_SEASONS:
+            parquet = processed_dir / f"laps_featured_{year}.parquet"
+            if not parquet.exists():
+                continue
+            speeds = pd.read_parquet(parquet, columns=["GP_Name", "mean_sector_speed"]).dropna()
+            for row in speeds.drop_duplicates("GP_Name").itertuples():
+                by_race[(year, _normalise_gp_key(str(row.GP_Name)))] = float(row.mean_sector_speed)
+        return by_race
 
     def _resolve_mean_sector_speed(self, gp_name: str, year: int) -> float:
         """This race's trained mean sector speed, or NaN when it does not resolve.
