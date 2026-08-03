@@ -30,12 +30,14 @@ import pandas as pd
 import xgboost as xgb
 
 from src.agents._shared_defaults import reading_or_default
+from src.f1_strat_manager.gp_slugs import slug_from_event_name
+
 # Safe in this direction: envelope.py is a leaf that imports nothing from src.agents.
 from src.strategy.inference.envelope import OperatingEnvelope
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
-while not (_REPO_ROOT / '.git').exists():
+while not (_REPO_ROOT / ".git").exists():
     if _REPO_ROOT.parent == _REPO_ROOT:
         break
     _REPO_ROOT = _REPO_ROOT.parent
@@ -45,6 +47,7 @@ while not (_REPO_ROOT / '.git').exists():
 # checkouts with a repo-relative ``data/`` short-circuit the helper.
 try:
     from src.f1_strat_manager.data_cache import get_data_root as _get_data_root
+
     _DATA_ROOT = _get_data_root()
 except (ImportError, OSError, RuntimeError):
     # Every way get_data_root() can fail, enumerated against its body in
@@ -55,7 +58,7 @@ except (ImportError, OSError, RuntimeError):
     # the Path.home() branch IS the `uv tool install` path this block exists to
     # serve, and a container with no HOME would take it. Falling back to the
     # repo-relative data/ is right for all three.
-    _DATA_ROOT = _REPO_ROOT / 'data'
+    _DATA_ROOT = _REPO_ROOT / "data"
 
 # What stands in for the previous lap when there genuinely is not one: the first lap
 # of a race, or of a stint, where N04's Prev_LapTime is NaN by construction.
@@ -71,14 +74,14 @@ except (ImportError, OSError, RuntimeError):
 # None value, which the two-arg form does not substitute for.
 MISSING_PREV_LAP_TIME_S = 90.0
 
-_MODELS_DIR = _DATA_ROOT / 'models' / 'lap_time'
-_PROCESSED  = _DATA_ROOT / 'processed'
+_MODELS_DIR = _DATA_ROOT / "models" / "lap_time"
+_PROCESSED = _DATA_ROOT / "processed"
 
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-N_BOOTSTRAP: int   = 200
-_NOISE_PCT: float  = 0.02   # 2 % Gaussian noise on continuous features
+N_BOOTSTRAP: int = 200
+_NOISE_PCT: float = 0.02  # 2 % Gaussian noise on continuous features
 
 # Seconds of lap time recovered per lap as fuel burns off. N04 builds the training
 # feature as (TyreLife - min(TyreLife of the stint)) * 0.055 — verified exactly against
@@ -117,14 +120,15 @@ FUEL_GAIN_PER_LAP_S: float = 0.055
 #       not one: 0.0 sits mid-distribution for each (42.6% / 41.9% / 46.7% of training
 #       rows fall below it), so a bound could never fire and declaring one would
 #       advertise a check that cannot work.
-#     - `mean_sector_speed`. `_compute_derived` falls back to `prev_speed_st` whenever a
-#       mean sector speed is absent, and `run_from_state` never supplies one, so at
-#       inference this feature ALWAYS carries the speed trap. They are different physical
-#       quantities with different distributions (training means 256.8 vs 303.0 km/h), and
-#       a bound over the first one applied to the second fires on 83% of laps at Monza
-#       while describing none of them correctly. This is the twin of the Prev_Deg* case
-#       and it was missed on the first pass precisely because only one of the pair was
-#       looked at, which is this repo's most reliable defect.
+#     `mean_sector_speed` used to be listed here for the same reason and no longer is.
+#     `_compute_derived` substituted `prev_speed_st` whenever no mean sector speed was
+#     supplied and `run_from_state` never supplied one, so the feature carried the speed
+#     trap on every real call: a different physical quantity, training means 256.8 vs
+#     303.0 km/h, and a bound over the first applied to the second fired on 83% of laps
+#     at Monza while describing none of them. #797 fixed the FEED rather than deleting
+#     the bound, so the value is once again the quantity the range was measured from and
+#     the bound is once again meaningful: it now fires when a circuit falls outside the
+#     set N06 was fitted on, which is the question it was always supposed to ask.
 #
 #   Excluded, a bound would report the same event twice (1): `LapsSincePitStop`.
 #   `run_from_state` passes `d.get('tyre_life') or 1` for BOTH it and `TyreLife`, so at
@@ -145,24 +149,26 @@ FUEL_GAIN_PER_LAP_S: float = 0.055
 # laps_featured_2025: 2025 is the held-out TEST season, and an envelope sourced from it
 # would be describing where the model is asked to work rather than where it was fitted.
 _N06_TRAINED_BOUNDS: dict[str, tuple[float, float]] = {
-    'LapNumber':      (3.0, 78.0),
-    'TyreLife':       (3.0, 78.0),
-    'FuelEffect':     (0.055, 4.125),
-    'Prev_LapTime':   (67.719, 148.991),
-    'Prev_TyreLife':  (2.0, 77.0),
-    'Prev_SpeedST':   (156.0, 362.0),
-    'AirTemp':        (14.5, 33.7),
-    'TrackTemp':      (16.7, 50.7),
-    'Humidity':       (18.0, 92.0),
-    'laps_remaining': (0.0, 75.0),
+    "LapNumber": (3.0, 78.0),
+    "TyreLife": (3.0, 78.0),
+    "FuelEffect": (0.055, 4.125),
+    "Prev_LapTime": (67.719, 148.991),
+    "Prev_TyreLife": (2.0, 77.0),
+    "Prev_SpeedST": (156.0, 362.0),
+    "AirTemp": (14.5, 33.7),
+    "TrackTemp": (16.7, 50.7),
+    "Humidity": (18.0, 92.0),
+    "laps_remaining": (0.0, 75.0),
+    "mean_sector_speed": (196.6292354740061, 314.9705586672411),
 }
 
-_N06_ENVELOPE = OperatingEnvelope(name='n06_laptime_delta', bounds=_N06_TRAINED_BOUNDS)
+_N06_ENVELOPE = OperatingEnvelope(name="n06_laptime_delta", bounds=_N06_TRAINED_BOUNDS)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PaceOutput dataclass (public API — untouched)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class PaceOutput:
@@ -188,17 +194,18 @@ class PaceOutput:
     Orchestrator for LLM synthesis.
     """
 
-    lap_time_pred:   float
-    delta_vs_prev:   float
+    lap_time_pred: float
+    delta_vs_prev: float
     delta_vs_median: float
-    ci_p10:          float
-    ci_p90:          float
-    reasoning:       str = ""
+    ci_p10: float
+    ci_p90: float
+    reasoning: str = ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PaceAgent class
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class PaceAgent:
     """Encapsulates the N06 XGBoost lap-time prediction pipeline.
@@ -227,18 +234,21 @@ class PaceAgent:
         models_dir: Path = _MODELS_DIR,
         processed_dir: Path = _PROCESSED,
     ) -> None:
-        self.model, self.features     = self._load_model(models_dir)
-        self.compound_id: dict        = {}
-        self.circuit_cluster: dict    = {}
-        self.team_id: dict            = {}
-        self.compound_id, self.circuit_cluster, self.team_id = self._load_encoding_maps(processed_dir)
-        self.laps_ref: pd.DataFrame   = self._load_reference_laps(processed_dir)
+        self.model, self.features = self._load_model(models_dir)
+        self.compound_id: dict = {}
+        self.circuit_cluster: dict = {}
+        self.team_id: dict = {}
+        self.compound_id, self.circuit_cluster, self.team_id = self._load_encoding_maps(
+            processed_dir
+        )
+        self.circuit_mean_sector_speed: dict[str, float] = self._load_circuit_mean_sector_speed(
+            processed_dir
+        )
+        self.laps_ref: pd.DataFrame = self._load_reference_laps(processed_dir)
 
     # ── Loaders ───────────────────────────────────────────────────────────────
 
-    def _load_model(
-        self, models_dir: Path
-    ) -> tuple[xgb.XGBRegressor, list[str]]:
+    def _load_model(self, models_dir: Path) -> tuple[xgb.XGBRegressor, list[str]]:
         """Load N06 XGBoost model and ordered feature name list from disk.
 
         Both artifacts are returned together to guarantee the feature order is
@@ -252,16 +262,12 @@ class PaceAgent:
             Tuple (model, features) where model is a fitted XGBRegressor and
             features is a list of column name strings in predict order.
         """
-        features = json.loads(
-            (models_dir / 'xgb_laptime_delta_feature_names.json').read_text()
-        )
+        features = json.loads((models_dir / "xgb_laptime_delta_feature_names.json").read_text())
         model = xgb.XGBRegressor()
-        model.load_model(models_dir / 'xgb_laptime_delta_final.json')
+        model.load_model(models_dir / "xgb_laptime_delta_final.json")
         return model, features
 
-    def _load_encoding_maps(
-        self, processed_dir: Path
-    ) -> tuple[dict, dict, dict]:
+    def _load_encoding_maps(self, processed_dir: Path) -> tuple[dict, dict, dict]:
         """Load compound, circuit-cluster, and team label-encoding maps.
 
         Reads the compound encoding from the N06 feature manifest, the circuit
@@ -276,28 +282,77 @@ class PaceAgent:
         Returns:
             Tuple (compound_id, circuit_cluster, team_id) dicts.
         """
-        manifest    = json.loads((processed_dir / 'feature_manifest_laptime.json').read_text())
-        compound_id = manifest['categorical_encoding']['Compound']
+        manifest = json.loads((processed_dir / "feature_manifest_laptime.json").read_text())
+        compound_id = manifest["categorical_encoding"]["Compound"]
 
         clusters_df = pd.read_parquet(
-            processed_dir / 'circuit_clustering' / 'circuit_clusters_k4_2025.parquet',
-            columns=['GP_Name', 'Cluster'],
+            processed_dir / "circuit_clustering" / "circuit_clusters_k4_2025.parquet",
+            columns=["GP_Name", "Cluster"],
         )
-        circuit_cluster = dict(
-            zip(clusters_df['GP_Name'], clusters_df['Cluster'].astype(int))
-        )
+        circuit_cluster = dict(zip(clusters_df["GP_Name"], clusters_df["Cluster"].astype(int)))
 
         laps = pd.read_parquet(
-            processed_dir / 'laps_featured_2025.parquet',
-            columns=['Team', 'TeamID'],
+            processed_dir / "laps_featured_2025.parquet",
+            columns=["Team", "TeamID"],
         ).dropna()
-        team_id = (
-            laps.drop_duplicates('Team')
-                .set_index('Team')['TeamID']
-                .astype(int)
-                .to_dict()
-        )
+        team_id = laps.drop_duplicates("Team").set_index("Team")["TeamID"].astype(int).to_dict()
         return compound_id, circuit_cluster, team_id
+
+    @staticmethod
+    def _load_circuit_mean_sector_speed(processed_dir: Path) -> dict[str, float]:
+        """The one ``mean_sector_speed`` each GP carries, keyed by parquet ``GP_Name``.
+
+        This feature is a property of the CIRCUIT, not of the lap: the featured parquet
+        holds exactly one distinct value per GP, the mean of the three speed traps.
+        N06 was trained on it and inference never had it, because `_compute_derived`
+        substituted `prev_speed_st` and nothing ever supplied the real thing (#797).
+
+        Read from the same `laps_featured_2025.parquet` the team map and the reference
+        laps already come from rather than from `circuit_clustering/`: it is the artefact
+        N04 wrote the trained column into, so the value served is the value fitted, and
+        there is no second file to keep in step. Checked across the 22 GPs of the training
+        seasons against `circuit_features_with_clusters_k4.parquet`: identical to 0.0.
+
+        A GP whose value is missing is simply absent from the map. It must NOT acquire a
+        default here -- see `_resolve_mean_sector_speed` for why an absent circuit has to
+        stay absent all the way to the model.
+        """
+        speeds = pd.read_parquet(
+            processed_dir / "laps_featured_2025.parquet",
+            columns=["GP_Name", "mean_sector_speed"],
+        ).dropna()
+        by_gp = speeds.drop_duplicates("GP_Name").set_index("GP_Name")["mean_sector_speed"]
+        return {str(gp): float(value) for gp, value in by_gp.items()}
+
+    def _resolve_mean_sector_speed(self, gp_name: str) -> float:
+        """This circuit's trained mean sector speed, or NaN when it does not resolve.
+
+        NaN, never `prev_speed_st`, and that substitution is the whole bug: the speed
+        trap is a different physical quantity (training means 256.8 vs 303.0 km/h), so
+        feeding it does not degrade the prediction gracefully, it silently answers a
+        different question. XGBoost handles a genuinely missing feature natively through
+        its sparse-aware split direction, which is what "we do not know this circuit"
+        should look like. Same rule as `FuelEffect` (#446) and `Position` (#628): unknown
+        data stays unknown and never becomes a number the model can mistake for a reading.
+
+        The name is resolved through `slug_from_event_name` first, because `gp_name`
+        arrives in either keyspace depending on the caller -- the CLI passes the slug
+        ('Lusail'), a FastF1-derived caller passes the event name ('Qatar Grand Prix').
+        The same dual-keyspace trap cost #448 and #450.
+        """
+        if gp_name in self.circuit_mean_sector_speed:
+            return self.circuit_mean_sector_speed[gp_name]
+
+        slug = slug_from_event_name(gp_name) if gp_name else None
+        if slug and slug in self.circuit_mean_sector_speed:
+            return self.circuit_mean_sector_speed[slug]
+
+        logger.warning(
+            "no trained mean sector speed for GP %r; N06 reads the feature as missing "
+            "rather than being fed the speed trap in its place (#797)",
+            gp_name,
+        )
+        return float("nan")
 
     def _load_reference_laps(self, processed_dir: Path) -> pd.DataFrame:
         """Load the reference laps parquet used for session median computation.
@@ -312,15 +367,13 @@ class PaceAgent:
             DataFrame with columns GP_Name, Year, Compound, LapTime_s.
         """
         return pd.read_parquet(
-            processed_dir / 'laps_featured_2025.parquet',
-            columns=['GP_Name', 'Year', 'Compound', 'LapTime_s'],
+            processed_dir / "laps_featured_2025.parquet",
+            columns=["GP_Name", "Year", "Compound", "LapTime_s"],
         )
 
     # ── Encoding helpers ──────────────────────────────────────────────────────
 
-    def _encode_categorical(
-        self, compound: str, team: str, gp_name: str
-    ) -> tuple[int, int, int]:
+    def _encode_categorical(self, compound: str, team: str, gp_name: str) -> tuple[int, int, int]:
         """Map compound, team, and circuit to their integer label encodings.
 
         Unknown categories degrade gracefully to the most common training
@@ -334,8 +387,8 @@ class PaceAgent:
         Returns:
             Tuple (compound_id_int, team_id_int, cluster_int).
         """
-        c_id    = self.compound_id.get(compound, 1)
-        t_id    = self.team_id.get(team, 0)
+        c_id = self.compound_id.get(compound, 1)
+        t_id = self.team_id.get(team, 0)
         cluster = self.circuit_cluster.get(gp_name, 1)
         return c_id, t_id, cluster
 
@@ -345,8 +398,7 @@ class PaceAgent:
         fuel_load: float,
         lap_number: int,
         total_laps: int,
-        prev_speed_st: float,
-        mean_sector_speed: Optional[float],
+        mean_sector_speed: float,
         stint_baseline_tyre_life: Optional[int] = None,
     ) -> dict:
         """Compute features derived from raw inputs that are not in the source data.
@@ -355,8 +407,11 @@ class PaceAgent:
         the outlap pace loss caused by tyre heating and rubber laydown.
         FuelEffect: cumulative fuel burn pace gain (lighter car = faster lap).
         laps_remaining: inverted lap count used as a proxy for race phase.
-        mean_sector_speed: falls back to prev_speed_st when circuit_features
-        are unavailable for the current GP.
+        mean_sector_speed: passed through untouched, already resolved by the caller.
+        It used to fall back to prev_speed_st here, which fed the speed trap in place
+        of a circuit mean on every RaceStateManager call (#797). Resolution and its
+        NaN-on-unknown rule now live in `_resolve_mean_sector_speed`, so this function
+        has no opinion left about a value it cannot look up.
 
         Args:
             tyre_life: Current laps on this tyre set.
@@ -364,7 +419,8 @@ class PaceAgent:
             lap_number: Current race lap.
             total_laps: Total scheduled race laps.
             prev_speed_st: Speed trap reading in km/h from the previous lap.
-            mean_sector_speed: Average sector speed; None → use prev_speed_st.
+            mean_sector_speed: This circuit's trained mean sector speed, already
+                resolved; NaN when the GP does not resolve.
             stint_baseline_tyre_life: TyreLife recorded at the start of the
                 current stint. None means the caller has not been updated to
                 supply it, in which case FuelEffect is forced to NaN instead
@@ -390,18 +446,18 @@ class PaceAgent:
         # to mistake for a reading.
         if stint_baseline_tyre_life is None:
             logger.warning(
-                'stint_baseline_tyre_life absent from lap_state: FuelEffect=NaN for this '
-                'lap; the producer must supply it (#446)'
+                "stint_baseline_tyre_life absent from lap_state: FuelEffect=NaN for this "
+                "lap; the producer must supply it (#446)"
             )
-            fuel_effect = float('nan')
+            fuel_effect = float("nan")
         else:
             fuel_effect = (tyre_life - stint_baseline_tyre_life) * FUEL_GAIN_PER_LAP_S
 
         return {
-            'FreshTyre':        int(tyre_life <= 1),
-            'FuelEffect':       fuel_effect,
-            'laps_remaining':   max(0, total_laps - lap_number),
-            'mean_sector_speed': mean_sector_speed if mean_sector_speed is not None else prev_speed_st,
+            "FreshTyre": int(tyre_life <= 1),
+            "FuelEffect": fuel_effect,
+            "laps_remaining": max(0, total_laps - lap_number),
+            "mean_sector_speed": mean_sector_speed,
         }
 
     def _build_feature_row(
@@ -441,37 +497,50 @@ class PaceAgent:
             Single-row pd.DataFrame with columns in self.features order.
         """
         c_id, t_id, cluster = self._encode_categorical(compound, team, gp_name)
+        # An explicit argument still wins, so a caller that genuinely measured this lap's
+        # mean sector speed is not overridden by the circuit constant. Nothing in the
+        # repo passes one today; the RaceStateManager path is exactly the caller that
+        # left it None and got the speed trap for it (#797).
+        resolved_mean_sector_speed = (
+            mean_sector_speed
+            if mean_sector_speed is not None
+            else self._resolve_mean_sector_speed(gp_name)
+        )
         derived = self._compute_derived(
-            tyre_life, fuel_load, lap_number, total_laps,
-            prev_speed_st, mean_sector_speed, stint_baseline_tyre_life,
+            tyre_life,
+            fuel_load,
+            lap_number,
+            total_laps,
+            resolved_mean_sector_speed,
+            stint_baseline_tyre_life,
         )
 
         row = {
-            'DriverNumber':         driver_number,
-            'LapNumber':            lap_number,
-            'Stint':                stint,
-            'TyreLife':             tyre_life,
-            'FreshTyre':            derived['FreshTyre'],
-            'Position':             position,
-            'CompoundID':           c_id,
-            'TeamID':               t_id,
-            'LapsSincePitStop':     laps_since_pit,
-            'FuelLoad':             fuel_load,
-            'Year':                 year,
-            'FuelEffect':           derived['FuelEffect'],
-            'Prev_LapTime':         prev_lap_time,
-            'Prev_TyreLife':        prev_tyre_life,
-            'Prev_SpeedST':         prev_speed_st,
-            'AirTemp':              air_temp,
-            'TrackTemp':            track_temp,
-            'Humidity':             humidity,
-            'Rainfall':             rainfall,
-            'laps_remaining':       derived['laps_remaining'],
-            'Cluster':              cluster,
-            'mean_sector_speed':    derived['mean_sector_speed'],
-            'Prev_DegradationRate': prev_deg_rate,
-            'Prev_CumulativeDeg':   prev_cum_deg,
-            'Prev_DegAcceleration': prev_deg_accel,
+            "DriverNumber": driver_number,
+            "LapNumber": lap_number,
+            "Stint": stint,
+            "TyreLife": tyre_life,
+            "FreshTyre": derived["FreshTyre"],
+            "Position": position,
+            "CompoundID": c_id,
+            "TeamID": t_id,
+            "LapsSincePitStop": laps_since_pit,
+            "FuelLoad": fuel_load,
+            "Year": year,
+            "FuelEffect": derived["FuelEffect"],
+            "Prev_LapTime": prev_lap_time,
+            "Prev_TyreLife": prev_tyre_life,
+            "Prev_SpeedST": prev_speed_st,
+            "AirTemp": air_temp,
+            "TrackTemp": track_temp,
+            "Humidity": humidity,
+            "Rainfall": rainfall,
+            "laps_remaining": derived["laps_remaining"],
+            "Cluster": cluster,
+            "mean_sector_speed": derived["mean_sector_speed"],
+            "Prev_DegradationRate": prev_deg_rate,
+            "Prev_CumulativeDeg": prev_cum_deg,
+            "Prev_DegAcceleration": prev_deg_accel,
         }
         df = pd.DataFrame([row])[self.features]
         # Belt-and-braces: any caller that slips a None through lands here.
@@ -479,7 +548,7 @@ class PaceAgent:
         # converts None→NaN and the model handles NaN natively via its
         # sparse-aware split logic (default_left). Cheap and defensive —
         # no-op on already-numeric frames.
-        numeric = df.apply(pd.to_numeric, errors='coerce')
+        numeric = df.apply(pd.to_numeric, errors="coerce")
         self._label_against_envelope(numeric)
         return numeric
 
@@ -502,8 +571,8 @@ class PaceAgent:
         verdict = _N06_ENVELOPE.check(feature_df.iloc[0].to_dict())
         if verdict.violations:
             logger.warning(
-                'N06 called outside its trained range on %d feature(s): %s; the '
-                'prediction is an extrapolation, not a fit',
+                "N06 called outside its trained range on %d feature(s): %s; the "
+                "prediction is an extrapolation, not a fit",
                 len(verdict.violations),
                 dict(verdict.violations),
             )
@@ -524,7 +593,7 @@ class PaceAgent:
             Absolute predicted lap time in seconds.
         """
         delta = float(self.model.predict(feature_df)[0])
-        prev  = float(feature_df['Prev_LapTime'].iloc[0])
+        prev = float(feature_df["Prev_LapTime"].iloc[0])
         return prev + delta
 
     def _bootstrap_ci(
@@ -552,11 +621,17 @@ class PaceAgent:
         Returns:
             Tuple (p10, p90) of absolute lap times in seconds.
         """
-        noise_cols = ['Prev_LapTime', 'Prev_SpeedST', 'mean_sector_speed',
-                      'AirTemp', 'TrackTemp', 'TyreLife']
+        noise_cols = [
+            "Prev_LapTime",
+            "Prev_SpeedST",
+            "mean_sector_speed",
+            "AirTemp",
+            "TrackTemp",
+            "TyreLife",
+        ]
 
-        rng     = np.random.default_rng(seed)
-        base    = feature_df.values.copy().astype(float)
+        rng = np.random.default_rng(seed)
+        base = feature_df.values.copy().astype(float)
         col_idx = {c: feature_df.columns.get_loc(c) for c in noise_cols}
 
         preds = []
@@ -566,14 +641,12 @@ class PaceAgent:
                 sigma = abs(base[0, idx]) * _NOISE_PCT
                 row[0, idx] += rng.normal(0, sigma)
             df_row = pd.DataFrame(row, columns=feature_df.columns)
-            delta  = float(self.model.predict(df_row)[0])
-            preds.append(float(df_row['Prev_LapTime'].iloc[0]) + delta)
+            delta = float(self.model.predict(df_row)[0])
+            preds.append(float(df_row["Prev_LapTime"].iloc[0]) + delta)
 
         return float(np.percentile(preds, 10)), float(np.percentile(preds, 90))
 
-    def _session_median(
-        self, gp_name: str, year: int, compound: str
-    ) -> Optional[float]:
+    def _session_median(self, gp_name: str, year: int, compound: str) -> Optional[float]:
         """Return the historical median lap time for a GP / year / compound.
 
         Filters self.laps_ref to the matching GP, year, and compound, then
@@ -590,11 +663,11 @@ class PaceAgent:
             Median lap time in seconds, or None when no matching laps exist.
         """
         mask = (
-            (self.laps_ref['GP_Name']  == gp_name) &
-            (self.laps_ref['Year']     == year)     &
-            (self.laps_ref['Compound'] == compound)
+            (self.laps_ref["GP_Name"] == gp_name)
+            & (self.laps_ref["Year"] == year)
+            & (self.laps_ref["Compound"] == compound)
         )
-        subset = self.laps_ref.loc[mask, 'LapTime_s'].dropna()
+        subset = self.laps_ref.loc[mask, "LapTime_s"].dropna()
         return float(subset.median()) if len(subset) > 0 else None
 
     # ── Main inference entrypoint ─────────────────────────────────────────────
@@ -669,28 +742,41 @@ class PaceAgent:
             PaceOutput with all fields populated and a reasoning string.
         """
         feature_df = self._build_feature_row(
-            driver_number=driver_number, lap_number=lap_number, stint=stint,
-            tyre_life=tyre_life, compound=compound, position=position, team=team,
-            laps_since_pit=laps_since_pit, fuel_load=fuel_load, year=year,
-            prev_lap_time=prev_lap_time, prev_tyre_life=prev_tyre_life,
-            prev_speed_st=prev_speed_st, air_temp=air_temp, track_temp=track_temp,
-            humidity=humidity, rainfall=rainfall, total_laps=total_laps,
-            gp_name=gp_name, mean_sector_speed=mean_sector_speed,
-            prev_deg_rate=prev_deg_rate, prev_cum_deg=prev_cum_deg,
+            driver_number=driver_number,
+            lap_number=lap_number,
+            stint=stint,
+            tyre_life=tyre_life,
+            compound=compound,
+            position=position,
+            team=team,
+            laps_since_pit=laps_since_pit,
+            fuel_load=fuel_load,
+            year=year,
+            prev_lap_time=prev_lap_time,
+            prev_tyre_life=prev_tyre_life,
+            prev_speed_st=prev_speed_st,
+            air_temp=air_temp,
+            track_temp=track_temp,
+            humidity=humidity,
+            rainfall=rainfall,
+            total_laps=total_laps,
+            gp_name=gp_name,
+            mean_sector_speed=mean_sector_speed,
+            prev_deg_rate=prev_deg_rate,
+            prev_cum_deg=prev_cum_deg,
             prev_deg_accel=prev_deg_accel,
             stint_baseline_tyre_life=stint_baseline_tyre_life,
         )
 
-        lap_time_pred   = self._predict(feature_df)
-        delta_vs_prev   = lap_time_pred - prev_lap_time
-        p10, p90        = self._bootstrap_ci(feature_df)
-        median          = self._session_median(gp_name, year, compound)
-        delta_vs_median = (lap_time_pred - median) if median is not None else float('nan')
+        lap_time_pred = self._predict(feature_df)
+        delta_vs_prev = lap_time_pred - prev_lap_time
+        p10, p90 = self._bootstrap_ci(feature_df)
+        median = self._session_median(gp_name, year, compound)
+        delta_vs_median = (lap_time_pred - median) if median is not None else float("nan")
 
-        trend  = "faster" if delta_vs_prev < 0 else "slower"
+        trend = "faster" if delta_vs_prev < 0 else "slower"
         vs_med = (
-            f"{delta_vs_median:+.3f}s vs median"
-            if median is not None else "no median reference"
+            f"{delta_vs_median:+.3f}s vs median" if median is not None else "no median reference"
         )
         reasoning = (
             f"Lap {lap_number}: predicted {round(lap_time_pred, 3):.3f}s "
@@ -699,12 +785,12 @@ class PaceAgent:
         )
 
         return PaceOutput(
-            lap_time_pred   = round(lap_time_pred, 3),
-            delta_vs_prev   = round(delta_vs_prev, 3),
-            delta_vs_median = round(delta_vs_median, 3),
-            ci_p10          = round(p10, 3),
-            ci_p90          = round(p90, 3),
-            reasoning       = reasoning,
+            lap_time_pred=round(lap_time_pred, 3),
+            delta_vs_prev=round(delta_vs_prev, 3),
+            delta_vs_median=round(delta_vs_median, 3),
+            ci_p10=round(p10, 3),
+            ci_p90=round(p90, 3),
+            reasoning=reasoning,
         )
 
     def run_from_state(self, lap_state: dict) -> PaceOutput:
@@ -724,12 +810,12 @@ class PaceAgent:
         Returns:
             PaceOutput with all fields populated.
         """
-        d    = lap_state['driver']
-        meta = lap_state['session_meta']
-        wx   = lap_state.get('weather', {})
+        d = lap_state["driver"]
+        meta = lap_state["session_meta"]
+        wx = lap_state.get("weather", {})
 
-        lap_number     = lap_state['lap_number']
-        total_laps     = meta['total_laps']
+        lap_number = lap_state["lap_number"]
+        total_laps = meta["total_laps"]
         laps_remaining = max(0, total_laps - lap_number)
 
         # ``dict.get(key, default)`` only applies the default when *key is
@@ -744,18 +830,18 @@ class PaceAgent:
         # This file's inline guard was the ONLY one of the three agents that handled
         # present-and-None, and it is now the shared helper the other two adopted rather
         # than a fourth copy of the pattern (#788).
-        _speed_st  = d.get('speed_st')   or 300.0
-        _air_temp  = reading_or_default(wx, 'air_temp',   25.0)
-        _trk_temp  = reading_or_default(wx, 'track_temp', 35.0)
-        _humidity  = reading_or_default(wx, 'humidity',   50.0)
-        _rainfall  = reading_or_default(wx, 'rainfall', 0)
+        _speed_st = d.get("speed_st") or 300.0
+        _air_temp = reading_or_default(wx, "air_temp", 25.0)
+        _trk_temp = reading_or_default(wx, "track_temp", 35.0)
+        _humidity = reading_or_default(wx, "humidity", 50.0)
+        _rainfall = reading_or_default(wx, "rainfall", 0)
 
         return self.run(
-            driver_number  = d.get('driver_number') or 0,
-            lap_number     = lap_number,
-            stint          = d.get('stint') or 1,
-            tyre_life      = d.get('tyre_life') or 1,
-            compound       = d.get('compound') or 'MEDIUM',
+            driver_number=d.get("driver_number") or 0,
+            lap_number=lap_number,
+            stint=d.get("stint") or 1,
+            tyre_life=d.get("tyre_life") or 1,
+            compound=d.get("compound") or "MEDIUM",
             # Plain .get, no `or` fallback: `d.get('position') or 1` collapsed a
             # missing telemetry reading AND the #428 sentinel (a stored `0`)
             # into P1, the race leader, straight into the live N06 XGBoost
@@ -766,11 +852,11 @@ class PaceAgent:
             # existing pd.to_numeric(errors='coerce') turns that into NaN, and
             # XGBoost handles a missing 'Position' natively via its
             # default-left split direction, so no fabricated value is needed.
-            position       = d.get('position'),
-            team           = meta.get('team') or 'Unknown',
-            laps_since_pit = d.get('tyre_life') or 1,
-            fuel_load      = laps_remaining / max(total_laps, 1),
-            year           = meta.get('year') or 2025,
+            position=d.get("position"),
+            team=meta.get("team") or "Unknown",
+            laps_since_pit=d.get("tyre_life") or 1,
+            fuel_load=laps_remaining / max(total_laps, 1),
+            year=meta.get("year") or 2025,
             # ``d.get('prev_lap_time') or 90.0``, NOT ``d.get('lap_time_s')``: the
             # latter fed this LAP's own time back in as the PREVIOUS lap's time, so
             # the model chased its own most recent prediction instead of the real
@@ -787,23 +873,23 @@ class PaceAgent:
             # would turn lap_time_pred itself into NaN. 90.0 is the same
             # order-of-magnitude placeholder the old (wrong) code used, now only
             # reached on a genuinely missing previous lap.
-            prev_lap_time  = d.get('prev_lap_time') or MISSING_PREV_LAP_TIME_S,
-            prev_tyre_life = max(0, (d.get('tyre_life') or 1) - 1),
-            prev_speed_st  = float(_speed_st),
-            air_temp       = float(_air_temp),
-            track_temp     = float(_trk_temp),
-            humidity       = float(_humidity),
-            rainfall       = float(_rainfall or 0),
-            total_laps     = total_laps,
-            gp_name        = meta.get('gp_name') or '',
-            prev_deg_rate  = 0.0,
-            prev_cum_deg   = 0.0,
-            prev_deg_accel = 0.0,
+            prev_lap_time=d.get("prev_lap_time") or MISSING_PREV_LAP_TIME_S,
+            prev_tyre_life=max(0, (d.get("tyre_life") or 1) - 1),
+            prev_speed_st=float(_speed_st),
+            air_temp=float(_air_temp),
+            track_temp=float(_trk_temp),
+            humidity=float(_humidity),
+            rainfall=float(_rainfall or 0),
+            total_laps=total_laps,
+            gp_name=meta.get("gp_name") or "",
+            prev_deg_rate=0.0,
+            prev_cum_deg=0.0,
+            prev_deg_accel=0.0,
             # Plain .get, deliberately NOT the `or` pattern used above: `or` would
             # collapse a legitimate baseline of 0 into None and re-introduce exactly
             # the sentinel-vs-real-value confusion this epic is about. Absent stays
             # absent, and _compute_derived turns that into a NaN plus a warning (#446).
-            stint_baseline_tyre_life = d.get('stint_baseline_tyre_life'),
+            stint_baseline_tyre_life=d.get("stint_baseline_tyre_life"),
         )
 
 
@@ -832,14 +918,31 @@ def _get_default_pace_agent() -> PaceAgent:
 # Public entry points (backward-compatible API — same signatures as before)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def run_pace_agent(
-    driver_number, lap_number, stint, tyre_life, compound,
-    position, team, laps_since_pit, fuel_load, year,
-    prev_lap_time, prev_tyre_life, prev_speed_st,
-    air_temp, track_temp, humidity, rainfall,
-    total_laps, gp_name,
+    driver_number,
+    lap_number,
+    stint,
+    tyre_life,
+    compound,
+    position,
+    team,
+    laps_since_pit,
+    fuel_load,
+    year,
+    prev_lap_time,
+    prev_tyre_life,
+    prev_speed_st,
+    air_temp,
+    track_temp,
+    humidity,
+    rainfall,
+    total_laps,
+    gp_name,
     mean_sector_speed=None,
-    prev_deg_rate=0.0, prev_cum_deg=0.0, prev_deg_accel=0.0,
+    prev_deg_rate=0.0,
+    prev_cum_deg=0.0,
+    prev_deg_accel=0.0,
 ) -> PaceOutput:
     """Run the Pace Agent for a single lap and return a structured PaceOutput.
 
@@ -848,14 +951,28 @@ def run_pace_agent(
     parameter documentation.
     """
     return _get_default_pace_agent().run(
-        driver_number=driver_number, lap_number=lap_number, stint=stint,
-        tyre_life=tyre_life, compound=compound, position=position, team=team,
-        laps_since_pit=laps_since_pit, fuel_load=fuel_load, year=year,
-        prev_lap_time=prev_lap_time, prev_tyre_life=prev_tyre_life,
-        prev_speed_st=prev_speed_st, air_temp=air_temp, track_temp=track_temp,
-        humidity=humidity, rainfall=rainfall, total_laps=total_laps,
-        gp_name=gp_name, mean_sector_speed=mean_sector_speed,
-        prev_deg_rate=prev_deg_rate, prev_cum_deg=prev_cum_deg,
+        driver_number=driver_number,
+        lap_number=lap_number,
+        stint=stint,
+        tyre_life=tyre_life,
+        compound=compound,
+        position=position,
+        team=team,
+        laps_since_pit=laps_since_pit,
+        fuel_load=fuel_load,
+        year=year,
+        prev_lap_time=prev_lap_time,
+        prev_tyre_life=prev_tyre_life,
+        prev_speed_st=prev_speed_st,
+        air_temp=air_temp,
+        track_temp=track_temp,
+        humidity=humidity,
+        rainfall=rainfall,
+        total_laps=total_laps,
+        gp_name=gp_name,
+        mean_sector_speed=mean_sector_speed,
+        prev_deg_rate=prev_deg_rate,
+        prev_cum_deg=prev_cum_deg,
         prev_deg_accel=prev_deg_accel,
     )
 

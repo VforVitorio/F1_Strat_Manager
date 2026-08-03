@@ -129,7 +129,6 @@ _UNBOUNDED = {
     "Prev_DegradationRate": "hardcoded 0.0, and 0.0 is mid-distribution",
     "Prev_CumulativeDeg": "hardcoded 0.0, and 0.0 is mid-distribution",
     "Prev_DegAcceleration": "hardcoded 0.0, and 0.0 is mid-distribution",
-    "mean_sector_speed": "always carries the speed trap at inference",
     # a bound would report the same event twice
     "LapsSincePitStop": "equals TyreLife at inference",
     # training and inference encode it differently
