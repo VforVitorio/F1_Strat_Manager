@@ -373,3 +373,164 @@ undercut_clean.parquet`, which **does not exist in the Hugging Face dataset at a
 no clean install can pass them; the NLP goldens report `pending` because the 15.9 GB NLP
 weights are not downloaded here. The skip guards should require those artefacts instead
 of failing, which is a separate issue.
+
+---
+
+# #797 and #798, and one claim of mine I refuted myself
+
+## H1 — the fix: N06 was reading the speed trap where it was trained on a circuit mean
+
+`mean_sector_speed` is a property of the CIRCUIT, one value per GP.
+`PaceAgent._compute_derived` substituted `prev_speed_st` whenever none was supplied and
+`run_from_state` never supplied one, so on the path every real race takes N06 received a
+different physical quantity on every lap. Training means 256.8 against 303.0 km/h.
+
+Not an extraction slip: `N25_pace_agent.ipynb` documents the substitution as a proxy, and
+`pace_agent.py` already named the real source, calling it a fallback for when circuit
+features are unavailable. The lookup it described was never wired. It is now, per GP,
+with an unresolvable circuit yielding NaN and a warning rather than a substituted reading.
+
+**Measured impact, and a lesson about probes.** A single hand-built row moved the
+prediction by 0.002 s and I nearly reported the fix as cosmetic on that basis. Over 4000
+real 2025 laps it moves the delta prediction by a mean of +0.069 s, a p95 absolute of
+0.377 s, and more than 0.010 s on 38% of laps. The trees split on this feature only in
+some regions, so one probe is not a distribution.
+
+## H2 — REFUTED BY ME, after the commit message had already claimed it
+
+The commit says the value served is the value fitted, "identical to 0.0". What that
+number actually compared was `laps_featured_2023` against
+`circuit_features_with_clusters_k4.parquet` -- two artefacts of the TRAINING seasons. The
+code serves the **2025** map. Those are a different pair, and I checked the wrong one.
+
+Measured properly, across the 23 GPs present in both:
+
+| | |
+|---|---|
+| GPs matching exactly | **0 of 23** |
+| mean absolute gap | 4.82 km/h |
+| median | 2.91 km/h |
+| largest | Silverstone, 18.35 km/h |
+
+The FIX is still right, and serving 2025 is the correct half of the pair: the feature is
+recomputed per season, so the quantity N04 would compute for a 2025 lap is the 2025
+measurement, and serving the training seasons' value would feed a stale reading of a
+circuit since resurfaced or re-regulated. What was wrong was the claim of exact parity,
+which was true in isolation about a comparison nobody had asked for and false about the
+one that matters. That is the same defect class this session has been removing all day,
+committed in the sentence describing the removal.
+
+The docstring now states the seasonal seam and why the envelope bound is deliberately the
+2023-2024 range held against a 2025 value: the bound asks whether N06 was FITTED on inputs
+like this one, so a 2025 circuit outside the fitted range is genuine extrapolation. Monza
+2025 at 317.24 against a fitted maximum of 314.97 is the only such case.
+
+## H3 — the pit agent cannot be constructed on a clean install (#798)
+
+`PitStrategyAgent.__init__` reads `data/processed/undercut_labeled/undercut_clean.parquet`
+unconditionally. The Hugging Face dataset publishes `overtake_labeled/` and `sc_labeled/`
+and **not** `undercut_labeled/`, so on a checkout built from the published data the agent
+raises FileNotFoundError at construction. It stays hidden because every developer machine
+has run N16, and because `f1-sim --no-llm` at Lusail never triggers the pit agent.
+
+Six tests failed rather than skipped for the same reason, and one of them,
+`test_the_committed_tables_match_a_fresh_measurement`, regenerated
+`data/mc_measured_v1.json` with the entire measured `undercut_band` dropped to
+`available: false` and left the emptied file in the worktree. The guards now name the
+holdout. Publishing the artefact is the real fix and needs the file, which only exists on
+a machine that has run the notebook.
+
+## H4 — the #797 gate died on a usage limit, and its on-disk report paid for itself
+
+`GATE_797_circuit_speed.md` reached 8.6 KB before the agent was terminated mid-run. Because
+it appended findings as it confirmed them rather than buffering a final report, five
+findings survived, four of them real and two HIGH. This is the second time in two sessions
+that incremental persistence recovered work a dead agent would otherwise have taken with it.
+
+What it found in my own fix, all verified independently before acting:
+
+- **F1, HIGH.** The resolver covered two of the project's FOUR keyspaces. `RaceReplayEngine`
+  puts the metadata.json name into `session_meta`, which for one race is `'Miami Gardens'`
+  with a SPACE, matching neither the parquet slug `'Miami'` nor the folder `'Miami_Gardens'`.
+  Every lap of the 2025 Miami race was served NaN while its value sat in the map. Same for
+  the 2023 Spanish GP (`'Spain'`). The #448/#450 dual-keyspace trap, third occurrence, and
+  the third time in this session that I fixed one member of a pair and not the other.
+- **F2, HIGH.** `laps_featured_2025.parquet` carries NaN on all 760 Las Vegas rows, so
+  reading that file dropped a circuit N06 was FITTED on and whose value sits in three other
+  artefacts. The docstring's "we do not know this circuit" was false for Las Vegas.
+- **F3, MEDIUM.** The map was 2025-only while the replay engine can replay 2023 and 2024, so
+  a 2023 Silverstone lap was served a measurement taken two years after it, 18.4 km/h away.
+  `run()` receives `year` and the resolver ignored it.
+- **F4, MEDIUM.** My "recomputed per season" claim was wrong: 2023 and 2024 are identical
+  per GP to exactly 0.0. The value is recomputed per ARTEFACT BUILD, one build pooling both
+  training seasons. The conclusion survived, the stated mechanism did not, and a comment
+  naming the wrong mechanism is how the next fix goes wrong.
+- **F5, verified clean.** NaN survives to the model, `_bootstrap_ci` multiplying NaN by
+  Gaussian noise still returns finite p10/p90 through XGBoost's default split, an explicit
+  value still wins, and no production caller passes one.
+
+**And one the gate did not reach, found while fixing F1:** the combined artefact does not
+agree with itself. `laps_featured.parquet` calls the same race `'Miami'` in 2023-2024 and
+`'Miami Gardens'` in 2025, so even a correctly spelled query misses on one season. The fix
+is not a longer candidate list at the query end, which fails the moment the STORED spelling
+is the odd one: `_normalise_gp_key` now normalises both the map keys at load time and the
+query, which is what `gp_slugs`'s own docstring prescribes.
+
+The lookup is now keyed by `(Year, GP)` from the combined parquet, which has 71 pairs and
+zero missing values. All 71 races on disk resolve, asserted by walking `data/raw/` rather
+than by fixing the two names an audit happened to mention. A real `f1-sim Miami_Gardens`
+run completes with zero unresolved-circuit warnings.
+
+## H5 — the resumed gate caught the fix for H4 introducing a regression of its own
+
+Switching the loader to the combined `laps_featured.parquet` closed the Las Vegas hole and
+looked like a strict improvement. It was not. That artefact **broadcasts the training-era
+value across all three seasons**: across every GP present in both eras the 2023-vs-2025
+difference is exactly 0.0, so keying by year became decorative and every 2025 lap silently
+received the 2023 measurement. The deliberate choice recorded in H2 was reverted by the
+commit that claimed to refine it.
+
+The raw laps settle which artefact is honest, and this is the check neither of my earlier
+measurements made:
+
+| | Silverstone 2025 | Melbourne 2025 |
+|---|---|---|
+| raw speed traps, mean of the three | **232.32** | **252.93** |
+| per-year artefact | 231.36 | 256.84 |
+| combined artefact | 249.71 (the 2023 value) | 272.44 |
+
+So the loader reads the three per-year artefacts, keyed by year. Las Vegas 2025 goes back to
+NaN, which is the correct failure: the alternative is serving a 2023 measurement for a 2025
+lap, the same defect class as the speed-trap substitution, only quieter. The hole belongs in
+the artefact, and there is now a test pinning it as a known hole so a NEW unresolved race
+still fails loudly.
+
+The test that would have caught this asserts an EFFECT: Silverstone's served value must
+DIFFER between 2023 and 2025. Asserting either value alone passes happily against the wrong
+artefact, which is exactly what happened.
+
+## H6 — the impact numbers, and the accuracy claim I must not make
+
+Re-measured on the full 2025 season with no sampling, comparing what the model receives now
+against what the bug fed it: mean **+0.0712 s**, p95 absolute **0.3767 s**, more than 0.010 s
+on **38.7%** of laps. The commit's figures reproduce.
+
+The gate measured smaller numbers because it measured `806cedd`, where the served value was
+the training-era one; that state is reverted.
+
+**What must not be claimed:** the fix does not make N06 more accurate. The published pace MAE
+still reproduces within tolerance, and the gate measured bug-versus-fix on the proper holdout
+at 0.4096 against 0.4097. This is a correctness fix, not an accuracy fix: the model is now
+being asked the question it was trained on, and the answer is about as good as before.
+
+## H7 — a third member of the family, found by the gate and left open
+
+`LapsSincePitStop` receives `TyreLife` at inference, and the two differ from the trained
+column on **19.8% of rows**, by a mean of 2.6 laps. That is the same shape as `Prev_Deg*` and
+`mean_sector_speed`: an inference value that is not the quantity its training column holds.
+Left open rather than fixed here, because it is a third instance and deserves its own issue
+and its own measurement rather than being folded into this branch.
+
+Also recorded by the gate and not fixed: the 2023 Spanish GP exists twice in `data/raw` and
+in the featured artefacts, as `Spain` and `Barcelona` with the same OpenF1 session key, so
+"71 races" is 70 plus one duplicate.
