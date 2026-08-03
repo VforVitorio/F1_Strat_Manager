@@ -31,9 +31,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+
 ROOT = Path(__file__).parent.parent.parent
 RACE_DIR = ROOT / "data" / "raw" / "2024" / "Austin"
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 _HAS_RACE_DATA = (RACE_DIR / "laps.parquet").exists()
 
 # TireAgent() loads the TCN bundles at __init__ time, and the fixture below

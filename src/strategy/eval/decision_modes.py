@@ -84,6 +84,7 @@ from src.strategy.eval.report import build_header, write_report
 # loads model weights at import time, which would make this report — and every other
 # ``f1-eval`` subcommand next to it — impossible to even import without ``data/models/``.
 from src.strategy.inference.guard_rails import (
+    _DEFAULT_MIN_STINT,
     _MIN_STINT_LAPS,
     _NO_PIT_BEFORE_LAP,
     _PIT_ACTIONS,
@@ -232,8 +233,17 @@ def guard_rail_block(
     the probe passes a life that satisfies every minimum and only the lap-based
     rails apply. That is a stated assumption, not a sentinel: it never becomes a
     value the caller can mistake for a measurement.
+
+    ``_DEFAULT_MIN_STINT`` is folded into that maximum rather than assumed to sit
+    below it. It is not a spare branch here: an unknown compound arrives as ``""``
+    two lines down, so the fallback IS the bound this probe meets in exactly the
+    case the probe exists for. The two happen to be ordered correctly today (#716
+    left them at 8 and 6), and the docstring above would have been quietly false
+    the first time they were not.
     """
-    probe_life = max(_MIN_STINT_LAPS.values()) if tyre_life is None else tyre_life
+    probe_life = (
+        max(*_MIN_STINT_LAPS.values(), _DEFAULT_MIN_STINT) if tyre_life is None else tyre_life
+    )
     action, reason = apply_guard_rails(
         "PIT_NOW", actual_lap, total_laps, compound or "", probe_life
     )

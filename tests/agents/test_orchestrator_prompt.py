@@ -17,13 +17,14 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+
 # Importing the orchestrator pulls in the tire agent, which reads its routing
 # config at import time, so the whole module is unimportable without the HF
 # weights. That is why the import below lives inside the fixture rather than at
 # module scope: a module-level import raises during COLLECTION, which no skipif
 # can catch. Same guard as tests/agents/test_agents.py, same reason.
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 
 pytestmark = pytest.mark.skipif(
     not _HAS_MODELS,

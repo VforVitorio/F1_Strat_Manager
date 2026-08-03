@@ -102,9 +102,14 @@ def load_pace_predictions(year: int = 2025) -> tuple[np.ndarray, np.ndarray] | N
     target = manifest["target"]  # LapTime_s
     features_delta = json.loads(features_path.read_text(encoding="utf-8"))
 
-    df = _add_lag_deg_features(
-        _encode_categoricals(pd.read_parquet(parquet), compound_map, racephase_map)
-    )
+    # Through augment_featured_laps, never straight from the parquet: the 2025 artefact
+    # ships without the four weather columns N06 was trained on, so a direct read raises
+    # a KeyError here (#782). That module's own docstring has said "every consumer must
+    # call it" since the third time this happened; this was the fourth.
+    from src.f1_strat_manager.laps_augment import augment_featured_laps
+
+    featured = augment_featured_laps(pd.read_parquet(parquet), year)
+    df = _add_lag_deg_features(_encode_categoricals(featured, compound_map, racephase_map))
     df = df.dropna(subset=_DROPNA).copy()
     if df.empty:
         return None

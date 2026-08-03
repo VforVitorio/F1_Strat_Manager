@@ -12,7 +12,16 @@ import pytest
 
 ROOT = Path(__file__).parent.parent.parent
 _HAS_SC = (ROOT / "data" / "models" / "safety_car_probability" / "lgbm_sc_v1.pkl").exists()
-_HAS_UNDERCUT = (ROOT / "data" / "models" / "pit_prediction" / "lgbm_undercut_v1.pkl").exists()
+# The HOLDOUT as well as the model, matching _HAS_PIT / _HAS_PACE / _HAS_TIRE below.
+# Checking only the model made this test FAIL rather than skip on a checkout built from
+# the published dataset, because `undercut_clean.parquet` is not in it (#798) -- and a
+# data-tier guard that fails on absent data is worse than no guard, since it costs a red
+# suite that says nothing about the change under test.
+_HAS_UNDERCUT = (
+    ROOT / "data" / "models" / "pit_prediction" / "lgbm_undercut_v1.pkl"
+).exists() and (
+    ROOT / "data" / "processed" / "undercut_labeled" / "undercut_clean.parquet"
+).exists()
 _HAS_PIT = (ROOT / "data" / "models" / "pit_prediction" / "hist_pit_p50_v1.pkl").exists() and bool(
     list((ROOT / "data" / "raw").glob("*/*/laps.parquet"))
 )
