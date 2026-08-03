@@ -52,3 +52,31 @@ def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> f
     if value is None:
         return default
     return value
+
+
+# The air and track temperature a consumer reads when the reading is genuinely absent.
+#
+# MEASURED, not chosen: the medians over the 68,122 laps of 2023-2025, taken through
+# ``augment_featured_laps`` so the weather columns the 2025 artefact ships without are
+# restored first (#782). AirTemp median 24.20, TrackTemp median 34.20.
+#
+# One pair, because there were FIVE for the same two quantities (#789), three of them
+# feeding models: pace read 25.0/35.0, tire and race_situation read 28.0/38.0, and the
+# backend producer read 25/40 in one route and 28/38 in another. The 28.0/38.0 pair sat
+# 3.8 degrees above the median in both quantities, and pace's 35.0 matches the TrackTemp
+# MEAN (35.22) rather than its median, which is how two plausible numbers for one
+# quantity survive next to each other.
+#
+# WHAT UNIFYING THEM DOES NOT DO is move any model input on a replay. Measured through
+# ``RaceReplayEngine.replay()`` over four races across three seasons, 229 lap states
+# carried a real air and track temperature on 100% of laps, so these defaults never
+# fire there. (Measured through ``rsm.get_lap_state(lap)`` WITHOUT the weather frame
+# they appear to fire on every lap, which is an artefact of calling the state manager
+# directly rather than through the engine that supplies it -- the same wrong-call
+# reading CLAUDE.md section 11 already records for the arcade temperatures.)
+#
+# So this is a dedup of a LATENT disagreement, and the paths where it does bite are the
+# ones with no weather frame at all: a hand-built session_meta, a test fixture, or the
+# backend producer that emits None per key (#788).
+DEFAULT_AIR_TEMP_C: float = 24.2
+DEFAULT_TRACK_TEMP_C: float = 34.2
