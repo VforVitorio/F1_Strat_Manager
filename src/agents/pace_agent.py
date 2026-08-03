@@ -923,7 +923,16 @@ class PaceAgent:
             # default-left split direction, so no fabricated value is needed.
             position=d.get("position"),
             team=meta.get("team") or "Unknown",
-            laps_since_pit=d.get("tyre_life") or 1,
+            # The REAL laps-since-pit, not the tyre's age. These are different
+            # quantities and coincide only when the set was fitted at the last stop:
+            # measured against N06's trained column they agree on 97.7% of laps at
+            # Lusail and 34.6% at Melbourne, where two thirds of laps were fed the
+            # wrong number. `RaceStateManager.laps_since_pit` reproduces N01's own
+            # definition exactly, so this is a lookup rather than an approximation
+            # (#800). `or` rather than the two-arg get: a producer that has not been
+            # updated reports the key absent, and lap 1 of an unpitted race is 1
+            # under N01's rule anyway.
+            laps_since_pit=d.get("laps_since_pit") or d.get("tyre_life") or 1,
             fuel_load=laps_remaining / max(total_laps, 1),
             year=meta.get("year") or 2025,
             # ``d.get('prev_lap_time') or 90.0``, NOT ``d.get('lap_time_s')``: the
