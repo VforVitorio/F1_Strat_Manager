@@ -36,9 +36,21 @@ ROOT = Path(__file__).parent.parent.parent
 
 # Importing N28 reads model configs at import time, and the fixture needs the raw
 # parquet. data/ is pulled from Hugging Face, so the CI runner has neither.
+#
+# CONSTRUCTING N28 also reads `undercut_clean.parquet`, and that one is NOT in the
+# published dataset (#798), so a checkout built purely from Hugging Face errored here at
+# fixture setup instead of skipping. The gate has to name every artefact construction
+# touches, not just the ones this file reads itself: an unlisted dependency turns a
+# missing-data skip into four red tests that have nothing to do with the change under
+# test, which is exactly how it presented.
+_HAS_UNDERCUT_HOLDOUT = (
+    ROOT / "data" / "processed" / "undercut_labeled" / "undercut_clean.parquet"
+).exists()
+
 pytestmark = pytest.mark.skipif(
-    not (_HAS_MODELS and (RACE_DIR / "laps.parquet").exists()),
-    reason="needs data/models/ and the raw Lusail parquet (data/ comes from HF, not git)",
+    not (_HAS_MODELS and _HAS_UNDERCUT_HOLDOUT and (RACE_DIR / "laps.parquet").exists()),
+    reason="needs data/models/, undercut_clean.parquet and the raw Lusail parquet "
+    "(data/ comes from HF, not git)",
 )
 
 
