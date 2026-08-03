@@ -27,8 +27,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 pytestmark = pytest.mark.skipif(
     not _HAS_MODELS,
     reason="data/models/ not present (CI runner without model weights)",
@@ -433,7 +434,7 @@ def test_the_legacy_path_is_taken_whenever_the_rivals_list_is_falsy():
     have routed them into a projection with no cars in it.
     """
     from src.agents.strategy_orchestrator import _run_mc_simulation
-    from tests.mc.test_mc_state_helpers import _canned_outputs
+    from tests.mc.canned_outputs import canned_outputs as _canned_outputs
 
     pace, tire, situation, pit = _canned_outputs()
     baseline = _run_mc_simulation(pace, tire, situation, pit, alpha=0.5)

@@ -91,8 +91,8 @@ def test_importing_the_module_does_not_load_the_agent_stack():
     [
         (3, 57, "MEDIUM", 20, "opening_laps"),
         (56, 57, "MEDIUM", 20, "closing_laps"),
-        (30, 57, "SOFT", 5, "min_stint"),
-        (30, 57, None, 9, "min_stint"),
+        (30, 57, "SOFT", 1, "min_stint"),
+        (30, 57, None, 5, "min_stint"),
         (30, 57, "SOFT", 20, None),
         (30, 57, "MEDIUM", None, None),
     ],

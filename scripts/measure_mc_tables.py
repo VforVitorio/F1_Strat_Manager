@@ -67,7 +67,14 @@ from typing import Any, Iterable
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent.parent
+# ``.git``-search-with-fallback, not a fixed ``.parent.parent``: the latter
+# silently resolves to the wrong directory under a `uv tool install` layout,
+# where this file is not exactly one level below the repo root.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = next(
+    (p for p in [_SCRIPT_DIR, *_SCRIPT_DIR.parents] if (p / ".git").exists()),
+    _SCRIPT_DIR.parent,
+)
 sys.path.insert(0, str(ROOT))
 
 from src.f1_strat_manager.gp_slugs import (  # noqa: E402

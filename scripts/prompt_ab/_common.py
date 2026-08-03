@@ -20,7 +20,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# ``.git``-search-with-fallback, not a fixed ``.parents[2]``: the latter
+# silently resolves to the wrong directory under a `uv tool install` layout,
+# where this file is not exactly two levels below the repo root.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = next(
+    (p for p in [_SCRIPT_DIR, *_SCRIPT_DIR.parents] if (p / ".git").exists()),
+    _SCRIPT_DIR.parent.parent,
+)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

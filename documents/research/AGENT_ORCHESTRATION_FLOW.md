@@ -38,7 +38,7 @@ so and the v2 graph preserves it.
 
 | Agent | Module | Pattern (shipped) | LLM in per-lap path | Cadence |
 |---|---|---|---|---|
-| N25 Pace | `src/agents/pace_agent.py` | ReAct agent exists (`create_agent`, :648) but the per-lap path calls `PaceAgent.run()` directly; reasoning is a template string | none (ReAct idle) | every lap |
+| N25 Pace | `src/agents/pace_agent.py` | Direct call — `PaceAgent.run()`, reasoning is a template string. (Written 2026-07-07 against a ReAct scaffold that existed but was idle; formally retired and deleted in #781 after the #778/#779/#780 archaeology confirmed it was never wired and had no stated future use — do not plan v2 work around resurrecting it.) | none | every lap |
 | N26 Tire | `src/agents/tire_agent.py` | ReAct (`create_agent`, :997; invoke :1162), 2 tools | ~3 turns | every lap |
 | N27 Situation | `src/agents/race_situation_agent.py` | ReAct (:985; invoke :1145), 2 tools | ~3 turns | every lap |
 | N28 Pit | `src/agents/pit_strategy_agent.py` | ReAct (:837; invoke :996), 3 tools; output parsed from tool messages + final-message prose | up to 4 turns | conditional |

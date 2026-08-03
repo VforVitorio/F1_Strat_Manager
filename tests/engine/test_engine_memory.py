@@ -28,10 +28,10 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
 from tests.engine.ast_helpers import kwargs_passed_by
 
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 pytestmark = pytest.mark.skipif(
     not _HAS_MODELS,
     reason="data/models/ not present (CI runner without model weights)",
