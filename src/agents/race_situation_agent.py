@@ -28,11 +28,16 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS, reading_or_default
+from src.agents._shared_defaults import (
+    DEFAULT_AIR_TEMP_C,
+    DEFAULT_TOTAL_LAPS,
+    DEFAULT_TRACK_TEMP_C,
+    reading_or_default,
+)
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
-while not (_REPO_ROOT / '.git').exists():
+while not (_REPO_ROOT / ".git").exists():
     if _REPO_ROOT.parent == _REPO_ROOT:
         break
     _REPO_ROOT = _REPO_ROOT.parent
@@ -42,6 +47,7 @@ while not (_REPO_ROOT / '.git').exists():
 # ``uv tool install`` flow (``~/.f1-strat/data/``).
 try:
     from src.f1_strat_manager.data_cache import get_data_root as _get_data_root
+
     _DATA_ROOT = _get_data_root()
 except (ImportError, OSError, RuntimeError):
     # Every way get_data_root() can fail, enumerated against its body in
@@ -52,28 +58,27 @@ except (ImportError, OSError, RuntimeError):
     # the Path.home() branch IS the `uv tool install` path this block exists to
     # serve, and a container with no HOME would take it. Falling back to the
     # repo-relative data/ is right for all three.
-    _DATA_ROOT = _REPO_ROOT / 'data'
+    _DATA_ROOT = _REPO_ROOT / "data"
 
 from src.f1_strat_manager.gp_slugs import rekey_by_slug, slug_from_event_name  # noqa: E402
 
-_MODELS    = _DATA_ROOT / 'models'
-_PROCESSED = _DATA_ROOT / 'processed'
-_AGENTS    = _DATA_ROOT / 'models' / 'agents'
+_MODELS = _DATA_ROOT / "models"
+_PROCESSED = _DATA_ROOT / "processed"
+_AGENTS = _DATA_ROOT / "models" / "agents"
 
 
 # ── Authoritative compound allocation ─────────────────────────────────────────
-_compounds_path = _DATA_ROOT / 'tire_compounds_by_race.json'
+_compounds_path = _DATA_ROOT / "tire_compounds_by_race.json"
 TIRE_COMPOUNDS: dict = (
-    json.loads(_compounds_path.read_text(encoding='utf-8'))
-    if _compounds_path.exists() else {}
+    json.loads(_compounds_path.read_text(encoding="utf-8")) if _compounds_path.exists() else {}
 )
 
 # ── Feature engineering constants (matching N13/N14 training definitions) ─────
-CLIFF_THRESHOLDS = {'SOFT': 20, 'MEDIUM': 35, 'HARD': 50}
-STATUS_ENC       = {'1': 0, '2': 1, '5': 2, '7': 3, '6': 4, '4': 5}
-STATUS_SEVERITY  = {'1': 1, '2': 2, '5': 3, '7': 4, '6': 5, '4': 6}
-_INCIDENT_RE     = r'INCIDENT|COLLISION|CONTACT|SPIN|OFF TRACK|STOPPED CAR|DEBRIS|MARSHAL'
-_EXCLUDE_RE      = r'TRACK LIMITS|LAP TIME|PENALTY|PIT LANE|FORMATION|GRID|DRS|SAFETY CAR|VIRTUAL'
+CLIFF_THRESHOLDS = {"SOFT": 20, "MEDIUM": 35, "HARD": 50}
+STATUS_ENC = {"1": 0, "2": 1, "5": 2, "7": 3, "6": 4, "4": 5}
+STATUS_SEVERITY = {"1": 1, "2": 2, "5": 3, "7": 4, "6": 5, "4": 6}
+_INCIDENT_RE = r"INCIDENT|COLLISION|CONTACT|SPIN|OFF TRACK|STOPPED CAR|DEBRIS|MARSHAL"
+_EXCLUDE_RE = r"TRACK LIMITS|LAP TIME|PENALTY|PIT LANE|FORMATION|GRID|DRS|SAFETY CAR|VIRTUAL"
 
 
 # ── RCM context override (post-hoc fix for "SC active but model says low") ────
@@ -85,7 +90,7 @@ _EXCLUDE_RE      = r'TRACK LIMITS|LAP TIME|PENALTY|PIT LANE|FORMATION|GRID|DRS|S
 # under a VSC, so the two are tracked apart from here on. Strings match exactly what
 # radio_agent._classify_rcm_event() emits. (src/nlp/rcm_state.py mirrors these sets for
 # its cross-lap tracker; keep them in sync.)
-_SC_DEPLOY_EVENT_TYPES:  frozenset[str] = frozenset({"SAFETY_CAR_DEPLOYED"})
+_SC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"SAFETY_CAR_DEPLOYED"})
 _VSC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"VIRTUAL_SAFETY_CAR_DEPLOYED"})
 
 # SC release. Art. 55.15's "SAFETY CAR IN THIS LAP" (the real message, which classifies
@@ -95,10 +100,12 @@ _VSC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"VIRTUAL_SAFETY_CAR_DEPLOYE
 # neutralised: _neutralization_from_rcm keeps the flag active for it and it clears the
 # lap after. SAFETY_CAR_IN_PIT_LANE is the same case for the rarer "IN THE PIT LANE"
 # wording.
-_SC_RELEASE_EVENT_TYPES:  frozenset[str] = frozenset({
-    "SAFETY_CAR_ENDING",
-    "SAFETY_CAR_IN_PIT_LANE",
-})
+_SC_RELEASE_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        "SAFETY_CAR_ENDING",
+        "SAFETY_CAR_IN_PIT_LANE",
+    }
+)
 
 # VSC release. Art. 56.7's restart is near-instant (green ~10-15 s after "VSC ENDING"),
 # so at lap granularity the neutralisation is over on the announcement lap: this releases
@@ -122,6 +129,7 @@ class Neutralization(str, Enum):
 # ─────────────────────────────────────────────────────────────────────────────
 # RaceSituationConfig
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class RaceSituationConfig:
@@ -165,12 +173,12 @@ class RaceSituationConfig:
             fires on 13.59% of laps.
     """
 
-    model_name: str = 'gpt-4.1-mini'
+    model_name: str = "gpt-4.1-mini"
 
-    high_overtake:   float = 0.65
+    high_overtake: float = 0.65
     medium_overtake: float = 0.40
-    high_sc:         float = 0.0864
-    medium_sc:       float = 0.0432
+    high_sc: float = 0.0864
+    medium_sc: float = 0.0432
 
     def __post_init__(self) -> None:
         self.export_dir = _AGENTS
@@ -180,23 +188,23 @@ class RaceSituationConfig:
             pass  # read-only mount in Docker
 
         # Overtake model (N12)
-        _ov = _MODELS / 'overtake_probability'
-        self.overtake_model      = joblib.load(_ov / 'lgbm_overtake_v1.pkl')
-        self.overtake_calibrator = joblib.load(_ov / 'calibrator.pkl')
-        with open(_ov / 'model_config.json') as f:
+        _ov = _MODELS / "overtake_probability"
+        self.overtake_model = joblib.load(_ov / "lgbm_overtake_v1.pkl")
+        self.overtake_calibrator = joblib.load(_ov / "calibrator.pkl")
+        with open(_ov / "model_config.json") as f:
             ov_cfg = json.load(f)
-        self.overtake_features: list[str]     = ov_cfg['features']
-        self.overtake_cat_features: list[str] = ov_cfg['categorical_features']
-        self.overtake_threshold: float        = ov_cfg['optimal_threshold']
+        self.overtake_features: list[str] = ov_cfg["features"]
+        self.overtake_cat_features: list[str] = ov_cfg["categorical_features"]
+        self.overtake_threshold: float = ov_cfg["optimal_threshold"]
 
         # SC model (N14)
-        _sc = _MODELS / 'safety_car_probability'
-        self.sc_model      = joblib.load(_sc / 'lgbm_sc_v1.pkl')
-        self.sc_calibrator = joblib.load(_sc / 'calibrator_sc_v1.pkl')
-        with open(_sc / 'feature_list_v1.json') as f:
+        _sc = _MODELS / "safety_car_probability"
+        self.sc_model = joblib.load(_sc / "lgbm_sc_v1.pkl")
+        self.sc_calibrator = joblib.load(_sc / "calibrator_sc_v1.pkl")
+        with open(_sc / "feature_list_v1.json") as f:
             sc_cfg = json.load(f)
-        self.sc_features: list[str] = sc_cfg['features']
-        self.sc_threshold: float    = sc_cfg['best_threshold']
+        self.sc_features: list[str] = sc_cfg["features"]
+        self.sc_threshold: float = sc_cfg["best_threshold"]
 
         # DO NOT assign overtake_threshold/sc_threshold onto high_overtake/high_sc.
         # #450 did exactly that and it is a unit error: both tuned thresholds are
@@ -220,15 +228,13 @@ class RaceSituationConfig:
         # are pit-wall alert levels, set on the served calibrated scale (#665).
 
         # Circuit cluster map (k=4 parquet from N05)
-        _cl = pd.read_parquet(_PROCESSED / 'circuit_clustering' / 'circuit_clusters_k4.parquet')
-        self.circuit_cluster_map: dict = dict(
-            zip(_cl['GP_Name'], _cl['Cluster'].astype(int))
-        )
+        _cl = pd.read_parquet(_PROCESSED / "circuit_clustering" / "circuit_clusters_k4.parquet")
+        self.circuit_cluster_map: dict = dict(zip(_cl["GP_Name"], _cl["Cluster"].astype(int)))
 
         # Circuit SC base rates (from N13 labeled parquet)
         _sc_df = pd.read_parquet(
-            _PROCESSED / 'sc_labeled' / 'sc_labeled_2023_2025.parquet',
-            columns=['event_name', 'circuit_sc_rate'],
+            _PROCESSED / "sc_labeled" / "sc_labeled_2023_2025.parquet",
+            columns=["event_name", "circuit_sc_rate"],
         )
         # Re-key to the SLUG keyspace the replay path queries with. This table ships
         # keyed by FastF1 event names, which the FastF1 session path supplies but the
@@ -239,10 +245,10 @@ class RaceSituationConfig:
         # through `sc_rate_for`, which resolves EITHER keyspace, so the FastF1 path
         # keeps working too.
         self.circuit_sc_rate_map: dict = rekey_by_slug(
-            _sc_df.drop_duplicates('event_name')
-                  .set_index('event_name')['circuit_sc_rate']
-                  .to_dict(),
-            'circuit_sc_rate_map',
+            _sc_df.drop_duplicates("event_name")
+            .set_index("event_name")["circuit_sc_rate"]
+            .to_dict(),
+            "circuit_sc_rate_map",
         )
 
     def sc_rate_for(self, event_name: str) -> float:
@@ -267,6 +273,7 @@ CFG = RaceSituationConfig()
 # ─────────────────────────────────────────────────────────────────────────────
 # RaceSituationOutput
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class RaceSituationOutput:
@@ -308,19 +315,23 @@ class RaceSituationOutput:
     overtake_prob: float
     sc_prob_3lap: float
     threat_level: str = field(init=False)
-    gap_ahead_s: float  = 0.0
+    gap_ahead_s: float = 0.0
     pace_delta_s: float = 0.0
-    reasoning: str      = ''
+    reasoning: str = ""
     sc_currently_active: bool = False  # any neutralisation (SC OR VSC) confirmed by RCM this lap
-    vsc_active: bool          = False  # the active neutralisation is specifically a VSC (Art. 56)
+    vsc_active: bool = False  # the active neutralisation is specifically a VSC (Art. 56)
 
     def __post_init__(self) -> None:
-        if self.sc_currently_active or self.overtake_prob >= CFG.high_overtake or self.sc_prob_3lap >= CFG.high_sc:
-            self.threat_level = 'HIGH'
+        if (
+            self.sc_currently_active
+            or self.overtake_prob >= CFG.high_overtake
+            or self.sc_prob_3lap >= CFG.high_sc
+        ):
+            self.threat_level = "HIGH"
         elif self.overtake_prob >= CFG.medium_overtake or self.sc_prob_3lap >= CFG.medium_sc:
-            self.threat_level = 'MEDIUM'
+            self.threat_level = "MEDIUM"
         else:
-            self.threat_level = 'LOW'
+            self.threat_level = "LOW"
 
     @property
     def sc_active(self) -> bool:
@@ -336,6 +347,7 @@ class RaceSituationOutput:
 # Pure feature sub-helpers — accept all state as arguments, read no globals
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _abs_compound(relative: str, gp_name: str, year: int) -> str:
     """Map SOFT/MEDIUM/HARD → Cx string using TIRE_COMPOUNDS; fallback to input."""
     return TIRE_COMPOUNDS.get(str(year), {}).get(gp_name, {}).get(relative.upper(), relative)
@@ -343,17 +355,19 @@ def _abs_compound(relative: str, gp_name: str, year: int) -> str:
 
 def _agg(grp: pd.DataFrame) -> pd.Series:
     """Aggregate lap times for one lap group into mean, std, min scalars."""
-    lt = grp['LapTime'].dt.total_seconds().dropna()
-    return pd.Series({
-        'lt_mean': lt.mean() if not lt.empty else np.nan,
-        'lt_std':  lt.std(ddof=1) if len(lt) > 1 else 0.0,
-        'lt_min':  lt.min() if not lt.empty else np.nan,
-    })
+    lt = grp["LapTime"].dt.total_seconds().dropna()
+    return pd.Series(
+        {
+            "lt_mean": lt.mean() if not lt.empty else np.nan,
+            "lt_std": lt.std(ddof=1) if len(lt) > 1 else 0.0,
+            "lt_min": lt.min() if not lt.empty else np.nan,
+        }
+    )
 
 
 def _zscore(series: pd.DataFrame, col: str, lap_number: int) -> float:
     """Standardise the value at lap_number against the full causal history."""
-    mu  = series[col].mean()
+    mu = series[col].mean()
     sig = max(float(series[col].std(ddof=1)), 0.01)
     val = series.loc[series.index == lap_number, col]
     return float((val.iloc[0] - mu) / sig) if not val.empty else 0.0
@@ -374,7 +388,7 @@ def _is_neutralised(track_status: object) -> bool:
     if track_status is None or pd.isna(track_status):
         return False
     codes = str(track_status)
-    return '4' in codes or '6' in codes
+    return "4" in codes or "6" in codes
 
 
 def _dominant_status(grp: pd.DataFrame) -> str:
@@ -390,10 +404,10 @@ def _dominant_status(grp: pd.DataFrame) -> str:
 
     Mirrors N13's most_severe_status (notebook N13_sc_eda.ipynb, Step 2 loader cell).
     """
-    codes = grp['TrackStatus'].dropna().astype(str).tolist()
-    chars = [c for c in ''.join(codes) if c in STATUS_SEVERITY]
+    codes = grp["TrackStatus"].dropna().astype(str).tolist()
+    chars = [c for c in "".join(codes) if c in STATUS_SEVERITY]
     if not chars:
-        return '1'
+        return "1"
     return max(chars, key=lambda c: STATUS_SEVERITY[c])
 
 
@@ -417,41 +431,42 @@ def _compute_laptime_features(all_laps: pd.DataFrame, lap_number: int) -> dict:
         Dict with: lap_time_mean_z, lap_time_std_z, lap_time_min_z,
         lap_time_cv, lap_time_trend_5.
     """
-    causal = all_laps[all_laps['LapNumber'] <= lap_number]
+    causal = all_laps[all_laps["LapNumber"] <= lap_number]
     if causal.empty:
         # No prior lap data — return neutral defaults matching the N14 schema.
         # Happens on lap 1 of every replay (no lap has finished yet) and also
         # when the race has been neutralised (all LapTimes NaN under red flag).
         return {
-            'lap_time_mean_z':  0.0,
-            'lap_time_std_z':   0.0,
-            'lap_time_min_z':   0.0,
-            'lap_time_cv':      0.0,
-            'lap_time_trend_5': 1.0,
+            "lap_time_mean_z": 0.0,
+            "lap_time_std_z": 0.0,
+            "lap_time_min_z": 0.0,
+            "lap_time_cv": 0.0,
+            "lap_time_trend_5": 1.0,
         }
 
-    per_lap = causal.groupby('LapNumber').apply(_agg)
+    per_lap = causal.groupby("LapNumber").apply(_agg)
     # apply() on an empty-after-filter group can return a DataFrame with no
     # columns at all — guard before dropna so we don't KeyError on 'lt_mean'.
-    if 'lt_mean' not in per_lap.columns:
+    if "lt_mean" not in per_lap.columns:
         return {
-            'lap_time_mean_z':  0.0,
-            'lap_time_std_z':   0.0,
-            'lap_time_min_z':   0.0,
-            'lap_time_cv':      0.0,
-            'lap_time_trend_5': 1.0,
+            "lap_time_mean_z": 0.0,
+            "lap_time_std_z": 0.0,
+            "lap_time_min_z": 0.0,
+            "lap_time_cv": 0.0,
+            "lap_time_trend_5": 1.0,
         }
-    per_lap = per_lap.dropna(subset=['lt_mean'])
+    per_lap = per_lap.dropna(subset=["lt_mean"])
 
-    lt_mean_z = _zscore(per_lap, 'lt_mean', lap_number)
-    lt_std_z  = _zscore(per_lap, 'lt_std',  lap_number)
-    lt_min_z  = _zscore(per_lap, 'lt_min',  lap_number)
+    lt_mean_z = _zscore(per_lap, "lt_mean", lap_number)
+    lt_std_z = _zscore(per_lap, "lt_std", lap_number)
+    lt_min_z = _zscore(per_lap, "lt_min", lap_number)
     lt_cv = (
-        float(per_lap.loc[lap_number, 'lt_std'] / max(per_lap.loc[lap_number, 'lt_mean'], 1.0))
-        if lap_number in per_lap.index else 0.0
+        float(per_lap.loc[lap_number, "lt_std"] / max(per_lap.loc[lap_number, "lt_mean"], 1.0))
+        if lap_number in per_lap.index
+        else 0.0
     )
 
-    lt_means = per_lap['lt_mean'].values
+    lt_means = per_lap["lt_mean"].values
     n = len(lt_means)
     if n >= 5:
         last5 = lt_means[-5:].mean()
@@ -461,45 +476,45 @@ def _compute_laptime_features(all_laps: pd.DataFrame, lap_number: int) -> dict:
         lt_trend5 = 1.0
 
     return {
-        'lap_time_mean_z':  lt_mean_z,
-        'lap_time_std_z':   lt_std_z,
-        'lap_time_min_z':   lt_min_z,
-        'lap_time_cv':      lt_cv,
-        'lap_time_trend_5': lt_trend5,
+        "lap_time_mean_z": lt_mean_z,
+        "lap_time_std_z": lt_std_z,
+        "lap_time_min_z": lt_min_z,
+        "lap_time_cv": lt_cv,
+        "lap_time_trend_5": lt_trend5,
     }
 
 
 def _compute_driver_tyre_features(cur: pd.DataFrame, prev: pd.DataFrame) -> dict:
     """Compute driver count, tyre life, and pit-stop features for the current lap."""
-    n_drv       = int(cur['Driver'].nunique()) if not cur.empty else 0
-    n_drv_prev  = int(prev['Driver'].nunique()) if not prev.empty else n_drv
+    n_drv = int(cur["Driver"].nunique()) if not cur.empty else 0
+    n_drv_prev = int(prev["Driver"].nunique()) if not prev.empty else n_drv
     n_drv_delta = n_drv - n_drv_prev
 
-    tl      = cur['TyreLife'].dropna()
+    tl = cur["TyreLife"].dropna()
     tl_mean = float(tl.mean()) if not tl.empty else np.nan
-    tl_max  = float(tl.max())  if not tl.empty else np.nan
+    tl_max = float(tl.max()) if not tl.empty else np.nan
 
     high_risk = 0
     for _, r in cur.iterrows():
-        cmp = str(r.get('Compound', '')).upper()
+        cmp = str(r.get("Compound", "")).upper()
         thr = CLIFF_THRESHOLDS.get(cmp, 999)
         try:
-            if float(r['TyreLife']) > thr:
+            if float(r["TyreLife"]) > thr:
                 high_risk += 1
         except (TypeError, ValueError):
             pass
 
-    pit_count = int(cur['PitInTime'].notna().sum()) if 'PitInTime' in cur.columns else 0
-    outlap    = int((cur['TyreLife'] <= 2).sum()) if not cur.empty else 0
+    pit_count = int(cur["PitInTime"].notna().sum()) if "PitInTime" in cur.columns else 0
+    outlap = int((cur["TyreLife"] <= 2).sum()) if not cur.empty else 0
 
     return {
-        'n_drivers':                n_drv,
-        'n_drivers_delta':          n_drv_delta,
-        'tyre_life_mean':           tl_mean,
-        'tyre_life_max':            tl_max,
-        'tyre_age_high_risk_count': high_risk,
-        'active_pitstop_count':     pit_count,
-        'outlap_drivers':           outlap,
+        "n_drivers": n_drv,
+        "n_drivers_delta": n_drv_delta,
+        "tyre_life_mean": tl_mean,
+        "tyre_life_max": tl_max,
+        "tyre_age_high_risk_count": high_risk,
+        "active_pitstop_count": pit_count,
+        "outlap_drivers": outlap,
     }
 
 
@@ -516,19 +531,19 @@ def _compute_track_status_features(all_laps: pd.DataFrame, lap_number: int) -> d
     Returns:
         Dict with model features plus '_cur_code', '_prev_code', '_yel_esc' sentinels.
     """
-    causal_laps = all_laps[all_laps['LapNumber'] <= lap_number]
+    causal_laps = all_laps[all_laps["LapNumber"] <= lap_number]
     if causal_laps.empty:
         # No lap data yet — return green-flag defaults. Matches N14's behaviour
         # when the model receives a pre-race or post-red-flag blank state.
         return {
-            '_cur_code':               '1',
-            '_prev_code':              '1',
-            '_yel_esc':                0,
-            'track_status_enc':        STATUS_ENC.get('1', 0),
-            'status_changed':          0,
-            'status_change_direction': 0,
-            'yellow_escalation_count': 0,
-            'laps_since_last_yellow':  10,
+            "_cur_code": "1",
+            "_prev_code": "1",
+            "_yel_esc": 0,
+            "track_status_enc": STATUS_ENC.get("1", 0),
+            "status_changed": 0,
+            "status_change_direction": 0,
+            "yellow_escalation_count": 0,
+            "laps_since_last_yellow": 10,
         }
 
     # Grouped by lap NUMBER across every car, so a driver a lap down inherits the
@@ -538,32 +553,27 @@ def _compute_track_status_features(all_laps: pd.DataFrame, lap_number: int) -> d
     # `groupby("LapNumber")` union, so keying this on the clock would feed N14 a
     # distribution it never saw. Inference has to reproduce its notebook, and this
     # repo has already paid for three bugs that were exactly that divergence.
-    lap_status = (
-        causal_laps
-        .groupby('LapNumber')
-        .apply(_dominant_status)
-        .sort_index()
-    )
+    lap_status = causal_laps.groupby("LapNumber").apply(_dominant_status).sort_index()
     # Pandas quirk: when the grouped object is empty or apply() returns an
     # empty result, groupby().apply() can yield an empty DataFrame (with the
     # full column schema) instead of an empty Series. The early-return above
     # prevents that, but cheap belt-and-braces check in case of edge cases.
     if not isinstance(lap_status, pd.Series) or lap_status.empty:
         return {
-            '_cur_code':               '1',
-            '_prev_code':              '1',
-            '_yel_esc':                0,
-            'track_status_enc':        STATUS_ENC.get('1', 0),
-            'status_changed':          0,
-            'status_change_direction': 0,
-            'yellow_escalation_count': 0,
-            'laps_since_last_yellow':  10,
+            "_cur_code": "1",
+            "_prev_code": "1",
+            "_yel_esc": 0,
+            "track_status_enc": STATUS_ENC.get("1", 0),
+            "status_changed": 0,
+            "status_change_direction": 0,
+            "yellow_escalation_count": 0,
+            "laps_since_last_yellow": 10,
         }
 
-    cur_code  = str(lap_status.iloc[-1])
+    cur_code = str(lap_status.iloc[-1])
     prev_code = str(lap_status.iloc[-2]) if len(lap_status) > 1 else cur_code
 
-    cur_sev  = STATUS_SEVERITY.get(cur_code, 1)
+    cur_sev = STATUS_SEVERITY.get(cur_code, 1)
     prev_sev = STATUS_SEVERITY.get(prev_code, 1)
 
     # Force plain int dtype — FastF1 stores TrackStatus as a Categorical, and
@@ -575,24 +585,24 @@ def _compute_track_status_features(all_laps: pd.DataFrame, lap_number: int) -> d
         index=lap_status.index,
         dtype=int,
     )
-    escalated  = (sev_series > sev_series.shift(1).fillna(1)).astype(int)
-    yel_esc    = int(escalated.iloc[:-1].tail(3).sum())
+    escalated = (sev_series > sev_series.shift(1).fillna(1)).astype(int)
+    yel_esc = int(escalated.iloc[:-1].tail(3).sum())
 
     lsl, since = [], 10
     for code in lap_status:
-        since = 0 if str(code) != '1' else min(since + 1, 10)
+        since = 0 if str(code) != "1" else min(since + 1, 10)
         lsl.append(since)
     laps_since_yellow = int(lsl[-2]) if len(lsl) > 1 else 10
 
     return {
-        '_cur_code':               cur_code,
-        '_prev_code':              prev_code,
-        '_yel_esc':                yel_esc,
-        'track_status_enc':        STATUS_ENC.get(cur_code, 0),
-        'status_changed':          int(cur_code != prev_code),
-        'status_change_direction': int(cur_sev > prev_sev) - int(cur_sev < prev_sev),
-        'yellow_escalation_count': yel_esc,
-        'laps_since_last_yellow':  laps_since_yellow,
+        "_cur_code": cur_code,
+        "_prev_code": prev_code,
+        "_yel_esc": yel_esc,
+        "track_status_enc": STATUS_ENC.get(cur_code, 0),
+        "status_changed": int(cur_code != prev_code),
+        "status_change_direction": int(cur_sev > prev_sev) - int(cur_sev < prev_sev),
+        "yellow_escalation_count": yel_esc,
+        "laps_since_last_yellow": laps_since_yellow,
     }
 
 
@@ -621,54 +631,53 @@ def _compute_rcm_features(
         yellow_sectors_prev3, rcm_incident_count_prev3.
     """
     had_inc = inc_esc = ys_cur = ys_prev3 = rcm_prev3 = 0
-    _sess = session_meta.get('session')
-    if _sess is not None and hasattr(_sess, 'race_control_messages'):
+    _sess = session_meta.get("session")
+    if _sess is not None and hasattr(_sess, "race_control_messages"):
         rcm = _sess.race_control_messages.copy()
-        if 'Lap' not in rcm.columns:
-            rcm['Lap'] = np.nan
+        if "Lap" not in rcm.columns:
+            rcm["Lap"] = np.nan
 
-        _caution = rcm.get('Flag', pd.Series(dtype=str)).isin(['YELLOW', 'DOUBLE YELLOW', 'RED'])
-        _keyword = (
-            rcm.get('Message', pd.Series(dtype=str)).str.upper().str.contains(
-                _INCIDENT_RE, na=False, regex=True
-            ) &
-            ~rcm.get('Message', pd.Series(dtype=str)).str.upper().str.contains(
-                _EXCLUDE_RE, na=False, regex=True
-            )
+        _caution = rcm.get("Flag", pd.Series(dtype=str)).isin(["YELLOW", "DOUBLE YELLOW", "RED"])
+        _keyword = rcm.get("Message", pd.Series(dtype=str)).str.upper().str.contains(
+            _INCIDENT_RE, na=False, regex=True
+        ) & ~rcm.get("Message", pd.Series(dtype=str)).str.upper().str.contains(
+            _EXCLUDE_RE, na=False, regex=True
         )
         _scope = (
-            rcm['Scope'].str.upper().isin(['TRACK', 'SECTOR']) | rcm['Scope'].isna()
-        ) if 'Scope' in rcm.columns else pd.Series(True, index=rcm.index)
+            (rcm["Scope"].str.upper().isin(["TRACK", "SECTOR"]) | rcm["Scope"].isna())
+            if "Scope" in rcm.columns
+            else pd.Series(True, index=rcm.index)
+        )
         clean = (_caution | _keyword) & _scope
 
-        valid    = set(all_laps['LapNumber'].dropna().astype(int))
-        inc_raw  = set(rcm.loc[clean, 'Lap'].dropna().astype(int))
+        valid = set(all_laps["LapNumber"].dropna().astype(int))
+        inc_raw = set(rcm.loc[clean, "Lap"].dropna().astype(int))
         inc_laps = {l for r in inc_raw for l in (r - 1, r, r + 1)} & valid
 
-        had_inc  = int(lap_number in inc_laps)
+        had_inc = int(lap_number in inc_laps)
         inc_prev = int((lap_number - 1) in inc_laps)
-        inc_esc  = inc_prev * int(cur_code != prev_code)
+        inc_esc = inc_prev * int(cur_code != prev_code)
 
-        if 'Scope' in rcm.columns and 'Flag' in rcm.columns:
-            sect_y    = rcm[
-                rcm['Scope'].str.upper().str.contains('SECTOR', na=False) &
-                rcm['Flag'].str.upper().str.contains('YELLOW', na=False)
+        if "Scope" in rcm.columns and "Flag" in rcm.columns:
+            sect_y = rcm[
+                rcm["Scope"].str.upper().str.contains("SECTOR", na=False)
+                & rcm["Flag"].str.upper().str.contains("YELLOW", na=False)
             ]
-            sy_per_lap = sect_y.groupby('Lap').size()
+            sy_per_lap = sect_y.groupby("Lap").size()
         else:
             sy_per_lap = pd.Series(dtype=int)
 
-        ys_cur    = int(sy_per_lap.get(lap_number, 0))
-        ys_prev3  = sum(int(sy_per_lap.get(l, 0)) for l in range(max(1, lap_number - 3), lap_number))
-        inc_per   = rcm.loc[clean].groupby('Lap').size() if clean.any() else pd.Series(dtype=int)
+        ys_cur = int(sy_per_lap.get(lap_number, 0))
+        ys_prev3 = sum(int(sy_per_lap.get(l, 0)) for l in range(max(1, lap_number - 3), lap_number))
+        inc_per = rcm.loc[clean].groupby("Lap").size() if clean.any() else pd.Series(dtype=int)
         rcm_prev3 = sum(int(inc_per.get(l, 0)) for l in range(max(1, lap_number - 3), lap_number))
 
     return {
-        'had_incident_msg':         had_inc,
-        'incident_escalation':      inc_esc,
-        'yellow_sectors_this_lap':  ys_cur,
-        'yellow_sectors_prev3':     ys_prev3,
-        'rcm_incident_count_prev3': rcm_prev3,
+        "had_incident_msg": had_inc,
+        "incident_escalation": inc_esc,
+        "yellow_sectors_this_lap": ys_cur,
+        "yellow_sectors_prev3": ys_prev3,
+        "rcm_incident_count_prev3": rcm_prev3,
     }
 
 
@@ -678,15 +687,15 @@ def _compute_weather_features(session_meta: dict) -> dict:
     # file for 'TrackTemp' to find both) when they build this same session_meta key, so a
     # hand-built session_meta missing the key resolves to the same temperature this file
     # uses everywhere else instead of silently disagreeing with itself.
-    track_temp       = float(session_meta.get('TrackTemp', 38.0))
-    air_temp         = float(session_meta.get('AirTemp', 28.0))
-    humidity         = float(session_meta.get('Humidity', 50.0))
-    track_temp_start = float(session_meta.get('track_temp_start', track_temp))
+    track_temp = float(session_meta.get("TrackTemp", DEFAULT_TRACK_TEMP_C))
+    air_temp = float(session_meta.get("AirTemp", DEFAULT_AIR_TEMP_C))
+    humidity = float(session_meta.get("Humidity", 50.0))
+    track_temp_start = float(session_meta.get("track_temp_start", track_temp))
     return {
-        'track_temp':       track_temp,
-        'air_temp':         air_temp,
-        'humidity':         humidity,
-        'track_temp_delta': track_temp - track_temp_start,
+        "track_temp": track_temp,
+        "air_temp": air_temp,
+        "humidity": humidity,
+        "track_temp_delta": track_temp - track_temp_start,
     }
 
 
@@ -703,13 +712,13 @@ def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
         Copy with LapTime as Timedelta and Sector*Time columns present (NaT if absent).
     """
     df = laps_df.copy()
-    if 'LapTime' not in df.columns:
-        if 'LapTime_s' in df.columns:
-            df['LapTime'] = pd.to_timedelta(df['LapTime_s'], unit='s')
+    if "LapTime" not in df.columns:
+        if "LapTime_s" in df.columns:
+            df["LapTime"] = pd.to_timedelta(df["LapTime_s"], unit="s")
         else:
-            df['LapTime'] = pd.to_timedelta(90.0, unit='s')
-    elif not hasattr(df['LapTime'].iloc[0], 'total_seconds'):
-        df['LapTime'] = pd.to_timedelta(pd.to_numeric(df['LapTime'], errors='coerce'), unit='s')
+            df["LapTime"] = pd.to_timedelta(90.0, unit="s")
+    elif not hasattr(df["LapTime"].iloc[0], "total_seconds"):
+        df["LapTime"] = pd.to_timedelta(pd.to_numeric(df["LapTime"], errors="coerce"), unit="s")
 
     # Same normalisation for the session elapsed time, and it is load-bearing:
     # _build_overtake_features reads `Time` to compute the gap the way N11 was
@@ -720,10 +729,10 @@ def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
     # leader when the real gap was 33.950 s, which is the difference between "in the
     # DRS window" and "half a minute away". #447 restored the column; this is what
     # lets the agent actually see it.
-    if 'Time' not in df.columns and 'Time_s' in df.columns:
-        df['Time'] = pd.to_timedelta(df['Time_s'], unit='s')
+    if "Time" not in df.columns and "Time_s" in df.columns:
+        df["Time"] = pd.to_timedelta(df["Time_s"], unit="s")
 
-    for col in ('Sector1Time', 'Sector2Time', 'Sector3Time'):
+    for col in ("Sector1Time", "Sector2Time", "Sector3Time"):
         if col not in df.columns:
             df[col] = pd.NaT
 
@@ -740,8 +749,8 @@ def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
     # it would advertise a 3-class reconstruction this frame cannot deliver. If a
     # lap's real track status is needed (yellow/VSC/SC), it has to come from
     # data/raw/, where the neutralised laps are still present.
-    if 'TrackStatus' not in df.columns:
-        df['TrackStatus'] = '1'
+    if "TrackStatus" not in df.columns:
+        df["TrackStatus"] = "1"
 
     return df
 
@@ -749,6 +758,7 @@ def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # Stateless output parser
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _parse_tool_outputs(messages: list) -> dict:
     """Extract numeric probabilities from ToolMessage strings in the agent history.
@@ -763,16 +773,16 @@ def _parse_tool_outputs(messages: list) -> dict:
         Dict with: overtake_prob, sc_prob_3lap, gap_ahead_s, pace_delta_s.
         Missing fields default to 0.0.
     """
-    result = {'overtake_prob': 0.0, 'sc_prob_3lap': 0.0, 'gap_ahead_s': 0.0, 'pace_delta_s': 0.0}
+    result = {"overtake_prob": 0.0, "sc_prob_3lap": 0.0, "gap_ahead_s": 0.0, "pace_delta_s": 0.0}
     for msg in messages:
-        content = getattr(msg, 'content', '')
+        content = getattr(msg, "content", "")
         if not isinstance(content, str):
             continue
         for pattern, key in [
-            (r'P\(overtake\)\s*=\s*(\d+(?:\.\d+)?)', 'overtake_prob'),
-            (r'P\(SC 3-lap\)\s*=\s*(\d+(?:\.\d+)?)', 'sc_prob_3lap'),
-            (r'gap=([\d.]+)s',                        'gap_ahead_s'),
-            (r'pace_delta=([-\d.]+)s/lap',            'pace_delta_s'),
+            (r"P\(overtake\)\s*=\s*(\d+(?:\.\d+)?)", "overtake_prob"),
+            (r"P\(SC 3-lap\)\s*=\s*(\d+(?:\.\d+)?)", "sc_prob_3lap"),
+            (r"gap=([\d.]+)s", "gap_ahead_s"),
+            (r"pace_delta=([-\d.]+)s/lap", "pace_delta_s"),
         ]:
             m = re.search(pattern, content)
             if m and result[key] == 0.0:
@@ -789,6 +799,7 @@ try:
     from langchain_core.messages import HumanMessage
     from langchain_openai import ChatOpenAI
     from langchain.agents import create_agent
+
     _LANGGRAPH_AVAILABLE = True
 except ImportError:
     _LANGGRAPH_AVAILABLE = False
@@ -844,6 +855,7 @@ Your job is to assess two dimensions of strategic threat per lap:
 # RaceSituationAgent — encapsulated agent class
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class RaceSituationAgent:
     """Encapsulated Race Situation Agent combining N12 overtake and N14 SC models.
 
@@ -862,10 +874,10 @@ class RaceSituationAgent:
 
     def __init__(self, cfg: RaceSituationConfig = CFG) -> None:
         self.cfg: RaceSituationConfig = cfg
-        self.laps_df: pd.DataFrame    = pd.DataFrame()
-        self.session_meta: dict       = {}
-        self._react_agent             = None
-        self._tools: list             = self._build_tools()
+        self.laps_df: pd.DataFrame = pd.DataFrame()
+        self.session_meta: dict = {}
+        self._react_agent = None
+        self._tools: list = self._build_tools()
 
     # ── Feature builders (instance methods: use self.cfg) ─────────────────────
 
@@ -875,7 +887,7 @@ class RaceSituationAgent:
         driver_y_lap: pd.Series,
         laps_recent: pd.DataFrame,
         circuit_cluster: int,
-        gp_name: str = '',
+        gp_name: str = "",
         year: int = 2025,
     ) -> pd.DataFrame:
         """Build the 15 N12 overtake model features from a driver pair at one lap.
@@ -902,71 +914,87 @@ class RaceSituationAgent:
             Single-row DataFrame with 15 columns in cfg.overtake_features order.
             compound_x/y cast to pandas category for LightGBM categorical encoding.
         """
-        t_x = driver_x_lap.get('Time')
-        t_y = driver_y_lap.get('Time')
+        t_x = driver_x_lap.get("Time")
+        t_y = driver_y_lap.get("Time")
         if pd.notna(t_x) and pd.notna(t_y):
             gap_ahead_s = float((t_x - t_y).total_seconds())
         else:
-            gap_ahead_s = float((driver_x_lap['LapTime'] - driver_y_lap['LapTime']).total_seconds())
+            gap_ahead_s = float((driver_x_lap["LapTime"] - driver_y_lap["LapTime"]).total_seconds())
         gap_ahead_s = max(0.0, gap_ahead_s)
 
-        pace_delta_s   = float((driver_x_lap['LapTime'] - driver_y_lap['LapTime']).total_seconds())
-        tyre_life_x    = int(driver_x_lap['TyreLife'])
-        tyre_life_y    = int(driver_y_lap['TyreLife'])
+        pace_delta_s = float((driver_x_lap["LapTime"] - driver_y_lap["LapTime"]).total_seconds())
+        tyre_life_x = int(driver_x_lap["TyreLife"])
+        tyre_life_y = int(driver_y_lap["TyreLife"])
         tyre_life_diff = tyre_life_x - tyre_life_y
-        speed_trap_delta = (
-            float(driver_x_lap.get('SpeedST', 300.0)) - float(driver_y_lap.get('SpeedST', 300.0))
+        speed_trap_delta = float(driver_x_lap.get("SpeedST", 300.0)) - float(
+            driver_y_lap.get("SpeedST", 300.0)
         )
-        lap_number      = int(driver_x_lap['LapNumber'])
+        lap_number = int(driver_x_lap["LapNumber"])
         # DRS is unavailable under SC/VSC (Art. 22.1(c): activation only resumes one lap
         # after a safety car period, two in the 2023 regulation). The gap-based rule
         # below cannot know that, so a neutralised lap used to report an open DRS window
         # purely because the field had bunched to under a second: the feature was live
         # and lying, on exactly the laps where it is regulated shut.
-        drs_allowed     = not _is_neutralised(driver_x_lap.get('TrackStatus'))
-        drs_window      = int(gap_ahead_s < 1.0) if drs_allowed else 0
-        drs_ready_gap   = gap_ahead_s * drs_window
+        drs_allowed = not _is_neutralised(driver_x_lap.get("TrackStatus"))
+        drs_window = int(gap_ahead_s < 1.0) if drs_allowed else 0
+        drs_ready_gap = gap_ahead_s * drs_window
 
-        compound_x = _abs_compound(str(driver_x_lap.get('Compound', 'MEDIUM')), gp_name, year)
-        compound_y = _abs_compound(str(driver_y_lap.get('Compound', 'MEDIUM')), gp_name, year)
+        compound_x = _abs_compound(str(driver_x_lap.get("Compound", "MEDIUM")), gp_name, year)
+        compound_y = _abs_compound(str(driver_y_lap.get("Compound", "MEDIUM")), gp_name, year)
         gap_pace_product = gap_ahead_s * pace_delta_s
 
-        _dx = laps_recent[laps_recent['Driver'] == driver_x_lap['Driver']].sort_values('LapNumber').tail(3)
-        _dy = laps_recent[laps_recent['Driver'] == driver_y_lap['Driver']].sort_values('LapNumber').tail(3)
+        _dx = (
+            laps_recent[laps_recent["Driver"] == driver_x_lap["Driver"]]
+            .sort_values("LapNumber")
+            .tail(3)
+        )
+        _dy = (
+            laps_recent[laps_recent["Driver"] == driver_y_lap["Driver"]]
+            .sort_values("LapNumber")
+            .tail(3)
+        )
 
         if len(_dx) >= 2 and len(_dy) >= 2:
-            _dx_t = _dx['LapTime'].dt.total_seconds().values
-            _dy_t = _dy['LapTime'].dt.total_seconds().values
+            _dx_t = _dx["LapTime"].dt.total_seconds().values
+            _dy_t = _dy["LapTime"].dt.total_seconds().values
             n_shared = min(len(_dx_t), len(_dy_t))
             pace_delta_rolling3 = float((_dx_t[:n_shared] - _dy_t[:n_shared]).mean())
 
-            _tx = _dx['Time'] if 'Time' in _dx.columns else None
-            if _tx is not None and pd.notna(_dx.iloc[-2]['Time']) and pd.notna(_dy.iloc[-2]['Time']):
-                prev_gap  = float((_dx.iloc[-2]['Time'] - _dy.iloc[-2]['Time']).total_seconds())
+            _tx = _dx["Time"] if "Time" in _dx.columns else None
+            if (
+                _tx is not None
+                and pd.notna(_dx.iloc[-2]["Time"])
+                and pd.notna(_dy.iloc[-2]["Time"])
+            ):
+                prev_gap = float((_dx.iloc[-2]["Time"] - _dy.iloc[-2]["Time"]).total_seconds())
                 gap_trend = gap_ahead_s - prev_gap
             else:
                 gap_trend = 0.0
         else:
             pace_delta_rolling3 = pace_delta_s
-            gap_trend           = 0.0
+            gap_trend = 0.0
 
-        return pd.DataFrame([{
-            'gap_ahead_s':         gap_ahead_s,
-            'pace_delta_s':        pace_delta_s,
-            'tyre_life_x':         tyre_life_x,
-            'tyre_life_y':         tyre_life_y,
-            'tyre_life_diff':      tyre_life_diff,
-            'speed_trap_delta':    speed_trap_delta,
-            'LapNumber':           lap_number,
-            'drs_window':          drs_window,
-            'compound_x':          compound_x,
-            'compound_y':          compound_y,
-            'circuit_cluster':     circuit_cluster,
-            'gap_pace_product':    gap_pace_product,
-            'drs_ready_gap':       drs_ready_gap,
-            'gap_trend':           gap_trend,
-            'pace_delta_rolling3': pace_delta_rolling3,
-        }])[self.cfg.overtake_features]
+        return pd.DataFrame(
+            [
+                {
+                    "gap_ahead_s": gap_ahead_s,
+                    "pace_delta_s": pace_delta_s,
+                    "tyre_life_x": tyre_life_x,
+                    "tyre_life_y": tyre_life_y,
+                    "tyre_life_diff": tyre_life_diff,
+                    "speed_trap_delta": speed_trap_delta,
+                    "LapNumber": lap_number,
+                    "drs_window": drs_window,
+                    "compound_x": compound_x,
+                    "compound_y": compound_y,
+                    "circuit_cluster": circuit_cluster,
+                    "gap_pace_product": gap_pace_product,
+                    "drs_ready_gap": drs_ready_gap,
+                    "gap_trend": gap_trend,
+                    "pace_delta_rolling3": pace_delta_rolling3,
+                }
+            ]
+        )[self.cfg.overtake_features]
 
     def _build_sc_features(
         self,
@@ -992,17 +1020,17 @@ class RaceSituationAgent:
         Returns:
             Single-row DataFrame with 32 columns in cfg.sc_features order.
         """
-        cur  = all_laps[all_laps['LapNumber'] == lap_number]
-        prev = all_laps[all_laps['LapNumber'] == lap_number - 1]
+        cur = all_laps[all_laps["LapNumber"] == lap_number]
+        prev = all_laps[all_laps["LapNumber"] == lap_number - 1]
 
         feat: dict = {}
         feat.update(_compute_laptime_features(all_laps, lap_number))
         feat.update(_compute_driver_tyre_features(cur, prev))
 
-        ts_feat   = _compute_track_status_features(all_laps, lap_number)
-        cur_code  = ts_feat.pop('_cur_code')
-        prev_code = ts_feat.pop('_prev_code')
-        ts_feat.pop('_yel_esc')
+        ts_feat = _compute_track_status_features(all_laps, lap_number)
+        cur_code = ts_feat.pop("_cur_code")
+        prev_code = ts_feat.pop("_prev_code")
+        ts_feat.pop("_yel_esc")
         feat.update(ts_feat)
 
         feat.update(_compute_rcm_features(all_laps, lap_number, session_meta, cur_code, prev_code))
@@ -1010,28 +1038,28 @@ class RaceSituationAgent:
 
         # DEFAULT_TOTAL_LAPS: see src/agents/_shared_defaults.py for why this fallback
         # exists and why it is single-sourced across the strategy agents.
-        total_laps = int(session_meta.get('total_laps', DEFAULT_TOTAL_LAPS))
-        is_lap1    = int(lap_number == 1)
-        lap_pct    = float(lap_number) / max(total_laps, 1)
+        total_laps = int(session_meta.get("total_laps", DEFAULT_TOTAL_LAPS))
+        is_lap1 = int(lap_number == 1)
+        lap_pct = float(lap_number) / max(total_laps, 1)
 
         anom_hard = 0
-        hist = all_laps[all_laps['LapNumber'] < lap_number]
+        hist = all_laps[all_laps["LapNumber"] < lap_number]
         if not cur.empty and not hist.empty:
-            for drv in cur['Driver'].unique():
-                h = hist[hist['Driver'] == drv]['LapTime'].dt.total_seconds().tail(5)
+            for drv in cur["Driver"].unique():
+                h = hist[hist["Driver"] == drv]["LapTime"].dt.total_seconds().tail(5)
                 if len(h) >= 2:
-                    med    = h.median()
-                    lt_cur = cur.loc[cur['Driver'] == drv, 'LapTime'].dt.total_seconds()
+                    med = h.median()
+                    lt_cur = cur.loc[cur["Driver"] == drv, "LapTime"].dt.total_seconds()
                     if not lt_cur.empty and med > 0 and float(lt_cur.iloc[0]) / med > 1.30:
                         anom_hard += 1
 
-        yel_esc = feat.get('yellow_escalation_count', 0)
-        feat['anomaly_and_yellow'] = int(anom_hard > 0 and yel_esc > 0)
-        feat['lap1_chaos']         = is_lap1 * abs(feat.get('n_drivers_delta', 0))
-        feat['circuit_cluster']    = int(session_meta.get('circuit_cluster', 0))
-        feat['circuit_sc_rate']    = float(session_meta.get('circuit_sc_rate', 0.10))
-        feat['lap_pct']            = lap_pct
-        feat['is_lap1']            = is_lap1
+        yel_esc = feat.get("yellow_escalation_count", 0)
+        feat["anomaly_and_yellow"] = int(anom_hard > 0 and yel_esc > 0)
+        feat["lap1_chaos"] = is_lap1 * abs(feat.get("n_drivers_delta", 0))
+        feat["circuit_cluster"] = int(session_meta.get("circuit_cluster", 0))
+        feat["circuit_sc_rate"] = float(session_meta.get("circuit_sc_rate", 0.10))
+        feat["lap_pct"] = lap_pct
+        feat["is_lap1"] = is_lap1
 
         return pd.DataFrame([feat])[self.cfg.sc_features]
 
@@ -1054,12 +1082,12 @@ class RaceSituationAgent:
             An error string naming the problem, or None when lap_number is valid.
         """
         if lap_number < 1:
-            return f'invalid lap_number {lap_number} — laps start at 1'
-        current = getattr(self, '_current_lap', None)
+            return f"invalid lap_number {lap_number} — laps start at 1"
+        current = getattr(self, "_current_lap", None)
         if current is not None and lap_number > current:
             return (
-                f'invalid lap_number {lap_number} — the race is currently at lap '
-                f'{current}; cannot query a future lap'
+                f"invalid lap_number {lap_number} — the race is currently at lap "
+                f"{current}; cannot query a future lap"
             )
         return None
 
@@ -1080,15 +1108,15 @@ class RaceSituationAgent:
             or None when every driver is live (or presence is unknown, in which
             case the guard disables rather than rejecting every target).
         """
-        live = getattr(self, '_live_drivers', None)
+        live = getattr(self, "_live_drivers", None)
         if live is None:
             return None
         unknown = [d for d in drivers if d not in live]
         if not unknown:
             return None
         return (
-            f'{" and ".join(unknown)} not on track at lap {lap_number}. '
-            f'Drivers racing this lap: {", ".join(sorted(live))}. Pick from that list.'
+            f"{' and '.join(unknown)} not on track at lap {lap_number}. "
+            f"Drivers racing this lap: {', '.join(sorted(live))}. Pick from that list."
         )
 
     # ── LangChain tool factory ────────────────────────────────────────────────
@@ -1125,50 +1153,54 @@ class RaceSituationAgent:
             """
             lap_err = agent._lap_range_error(lap_number)
             if lap_err:
-                return f'Overtake scoring REFUSED — {lap_err}'
+                return f"Overtake scoring REFUSED — {lap_err}"
             drv_err = agent._unknown_driver_error((driver_x, driver_y), lap_number)
             if drv_err:
-                return f'Overtake scoring REFUSED — {drv_err}'
+                return f"Overtake scoring REFUSED — {drv_err}"
 
             x_rows = agent.laps_df[
-                (agent.laps_df['Driver'] == driver_x) & (agent.laps_df['LapNumber'] == lap_number)
+                (agent.laps_df["Driver"] == driver_x) & (agent.laps_df["LapNumber"] == lap_number)
             ]
             y_rows = agent.laps_df[
-                (agent.laps_df['Driver'] == driver_y) & (agent.laps_df['LapNumber'] == lap_number)
+                (agent.laps_df["Driver"] == driver_y) & (agent.laps_df["LapNumber"] == lap_number)
             ]
 
             if x_rows.empty or y_rows.empty:
-                return f'No lap data for {driver_x} or {driver_y} at lap {lap_number}'
+                return f"No lap data for {driver_x} or {driver_y} at lap {lap_number}"
 
             laps_recent = agent.laps_df[
-                agent.laps_df['Driver'].isin([driver_x, driver_y]) &
-                (agent.laps_df['LapNumber'] >= lap_number - 3) &
-                (agent.laps_df['LapNumber'] <= lap_number)
+                agent.laps_df["Driver"].isin([driver_x, driver_y])
+                & (agent.laps_df["LapNumber"] >= lap_number - 3)
+                & (agent.laps_df["LapNumber"] <= lap_number)
             ]
 
             feat_df = agent._build_overtake_features(
-                x_rows.iloc[0], y_rows.iloc[0], laps_recent,
-                circuit_cluster = agent.session_meta.get('circuit_cluster', 0),
-                gp_name         = agent.session_meta.get('gp_name', ''),
-                year            = agent.session_meta.get('year', 2025),
+                x_rows.iloc[0],
+                y_rows.iloc[0],
+                laps_recent,
+                circuit_cluster=agent.session_meta.get("circuit_cluster", 0),
+                gp_name=agent.session_meta.get("gp_name", ""),
+                year=agent.session_meta.get("year", 2025),
             )
 
-            for i, col in enumerate(['compound_x', 'compound_y', 'circuit_cluster']):
+            for i, col in enumerate(["compound_x", "compound_y", "circuit_cluster"]):
                 training_cats = agent.cfg.overtake_model._Booster.pandas_categorical[i]
-                feat_df[col]  = pd.Categorical(feat_df[col], categories=training_cats)
+                feat_df[col] = pd.Categorical(feat_df[col], categories=training_cats)
 
-            raw_proba   = agent.cfg.overtake_model.predict_proba(feat_df)[:, 1]
-            calib_proba = agent.cfg.overtake_calibrator.predict_proba(raw_proba.reshape(-1, 1))[:, 1][0]
+            raw_proba = agent.cfg.overtake_model.predict_proba(feat_df)[:, 1]
+            calib_proba = agent.cfg.overtake_calibrator.predict_proba(raw_proba.reshape(-1, 1))[
+                :, 1
+            ][0]
 
-            gap  = feat_df['gap_ahead_s'].iloc[0]
-            pace = feat_df['pace_delta_s'].iloc[0]
-            drs  = 'active' if feat_df['drs_window'].iloc[0] else 'inactive'
+            gap = feat_df["gap_ahead_s"].iloc[0]
+            pace = feat_df["pace_delta_s"].iloc[0]
+            drs = "active" if feat_df["drs_window"].iloc[0] else "inactive"
 
             return (
-                f'P(overtake) = {calib_proba:.3f} | '
-                f'gap={gap:.2f}s | '
-                f'pace_delta={pace:.3f}s/lap | '
-                f'DRS: {drs}'
+                f"P(overtake) = {calib_proba:.3f} | "
+                f"gap={gap:.2f}s | "
+                f"pace_delta={pace:.3f}s/lap | "
+                f"DRS: {drs}"
             )
 
         @lc_tool
@@ -1186,27 +1218,34 @@ class RaceSituationAgent:
             """
             lap_err = agent._lap_range_error(lap_number)
             if lap_err:
-                return f'SC scoring REFUSED — {lap_err}'
+                return f"SC scoring REFUSED — {lap_err}"
             if len(agent.laps_df) < 10:
-                return f'Insufficient lap data at lap {lap_number}'
+                return f"Insufficient lap data at lap {lap_number}"
 
             feat_df = agent._build_sc_features(agent.laps_df, lap_number, agent.session_meta)
 
-            raw_proba   = agent.cfg.sc_model.predict_proba(feat_df)[:, 1]
+            raw_proba = agent.cfg.sc_model.predict_proba(feat_df)[:, 1]
             calib_proba = agent.cfg.sc_calibrator.predict_proba(raw_proba.reshape(-1, 1))[:, 1][0]
 
-            lt_std_z     = feat_df['lap_time_std_z'].iloc[0]
-            sc_rate      = feat_df['circuit_sc_rate'].iloc[0]
-            status_enc   = int(feat_df['track_status_enc'].iloc[0])
-            had_incident = int(feat_df['had_incident_msg'].iloc[0])
+            lt_std_z = feat_df["lap_time_std_z"].iloc[0]
+            sc_rate = feat_df["circuit_sc_rate"].iloc[0]
+            status_enc = int(feat_df["track_status_enc"].iloc[0])
+            had_incident = int(feat_df["had_incident_msg"].iloc[0])
 
-            _status_desc = {0: 'green', 1: 'yellow', 2: 'red flag', 3: 'VSC ending', 4: 'VSC', 5: 'SC'}
+            _status_desc = {
+                0: "green",
+                1: "yellow",
+                2: "red flag",
+                3: "VSC ending",
+                4: "VSC",
+                5: "SC",
+            }
             return (
-                f'P(SC 3-lap) = {calib_proba:.3f} | '
-                f'lap_time_std_z={lt_std_z:.2f} | '
-                f'circuit_sc_rate={sc_rate:.2f} | '
-                f'status: {_status_desc.get(status_enc, "unknown")} | '
-                f'{"incident flagged" if had_incident else "no incidents"}'
+                f"P(SC 3-lap) = {calib_proba:.3f} | "
+                f"lap_time_std_z={lt_std_z:.2f} | "
+                f"circuit_sc_rate={sc_rate:.2f} | "
+                f"status: {_status_desc.get(status_enc, 'unknown')} | "
+                f"{'incident flagged' if had_incident else 'no incidents'}"
             )
 
         return [predict_overtake_tool, predict_sc_tool]
@@ -1216,9 +1255,9 @@ class RaceSituationAgent:
     def get_react_agent(
         self,
         provider: str = None,
-        model_name: str = 'gpt-4.1-mini',
-        base_url: str = 'http://localhost:1234/v1',
-        api_key: str = 'lm-studio',
+        model_name: str = "gpt-4.1-mini",
+        base_url: str = "http://localhost:1234/v1",
+        api_key: str = "lm-studio",
     ):
         """Return the LangGraph ReAct agent, creating it on the first call (lazy).
 
@@ -1238,17 +1277,25 @@ class RaceSituationAgent:
             ImportError: When LangGraph / LangChain are not installed.
         """
         if not _LANGGRAPH_AVAILABLE:
-            raise ImportError('LangGraph / LangChain not installed.')
+            raise ImportError("LangGraph / LangChain not installed.")
 
         if self._react_agent is not None:
             return self._react_agent
 
         import os
-        if provider is None:
-            provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
 
-        if provider == 'lmstudio':
-            llm = ChatOpenAI(model=model_name, base_url=base_url, api_key=api_key, temperature=0, timeout=120, max_retries=1)
+        if provider is None:
+            provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
+
+        if provider == "lmstudio":
+            llm = ChatOpenAI(
+                model=model_name,
+                base_url=base_url,
+                api_key=api_key,
+                temperature=0,
+                timeout=120,
+                max_retries=1,
+            )
         else:
             llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=1)
 
@@ -1282,16 +1329,16 @@ class RaceSituationAgent:
             RaceSituationOutput with overtake_prob, sc_prob_3lap, threat_level,
             gap_ahead_s, pace_delta_s, and LLM reasoning string.
         """
-        session     = lap_state['session']
-        driver      = lap_state['driver']
-        rival_ahead = lap_state.get('rival_ahead')
-        lap_number  = lap_state['lap_number']
-        gp_name     = lap_state['gp_name']
-        event_name  = lap_state['event_name']
+        session = lap_state["session"]
+        driver = lap_state["driver"]
+        rival_ahead = lap_state.get("rival_ahead")
+        lap_number = lap_state["lap_number"]
+        gp_name = lap_state["gp_name"]
+        event_name = lap_state["event_name"]
 
         self.laps_df = session.laps.pick_accurate().copy()
-        _clean       = self.laps_df[self.laps_df['TrackStatus'] == '1']
-        _wx          = session.weather_data
+        _clean = self.laps_df[self.laps_df["TrackStatus"] == "1"]
+        _wx = session.weather_data
 
         # Who is actually on track at this lap. session.laps carries the WHOLE race
         # (not just laps up to lap_number), so without this a free-text driver_x/
@@ -1300,23 +1347,27 @@ class RaceSituationAgent:
         # (#476) — mirrors pit_strategy_agent's `_live_drivers` (#462). Empty means
         # we could not tell (e.g. lap_number outside the session), so the guard
         # disables (None) rather than rejecting every target.
-        _at_lap = self.laps_df.loc[self.laps_df['LapNumber'] == lap_number, 'Driver'].dropna()
+        _at_lap = self.laps_df.loc[self.laps_df["LapNumber"] == lap_number, "Driver"].dropna()
         self._live_drivers = set(_at_lap) | {driver} if len(_at_lap) else None
-        self._current_lap  = lap_number
+        self._current_lap = lap_number
 
         self.session_meta = {
-            'session':          session,
-            'gp_name':          gp_name,
-            'event_name':       event_name,
-            'year':             lap_state.get('year', 2025),
-            'circuit_cluster':  self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'circuit_sc_rate':  self.cfg.sc_rate_for(event_name),
-            'total_laps':       int(session.total_laps),
-            'fastest_lap_s':    _clean['LapTime'].min().total_seconds(),
-            'AirTemp':          float(_wx['AirTemp'].mean())    if 'AirTemp'   in _wx else 28.0,
-            'TrackTemp':        float(_wx['TrackTemp'].mean())  if 'TrackTemp' in _wx else 38.0,
-            'Humidity':         float(_wx['Humidity'].mean())   if 'Humidity'  in _wx else 50.0,
-            'track_temp_start': float(_wx['TrackTemp'].iloc[0]) if 'TrackTemp' in _wx else 38.0,
+            "session": session,
+            "gp_name": gp_name,
+            "event_name": event_name,
+            "year": lap_state.get("year", 2025),
+            "circuit_cluster": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
+            "total_laps": int(session.total_laps),
+            "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
+            "AirTemp": float(_wx["AirTemp"].mean()) if "AirTemp" in _wx else 28.0,
+            "TrackTemp": float(_wx["TrackTemp"].mean())
+            if "TrackTemp" in _wx
+            else DEFAULT_TRACK_TEMP_C,
+            "Humidity": float(_wx["Humidity"].mean()) if "Humidity" in _wx else 50.0,
+            "track_temp_start": float(_wx["TrackTemp"].iloc[0])
+            if "TrackTemp" in _wx
+            else DEFAULT_TRACK_TEMP_C,
         }
 
         # Carry the RCM events into _run_core so the SC override can read them
@@ -1352,31 +1403,32 @@ class RaceSituationAgent:
         Returns:
             RaceSituationOutput with all fields populated.
         """
-        d      = lap_state['driver']
-        meta   = lap_state['session_meta']
-        wx     = lap_state.get('weather', {})
-        rivals = lap_state.get('rivals', [])
+        d = lap_state["driver"]
+        meta = lap_state["session_meta"]
+        wx = lap_state.get("weather", {})
+        rivals = lap_state.get("rivals", [])
 
-        lap_number = lap_state['lap_number']
-        driver     = meta['driver']
-        gp_name    = meta.get('gp_name', '')
+        lap_number = lap_state["lap_number"]
+        driver = meta["driver"]
+        gp_name = meta.get("gp_name", "")
         # DEFAULT_TOTAL_LAPS: see src/agents/_shared_defaults.py.
-        total_laps = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
-        year       = meta.get('year', 2025)
+        total_laps = meta.get("total_laps", DEFAULT_TOTAL_LAPS)
+        year = meta.get("year", 2025)
 
         # #465 (F6): a defaulted position (previously `.get('position', 20)`) is a
         # SEARCHABLE value, not a safe placeholder — if the real grid has a car at
         # P19, "unknown position" and "genuinely P20" silently produce the same
         # rival_ahead lookup. An unknown position must propagate as "no rival
         # computable", not guess P20.
-        driver_pos  = d.get('position')
+        driver_pos = d.get("position")
         rival_ahead = (
-            next((r['driver'] for r in rivals if r.get('position') == driver_pos - 1), None)
-            if driver_pos is not None else None
+            next((r["driver"] for r in rivals if r.get("position") == driver_pos - 1), None)
+            if driver_pos is not None
+            else None
         )
 
         self.laps_df = _ensure_timedelta_laps(laps_df)
-        event_name   = meta.get('event_name', gp_name)
+        event_name = meta.get("event_name", gp_name)
 
         # Who is actually on track this lap, from the RSM's `rivals` list (a car that
         # retired simply is not in it — the same answer a timing screen gives). Used
@@ -1385,27 +1437,28 @@ class RaceSituationAgent:
         # (#462). An empty rivals list means the roster is unknown, not "only our car
         # is racing", so it disables the guard (None) rather than rejecting every
         # target — same convention as pit_strategy_agent.run_from_state.
-        on_track = {r['driver'] for r in rivals if r.get('driver')}
+        on_track = {r["driver"] for r in rivals if r.get("driver")}
         self._live_drivers = on_track | {driver} if on_track else None
-        self._current_lap  = lap_number
+        self._current_lap = lap_number
 
         self.session_meta = {
-            'session':          None,
-            'gp_name':          gp_name,
-            'event_name':       event_name,
-            'year':             year,
-            'circuit_cluster':  self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'circuit_sc_rate':  self.cfg.sc_rate_for(event_name),
-            'total_laps':       total_laps,
-            'fastest_lap_s':    float(self.laps_df['LapTime'].dt.total_seconds().min())
-                                if len(self.laps_df) > 0 else 90.0,
+            "session": None,
+            "gp_name": gp_name,
+            "event_name": event_name,
+            "year": year,
+            "circuit_cluster": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
+            "total_laps": total_laps,
+            "fastest_lap_s": float(self.laps_df["LapTime"].dt.total_seconds().min())
+            if len(self.laps_df) > 0
+            else 90.0,
             # reading_or_default, not .get(key, default): the producers report an
             # unmeasured reading as the key PRESENT holding None, which .get's default
             # never catches, and _compute_weather_features' float() then raises. That
             # 422'd /recommend on every 2025 lap (#788) — see the helper's docstring.
-            'AirTemp':          reading_or_default(wx, 'air_temp',   28.0),
-            'TrackTemp':        reading_or_default(wx, 'track_temp', 38.0),
-            'Humidity':         reading_or_default(wx, 'humidity',   50.0),
+            "AirTemp": reading_or_default(wx, "air_temp", DEFAULT_AIR_TEMP_C),
+            "TrackTemp": reading_or_default(wx, "track_temp", DEFAULT_TRACK_TEMP_C),
+            "Humidity": reading_or_default(wx, "humidity", 50.0),
             # The session's FIRST track temp, which the RSM now supplies. This used to
             # read `track_temp` — the CURRENT one — so `track_temp_delta` came out 0.0 on
             # every lap of every race, on every shipping path (CLI, arcade, backend,
@@ -1417,7 +1470,7 @@ class RaceSituationAgent:
             # exactly where a late SC decides a result. Falling back to the current temp
             # would reinstate the bug silently, so an absent value degrades to the
             # training default instead.
-            'track_temp_start': wx.get('track_temp_start') or 38.0,
+            "track_temp_start": wx.get("track_temp_start") or DEFAULT_TRACK_TEMP_C,
         }
 
         # Carry the RCM events into _run_core so the SC override can read them.
@@ -1443,25 +1496,25 @@ class RaceSituationAgent:
             Fully populated RaceSituationOutput.
         """
         if not _LANGGRAPH_AVAILABLE:
-            raise ImportError('LangGraph / LangChain not installed.')
+            raise ImportError("LangGraph / LangChain not installed.")
 
         if rival_ahead:
             message = (
-                f'Assess the race situation for driver {driver} at lap {lap_number}. '
-                f'The car ahead is {rival_ahead}. '
-                f'Determine the overtaking probability and Safety Car risk, then provide a threat level.'
+                f"Assess the race situation for driver {driver} at lap {lap_number}. "
+                f"The car ahead is {rival_ahead}. "
+                f"Determine the overtaking probability and Safety Car risk, then provide a threat level."
             )
         else:
             message = (
-                f'Assess the race situation for driver {driver} at lap {lap_number}. '
-                f'No car is within overtaking range (gap > 2.5s). '
-                f'Determine the Safety Car risk and provide a threat level.'
+                f"Assess the race situation for driver {driver} at lap {lap_number}. "
+                f"No car is within overtaking range (gap > 2.5s). "
+                f"Determine the Safety Car risk and provide a threat level."
             )
 
         react_agent = self.get_react_agent()
-        response    = react_agent.invoke({'messages': [HumanMessage(content=message)]})
-        parsed      = _parse_tool_outputs(response['messages'])
-        reasoning   = response['messages'][-1].content
+        response = react_agent.invoke({"messages": [HumanMessage(content=message)]})
+        parsed = _parse_tool_outputs(response["messages"])
+        reasoning = response["messages"][-1].content
 
         # Post-hoc override: when the lap's RCM events confirm a neutralisation is
         # currently deployed, force sc_prob_3lap to 1.0 and flag the output so downstream
@@ -1470,10 +1523,10 @@ class RaceSituationAgent:
         # the patch. The SC/VSC split (#471) rides on the same signal: both are
         # neutralisations (overtake_prob = 0, sc_prob_3lap = 1.0), but only the KIND
         # changes the pit-time saving, carried downstream on vsc_active.
-        neutralization    = _neutralization_from_rcm(getattr(self, "_pending_rcm_events", None) or [])
-        is_neutralized    = neutralization is not Neutralization.NONE
-        is_vsc            = neutralization is Neutralization.VSC
-        raw_sc_prob       = round(parsed['sc_prob_3lap'], 3)
+        neutralization = _neutralization_from_rcm(getattr(self, "_pending_rcm_events", None) or [])
+        is_neutralized = neutralization is not Neutralization.NONE
+        is_vsc = neutralization is Neutralization.VSC
+        raw_sc_prob = round(parsed["sc_prob_3lap"], 3)
         effective_sc_prob = 1.0 if is_neutralized else raw_sc_prob
 
         # Art. 55.8 (SC) / 56.6 (VSC): no overtaking on track. N12 predicts a RACING
@@ -1484,10 +1537,10 @@ class RaceSituationAgent:
         # lengths (55.7/55.10) and pace_delta collapses to the FIA ECU delta. So the model
         # is not merely imprecise here, it is inapplicable: 0.0 is the correct value and
         # the honest one, and it holds identically under a VSC (56.6).
-        raw_overtake_prob       = round(parsed['overtake_prob'], 3)
+        raw_overtake_prob = round(parsed["overtake_prob"], 3)
         effective_overtake_prob = 0.0 if is_neutralized else raw_overtake_prob
 
-        _kind_label       = "VIRTUAL_SAFETY_CAR_DEPLOYED" if is_vsc else "SAFETY_CAR_DEPLOYED"
+        _kind_label = "VIRTUAL_SAFETY_CAR_DEPLOYED" if is_vsc else "SAFETY_CAR_DEPLOYED"
         _overtake_article = "56.6" if is_vsc else "55.8"
         effective_reasoning = (
             reasoning
@@ -1501,19 +1554,20 @@ class RaceSituationAgent:
         )
 
         return RaceSituationOutput(
-            overtake_prob       = effective_overtake_prob,
-            sc_prob_3lap        = effective_sc_prob,
-            gap_ahead_s         = round(parsed['gap_ahead_s'],   2),
-            pace_delta_s        = round(parsed['pace_delta_s'],  3),
-            reasoning           = effective_reasoning,
-            sc_currently_active = is_neutralized,
-            vsc_active          = is_vsc,
+            overtake_prob=effective_overtake_prob,
+            sc_prob_3lap=effective_sc_prob,
+            gap_ahead_s=round(parsed["gap_ahead_s"], 2),
+            pace_delta_s=round(parsed["pace_delta_s"], 3),
+            reasoning=effective_reasoning,
+            sc_currently_active=is_neutralized,
+            vsc_active=is_vsc,
         )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RCM context override helper
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _classify_rcm_events(rcm_events: list | None) -> list[str]:
     """Classify a lap's RCM events into canonical event-type strings.
@@ -1545,14 +1599,18 @@ def _classify_rcm_events(rcm_events: list | None) -> list[str]:
             classified.append(_radio._classify_rcm_event(ev))
             continue
         if isinstance(ev, dict):
-            classified.append(_radio._classify_rcm_event(_radio.RCMEvent(
-                message=str(ev.get("message", "")),
-                flag=str(ev.get("flag", "") or ""),
-                category=str(ev.get("category", "")),
-                lap=int(ev.get("lap", 0) or 0),
-                racing_number=ev.get("racing_number") or ev.get("RacingNumber"),
-                scope=str(ev.get("scope", "") or ""),
-            )))
+            classified.append(
+                _radio._classify_rcm_event(
+                    _radio.RCMEvent(
+                        message=str(ev.get("message", "")),
+                        flag=str(ev.get("flag", "") or ""),
+                        category=str(ev.get("category", "")),
+                        lap=int(ev.get("lap", 0) or 0),
+                        racing_number=ev.get("racing_number") or ev.get("RacingNumber"),
+                        scope=str(ev.get("scope", "") or ""),
+                    )
+                )
+            )
     return classified
 
 
@@ -1624,6 +1682,7 @@ def _get_default_situation_agent() -> RaceSituationAgent:
 # ─────────────────────────────────────────────────────────────────────────────
 # Public entry points — backward-compatible signatures (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_race_situation_agent(lap_state: dict) -> RaceSituationOutput:
     """Run the Race Situation Agent for one lap and return structured output.
