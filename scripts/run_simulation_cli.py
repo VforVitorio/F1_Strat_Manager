@@ -1331,7 +1331,14 @@ def run(args: argparse.Namespace) -> None:
     # actually used: --no-llm builds zero LLM clients (engine no-llm profile),
     # so leaving the env untouched keeps that mode truly offline instead of
     # silently becoming LLM mode if LM Studio happens to be up (audit C-06).
-    if not args.no_llm:
+    #
+    # Only when the flag was actually PASSED, so precedence runs
+    # flag > .env > built-in default. Writing it unconditionally made the flag's
+    # own default clobber a correctly configured `.env`: `.env.example` ships
+    # `F1_LLM_PROVIDER=openai` and INSTALL.md tells users to copy it, yet every
+    # `f1-sim` run went to LM Studio regardless, failed each lap with
+    # APIConnectionError and still exited 0 (#805).
+    if not args.no_llm and args.provider is not None:
         os.environ["F1_LLM_PROVIDER"] = args.provider
 
     # First-run bootstrap: pull data + models from HF Hub when the cache is
@@ -1425,7 +1432,13 @@ def run(args: argparse.Namespace) -> None:
 
     # ── Pre-warm NLP models (suppresses tqdm + LOAD REPORT noise) ────────────
     radio_label = f" · radios={radio_runner.total_radios()}" if radio_runner is not None else ""
-    mode_label = ("no-LLM" if args.no_llm else f"LLM · {args.provider}") + radio_label
+    # The EFFECTIVE provider, not the flag: since #805 the flag may be unset and the
+    # answer then comes from `.env` or from the built-in fallback. Reading `args.provider`
+    # here printed a blank once the default became None, which would have removed the one
+    # line on screen that says where the run is actually pointing -- and that line is what
+    # made #805 diagnosable at all.
+    effective_provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
+    mode_label = ("no-LLM" if args.no_llm else f"LLM · {effective_provider}") + radio_label
     with console.status("[dim]Loading agents…[/dim]", spinner="dots"):
         _prewarm_agents(args.no_llm)
 
@@ -2132,9 +2145,18 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--provider",
-        default="lmstudio",
+        # None, not "lmstudio": an argparse default is indistinguishable from an
+        # explicit value at the call site, so a default here silently outranked the
+        # `.env` the project tells users to configure (#805). The built-in fallback
+        # still lands on LM Studio, in strategy_orchestrator's own
+        # `os.environ.get("F1_LLM_PROVIDER", "lmstudio")`, so behaviour is unchanged
+        # for anyone who sets neither.
+        default=None,
         choices=["lmstudio", "openai"],
-        help="LLM provider: 'lmstudio' (default) or 'openai' (needs OPENAI_API_KEY in .env)",
+        help=(
+            "LLM provider, overriding F1_LLM_PROVIDER from .env. "
+            "Unset: use .env, falling back to 'lmstudio'."
+        ),
     )
     p.add_argument(
         "--interval",
