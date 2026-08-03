@@ -37,6 +37,12 @@ from typing import Callable, Dict, Optional
 import pandas as pd
 
 from src.f1_strat_manager.tyre_stint_repair import repair_tyre_stints
+from src.f1_strat_manager.weather_restore import (
+    WEATHER_COLUMNS,
+    normalise_rainfall,
+    read_race_weather,
+    weather_for_race,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +200,18 @@ def augment_featured_laps(
 
     root = data_root or (root_resolver() if root_resolver else _default_data_root())
 
+    # A season whose artefact already carries ANY of the weather columns is never
+    # re-derived: 2023 and 2024 take this exit by construction, so the restore cannot
+    # silently disagree with the values the models were trained on (#782).
+    #
+    # `any`, not `all`, and the difference is not cosmetic: on a partial set the per-race
+    # slice would carry all four names and the left-merge below would collide with the
+    # ones already present, replacing `TrackTemp` with a `TrackTemp_x`/`TrackTemp_y` pair
+    # that no consumer reads. No shipped artefact is partial today, so this is a latent
+    # shape -- but it is the shape the guard itself contemplates, and corrupting is a
+    # worse answer than declining.
+    wants_weather = not any(column in df.columns for column in WEATHER_COLUMNS)
+
     frames = []
     corrections: list[pd.DataFrame] = []
     missing: list[str] = []
@@ -215,6 +233,15 @@ def augment_featured_laps(
             corrections.append(_stint_corrections(raw, path, gp_name))
         slice_ = raw[["Driver", "LapNumber", *RAW_COLUMNS_TO_RESTORE]].copy()
         slice_["GP_Name"] = gp_name
+        if wants_weather:
+            # Aligned here rather than after the merge because N04 joined on the RAW
+            # laps' session `Time` timedelta, and this is the last point where that
+            # column still exists in its original form (#782).
+            race_weather = read_race_weather(path.parent)
+            if race_weather is not None:
+                aligned = weather_for_race(raw, race_weather)
+                for column in WEATHER_COLUMNS:
+                    slice_[column] = aligned[column].values
         # `Time` is a session-elapsed timedelta; the models were trained on seconds.
         slice_["Time"] = pd.to_timedelta(slice_["Time"]).dt.total_seconds()
         frames.append(slice_.rename(columns=RAW_COLUMNS_TO_RESTORE))
@@ -232,6 +259,13 @@ def augment_featured_laps(
 
     augmented = df.merge(pd.concat(frames, ignore_index=True), on=_JOIN_KEYS, how="left")
     augmented = _apply_stint_corrections(augmented, corrections)
+    if wants_weather:
+        # N04's closing step, at N04's own placement. Note what it does NOT do: a race
+        # whose weather parquet is missing keeps NaN temperatures but still reads
+        # Rainfall 0 (dry). That is inherited from N04 on purpose, not a gap left open.
+        augmented = normalise_rainfall(augmented)
+        restored = int(augmented["TrackTemp"].notna().sum()) if "TrackTemp" in augmented else 0
+        logger.info("Restored weather onto %d/%d laps of %d (#782)", restored, len(augmented), year)
     restored = int(augmented["Time_s"].notna().sum())
     logger.info(
         "Restored Time_s/TrackStatus onto %d/%d laps of %d from the raw parquets",
