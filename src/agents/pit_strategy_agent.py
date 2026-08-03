@@ -8,7 +8,6 @@ Public API
 ----------
 run_pit_strategy_agent(lap_state)                     → PitStrategyOutput  (FastF1 session)
 run_pit_strategy_agent_from_state(lap_state, laps_df) → PitStrategyOutput  (RSM adapter)
-get_pit_strategy_react_agent(**kwargs)                 → CompiledGraph
 """
 
 from __future__ import annotations
@@ -28,6 +27,19 @@ from sklearn.preprocessing import LabelEncoder
 # Safe in this direction: envelope.py is a leaf that imports nothing from src.agents, so
 # there is no cycle even though src/strategy/inference/no_llm.py imports this package.
 from src.strategy.inference.envelope import OperatingEnvelope
+
+# From the leaf guard-rails module, never restated. These four bounds were prose in the
+# system prompt while the deterministic rails computed against the constants, so the
+# prompt could tell the LLM to refuse what the rails had just allowed (#741, #766).
+# guard_rails imports nothing from this package, so there is no cycle.
+from src.strategy.inference.guard_rails import (
+    _CLIFF_P10_SAFE,
+    _MIN_STINT_LAPS,
+    _NO_PIT_BEFORE_LAP,
+    _NO_PIT_LAST_N_LAPS,
+)
+
+from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -90,6 +102,22 @@ _COMPOUND_FALLBACK: dict[str, int] = {'HARD': 1, 'MEDIUM': 3, 'SOFT': 5}
 # the same standing as VSC_PIT_BONUS and WINDOW_LAPS in strategy_orchestrator.
 _STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
 
+# The FLOOR of the MEDIUM suitability band in both prompts' "COMPOUND vs REMAINING
+# LAPS" rule: below this many laps left, fit a SOFT instead. Same standing as
+# _STINT_CAPACITY_LAPS above, a modelling assumption rather than a measurement.
+#
+# It exists as its own constant because it was previously rendered from
+# `_MIN_STINT_LAPS['MEDIUM']`, and those are two different rules that happened to
+# share the number 12. One asks "has this set run long enough to be worth
+# replacing?", the other asks "is there enough race left for this compound to make
+# sense?" — nothing ties them, and the coupling was invisible because the values
+# agreed. It surfaced when #716 recalibrated the minimum-stint bound to 7 against
+# real stint lengths and silently rewrote this unrelated rule to "MEDIUM: suitable
+# for 7-30 remaining laps" in the DEFAULT LLM path. 12 is what this band has always
+# said; the recalibration must not move it. Do NOT re-derive it from another
+# constant: a shared value is not a shared meaning.
+_MEDIUM_SUITABILITY_FLOOR_LAPS: int = 12
+
 # N16 trained Lap_gap as the offset between the two stops (lap_y - lap_x), never the
 # race lap. At inference we always score the canonical undercut: we box on this lap and
 # the rival responds on the next one, so the offset is 1 (#444).
@@ -141,6 +169,13 @@ _NORMAL_STOP_MAX_S: float = 4.5
 
 CLIFF_IMMINENT_LAPS = 3    # laps_to_cliff_p10 below this → PIT_NOW
 CLIFF_SOON_LAPS     = 10   # laps_to_cliff_p10 below this → prefer harder compound
+
+# Above this, an undeployed Safety Car is elevated enough to justify REACTIVE_SC rather
+# than a plain stop. It had no name at all: the value sat as a bare 0.30 in the routing
+# branch and twice more in the system prompt, three copies of a number nobody declared.
+# A constant with no definition cannot drift from its definition, but it can drift from
+# its other copies, which is the same defect wearing a different hat (#766).
+SC_REACTIVE_PROB_THRESHOLD = 0.30
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -615,15 +650,17 @@ Decision rules:
 1. Always call predict_pit_duration_tool first to know the stop cost.
 2. Call score_undercut_tool for each rival within 5 positions ahead.
 3. Call recommend_compound_tool to determine the optimal compound.
-4. If P(undercut_success) >= 0.522 for any rival → recommend UNDERCUT.
-5. If sc_prob context is provided and >= 0.30 → recommend REACTIVE_SC pit.
-6. If tyre_cliff context is provided and laps_to_cliff <= 3 → recommend PIT_NOW.
+4. If score_undercut_tool reports YES for any rival -> recommend UNDERCUT. The tool
+   prints the live threshold it compared against; do not carry your own number. It is
+   loaded from the model's calibration config and moves whenever the model is retuned.
+5. If sc_prob context is provided and >= {SC_REACTIVE_PROB_THRESHOLD} → recommend REACTIVE_SC pit.
+6. If tyre_cliff context is provided and laps_to_cliff <= {CLIFF_IMMINENT_LAPS} → recommend PIT_NOW.
 7. Otherwise → STAY_OUT unless a clear strategic window exists.
 
 ## Strategic guard-rails (HARD constraints — override any decision rule above)
 
 PIT WINDOW — early race:
-  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT before lap 5 of the race.
+  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT before lap {_NO_PIT_BEFORE_LAP} of the race.
   Exception: Safety Car IS currently deployed (prompt shows "SC STATUS: SAFETY
   CAR DEPLOYED RIGHT NOW"), or radio confirms damage/puncture/mechanical failure.
   Rationale: no tyre degrades enough in 1-4 laps to justify a stop; the pit lane time cost
@@ -631,8 +668,8 @@ PIT WINDOW — early race:
   in your reasoning.
 
 PIT WINDOW — end of race:
-  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT when remaining laps <= 3.
-  Exception: tyre failure is imminent (laps_to_cliff P10 < 2) or Safety Car deployed.
+  NEVER recommend PIT_NOW, UNDERCUT, or OVERCUT when remaining laps <= {_NO_PIT_LAST_N_LAPS}.
+  Exception: tyre failure is imminent (laps_to_cliff P10 < {_CLIFF_P10_SAFE}) or Safety Car deployed.
   Rationale: a pit stop costs ~22-25s; with ≤3 laps, fresh tyres recover at most ~1.5s
   total. Net loss ≈ 20s. Under green-flag racing, where consecutive cars sit a
   measured median 2.226s apart, that is worth ~9 positions, not 13: 13 positions
@@ -640,8 +677,8 @@ PIT WINDOW — end of race:
   the exception handled above, not this rule.
 
 MINIMUM STINT LENGTH before a pit makes sense:
-  SOFT: current tyre_life must be >= 8 laps before recommending a stop.
-  MEDIUM: >= 12 laps.  HARD: >= 15 laps.
+  SOFT: current tyre_life must be >= {_MIN_STINT_LAPS['SOFT']} laps before recommending a stop.
+  MEDIUM: >= {_MIN_STINT_LAPS['MEDIUM']} laps.  HARD: >= {_MIN_STINT_LAPS['HARD']} laps.
   If the driver has NOT completed the minimum stint, recommend STAY_OUT (the current
   set still has useful life; pitting now wastes a tyre allocation).
 
@@ -660,7 +697,7 @@ MINIMUM STINT LENGTH before a pit makes sense:
 
 COMPOUND vs REMAINING LAPS:
   SOFT: recommend only if remaining laps <= {_STINT_CAPACITY_LAPS['SOFT']} (it won't last longer).
-  MEDIUM: suitable for 12-30 remaining laps.
+  MEDIUM: suitable for {_MEDIUM_SUITABILITY_FLOOR_LAPS}-{_STINT_CAPACITY_LAPS['MEDIUM']} remaining laps.
   HARD: suitable for 20+ remaining laps.
   Picking SOFT with 25 laps to go forces an extra pit stop — factor that cost in.
 
@@ -668,7 +705,7 @@ REACTIVE_SC usage:
   REACTIVE_SC is for the rare in-between case where sc_prob is elevated but the
   Safety Car is NOT yet deployed.  When the prompt states "SC STATUS: SAFETY CAR
   DEPLOYED RIGHT NOW", prefer PIT_NOW directly.  Use REACTIVE_SC only when
-  sc_prob >= 0.30 AND the prompt shows the legacy "SC probability" line.  A high
+  sc_prob >= {SC_REACTIVE_PROB_THRESHOLD} AND the prompt shows the legacy "SC probability" line.  A high
   sc_prob without confirmation is still a contingency — mention it in reasoning
   and set ACTION to STAY_OUT unless the SC is actually out.
 
@@ -1016,7 +1053,7 @@ class PitStrategyAgent:
 
         gp_name    = self.session_meta.get('gp_name', '')
         year       = self.session_meta.get('year', 2025)
-        total_laps = self.session_meta.get('total_laps', 57)
+        total_laps = self.session_meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         team_x_raw = self.session_meta.get('team_lookup', {}).get(driver_x, 'Unknown')
         team_x     = _TEAM_ALIASES.get(team_x_raw, team_x_raw)
 
@@ -1250,7 +1287,7 @@ class PitStrategyAgent:
                     f'Pick a driver from that list.'
                 )
 
-            total_laps       = agent.session_meta.get('total_laps', 57)
+            total_laps       = agent.session_meta.get('total_laps', DEFAULT_TOTAL_LAPS)
             laps_remaining   = total_laps - lap_number
             current_compound = current_compound.upper()
 
@@ -1431,9 +1468,9 @@ class PitStrategyAgent:
         lap_number = lap_state['lap_number']
         driver     = meta['driver']
         gp_name    = meta.get('gp_name', '')
-        # 57 = median/mode race length across the 2022-2025 dataset; the same fallback the
-        # other strategy surfaces use, so a missing key resolves to one value everywhere.
-        total_laps = meta.get('total_laps', 57)
+        # DEFAULT_TOTAL_LAPS: see src/agents/_shared_defaults.py for why this fallback
+        # exists and why it is single-sourced across the strategy agents.
+        total_laps = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         year       = meta.get('year', 2025)
         team       = meta.get('team', 'Unknown')
         compound   = d.get('compound', 'MEDIUM')
@@ -1597,7 +1634,7 @@ class PitStrategyAgent:
         # the surrendered position unrecoverable). The regulatory facts an SC does
         # force live in N27; see tests/mc/test_sc_regulatory_rails.py.
         sc_reactive = sc_currently_active or (action == 'REACTIVE_SC') or (
-            sc_prob >= 0.30 and action in ('PIT_NOW', 'UNDERCUT')
+            sc_prob >= SC_REACTIVE_PROB_THRESHOLD and action in ('PIT_NOW', 'UNDERCUT')
         )
 
         return PitStrategyOutput(
@@ -1677,31 +1714,3 @@ def run_pit_strategy_agent_from_state(
         PitStrategyOutput with all fields populated.
     """
     return _get_default_pit_agent().run_from_state(lap_state, laps_df)
-
-
-def get_pit_strategy_react_agent(
-    provider: str = 'lmstudio',
-    model_name: str = 'gpt-4.1-mini',
-    base_url: str = 'http://localhost:1234/v1',
-    api_key: str = 'lm-studio',
-):
-    """Return the LangGraph ReAct agent backed by the singleton PitStrategyAgent.
-
-    Avoids connecting to the LLM at import time — created only when N31 or tests
-    actually invoke the agent.
-
-    Args:
-        provider: 'lmstudio' or 'openai'.
-        model_name: Model identifier for ChatOpenAI.
-        base_url: Base URL for LM Studio (ignored when provider='openai').
-        api_key: API key; 'lm-studio' for local server.
-
-    Returns:
-        LangGraph CompiledGraph.
-    """
-    return _get_default_pit_agent().get_react_agent(
-        provider=provider,
-        model_name=model_name,
-        base_url=base_url,
-        api_key=api_key,
-    )

@@ -21,6 +21,8 @@ import pandas as pd
 import pytest
 
 from src.simulation.stint_history import stint_history_flags
+from tests.conftest import skip_no_tire_models as _skip_no_models
+from tests.mc.canned_outputs import canned_outputs as _canned_outputs
 
 ROOT = Path(__file__).parent.parent.parent
 
@@ -28,12 +30,6 @@ _HAS_DATA = (ROOT / "data" / "processed" / "laps_featured_2024.parquet").exists(
 _skip_no_data = pytest.mark.skipif(
     not _HAS_DATA,
     reason="data/processed/ not present (CI runner without the HF dataset)",
-)
-
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
-_skip_no_models = pytest.mark.skipif(
-    not _HAS_MODELS,
-    reason="data/models/ not present (CI runner without model weights)",
 )
 
 
@@ -199,41 +195,6 @@ def test_rsm_get_stint_flags_matches_the_pure_helper(raw_lusail_2024):
 # ---------------------------------------------------------------------------
 # MC kwargs — accepted and ignored, byte-identical output
 # ---------------------------------------------------------------------------
-
-
-def _canned_outputs():
-    """Same canned near-cliff fixture as tests/mc/test_strategy_goldens.py."""
-    from src.agents.pace_agent import PaceOutput
-    from src.agents.pit_strategy_agent import PitStrategyOutput
-    from src.agents.race_situation_agent import RaceSituationOutput
-    from src.agents.tire_agent import TireOutput
-
-    pace = PaceOutput(
-        lap_time_pred=91.0, delta_vs_prev=-0.2, delta_vs_median=0.3, ci_p10=90.5, ci_p90=91.8
-    )
-    tire = TireOutput(
-        compound="MEDIUM",
-        current_tyre_life=18,
-        deg_rate=0.05,
-        laps_to_cliff_p10=3.0,
-        laps_to_cliff_p50=5.0,
-        laps_to_cliff_p90=8.0,
-        gp_name="",
-    )
-    situation = RaceSituationOutput(overtake_prob=0.2, sc_prob_3lap=0.10)
-    pit = PitStrategyOutput(
-        action="PIT_NOW",
-        recommended_lap=20,
-        compound_recommendation="HARD",
-        stop_duration_p05=2.2,
-        stop_duration_p50=2.8,
-        stop_duration_p95=3.6,
-        undercut_prob=0.55,
-        undercut_target="VER",
-        sc_reactive=False,
-        reasoning="",
-    )
-    return pace, tire, situation, pit
 
 
 @_skip_no_models

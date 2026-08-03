@@ -96,7 +96,15 @@ import requests
 # ``python scripts/build_radio_dataset.py`` or ``python -m scripts.build_radio_dataset``.
 # scripts/ is a package but the parent ``src/`` package lives one level up,
 # so the repo root must be on sys.path before any project import.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+#
+# ``.git``-search-with-fallback, not a fixed ``.parent.parent``: the latter
+# silently resolves to the wrong directory under a `uv tool install` layout,
+# where this file is not exactly one level below the repo root.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = next(
+    (p for p in [_SCRIPT_DIR, *_SCRIPT_DIR.parents] if (p / ".git").exists()),
+    _SCRIPT_DIR.parent,
+)
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 

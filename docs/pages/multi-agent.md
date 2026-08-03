@@ -100,8 +100,10 @@ See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the shared engine
 
 Wraps the N06 XGBoost delta-lap-time model. Returns predicted lap time, delta signals against previous lap and session median, and bootstrap confidence intervals (N=200 draws with 2% Gaussian noise on continuous features).
 
-- **Model**: XGBoost trained on 2023–2025 lap data
+- **Model**: XGBoost fitted on 2023–2024 lap data, with **2025 held out**. This line used to read "2023–2025", which quietly folded the test season into the training set: the feature manifest's own row counts are 22,106 train and 23,256 validation, exactly the 2023 and 2024 featured parquets, and every operating bound below is measured on those two seasons for the same reason.
 - **Output**: `PaceOutput` (lap_time_pred, delta_vs_prev, delta_vs_median, ci_p10, ci_p90)
+- **Circuit feature**: `mean_sector_speed` is a property of the track, one value per GP, looked up from the featured parquet. It used to be substituted with the speed trap on every call through the `RaceStateManager` path; see the operating-envelope section under N28 for how that surfaced.
+- **No LLM step**: unlike its tire/pit/race-situation siblings below, pace calls the XGBoost model directly — `reasoning` is a deterministic f-string, not LLM output. Pace is the one always-on agent with no qualitative judgment to make (no `warning_level`/`action`/`threat_level` category alongside its numbers), so a `pace_agent.py` once carried a complete but never-wired LangGraph ReAct scaffold; it was formally retired in #781 after the #778/#779/#780 archaeology and decision. See [agents-api.md](#/agents-api) for the full record.
 
 ### N26: Tire Agent (`tire_agent.py`)
 
@@ -160,6 +162,49 @@ It also silenced the computation built to weigh it: with an SC deployed `sc_prob
 Staying out under an SC is right whenever you have already stopped, you lead a pack that must stop anyway, you would rejoin into traffic, or the race is ending. Boxing is right when you must stop anyway, the tyres are near the cliff, or the two-compound rule is unsatisfied and time is short. Not one of those is a rule. All of them are race state the model is given, and a rail sees none of it.
 
 See `tests/mc/test_sc_regulatory_rails.py`.
+
+##### The bounds that stayed, and the test they have to pass
+
+Removing that rail did not remove the pit bounds, because they are a different kind of object and are judged differently.
+
+| | What it does | What justifies it |
+|---|---|---|
+| **Prescriptive** rail | Makes the strategic decision *for* the model | A regulation, or nothing |
+| **Proscriptive** bound | Forbids an action so a generative model cannot emit nonsense | **Calibration** |
+
+Bounding an LLM's output space is legitimate engineering with or without an FIA article: the bounds exist so nothing can recommend a lap-2 stop because it felt like one. But a bound only earns that description if it sits where real strategy essentially never goes. The rule the project holds them to is explicit: **a bound may veto at most 5% of real green-flag stops**, measured over 1900 of them across 71 races of 2023-2025.
+
+Checked against that rule, three of the four minimum-stint bounds were separating *unusual* from *usual* rather than *absurd* from *sane*, and were reset to the largest value that clears the ceiling:
+
+| Bound | Was | Vetoed | Now | Vetoes |
+|---|---|---|---|---|
+| Minimum stint, SOFT | 8 laps | 15.5% | **2** | 3.2% |
+| Minimum stint, MEDIUM | 12 laps | 17.0% | **7** | 4.6% |
+| Minimum stint, HARD | 15 laps | 12.2% | **8** | 4.7% |
+| Minimum stint, wet fallback | 10 laps | 20.0% | **6** | 4.5% |
+| No pit before lap 5 | 5 | 2.21% | unchanged | 2.21% |
+| No pit in the last 3 laps | 3 | 1.37% | unchanged | 1.37% |
+
+The end-of-race bound is the only one that is partly a *fact*: under a Safety Car, Art. 55.17 ends the race behind it if it is still deployed on the final lap, so the position a late stop surrenders is unrecoverable by regulation rather than merely expensive. That article does not reach a green-flag lap, where the bound rests on the stop cost and on the measurement above.
+
+The compounding effect is what made the old values worth changing rather than merely wrong. A stop inside a bound can never be agreed with, so it is excluded from the decision-agreement measurement: the bound was removing its own hardest cases from the evidence about itself. After the recalibration the `min_stint` exclusion bucket falls from 17 stops to 5, the scored sample rises from 54 to 67 of 178, and agreement within two laps rises from 51.9% to 61.2%.
+
+`documents/eval_reports/stint_lengths.md` regenerates these shares from the live constants on every run, so the report always grades what is actually shipping rather than what was shipping when it was written.
+
+##### Operating envelopes: knowing when a model is answering outside what it learned
+
+A separate contract, and a quieter one. None of the models refuse out-of-range input; they answer with the same confidence whether the call falls inside what they were trained on or not. N26's tire TCN did exactly that for two years.
+
+An `OperatingEnvelope` (`src/strategy/inference/envelope.py`) names the input range a model's answer is actually valid over, and **labels only**: checking a feature vector never clips, alters or refuses a prediction, it only tells the call site whether to trust the one it already has. A feature that is absent is tracked as *unknown* rather than compared, because "we do not know" must never collapse into a number a real reading could also take.
+
+Two are declared today:
+
+- **N15** (pit duration) declares the 50-lap tyre-life ceiling it was trained under. The clip that keeps it inside that range is unchanged; what the envelope adds is that hitting it stops being silent.
+- **N06** (lap time) declares eleven feature ranges measured from its own training seasons. It has no clip at all, so the label is the entire mechanism.
+
+The envelope earns its keep by what it surfaced rather than by what it prevents. Wiring it to N06 exposed that `mean_sector_speed` was carrying the **speed trap** on every real call, because the agent substituted `prev_speed_st` whenever no mean sector speed was supplied and nothing ever supplied one. Those are different physical quantities, 256.8 against 303.0 km/h on average, and the model had been reading the wrong one throughout. The value is a property of the circuit and was on disk all along; it is now looked up per GP, and a circuit that does not resolve reaches the model as missing rather than as a substituted reading.
+
+It also surfaced something not yet fixed: N06 is asked to predict on the opening laps of a race and on the first lap of every stint, and it was never trained on either, because its own feature pipeline drops exactly those rows.
 
 ### N29: Radio Agent (`radio_agent.py`)
 
@@ -325,8 +370,10 @@ One consequence worth knowing before debugging a call: **the effect does not sho
 
 | Layer | Model | Provider |
 |---|---|---|
-| Sub-agents N25–N29 | gpt-4.1-mini | OpenAI or LM Studio |
+| Sub-agents N26–N29 | gpt-4.1-mini | OpenAI or LM Studio |
 | Orchestrator N31 | gpt-5.4-mini | OpenAI or LM Studio |
+
+N25 (pace) is not in this table — it never calls an LLM, see the "No LLM step" note under [N25: Pace Agent](#/multi-agent#n25-pace-agent-paceagentpy) above.
 
 Set `F1_LLM_PROVIDER=openai` env var to use the real OpenAI API. Default is LM Studio at `http://localhost:1234/v1`.
 

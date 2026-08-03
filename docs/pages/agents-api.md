@@ -22,7 +22,9 @@ Every agent has two entry points:
 `lap_state`, which is why the stint fuel baseline is carried there rather than derived from a
 frame. The adapters are not uniform, so check the signature before assuming.
 
-Every agent except N29 also exposes a `get_*_react_agent()` factory returning a compiled LangGraph `CompiledGraph`, for callers that want to drive the graph directly. The radio agent has none: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.
+Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory returning a compiled LangGraph `CompiledGraph`, for callers that want to drive the graph directly — it is genuinely invoked (the chat backend calls it). N25-N28 (pace, tire, race situation, pit strategy) used to have an equivalent free function each; all four were confirmed dead (zero callers anywhere in the repo) and removed in the 2026-08-01 cleanup pass. Tire, race situation and pit strategy still have their own `get_react_agent()` *instance method*, called internally from each agent's own `_run_core` — only the redundant module-level wrapper was removed for those three. The radio agent (N29) never had one: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.
+
+**N25 (pace) is deliberately deterministic — no ReAct loop at all.** Unlike its three siblings above, pace's `run()`/`run_from_state()` call the N06 XGBoost model directly; there is no LLM step to invoke and no category field (`warning_level`/`action`/`threat_level`) for an LLM to decide. `pace_agent.py` used to carry a complete but never-wired LangGraph ReAct scaffold (tools, system prompt, `get_react_agent()`) from the moment the module was first extracted — confirmed by archaeology to have been a deliberate per-agent choice made in the same commit that wired tire/pit/race_situation, not a wiring gap. It was formally retired (deleted, not left dead) in #781; see #778 for the full decision record.
 
 ## Output dataclasses
 
@@ -35,7 +37,7 @@ Every agent except N29 also exposes a `get_*_react_agent()` factory returning a 
 | `delta_vs_median` | float | Delta vs session median |
 | `ci_p10` | float | 10th percentile bootstrap CI |
 | `ci_p90` | float | 90th percentile bootstrap CI |
-| `reasoning` | str | LLM-generated reasoning text |
+| `reasoning` | str | Deterministic summary string (no LLM call — see the note above) |
 
 ### TireOutput (N26)
 
@@ -158,10 +160,11 @@ Every LangChain tool the LLM can call takes free-text arguments (`driver`, `lap_
 
 | Agent | Tools guarded | Refuses when |
 |---|---|---|
-| N25 Pace | `predict_pace_tool` | `driver_number`/`gp_name`/`year` do not resolve to a driver on track for that GP/year, or `lap_number` is outside `[1, total_laps]` |
 | N26 Tire | `predict_tire_deg_tool`, `estimate_laps_to_cliff_tool` | `driver` is not on track at the currently loaded lap, or the loaded `current_lap` is outside `[1, total_laps]` |
 | N27 Situation | `predict_overtake_tool`, `predict_sc_tool` | `lap_number` is out of range, or (for `predict_overtake_tool`) either driver is unknown for that lap |
 | N28 Pit | `predict_pit_duration_tool`, `score_undercut_tool` | the named driver (`driver`/`driver_y`) is not present in the live roster for the current lap |
+
+N25 Pace originally had an equivalent guard on its own `predict_pace_tool` (#476), but that tool was deleted along with the rest of pace's unreachable LangGraph scaffold in #781 — pace has no LLM-facing tool left to guard, so the class of bug #476 fixed cannot occur for it anymore.
 
 The refusal is a plain string return (e.g. `"error: 'HAM' is not on track at lap 12; valid: [...]"` or `"... REFUSED — {driver} is not on track ..."`), not an exception, the LLM sees a normal-looking tool result it can react to, rather than a traceback. `predict_pit_duration_tool` additionally cross-checks the LLM-supplied `under_sc` flag against the RCM-confirmed `sc_currently_active` ground truth when a real orchestrator run has set it, and trusts the confirmed value over the guess (logging a warning) rather than the other way round.
 

@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import skip_no_tire_models as _skip_no_models
+
 ROOT = Path(__file__).parent.parent.parent
 
 # Guard: simulation service needs laps_featured_YYYY.parquet + raw race dir.
@@ -54,11 +56,6 @@ _skip_no_backend = pytest.mark.skipif(
 # needs the weights on disk, and `_skip_no_backend` alone is not enough — that
 # combination is what made the first version of the payload tests fail on CI while
 # passing locally.
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
-_skip_no_models = pytest.mark.skipif(
-    not _HAS_MODELS,
-    reason="data/models/ not present (importing the simulator reads model config)",
-)
 
 
 def _ensure_backend_on_path() -> None:

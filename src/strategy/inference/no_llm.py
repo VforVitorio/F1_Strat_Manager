@@ -32,6 +32,7 @@ import pandas as pd
 
 from src.agents.pace_agent import run_pace_agent_from_state
 from src.agents.race_situation_agent import RaceSituationAgent
+from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE, normalise_compound
 from src.agents.radio_agent import RadioOutput, _build_alerts, run_pipeline, run_rcm_pipeline
 from src.agents.strategy_orchestrator import (
     RaceState,
@@ -132,8 +133,12 @@ def _tire_no_llm(lap_state: dict[str, Any], laps_df: pd.DataFrame):
     driver = lap_state["session_meta"]["driver"]
     d = lap_state["driver"]
     meta = lap_state["session_meta"]
-    compound = d.get("compound", "MEDIUM")
-    tyre_life = d.get("tyre_life", 1)
+    # Same rules as tire_agent.run_from_state: this path also reads the RAW lap_state
+    # rather than the RaceState, so it applies the canonical normalisation itself
+    # instead of restating the pre-#784 defaults its twin used to carry.
+    compound = normalise_compound(d.get("compound"))
+    raw_tyre_life = d.get("tyre_life")
+    tyre_life = UNKNOWN_TYRE_LIFE if raw_tyre_life is None else raw_tyre_life
     gp_name = meta.get("gp_name", "")
     year = meta.get("year", 2025)
     compound_id = (

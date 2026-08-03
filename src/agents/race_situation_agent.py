@@ -7,7 +7,6 @@ Public API
 ----------
 run_race_situation_agent(lap_state)                       → RaceSituationOutput  (FastF1 session)
 run_race_situation_agent_from_state(lap_state, laps_df)   → RaceSituationOutput  (RSM adapter)
-get_race_situation_react_agent(**kwargs)                   → CompiledGraph
 
 Module-level singletons
 -----------------------
@@ -28,6 +27,8 @@ from typing import Optional
 import joblib
 import numpy as np
 import pandas as pd
+
+from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS, reading_or_default
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -673,7 +674,11 @@ def _compute_rcm_features(
 
 def _compute_weather_features(session_meta: dict) -> dict:
     """Extract weather scalars from session_meta for the SC feature vector."""
-    track_temp       = float(session_meta.get('TrackTemp', 35.0))
+    # 38.0, not 35.0: matches the fallback run()/run_from_state() already use (grep this
+    # file for 'TrackTemp' to find both) when they build this same session_meta key, so a
+    # hand-built session_meta missing the key resolves to the same temperature this file
+    # uses everywhere else instead of silently disagreeing with itself.
+    track_temp       = float(session_meta.get('TrackTemp', 38.0))
     air_temp         = float(session_meta.get('AirTemp', 28.0))
     humidity         = float(session_meta.get('Humidity', 50.0))
     track_temp_start = float(session_meta.get('track_temp_start', track_temp))
@@ -1003,11 +1008,9 @@ class RaceSituationAgent:
         feat.update(_compute_rcm_features(all_laps, lap_number, session_meta, cur_code, prev_code))
         feat.update(_compute_weather_features(session_meta))
 
-        # RaceStateManager and the FastF1 session always supply total_laps, so this
-        # fallback only fires for hand-built states (tests, debug). 57 is the median and
-        # mode race length across the 2022-2025 dataset (71 races), so it is the least
-        # surprising stand-in and is kept identical across every strategy surface.
-        total_laps = int(session_meta.get('total_laps', 57))
+        # DEFAULT_TOTAL_LAPS: see src/agents/_shared_defaults.py for why this fallback
+        # exists and why it is single-sourced across the strategy agents.
+        total_laps = int(session_meta.get('total_laps', DEFAULT_TOTAL_LAPS))
         is_lap1    = int(lap_number == 1)
         lap_pct    = float(lap_number) / max(total_laps, 1)
 
@@ -1357,9 +1360,8 @@ class RaceSituationAgent:
         lap_number = lap_state['lap_number']
         driver     = meta['driver']
         gp_name    = meta.get('gp_name', '')
-        # 57 = median/mode race length across the dataset; matches _build_features above
-        # and the other strategy surfaces so the fallback is one value, not several.
-        total_laps = meta.get('total_laps', 57)
+        # DEFAULT_TOTAL_LAPS: see src/agents/_shared_defaults.py.
+        total_laps = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         year       = meta.get('year', 2025)
 
         # #465 (F6): a defaulted position (previously `.get('position', 20)`) is a
@@ -1397,9 +1399,13 @@ class RaceSituationAgent:
             'total_laps':       total_laps,
             'fastest_lap_s':    float(self.laps_df['LapTime'].dt.total_seconds().min())
                                 if len(self.laps_df) > 0 else 90.0,
-            'AirTemp':          wx.get('air_temp',   28.0),
-            'TrackTemp':        wx.get('track_temp', 38.0),
-            'Humidity':         wx.get('humidity',   50.0),
+            # reading_or_default, not .get(key, default): the producers report an
+            # unmeasured reading as the key PRESENT holding None, which .get's default
+            # never catches, and _compute_weather_features' float() then raises. That
+            # 422'd /recommend on every 2025 lap (#788) — see the helper's docstring.
+            'AirTemp':          reading_or_default(wx, 'air_temp',   28.0),
+            'TrackTemp':        reading_or_default(wx, 'track_temp', 38.0),
+            'Humidity':         reading_or_default(wx, 'humidity',   50.0),
             # The session's FIRST track temp, which the RSM now supplies. This used to
             # read `track_temp` — the CURRENT one — so `track_temp_delta` came out 0.0 on
             # every lap of every race, on every shipping path (CLI, arcade, backend,
@@ -1655,31 +1661,3 @@ def run_race_situation_agent_from_state(
         RaceSituationOutput with all fields populated.
     """
     return _get_default_situation_agent().run_from_state(lap_state, laps_df)
-
-
-def get_race_situation_react_agent(
-    provider: str = 'lmstudio',
-    model_name: str = 'gpt-4.1-mini',
-    base_url: str = 'http://localhost:1234/v1',
-    api_key: str = 'lm-studio',
-):
-    """Return the LangGraph ReAct agent backed by the singleton RaceSituationAgent.
-
-    Avoids connecting to the LLM at import time — created only when N31 or tests
-    actually invoke the agent.
-
-    Args:
-        provider: 'lmstudio' or 'openai'.
-        model_name: Model identifier for ChatOpenAI.
-        base_url: Base URL for LM Studio (ignored when provider='openai').
-        api_key: API key; use 'lm-studio' for local server.
-
-    Returns:
-        LangGraph CompiledGraph — invoke with {"messages": [HumanMessage(...)]}.
-    """
-    return _get_default_situation_agent().get_react_agent(
-        provider=provider,
-        model_name=model_name,
-        base_url=base_url,
-        api_key=api_key,
-    )

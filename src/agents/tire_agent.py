@@ -8,7 +8,6 @@ Public API
 ----------
 run_tire_agent(stint_state)                   → TireOutput  (FastF1 session in stint_state)
 run_tire_agent_from_state(lap_state, laps_df) → TireOutput  (RSM adapter, no FastF1 session)
-get_tire_react_agent(**kwargs)                → CompiledGraph
 
 Module-level singletons
 -----------------------
@@ -33,6 +32,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS, reading_or_default
+from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE, normalise_compound
 from src.agents.tire_parsing import parse_tool_outputs
 
 # ── Repo root (module-relative) ───────────────────────────────────────────────
@@ -225,6 +226,27 @@ class TireAgentConfig:
             standing start, so the level is biased slow and cannot be charged as a
             cost directly. Asking the same model on the same stint's early laps
             cancels that baseline algebraically instead of approximately.
+        fresh_reference_max_pct_of_fastest: Reject a fresh-reference candidate lap
+            whose ``lap_time_pct_of_race_fastest`` exceeds this ratio. ``track_status_
+            clean`` (see ``_add_session_cols``) is supposed to be the signal for a
+            Safety-Car- or red-flag-affected lap, but it is dead on the shipping
+            path — a constant 0 across every featured parquet, because N04's
+            ``IsAccurate`` gate does not catch every neutralised lap (measured
+            counter-example: Mexico City 2023 car 4, lap 36, 137.8 s on a circuit
+            whose green-flag pace is ~83 s, ``track_status_clean == 0`` regardless).
+            When such a lap lands as the fresh reference, the model correctly
+            predicts it as an outlier and every later lap in the stint reads as
+            tens of seconds "faster than fresh" — not tyre wear, an artefact of a
+            contaminated zero point. ``lap_time_pct_of_race_fastest`` is already a
+            TCN input feature, computed unconditionally and cheaply from
+            ``session_meta['fastest_lap_s']``, so it is available at the same point
+            ``track_status_clean`` should have been. Threshold measured over 31,624
+            training-season laps: gating at 1.10 cuts the deg_cost_s error bound's
+            mean absolute error from 0.650 to 0.434 s/lap and its signed bias from
+            +0.351 to +0.139, at the cost of 49 of 1714 stints (2.9%) losing their
+            reference entirely and falling back to ``None`` (``scripts/
+            measure_deg_error_bound.py``, ``documents/audits/MEASURE_fresh_reference_
+            quality_gate.md``).
         deg_cost_floor_s / deg_cost_ceiling_s: Bounds on the referenced wear, in
             seconds per lap. MEASURED, not chosen: they are the 1st and 99th
             percentiles over 31,624 training-season laps
@@ -245,6 +267,7 @@ class TireAgentConfig:
     cliff_pit_soon_laps: int = 3
     cliff_monitor_laps: int  = 7
     fresh_reference_tyre_life: int = 3
+    fresh_reference_max_pct_of_fastest: float = 1.10
     deg_cost_floor_s: float   = -2.33
     deg_cost_ceiling_s: float = 3.67
 
@@ -396,6 +419,20 @@ CLIFF_THRESHOLD: dict[str, int] = {
 # session_meta.total_laps is present on every shipping path, so this only guards
 # hand-built states.
 MAX_RACE_LAPS: int = 78
+
+
+def _reject_contaminated_laps(
+    laps: pd.DataFrame, fastest_lap_s: float, max_pct: float,
+) -> pd.DataFrame:
+    """Drop candidate fresh-reference laps slower than ``max_pct`` times the
+    race's fastest lap -- a Safety-Car or red-flag-affected lap that
+    ``track_status_clean`` should flag but does not (see
+    ``TireAgentConfig.fresh_reference_max_pct_of_fastest``).
+
+    Pure and leaf-level so the threshold is testable without model weights --
+    the same split ``tire_parsing.py`` made, and for the same reason.
+    """
+    return laps[laps['LapTime_s'] <= max_pct * fastest_lap_s]
 
 
 def _referenced_wear(parsed: dict) -> Optional[float]:
@@ -932,9 +969,29 @@ class TireAgent:
         life — a replay that starts mid-stint. Zero is a legitimate reading of the
         wear it feeds, so collapsing "unknown" into it would be the same sentinel
         collision that #436 fixed for the cliff.
+
+        Also drops any candidate lap slower than ``cfg.fresh_reference_max_pct_of_
+        fastest`` times the race's fastest lap — a Safety-Car or red-flag-affected
+        lap that ``track_status_clean`` should have flagged but does not (see the
+        config docstring). Returns ``None`` rather than falling back to a
+        contaminated lap when every candidate is rejected, for the same reason: a
+        wrong reference is worse than none.
         """
         early_laps = self._get_driver_stint(driver, self.cfg.fresh_reference_tyre_life)
         if early_laps is None or not len(early_laps):
+            return None
+
+        # `_get_driver_stint` returns the raw slice of `self.laps_df` as-is, so
+        # `LapTime_s` does not exist yet on the FastF1 `run()` path (raw `LapTime`
+        # Timedelta) -- it is only created by `_add_timing_cols`, the first step
+        # inside `_build_stint_tensor`. Reuse it here rather than assume a column
+        # that `_build_stint_features` itself only guarantees after this point.
+        early_laps = _reject_contaminated_laps(
+            _add_timing_cols(early_laps),
+            self.session_meta['fastest_lap_s'],
+            self.cfg.fresh_reference_max_pct_of_fastest,
+        )
+        if not len(early_laps):
             return None
 
         tensor = self._build_stint_tensor(early_laps, compound_id, self.session_meta)
@@ -1419,10 +1476,17 @@ class TireAgent:
         wx   = lap_state.get('weather', {})
 
         driver      = meta['driver']
-        compound    = d.get('compound', 'MEDIUM')
-        tyre_life   = d.get('tyre_life', 1)
+        # This adapter reads the RAW lap_state, not the RaceState, so the canonical
+        # builder's normalisation does not reach it — it has to apply the same rules
+        # itself or the unification stops at the object boundary (#784). Both of the
+        # old two-arg defaults were also dead on the RSM path and wrong when they did
+        # fire: the key is always present, so a stored NaN arrives as the STRING "nan"
+        # and a None arrives as None, neither of which .get's default catches.
+        compound    = normalise_compound(d.get('compound'))
+        raw_tyre_life = d.get('tyre_life')
+        tyre_life   = UNKNOWN_TYRE_LIFE if raw_tyre_life is None else raw_tyre_life
         gp_name     = meta.get('gp_name', '')
-        total_laps  = meta.get('total_laps', 57)
+        total_laps  = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
         year        = meta.get('year', 2025)
         team        = meta.get('team', 'Unknown')
 
@@ -1453,10 +1517,16 @@ class TireAgent:
             'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
             'team_id':            _encode_team_id(self.cfg.team_id_map, team),
             'year':               year,
-            'AirTemp':   wx.get('air_temp',   28.0),
-            'TrackTemp': wx.get('track_temp', 38.0),
-            'Humidity':  wx.get('humidity',   50.0),
-            'Rainfall':  float(wx.get('rainfall', 0)),
+            # reading_or_default, not .get(key, default): the producers report an
+            # unmeasured reading as the key PRESENT holding None, which .get's default
+            # never catches. These Nones do not crash here — they flow through
+            # _add_weather_cols into the TCN's feature frame and moved the cliff estimate
+            # 2.3 laps OPTIMISTIC on the 2025 reference lap, silently. Optimistic is the
+            # dangerous direction: it delays the pit call. See the helper's docstring.
+            'AirTemp':   reading_or_default(wx, 'air_temp',   28.0),
+            'TrackTemp': reading_or_default(wx, 'track_temp', 38.0),
+            'Humidity':  reading_or_default(wx, 'humidity',   50.0),
+            'Rainfall':  float(reading_or_default(wx, 'rainfall', 0.0)),
             f'{driver}_compound': compound,
             # The stint we are actually in, and the lap we are actually on. N10 trained
             # on windows grouped by ['Year','GP_Name','DriverNumber','Stint'], and the
@@ -1481,6 +1551,26 @@ class TireAgent:
         }
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)
+
+    @staticmethod
+    def _conservative_stub(
+        compound_id: str, tyre_life: int, gp_name: str, reason: str,
+    ) -> TireOutput:
+        """TireOutput with the fixed conservative defaults used whenever a real TCN
+        reading is unavailable (no bundle for this compound, or a tool-output parse
+        miss). ``reason`` is folded into ``reasoning`` so the degradation is visible
+        instead of masquerading as a genuine reading.
+        """
+        return TireOutput(
+            compound          = compound_id,
+            current_tyre_life = tyre_life,
+            gp_name           = gp_name,
+            deg_rate          = 0.03,
+            laps_to_cliff_p10 = 20.0,
+            laps_to_cliff_p50 = 30.0,
+            laps_to_cliff_p90 = 40.0,
+            reasoning         = reason,
+        )
 
     def _run_core(
         self,
@@ -1507,15 +1597,9 @@ class TireAgent:
         # TCN bundles only exist for dry compounds (C1–C6). For wet/intermediate
         # compounds return a stub with conservative defaults — no TCN inference.
         if compound_id not in self.bundles:
-            return TireOutput(
-                compound          = compound_id,
-                current_tyre_life = tyre_life,
-                gp_name           = gp_name,
-                deg_rate          = 0.03,
-                laps_to_cliff_p10 = 20.0,
-                laps_to_cliff_p50 = 30.0,
-                laps_to_cliff_p90 = 40.0,
-                reasoning         = (
+            return self._conservative_stub(
+                compound_id, tyre_life, gp_name,
+                reason=(
                     f"[{compound_id} — TCN model not available for wet/intermediate compounds; "
                     f"conservative defaults used]"
                 ),
@@ -1550,15 +1634,9 @@ class TireAgent:
                 'Tire tool output did not parse for %s (tyre_life=%s) — using conservative '
                 'defaults instead of a 0.0 cliff', compound_id, tyre_life,
             )
-            return TireOutput(
-                compound          = compound_id,
-                current_tyre_life = tyre_life,
-                gp_name           = gp_name,
-                deg_rate          = 0.03,
-                laps_to_cliff_p10 = 20.0,
-                laps_to_cliff_p50 = 30.0,
-                laps_to_cliff_p90 = 40.0,
-                reasoning         = (
+            return self._conservative_stub(
+                compound_id, tyre_life, gp_name,
+                reason=(
                     f"[{compound_id} — tire tool output could not be parsed; conservative "
                     f"defaults used] {reasoning}"
                 ),
@@ -1642,31 +1720,3 @@ def run_tire_agent_from_state(lap_state: dict, laps_df: pd.DataFrame) -> TireOut
         TireOutput with all fields populated.
     """
     return _get_default_tire_agent().run_from_state(lap_state, laps_df)
-
-
-def get_tire_react_agent(
-    provider: str = 'lmstudio',
-    model_name: str = 'gpt-4.1-mini',
-    base_url: str = 'http://localhost:1234/v1',
-    api_key: str = 'lm-studio',
-):
-    """Return the LangGraph ReAct agent backed by the singleton TireAgent instance.
-
-    Avoids connecting to the LLM at import time — created only when N31 or tests
-    actually invoke the agent.
-
-    Args:
-        provider: 'lmstudio' or 'openai'.
-        model_name: Model identifier for ChatOpenAI.
-        base_url: Base URL for LM Studio (ignored when provider='openai').
-        api_key: API key; use 'lm-studio' for local server.
-
-    Returns:
-        LangGraph CompiledGraph — invoke with {"messages": [{"role": "user", "content": ...}]}.
-    """
-    return _get_default_tire_agent().get_react_agent(
-        provider=provider,
-        model_name=model_name,
-        base_url=base_url,
-        api_key=api_key,
-    )

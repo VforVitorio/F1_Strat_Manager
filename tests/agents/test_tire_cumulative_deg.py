@@ -44,10 +44,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+
 ROOT = Path(__file__).parent.parent.parent
 RACE_DIR = ROOT / "data" / "raw" / "2025" / "Lusail"
 FEATURED = ROOT / "data" / "processed" / "laps_featured_2025.parquet"
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").exists()
 _HAS_DATA = (RACE_DIR / "laps.parquet").exists() and FEATURED.exists()
 
 
@@ -377,3 +378,116 @@ def test_the_reference_is_taken_from_the_stints_early_laps_and_not_from_all_of_t
     )
     assert tire_out.deg_cost_s is not None
     assert tire_out.deg_cost_s != 0.0
+
+
+# ===========================================================================
+# fresh-reference quality gate -- track_status_clean is dead on the shipping
+# path (a constant 0: N04's IsAccurate gate does not catch every neutralised
+# lap), so a Safety-Car- or red-flag-affected lap can land as the fresh
+# reference. Measured counter-example: Mexico City 2023 car 4, lap 36 reads
+# 137.8 s on a circuit whose green-flag pace is ~83 s, and every later lap in
+# that stint then priced tens of seconds "faster than fresh". Gating on
+# `lap_time_pct_of_race_fastest` -- already a TCN input feature, so no new
+# data is needed -- cuts the deg_cost_s error bound's mean absolute error from
+# 0.650 to 0.434 s/lap and its signed bias from +0.351 to +0.139 s/lap
+# (documents/audits/MEASURE_fresh_reference_quality_gate.md).
+
+
+@pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="_reject_contaminated_laps is logically pure, but it lives in tire_agent, "
+    "whose import builds TireAgentConfig() and reads data/models/tire_degradation/ "
+    "(HF, not git) -- the same constraint TestReferencedWear is already under.",
+)
+class TestRejectContaminatedLaps:
+    """The gate's threshold logic -- no model weights needed to EVALUATE it, but the
+    import that defines it needs them regardless (see the skip reason)."""
+
+    def test_a_lap_at_the_races_fastest_pace_survives(self):
+        from src.agents.tire_agent import _reject_contaminated_laps
+
+        laps = pd.DataFrame({"LapTime_s": [85.0]})
+        kept = _reject_contaminated_laps(laps, fastest_lap_s=85.0, max_pct=1.10)
+
+        assert len(kept) == 1
+
+    def test_a_lap_exactly_at_the_threshold_survives(self):
+        """The gate is <=, not <, so the boundary itself is not rejected."""
+        from src.agents.tire_agent import _reject_contaminated_laps
+
+        laps = pd.DataFrame({"LapTime_s": [93.5]})  # 85.0 * 1.10
+
+        kept = _reject_contaminated_laps(laps, fastest_lap_s=85.0, max_pct=1.10)
+
+        assert len(kept) == 1
+
+    def test_a_safety_car_affected_lap_is_rejected(self):
+        """The measured counter-example, in ratio form: 137.757 / 81.372 = 1.693."""
+        from src.agents.tire_agent import _reject_contaminated_laps
+
+        laps = pd.DataFrame({"LapTime_s": [137.757]})
+
+        kept = _reject_contaminated_laps(laps, fastest_lap_s=81.372, max_pct=1.10)
+
+        assert len(kept) == 0
+
+    def test_only_the_contaminated_rows_are_dropped_from_a_mixed_stint(self):
+        laps = pd.DataFrame({"LapTime_s": [86.0, 150.0, 88.5], "TyreLife": [1.0, 2.0, 3.0]})
+        from src.agents.tire_agent import _reject_contaminated_laps
+
+        kept = _reject_contaminated_laps(laps, fastest_lap_s=85.0, max_pct=1.10)
+
+        assert kept["TyreLife"].tolist() == [1.0, 3.0]
+
+
+@pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="TireAgent() loads the compound bundles from data/models/tire_degradation/ (HF, not git)",
+)
+def test_a_stint_whose_only_candidate_lap_is_a_safety_car_lap_has_no_reference():
+    """The agent-level wiring: every candidate rejected must return None, never
+    fall back to the contaminated lap. A wrong reference is worse than none --
+    the same doctrine ``_referenced_wear`` already applies to a missing half."""
+    from src.agents.tire_agent import TireAgent
+
+    agent = TireAgent()
+    agent.laps_df = pd.DataFrame(
+        {
+            "Driver": ["NOR"],
+            "Compound": ["MEDIUM"],
+            "TyreLife": [2.0],
+            "LapNumber": [36.0],
+            "LapTime_s": [137.757],  # the measured Mexico City 2023 counter-example
+        }
+    )
+    agent.session_meta = {"fastest_lap_s": 81.372}
+
+    assert agent._fresh_reference("NOR", "C3") is None
+
+
+@pytest.mark.skipif(
+    not _HAS_MODELS,
+    reason="TireAgent() loads the compound bundles from data/models/tire_degradation/ (HF, not git)",
+)
+def test_the_gate_also_works_on_the_raw_fastf1_laptime_column():
+    """`_get_driver_stint` returns `self.laps_df` as-is, and the raw FastF1 `run()`
+    path carries `LapTime` (a Timedelta), not the featured parquet's `LapTime_s` --
+    `_add_timing_cols` is what creates it, and only inside `_build_stint_tensor`.
+    A gate that assumes `LapTime_s` already exists breaks every raw-FastF1 caller,
+    which is exactly the regression this test pins (caught by
+    tests/engine/test_engine_no_llm.py before this test existed)."""
+    from src.agents.tire_agent import TireAgent
+
+    agent = TireAgent()
+    agent.laps_df = pd.DataFrame(
+        {
+            "Driver": ["NOR"],
+            "Compound": ["MEDIUM"],
+            "TyreLife": [2.0],
+            "LapNumber": [36.0],
+            "LapTime": [pd.Timedelta(seconds=137.757)],
+        }
+    )
+    agent.session_meta = {"fastest_lap_s": 81.372}
+
+    assert agent._fresh_reference("NOR", "C3") is None

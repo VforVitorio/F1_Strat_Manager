@@ -36,8 +36,9 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+
 ROOT = Path(__file__).parent.parent.parent
-_HAS_MODELS = (ROOT / "data" / "models" / "tire_degradation" / "routing_config.json").is_file()
 
 pytestmark = pytest.mark.skipif(
     not _HAS_MODELS,
@@ -79,6 +80,16 @@ def _orchestrator_prompt() -> str:
         track_temp=35.0,
     )
     return _build_orchestrator_prompt(race_state, {}, "STAY_OUT")
+
+
+def _prompts() -> dict[str, str]:
+    """Both rendered prompts, so every check below covers the pair rather than one."""
+    from src.agents.pit_strategy_agent import _PIT_STRATEGY_SYSTEM_PROMPT
+
+    return {
+        "pit agent prompt": _PIT_STRATEGY_SYSTEM_PROMPT,
+        "orchestrator prompt": _orchestrator_prompt(),
+    }
 
 
 def test_no_prompt_states_a_capacity_the_table_disagrees_with():
@@ -141,3 +152,112 @@ def test_the_selector_and_the_prompt_agree_across_the_band_that_used_to_split_th
         selector_allows = _STINT_CAPACITY_LAPS["SOFT"] >= laps_remaining
         prompt_allows = laps_remaining <= prompt_bound
         assert selector_allows == prompt_allows, laps_remaining
+
+
+# The four guard-rail bounds, each of which was prose in both prompts while the
+# deterministic rails computed against the constant. Gate G3 listed them; #741 had
+# derived exactly one number and left these.
+_MIN_STINT = re.compile(r"\b(SOFT|MEDIUM|HARD)\b[^.\n]*?>=\s*(\d+)\s*lap")
+_BEFORE_LAP = re.compile(r"before lap (\d+)")
+# Anchored on "when", because a looser pattern also matches the COMPOUND capacity line
+# ("recommend only if remaining laps <= 18") and then asserts the guard-rail bound
+# equals a stint capacity. Caught by this very test on its first run.
+_LAST_LAPS = re.compile(r"when remaining laps <=\s*(\d+)")
+_CLIFF_P10 = re.compile(r"cliff P10 <\s*(\d+)|laps_to_cliff P10 <\s*(\d+)")
+
+
+def test_no_prompt_states_a_minimum_stint_the_rails_disagree_with():
+    """`_MIN_STINT_LAPS` sat two sections above the one number #741 derived.
+
+    Same defect, same file, left in place because the fix was applied to the instance
+    in front of me rather than to the class. That is the pattern three gates have now
+    found, so this pins the whole table instead of one compound of it.
+    """
+    from src.strategy.inference.guard_rails import _MIN_STINT_LAPS
+
+    for name, prompt in _prompts().items():
+        stated = {m.group(1): int(m.group(2)) for m in _MIN_STINT.finditer(prompt)}
+        assert stated, f"{name} states no minimum stint the pattern can see"
+        for compound, value in stated.items():
+            assert value == _MIN_STINT_LAPS[compound], (
+                f"{name} says {compound} >= {value}, the rails enforce {_MIN_STINT_LAPS[compound]}"
+            )
+
+
+def test_no_prompt_states_a_pit_window_bound_the_rails_disagree_with():
+    """The two hard bounds an LLM is told to treat as inviolable.
+
+    If prose and rail disagree here the model is told to refuse an action the rails
+    would have allowed, or to allow one they will override, and either way the
+    disagreement is invisible until someone reads both files.
+    """
+    from src.strategy.inference.guard_rails import (
+        _CLIFF_P10_SAFE,
+        _NO_PIT_BEFORE_LAP,
+        _NO_PIT_LAST_N_LAPS,
+    )
+
+    for name, prompt in _prompts().items():
+        early = [int(m.group(1)) for m in _BEFORE_LAP.finditer(prompt)]
+        late = [int(m.group(1)) for m in _LAST_LAPS.finditer(prompt)]
+        cliff = [int(m.group(1) or m.group(2)) for m in _CLIFF_P10.finditer(prompt)]
+
+        assert early, f"{name}: the early-window bound is no longer visible"
+        assert late, f"{name}: the end-of-race bound is no longer visible"
+        assert cliff, f"{name}: the cliff exception is no longer visible"
+
+        assert set(early) == {_NO_PIT_BEFORE_LAP}, name
+        assert set(late) == {_NO_PIT_LAST_N_LAPS}, name
+        assert set(cliff) == {_CLIFF_P10_SAFE}, name
+
+
+def test_the_undercut_threshold_is_not_restated_at_all():
+    """This one cannot be interpolated, so it must not appear.
+
+    The threshold is loaded per-instance from the model's calibration config and the
+    tool PRINTS the live value into its own response. A module-level prompt cannot see
+    it, so restating it means the LLM can receive two different thresholds in one
+    conversation the moment the model is retuned. The prompt now points at what the
+    tool reports instead.
+    """
+    from src.agents.pit_strategy_agent import _PIT_STRATEGY_SYSTEM_PROMPT
+
+    assert "0.522" not in _PIT_STRATEGY_SYSTEM_PROMPT
+    assert "score_undercut_tool reports" in _PIT_STRATEGY_SYSTEM_PROMPT
+
+
+# --- two rules, one number: the coupling #716 exposed ------------------------
+
+_MEDIUM_BAND = re.compile(r"MEDIUM\b[^.\n]*?\b(\d+)\s*-\s*\d+")
+
+
+def test_the_medium_suitability_floor_is_not_the_minimum_stint_bound():
+    """Both prompts state a MEDIUM suitability band. Its floor is its OWN constant.
+
+    These are two different questions that shared the number 12 by accident: the
+    minimum-stint bound asks whether a set has run long enough to be worth replacing,
+    the suitability floor asks whether enough race is left for the compound to make
+    sense. Nothing ties them, and while the values agreed the coupling was invisible.
+
+    It surfaced when #716 recalibrated the minimum-stint bound to 7 against real stint
+    lengths: because both prompts rendered the band floor from `_MIN_STINT_LAPS`, the
+    recalibration silently rewrote "MEDIUM: suitable for 12-30 remaining laps" into
+    "7-30" on the DEFAULT LLM path, a rule the issue never touched and nobody reviewed.
+
+    Asserting the floor against its own constant is what catches a re-coupling: point
+    the prompt back at `_MIN_STINT_LAPS['MEDIUM']` and this fails on the mismatch. The
+    prompt-versus-table tests above cannot see it, because they assert equality between
+    prompt and constant and a re-coupled prompt agrees with the WRONG constant.
+    """
+    from src.agents.pit_strategy_agent import _MEDIUM_SUITABILITY_FLOOR_LAPS
+    from src.strategy.inference.guard_rails import _MIN_STINT_LAPS
+
+    for name, prompt in _prompts().items():
+        floors = {int(m.group(1)) for m in _MEDIUM_BAND.finditer(prompt)}
+        assert floors, f"{name} states no MEDIUM band the pattern can see"
+        assert floors == {_MEDIUM_SUITABILITY_FLOOR_LAPS}, (
+            f"{name} states a MEDIUM suitability floor of {floors}, but the constant is "
+            f"{_MEDIUM_SUITABILITY_FLOOR_LAPS}. If it now reads "
+            f"{_MIN_STINT_LAPS['MEDIUM']}, the band has been re-coupled to the "
+            f"minimum-stint bound and moves whenever that is recalibrated."
+        )

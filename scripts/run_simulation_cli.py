@@ -1287,18 +1287,13 @@ def _make_inference_panel(
 # RaceState builder
 # ---------------------------------------------------------------------------
 
-# Imported, not redeclared. Its rationale and its honest limitation live with it.
-#
-# Be precise about how far this got, because a comment claiming a closed drift is
-# worse than no comment: the CLI and the arcade now share one constant, and the
-# telemetry BACKEND does not. It is a git submodule and cannot be changed from this
-# commit, and an adversarial gate counted SIX surviving copies of this convention
-# there and here, including one in `strategy.py` that defaults the same concept to
-# 2.0 on one request model and 0.0 on its sibling in the same file. Tracked, not
-# closed (#628).
-from src.agents.position_projection import (  # noqa: E402
-    GAP_UNKNOWN_FALLBACK_S as _GAP_UNKNOWN_FALLBACK_S,
-)
+# The lap_state -> RaceState mapping is imported, not restated: the canonical
+# builder in src/agents/race_state_builder.py is shared by all three surfaces
+# (#784) — this CLI, the arcade, and the telemetry backend, which reaches it
+# through a re-export shim (#786). So the defaults the models receive, the gap
+# fallback and the #750 pace-delta axis can no longer drift per surface. Their
+# rationale and honest limitations live with the builder.
+from src.agents.race_state_builder import build_race_state  # noqa: E402
 
 
 def _build_race_state(
@@ -1306,71 +1301,24 @@ def _build_race_state(
     driver_code: str,
     prev_lap_time: float,
 ) -> RaceState:
-    """Map RaceStateManager's lap_state dict → RaceState Pydantic model.
+    """Map RaceStateManager's lap_state dict -> RaceState Pydantic model.
+
+    Thin delegation to ``src.agents.race_state_builder.build_race_state``
+    (#784), the single canonical mapping shared with the arcade and the
+    telemetry backend. The #628 position guard, the #750 pace-delta axis and
+    the gap fallback rationale all live there now. ``radio_msgs`` /
+    ``rcm_events`` stay schema defaults here on purpose: the main loop below
+    mutates them after construction (corpus radios, the SC tracker, the
+    --radio-every synthetic generator), and that precedence rule is CLI policy,
+    not builder policy.
 
     ``prev_lap_time`` is accepted but no longer read here: ``pace_delta_s`` used
-    to be computed from it and that was the wrong axis (#750, fixed below). Left
-    in the signature rather than removed, since the caller's per-lap bookkeeping
+    to be computed from it and that was the wrong axis (#750). Left in the
+    signature rather than removed, since the caller's per-lap bookkeeping
     that produces it (`run()`'s ``prev_lap_time`` loop variable) serves no other
     purpose today and dropping it is a small cleanup outside this fix's scope.
     """
-    driver_st = lap_state["driver"]
-    rivals = lap_state.get("rivals", [])
-    weather = lap_state.get("weather", {})
-
-    our_pos = driver_st.get("position")
-    # The incomplete-lap guard in run()'s main loop (`_pos_raw is None or ...`)
-    # already skips any lap where the driver's position is unknown before
-    # _build_race_state is ever called. Reaching here with a None position
-    # means that invariant broke. Fail loudly instead of defaulting to a
-    # searchable P99: a fabricated position is exactly the value the
-    # `our_pos - 1` lookup below searches by, so an unknown position and a
-    # genuinely-last car would silently resolve to the same rival — the #428
-    # bug shape. Mirrors src/arcade/strategy.py's _build_race_state (fixed for
-    # the identical shape under #465); the caller's per-lap try/except (in
-    # run()) turns this into an [ERROR] row for the lap, not a crashed run.
-    if our_pos is None:
-        raise ValueError(
-            "_build_race_state: driver position is None; the incomplete-lap "
-            "guard should have skipped this lap before it reached "
-            "_build_race_state (#628)"
-        )
-    car_ahead = next((r for r in rivals if r.get("position") == our_pos - 1), None)
-    if car_ahead is not None:
-        _interval = car_ahead.get("interval_to_driver_s")
-        gap_ahead_s = abs(_interval) if _interval is not None else _GAP_UNKNOWN_FALLBACK_S
-    else:
-        gap_ahead_s = 0.0
-
-    cur_lap_time = driver_st.get("lap_time_s") or 0.0
-    # pace_delta_s is contractually RIVAL-relative (this driver's lap time minus
-    # the car directly ahead's SAME lap, negative = we are faster) per
-    # race_situation_agent.py:292/904, the schema N27 itself computes. The old
-    # formula compared cur_lap_time against our OWN previous lap instead, a
-    # same-car same-driver quantity that reported roughly -20s of phantom "pace
-    # gain" on the lap after a pit stop, a green lap read against our own
-    # out-lap. car_ahead is already resolved above for gap_ahead_s, so no extra
-    # lookup is needed; 0.0 when it or its lap time is unknown is the schema's
-    # documented neutral, not a guess in either direction (#750).
-    ahead_lap_time = car_ahead.get("lap_time_s") if car_ahead is not None else None
-    if ahead_lap_time is not None and cur_lap_time:
-        pace_delta_s = cur_lap_time - float(ahead_lap_time)
-    else:
-        pace_delta_s = 0.0
-
-    return RaceState(
-        driver=driver_code,
-        lap=driver_st["lap_number"],
-        total_laps=lap_state["session_meta"]["total_laps"],
-        position=our_pos,
-        compound=driver_st.get("compound", "UNKNOWN"),
-        tyre_life=driver_st.get("tyre_life", 0),
-        gap_ahead_s=gap_ahead_s,
-        pace_delta_s=pace_delta_s,
-        air_temp=weather.get("air_temp", 25.0),
-        track_temp=weather.get("track_temp", 40.0),
-        rainfall=bool(weather.get("rainfall", False)),
-    )
+    return build_race_state(lap_state, driver=driver_code)
 
 
 # ---------------------------------------------------------------------------
