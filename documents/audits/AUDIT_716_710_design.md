@@ -439,3 +439,44 @@ Six tests failed rather than skipped for the same reason, and one of them,
 `available: false` and left the emptied file in the worktree. The guards now name the
 holdout. Publishing the artefact is the real fix and needs the file, which only exists on
 a machine that has run the notebook.
+
+## H4 — the #797 gate died on a usage limit, and its on-disk report paid for itself
+
+`GATE_797_circuit_speed.md` reached 8.6 KB before the agent was terminated mid-run. Because
+it appended findings as it confirmed them rather than buffering a final report, five
+findings survived, four of them real and two HIGH. This is the second time in two sessions
+that incremental persistence recovered work a dead agent would otherwise have taken with it.
+
+What it found in my own fix, all verified independently before acting:
+
+- **F1, HIGH.** The resolver covered two of the project's FOUR keyspaces. `RaceReplayEngine`
+  puts the metadata.json name into `session_meta`, which for one race is `'Miami Gardens'`
+  with a SPACE, matching neither the parquet slug `'Miami'` nor the folder `'Miami_Gardens'`.
+  Every lap of the 2025 Miami race was served NaN while its value sat in the map. Same for
+  the 2023 Spanish GP (`'Spain'`). The #448/#450 dual-keyspace trap, third occurrence, and
+  the third time in this session that I fixed one member of a pair and not the other.
+- **F2, HIGH.** `laps_featured_2025.parquet` carries NaN on all 760 Las Vegas rows, so
+  reading that file dropped a circuit N06 was FITTED on and whose value sits in three other
+  artefacts. The docstring's "we do not know this circuit" was false for Las Vegas.
+- **F3, MEDIUM.** The map was 2025-only while the replay engine can replay 2023 and 2024, so
+  a 2023 Silverstone lap was served a measurement taken two years after it, 18.4 km/h away.
+  `run()` receives `year` and the resolver ignored it.
+- **F4, MEDIUM.** My "recomputed per season" claim was wrong: 2023 and 2024 are identical
+  per GP to exactly 0.0. The value is recomputed per ARTEFACT BUILD, one build pooling both
+  training seasons. The conclusion survived, the stated mechanism did not, and a comment
+  naming the wrong mechanism is how the next fix goes wrong.
+- **F5, verified clean.** NaN survives to the model, `_bootstrap_ci` multiplying NaN by
+  Gaussian noise still returns finite p10/p90 through XGBoost's default split, an explicit
+  value still wins, and no production caller passes one.
+
+**And one the gate did not reach, found while fixing F1:** the combined artefact does not
+agree with itself. `laps_featured.parquet` calls the same race `'Miami'` in 2023-2024 and
+`'Miami Gardens'` in 2025, so even a correctly spelled query misses on one season. The fix
+is not a longer candidate list at the query end, which fails the moment the STORED spelling
+is the odd one: `_normalise_gp_key` now normalises both the map keys at load time and the
+query, which is what `gp_slugs`'s own docstring prescribes.
+
+The lookup is now keyed by `(Year, GP)` from the combined parquet, which has 71 pairs and
+zero missing values. All 71 races on disk resolve, asserted by walking `data/raw/` rather
+than by fixing the two names an audit happened to mention. A real `f1-sim Miami_Gardens`
+run completes with zero unresolved-circuit warnings.

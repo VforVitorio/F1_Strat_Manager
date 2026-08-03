@@ -30,7 +30,7 @@ import pandas as pd
 import xgboost as xgb
 
 from src.agents._shared_defaults import reading_or_default
-from src.f1_strat_manager.gp_slugs import slug_from_event_name
+from src.f1_strat_manager.gp_slugs import canonical_gp_name, slug_from_event_name
 
 # Safe in this direction: envelope.py is a leaf that imports nothing from src.agents.
 from src.strategy.inference.envelope import OperatingEnvelope
@@ -165,6 +165,30 @@ _N06_TRAINED_BOUNDS: dict[str, tuple[float, float]] = {
 _N06_ENVELOPE = OperatingEnvelope(name="n06_laptime_delta", bounds=_N06_TRAINED_BOUNDS)
 
 
+def _normalise_gp_key(gp_name: str) -> str:
+    """One spelling for a GP, applied to BOTH sides of the circuit-speed lookup.
+
+    A GP is written four ways across this project: the parquet slug ('Miami'), the raw
+    folder ('Miami_Gardens'), the metadata.json name the replay engine puts into
+    `session_meta` ('Miami Gardens', with a SPACE), and the FastF1 event name ('Miami
+    Grand Prix'). Worse, the artefacts do not agree with each other: the combined
+    `laps_featured.parquet` calls this race 'Miami' in 2023-2024 and 'Miami Gardens' in
+    2025, so even a lookup whose query is spelled correctly can miss on the season.
+
+    Normalising the KEYS at load time and the query the same way is what `gp_slugs`'s own
+    docstring prescribes, and it is why this is a function rather than a longer candidate
+    list at the call site: a chain of guesses at the query end still fails the moment the
+    stored spelling is the odd one, which is exactly how the first version of this lookup
+    sent every lap of the 2025 Miami race to NaN.
+
+    Underscores first, because `canonical_gp_name`'s alias table is keyed by the folder
+    form, so 'Miami Gardens' has to become 'Miami_Gardens' before it can become 'Miami'.
+    """
+    if not gp_name:
+        return ""
+    return canonical_gp_name(gp_name.replace(" ", "_"))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PaceOutput dataclass (public API — untouched)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -241,8 +265,8 @@ class PaceAgent:
         self.compound_id, self.circuit_cluster, self.team_id = self._load_encoding_maps(
             processed_dir
         )
-        self.circuit_mean_sector_speed: dict[str, float] = self._load_circuit_mean_sector_speed(
-            processed_dir
+        self.circuit_mean_sector_speed: dict[tuple[int, str], float] = (
+            self._load_circuit_mean_sector_speed(processed_dir)
         )
         self.laps_ref: pd.DataFrame = self._load_reference_laps(processed_dir)
 
@@ -299,47 +323,54 @@ class PaceAgent:
         return compound_id, circuit_cluster, team_id
 
     @staticmethod
-    def _load_circuit_mean_sector_speed(processed_dir: Path) -> dict[str, float]:
-        """The one ``mean_sector_speed`` each GP carries, keyed by parquet ``GP_Name``.
+    def _load_circuit_mean_sector_speed(processed_dir: Path) -> dict[tuple[int, str], float]:
+        """``mean_sector_speed`` per ``(Year, GP_Name)``, from the combined featured parquet.
 
-        This feature is a property of the CIRCUIT, not of the lap: the featured parquet
-        holds exactly one distinct value per GP, the mean of the three speed traps.
+        This feature is a property of the CIRCUIT, not of the lap: the parquet holds
+        exactly one distinct value per (year, GP), the mean of the three speed traps.
         N06 was trained on it and inference never had it, because `_compute_derived`
         substituted `prev_speed_st` and nothing ever supplied the real thing (#797).
 
-        Read from the same `laps_featured_2025.parquet` the team map and the reference
-        laps already come from rather than from `circuit_clustering/`: it is the artefact
-        N04 writes the column into, and there is no second file to keep in step.
+        KEYED BY YEAR, because the value is not constant across the dataset and the
+        replay engine can replay any of the three seasons. `laps_featured.parquet` carries
+        71 (year, GP) pairs and the value differs between the training era and 2025 on
+        every GP present in both: mean absolute gap 4.8 km/h, largest Silverstone at 18.4.
+        An earlier draft of this loader read only `laps_featured_2025.parquet` and served
+        that single value for every replay, which fed a 2023 Silverstone lap a measurement
+        taken two years after it. Keying by year makes the value served the value the lap
+        being replayed actually carries.
 
-        WHICH SEASON'S VALUE, because the two are not the same number and an earlier
-        draft of this docstring implied they were. The feature is recomputed per season
-        from that season's laps, so a GP's 2025 value differs from its 2023-2024 one:
-        across the 23 GPs in both, none match exactly, the mean absolute gap is 4.8 km/h
-        and Silverstone moves 18.4. Serving 2025 is deliberate and is the correct half of
-        that pair, because the quantity N04 would compute for a 2025 lap is the 2025
-        measurement; serving the training seasons' value would feed a stale reading of a
-        circuit that has since been resurfaced or re-regulated.
+        Beware the mechanism, which is NOT what an earlier draft of this docstring said:
+        the value is recomputed per ARTEFACT GENERATION, not per season. 2023 and 2024 are
+        identical for every GP they share (max difference exactly 0.0), because one build
+        pooled both training seasons and a later build produced 2025. Anyone "completing"
+        a per-season resolution between 2023 and 2024 would find nothing to resolve.
 
-        It follows that the ENVELOPE bound on this feature is the 2023-2024 range while
-        the value served is a 2025 measurement, and that is the right way round rather
-        than an oversight: the bound asks whether N06 was FITTED on inputs like this one,
-        so a 2025 circuit outside the fitted range is genuine extrapolation and should be
-        said out loud. Monza 2025 at 317.24 against a fitted maximum of 314.97 is exactly
-        that case, and it is the only one.
+        THE COMBINED FILE, not the per-year ones, and that is the whole reason this reads
+        `laps_featured.parquet`: `laps_featured_2025.parquet` carries NaN on all 760 Las
+        Vegas rows, so a `.dropna()` over it silently drops a circuit N06 was fitted on and
+        whose value sits in three other artefacts. The combined file has 71 pairs and ZERO
+        missing values, so "absent from the map" now means a genuinely unknown circuit
+        rather than an artefact with a hole in it.
 
-        A GP whose value is missing is simply absent from the map. It must NOT acquire a
-        default here -- see `_resolve_mean_sector_speed` for why an absent circuit has to
-        stay absent all the way to the model.
+        It follows that the ENVELOPE bound stays the 2023-2024 range while a 2025 lap is
+        served a 2025 measurement, and that is the right way round rather than an oversight:
+        the bound asks whether N06 was FITTED on inputs like this one, so a 2025 circuit
+        outside the fitted range is genuine extrapolation and should be said out loud. Monza
+        2025 at 317.24 against a fitted maximum of 314.97 is exactly that, and the only one.
         """
         speeds = pd.read_parquet(
-            processed_dir / "laps_featured_2025.parquet",
-            columns=["GP_Name", "mean_sector_speed"],
+            processed_dir / "laps_featured.parquet",
+            columns=["Year", "GP_Name", "mean_sector_speed"],
         ).dropna()
-        by_gp = speeds.drop_duplicates("GP_Name").set_index("GP_Name")["mean_sector_speed"]
-        return {str(gp): float(value) for gp, value in by_gp.items()}
+        by_race = speeds.drop_duplicates(["Year", "GP_Name"])
+        return {
+            (int(row.Year), _normalise_gp_key(str(row.GP_Name))): float(row.mean_sector_speed)
+            for row in by_race.itertuples()
+        }
 
-    def _resolve_mean_sector_speed(self, gp_name: str) -> float:
-        """This circuit's trained mean sector speed, or NaN when it does not resolve.
+    def _resolve_mean_sector_speed(self, gp_name: str, year: int) -> float:
+        """This race's trained mean sector speed, or NaN when it does not resolve.
 
         NaN, never `prev_speed_st`, and that substitution is the whole bug: the speed
         trap is a different physical quantity (training means 256.8 vs 303.0 km/h), so
@@ -349,22 +380,28 @@ class PaceAgent:
         should look like. Same rule as `FuelEffect` (#446) and `Position` (#628): unknown
         data stays unknown and never becomes a number the model can mistake for a reading.
 
-        The name is resolved through `slug_from_event_name` first, because `gp_name`
-        arrives in either keyspace depending on the caller -- the CLI passes the slug
-        ('Lusail'), a FastF1-derived caller passes the event name ('Qatar Grand Prix').
-        The same dual-keyspace trap cost #448 and #450.
+        FOUR KEYSPACES, because a GP is named four different ways in this project and an
+        earlier draft resolved only two of them. The parquet slug ('Miami'), the raw
+        folder ('Miami_Gardens'), the metadata.json name the replay engine actually puts
+        into `session_meta` ('Miami Gardens', with a SPACE, which neither of the other two
+        forms matches), and the FastF1 event name ('Qatar Grand Prix'). Resolving only the
+        first and last sent every lap of the 2025 Miami and 2023 Spanish races to NaN while
+        their value sat in the map. That is the #448/#450 dual-keyspace trap for the third
+        time, and this time the enumeration is checked rather than assumed: all 71 races
+        under `data/raw/` resolve through the chain below, asserted in
+        `tests/agents/test_pace_circuit_speed.py`.
         """
-        if gp_name in self.circuit_mean_sector_speed:
-            return self.circuit_mean_sector_speed[gp_name]
-
-        slug = slug_from_event_name(gp_name) if gp_name else None
-        if slug and slug in self.circuit_mean_sector_speed:
-            return self.circuit_mean_sector_speed[slug]
+        if gp_name:
+            for candidate in (gp_name, slug_from_event_name(gp_name) or ""):
+                key = (year, _normalise_gp_key(candidate))
+                if key in self.circuit_mean_sector_speed:
+                    return self.circuit_mean_sector_speed[key]
 
         logger.warning(
-            "no trained mean sector speed for GP %r; N06 reads the feature as missing "
+            "no trained mean sector speed for %r in %s; N06 reads the feature as missing "
             "rather than being fed the speed trap in its place (#797)",
             gp_name,
+            year,
         )
         return float("nan")
 
@@ -518,7 +555,7 @@ class PaceAgent:
         resolved_mean_sector_speed = (
             mean_sector_speed
             if mean_sector_speed is not None
-            else self._resolve_mean_sector_speed(gp_name)
+            else self._resolve_mean_sector_speed(gp_name, year)
         )
         derived = self._compute_derived(
             tyre_life,
