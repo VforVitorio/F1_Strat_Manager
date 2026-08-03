@@ -137,6 +137,10 @@ class RaceStateManager:
         # same reason as the leader times: get_lap_state must stay an O(1) lookup.
         self._stint_baselines: dict[int, int] = self._precompute_stint_baselines()
 
+        # Our driver's pit-in laps, so `laps_since_pit` is an O(1) lookup like the
+        # rest of this class rather than a rescan per lap.
+        self._pit_laps: tuple[int, ...] = self._precompute_pit_laps()
+
         # N04's Prev_LapTime, reconstructed for frames that do not carry it.
         # Precomputed for the same reason as the two above: get_driver_state is an
         # O(1) lookup and a per-lap rescan would break that promise.
@@ -150,6 +154,40 @@ class RaceStateManager:
         # pass brings it back to 3.9 ms. Lazy per driver, because a caller asking
         # about three cars should not pay for twenty.
         self._stint_flags: dict[str, dict[int, dict[str, Any]]] = {}
+
+    def _precompute_pit_laps(self) -> tuple[int, ...]:
+        """The lap numbers on which our driver entered the pit lane, ascending.
+
+        ``PitInTime`` is the same signal N01 uses to build ``LapsSincePitStop`` and
+        the same one ``green_flag_stops`` uses to define a real stop, so the three
+        agree on what a pit lap is by construction rather than by coincidence.
+        """
+        if "PitInTime" not in self._driver.columns:
+            return ()
+        pit_rows = self._driver[self._driver["PitInTime"].notna()]
+        return tuple(sorted(int(lap) for lap in pit_rows["LapNumber"].dropna()))
+
+    def laps_since_pit(self, lap_number: int) -> int:
+        """Laps completed since our driver's last pit stop, N01's definition exactly.
+
+        N01 (``notebooks/data_engineering/N01_data_download.ipynb``, "3.
+        LapsSincePitStop") builds the trained column as ``lap - max(pit laps strictly
+        before lap)``, falling back to ``lap`` itself while the driver has not stopped.
+        Reproduced here rather than approximated: recomputing that rule from the raw
+        laps matches the featured parquet's column on **100.0%** of 2,851 laps across
+        four 2025 races.
+
+        WHY THIS EXISTS AT ALL. Inference used to pass ``TyreLife`` for this feature,
+        which is a different quantity: the AGE OF THE TYRE SET, counting laps the set
+        ran before this race. The two coincide only when the set was fitted at the last
+        stop. Measured against the trained column on the same four races, ``TyreLife``
+        reproduces it on 97.7% of laps at Lusail and **34.6%** at Melbourne, where two
+        thirds of laps were fed the wrong number (#800).
+        """
+        earlier = [lap for lap in self._pit_laps if lap < lap_number]
+        if not earlier:
+            return int(lap_number)
+        return int(lap_number - max(earlier))
 
     def _precompute_prev_lap_times(self) -> dict[int, float]:
         """Reconstruct N04's ``Prev_LapTime`` for a frame that has no such column.
@@ -352,6 +390,11 @@ class RaceStateManager:
             "compound": str(r.get("Compound", "")),
             "compound_id": int(r["CompoundID"]) if pd.notna(r.get("CompoundID")) else None,
             "tyre_life": int(r["TyreLife"]) if pd.notna(r.get("TyreLife")) else None,
+            # NOT the same quantity as tyre_life, which is the AGE OF THE SET and counts
+            # laps run before this race. Emitted separately because inference used to
+            # pass tyre_life for N06's LapsSincePitStop and the two only coincide when
+            # the set was fitted at the last stop (#800).
+            "laps_since_pit": self.laps_since_pit(int(lap_number)),
             "stint": int(r["Stint"]) if pd.notna(r.get("Stint")) else None,
             # TyreLife when this stint began — N06's FuelEffect is measured from it.
             # Driver-only on purpose: the pace model runs on our car, and rivals stay
