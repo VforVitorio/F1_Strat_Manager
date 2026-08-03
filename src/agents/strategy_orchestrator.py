@@ -79,6 +79,7 @@ from src.agents.race_situation_agent import (
 from src.agents.pit_strategy_agent import (
     run_pit_strategy_agent,
     run_pit_strategy_agent_from_state,
+    _MEDIUM_SUITABILITY_FLOOR_LAPS,
     _STINT_CAPACITY_LAPS,
 )
 
@@ -1700,7 +1701,7 @@ def _build_orchestrator_prompt(
         # deterministic selector's table (18 vs 15), so laps_remaining=16-18 had the
         # selector pass SOFT while both prompts told the LLM to refuse it (#741).
         f"  5. Compound must fit remaining laps: SOFT only if <= {_STINT_CAPACITY_LAPS['SOFT']} laps remain,\n"
-        f"     MEDIUM for {_MIN_STINT_LAPS['MEDIUM']}-{_STINT_CAPACITY_LAPS['MEDIUM']}, "
+        f"     MEDIUM for {_MEDIUM_SUITABILITY_FLOOR_LAPS}-{_STINT_CAPACITY_LAPS['MEDIUM']}, "
         f"HARD for 20+. Wrong compound forces an extra stop.\n"
         f"  6. Opening laps 1-3: threat levels from N27 are inflated by start chaos.\n"
         f"     Discount them one tier (HIGH→MEDIUM, MEDIUM→LOW) for decision-making.\n"

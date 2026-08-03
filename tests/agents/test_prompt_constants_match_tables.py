@@ -224,3 +224,40 @@ def test_the_undercut_threshold_is_not_restated_at_all():
 
     assert "0.522" not in _PIT_STRATEGY_SYSTEM_PROMPT
     assert "score_undercut_tool reports" in _PIT_STRATEGY_SYSTEM_PROMPT
+
+
+# --- two rules, one number: the coupling #716 exposed ------------------------
+
+_MEDIUM_BAND = re.compile(r"MEDIUM\b[^.\n]*?\b(\d+)\s*-\s*\d+")
+
+
+def test_the_medium_suitability_floor_is_not_the_minimum_stint_bound():
+    """Both prompts state a MEDIUM suitability band. Its floor is its OWN constant.
+
+    These are two different questions that shared the number 12 by accident: the
+    minimum-stint bound asks whether a set has run long enough to be worth replacing,
+    the suitability floor asks whether enough race is left for the compound to make
+    sense. Nothing ties them, and while the values agreed the coupling was invisible.
+
+    It surfaced when #716 recalibrated the minimum-stint bound to 7 against real stint
+    lengths: because both prompts rendered the band floor from `_MIN_STINT_LAPS`, the
+    recalibration silently rewrote "MEDIUM: suitable for 12-30 remaining laps" into
+    "7-30" on the DEFAULT LLM path, a rule the issue never touched and nobody reviewed.
+
+    Asserting the floor against its own constant is what catches a re-coupling: point
+    the prompt back at `_MIN_STINT_LAPS['MEDIUM']` and this fails on the mismatch. The
+    prompt-versus-table tests above cannot see it, because they assert equality between
+    prompt and constant and a re-coupled prompt agrees with the WRONG constant.
+    """
+    from src.agents.pit_strategy_agent import _MEDIUM_SUITABILITY_FLOOR_LAPS
+    from src.strategy.inference.guard_rails import _MIN_STINT_LAPS
+
+    for name, prompt in _prompts().items():
+        floors = {int(m.group(1)) for m in _MEDIUM_BAND.finditer(prompt)}
+        assert floors, f"{name} states no MEDIUM band the pattern can see"
+        assert floors == {_MEDIUM_SUITABILITY_FLOOR_LAPS}, (
+            f"{name} states a MEDIUM suitability floor of {floors}, but the constant is "
+            f"{_MEDIUM_SUITABILITY_FLOOR_LAPS}. If it now reads "
+            f"{_MIN_STINT_LAPS['MEDIUM']}, the band has been re-coupled to the "
+            f"minimum-stint bound and moves whenever that is recalibrated."
+        )

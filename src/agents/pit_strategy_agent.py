@@ -102,6 +102,22 @@ _COMPOUND_FALLBACK: dict[str, int] = {'HARD': 1, 'MEDIUM': 3, 'SOFT': 5}
 # the same standing as VSC_PIT_BONUS and WINDOW_LAPS in strategy_orchestrator.
 _STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
 
+# The FLOOR of the MEDIUM suitability band in both prompts' "COMPOUND vs REMAINING
+# LAPS" rule: below this many laps left, fit a SOFT instead. Same standing as
+# _STINT_CAPACITY_LAPS above, a modelling assumption rather than a measurement.
+#
+# It exists as its own constant because it was previously rendered from
+# `_MIN_STINT_LAPS['MEDIUM']`, and those are two different rules that happened to
+# share the number 12. One asks "has this set run long enough to be worth
+# replacing?", the other asks "is there enough race left for this compound to make
+# sense?" — nothing ties them, and the coupling was invisible because the values
+# agreed. It surfaced when #716 recalibrated the minimum-stint bound to 7 against
+# real stint lengths and silently rewrote this unrelated rule to "MEDIUM: suitable
+# for 7-30 remaining laps" in the DEFAULT LLM path. 12 is what this band has always
+# said; the recalibration must not move it. Do NOT re-derive it from another
+# constant: a shared value is not a shared meaning.
+_MEDIUM_SUITABILITY_FLOOR_LAPS: int = 12
+
 # N16 trained Lap_gap as the offset between the two stops (lap_y - lap_x), never the
 # race lap. At inference we always score the canonical undercut: we box on this lap and
 # the rival responds on the next one, so the offset is 1 (#444).
@@ -681,7 +697,7 @@ MINIMUM STINT LENGTH before a pit makes sense:
 
 COMPOUND vs REMAINING LAPS:
   SOFT: recommend only if remaining laps <= {_STINT_CAPACITY_LAPS['SOFT']} (it won't last longer).
-  MEDIUM: suitable for {_MIN_STINT_LAPS['MEDIUM']}-{_STINT_CAPACITY_LAPS['MEDIUM']} remaining laps.
+  MEDIUM: suitable for {_MEDIUM_SUITABILITY_FLOOR_LAPS}-{_STINT_CAPACITY_LAPS['MEDIUM']} remaining laps.
   HARD: suitable for 20+ remaining laps.
   Picking SOFT with 25 laps to go forces an extra pit stop — factor that cost in.
 
