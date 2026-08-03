@@ -111,6 +111,13 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     "data/processed/tiredeg_feature_manifest.json",
     "data/processed/tiredeg_sequence_config.json",
     "data/processed/circuit_clustering/**",
+    # N16's undercut holdout. NOT optional and not an eval-only artefact:
+    # `PitStrategyAgent.__init__` reads it unconditionally to pre-aggregate the
+    # per-circuit and per-team undercut rates, so without it the pit agent cannot be
+    # CONSTRUCTED and every surface that reaches it raises FileNotFoundError. It was
+    # missing from this list and from the dataset itself, which stayed invisible
+    # because every machine that has run the notebook already had the file (#798).
+    "data/processed/undercut_labeled/**",
     # Radio corpus metadata: small parquets (~430 KB total for the full
     # 2025 calendar) that the runner reads to enumerate per-lap team-radio
     # rows and FIA race-control messages. The matching MP3 audio tree under
