@@ -30,6 +30,8 @@ import pandas as pd
 import xgboost as xgb
 
 from src.agents._shared_defaults import reading_or_default
+# Safe in this direction: envelope.py is a leaf that imports nothing from src.agents.
+from src.strategy.inference.envelope import OperatingEnvelope
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -84,6 +86,55 @@ _NOISE_PCT: float  = 0.02   # 2 % Gaussian noise on continuous features
 # lives in tire_agent._add_fuel_cols; deliberately duplicated rather than shared, since
 # unifying constants across agent modules is a wider refactor than this fix (#446).
 FUEL_GAIN_PER_LAP_S: float = 0.055
+
+
+# ── N06's operating envelope (#710) ──────────────────────────────────────────
+# The range each continuous feature actually took across N06's training seasons,
+# so that a call outside it stops being silent. Until now this agent had no range
+# check of any kind, which is the condition the envelope contract was written for:
+# an XGBoost regressor answers an out-of-range call with exactly the confidence it
+# answers an in-range one, and N26 spent two years doing precisely that.
+#
+# MEASURED, NOT CHOSEN, and reproducible: rebuild 2023 + 2024 through
+# `augment_featured_laps`, apply the two N06 feature steps `pace_holdout.py` already
+# owns (`_encode_categoricals` then `_add_lag_deg_features`), drop the rows N06 drops,
+# and take the min/max of each column over the resulting 42,957 rows.
+# `tests/agents/test_n06_envelope.py` re-runs that measurement and fails if any bound
+# below has drifted from it, so these cannot quietly become hand-typed numbers.
+#
+# Why these twelve and not all twenty-five:
+#   - The identifiers and codes (DriverNumber, TeamID, CompoundID, Cluster, Year) and
+#     the flags (FreshTyre, Rainfall) have no range to be outside of. A bound on a
+#     label is a category check wearing the wrong contract.
+#   - The three Prev_Deg* features are excluded DELIBERATELY, and the reason matters
+#     because it is the opposite of what it looks like. `run_from_state` hardcodes all
+#     three to 0.0 on every real call, which reads like the textbook out-of-range bug.
+#     Measured, it is not one: 0.0 sits mid-distribution for all three (42%/42%/47% of
+#     training rows fall below it), so an envelope would never fire and declaring one
+#     here would advertise a check that cannot work. Feeding a model a CONSTANT where
+#     it was trained on a distribution is a real defect, but it is a different defect
+#     and it needs its own instrument, not this one.
+#
+# The bounds are TRAINING-season ranges (2023-2024). This is not the same thing as the
+# "range 0..3.685 s" recorded next to FUEL_GAIN_PER_LAP_S above, which was measured on
+# laps_featured_2025: 2025 is the held-out TEST season, and an envelope sourced from it
+# would be describing where the model is asked to work rather than where it was fitted.
+_N06_TRAINED_BOUNDS: dict[str, tuple[float, float]] = {
+    'LapNumber':         (3.0, 78.0),
+    'TyreLife':          (3.0, 78.0),
+    'FuelLoad':          (0.0, 0.9615),
+    'FuelEffect':        (0.055, 4.125),
+    'Prev_LapTime':      (67.719, 148.991),
+    'Prev_TyreLife':     (2.0, 77.0),
+    'Prev_SpeedST':      (156.0, 362.0),
+    'AirTemp':           (14.5, 33.7),
+    'TrackTemp':         (16.7, 50.7),
+    'Humidity':          (18.0, 92.0),
+    'laps_remaining':    (0.0, 75.0),
+    'mean_sector_speed': (196.6292354740061, 314.9705586672411),
+}
+
+_N06_ENVELOPE = OperatingEnvelope(name='n06_laptime_delta', bounds=_N06_TRAINED_BOUNDS)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -405,7 +456,34 @@ class PaceAgent:
         # converts None→NaN and the model handles NaN natively via its
         # sparse-aware split logic (default_left). Cheap and defensive —
         # no-op on already-numeric frames.
-        return df.apply(pd.to_numeric, errors='coerce')
+        numeric = df.apply(pd.to_numeric, errors='coerce')
+        self._label_against_envelope(numeric)
+        return numeric
+
+    @staticmethod
+    def _label_against_envelope(feature_df: pd.DataFrame) -> None:
+        """Say out loud when N06 is being asked to predict outside its trained range.
+
+        LABELS ONLY, and that is the contract, not a shortcut: nothing here clips,
+        refuses or alters a single value the model is fed, so the frame returned by
+        `_build_feature_row` is byte-identical to the one returned before this
+        existed and the strategy goldens cannot move (#710).
+
+        Only ``violations`` are reported, never ``unknown``. A feature that arrived
+        as NaN was not given a bad value, it was given no value, and the two must
+        stay distinguishable: the places that can produce a NaN here already warn
+        for themselves (`_compute_derived` on an absent stint baseline, and the
+        deliberate None-propagation of an unknown Position), so folding them in
+        would double-report the known cases and drown the one this exists to catch.
+        """
+        verdict = _N06_ENVELOPE.check(feature_df.iloc[0].to_dict())
+        if verdict.violations:
+            logger.warning(
+                'N06 called outside its trained range on %d feature(s): %s; the '
+                'prediction is an extrapolation, not a fit',
+                len(verdict.violations),
+                dict(verdict.violations),
+            )
 
     # ── Inference helpers ─────────────────────────────────────────────────────
 
