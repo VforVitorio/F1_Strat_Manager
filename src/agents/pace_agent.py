@@ -29,7 +29,11 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from src.agents._shared_defaults import reading_or_default
+from src.agents._shared_defaults import (
+    DEFAULT_AIR_TEMP_C,
+    DEFAULT_TRACK_TEMP_C,
+    reading_or_default,
+)
 from src.f1_strat_manager.gp_slugs import canonical_gp_name, slug_from_event_name
 
 # Safe in this direction: envelope.py is a leaf that imports nothing from src.agents.
@@ -896,8 +900,8 @@ class PaceAgent:
         # present-and-None, and it is now the shared helper the other two adopted rather
         # than a fourth copy of the pattern (#788).
         _speed_st = d.get("speed_st") or 300.0
-        _air_temp = reading_or_default(wx, "air_temp", 25.0)
-        _trk_temp = reading_or_default(wx, "track_temp", 35.0)
+        _air_temp = reading_or_default(wx, "air_temp", DEFAULT_AIR_TEMP_C)
+        _trk_temp = reading_or_default(wx, "track_temp", DEFAULT_TRACK_TEMP_C)
         _humidity = reading_or_default(wx, "humidity", 50.0)
         _rainfall = reading_or_default(wx, "rainfall", 0)
 
