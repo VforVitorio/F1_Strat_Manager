@@ -32,7 +32,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS, reading_or_default
+from src.agents._shared_defaults import (
+    DEFAULT_AIR_TEMP_C,
+    DEFAULT_TOTAL_LAPS,
+    DEFAULT_TRACK_TEMP_C,
+    reading_or_default,
+)
 from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE, normalise_compound
 from src.agents.tire_parsing import parse_tool_outputs
 
@@ -40,7 +45,7 @@ from src.agents.tire_parsing import parse_tool_outputs
 # Walker with a root-stop guard so we don't spin forever when the module is
 # imported from outside a git checkout (e.g. uv tool install).
 _REPO_ROOT = Path(__file__).resolve().parent
-while not (_REPO_ROOT / '.git').exists():
+while not (_REPO_ROOT / ".git").exists():
     if _REPO_ROOT.parent == _REPO_ROOT:
         break
     _REPO_ROOT = _REPO_ROOT.parent
@@ -50,6 +55,7 @@ while not (_REPO_ROOT / '.git').exists():
 # to the repo-relative layout when the helper is not importable.
 try:
     from src.f1_strat_manager.data_cache import get_data_root as _get_data_root
+
     _DATA_ROOT = _get_data_root()
 except (ImportError, OSError, RuntimeError):
     # Every way get_data_root() can fail, enumerated against its body in
@@ -60,18 +66,19 @@ except (ImportError, OSError, RuntimeError):
     # the Path.home() branch IS the `uv tool install` path this block exists to
     # serve, and a container with no HOME would take it. Falling back to the
     # repo-relative data/ is right for all three.
-    _DATA_ROOT = _REPO_ROOT / 'data'
+    _DATA_ROOT = _REPO_ROOT / "data"
 
 logger = logging.getLogger(__name__)
 
-_MODEL_DIR  = _DATA_ROOT / 'models' / 'tire_degradation'
-_PROCESSED  = _DATA_ROOT / 'processed'
-_AGENTS_DIR = _DATA_ROOT / 'models' / 'agents'
+_MODEL_DIR = _DATA_ROOT / "models" / "tire_degradation"
+_PROCESSED = _DATA_ROOT / "processed"
+_AGENTS_DIR = _DATA_ROOT / "models" / "agents"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TireDegTCN — reproduced from N10 (different state dict layout from legacy N09)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class CausalConv1dBlock(nn.Module):
     """Single causal dilated convolution layer with left-side padding.
@@ -93,9 +100,11 @@ class CausalConv1dBlock(nn.Module):
             at inference time for MC Dropout uncertainty estimation.
     """
 
-    def __init__(self, in_ch: int, out_ch: int, kernel_size: int, dilation: int, dropout: float = 0.1):
+    def __init__(
+        self, in_ch: int, out_ch: int, kernel_size: int, dilation: int, dropout: float = 0.1
+    ):
         super().__init__()
-        self.pad  = (kernel_size - 1) * dilation
+        self.pad = (kernel_size - 1) * dilation
         self.conv = nn.Conv1d(in_ch, out_ch, kernel_size, dilation=dilation, padding=0)
         self.norm = nn.LayerNorm(out_ch)
         self.drop = nn.Dropout(dropout)
@@ -162,11 +171,10 @@ class TireDegTCN(nn.Module):
         dropout: float = 0.1,
     ):
         super().__init__()
-        self.input_proj  = nn.Linear(n_features, d_model)
-        self.blocks      = nn.ModuleList([
-            TCNResidualBlock(d_model, kernel_size, 2**i, dropout)
-            for i in range(n_layers)
-        ])
+        self.input_proj = nn.Linear(n_features, d_model)
+        self.blocks = nn.ModuleList(
+            [TCNResidualBlock(d_model, kernel_size, 2**i, dropout) for i in range(n_layers)]
+        )
         self.output_head = nn.Linear(d_model, 1)
 
     def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -179,6 +187,7 @@ class TireDegTCN(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 # TireAgentConfig
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class TireAgentConfig:
@@ -263,12 +272,12 @@ class TireAgentConfig:
 
     n_mc: int = 50
     mc_seed: int = 42
-    model_name: str = 'gpt-4.1-mini'
+    model_name: str = "gpt-4.1-mini"
     cliff_pit_soon_laps: int = 3
-    cliff_monitor_laps: int  = 7
+    cliff_monitor_laps: int = 7
     fresh_reference_tyre_life: int = 3
     fresh_reference_max_pct_of_fastest: float = 1.10
-    deg_cost_floor_s: float   = -2.33
+    deg_cost_floor_s: float = -2.33
     deg_cost_ceiling_s: float = 3.67
 
     def __post_init__(self) -> None:
@@ -279,15 +288,15 @@ class TireAgentConfig:
         except OSError:
             pass  # read-only mount in Docker
 
-        self.routing_cfg                              = self._load_routing_cfg()
-        self.mc_calibration, self.mc_sigma_fallback   = self._load_mc_calibration()
+        self.routing_cfg = self._load_routing_cfg()
+        self.mc_calibration, self.mc_sigma_fallback = self._load_mc_calibration()
         self._load_encoding_maps()
-        self.circuit_cluster_map                      = self._load_circuit_clusters()
+        self.circuit_cluster_map = self._load_circuit_clusters()
         self._load_cliff_thresholds()
 
     def _load_routing_cfg(self) -> dict:
         """Load routing_config.json: compound ID → bundle filename + window size."""
-        with open(self._model_dir / 'routing_config.json') as f:
+        with open(self._model_dir / "routing_config.json") as f:
             return json.load(f)
 
     def _load_mc_calibration(self) -> tuple[dict, float]:
@@ -302,26 +311,26 @@ class TireAgentConfig:
         Returns:
             Tuple (calibration_dict, sigma_fallback).
         """
-        with open(self._model_dir / 'mc_dropout_calibration.json') as f:
+        with open(self._model_dir / "mc_dropout_calibration.json") as f:
             mc_cal = json.load(f)
-        fallback = float(np.mean([v['mean_sigma_s'] for v in mc_cal.values()]))
+        fallback = float(np.mean([v["mean_sigma_s"] for v in mc_cal.values()]))
         return mc_cal, fallback
 
     def _load_encoding_maps(self) -> None:
         """Load encoding_maps.json and set four label-encoding dicts as instance attrs."""
-        with open(self._model_dir / 'encoding_maps.json') as f:
+        with open(self._model_dir / "encoding_maps.json") as f:
             enc = json.load(f)
-        self.team_id_map: dict           = enc['team_id']
-        self.compound_id_map: dict       = enc['compound_id']
-        self.abs_compound_id_map: dict   = enc['absolute_compound_id']
-        self.compound_hardness_map: dict = enc['compound_hardness']
+        self.team_id_map: dict = enc["team_id"]
+        self.compound_id_map: dict = enc["compound_id"]
+        self.abs_compound_id_map: dict = enc["absolute_compound_id"]
+        self.compound_hardness_map: dict = enc["compound_hardness"]
 
     def _load_circuit_clusters(self) -> dict:
         """Load k=4 circuit cluster parquet and return GP_Name → Cluster int dict."""
         cluster_df = pd.read_parquet(
-            _PROCESSED / 'circuit_clustering' / 'circuit_clusters_k4.parquet'
+            _PROCESSED / "circuit_clustering" / "circuit_clusters_k4.parquet"
         )
-        return dict(zip(cluster_df['GP_Name'], cluster_df['Cluster'].astype(int)))
+        return dict(zip(cluster_df["GP_Name"], cluster_df["Cluster"].astype(int)))
 
     def _load_cliff_thresholds(self) -> None:
         """Load cluster-aware and GP-level cliff thresholds from tire_agent_config_v1.json.
@@ -329,22 +338,22 @@ class TireAgentConfig:
         Falls back to empty dicts (global thresholds only) when the file does not
         exist yet — this covers the case where N26 Step 6 has not been run.
         """
-        cfg_path = self.export_dir / 'tire_agent_config_v1.json'
+        cfg_path = self.export_dir / "tire_agent_config_v1.json"
         if cfg_path.exists():
             with open(cfg_path) as f:
                 agent_cfg = json.load(f)
-            cat = agent_cfg.get('cluster_aware_thresholds', {})
+            cat = agent_cfg.get("cluster_aware_thresholds", {})
             self.cliff_pit_soon_by_cluster: dict = {
-                int(k): v for k, v in cat.get('pit_soon_by_cluster', {}).items()
+                int(k): v for k, v in cat.get("pit_soon_by_cluster", {}).items()
             }
             self.cliff_monitor_by_cluster: dict = {
-                int(k): v for k, v in cat.get('monitor_by_cluster', {}).items()
+                int(k): v for k, v in cat.get("monitor_by_cluster", {}).items()
             }
-            self.cliff_overrides_by_gp: dict = cat.get('overrides_by_gp', {})
+            self.cliff_overrides_by_gp: dict = cat.get("overrides_by_gp", {})
         else:
             self.cliff_pit_soon_by_cluster = {}
-            self.cliff_monitor_by_cluster  = {}
-            self.cliff_overrides_by_gp     = {}
+            self.cliff_monitor_by_cluster = {}
+            self.cliff_overrides_by_gp = {}
 
     def get_cliff_thresholds(self, gp_name: str) -> tuple[int, int]:
         """Return (pit_soon_laps, monitor_laps) for the given GP.
@@ -362,11 +371,11 @@ class TireAgentConfig:
         """
         if gp_name in self.cliff_overrides_by_gp:
             ov = self.cliff_overrides_by_gp[gp_name]
-            return ov['pit_soon'], ov['monitor']
+            return ov["pit_soon"], ov["monitor"]
         cluster_id = self.circuit_cluster_map.get(gp_name)
         if cluster_id is not None:
             pit_soon = self.cliff_pit_soon_by_cluster.get(cluster_id, self.cliff_pit_soon_laps)
-            monitor  = self.cliff_monitor_by_cluster.get(cluster_id, self.cliff_monitor_laps)
+            monitor = self.cliff_monitor_by_cluster.get(cluster_id, self.cliff_monitor_laps)
             return pit_soon, monitor
         return self.cliff_pit_soon_laps, self.cliff_monitor_laps
 
@@ -376,16 +385,16 @@ class TireAgentConfig:
         Each .pt file is a self-contained dict from N10: state dict, fitted
         StandardScaler, feature name list, window size, and architecture hparams.
         """
-        cfg    = self.routing_cfg[compound_id]
+        cfg = self.routing_cfg[compound_id]
         bundle = torch.load(
-            self._model_dir / cfg['bundle'],
-            map_location='cpu',
+            self._model_dir / cfg["bundle"],
+            map_location="cpu",
             weights_only=False,
         )
-        model = TireDegTCN(bundle['n_features'], **bundle['model_hparams'])
-        model.load_state_dict(bundle['state_dict'])
+        model = TireDegTCN(bundle["n_features"], **bundle["model_hparams"])
+        model.load_state_dict(bundle["state_dict"])
         model.eval()
-        bundle['model'] = model
+        bundle["model"] = model
         return bundle
 
     def load_all_bundles(self) -> dict:
@@ -403,12 +412,12 @@ CFG = TireAgentConfig()
 # p75 of last-stint-lap FuelAdjustedDegAbsolute in N10 training data (2023-2024).
 # 75% of stints had already pitted by this level — a practical proxy for the cliff.
 CLIFF_THRESHOLD: dict[str, int] = {
-    'C1': 3,  # p75 = 2.20 → ceil = 3
-    'C2': 2,  # p75 = 1.74 → ceil = 2
-    'C3': 2,  # p75 = 1.96 → ceil = 2
-    'C4': 2,  # p75 = 1.75 → ceil = 2
-    'C5': 2,  # p75 = 1.43 → ceil = 2
-    'C6': 2,  # p75 = 1.82 → ceil = 2
+    "C1": 3,  # p75 = 2.20 → ceil = 3
+    "C2": 2,  # p75 = 1.74 → ceil = 2
+    "C3": 2,  # p75 = 1.96 → ceil = 2
+    "C4": 2,  # p75 = 1.75 → ceil = 2
+    "C5": 2,  # p75 = 1.43 → ceil = 2
+    "C6": 2,  # p75 = 1.82 → ceil = 2
 }
 
 # Longest race on the current calendar (Monaco, 78 laps; max observed across
@@ -422,7 +431,9 @@ MAX_RACE_LAPS: int = 78
 
 
 def _reject_contaminated_laps(
-    laps: pd.DataFrame, fastest_lap_s: float, max_pct: float,
+    laps: pd.DataFrame,
+    fastest_lap_s: float,
+    max_pct: float,
 ) -> pd.DataFrame:
     """Drop candidate fresh-reference laps slower than ``max_pct`` times the
     race's fastest lap -- a Safety-Car or red-flag-affected lap that
@@ -432,7 +443,7 @@ def _reject_contaminated_laps(
     Pure and leaf-level so the threshold is testable without model weights --
     the same split ``tire_parsing.py`` made, and for the same reason.
     """
-    return laps[laps['LapTime_s'] <= max_pct * fastest_lap_s]
+    return laps[laps["LapTime_s"] <= max_pct * fastest_lap_s]
 
 
 def _referenced_wear(parsed: dict) -> Optional[float]:
@@ -442,10 +453,10 @@ def _referenced_wear(parsed: dict) -> Optional[float]:
     missing reference into "this tyre is exactly at its fresh pace", which is a
     reading the scorer can also legitimately receive.
     """
-    if 'cum_deg' not in parsed or 'fresh_ref' not in parsed:
+    if "cum_deg" not in parsed or "fresh_ref" not in parsed:
         return None
 
-    wear = parsed['cum_deg'] - parsed['fresh_ref']
+    wear = parsed["cum_deg"] - parsed["fresh_ref"]
     bounded = min(max(wear, CFG.deg_cost_floor_s), CFG.deg_cost_ceiling_s)
     return round(bounded, 4)
 
@@ -453,6 +464,7 @@ def _referenced_wear(parsed: dict) -> Optional[float]:
 # ─────────────────────────────────────────────────────────────────────────────
 # TireOutput
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class TireOutput:
@@ -529,26 +541,27 @@ class TireOutput:
     laps_to_cliff_p10: float
     laps_to_cliff_p50: float
     laps_to_cliff_p90: float
-    gp_name: str   = ''
+    gp_name: str = ""
     cumulative_deg_s: float | None = None
     deg_cost_s: float | None = None
     warning_level: str = field(init=False)
-    reasoning: str = ''
+    reasoning: str = ""
 
     def __post_init__(self) -> None:
         pit_soon, monitor = CFG.get_cliff_thresholds(self.gp_name)
         if self.laps_to_cliff_p10 < pit_soon:
-            self.warning_level = 'PIT_SOON'
+            self.warning_level = "PIT_SOON"
         elif self.laps_to_cliff_p10 < monitor:
-            self.warning_level = 'MONITOR'
+            self.warning_level = "MONITOR"
         else:
-            self.warning_level = 'OK'
+            self.warning_level = "OK"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Feature pipeline helpers (must match N10 training order exactly)
 # Pure functions — receive all required state as arguments, read no globals.
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _add_timing_cols(df: pd.DataFrame) -> pd.DataFrame:
     """Convert FastF1 Timedelta columns to float seconds.
@@ -559,30 +572,31 @@ def _add_timing_cols(df: pd.DataFrame) -> pd.DataFrame:
 
     LapsSincePitStop is aliased from TyreLife.
     """
+
     def _to_seconds(df, td_col, s_col):
         if s_col in df.columns:
-            df[s_col] = pd.to_numeric(df[s_col], errors='coerce')
+            df[s_col] = pd.to_numeric(df[s_col], errors="coerce")
         elif td_col in df.columns:
             val = df[td_col]
-            if hasattr(val.iloc[0] if len(val) > 0 else None, 'total_seconds'):
+            if hasattr(val.iloc[0] if len(val) > 0 else None, "total_seconds"):
                 df[s_col] = val.dt.total_seconds()
             else:
-                df[s_col] = pd.to_numeric(val, errors='coerce')
+                df[s_col] = pd.to_numeric(val, errors="coerce")
         else:
-            df[s_col] = float('nan')
+            df[s_col] = float("nan")
         return df
 
-    df = _to_seconds(df, 'LapTime',    'LapTime_s')
-    df = _to_seconds(df, 'Sector1Time', 'Sector1_s')
-    df = _to_seconds(df, 'Sector2Time', 'Sector2_s')
-    df = _to_seconds(df, 'Sector3Time', 'Sector3_s')
-    df['LapsSincePitStop'] = df['TyreLife']
+    df = _to_seconds(df, "LapTime", "LapTime_s")
+    df = _to_seconds(df, "Sector1Time", "Sector1_s")
+    df = _to_seconds(df, "Sector2Time", "Sector2_s")
+    df = _to_seconds(df, "Sector3Time", "Sector3_s")
+    df["LapsSincePitStop"] = df["TyreLife"]
     return df
 
 
 def _add_weather_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     """Ensure weather columns exist; fill from session_meta race averages if absent."""
-    for col in ('AirTemp', 'TrackTemp', 'Humidity', 'Rainfall'):
+    for col in ("AirTemp", "TrackTemp", "Humidity", "Rainfall"):
         if col not in df.columns:
             df[col] = session_meta.get(col, 0.0)
     return df
@@ -595,12 +609,12 @@ def _add_prev_cols(df: pd.DataFrame) -> pd.DataFrame:
     to avoid NaN in the scaler input. Must run before _add_delta_cols.
     """
     for new_col, src_col in [
-        ('Prev_LapTime',  'LapTime_s'),
-        ('Prev_SpeedFL',  'SpeedFL'),
-        ('Prev_SpeedI1',  'SpeedI1'),
-        ('Prev_SpeedI2',  'SpeedI2'),
-        ('Prev_SpeedST',  'SpeedST'),
-        ('Prev_TyreLife', 'TyreLife'),
+        ("Prev_LapTime", "LapTime_s"),
+        ("Prev_SpeedFL", "SpeedFL"),
+        ("Prev_SpeedI1", "SpeedI1"),
+        ("Prev_SpeedI2", "SpeedI2"),
+        ("Prev_SpeedST", "SpeedST"),
+        ("Prev_TyreLife", "TyreLife"),
     ]:
         df[new_col] = df[src_col].shift(1).fillna(df[src_col])
     return df
@@ -612,8 +626,8 @@ def _add_laptime_delta(df: pd.DataFrame) -> pd.DataFrame:
     LapTime_Delta: LapTime_s[i] - LapTime_s[i-1]. Requires Prev_LapTime.
     LapTime_Trend: LapTime_Delta[i] - LapTime_Delta[i-1] (second derivative).
     """
-    df['LapTime_Delta'] = (df['LapTime_s'] - df['Prev_LapTime']).fillna(0)
-    df['LapTime_Trend'] = (df['LapTime_Delta'] - df['LapTime_Delta'].shift(1)).fillna(0)
+    df["LapTime_Delta"] = (df["LapTime_s"] - df["Prev_LapTime"]).fillna(0)
+    df["LapTime_Trend"] = (df["LapTime_Delta"] - df["LapTime_Delta"].shift(1)).fillna(0)
     return df
 
 
@@ -629,25 +643,25 @@ def _add_degradation_rate(df: pd.DataFrame) -> pd.DataFrame:
     Both are shifted by 1 lap (leakage fix matching N10 training) so at position i
     the model sees the rate from lap i-1.
     """
-    tyre_lives = df['TyreLife'].values
-    adj_times  = df['FuelAdjustedLapTime'].values
+    tyre_lives = df["TyreLife"].values
+    adj_times = df["FuelAdjustedLapTime"].values
     n = len(df)
 
-    raw_deg   = np.zeros(n)
+    raw_deg = np.zeros(n)
     raw_accel = np.zeros(n)
 
     for i in range(1, n):
         start = max(0, i - 2)
-        x = tyre_lives[start: i + 1]
-        y = adj_times[start: i + 1]
+        x = tyre_lives[start : i + 1]
+        y = adj_times[start : i + 1]
         if len(x) >= 2 and not np.isnan(y).any():
             raw_deg[i] = np.polyfit(x, y, 1)[0]
 
     for i in range(1, n):
         raw_accel[i] = raw_deg[i] - raw_deg[i - 1]
 
-    df['DegradationRate'] = pd.Series(raw_deg, index=df.index).shift(1).fillna(0)
-    df['DegAcceleration'] = pd.Series(raw_accel, index=df.index).shift(1).fillna(0)
+    df["DegradationRate"] = pd.Series(raw_deg, index=df.index).shift(1).fillna(0)
+    df["DegAcceleration"] = pd.Series(raw_accel, index=df.index).shift(1).fillna(0)
     return df
 
 
@@ -660,8 +674,8 @@ def _add_delta_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 def _add_speed_delta_cols(df: pd.DataFrame) -> pd.DataFrame:
     """Compute trap-speed deltas (current minus previous lap) for all four sensors."""
-    for sensor in ('FL', 'I1', 'I2', 'ST'):
-        df[f'Speed{sensor}_Delta'] = df[f'Speed{sensor}'] - df[f'Prev_Speed{sensor}']
+    for sensor in ("FL", "I1", "I2", "ST"):
+        df[f"Speed{sensor}_Delta"] = df[f"Speed{sensor}"] - df[f"Prev_Speed{sensor}"]
     return df
 
 
@@ -677,14 +691,14 @@ def _add_compound_cols(df: pd.DataFrame, compound_id: str) -> pd.DataFrame:
     with corrupt or out-of-scope compound data, but it is a sentinel by construction, so
     it is logged loudly rather than left invisible.
     """
-    name = str(df['Compound'].iloc[0])
+    name = str(df["Compound"].iloc[0])
     if compound_id not in CFG.abs_compound_id_map:
         logger.warning("Unknown compound_id %r: encoding as C3 (AbsoluteCompoundID=3)", compound_id)
     if name not in CFG.compound_id_map:
         logger.warning("Unknown compound name %r: encoding as SOFT (CompoundID=1)", name)
-    df['AbsoluteCompoundID'] = CFG.abs_compound_id_map.get(compound_id, 3)
-    df['CompoundHardness']   = CFG.compound_hardness_map.get(compound_id, 4)
-    df['CompoundID']         = CFG.compound_id_map.get(name, 1)
+    df["AbsoluteCompoundID"] = CFG.abs_compound_id_map.get(compound_id, 3)
+    df["CompoundHardness"] = CFG.compound_hardness_map.get(compound_id, 4)
+    df["CompoundID"] = CFG.compound_id_map.get(name, 1)
     return df
 
 
@@ -708,14 +722,14 @@ def _add_fuel_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     FuelEffect: cumulative gain from fuel burn = (TyreLife - baseline_tyrelife) * 0.055 s/lap.
     FuelAdjustedLapTime: intermediate column needed by _add_degradation_rate.
     """
-    total_laps = session_meta['total_laps']
+    total_laps = session_meta["total_laps"]
 
-    if 'FuelLoad' not in df.columns:
-        df['FuelLoad'] = ((total_laps - df['LapNumber']) / total_laps).clip(lower=0.0)
+    if "FuelLoad" not in df.columns:
+        df["FuelLoad"] = ((total_laps - df["LapNumber"]) / total_laps).clip(lower=0.0)
 
-    baseline_tyrelife         = df['TyreLife'].iloc[0]
-    df['FuelEffect']          = (df['TyreLife'] - baseline_tyrelife) * 0.055
-    df['FuelAdjustedLapTime'] = df['LapTime_s'] + df['FuelEffect']
+    baseline_tyrelife = df["TyreLife"].iloc[0]
+    df["FuelEffect"] = (df["TyreLife"] - baseline_tyrelife) * 0.055
+    df["FuelAdjustedLapTime"] = df["LapTime_s"] + df["FuelEffect"]
     return df
 
 
@@ -750,25 +764,21 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     because their per-frame recompute reproduces the shipped value exactly
     (0.0000 s delta across all 24 GPs).
     """
-    df['lap_time_pct_of_race_fastest'] = (
-        df['LapTime_s'] / session_meta['fastest_lap_s']
-    )
-    if 'lap_time_vs_cluster_mean' not in df.columns:
-        df['lap_time_vs_cluster_mean'] = (
-            df['LapTime_s'] - session_meta['cluster_mean_lap_s']
-        )
-    df['laps_remaining'] = session_meta['total_laps'] - df['LapNumber']
-    if 'mean_sector_speed' not in df.columns:
-        df['mean_sector_speed'] = (df['SpeedI1'] + df['SpeedI2'] + df['SpeedFL']) / 3
+    df["lap_time_pct_of_race_fastest"] = df["LapTime_s"] / session_meta["fastest_lap_s"]
+    if "lap_time_vs_cluster_mean" not in df.columns:
+        df["lap_time_vs_cluster_mean"] = df["LapTime_s"] - session_meta["cluster_mean_lap_s"]
+    df["laps_remaining"] = session_meta["total_laps"] - df["LapNumber"]
+    if "mean_sector_speed" not in df.columns:
+        df["mean_sector_speed"] = (df["SpeedI1"] + df["SpeedI2"] + df["SpeedFL"]) / 3
 
-    if 'track_status_clean' not in df.columns:
-        status_map = {'1': 0, '2': 1, '3': 2, '4': 2, '5': 2, '6': 1, '7': 1}
-        if 'TrackStatus' in df.columns:
-            df['track_status_clean'] = (
-                df['TrackStatus'].astype(str).map(status_map).fillna(0).astype(int)
+    if "track_status_clean" not in df.columns:
+        status_map = {"1": 0, "2": 1, "3": 2, "4": 2, "5": 2, "6": 1, "7": 1}
+        if "TrackStatus" in df.columns:
+            df["track_status_clean"] = (
+                df["TrackStatus"].astype(str).map(status_map).fillna(0).astype(int)
             )
         else:
-            df['track_status_clean'] = 0
+            df["track_status_clean"] = 0
     return df
 
 
@@ -798,18 +808,17 @@ def _compound_name_to_id(compound_name: str, gp_name: str, year: int) -> str:
     Returns:
         Compound ID string such as 'C3'.
     """
-    compounds_path = _REPO_ROOT / 'data' / 'tire_compounds_by_race.json'
-    fallback = {'SOFT': 'C3', 'MEDIUM': 'C2', 'HARD': 'C1',
-                'INTERMEDIATE': 'INT', 'WET': 'WET'}
+    compounds_path = _REPO_ROOT / "data" / "tire_compounds_by_race.json"
+    fallback = {"SOFT": "C3", "MEDIUM": "C2", "HARD": "C1", "INTERMEDIATE": "INT", "WET": "WET"}
     if not compounds_path.exists():
-        return fallback.get(compound_name.upper(), 'C3')
+        return fallback.get(compound_name.upper(), "C3")
 
     with open(compounds_path) as f:
         alloc = json.load(f)
 
     year_data = alloc.get(str(year), {})
-    gp_data   = year_data.get(gp_name, {})
-    return gp_data.get(compound_name.upper(), fallback.get(compound_name.upper(), 'C3'))
+    gp_data = year_data.get(gp_name, {})
+    return gp_data.get(compound_name.upper(), fallback.get(compound_name.upper(), "C3"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -820,6 +829,7 @@ try:
     from langchain_core.tools import tool as lc_tool
     from langchain_openai import ChatOpenAI
     from langchain.agents import create_agent
+
     _LANGGRAPH_AVAILABLE = True
 except ImportError:
     _LANGGRAPH_AVAILABLE = False
@@ -871,6 +881,7 @@ stop becomes unavoidable.
 # TireAgent — encapsulated agent class
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TireAgent:
     """Encapsulated Tire Degradation Agent backed by TireDegTCN and LangGraph ReAct.
 
@@ -890,16 +901,16 @@ class TireAgent:
 
     def __init__(self, cfg: TireAgentConfig = CFG) -> None:
         self.cfg: TireAgentConfig = cfg
-        self.bundles: dict        = self.cfg.load_all_bundles()
+        self.bundles: dict = self.cfg.load_all_bundles()
         self.laps_df: pd.DataFrame = pd.DataFrame()
-        self.session_meta: dict    = {}
+        self.session_meta: dict = {}
         # Driver codes actually on track for the CURRENT loaded state (#476). Reset
         # on every run()/run_from_state() call — this instance is a process-level
         # singleton reused across many laps/drivers, so a stale set from a previous
         # call must never leak into the next one's tool-arg validation.
         self._live_drivers: Optional[set] = None
-        self._react_agent          = None
-        self._tools: list          = self._build_tools()
+        self._react_agent = None
+        self._tools: list = self._build_tools()
 
     # ── Feature pipeline (instance methods: use self.bundles / self.cfg) ──────
 
@@ -940,11 +951,11 @@ class TireAgent:
         df = _add_speed_delta_cols(df)
         df = _add_session_cols(df, session_meta)
 
-        df['Cluster'] = session_meta['cluster_id']
-        df['TeamID']  = session_meta['team_id']
-        df['Year']    = session_meta['year']
+        df["Cluster"] = session_meta["cluster_id"]
+        df["TeamID"] = session_meta["team_id"]
+        df["Year"] = session_meta["year"]
 
-        return df[self.bundles[compound_id]['feature_names']].astype(float)
+        return df[self.bundles[compound_id]["feature_names"]].astype(float)
 
     def _fresh_reference(self, driver: str, compound_id: str) -> Optional[float]:
         """What the model said about this same set before it wore, in seconds.
@@ -988,14 +999,14 @@ class TireAgent:
         # that `_build_stint_features` itself only guarantees after this point.
         early_laps = _reject_contaminated_laps(
             _add_timing_cols(early_laps),
-            self.session_meta['fastest_lap_s'],
+            self.session_meta["fastest_lap_s"],
             self.cfg.fresh_reference_max_pct_of_fastest,
         )
         if not len(early_laps):
             return None
 
         tensor = self._build_stint_tensor(early_laps, compound_id, self.session_meta)
-        model = self.bundles[compound_id]['model']
+        model = self.bundles[compound_id]["model"]
         with torch.no_grad():
             model.eval()
             return float(model(tensor).item())
@@ -1031,10 +1042,10 @@ class TireAgent:
             Float32 tensor of shape (1, window, 42) on CPU.
         """
         bundle = self.bundles[compound_id]
-        window = bundle['window']
+        window = bundle["window"]
 
         feat_df = self._build_stint_features(stint_laps, compound_id, session_meta)
-        scaled  = bundle['scaler'].transform(feat_df.fillna(0))
+        scaled = bundle["scaler"].transform(feat_df.fillna(0))
 
         if len(scaled) >= window:
             seq = scaled[-window:]
@@ -1073,15 +1084,15 @@ class TireAgent:
         Returns:
             Filtered and sorted DataFrame, or None if no laps found.
         """
-        driver_laps = self.laps_df.loc[self.laps_df['Driver'] == driver]
+        driver_laps = self.laps_df.loc[self.laps_df["Driver"] == driver]
         compound = self.session_meta.get(
-            f'{driver}_compound',
-            driver_laps['Compound'].iloc[-1] if len(driver_laps) > 0 else 'MEDIUM',
+            f"{driver}_compound",
+            driver_laps["Compound"].iloc[-1] if len(driver_laps) > 0 else "MEDIUM",
         )
         mask = (
-            (self.laps_df['Driver']   == driver) &
-            (self.laps_df['Compound'] == compound) &
-            (self.laps_df['TyreLife'] <= tyre_life)
+            (self.laps_df["Driver"] == driver)
+            & (self.laps_df["Compound"] == compound)
+            & (self.laps_df["TyreLife"] <= tyre_life)
         )
 
         # Scope to THIS stint and to laps that have already happened. N10 built its
@@ -1098,15 +1109,15 @@ class TireAgent:
         #
         # Both keys are optional: the FastF1 path does not supply them and keeps its old
         # behaviour rather than breaking.
-        current_stint = self.session_meta.get(f'{driver}_stint')
-        if current_stint is not None and 'Stint' in self.laps_df.columns:
-            mask &= (self.laps_df['Stint'] == current_stint)
+        current_stint = self.session_meta.get(f"{driver}_stint")
+        if current_stint is not None and "Stint" in self.laps_df.columns:
+            mask &= self.laps_df["Stint"] == current_stint
 
-        current_lap = self.session_meta.get('current_lap')
-        if current_lap is not None and 'LapNumber' in self.laps_df.columns:
-            mask &= (self.laps_df['LapNumber'] <= current_lap)
+        current_lap = self.session_meta.get("current_lap")
+        if current_lap is not None and "LapNumber" in self.laps_df.columns:
+            mask &= self.laps_df["LapNumber"] <= current_lap
 
-        stint = self.laps_df[mask].sort_values('LapNumber')
+        stint = self.laps_df[mask].sort_values("LapNumber")
         return stint if len(stint) > 0 else None
 
     # ── Live-driver guard (#476) ───────────────────────────────────────────────
@@ -1131,8 +1142,8 @@ class TireAgent:
         """
         if self._live_drivers is not None:
             return self._live_drivers
-        if len(self.laps_df) > 0 and 'Driver' in self.laps_df.columns:
-            drivers = set(self.laps_df['Driver'].dropna().unique())
+        if len(self.laps_df) > 0 and "Driver" in self.laps_df.columns:
+            drivers = set(self.laps_df["Driver"].dropna().unique())
             return drivers or None
         return None
 
@@ -1156,14 +1167,14 @@ class TireAgent:
             set, or when the loaded current_lap falls outside [1, total_laps].
             None when the driver checks out and the tool should proceed.
         """
-        live       = self._live_drivers_at_current_lap()
-        lap        = self.session_meta.get('current_lap')
-        total_laps = self.session_meta.get('total_laps')
+        live = self._live_drivers_at_current_lap()
+        lap = self.session_meta.get("current_lap")
+        total_laps = self.session_meta.get("total_laps")
         lap_out_of_range = (
             lap is not None and total_laps is not None and not (1 <= lap <= total_laps)
         )
         if (live is not None and driver not in live) or lap_out_of_range:
-            lap_display = lap if lap is not None else 'unknown'
+            lap_display = lap if lap is not None else "unknown"
             valid = sorted(live) if live is not None else []
             return f"error: '{driver}' is not on track at lap {lap_display}; valid: {valid}"
         return None
@@ -1210,27 +1221,25 @@ class TireAgent:
 
             stint = agent._get_driver_stint(driver, tyre_life)
             if stint is None:
-                return f'No laps found for driver {driver} with tyre_life <= {tyre_life}.'
+                return f"No laps found for driver {driver} with tyre_life <= {tyre_life}."
 
             tensor = agent._build_stint_tensor(stint, compound_id, agent.session_meta)
-            model  = agent.bundles[compound_id]['model']
+            model = agent.bundles[compound_id]["model"]
 
             with torch.no_grad():
                 model.eval()
                 pred = model(tensor).item()
 
-            feat_df  = agent._build_stint_features(stint, compound_id, agent.session_meta)
-            deg_rate = float(feat_df['DegradationRate'].iloc[-1])
+            feat_df = agent._build_stint_features(stint, compound_id, agent.session_meta)
+            deg_rate = float(feat_df["DegradationRate"].iloc[-1])
 
             reference = agent._fresh_reference(driver, compound_id)
-            reference_line = (
-                '' if reference is None else f' | Fresh reference: {reference:.3f} s'
-            )
+            reference_line = "" if reference is None else f" | Fresh reference: {reference:.3f} s"
 
             return (
-                f'Driver {driver} | Compound {compound_id} | TyreLife {tyre_life}\n'
-                f'Cumulative degradation: {pred:.3f} s | Degradation rate: {deg_rate:.4f} s/lap'
-                f'{reference_line}'
+                f"Driver {driver} | Compound {compound_id} | TyreLife {tyre_life}\n"
+                f"Cumulative degradation: {pred:.3f} s | Degradation rate: {deg_rate:.4f} s/lap"
+                f"{reference_line}"
             )
 
         @lc_tool
@@ -1259,10 +1268,10 @@ class TireAgent:
 
             stint = agent._get_driver_stint(driver, tyre_life)
             if stint is None:
-                return f'No laps found for driver {driver} with tyre_life <= {tyre_life}.'
+                return f"No laps found for driver {driver} with tyre_life <= {tyre_life}."
 
             tensor = agent._build_stint_tensor(stint, compound_id, agent.session_meta)
-            model  = agent.bundles[compound_id]['model']
+            model = agent.bundles[compound_id]["model"]
             model.train()  # keep dropout active for MC
             # Seed the dropout masks so identical inputs give an identical band
             # (#735). Order mirrors the holdout twin in src/strategy/eval/
@@ -1283,18 +1292,18 @@ class TireAgent:
                 model.eval()
 
             mean_pred = float(np.mean(preds))
-            mc_std    = float(np.std(preds))
-            sigma     = (
-                float(agent.cfg.mc_calibration[compound_id]['mean_sigma_s'])
+            mc_std = float(np.std(preds))
+            sigma = (
+                float(agent.cfg.mc_calibration[compound_id]["mean_sigma_s"])
                 if compound_id in agent.cfg.mc_calibration
                 else agent.cfg.mc_sigma_fallback
             )
             total_std = np.sqrt(mc_std**2 + sigma**2)
 
-            feat_df  = agent._build_stint_features(stint, compound_id, agent.session_meta)
-            deg_rate = max(float(feat_df['DegradationRate'].abs().iloc[-1]), 0.001)
+            feat_df = agent._build_stint_features(stint, compound_id, agent.session_meta)
+            deg_rate = max(float(feat_df["DegradationRate"].abs().iloc[-1]), 0.001)
 
-            threshold        = CLIFF_THRESHOLD.get(compound_id, 2.5)
+            threshold = CLIFF_THRESHOLD.get(compound_id, 2.5)
             remaining_budget = max(0.0, threshold - mean_pred)
 
             # Flooring the divisor without clamping the quotient produced cliffs beyond
@@ -1314,7 +1323,7 @@ class TireAgent:
             # earlier default of 100 exceeded every race, so an absent key silently
             # disabled the clamp for any race up to 100 laps.
             cliff_ceiling = float(
-                agent.session_meta.get('total_laps', MAX_RACE_LAPS) or MAX_RACE_LAPS
+                agent.session_meta.get("total_laps", MAX_RACE_LAPS) or MAX_RACE_LAPS
             )
 
             p50 = min(remaining_budget / deg_rate, cliff_ceiling)
@@ -1331,10 +1340,10 @@ class TireAgent:
             )
 
             return (
-                f'Driver {driver} | Compound {compound_id} | TyreLife {tyre_life}\n'
-                f'Laps to cliff — P10: {to.laps_to_cliff_p10} | P50: {to.laps_to_cliff_p50} | P90: {to.laps_to_cliff_p90}\n'
-                f'Degradation rate: {deg_rate:.4f} s/lap | MC std: {mc_std:.4f} s | Calibrated sigma: {sigma:.4f} s\n'
-                f'Warning level: {to.warning_level}'
+                f"Driver {driver} | Compound {compound_id} | TyreLife {tyre_life}\n"
+                f"Laps to cliff — P10: {to.laps_to_cliff_p10} | P50: {to.laps_to_cliff_p50} | P90: {to.laps_to_cliff_p90}\n"
+                f"Degradation rate: {deg_rate:.4f} s/lap | MC std: {mc_std:.4f} s | Calibrated sigma: {sigma:.4f} s\n"
+                f"Warning level: {to.warning_level}"
             )
 
         return [predict_tire_deg_tool, estimate_laps_to_cliff_tool]
@@ -1344,9 +1353,9 @@ class TireAgent:
     def get_react_agent(
         self,
         provider: str = None,
-        model_name: str = 'gpt-4.1-mini',
-        base_url: str = 'http://localhost:1234/v1',
-        api_key: str = 'lm-studio',
+        model_name: str = "gpt-4.1-mini",
+        base_url: str = "http://localhost:1234/v1",
+        api_key: str = "lm-studio",
     ):
         """Return the LangGraph ReAct agent, creating it on the first call (lazy).
 
@@ -1367,18 +1376,19 @@ class TireAgent:
         """
         if not _LANGGRAPH_AVAILABLE:
             raise ImportError(
-                'LangGraph / LangChain not installed. '
-                'Install with: pip install langgraph langchain-openai'
+                "LangGraph / LangChain not installed. "
+                "Install with: pip install langgraph langchain-openai"
             )
 
         if self._react_agent is not None:
             return self._react_agent
 
         import os
-        if provider is None:
-            provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
 
-        if provider == 'lmstudio':
+        if provider is None:
+            provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
+
+        if provider == "lmstudio":
             llm = ChatOpenAI(
                 model=model_name,
                 base_url=base_url,
@@ -1421,32 +1431,32 @@ class TireAgent:
             TireOutput with deg_rate, laps_to_cliff P10/P50/P90, gp_name,
             warning_level, and reasoning.
         """
-        session     = stint_state['session']
-        driver      = stint_state['driver']
-        compound_id = stint_state['compound_id']
-        tyre_life   = stint_state['tyre_life']
-        gp_name     = stint_state.get('gp_name', '')
+        session = stint_state["session"]
+        driver = stint_state["driver"]
+        compound_id = stint_state["compound_id"]
+        tyre_life = stint_state["tyre_life"]
+        gp_name = stint_state.get("gp_name", "")
 
         self.laps_df = session.laps.pick_accurate().copy()
-        _clean       = self.laps_df[self.laps_df['TrackStatus'] == '1']
-        _weather     = session.weather_data.mean(numeric_only=True)
+        _clean = self.laps_df[self.laps_df["TrackStatus"] == "1"]
+        _weather = session.weather_data.mean(numeric_only=True)
 
         self.session_meta = {
-            'fastest_lap_s':      _clean['LapTime'].min().total_seconds(),
-            'cluster_mean_lap_s': _clean['LapTime'].dt.total_seconds().mean(),
-            'total_laps':         int(session.total_laps),
-            'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'team_id':            _encode_team_id(self.cfg.team_id_map, stint_state.get('team', 'Unknown')),
-            'year':               stint_state.get('year', 2025),
-            'AirTemp':   float(_weather.get('AirTemp',   28.0)),
-            'TrackTemp': float(_weather.get('TrackTemp', 38.0)),
-            'Humidity':  float(_weather.get('Humidity',  50.0)),
+            "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
+            "cluster_mean_lap_s": _clean["LapTime"].dt.total_seconds().mean(),
+            "total_laps": int(session.total_laps),
+            "cluster_id": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "team_id": _encode_team_id(self.cfg.team_id_map, stint_state.get("team", "Unknown")),
+            "year": stint_state.get("year", 2025),
+            "AirTemp": float(_weather.get("AirTemp", DEFAULT_AIR_TEMP_C)),
+            "TrackTemp": float(_weather.get("TrackTemp", DEFAULT_TRACK_TEMP_C)),
+            "Humidity": float(_weather.get("Humidity", 50.0)),
             # Was hardcoded 0.0 (#477) while run_from_state() correctly reads
             # wx.get('rainfall', 0) from the RSM weather dict — mirror that here
             # from the session's own weather data instead of silently telling
             # every dry-model feature the race was rain-free regardless of what
             # actually happened.
-            'Rainfall':  float(_weather.get('Rainfall', 0.0)),
+            "Rainfall": float(_weather.get("Rainfall", 0.0)),
         }
         # No per-lap rivals list on this path (single-shot FastF1 query, not a live
         # simulation lap) — _live_drivers_at_current_lap() falls back to laps_df.
@@ -1471,63 +1481,62 @@ class TireAgent:
         Returns:
             TireOutput with all fields populated.
         """
-        d    = lap_state['driver']
-        meta = lap_state['session_meta']
-        wx   = lap_state.get('weather', {})
+        d = lap_state["driver"]
+        meta = lap_state["session_meta"]
+        wx = lap_state.get("weather", {})
 
-        driver      = meta['driver']
+        driver = meta["driver"]
         # This adapter reads the RAW lap_state, not the RaceState, so the canonical
         # builder's normalisation does not reach it — it has to apply the same rules
         # itself or the unification stops at the object boundary (#784). Both of the
         # old two-arg defaults were also dead on the RSM path and wrong when they did
         # fire: the key is always present, so a stored NaN arrives as the STRING "nan"
         # and a None arrives as None, neither of which .get's default catches.
-        compound    = normalise_compound(d.get('compound'))
-        raw_tyre_life = d.get('tyre_life')
-        tyre_life   = UNKNOWN_TYRE_LIFE if raw_tyre_life is None else raw_tyre_life
-        gp_name     = meta.get('gp_name', '')
-        total_laps  = meta.get('total_laps', DEFAULT_TOTAL_LAPS)
-        year        = meta.get('year', 2025)
-        team        = meta.get('team', 'Unknown')
+        compound = normalise_compound(d.get("compound"))
+        raw_tyre_life = d.get("tyre_life")
+        tyre_life = UNKNOWN_TYRE_LIFE if raw_tyre_life is None else raw_tyre_life
+        gp_name = meta.get("gp_name", "")
+        total_laps = meta.get("total_laps", DEFAULT_TOTAL_LAPS)
+        year = meta.get("year", 2025)
+        team = meta.get("team", "Unknown")
 
         compound_id = (
-            compound if compound.startswith('C')
-            else _compound_name_to_id(compound, gp_name, year)
+            compound if compound.startswith("C") else _compound_name_to_id(compound, gp_name, year)
         )
 
         self.laps_df = laps_df.copy()
 
         # Build session_meta from laps_df (FastF1 Timedelta → float if needed)
-        lt_col = 'LapTime_s' if 'LapTime_s' in self.laps_df.columns else 'LapTime'
-        if lt_col == 'LapTime' and hasattr(self.laps_df[lt_col].iloc[0], 'total_seconds'):
+        lt_col = "LapTime_s" if "LapTime_s" in self.laps_df.columns else "LapTime"
+        if lt_col == "LapTime" and hasattr(self.laps_df[lt_col].iloc[0], "total_seconds"):
             lap_times = self.laps_df[lt_col].dropna().apply(lambda t: t.total_seconds())
         else:
-            lap_times = pd.to_numeric(self.laps_df[lt_col], errors='coerce').dropna()
+            lap_times = pd.to_numeric(self.laps_df[lt_col], errors="coerce").dropna()
 
-        if 'TrackStatus' in self.laps_df.columns:
-            clean_mask  = self.laps_df['TrackStatus'].astype(str) == '1'
+        if "TrackStatus" in self.laps_df.columns:
+            clean_mask = self.laps_df["TrackStatus"].astype(str) == "1"
             clean_times = lap_times[clean_mask] if clean_mask.sum() > 0 else lap_times
         else:
             clean_times = lap_times
 
         self.session_meta = {
-            'fastest_lap_s':      float(clean_times.min()) if len(clean_times) > 0 else 90.0,
-            'cluster_mean_lap_s': float(clean_times.mean()) if len(clean_times) > 0 else 90.0,
-            'total_laps':         total_laps,
-            'cluster_id':         self.cfg.circuit_cluster_map.get(gp_name, 0),
-            'team_id':            _encode_team_id(self.cfg.team_id_map, team),
-            'year':               year,
+            "fastest_lap_s": float(clean_times.min()) if len(clean_times) > 0 else 90.0,
+            "cluster_mean_lap_s": float(clean_times.mean()) if len(clean_times) > 0 else 90.0,
+            "total_laps": total_laps,
+            "cluster_id": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "team_id": _encode_team_id(self.cfg.team_id_map, team),
+            "year": year,
             # reading_or_default, not .get(key, default): the producers report an
             # unmeasured reading as the key PRESENT holding None, which .get's default
             # never catches. These Nones do not crash here — they flow through
             # _add_weather_cols into the TCN's feature frame and moved the cliff estimate
             # 2.3 laps OPTIMISTIC on the 2025 reference lap, silently. Optimistic is the
             # dangerous direction: it delays the pit call. See the helper's docstring.
-            'AirTemp':   reading_or_default(wx, 'air_temp',   28.0),
-            'TrackTemp': reading_or_default(wx, 'track_temp', 38.0),
-            'Humidity':  reading_or_default(wx, 'humidity',   50.0),
-            'Rainfall':  float(reading_or_default(wx, 'rainfall', 0.0)),
-            f'{driver}_compound': compound,
+            "AirTemp": reading_or_default(wx, "air_temp", DEFAULT_AIR_TEMP_C),
+            "TrackTemp": reading_or_default(wx, "track_temp", DEFAULT_TRACK_TEMP_C),
+            "Humidity": reading_or_default(wx, "humidity", 50.0),
+            "Rainfall": float(reading_or_default(wx, "rainfall", 0.0)),
+            f"{driver}_compound": compound,
             # The stint we are actually in, and the lap we are actually on. N10 trained
             # on windows grouped by ['Year','GP_Name','DriverNumber','Stint'], and the
             # slice below had neither: it matched on Compound alone, so a later stint on
@@ -1536,8 +1545,8 @@ class TireAgent:
             # LAP 59's degradation as current. Both keys travel here rather than through
             # the signature so the FastF1 path, which has neither, degrades to the old
             # behaviour instead of breaking (#449).
-            f'{driver}_stint': d.get('stint'),
-            'current_lap': lap_state.get('lap_number'),
+            f"{driver}_stint": d.get("stint"),
+            "current_lap": lap_state.get("lap_number"),
         }
 
         # Presence-based on-track set for this lap (#476): our own driver plus
@@ -1547,14 +1556,17 @@ class TireAgent:
         # this catches an LLM tool call for a long-retired driver code without
         # reimplementing any retirement/lap-count heuristic.
         self._live_drivers = {driver} | {
-            str(r['driver']) for r in lap_state.get('rivals', []) or [] if r.get('driver')
+            str(r["driver"]) for r in lap_state.get("rivals", []) or [] if r.get("driver")
         }
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)
 
     @staticmethod
     def _conservative_stub(
-        compound_id: str, tyre_life: int, gp_name: str, reason: str,
+        compound_id: str,
+        tyre_life: int,
+        gp_name: str,
+        reason: str,
     ) -> TireOutput:
         """TireOutput with the fixed conservative defaults used whenever a real TCN
         reading is unavailable (no bundle for this compound, or a tool-output parse
@@ -1562,14 +1574,14 @@ class TireAgent:
         instead of masquerading as a genuine reading.
         """
         return TireOutput(
-            compound          = compound_id,
-            current_tyre_life = tyre_life,
-            gp_name           = gp_name,
-            deg_rate          = 0.03,
-            laps_to_cliff_p10 = 20.0,
-            laps_to_cliff_p50 = 30.0,
-            laps_to_cliff_p90 = 40.0,
-            reasoning         = reason,
+            compound=compound_id,
+            current_tyre_life=tyre_life,
+            gp_name=gp_name,
+            deg_rate=0.03,
+            laps_to_cliff_p10=20.0,
+            laps_to_cliff_p50=30.0,
+            laps_to_cliff_p90=40.0,
+            reasoning=reason,
         )
 
     def _run_core(
@@ -1598,7 +1610,9 @@ class TireAgent:
         # compounds return a stub with conservative defaults — no TCN inference.
         if compound_id not in self.bundles:
             return self._conservative_stub(
-                compound_id, tyre_life, gp_name,
+                compound_id,
+                tyre_life,
+                gp_name,
                 reason=(
                     f"[{compound_id} — TCN model not available for wet/intermediate compounds; "
                     f"conservative defaults used]"
@@ -1607,16 +1621,16 @@ class TireAgent:
 
         react_agent = self.get_react_agent()
         msg = (
-            f'Analyse the tyre state for driver {driver}, compound {compound_id}, '
-            f'tyre life {tyre_life} laps. Use both tools and give your recommendation.'
+            f"Analyse the tyre state for driver {driver}, compound {compound_id}, "
+            f"tyre life {tyre_life} laps. Use both tools and give your recommendation."
         )
-        response = react_agent.invoke({'messages': [{'role': 'user', 'content': msg}]})
-        parsed   = _parse_tool_outputs(response['messages'])
+        response = react_agent.invoke({"messages": [{"role": "user", "content": msg}]})
+        parsed = _parse_tool_outputs(response["messages"])
 
-        reasoning = ''
-        for m in reversed(response['messages']):
-            if hasattr(m, 'content') and isinstance(m.content, str) and m.content.strip():
-                if not getattr(m, 'tool_calls', None):
+        reasoning = ""
+        for m in reversed(response["messages"]):
+            if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip():
+                if not getattr(m, "tool_calls", None):
                     reasoning = m.content.strip()
                     break
 
@@ -1629,13 +1643,17 @@ class TireAgent:
         # confident call to box. Fall back to the same conservative stub the
         # wet/intermediate branch above already uses, and say so in the reasoning so the
         # degradation is visible instead of masquerading as a reading (#436).
-        if 'p10' not in parsed:
+        if "p10" not in parsed:
             logger.warning(
-                'Tire tool output did not parse for %s (tyre_life=%s) — using conservative '
-                'defaults instead of a 0.0 cliff', compound_id, tyre_life,
+                "Tire tool output did not parse for %s (tyre_life=%s) — using conservative "
+                "defaults instead of a 0.0 cliff",
+                compound_id,
+                tyre_life,
             )
             return self._conservative_stub(
-                compound_id, tyre_life, gp_name,
+                compound_id,
+                tyre_life,
+                gp_name,
                 reason=(
                     f"[{compound_id} — tire tool output could not be parsed; conservative "
                     f"defaults used] {reasoning}"
@@ -1643,21 +1661,19 @@ class TireAgent:
             )
 
         return TireOutput(
-            compound          = compound_id,
-            current_tyre_life = tyre_life,
-            gp_name           = gp_name,
-            deg_rate          = round(parsed.get('deg_rate', 0.0), 4),
+            compound=compound_id,
+            current_tyre_life=tyre_life,
+            gp_name=gp_name,
+            deg_rate=round(parsed.get("deg_rate", 0.0), 4),
             # `.get(...)` then an explicit None, rather than a numeric default:
             # predict_tire_deg_tool can legitimately be skipped while the cliff
             # tool ran, and 0.0 is a real reading for this quantity.
-            cumulative_deg_s  = (
-                round(parsed['cum_deg'], 4) if 'cum_deg' in parsed else None
-            ),
-            deg_cost_s        = _referenced_wear(parsed),
-            laps_to_cliff_p10 = round(parsed['p10'], 1),
-            laps_to_cliff_p50 = round(parsed.get('p50', 0.0), 1),
-            laps_to_cliff_p90 = round(parsed.get('p90', 0.0), 1),
-            reasoning         = reasoning,
+            cumulative_deg_s=(round(parsed["cum_deg"], 4) if "cum_deg" in parsed else None),
+            deg_cost_s=_referenced_wear(parsed),
+            laps_to_cliff_p10=round(parsed["p10"], 1),
+            laps_to_cliff_p50=round(parsed.get("p50", 0.0), 1),
+            laps_to_cliff_p90=round(parsed.get("p90", 0.0), 1),
+            reasoning=reasoning,
         )
 
 
@@ -1686,6 +1702,7 @@ def _get_default_tire_agent() -> TireAgent:
 # ─────────────────────────────────────────────────────────────────────────────
 # Public entry points — backward-compatible signatures (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_tire_agent(stint_state: dict) -> TireOutput:
     """Run the Tire Agent for a given stint and return a structured TireOutput.
