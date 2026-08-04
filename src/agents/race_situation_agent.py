@@ -60,7 +60,11 @@ except (ImportError, OSError, RuntimeError):
     # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / "data"
 
-from src.f1_strat_manager.gp_slugs import rekey_by_slug, slug_from_event_name  # noqa: E402
+from src.f1_strat_manager.gp_slugs import (  # noqa: E402
+    rekey_by_slug,
+    resolve_gp_key,
+    slug_from_event_name,
+)
 
 _MODELS = _DATA_ROOT / "models"
 _PROCESSED = _DATA_ROOT / "processed"
@@ -263,6 +267,18 @@ class RaceSituationConfig:
         slug = slug_from_event_name(event_name) or event_name
         return self.circuit_sc_rate_map.get(slug, 0.10)
 
+    def cluster_for(self, gp_name: str, default: Optional[int] = None) -> Optional[int]:
+        """This circuit's cluster, whichever of its four spellings the caller holds.
+
+        `sc_rate_for` above already resolves ONE keyspace for this same config; the cluster
+        map next to it did not, which is the one-copy-fixed-its-twin-not pattern this repo
+        keeps producing. Four spellings need both resolvers, not just the slug one
+        (PR3_GP_KEYSPACE_SWEEP.md).
+        """
+        return self.circuit_cluster_map.get(
+            resolve_gp_key(self.circuit_cluster_map, gp_name), default
+        )
+
 
 # ── Module-level config singleton ─────────────────────────────────────────────
 # Kept at module level because RaceSituationOutput.__post_init__ reads
@@ -349,8 +365,15 @@ class RaceSituationOutput:
 
 
 def _abs_compound(relative: str, gp_name: str, year: int) -> str:
-    """Map SOFT/MEDIUM/HARD → Cx string using TIRE_COMPOUNDS; fallback to input."""
-    return TIRE_COMPOUNDS.get(str(year), {}).get(gp_name, {}).get(relative.upper(), relative)
+    """Map SOFT/MEDIUM/HARD → Cx string using TIRE_COMPOUNDS; fallback to input.
+
+    The fifth consumer of this JSON, and the one the earlier keyspace sweeps missed. Its
+    failure mode is the loudest of the three: unresolved it returns the RELATIVE name
+    ('HARD') where the caller expects a Cx string (PR3_GP_KEYSPACE_SWEEP.md).
+    """
+    year_data = TIRE_COMPOUNDS.get(str(year), {})
+    gp_data = year_data.get(resolve_gp_key(year_data, gp_name), {})
+    return gp_data.get(relative.upper(), relative)
 
 
 def _agg(grp: pd.DataFrame) -> pd.Series:
@@ -1356,7 +1379,7 @@ class RaceSituationAgent:
             "gp_name": gp_name,
             "event_name": event_name,
             "year": lap_state.get("year", 2025),
-            "circuit_cluster": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "circuit_cluster": self.cfg.cluster_for(gp_name, 0),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": int(session.total_laps),
             "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
@@ -1446,7 +1469,7 @@ class RaceSituationAgent:
             "gp_name": gp_name,
             "event_name": event_name,
             "year": year,
-            "circuit_cluster": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "circuit_cluster": self.cfg.cluster_for(gp_name, 0),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": total_laps,
             "fastest_lap_s": float(self.laps_df["LapTime"].dt.total_seconds().min())

@@ -34,7 +34,11 @@ from src.agents._shared_defaults import (
     DEFAULT_TRACK_TEMP_C,
     reading_or_default,
 )
-from src.f1_strat_manager.gp_slugs import canonical_gp_name, slug_from_event_name
+from src.f1_strat_manager.gp_slugs import (
+    normalise_gp_key,
+    resolve_gp_key,
+    slug_from_event_name,
+)
 
 # Safe in this direction: envelope.py is a leaf that imports nothing from src.agents.
 from src.strategy.inference.envelope import OperatingEnvelope
@@ -174,28 +178,10 @@ _N06_ENVELOPE = OperatingEnvelope(name="n06_laptime_delta", bounds=_N06_TRAINED_
 _FEATURED_SEASONS: tuple[int, ...] = (2023, 2024, 2025)
 
 
-def _normalise_gp_key(gp_name: str) -> str:
-    """One spelling for a GP, applied to BOTH sides of the circuit-speed lookup.
-
-    A GP is written four ways across this project: the parquet slug ('Miami'), the raw
-    folder ('Miami_Gardens'), the metadata.json name the replay engine puts into
-    `session_meta` ('Miami Gardens', with a SPACE), and the FastF1 event name ('Miami
-    Grand Prix'). Worse, the artefacts do not agree with each other: the combined
-    `laps_featured.parquet` calls this race 'Miami' in 2023-2024 and 'Miami Gardens' in
-    2025, so even a lookup whose query is spelled correctly can miss on the season.
-
-    Normalising the KEYS at load time and the query the same way is what `gp_slugs`'s own
-    docstring prescribes, and it is why this is a function rather than a longer candidate
-    list at the call site: a chain of guesses at the query end still fails the moment the
-    stored spelling is the odd one, which is exactly how the first version of this lookup
-    sent every lap of the 2025 Miami race to NaN.
-
-    Underscores first, because `canonical_gp_name`'s alias table is keyed by the folder
-    form, so 'Miami Gardens' has to become 'Miami_Gardens' before it can become 'Miami'.
-    """
-    if not gp_name:
-        return ""
-    return canonical_gp_name(gp_name.replace(" ", "_"))
+# Moved to `gp_slugs` by the 2026-08-04 keyspace sweep: five consumers across three
+# modules needed the same normalisation, and it was never pace-specific. Re-exported under
+# the old private name so the #797 call sites and their tests do not move.
+_normalise_gp_key = normalise_gp_key
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -278,6 +264,11 @@ class PaceAgent:
             self._load_circuit_mean_sector_speed(processed_dir)
         )
         self.laps_ref: pd.DataFrame = self._load_reference_laps(processed_dir)
+        # Cached because `_session_median` resolves the caller's spelling against it on
+        # every lap, and a `.unique()` over the whole reference frame is not a per-lap cost.
+        self._reference_gp_names: frozenset[str] = frozenset(
+            self.laps_ref["GP_Name"].dropna().astype(str).unique()
+        )
 
     # ── Loaders ───────────────────────────────────────────────────────────────
 
@@ -458,7 +449,10 @@ class PaceAgent:
         """
         c_id = self.compound_id.get(compound, 1)
         t_id = self.team_id.get(team, 0)
-        cluster = self.circuit_cluster.get(gp_name, 1)
+        # `circuit_cluster` is keyed by the parquet slug; the replay path queries with the
+        # metadata name. Miami 2025 missed and took the default, which happens to be its
+        # real cluster - a coincidence, not correctness (PR3_GP_KEYSPACE_SWEEP.md).
+        cluster = self.circuit_cluster.get(resolve_gp_key(self.circuit_cluster, gp_name), 1)
         return c_id, t_id, cluster
 
     def _compute_derived(
@@ -731,8 +725,12 @@ class PaceAgent:
         Returns:
             Median lap time in seconds, or None when no matching laps exist.
         """
+        # The parquet spells this race 'Miami'; the replay path asks for 'Miami Gardens'.
+        # Unresolved, the mask was empty for the whole race and N31 lost delta_vs_median
+        # on every lap (PR3_GP_KEYSPACE_SWEEP.md).
+        stored_name = resolve_gp_key(self._reference_gp_names, gp_name)
         mask = (
-            (self.laps_ref["GP_Name"] == gp_name)
+            (self.laps_ref["GP_Name"] == stored_name)
             & (self.laps_ref["Year"] == year)
             & (self.laps_ref["Compound"] == compound)
         )
