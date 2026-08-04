@@ -18,9 +18,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
+
 ROOT = Path(__file__).parent.parent.parent
 _TIREDEG = ROOT / "data" / "processed" / "laps_tiredeg.parquet"
 _CLUSTERS = ROOT / "data" / "processed" / "circuit_clustering"
+
+# EVERY test here, including the ones that only exercise a pure helper. Importing
+# `tire_agent` reads `data/models/tire_degradation/routing_config.json` at module import,
+# so a "hermetic" test that touches one of its functions is not hermetic at all: the three
+# below were written as if they were and went red on CI immediately. Naming the artefact
+# the import needs, rather than the artefact the test body reads, is the same guard-shape
+# defect #798 documented.
+pytestmark = pytest.mark.skipif(
+    not _HAS_MODELS, reason="importing tire_agent reads data/models/ (HF, not git)"
+)
 
 
 def _constants() -> dict[int, float]:
