@@ -131,3 +131,66 @@ def test_the_lookup_is_not_the_proportional_index_it_replaced():
         "the proportional index agrees with N04's join on every lap of this race, so the "
         "tests above would pass under the old rule too: pick a different race"
     )
+
+
+# --- the two branches the first version of this file never touched ------------
+
+
+@pytest.mark.data
+def test_a_second_weather_frame_is_not_served_the_first_ones_alignment():
+    """The cache is keyed on the FRAME, not on `id()`, which a dead object releases.
+
+    Reproduced on the second trial before the fix: read frame A, serve a lap, let A die,
+    read a shifted frame B, and CPython hands B the same id, so B's lap came back with A's
+    temperature. Silent, no error, no log. Today's callers hold one frame for the race so
+    it could not fire, but the promise this method makes is per-ARGUMENT.
+    """
+    import gc
+
+    from src.simulation.race_state_manager import RaceStateManager
+
+    race_dir = _RAW / "Lusail"
+    laps = pd.read_parquet(race_dir / "laps.parquet")
+    manager = RaceStateManager(laps, "NOR", "McLaren", "Lusail", 2025)
+
+    first = pd.read_parquet(race_dir / "weather.parquet")
+    served_first = manager.get_weather_state(10, first)["track_temp"]
+    del first
+    gc.collect()
+
+    second = pd.read_parquet(race_dir / "weather.parquet")
+    second["TrackTemp"] = second["TrackTemp"] + 50.0
+    served_second = manager.get_weather_state(10, second)["track_temp"]
+
+    assert served_second == pytest.approx(served_first + 50.0), (
+        f"the second frame was served {served_second} where {served_first + 50.0} is "
+        f"correct: the cache is keyed on something a dead object can release"
+    )
+
+
+@pytest.mark.data
+def test_a_lap_our_driver_never_ran_reports_no_weather_at_all():
+    """After a retirement the replay keeps running; it must not invent a reading.
+
+    This branch used to serve `weather_df.iloc[0]`, the session's FIRST sample, under a
+    docstring calling it "a real gap rather than a substituted reading". Over 405 real
+    fallback laps it was 2.67 C off on average and up to 8.9, with the rain flag wrong on
+    92 of them: worse, on that territory, than the lookup this whole fix replaced.
+    """
+    from src.simulation.race_state_manager import RaceStateManager
+
+    race_dir = _RAW / "Lusail"
+    laps = pd.read_parquet(race_dir / "laps.parquet")
+    weather = pd.read_parquet(race_dir / "weather.parquet")
+
+    total = int(laps["LapNumber"].max())
+    retired = [
+        drv for drv, rows in laps.groupby("Driver") if int(rows["LapNumber"].max()) < total - 1
+    ]
+    assert retired, "no retirement in this race, so this test would hold vacuously"
+
+    manager = RaceStateManager(laps, retired[0], "Unknown", "Lusail", 2025)
+    state = manager.get_weather_state(total, weather)
+
+    assert state["track_temp"] is None
+    assert state["air_temp"] is None
