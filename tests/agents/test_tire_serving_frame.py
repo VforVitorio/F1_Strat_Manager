@@ -125,8 +125,13 @@ def test_the_agent_reads_the_cluster_family_the_tcn_trained_on():
 # --- the three shift/alias fixes, hermetic -----------------------------------
 
 
-def test_degradation_is_not_lagged():
-    """Training computed both unshifted; a lag moved the TCN 0.185 s at cliff onset."""
+def test_degradation_follows_n04s_conventions():
+    """Unshifted, NaN where training had none, and clipped. All three, on one frame.
+
+    The shift removal alone was not enough and briefly made one row worse: N04 starts both
+    arrays as NaN and writes the acceleration only when BOTH neighbours exist, so index 1
+    is always NaN there. Serving `deg[1] - 0` put `deg[1]` itself on 326 of 327 real stints.
+    """
     from src.agents.tire_agent import _add_degradation_rate
 
     frame = pd.DataFrame(
@@ -137,10 +142,27 @@ def test_degradation_is_not_lagged():
     )
     out = _add_degradation_rate(frame.copy())
 
-    # A lagged series would repeat the previous row; an unshifted one rises immediately.
-    assert out["DegradationRate"].iloc[1] != pytest.approx(0.0), (
-        "the second lap still reads the first lap's zero, so the shift is back"
+    assert pd.isna(out["DegradationRate"].iloc[0]), "index 0 must be NaN, not a zero reading"
+    assert pd.isna(out["DegAcceleration"].iloc[1]), (
+        "index 1 of the acceleration must be NaN: N04 needs both neighbours and deg[0] is NaN"
     )
+    # Unshifted: the second lap carries its own slope, not the first lap's absence.
+    assert not pd.isna(out["DegradationRate"].iloc[1])
+
+
+def test_degradation_is_clipped_to_the_trained_range():
+    """N04 clips both to [-2, 2] s/lap; without it the TCN eats out-of-range values."""
+    from src.agents.tire_agent import _add_degradation_rate
+
+    # A lap-time collapse steep enough to blow past the clip.
+    frame = pd.DataFrame(
+        {"TyreLife": [1, 2, 3, 4], "FuelAdjustedLapTime": [90.0, 100.0, 120.0, 150.0]}
+    )
+    out = _add_degradation_rate(frame.copy())
+
+    assert out["DegradationRate"].max() <= 2.0
+    assert out["DegradationRate"].min() >= -2.0
+    assert out["DegAcceleration"].max() <= 2.0
 
 
 def test_a_missing_predecessor_stays_missing():
@@ -160,8 +182,15 @@ def test_a_missing_predecessor_stays_missing():
 
 
 def test_an_existing_laps_since_pit_is_not_overwritten_by_tyre_life():
-    """They are different quantities and the artefacts carry the real one."""
-    from src.agents.tire_agent import _add_session_cols
+    """They are different quantities and the artefacts carry the real one.
+
+    Pointed at `_add_timing_cols`, which is where the guard lives. A first version called
+    `_add_session_cols`, which never touches the column, so the assertion held under ANY
+    behaviour of the fixed code: restoring the unconditional alias left it green while the
+    real chain served TyreLife. That is the `a guard that asserts nothing` class, and it
+    means W-F11 shipped with no effective regression guard at all until this was corrected.
+    """
+    from src.agents.tire_agent import _add_timing_cols
 
     frame = pd.DataFrame(
         {
@@ -173,18 +202,58 @@ def test_an_existing_laps_since_pit_is_not_overwritten_by_tyre_life():
             "LapsSincePitStop": [3, 4],
         }
     )
-    meta = {
-        "fastest_lap_s": 89.0,
-        "cluster_mean_lap_s": 95.0,
-        "total_laps": 50,
-        "cluster_id": 1,
-        "team_id": 0,
-        "year": 2025,
-    }
-    frame["LapNumber"] = [1, 2]
-    for col in ("SpeedI1", "SpeedI2", "SpeedFL"):
-        frame[col] = [300.0, 301.0]
-
-    out = _add_session_cols(frame.copy(), meta)
+    out = _add_timing_cols(frame.copy())
 
     assert list(out["LapsSincePitStop"]) == [3, 4], "the real column was stomped with TyreLife"
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not _TIREDEG.exists(), reason="laps_tiredeg absent")
+def test_both_degradation_columns_reproduce_the_trained_artefact():
+    """The test whose ABSENCE let three defects ship at once.
+
+    `lap_time_vs_cluster_mean` had a data-tier diff against `laps_tiredeg` and came out
+    exact. The degradation pair had none, so removing its shift looked correct while it
+    still missed N04's NaN initialisation, its both-neighbours guard and its clip. This is
+    the same diff, for the columns that lacked one.
+
+    Per stint, because that is the unit N04 groups by.
+    """
+    from src.agents.tire_agent import _add_degradation_rate
+
+    laps = pd.read_parquet(
+        _TIREDEG,
+        columns=[
+            "GP_Name",
+            "Year",
+            "DriverNumber",
+            "Stint",
+            "LapNumber",
+            "TyreLife",
+            "FuelAdjustedLapTime",
+            "DegradationRate",
+            "DegAcceleration",
+        ],
+    )
+    rows = laps[laps["Year"] == 2025]
+    assert len(rows) > 0, "no 2025 rows: this would hold vacuously"
+
+    compared = 0
+    mismatches: list[str] = []
+    for keys, stint in rows.groupby(["GP_Name", "DriverNumber", "Stint"]):
+        stint = stint.sort_values("LapNumber")
+        if len(stint) < 2:
+            continue
+        served = _add_degradation_rate(stint.copy())
+        for column in ("DegradationRate", "DegAcceleration"):
+            ours = served[column].to_numpy(dtype=float)
+            trained = stint[column].to_numpy(dtype=float)
+            both_nan = np.isnan(ours) & np.isnan(trained)
+            equal = np.isclose(ours, trained, atol=1e-9, equal_nan=True)
+            bad = np.where(~(equal | both_nan))[0]
+            compared += len(ours)
+            if bad.size:
+                mismatches.append(f"{keys} {column}: {bad.size} rows")
+
+    assert compared > 0, "nothing compared"
+    assert mismatches == [], f"{len(mismatches)} stint/column pairs diverge: {mismatches[:5]}"

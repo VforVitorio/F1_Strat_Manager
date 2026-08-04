@@ -692,13 +692,30 @@ def _add_degradation_rate(df: pd.DataFrame) -> pd.DataFrame:
     The lag was not leakage protection either way: `raw_deg[i]` is fitted over laps
     i-2..i, all of which have already happened at the moment the model is asked about
     lap i. There was nothing from the future to exclude.
+
+    THREE THINGS N04 DOES THAT THIS HAS TO DO TOO, all of them missed when the shift
+    came out (`.nb_py/N04_feature_engineering.py:478-556`):
+
+    1. Both arrays start as NaN, not zeros. N04 says so in its own words: "No fillna -
+       NaN on first lap of each stint is meaningful signal." A zero is a reading; a NaN
+       is the absence of one, and the tensor builder's single `fillna(0)` is what turns
+       it into the value the scaler saw.
+    2. The acceleration at index 1 is NaN, because N04 writes it only when BOTH
+       neighbours are non-NaN and `deg_rates[0]` is always NaN. Computing it as
+       `deg[1] - deg[0]` with a zero-filled `deg[0]` served `deg[1]` itself on 326 of
+       327 real stints, where training served nothing. The old lagged code was
+       accidentally right on that one row, which is why the shift removal made this
+       row worse before this fix put it back.
+    3. Both are clipped to [-2.0, 2.0] s/lap. Without it the TCN is handed values
+       outside the range it was fitted on precisely at cliff and chaos laps, which are
+       the laps the number exists to describe.
     """
     tyre_lives = df["TyreLife"].values
     adj_times = df["FuelAdjustedLapTime"].values
     n = len(df)
 
-    raw_deg = np.zeros(n)
-    raw_accel = np.zeros(n)
+    raw_deg = np.full(n, np.nan)
+    raw_accel = np.full(n, np.nan)
 
     for i in range(1, n):
         start = max(0, i - 2)
@@ -708,10 +725,11 @@ def _add_degradation_rate(df: pd.DataFrame) -> pd.DataFrame:
             raw_deg[i] = np.polyfit(x, y, 1)[0]
 
     for i in range(1, n):
-        raw_accel[i] = raw_deg[i] - raw_deg[i - 1]
+        if not np.isnan(raw_deg[i]) and not np.isnan(raw_deg[i - 1]):
+            raw_accel[i] = raw_deg[i] - raw_deg[i - 1]
 
-    df["DegradationRate"] = pd.Series(raw_deg, index=df.index)
-    df["DegAcceleration"] = pd.Series(raw_accel, index=df.index)
+    df["DegradationRate"] = pd.Series(raw_deg, index=df.index).clip(-2.0, 2.0)
+    df["DegAcceleration"] = pd.Series(raw_accel, index=df.index).clip(-2.0, 2.0)
     return df
 
 
