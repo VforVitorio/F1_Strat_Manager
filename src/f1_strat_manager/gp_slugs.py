@@ -25,6 +25,7 @@ path on first run.
 from __future__ import annotations
 
 import logging
+from collections.abc import Container
 from typing import Final, Optional
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,12 @@ COUNTRY_SLUG_BY_GP: dict[str, str] = {
 # by :func:`canonical_gp_name` and do NOT belong here.
 FOLDER_ALIASES: dict[str, str] = {
     "Miami_Gardens": "Miami",  # 2025 raw folder; 2023/2024 used "Miami"
+    # `data/raw/2023/Spain` is the SAME session as `data/raw/2023/Barcelona` (OpenF1 key
+    # 9102, byte-identical laps, extracted 21 s apart); 2024 and 2025 keep only Barcelona,
+    # and no lookup table is keyed 'Spain'. Replaying that folder today misses every
+    # compound and cluster lookup. The duplicate itself is a data defect with its own
+    # owner; this makes the folder resolve meanwhile, and stays inert once it is gone.
+    "Spain": "Barcelona",
 }
 
 
@@ -172,6 +179,55 @@ def slug_from_event_name(event_name: str) -> Optional[str]:
     if event_name in EVENT_NAME_BY_SLUG:
         return event_name  # already a slug
     return SLUG_BY_EVENT_NAME.get(event_name)
+
+
+def normalise_gp_key(gp_name: str) -> str:
+    """Collapse the metadata and folder spellings of a GP onto the parquet slug.
+
+    ``'Miami Gardens'`` (what ``metadata.json`` carries, and therefore what the replay
+    engine puts into ``session_meta``) and ``'Miami_Gardens'`` (the raw folder name, used
+    when that file is absent) both become ``'Miami'``. Underscores first, because
+    :func:`canonical_gp_name`'s alias table is keyed by the folder form, so the space has
+    to become an underscore before the alias can fire.
+
+    NOT a replacement for :func:`slug_from_event_name`: this one mangles the FastF1 event
+    name (``'Qatar Grand Prix'`` → ``'Qatar_Grand_Prix'``), while that one returns ``None``
+    for the metadata form. Neither covers all four spellings, which is why
+    :func:`resolve_gp_key` tries both rather than picking one.
+
+    Lived in ``pace_agent`` until the 2026-08-04 sweep found five consumers needing it.
+    """
+    if not gp_name:
+        return ""
+    return canonical_gp_name(gp_name.replace(" ", "_"))
+
+
+def resolve_gp_key(keys: Container[str], gp_name: str) -> str:
+    """Return the spelling of ``gp_name`` that ``keys`` actually holds.
+
+    A GP is written four ways across this project — the parquet slug (``'Miami'``), the
+    metadata name (``'Miami Gardens'``), the raw folder (``'Miami_Gardens'``) and the
+    FastF1 event name (``'Miami Grand Prix'``) — and the lookup tables are not keyed
+    consistently between them. Every consumer that queries one of those tables with a name
+    from another keyspace misses and takes its fallback, silently: the 2025 Miami replay
+    read the C1/C2 tyre bundle instead of C3/C4 in three agents at once (#448, #450, #797,
+    and the 2026-08-04 sweep in ``documents/audits/PR3_GP_KEYSPACE_SWEEP.md``).
+
+    Resolving on the QUERY side rather than re-keying the table is deliberate: the pooled
+    clustering artefacts hold BOTH ``'Miami'`` and ``'Miami Gardens'`` as separate rows, so
+    re-keying would silently drop one of the two.
+
+    Returns ``gp_name`` unchanged when nothing resolves, so the caller's own fallback (and
+    its warning) still fires exactly as before.
+    """
+    if not gp_name:
+        return gp_name
+    slug = slug_from_event_name(gp_name)
+    candidates = (gp_name, slug, normalise_gp_key(gp_name), normalise_gp_key(slug or ""))
+    for candidate in candidates:
+        if candidate and candidate in keys:
+            return candidate
+    return gp_name
 
 
 def rekey_by_slug(table: dict, table_name: str) -> dict:

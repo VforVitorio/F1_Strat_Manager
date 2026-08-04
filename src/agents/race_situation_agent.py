@@ -60,7 +60,11 @@ except (ImportError, OSError, RuntimeError):
     # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / "data"
 
-from src.f1_strat_manager.gp_slugs import rekey_by_slug, slug_from_event_name  # noqa: E402
+from src.f1_strat_manager.gp_slugs import (  # noqa: E402
+    rekey_by_slug,
+    resolve_gp_key,
+    slug_from_event_name,
+)
 
 _MODELS = _DATA_ROOT / "models"
 _PROCESSED = _DATA_ROOT / "processed"
@@ -263,6 +267,18 @@ class RaceSituationConfig:
         slug = slug_from_event_name(event_name) or event_name
         return self.circuit_sc_rate_map.get(slug, 0.10)
 
+    def cluster_for(self, gp_name: str, default: Optional[int] = None) -> Optional[int]:
+        """This circuit's cluster, whichever of its four spellings the caller holds.
+
+        `sc_rate_for` above already resolves ONE keyspace for this same config; the cluster
+        map next to it did not, which is the one-copy-fixed-its-twin-not pattern this repo
+        keeps producing. Four spellings need both resolvers, not just the slug one
+        (PR3_GP_KEYSPACE_SWEEP.md).
+        """
+        return self.circuit_cluster_map.get(
+            resolve_gp_key(self.circuit_cluster_map, gp_name), default
+        )
+
 
 # ── Module-level config singleton ─────────────────────────────────────────────
 # Kept at module level because RaceSituationOutput.__post_init__ reads
@@ -349,8 +365,34 @@ class RaceSituationOutput:
 
 
 def _abs_compound(relative: str, gp_name: str, year: int) -> str:
-    """Map SOFT/MEDIUM/HARD → Cx string using TIRE_COMPOUNDS; fallback to input."""
-    return TIRE_COMPOUNDS.get(str(year), {}).get(gp_name, {}).get(relative.upper(), relative)
+    """Map SOFT/MEDIUM/HARD → Cx string using TIRE_COMPOUNDS; fallback to input.
+
+    The fifth consumer of this JSON, and the one the earlier keyspace sweeps missed. Its
+    failure mode is the loudest of the three: unresolved it returns the RELATIVE name
+    ('HARD') where the caller expects a Cx string (PR3_GP_KEYSPACE_SWEEP.md).
+    """
+    year_data = TIRE_COMPOUNDS.get(str(year), {})
+    gp_data = year_data.get(resolve_gp_key(year_data, gp_name), {})
+    return gp_data.get(relative.upper(), relative)
+
+
+def _lap_count(lap: pd.Series, column: str) -> float:
+    """An integer lap count from a lap row, or NaN when the artefact has none.
+
+    `int()` on a NaN raises, and these columns are NOT reliably populated: 44% of the 2025
+    Miami rows in `laps_featured_2025.parquet` carry no `TyreLife` at all (492 of 857 after
+    augmentation, against 0 at Lusail). That crash never surfaced because the frame handed
+    to the agents was the whole season and the (Driver, LapNumber) lookup landed on some
+    other race's row; scoping the frame correctly is what exposed it.
+
+    NaN rather than a substitute: LightGBM reads a missing feature natively, and inventing
+    a tyre age here is how a sentinel ends up indistinguishable from a real value. The
+    absent data itself is an artefact defect, not something inference can repair.
+    """
+    value = lap.get(column)
+    if value is None or pd.isna(value):
+        return float("nan")
+    return int(value)
 
 
 def _agg(grp: pd.DataFrame) -> pd.Series:
@@ -923,13 +965,13 @@ class RaceSituationAgent:
         gap_ahead_s = max(0.0, gap_ahead_s)
 
         pace_delta_s = float((driver_x_lap["LapTime"] - driver_y_lap["LapTime"]).total_seconds())
-        tyre_life_x = int(driver_x_lap["TyreLife"])
-        tyre_life_y = int(driver_y_lap["TyreLife"])
+        tyre_life_x = _lap_count(driver_x_lap, "TyreLife")
+        tyre_life_y = _lap_count(driver_y_lap, "TyreLife")
         tyre_life_diff = tyre_life_x - tyre_life_y
         speed_trap_delta = float(driver_x_lap.get("SpeedST", 300.0)) - float(
             driver_y_lap.get("SpeedST", 300.0)
         )
-        lap_number = int(driver_x_lap["LapNumber"])
+        lap_number = _lap_count(driver_x_lap, "LapNumber")
         # DRS is unavailable under SC/VSC (Art. 22.1(c): activation only resumes one lap
         # after a safety car period, two in the 2023 regulation). The gap-based rule
         # below cannot know that, so a neutralised lap used to report an open DRS window
@@ -1356,7 +1398,7 @@ class RaceSituationAgent:
             "gp_name": gp_name,
             "event_name": event_name,
             "year": lap_state.get("year", 2025),
-            "circuit_cluster": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "circuit_cluster": self.cfg.cluster_for(gp_name, 0),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": int(session.total_laps),
             "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
@@ -1446,7 +1488,7 @@ class RaceSituationAgent:
             "gp_name": gp_name,
             "event_name": event_name,
             "year": year,
-            "circuit_cluster": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "circuit_cluster": self.cfg.cluster_for(gp_name, 0),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": total_laps,
             "fastest_lap_s": float(self.laps_df["LapTime"].dt.total_seconds().min())

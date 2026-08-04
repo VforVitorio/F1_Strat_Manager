@@ -78,6 +78,7 @@ from src.agents.strategy_orchestrator import (
     best_mc_candidate,
     race_context_from_lap_state,
 )
+from src.f1_strat_manager.gp_slugs import resolve_gp_key
 
 # The profiles #169 delivers. ``fast`` (direct-mode sub-agents + event-triggered
 # N31, audit F3/F11) is a later phase and is rejected with a pointing error so
@@ -141,7 +142,12 @@ def _scope_laps_to_gp(
             )
         return laps_df
 
-    scoped = laps_df[laps_df["GP_Name"] == gp_name]
+    # Resolve the spelling first: the replay path scopes with the metadata name while the
+    # frame is keyed by the parquet slug, so 2025 Miami matched nothing and took the
+    # fallback below — the whole race ran on the UNSCOPED season frame, which is the very
+    # regression the fallback's warning names (PR3_GP_KEYSPACE_SWEEP.md).
+    stored_name = resolve_gp_key(set(laps_df["GP_Name"].dropna().astype(str)), gp_name)
+    scoped = laps_df[laps_df["GP_Name"] == stored_name]
     if scoped.empty:
         logger.warning(
             "GP %r not found in the laps frame (%d rows, %d GPs); falling back to the "

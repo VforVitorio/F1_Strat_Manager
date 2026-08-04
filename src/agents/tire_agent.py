@@ -68,6 +68,8 @@ except (ImportError, OSError, RuntimeError):
     # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / "data"
 
+from src.f1_strat_manager.gp_slugs import resolve_gp_key  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 _MODEL_DIR = _DATA_ROOT / "models" / "tire_degradation"
@@ -377,6 +379,19 @@ class TireAgentConfig:
             self.cliff_monitor_by_cluster = {}
             self.cliff_overrides_by_gp = {}
 
+    def cluster_for(self, gp_name: str, default: Optional[int] = None) -> Optional[int]:
+        """This circuit's cluster, whichever of its four spellings the caller holds.
+
+        The map is keyed by the parquet slug ('Miami'); the replay path queries with the
+        metadata name ('Miami Gardens'). Today that particular query still lands, but only
+        because the pooled clustering artefact carries the race TWICE under both spellings
+        (25 rows for 24 circuits) - a duplicate PR 6 removes, at which point an unresolved
+        query would start defaulting silently. See PR3_GP_KEYSPACE_SWEEP.md.
+        """
+        return self.circuit_cluster_map.get(
+            resolve_gp_key(self.circuit_cluster_map, gp_name), default
+        )
+
     def get_cliff_thresholds(self, gp_name: str) -> tuple[int, int]:
         """Return (pit_soon_laps, monitor_laps) for the given GP.
 
@@ -391,10 +406,11 @@ class TireAgentConfig:
         Returns:
             Tuple (pit_soon_laps, monitor_laps) as integers.
         """
-        if gp_name in self.cliff_overrides_by_gp:
-            ov = self.cliff_overrides_by_gp[gp_name]
+        override_key = resolve_gp_key(self.cliff_overrides_by_gp, gp_name)
+        if override_key in self.cliff_overrides_by_gp:
+            ov = self.cliff_overrides_by_gp[override_key]
             return ov["pit_soon"], ov["monitor"]
-        cluster_id = self.circuit_cluster_map.get(gp_name)
+        cluster_id = self.cluster_for(gp_name)
         if cluster_id is not None:
             pit_soon = self.cliff_pit_soon_by_cluster.get(cluster_id, self.cliff_pit_soon_laps)
             monitor = self.cliff_monitor_by_cluster.get(cluster_id, self.cliff_monitor_laps)
@@ -889,7 +905,10 @@ def _compound_name_to_id(compound_name: str, gp_name: str, year: int) -> str:
         alloc = json.load(f)
 
     year_data = alloc.get(str(year), {})
-    gp_data = year_data.get(gp_name, {})
+    # The JSON is keyed by the parquet slug. Queried with the metadata name, 2025 Miami
+    # missed and took the fallback, routing MEDIUM/HARD stints to the C2/C1 TCN bundle
+    # instead of C4/C3 for the whole race (PR3_GP_KEYSPACE_SWEEP.md).
+    gp_data = year_data.get(resolve_gp_key(year_data, gp_name), {})
     return gp_data.get(compound_name.upper(), fallback.get(compound_name.upper(), "C3"))
 
 
@@ -1521,10 +1540,10 @@ class TireAgent:
             # within a cluster), and a race's own mean is a per-race number that
             # happens to have the same units.
             "cluster_mean_lap_s": TireAgentConfig._TRAINED_CLUSTER_MEAN_LAP_S.get(
-                self.cfg.circuit_cluster_map.get(gp_name, 0), 0.0
+                self.cfg.cluster_for(gp_name, 0), 0.0
             ),
             "total_laps": int(session.total_laps),
-            "cluster_id": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "cluster_id": self.cfg.cluster_for(gp_name, 0),
             "team_id": _encode_team_id(self.cfg.team_id_map, stint_state.get("team", "Unknown")),
             "year": stint_state.get("year", 2025),
             "AirTemp": float(_weather.get("AirTemp", DEFAULT_AIR_TEMP_C)),
@@ -1604,10 +1623,10 @@ class TireAgent:
             # above: this race's own mean lap time is a different quantity wearing the
             # same units.
             "cluster_mean_lap_s": TireAgentConfig._TRAINED_CLUSTER_MEAN_LAP_S.get(
-                self.cfg.circuit_cluster_map.get(gp_name, 0), 0.0
+                self.cfg.cluster_for(gp_name, 0), 0.0
             ),
             "total_laps": total_laps,
-            "cluster_id": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "cluster_id": self.cfg.cluster_for(gp_name, 0),
             "team_id": _encode_team_id(self.cfg.team_id_map, team),
             "year": year,
             # reading_or_default, not .get(key, default): the producers report an

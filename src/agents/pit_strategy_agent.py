@@ -67,6 +67,7 @@ except (ImportError, OSError, RuntimeError):
 from src.f1_strat_manager.gp_slugs import (  # noqa: E402
     canonical_gp_name,
     rekey_by_slug,
+    resolve_gp_key,
     slug_from_event_name,
 )
 
@@ -422,7 +423,12 @@ def _compound_to_id(compound: str, gp_name: str, year: int) -> int:
     Returns:
         Integer compound number (1–6).
     """
-    cx_str = TIRE_COMPOUNDS.get(str(year), {}).get(gp_name, {}).get(compound.upper(), '')
+    # The keyspace trap: queried with the metadata name ('Miami Gardens') this missed and
+    # returned _COMPOUND_FALLBACK, which for 2025 Miami is 1 where the answer is 3 (HARD)
+    # and 3 where it is 4 (MEDIUM). SOFT happens to coincide, which is why a SOFT-only
+    # probe reported the site as healthy (PR3_GP_KEYSPACE_SWEEP.md).
+    year_data = TIRE_COMPOUNDS.get(str(year), {})
+    cx_str = year_data.get(resolve_gp_key(year_data, gp_name), {}).get(compound.upper(), '')
     if cx_str and cx_str.startswith('C') and cx_str[1:].isdigit():
         return int(cx_str[1:])
     return _COMPOUND_FALLBACK.get(compound.upper(), 3)
