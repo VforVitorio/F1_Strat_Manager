@@ -155,10 +155,12 @@ class RaceStateManager:
         # about three cars should not pay for twenty.
         self._stint_flags: dict[str, dict[int, dict[str, Any]]] = {}
 
-        # Per-lap weather aligned by session time, one entry per weather frame the
-        # caller passes. See `_weather_for_lap`: the alignment is a whole-race
-        # merge_asof and doing it per lap would cost the O(1) lookup above.
-        self._weather_aligned: dict[int, pd.DataFrame] = {}
+        # Per-lap weather aligned by session time, for ONE frame at a time. See
+        # `_weather_for_lap`: the alignment is a whole-race merge_asof and doing it per
+        # lap would cost the O(1) lookup above. The frame itself is held so `is` stays a
+        # real identity test, which `id()` is not once an object dies.
+        self._weather_frame: pd.DataFrame | None = None
+        self._weather_aligned: pd.DataFrame | None = None
 
     def _precompute_pit_laps(self) -> tuple[int, ...]:
         """The lap numbers on which our driver entered the pit lane, ascending.
@@ -496,16 +498,30 @@ class RaceStateManager:
 
         Built once per weather frame and cached: the alignment is a `merge_asof`
         over the whole race, and paying it per lap would break the O(1) promise
-        `get_lap_state` makes. Keyed by the frame's identity because the replay
-        engine hands the same object on every call.
+        `get_lap_state` makes.
 
-        Falls back to the FIRST sample when this lap has no session time to join
-        on, which is the row N04 also leaves unmatched. That is a real gap rather
-        than a substituted reading, and it is why the caller still guards every
-        field with `pd.notna`.
+        THE CACHE HOLDS THE FRAME, not `id(weather_df)`. An id is only unique among
+        LIVE objects and CPython reuses a dead one eagerly: a caller that re-reads
+        `weather.parquet` per call and lets the previous frame die gets the previous
+        race's alignment, silently, with no error and no log. That was reproduced on
+        the second trial. Keeping a reference makes `is` a real identity test, and one
+        slot rather than a growing dict means the cache cannot leak either. A frame
+        MUTATED IN PLACE is still served stale; that is a precondition of any identity
+        cache and is why the contract is "hand back the same frame you built from".
+
+        WHEN THERE IS NO ROW FOR THIS LAP the four readings come back as NaN, so the
+        caller emits None. The trigger is not a lap with no session time, which never
+        happens (0 of 79,032 raw driver-laps): it is a driver with no row at all for a
+        lap the race still ran, which is every lap after a retirement, and 6,236
+        driver-lap pairs across the dataset. This used to serve `weather_df.iloc[0]`,
+        the session's FIRST sample, described as "a real gap rather than a substituted
+        reading". It was exactly a substituted reading, and a bad one: over 405 real
+        fallback laps it was 2.67 C off on average and up to 8.9, with the rain flag
+        wrong on 92 of them, which is WORSE than the proportional lookup this fix
+        replaced (1.86 C) on that same territory. N04 has no such row and therefore no
+        convention to copy, so the honest emission is nothing at all.
         """
-        cache_key = id(weather_df)
-        aligned = self._weather_aligned.get(cache_key)
+        aligned = self._weather_aligned if self._weather_frame is weather_df else None
         if aligned is None:
             from src.f1_strat_manager.weather_restore import weather_for_race
 
@@ -525,12 +541,15 @@ class RaceStateManager:
                     merged.index = laps.sort_values("Time").index
                     trained = trained.assign(WindSpeed=merged["WindSpeed"])
             aligned = trained
-            self._weather_aligned[cache_key] = aligned
+            self._weather_frame = weather_df
+            self._weather_aligned = aligned
 
         row = self._driver[self._driver["LapNumber"] == lap_number]
         if not row.empty and row.index[0] in aligned.index:
             return aligned.loc[row.index[0]]
-        return weather_df.iloc[0]
+        # No row for this lap: our driver has retired or been lapped out of the frame.
+        # An all-NaN row, so every field the caller guards with `pd.notna` becomes None.
+        return pd.Series(dtype="float64")
 
     def get_weather_state(
         self,
