@@ -59,7 +59,11 @@ import pandas as pd
 # ``f1_strat_manager.gp_slugs`` so the lazy first-run downloader in
 # ``data_cache`` can resolve slugs without dragging in the full
 # ``src.agents`` package init (which loads RoBERTa / BERT / Whisper).
-from src.f1_strat_manager.gp_slugs import COUNTRY_SLUG_BY_GP, resolve_gp_slug
+from src.f1_strat_manager.gp_slugs import (
+    COUNTRY_SLUG_BY_GP,
+    resolve_gp_key,
+    resolve_gp_slug,
+)
 
 __all__ = [
     "COUNTRY_SLUG_BY_GP",
@@ -399,7 +403,8 @@ class RadioPipelineRunner:
         falls back to the ``D{n}`` synthetic codes downstream.
         """
         try:
-            sub = laps_df[laps_df["GP_Name"] == gp_name]
+            names = set(laps_df["GP_Name"].dropna().astype(str))
+            sub = laps_df[laps_df["GP_Name"] == resolve_gp_key(names, gp_name)]
             sub = sub[["DriverNumber", "Driver"]].drop_duplicates()
             return {int(row.DriverNumber): str(row.Driver) for row in sub.itertuples()}
         except Exception as exc:  # noqa: BLE001 — log + degrade gracefully
