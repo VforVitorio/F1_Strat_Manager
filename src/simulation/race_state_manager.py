@@ -145,6 +145,7 @@ class RaceStateManager:
         # Precomputed for the same reason as the two above: get_driver_state is an
         # O(1) lookup and a per-lap rescan would break that promise.
         self._derived_prev_lap: dict[int, float] = self._precompute_prev_lap_times()
+        self._derived_prev_speed_st: dict[int, float] = self._precompute_prev_speed_traps()
 
         # Art. 30.5(m) flags, one timeline per driver, built on first ask.
         # `get_lap_state` needs ours plus one per rival, and the per-lap helper
@@ -237,12 +238,37 @@ class RaceStateManager:
             keeps that as ``None`` rather than inventing a number. An empty map is
             the honest result for a frame lacking the columns this needs.
         """
+        return self._precompute_previous(column="_lap_time_s")
+
+    def _precompute_prev_speed_traps(self) -> dict[int, float]:
+        """The same reconstruction, for N04's ``Prev_SpeedST``.
+
+        N04 builds every ``Prev_*`` column in one loop over the SAME grouped shift
+        (`.nb_py/N04_feature_engineering.py:389-392`), so the previous speed trap obeys
+        the identical rule as the previous lap time: same stint grouping, same survivor
+        filter. #435 restored ``Prev_LapTime`` through this machinery and left its
+        siblings alone, and the pace agent went on feeding the CURRENT lap's trap where
+        training had the previous one.
+
+        Sharing the helper is the point rather than an economy: two reconstructions of
+        one transform is how the pair drifts apart the next time either is corrected.
+        """
+        return self._precompute_previous(column="SpeedST")
+
+    def _precompute_previous(self, column: str) -> dict[int, float]:
+        """``{lap_number: the previous SURVIVING lap's value}`` for one N04 ``Prev_`` column.
+
+        Kept private and column-parametric because the survivor filter, not the shift, is
+        what makes this correct, and it is identical for every such column.
+        """
         needed = {"LapNumber", "LapTime", "Stint"}
         if self._driver.empty or not needed <= set(self._driver.columns):
             return {}
 
         laps = self._driver.copy()
         laps["_lap_time_s"] = laps["LapTime"].map(_to_seconds)
+        if column not in laps.columns:
+            return {}
 
         # N04's filter_baseline_laps, term for term. IsAccurate and Deleted are
         # FastF1 quality flags absent from some hand-built frames, so a missing
@@ -258,7 +284,7 @@ class RaceStateManager:
         if ordered.empty:
             return {}
 
-        previous = ordered.groupby("Stint", sort=False)["_lap_time_s"].shift(1)
+        previous = ordered.groupby("Stint", sort=False)[column].shift(1)
         return {
             int(lap): float(value)
             for lap, value in zip(ordered["LapNumber"], previous, strict=True)
@@ -415,6 +441,16 @@ class RaceStateManager:
             "speed_i2": float(r["SpeedI2"]) if pd.notna(r.get("SpeedI2")) else None,
             "speed_fl": float(r["SpeedFL"]) if pd.notna(r.get("SpeedFL")) else None,
             "speed_st": float(r["SpeedST"]) if pd.notna(r.get("SpeedST")) else None,
+            # N04's Prev_SpeedST, emitted for exactly the reason prev_lap_time above is:
+            # the pace agent had no previous trap to read, so it served THIS lap's
+            # (`d.get('speed_st') or 300.0`) into a feature trained on the preceding
+            # one. Same producer, same rule, same None-means-unknown convention — the
+            # first lap of a stint genuinely has no predecessor and says so.
+            "prev_speed_st": (
+                float(r["Prev_SpeedST"])
+                if pd.notna(r.get("Prev_SpeedST"))
+                else self._derived_prev_speed_st.get(int(lap_number))
+            ),
             # --- Fuel (linear depletion estimate from FuelLoad feature) ---
             "fuel_load": float(r["FuelLoad"]) if pd.notna(r.get("FuelLoad")) else None,
             # --- Track & pit state ---
