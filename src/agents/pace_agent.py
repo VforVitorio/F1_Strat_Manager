@@ -177,6 +177,23 @@ _N06_ENVELOPE = OperatingEnvelope(name="n06_laptime_delta", bounds=_N06_TRAINED_
 # stray file cannot silently widen what the agent claims to know.
 _FEATURED_SEASONS: tuple[int, ...] = (2023, 2024, 2025)
 
+# N01's compound codes (`.nb_py/N01_data_download.py:114`), which is what the parquet's
+# `CompoundID` column holds and therefore what N06 was trained on. Not the manifest's
+# 0-based `categorical_encoding.Compound` block: that one encodes a column N06 drops.
+#
+# 0 is a TRAINED CLASS, not a spare slot — N01 does `.fillna(0)`, so every lap whose
+# compound FastF1 did not report reached training as a 0. That is why an off-by-one here
+# is worse than a shift: it makes a SOFT lap indistinguishable from an unreported one.
+# `tests/agents/test_pace_compound_encoding.py` re-derives all of this from the artefact.
+_N01_COMPOUND_ID: dict[str, int] = {
+    "SOFT": 1,
+    "MEDIUM": 2,
+    "HARD": 3,
+    "INTERMEDIATE": 4,
+    "WET": 5,
+}
+_COMPOUND_ID_UNKNOWN: int = 0
+
 
 # Moved to `gp_slugs` by the 2026-08-04 keyspace sweep: five consumers across three
 # modules needed the same normalisation, and it was never pace-specific. Re-exported under
@@ -294,11 +311,17 @@ class PaceAgent:
     def _load_encoding_maps(self, processed_dir: Path) -> tuple[dict, dict, dict]:
         """Load compound, circuit-cluster, and team label-encoding maps.
 
-        Reads the compound encoding from the N06 feature manifest, the circuit
-        cluster assignments from the k=4 clustering parquet (N05), and the
-        team-to-integer map derived from the laps_featured parquet. All three
-        are static training artifacts — they must not be recomputed at inference
+        The compound codes are N01's, the circuit clusters come from the k=4 clustering
+        parquet (N05), and the team map is derived from the laps_featured parquet. All
+        three are static training artifacts — they must not be recomputed at inference
         time to avoid encoding drift between train and serve.
+
+        NOT the manifest's `categorical_encoding.Compound` block, which is what this used
+        to read. That block is 0-based and describes N06's `encode_features` step, whose
+        output column (`Compound`) is NOT among the 39 in `features_in`: the model eats
+        `CompoundID`, N01's 1-based column, straight from the parquet. The eval harness
+        says so in its own docstring — "the model consumes the pre-numeric CompoundID" —
+        and inference contradicted it, so every lap arrived one class low.
 
         Args:
             processed_dir: Root of the processed data directory.
@@ -306,8 +329,7 @@ class PaceAgent:
         Returns:
             Tuple (compound_id, circuit_cluster, team_id) dicts.
         """
-        manifest = json.loads((processed_dir / "feature_manifest_laptime.json").read_text())
-        compound_id = manifest["categorical_encoding"]["Compound"]
+        compound_id = dict(_N01_COMPOUND_ID)
 
         clusters_df = pd.read_parquet(
             processed_dir / "circuit_clustering" / "circuit_clusters_k4_2025.parquet",
@@ -447,7 +469,10 @@ class PaceAgent:
         Returns:
             Tuple (compound_id_int, team_id_int, cluster_int).
         """
-        c_id = self.compound_id.get(compound, 1)
+        # The unknown code, not 1: 1 is SOFT on the trained scale, so an unrecognised
+        # compound string used to be served as a specific tyre rather than as the absent
+        # reading N01 encoded it as.
+        c_id = self.compound_id.get(compound, _COMPOUND_ID_UNKNOWN)
         t_id = self.team_id.get(team, 0)
         # `circuit_cluster` is keyed by the parquet slug; the replay path queries with the
         # metadata name. Miami 2025 missed and took the default, which happens to be its
@@ -885,19 +910,23 @@ class PaceAgent:
         total_laps = meta["total_laps"]
         laps_remaining = max(0, total_laps - lap_number)
 
-        # ``dict.get(key, default)`` only applies the default when *key is
-        # absent* — if the key is present with a None value (FastF1 logs
-        # speed_st=None on laps where the trap beam is not crossed cleanly,
-        # e.g. inlaps, traffic interruptions, sector anomalies), the default
-        # is ignored and None flows into the DataFrame. The feature column
-        # then becomes object dtype and XGBoost rejects it with:
-        #     "DataFrame.dtypes for data must be int, float, bool or category"
-        # That is exactly the crash observed on mid-stint laps. The ``or``
-        # pattern handles both missing-key and None-value cases in one step.
-        # This file's inline guard was the ONLY one of the three agents that handled
-        # present-and-None, and it is now the shared helper the other two adopted rather
-        # than a fourth copy of the pattern (#788).
-        _speed_st = d.get("speed_st") or 300.0
+        # The PREVIOUS lap's trap, which is what N04 built and N06 ate: every `Prev_*`
+        # column is one grouped shift within the stint. This used to read `speed_st`,
+        # THIS lap's trap, so the feature was a lap ahead of itself on every call — the
+        # exact defect #435 fixed for `Prev_LapTime` and left in place for its sibling.
+        #
+        # No `or 300.0`. That default was not a neutral filler: 300 km/h sits inside the
+        # trained range (156-362), so an invented reading was indistinguishable from a
+        # measured one, and it fired on the first lap of every stint, where the answer is
+        # genuinely unknown. NaN says unknown, and XGBoost reads a missing feature
+        # natively through its sparse-aware split direction.
+        #
+        # `.get` alone would return a stored None; `_build_feature_row`'s
+        # `to_numeric(errors='coerce')` turns that into the NaN we want, but converting
+        # here keeps the value numeric all the way down, which is what the envelope
+        # labelling and the bootstrap both assume.
+        _prev_speed_st = d.get("prev_speed_st")
+        _prev_speed_st = float("nan") if _prev_speed_st is None else float(_prev_speed_st)
         _air_temp = reading_or_default(wx, "air_temp", DEFAULT_AIR_TEMP_C)
         _trk_temp = reading_or_default(wx, "track_temp", DEFAULT_TRACK_TEMP_C)
         _humidity = reading_or_default(wx, "humidity", 50.0)
@@ -951,7 +980,7 @@ class PaceAgent:
             # reached on a genuinely missing previous lap.
             prev_lap_time=d.get("prev_lap_time") or MISSING_PREV_LAP_TIME_S,
             prev_tyre_life=max(0, (d.get("tyre_life") or 1) - 1),
-            prev_speed_st=float(_speed_st),
+            prev_speed_st=_prev_speed_st,
             air_temp=float(_air_temp),
             track_temp=float(_trk_temp),
             humidity=float(_humidity),
