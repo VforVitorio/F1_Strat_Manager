@@ -376,6 +376,25 @@ def _abs_compound(relative: str, gp_name: str, year: int) -> str:
     return gp_data.get(relative.upper(), relative)
 
 
+def _lap_count(lap: pd.Series, column: str) -> float:
+    """An integer lap count from a lap row, or NaN when the artefact has none.
+
+    `int()` on a NaN raises, and these columns are NOT reliably populated: 44% of the 2025
+    Miami rows in `laps_featured_2025.parquet` carry no `TyreLife` at all (492 of 857 after
+    augmentation, against 0 at Lusail). That crash never surfaced because the frame handed
+    to the agents was the whole season and the (Driver, LapNumber) lookup landed on some
+    other race's row; scoping the frame correctly is what exposed it.
+
+    NaN rather than a substitute: LightGBM reads a missing feature natively, and inventing
+    a tyre age here is how a sentinel ends up indistinguishable from a real value. The
+    absent data itself is an artefact defect, not something inference can repair.
+    """
+    value = lap.get(column)
+    if value is None or pd.isna(value):
+        return float("nan")
+    return int(value)
+
+
 def _agg(grp: pd.DataFrame) -> pd.Series:
     """Aggregate lap times for one lap group into mean, std, min scalars."""
     lt = grp["LapTime"].dt.total_seconds().dropna()
@@ -946,13 +965,13 @@ class RaceSituationAgent:
         gap_ahead_s = max(0.0, gap_ahead_s)
 
         pace_delta_s = float((driver_x_lap["LapTime"] - driver_y_lap["LapTime"]).total_seconds())
-        tyre_life_x = int(driver_x_lap["TyreLife"])
-        tyre_life_y = int(driver_y_lap["TyreLife"])
+        tyre_life_x = _lap_count(driver_x_lap, "TyreLife")
+        tyre_life_y = _lap_count(driver_y_lap, "TyreLife")
         tyre_life_diff = tyre_life_x - tyre_life_y
         speed_trap_delta = float(driver_x_lap.get("SpeedST", 300.0)) - float(
             driver_y_lap.get("SpeedST", 300.0)
         )
-        lap_number = int(driver_x_lap["LapNumber"])
+        lap_number = _lap_count(driver_x_lap, "LapNumber")
         # DRS is unavailable under SC/VSC (Art. 22.1(c): activation only resumes one lap
         # after a safety car period, two in the 2023 regulation). The gap-based rule
         # below cannot know that, so a neutralised lap used to report an open DRS window
