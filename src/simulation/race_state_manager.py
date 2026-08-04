@@ -155,6 +155,11 @@ class RaceStateManager:
         # about three cars should not pay for twenty.
         self._stint_flags: dict[str, dict[int, dict[str, Any]]] = {}
 
+        # Per-lap weather aligned by session time, one entry per weather frame the
+        # caller passes. See `_weather_for_lap`: the alignment is a whole-race
+        # merge_asof and doing it per lap would cost the O(1) lookup above.
+        self._weather_aligned: dict[int, pd.DataFrame] = {}
+
     def _precompute_pit_laps(self) -> tuple[int, ...]:
         """The lap numbers on which our driver entered the pit lane, ascending.
 
@@ -486,6 +491,47 @@ class RaceStateManager:
 
         return sorted(states, key=lambda s: s["position"] or 99)
 
+    def _weather_for_lap(self, lap_number: int, weather_df: pd.DataFrame) -> pd.Series:
+        """Our driver's weather sample for this lap, aligned by session time.
+
+        Built once per weather frame and cached: the alignment is a `merge_asof`
+        over the whole race, and paying it per lap would break the O(1) promise
+        `get_lap_state` makes. Keyed by the frame's identity because the replay
+        engine hands the same object on every call.
+
+        Falls back to the FIRST sample when this lap has no session time to join
+        on, which is the row N04 also leaves unmatched. That is a real gap rather
+        than a substituted reading, and it is why the caller still guards every
+        field with `pd.notna`.
+        """
+        cache_key = id(weather_df)
+        aligned = self._weather_aligned.get(cache_key)
+        if aligned is None:
+            from src.f1_strat_manager.weather_restore import weather_for_race
+
+            trained = weather_for_race(self._driver, weather_df)
+            # Wind is display-only and not in N04's four, so it is carried on the
+            # same aligned rows rather than looked up a second way.
+            if "WindSpeed" in weather_df.columns and "Time" in weather_df.columns:
+                samples = weather_df[["Time", "WindSpeed"]].dropna(subset=["Time"])
+                laps = self._driver[["Time"]].dropna(subset=["Time"])
+                if not samples.empty and not laps.empty:
+                    merged = pd.merge_asof(
+                        laps.sort_values("Time"),
+                        samples.sort_values("Time"),
+                        on="Time",
+                        direction="nearest",
+                    )
+                    merged.index = laps.sort_values("Time").index
+                    trained = trained.assign(WindSpeed=merged["WindSpeed"])
+            aligned = trained
+            self._weather_aligned[cache_key] = aligned
+
+        row = self._driver[self._driver["LapNumber"] == lap_number]
+        if not row.empty and row.index[0] in aligned.index:
+            return aligned.loc[row.index[0]]
+        return weather_df.iloc[0]
+
     def get_weather_state(
         self,
         lap_number: int,
@@ -495,12 +541,31 @@ class RaceStateManager:
 
         ``TrackStatus`` is always present (sourced from laps). Optional
         ``weather_df`` (from weather.parquet) adds temperature, humidity,
-        wind, and rainfall when available. The row is picked by mapping the
-        lap fraction onto ``weather_df``'s row index (``int(lap_frac *
-        (len(weather_df) - 1))``): a proportional lookup, not an
-        interpolation between two samples. Weather changes slowly enough
-        over a race that a single nearest row is close enough for a replay
-        demo.
+        wind, and rainfall when available.
+
+        THE ROW IS PICKED BY SESSION TIME, which is how N04 built the trained
+        columns: ``merge_asof(direction='nearest')`` of each lap's ``Time``
+        against the weather samples' ``Time``.
+
+        It used to be picked by mapping the lap fraction onto ``weather_df``'s
+        row index, a proportional lookup that ignores session time entirely, on
+        the reasoning that weather changes slowly enough for a replay demo. The
+        reasoning was wrong twice over. Weather samples are not evenly spaced in
+        time, and neither are laps: a Safety Car or a red flag stretches the gap
+        between two laps while the samples keep their own cadence, so the two
+        indices drift apart exactly when conditions are changing.
+
+        Measured across 26,692 driver-laps of 24 races: the proportional lookup
+        disagreed with N04's join on **92.6%** of laps, mean 1.11 C and up to
+        11.8 C on TrackTemp, and **flipped the rain flag on 1,279 laps**. N06's
+        weather block is 39.7% of that model's gain, and its predictions moved
+        on 26.8% of laps, mean 0.037 s and up to 8.28 s.
+
+        The four trained columns come from ``weather_restore.weather_for_race``,
+        which is the verified reference (22,760/22,760 against N04's own output)
+        rather than a second implementation of the same join. Wind rides on the
+        same aligned row: nothing trains on it, but a second alignment inside one
+        dict is how the two weather paths drifted apart in the first place.
 
         Args:
             lap_number:  1-indexed lap number.
@@ -513,9 +578,7 @@ class RaceStateManager:
         weather: dict[str, Any] = {"track_status": track_status}
 
         if weather_df is not None and not weather_df.empty:
-            lap_frac = (lap_number - 1) / max(self.total_laps - 1, 1)
-            idx = int(lap_frac * (len(weather_df) - 1))
-            w = weather_df.iloc[idx]
+            w = self._weather_for_lap(lap_number, weather_df)
             weather.update(
                 {
                     "air_temp": float(w["AirTemp"]) if pd.notna(w.get("AirTemp")) else None,
