@@ -118,6 +118,39 @@ A per-lap sweep of the whole 2025 season is not on the table either: 22,760 feat
 sample. The window has to shrink, the driver set has to shrink, or both, and whichever is
 chosen has to be stated on the same line as every number it produces.**
 
+### ⚠️ CORRECTION: the three-lap probe was too short, and three of its numbers are wrong
+
+**Written after the 75-lap repeat run finished.** A probe of three laps is not a distribution,
+which is this project's own most-repeated lesson and I walked into it anyway. Measured over the
+completed 75-lap run instead:
+
+| quantity | 3-lap probe (wrong) | **75 laps (correct)** |
+|---|---|---|
+| LLM calls per lap | 6.00 | **7.91** (6.91 sub-agent + 1 orchestrator) |
+| prompt tokens per lap | 8,080 | **13,226** |
+| completion tokens per lap | 814 | **1,014** |
+| cached share of prompt tokens | **0%** | **34.8%** (39.0% on `gpt-4.1-mini`, 23.5% on `gpt-5.4-mini`) |
+| cost per lap | $0.0071 | **$0.0080** |
+
+Two distinct errors, and neither was a rounding difference:
+
+1. **"Zero cacheable" was an artefact of the probe's length.** OpenAI's prefix cache only serves
+   a prompt it has already seen, and three laps is too short to populate it. Over 75 laps a
+   third of all prompt tokens come back cached. The sentence "the prompt drifts numerically
+   every lap so no prefix is stable" is wrong about what is cacheable: the drifting part is the
+   numeric block, but the sub-agent system prompts and tool schemas in front of it do not move,
+   and they are what the cache holds.
+2. **Calls per lap is variable and the probe caught a low draw.** The sub-agents are LangGraph
+   ReAct loops with an unbounded number of tool turns, so 6.00 was three laps that happened to
+   take one turn each. The real mean is 7.91.
+
+**The cost-per-lap conclusion survives** ($0.0080 against $0.0071) because the higher token count
+and the caching discount very nearly cancel. That is luck, not method: the two errors happened to
+point in opposite directions.
+
+**What does NOT change**: the binding constraint is still wall clock, not money. 1,090 laps is
+**$8.72** and hours.
+
 ### What the probe costs in money, and the surprise
 
 Published list prices read 2026-08-06 (state them with this date; they move):
