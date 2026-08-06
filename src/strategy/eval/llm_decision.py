@@ -274,9 +274,19 @@ def measure(jsonl: Path, year: int, raw_root: Path) -> dict[str, Any]:
 
     agreement = aggregate(verdicts)
     seconds = [float(r.get("seconds", 0.0)) for r in rows]
+    # DISTINCT laps, not rows. A resumed run re-executes any window that is not
+    # complete on disk and appends its laps again, so the row count over-states
+    # coverage by exactly the re-runs. `actions_by_window` already resolves the
+    # duplicate by taking the later row; the count has to resolve it too, or the
+    # coverage line reports more laps than were ever distinctly evaluated.
+    distinct = {
+        (str(r["race"]), str(r["driver"]), int(r["lap"]), int(r.get("pass_index", 0)))
+        for r in rows
+    }
     result = {
         "source": str(jsonl),
-        "laps_measured": len(rows),
+        "laps_measured": len(distinct),
+        "rows_on_disk": len(rows),
         "windows": len(windows),
         "wall_clock_seconds": round(sum(seconds), 1),
         "tokens": {
