@@ -340,3 +340,34 @@ RUNS the measuring script, which REWRITES the file, and then compares. So a stal
 once, is silently repaired by the failing run, and passes on the retry. The drift it exists
 to catch disappears the moment you re-run it — and `tests/mc/` is data-gated, so CI never
 sees either state.
+
+## Published, and re-verified from the published copies
+
+The four files are on `VforVitorio/f1-strategy-dataset`, and the five files of the duplicated
+`data/raw/2023/Spain/` are deleted there — without that, the next `snapshot_download`
+resurrects the duplicate.
+
+Then re-checked the way the runbook demands, against a FRESH download rather than the local
+copies, because a published-vs-local mismatch is exactly how the previous degradation went
+unnoticed:
+
+```
+laps_featured.parquet        publicado (66924, 54)  local (66924, 54)  celdas distintas=0
+laps_featured_2023.parquet   publicado (20908, 54)  local (20908, 54)  celdas distintas=0
+laps_featured_2024.parquet   publicado (23256, 54)  local (23256, 54)  celdas distintas=0
+laps_featured_2025.parquet   publicado (22760, 54)  local (22760, 54)  celdas distintas=0
+```
+
+## Final state
+
+Full suite **719 passed**, 3 failed — all three the pre-existing NLP goldens, unrelated to
+this work and failing before it. `test_weather_restore` and the tyre determinism guard, which
+were failing when this PR started, are green.
+
+Three verification layers were needed and each caught something the other two did not:
+
+| layer | what only it found |
+|---|---|
+| the acceptance diffs | that the notebook no longer reproduces its own output |
+| the real simulation | a whole race's weather blanked, invisible to every diff and to the suite |
+| the adversarial gate | a refuted provenance claim, a vacuous truth test, a dormant twin in the new code, and a gate that did not gate |
