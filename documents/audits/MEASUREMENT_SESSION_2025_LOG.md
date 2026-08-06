@@ -275,7 +275,18 @@ which is what the decision tier measures instead. Recorded so nobody re-opens it
 
 Same windows, same data, same process, only `profile` differs. 22 laps each.
 
-| lap | real event | **LLM (`rich`)** | **deterministic (`no-llm`)** | MC score STAY / PIT |
+> ⚠️ **The MC column below is the DETERMINISTIC arm's, and the gate was right that presenting
+> it as shared was misleading.** In `rich` mode the sub-agents' outputs feed the Monte Carlo, so
+> the scores the orchestrator is handed are themselves perturbed per pass. On Budapest 19,
+> `PIT_NOW` is frozen at -1.645 across all eight stored samples, but `STAY_OUT` ranges from
+> -0.968 to -1.727 across the seven rich ones. **On the very pass this table quotes (confidence
+> 0.90) the MC favoured STAY_OUT, -0.968 against -1.645** — so on that pass the LLM was agreeing
+> with its own Monte Carlo, not overriding a pit-favouring one. Over the seven rich samples the
+> ordering favours PIT in four and STAY in three. The result stands; the phrase "given the same
+> inputs" does not, and Qatar is unaffected because there the MC favoured PIT on laps 8 and 9 on
+> every sample.
+
+| lap | real event | **LLM (`rich`)** | **deterministic (`no-llm`)** | MC score STAY / PIT (no-llm arm) |
 |---|---|---|---|---|
 | Budapest 14-18 | | STAY_OUT x5 | STAY_OUT x5 | |
 | **Budapest 19** | **LEC pits (Ferrari covers PIA)** | **STAY_OUT** (conf 0.90) | **PIT_NOW** | -1.69 / -1.65 |
@@ -289,8 +300,9 @@ Same windows, same data, same process, only `profile` differs. 22 laps each.
 ### Finding 1: the LLM layer declined on 22 of 22 laps, and it cost an exact agreement
 
 The deterministic layer chose **lap 19** at Budapest, which is **the exact lap Ferrari stopped**:
-offset 0, the best result this metric can produce. The LLM layer, given the same inputs on the
-same lap, answered STAY_OUT with confidence 0.90 and the stop was never called. In the decision
+offset 0, the best result this metric can produce. The LLM layer, over the same window and the
+same replayed race, answered STAY_OUT on every lap and every pass, and the stop was never
+called. In the decision
 tier's own vocabulary the deterministic path scores `scored, offset 0` and the LLM path scores
 `no_call_in_window`.
 
@@ -498,8 +510,19 @@ analyser and compare against the verdicts already published in
 - same bucket: **32 of 37**
 - same chosen lap, among those: **27 of 32**
 
-That gap is not noise and it is not a bug in the new analyser. **The published tier does not
-use the product's race state.**
+> ⚠️ **Corrected after the gate.** I wrote that this gap "is not noise and is not a bug in the
+> new analyser: the published tier does not use the product's race state." The second half is
+> true and independently verified; **using it to explain the 5 disagreeing verdicts is not.**
+> Three differences sit between the two artefacts, not one: the published `decision_modes.json`
+> was regenerated on 2026-08-03 and the featured artefacts on 2026-08-06; the preflight drives
+> the real CLI and therefore feeds RCM events into the Safety Car tracker while
+> `_decisions_in_window` passes no radio or RCM at all, which points in the causal direction of
+> a verdict flip on any window touching a neutralisation; and the race-state fields. Separating
+> them needs the five stops re-run pairwise. The finding below stands on its own evidence and is
+> only **consistent with** the disagreement.
+
+What the gap did lead to, and it holds independently: **the published tier does not use the
+product's race state.**
 
 `decision_modes.lap_inputs` builds its own `RaceState`. Measured on 2025 Barcelona, ALB:
 
