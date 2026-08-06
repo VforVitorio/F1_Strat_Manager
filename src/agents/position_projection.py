@@ -270,8 +270,11 @@ class ProjectionResult:
 
     Attributes:
         positions:   Projected track position at the end of the window. This is
-                     the REJOIN horizon, and it is what the 1810-stop ground
-                     truth grades, so it must keep meaning exactly that.
+                     the REJOIN horizon, and it is what the green-flag-stop
+                     ground truth grades, so it must keep meaning exactly that.
+                     (Named by its sample size here until 2026-08-06, when the
+                     published sample changed; the identity of the thing graded
+                     did not, so the count no longer appears in this contract.)
         margins_s:   Seconds of buffer to the nearest projected car behind,
                      clipped, and 0.0 when nothing is behind us.
         terminal_positions:
