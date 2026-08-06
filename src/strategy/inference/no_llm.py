@@ -153,8 +153,12 @@ def _situation_no_llm(sit_lap_state: dict[str, Any], laps_df: pd.DataFrame):
     """Run N27 with real LightGBM numbers + the RCM SC override, no LLM.
 
     Executes predict_sc_tool always, predict_overtake_tool only when a rival ahead is
-    derivable (parser defaults overtake fields to 0.0 otherwise). ``run_from_state``
-    then applies the SafetyCar RCM override exactly as in LLM mode.
+    derivable. The parser then leaves ``overtake_prob`` as **None**, not 0.0: the tool
+    also declines when the pair is farther apart than N11's trained 2.5 s domain, and
+    "nobody asked", "the model has no example this far out" and "the regulation forbids
+    it" (0.0, Art. 55.8) are three different claims. ``run_from_state`` applies the
+    SafetyCar RCM override afterwards, exactly as in LLM mode, and that override still
+    asserts its 0.0 over a None.
     """
     agent = _get_situation_agent()
     meta = sit_lap_state["session_meta"]

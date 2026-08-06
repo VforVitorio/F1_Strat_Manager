@@ -14,7 +14,7 @@ guard**, so `_build_overtake_features` built a 9-second-gap row and LightGBM ext
 
 | | pairs | outside the domain |
 |---|---|---|
-| this sweep, 2025, N11's own pairing rule | 20,449 | **8,816 (43.1%)**, median gap 2.06 s, p90 9.11 s, max 91.1 s |
+| this sweep, 2025, N11's own pairing rule | 20,449 (median gap 2.06 s, p90 9.11 s) | **8,816 (43.1%)** — of THOSE, median 5.16 s, p90 15.13 s, max 91.1 s |
 | the earlier gate | 25,215 | 10,565 (41.9%) |
 
 The denominators differ — a differently filtered starting frame — and the magnitude does
@@ -104,6 +104,26 @@ And the rule itself was not "pair by LapNumber": N12 takes
 series** (`.nb_py/N12_overtake_model.py:141-146`), with `gap_trend` as `.diff()` of the
 pair's gap series. Inference computed a different quantity. `gap_trend` shared the same
 window and is corrected with it rather than left as the next instance of the twin.
+
+### The first version of that fix was itself skewed, and the gate refuted it
+
+Pairing by LapNumber corrected the arithmetic and left a second, subtler train/serve skew —
+**the same class the fix was correcting.** N12's rows are N11's LABELLED pairs, and N11 only
+emits a row when the cars are position-adjacent **and** within 2.5 s. A lap where the pair
+existed but sat 4 s apart, or where they had swapped order, is simply not in the series N12
+rolled over. The first version rolled over every lap where both cars merely had a row.
+
+Measured by the gate over the 11,633 in-domain 2025 pairs, both rules re-scored through the
+real model and calibrator: the window content differed on **29.44%**, the `gap_trend` base on
+**18.13%**, calibrated |Δp| max **0.480**, and **81 pairs crossed the MEDIUM band, 38 the
+HIGH band** — larger than the 57-pair effect this report had treated as its headline. It bit
+hardest on battles that had just closed up, which is exactly what the domain gate makes
+interesting.
+
+`_battle_series` now reconstructs N11's membership test term for term. The gap helper also
+switched from the caller's `max(0.0, ...)` clamp to N11's `abs(...)`: with adjacency asserted
+separately the two are equal, and the clamp was turning a swapped-order lap into a fabricated
+zero-second gap.
 
 **The unknown-circuit sentinel was `0`, a real cluster.** N11's is `-1`. The booster's
 trained levels are `[0,1,2,3]`, so `-1` becomes the missing value LightGBM handles natively.
