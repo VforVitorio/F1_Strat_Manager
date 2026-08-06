@@ -378,6 +378,47 @@ any comparison against the deterministic tier must be stated as a comparison aga
 from a distribution. Deciding this after seeing the number is the exact manoeuvre this project's
 own doctrine forbids elsewhere, so it is fixed here first.
 
+## Step 7: the harness cross-check found a defect in the PUBLISHED tier
+
+Fable's design specifies a V0 cross-check: score the deterministic preflight with the new
+analyser and compare against the verdicts already published in
+`documents/eval_reports/decision_modes.json`. Result on the 37 stops both cover:
+
+- same bucket: **32 of 37**
+- same chosen lap, among those: **27 of 32**
+
+That gap is not noise and it is not a bug in the new analyser. **The published tier does not
+use the product's race state.**
+
+`decision_modes.lap_inputs` builds its own `RaceState`. Measured on 2025 Barcelona, ALB:
+
+| lap | field | eval harness | `build_race_state` (the product) |
+|---|---|---|---|
+| 1-5 | `gap_ahead_s` | **2.0 every lap** | 0.431, 0.914, 0.865, 0.961, 1.075 |
+| 1-3 | `pace_delta_s` | **0.0 every lap** | 0.431, 0.483, -0.049 |
+
+`lap_inputs` reads `car.get("gap_ahead_s") or 2.0`, and **`gap_ahead_s` is not a key in the lap
+state's driver dict at all** (it carries `gap_to_leader_s`). So the fallback is not a fallback:
+it is the value, on every lap of every race. `build_race_state` derives the real interval from
+`lap_state["rivals"]`, which `lap_inputs` never reads.
+
+Both fields feed N27's overtake scoring, the orchestrator prompt and the Monte Carlo the tier
+grades. **So the published 67-of-178 / 31.3% exact / 78-decline figures describe a stack told,
+on every lap, that the car ahead sits exactly 2.0 s away and matches its pace exactly.** And
+2.0 is inside the plausible range (the real gaps above run 0.43 to 1.08), so nothing downstream
+could tell it from a measurement. Filed as **#829**.
+
+Root cause is the family this repo keeps paying for: #784 replaced three drifted RaceState
+copies with one canonical builder, and `lap_inputs` is a fifth copy written into the eval
+harness afterwards.
+
+**What it means for this session:** it vindicates the decision to drive the real CLI rather than
+reimplement the mapping. **Both of my arms use the product's race state**, so they are
+comparable to each other, and neither is comparable to the published tier for this reason as
+well as for the sample.
+
+---
+
 ### One design-invalidating collision the design could not have known about
 
 The methodology allocates **13 windows / 155 laps to Monza**, and Monza is one of the three races
