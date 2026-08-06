@@ -97,6 +97,27 @@ _EXCLUDE_RE = r"TRACK LIMITS|LAP TIME|PENALTY|PIT LANE|FORMATION|GRID|DRS|SAFETY
 _SC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"SAFETY_CAR_DEPLOYED"})
 _VSC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"VIRTUAL_SAFETY_CAR_DEPLOYED"})
 
+# ── N11's trained domain ──────────────────────────────────────────────────────
+# N11's pair builder DROPS every pair more than 2.5 s apart before labelling — "not an
+# active battle" (`.nb_py/N11_overtake_eda.py:233-235`). The model therefore has no
+# labelled example beyond it, and a probability returned out there is whatever leaf the
+# extrapolation lands in, not an estimate.
+#
+# Measured over all 24 races of 2025 with N11's own pairing rule: 8,816 of 20,449
+# position-adjacent pairs (43.1%) sit outside it, median gap 2.06 s, p90 9.11 s. Four in
+# ten "can I pass the car ahead?" questions were answered from outside the training set.
+_TRAINED_MAX_GAP_S: float = 2.5
+
+# What the tool says instead of a number when it is asked outside that domain. Parsed back
+# by `_parse_tool_outputs`, which must map it to None rather than to its 0.0 default: an
+# unknown probability and a zero one are different claims, and the second is what the
+# regulation asserts under a Safety Car (Art. 55.8).
+_OUT_OF_DOMAIN_MARKER: str = "UNKNOWN"
+
+# N11's unknown-circuit code (`.nb_py/N11_overtake_eda.py:210-212`). Distinct from cluster
+# 0, which is a real kind of track.
+_UNKNOWN_CIRCUIT_CLUSTER: int = -1
+
 # SC release. Art. 55.15's "SAFETY CAR IN THIS LAP" (the real message, which classifies
 # to SAFETY_CAR_ENDING — verified on Qatar 2025 L10 and Spain 2025 L60) means the car
 # enters the pits at the END of that lap, and Art. 55.8 forbids overtaking until the
@@ -328,7 +349,12 @@ class RaceSituationOutput:
             VSC apart from a full SC, which the single flag could not (#471).
     """
 
-    overtake_prob: float
+    # Optional because N11 has a domain and this says so. None means the pair sat farther
+    # apart than any labelled example the model ever saw (43.1% of real adjacent pairs in
+    # 2025), so there is no probability to report — as opposed to 0.0, which under a
+    # Safety Car is a REGULATION FACT (Art. 55.8) rather than an absence. Every consumer
+    # has to tell those two apart, which is the point.
+    overtake_prob: Optional[float]
     sc_prob_3lap: float
     threat_level: str = field(init=False)
     gap_ahead_s: float = 0.0
@@ -338,13 +364,24 @@ class RaceSituationOutput:
     vsc_active: bool = False  # the active neutralisation is specifically a VSC (Art. 56)
 
     def __post_init__(self) -> None:
+        """Band the threat, treating an unknown overtake probability as no evidence.
+
+        An unknown cannot RAISE the band: the alternative is to keep classifying on the
+        extrapolated number, which is how a model's uninformed guess ends up presented to
+        N31 as a threat. It cannot lower it either — the SC terms and the live
+        neutralisation flag are evaluated exactly as before.
+        """
+        overtake_known = self.overtake_prob is not None
+
         if (
             self.sc_currently_active
-            or self.overtake_prob >= CFG.high_overtake
+            or (overtake_known and self.overtake_prob >= CFG.high_overtake)
             or self.sc_prob_3lap >= CFG.high_sc
         ):
             self.threat_level = "HIGH"
-        elif self.overtake_prob >= CFG.medium_overtake or self.sc_prob_3lap >= CFG.medium_sc:
+        elif (
+            overtake_known and self.overtake_prob >= CFG.medium_overtake
+        ) or self.sc_prob_3lap >= CFG.medium_sc:
             self.threat_level = "MEDIUM"
         else:
             self.threat_level = "LOW"
@@ -374,6 +411,129 @@ def _abs_compound(relative: str, gp_name: str, year: int) -> str:
     year_data = TIRE_COMPOUNDS.get(str(year), {})
     gp_data = year_data.get(resolve_gp_key(year_data, gp_name), {})
     return gp_data.get(relative.upper(), relative)
+
+
+def _fmt_prob(value: Optional[float]) -> str:
+    """A probability for human text, or the out-of-domain marker when there is none.
+
+    Exists because `f"{value:.2f}"` raises TypeError on None, and every place that renders
+    this probability into prose — the RCM override note, the N31 prompt, the dashboards —
+    would otherwise have to remember that. One helper beats four remembering.
+    """
+    return _OUT_OF_DOMAIN_MARKER if value is None else f"{value:.2f}"
+
+
+def _pair_rolling_features(
+    laps_recent: pd.DataFrame,
+    driver_x: str,
+    driver_y: str,
+    lap_number: float,
+    gap_ahead_s: float,
+    pace_delta_s: float,
+) -> tuple[float, float]:
+    """N12's ``pace_delta_rolling3`` and ``gap_trend``, over the pair's BATTLE series.
+
+    Both are properties of the battle, not of either car. N12 groups by the pair key,
+    sorts by LapNumber, and takes `rolling(3, min_periods=1).mean()` of that pair's
+    per-lap `pace_delta_s`, with `gap_trend` as `.diff()` of the pair's gap series
+    (`.nb_py/N12_overtake_model.py:141-146`).
+
+    THE SERIES IS THE HARD PART, AND IT TOOK TWO GOES
+    ------------------------------------------------
+    Inference originally took each DRIVER's last three lap times as two arrays and
+    subtracted them by array POSITION, which is a different quantity whenever the two
+    windows hold different laps (10.78% of 2025 adjacent pairs). Replacing that with a
+    LapNumber pairing fixed the arithmetic and left a second, subtler skew: it rolled over
+    every lap where both cars merely have a row.
+
+    N12's rows are the LABELLED pairs, and N11's builder only emits a row when the two cars
+    are position-adjacent AND within 2.5 s (`.nb_py/N11_overtake_eda.py:228-235`). So a lap
+    where the pair existed but was 4 s apart, or where they had swapped order, is simply
+    NOT in the series N12 rolled over. Measured: 29.44% of in-domain 2025 pairs got a
+    different window that way, moving the calibrated probability by up to 0.480 and pushing
+    81 pairs across the MEDIUM band. It bit hardest on battles that had just closed up —
+    exactly the ones the domain gate makes interesting.
+
+    So this reconstructs N11's membership rule, not merely a shared-lap window.
+
+    Without a ``Position`` column the membership cannot be reconstructed at all, and the
+    honest answer is the one N12 gives for the first row of a series (`min_periods=1`): the
+    current lap alone. Guessing a longer history from shared laps is what this docstring
+    exists to warn against.
+    """
+    series = _battle_series(laps_recent, driver_x, driver_y, lap_number)
+    if not series:
+        return pace_delta_s, 0.0
+
+    laps = sorted(series)
+    window = laps[-3:]
+    rolling = float(sum(series[lap]["pace_delta"] for lap in window) / len(window))
+
+    # `.diff()` against the previous BATTLE lap, which is not necessarily lap-1: if the
+    # pair fell out of the domain for two laps and closed up again, N12's series skips
+    # those rows and the diff spans them.
+    trend = 0.0
+    if len(laps) >= 2:
+        current, previous = series[laps[-1]]["gap"], series[laps[-2]]["gap"]
+        if pd.notna(current) and pd.notna(previous):
+            trend = current - previous
+    return rolling, trend
+
+
+def _battle_series(
+    laps_recent: pd.DataFrame, driver_x: str, driver_y: str, lap_number: float
+) -> dict[float, dict[str, float]]:
+    """The laps N11 would have emitted a labelled row for, keyed by LapNumber.
+
+    N11's membership test, term for term: both cars present, x directly behind y on
+    position, gap within the trained bound, and the timing columns actually populated (its
+    builder drops the NaN rows before pairing).
+    """
+    if "Position" not in laps_recent.columns:
+        return {}
+
+    both = laps_recent[laps_recent["Driver"].isin([driver_x, driver_y])]
+    window = both[both["LapNumber"] <= lap_number]
+
+    series: dict[float, dict[str, float]] = {}
+    for lap, rows in window.groupby("LapNumber"):
+        x_rows = rows[rows["Driver"] == driver_x]
+        y_rows = rows[rows["Driver"] == driver_y]
+        if x_rows.empty or y_rows.empty:
+            continue
+        x, y = x_rows.iloc[0], y_rows.iloc[0]
+
+        if not (pd.notna(x.get("Position")) and pd.notna(y.get("Position"))):
+            continue
+        if float(x["Position"]) != float(y["Position"]) + 1:
+            continue  # not adjacent, or they had swapped order on this lap
+        if not (pd.notna(x.get("LapTime")) and pd.notna(y.get("LapTime"))):
+            continue
+
+        gap = _pair_gap_seconds(x, y)
+        if not pd.notna(gap) or gap > _TRAINED_MAX_GAP_S:
+            continue  # N11 dropped it: "not an active battle"
+
+        series[float(lap)] = {
+            "pace_delta": float((x["LapTime"] - y["LapTime"]).total_seconds()),
+            "gap": gap,
+        }
+    return series
+
+
+def _pair_gap_seconds(row_x: pd.Series, row_y: pd.Series) -> float:
+    """One battle lap's gap, by N11's rule.
+
+    `abs`, matching `.nb_py/N11_overtake_eda.py:233`, NOT the `max(0.0, ...)` the caller
+    applies to the current lap: a clamp turns a negative gap into a fabricated zero, and
+    the caller's version is only safe because end-of-lap order guarantees the sign for an
+    adjacent pair. Here the adjacency is asserted separately, so the honest absolute is
+    both correct and equal to it.
+    """
+    t_x, t_y = row_x.get("Time"), row_y.get("Time")
+    if pd.notna(t_x) and pd.notna(t_y):
+        return abs(float((t_x - t_y).total_seconds()))
+    return float("nan")
 
 
 def _lap_count(lap: pd.Series, column: str) -> float:
@@ -813,22 +973,55 @@ def _parse_tool_outputs(messages: list) -> dict:
 
     Returns:
         Dict with: overtake_prob, sc_prob_3lap, gap_ahead_s, pace_delta_s.
-        Missing fields default to 0.0.
+        ``overtake_prob`` is None when the tool declined to answer — the pair sat outside
+        N11's trained gap domain, or the tool was never called. The other three default
+        to 0.0, unchanged.
+
+    WHY overtake_prob IS THE ONE THAT CAN BE None
+    ---------------------------------------------
+    0.0 is not a neutral placeholder for it: it is the value the REGULATION asserts under
+    a Safety Car (Art. 55.8 bans overtaking), and `_run_core` sets exactly that. Leaving
+    the no-answer case on 0.0 made "the rules forbid it" and "the model has no idea"
+    the same number to every consumer downstream, which is the sentinel collision this
+    repo keeps re-finding. They are different claims and they now look different.
     """
-    result = {"overtake_prob": 0.0, "sc_prob_3lap": 0.0, "gap_ahead_s": 0.0, "pace_delta_s": 0.0}
+    result: dict[str, Optional[float]] = {
+        "overtake_prob": None,
+        "sc_prob_3lap": 0.0,
+        "gap_ahead_s": 0.0,
+        "pace_delta_s": 0.0,
+    }
+    overtake_taken = False
+
     for msg in messages:
         content = getattr(msg, "content", "")
         if not isinstance(content, str):
             continue
-        for pattern, key in [
-            (r"P\(overtake\)\s*=\s*(\d+(?:\.\d+)?)", "overtake_prob"),
-            (r"P\(SC 3-lap\)\s*=\s*(\d+(?:\.\d+)?)", "sc_prob_3lap"),
-            (r"gap=([\d.]+)s", "gap_ahead_s"),
-            (r"pace_delta=([-\d.]+)s/lap", "pace_delta_s"),
-        ]:
-            m = re.search(pattern, content)
-            if m and result[key] == 0.0:
-                result[key] = float(m.group(1))
+
+        # The three overtake fields are read TOGETHER, from the first message that carries
+        # an overtake verdict, and then locked. Field-by-field first-match-wins was safe
+        # only while every call produced a number: now that a call can DECLINE, a declined
+        # first call would leave the probability open while its gap and pace_delta had
+        # already been taken, and a second call about a DIFFERENT pair of cars would fill
+        # the hole. The reported gap would then describe one battle and the probability
+        # another. Only reachable in LLM mode, where the agent may call the tool twice.
+        if not overtake_taken and "P(overtake)" in content:
+            overtake_taken = True
+            # No digits in the out-of-domain string, so this stays None by construction.
+            probability = re.search(r"P\(overtake\)\s*=\s*(\d+(?:\.\d+)?)", content)
+            if probability:
+                result["overtake_prob"] = float(probability.group(1))
+            for pattern, key in (
+                (r"gap=([\d.]+)s", "gap_ahead_s"),
+                (r"pace_delta=([-\d.]+)s/lap", "pace_delta_s"),
+            ):
+                match = re.search(pattern, content)
+                if match:
+                    result[key] = float(match.group(1))
+
+        sc = re.search(r"P\(SC 3-lap\)\s*=\s*(\d+(?:\.\d+)?)", content)
+        if sc and result["sc_prob_3lap"] == 0.0:
+            result["sc_prob_3lap"] = float(sc.group(1))
     return result
 
 
@@ -962,7 +1155,12 @@ class RaceSituationAgent:
             gap_ahead_s = float((t_x - t_y).total_seconds())
         else:
             gap_ahead_s = float((driver_x_lap["LapTime"] - driver_y_lap["LapTime"]).total_seconds())
-        gap_ahead_s = max(0.0, gap_ahead_s)
+        # NaN-preserving. `max(0.0, nan)` returns 0.0 in Python — the comparison is False,
+        # so the first argument wins — which turned an unmeasurable gap into the single
+        # most aggressive reading available: zero seconds, inside the trained domain, DRS
+        # window open. The clamp is for a negative gap, which end-of-lap order makes
+        # unreachable for an adjacent pair anyway; it was never meant to absorb an absence.
+        gap_ahead_s = float("nan") if pd.isna(gap_ahead_s) else max(0.0, gap_ahead_s)
 
         pace_delta_s = float((driver_x_lap["LapTime"] - driver_y_lap["LapTime"]).total_seconds())
         tyre_life_x = _lap_count(driver_x_lap, "TyreLife")
@@ -985,36 +1183,14 @@ class RaceSituationAgent:
         compound_y = _abs_compound(str(driver_y_lap.get("Compound", "MEDIUM")), gp_name, year)
         gap_pace_product = gap_ahead_s * pace_delta_s
 
-        _dx = (
-            laps_recent[laps_recent["Driver"] == driver_x_lap["Driver"]]
-            .sort_values("LapNumber")
-            .tail(3)
+        pace_delta_rolling3, gap_trend = _pair_rolling_features(
+            laps_recent,
+            driver_x=str(driver_x_lap["Driver"]),
+            driver_y=str(driver_y_lap["Driver"]),
+            lap_number=lap_number,
+            gap_ahead_s=gap_ahead_s,
+            pace_delta_s=pace_delta_s,
         )
-        _dy = (
-            laps_recent[laps_recent["Driver"] == driver_y_lap["Driver"]]
-            .sort_values("LapNumber")
-            .tail(3)
-        )
-
-        if len(_dx) >= 2 and len(_dy) >= 2:
-            _dx_t = _dx["LapTime"].dt.total_seconds().values
-            _dy_t = _dy["LapTime"].dt.total_seconds().values
-            n_shared = min(len(_dx_t), len(_dy_t))
-            pace_delta_rolling3 = float((_dx_t[:n_shared] - _dy_t[:n_shared]).mean())
-
-            _tx = _dx["Time"] if "Time" in _dx.columns else None
-            if (
-                _tx is not None
-                and pd.notna(_dx.iloc[-2]["Time"])
-                and pd.notna(_dy.iloc[-2]["Time"])
-            ):
-                prev_gap = float((_dx.iloc[-2]["Time"] - _dy.iloc[-2]["Time"]).total_seconds())
-                gap_trend = gap_ahead_s - prev_gap
-            else:
-                gap_trend = 0.0
-        else:
-            pace_delta_rolling3 = pace_delta_s
-            gap_trend = 0.0
 
         return pd.DataFrame(
             [
@@ -1220,7 +1396,9 @@ class RaceSituationAgent:
                 x_rows.iloc[0],
                 y_rows.iloc[0],
                 laps_recent,
-                circuit_cluster=agent.session_meta.get("circuit_cluster", 0),
+                circuit_cluster=agent.session_meta.get(
+                    "circuit_cluster", _UNKNOWN_CIRCUIT_CLUSTER
+                ),
                 gp_name=agent.session_meta.get("gp_name", ""),
                 year=agent.session_meta.get("year", 2025),
             )
@@ -1229,14 +1407,38 @@ class RaceSituationAgent:
                 training_cats = agent.cfg.overtake_model._Booster.pandas_categorical[i]
                 feat_df[col] = pd.Categorical(feat_df[col], categories=training_cats)
 
+            gap = feat_df["gap_ahead_s"].iloc[0]
+            pace = feat_df["pace_delta_s"].iloc[0]
+            drs = "active" if feat_df["drs_window"].iloc[0] else "inactive"
+
+            # Outside N11's trained domain the model is not wrong, it is uninformed: it
+            # never saw a labelled pair this far apart. Say so instead of publishing the
+            # extrapolation. The other two facts are still measurements, so they stay.
+            #
+            # An UNMEASURABLE gap declines too. Whether the pair is inside the domain is
+            # exactly what cannot be established without it, and answering anyway would be
+            # the same fabrication one branch further along.
+            if pd.isna(gap):
+                return (
+                    f"P(overtake) = {_OUT_OF_DOMAIN_MARKER} (the gap could not be measured "
+                    f"on this lap, so whether the pair is inside N11's trained "
+                    f"{_TRAINED_MAX_GAP_S}s domain is unknown) | "
+                    f"gap=unknown | pace_delta={pace:.3f}s/lap | DRS: {drs}"
+                )
+            if float(gap) > _TRAINED_MAX_GAP_S:
+                return (
+                    f"P(overtake) = {_OUT_OF_DOMAIN_MARKER} "
+                    f"(gap {float(gap):.2f}s is beyond N11's trained {_TRAINED_MAX_GAP_S}s "
+                    f"domain; no labelled example exists out here) | "
+                    f"gap={gap:.2f}s | "
+                    f"pace_delta={pace:.3f}s/lap | "
+                    f"DRS: {drs}"
+                )
+
             raw_proba = agent.cfg.overtake_model.predict_proba(feat_df)[:, 1]
             calib_proba = agent.cfg.overtake_calibrator.predict_proba(raw_proba.reshape(-1, 1))[
                 :, 1
             ][0]
-
-            gap = feat_df["gap_ahead_s"].iloc[0]
-            pace = feat_df["pace_delta_s"].iloc[0]
-            drs = "active" if feat_df["drs_window"].iloc[0] else "inactive"
 
             return (
                 f"P(overtake) = {calib_proba:.3f} | "
@@ -1398,7 +1600,13 @@ class RaceSituationAgent:
             "gp_name": gp_name,
             "event_name": event_name,
             "year": lap_state.get("year", 2025),
-            "circuit_cluster": self.cfg.cluster_for(gp_name, 0),
+            # N11's unknown-circuit code, not 0: 0 is a REAL cluster, so an unresolved
+            # circuit used to be scored as a specific kind of track. -1 is what N11's
+            # get_cluster returns (`.nb_py/N11_overtake_eda.py:210-212`), and since the
+            # booster's trained levels are [0,1,2,3] the Categorical cast in
+            # predict_overtake_tool turns it into the missing value LightGBM handles
+            # natively. Latent today — every race resolves — but the collision was real.
+            "circuit_cluster": self.cfg.cluster_for(gp_name, _UNKNOWN_CIRCUIT_CLUSTER),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": int(session.total_laps),
             "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
@@ -1488,7 +1696,13 @@ class RaceSituationAgent:
             "gp_name": gp_name,
             "event_name": event_name,
             "year": year,
-            "circuit_cluster": self.cfg.cluster_for(gp_name, 0),
+            # N11's unknown-circuit code, not 0: 0 is a REAL cluster, so an unresolved
+            # circuit used to be scored as a specific kind of track. -1 is what N11's
+            # get_cluster returns (`.nb_py/N11_overtake_eda.py:210-212`), and since the
+            # booster's trained levels are [0,1,2,3] the Categorical cast in
+            # predict_overtake_tool turns it into the missing value LightGBM handles
+            # natively. Latent today — every race resolves — but the collision was real.
+            "circuit_cluster": self.cfg.cluster_for(gp_name, _UNKNOWN_CIRCUIT_CLUSTER),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": total_laps,
             "fastest_lap_s": float(self.laps_df["LapTime"].dt.total_seconds().min())
@@ -1547,9 +1761,17 @@ class RaceSituationAgent:
                 f"Determine the overtaking probability and Safety Car risk, then provide a threat level."
             )
         else:
+            # NOT "no car is within overtaking range (gap > 2.5s)", which is what this
+            # said. `rival_ahead` comes from a POSITION lookup with no gap filter at all
+            # (see its derivation above), so it is None when the driver is leading, when
+            # the car ahead is missing from the timing feed, or when our own position is
+            # unknown — never because of a gap. The prompt was handing the LLM a reason
+            # that was not the reason, and one it could reason from. The gap-domain case
+            # is the tool's own to report, and it now does.
             message = (
                 f"Assess the race situation for driver {driver} at lap {lap_number}. "
-                f"No car is within overtaking range (gap > 2.5s). "
+                f"No car is classified directly ahead (leading, or the car ahead is not "
+                f"in the timing feed), so there is no overtake to score. "
                 f"Determine the Safety Car risk and provide a threat level."
             )
 
@@ -1579,7 +1801,14 @@ class RaceSituationAgent:
         # lengths (55.7/55.10) and pace_delta collapses to the FIA ECU delta. So the model
         # is not merely imprecise here, it is inapplicable: 0.0 is the correct value and
         # the honest one, and it holds identically under a VSC (56.6).
-        raw_overtake_prob = round(parsed["overtake_prob"], 3)
+        #
+        # The override applies whether or not the model answered, and that ordering is the
+        # point: under a neutralisation 0.0 is asserted by the REGULATION, so it holds even
+        # for a pair the model declined to score. An unscored pair on a green lap keeps its
+        # None — "the rules forbid it" and "nobody knows" must not collapse into one number.
+        raw_overtake_prob = (
+            None if parsed["overtake_prob"] is None else round(parsed["overtake_prob"], 3)
+        )
         effective_overtake_prob = 0.0 if is_neutralized else raw_overtake_prob
 
         _kind_label = "VIRTUAL_SAFETY_CAR_DEPLOYED" if is_vsc else "SAFETY_CAR_DEPLOYED"
@@ -1590,7 +1819,7 @@ class RaceSituationAgent:
             else (
                 f"[RCM OVERRIDE: {_kind_label} active — model output "
                 f"sc_prob_3lap={raw_sc_prob:.2f} overridden to 1.00, "
-                f"overtake_prob={raw_overtake_prob:.2f} overridden to 0.00 "
+                f"overtake_prob={_fmt_prob(raw_overtake_prob)} overridden to 0.00 "
                 f"(no overtaking under a neutralisation, Art. {_overtake_article}).] {reasoning}"
             )
         )
