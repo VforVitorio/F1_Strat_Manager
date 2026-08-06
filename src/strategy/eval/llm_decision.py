@@ -307,6 +307,14 @@ def measure(jsonl: Path, year: int, raw_root: Path) -> dict[str, Any]:
             "prompt": sum(int(r.get("prompt_tokens", 0)) for r in rows),
             "completion": sum(int(r.get("completion_tokens", 0)) for r in rows),
             "calls": sum(int(r.get("llm_calls", 0)) for r in rows),
+            # None, not 0, when no row carries the field: "measured zero" and "never
+            # recorded" are different statements and the report prints different
+            # sentences for them.
+            "cached_prompt": (
+                sum(int(r.get("cached_prompt_tokens", 0)) for r in rows)
+                if any("cached_prompt_tokens" in r for r in rows)
+                else None
+            ),
         },
         "agreement": {
             "scored": agreement.sample_size,

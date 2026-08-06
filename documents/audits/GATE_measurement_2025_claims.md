@@ -10,15 +10,17 @@ Written incrementally. Each verdict appended as confirmed or refuted.
 
 ## Checklist
 
-- [ ] A. Cost claim (15.93 s/lap, 6 calls, 8,080+814 tokens, ZERO cacheable, $0.0071)
-- [ ] B. The fabricated regulation (#826) — fabrication vs distortion; what Art. 54.3 is
-- [ ] C. Monza's phantom Safety Car (#825) — Imola discriminator; slug routing; decision-modes immunity
-- [ ] D. Eval race-state defect (#829) — gap_ahead_s 2.0 on 100% of laps; pace_delta_s hardcode; rival branch
-- [ ] E. 2025 projection figures (552/24/86.05/59.60) + the causal "reads no model/tables" half
-- [ ] F. Qatar + Budapest results recount from JSONL
-- [ ] G. Non-determinism percentages recount + denominator check
-- [ ] H. Population discipline across the log + PR #828 body
-- [ ] I. Lap-indexing correction (press 20 vs parquet 19)
+- [x] A. Cost claim (15.93 s/lap, 6 calls, 8,080+814 tokens, ZERO cacheable, $0.0071)
+- [x] B. The fabricated regulation (#826) — fabrication vs distortion; what Art. 54.3 is
+- [x] C. Monza's phantom Safety Car (#825) — Imola discriminator; slug routing; decision-modes immunity
+- [x] D. Eval race-state defect (#829) — gap_ahead_s 2.0 on 100% of laps; pace_delta_s hardcode; rival branch
+- [x] E. 2025 projection figures (552/24/86.05/59.60) + the causal "reads no model/tables" half
+- [x] F. Qatar + Budapest results recount from JSONL
+- [x] G. Non-determinism percentages recount + denominator check
+- [x] H. Population discipline across the log + PR #828 body + the two docs pages
+- [x] I. Lap-indexing correction (press 20 vs parquet 19)
+- [x] J. Step 8's paired-lap refutation of my own two-window generalisation
+- [x] K. The deterministic arm's own numbers vs the published `decision_modes` set
 
 ---
 
@@ -544,3 +546,297 @@ Evidence: Budapest/Lusail parquet reads shown above (in-lap/out-lap, `PitInTime`
 per-lap stop censuses); `05_resultados.tex` §5.5 preamble and §5.5.2 body; the four press sources
 listed, two by direct fetch.
 
+### J. Step 8's refutation — THE CONCLUSION SURVIVES A 3x LARGER SAMPLE, but the refutation was computed on TWO RACES and eight drivers. It commits the error it corrects.
+
+**My recount** (snapshot 2026-08-06, all `tierA_llm*.jsonl` against `tierA_nollm.jsonl`, paired on
+`(race, driver, lap)`, first occurrence per key). The files are live: the paired count was **554**
+on one command and **577** eleven minutes later, which is itself the reason no rate from these
+files is quotable without a snapshot marker — Step 8 carries none.
+
+At n = 554 paired laps (6 races, 43 race-driver windows):
+
+| | LLM (`rich`) | deterministic (`no-llm`) | log's n=180 |
+|---|---|---|---|
+| STAY_OUT | 400 | 379 | 113 / 106 |
+| PIT_NOW | 95 | 55 | 49 / 21 |
+| UNDERCUT | 59 | 120 | 18 / 53 |
+| **pit-class share** | **27.8%** | **31.6%** | 37.2% / 41.1% |
+| identical action | **76.9%** | | 68.3% |
+| same pit/no-pit class | **82.1%** | | 78.3% |
+
+The log's own arithmetic is internally correct (every row and the crosstab sum to 180, and all five
+derived percentages reproduce from its cells). **The direction of its conclusion also survives and is
+now better supported**: the arms differ by 3.8 points on willingness to stop (against 3.9 at n=180),
+and the "different KIND of stop" finding is much stronger at scale — the deterministic arm reaches
+for `UNDERCUT` 120 times against the LLM's 59, and the largest disagreements are still
+`UNDERCUT` to `STAY_OUT` (37) and `UNDERCUT` to `PIT_NOW` (29). `ALERT` remains 0 of 649 LLM rows.
+**But every absolute number in Step 8 is now wrong by 9-11 points.**
+
+**Which laps the refutation was actually computed on — recovered, not guessed.** The
+`_merged_llm.jsonl` / `_merged_det.jsonl` pair (mtime **2026-08-06 16:21:20**) is the snapshot
+immediately preceding Step 8: 164 paired laps, LLM `{STAY_OUT 100, UNDERCUT 18, PIT_NOW 46}`,
+DET `{STAY_OUT 95, UNDERCUT 48, PIT_NOW 21}`, and a crosstab with the **same eight cells in the same
+order** as the log's (80/18/17/16/15/12/3/3 against the log's 90/18/20/18/15/13/3/3, +16 laps).
+`UNDERCUT 18` on the LLM side and `PIT_NOW 21` on the deterministic side are identical in both. It is
+the same population, one snapshot earlier. Its composition:
+
+- **Two races: Budapest 96 laps and Barcelona 68.** Nothing else.
+- **Eight drivers: ALB, ALO, ANT, BEA, BOR, COL, GAS, HAM** — the alphabetical prefix of the field,
+  with HAM contributing 4 laps. **No LEC and no PIA**, which are the two drivers the claim being
+  refuted was about.
+- **Monza's 103 LLM laps were silently dropped from the pairing**, because `_merged_det.jsonl` held
+  no Monza rows at that moment (Monza's deterministic arm ran as a separate, radio-suppressed spec).
+  A third of the available LLM evidence was invisible to the count.
+
+**So the refutation of "two windows are not a system" was computed on two races, one of which
+(Budapest) IS one of the two windows.** Sixty per cent of its laps come from the race the original
+claim was drawn from. That is not a wider sample; it is the same window plus one neighbour, and the
+document says of itself *"I generalised from Budapest and Lusail inside the same document that opens
+by warning against exactly that"* — while doing it again two paragraphs later.
+
+**And the race mix does bias the rates, measurably.** Per-race pit-class shares on my 554:
+
+| race | n | LLM | DET | arm gap |
+|---|---|---|---|---|
+| Barcelona | 147 | 29.3% | 28.6% | **+0.7** (LLM higher) |
+| Budapest | 164 | 33.5% | 38.4% | -4.9 |
+| Monza | 152 | 27.0% | 36.8% | **-9.8** |
+| Montreal | 34 | 26.5% | 20.6% | **+5.9** (LLM higher) |
+| Monaco | 26 | 23.1% | 26.9% | -3.8 |
+| Lusail | 31 | 0.0% | 0.0% | 0.0 |
+
+**The sign of the arm difference flips by race**, and its range (-9.8 to +5.9) is nearly three times
+the aggregate the log quotes (-3.9). An aggregate over an unbalanced race mix is not an estimate of a
+system property; it is an estimate of this mix. Two further population facts belong on the same line
+as any rate from this sample: **three of the nine Tier A races (Mexico_City, Silverstone, Suzuka —
+332 deterministic laps) contribute zero paired laps**, and **Monza, which is 27% of the paired sample
+and shows the largest arm gap, is the one race deliberately run with the radio corpus suppressed**.
+The pairing stays internally valid (both arms got the treatment) but the aggregate silently mixes two
+input regimes.
+
+**Verdict on the refutation as a refutation:** the original claim ("the LLM layer is more reluctant")
+was over-general and deserved retracting, and at n=554 it is still not supported. But **a partial,
+non-uniformly-covered sample supports the refutation no better than two windows supported the claim**
+— at the moment it was written it *was* two windows. The honest form is: *"on the laps measured so
+far the two arms ask to pit at similar rates, and the Budapest/Lusail results are case results, not
+a rate"* — the retraction without the counter-rate. The counter-rate is the same mistake with the
+sign flipped.
+
+Severity: MEDIUM-HIGH. The retraction is right; the evidence offered for it is the error it
+retracts, and the rate is now published in a PR comment.
+Evidence: recounts above; `_merged_{llm,det}.jsonl` reconstruction with mtimes; per-race
+decomposition; the two live snapshots 554 then 577.
+
+### K. The deterministic arm's own numbers — REPRODUCE EXACTLY. Non-comparability IS stated (credit where due), but the 24-lap shortfall is unexplained and the explanation on offer covers only 19 of 24.
+
+**Reproduced to the digit** via `src.strategy.eval.llm_decision.measure(tierA_nollm.jsonl, 2025,
+data/raw)`:
+
+```
+laps_measured 1066   rows_on_disk 1261   windows 80
+eligible 100   scored 39 (39.0%)   coverage_verdict masked
+exact 0.1282   within_one 0.3077   within_two 0.4615
+mean_signed -2.308   mean_absolute 2.615
+buckets: scored 39, no_call_in_window 35, no_boundary_in_window 24, min_stint 2
+```
+
+**On comparability, the writing is BETTER than the brief assumed and I could not find a place that
+implies it.** `REPORT_partial.md` says it twice — *"it is not comparable to the published
+`decision_modes.md` numbers, whose sample is different"* in the population paragraph, and *"The
+published `decision_modes.md` numbers are NOT comparable to these: different sample"* in the paired
+section — and the log's Step 7 says *"neither is comparable to the published tier"*. That is real
+discipline and it should be kept.
+
+**What is wrong is the stated REASON, and the trap it leaves open.** Put the two side by side:
+
+| | Tier A `no-llm` | published `decision_modes.md` |
+|---|---|---|
+| scored share | 39.0% | 37.6% |
+| coverage verdict | masked | masked |
+| **exact lap** | **12.8%** | **31.3%** |
+| **within one** | **30.8%** | **47.8%** |
+| within two | 46.2% | 61.2% |
+| mean signed | -2.31 | -1.52 |
+
+**The two rows that look comparable are, and the rows that matter are 2.4x apart.** A reader scanning
+"about 38% scored, masked" in both tables has every invitation to read the accuracy rows as
+commensurate too, and "different sample" does not tell them the exact rate more than halves. Nobody
+has quantified how much of the gap the sample explains, so the disclaimer disclaims without
+informing.
+
+**I tried to explain the gap mechanically and FAILED — reporting that rather than a plausible story,
+because an unproven attribution written as a finding is exactly what verdict D downgraded.**
+
+- *Window width, the obvious candidate*: **not it.** `llm_decision.score_window:135-136` uses the
+  same imported `DECISION_WINDOW_LAPS = 5` as `decision_modes.py:546-547`. The scoring windows are
+  identical by construction and the identity is test-asserted.
+- *Partial window coverage*, since Tier A replays only `[drawn_stop-6, drawn_stop+5]` while
+  `decision_modes` replays a contiguous span covering all of a driver's stops: **measured and
+  largely refuted.** 81 of 98 eligible windows (82.7%) are fully covered, and restricting the scored
+  set to fully-covered windows moves exact 12.8% to 14.3% and within-one 30.8% to 34.3%. That is
+  about 1.5 of the roughly 18.5-point exact gap. It is not the mechanism.
+- One real but small population note it did surface: **7 of the 98 eligible stops were never in the
+  draw** (mean window coverage 0.45) — they are a driver's *other* stops that happened to fall inside
+  a replayed span, and `score_window` grades a stop when as little as one of its eleven laps was
+  evaluated. `REPORT_partial.md` describes the population as *"drawn by a seeded uniform draw"*;
+  about 7% of what is graded was not drawn.
+
+**The 24-lap shortfall is not explained anywhere, and the general explanation on offer is
+incomplete.** Neither the log nor `REPORT_partial.md` mentions 1,066 — the report's coverage table
+quotes an older snapshot (913 of 1,090, 83.8%). I reconstructed the planned set from
+`spec_tierA_all.json` (91 windows, 80 distinct race-drivers, **exactly 1,090 laps**, 0 extra rows)
+and diffed it:
+
+| cause | laps | matches the report's stated explanation? |
+|---|---|---|
+| no lap row at all in the raw parquet (car retired) | 18 | yes — "a retired car" |
+| lap row present, `Position` is NaN (Barcelona ANT L54) | 1 | yes — "a lap with no position" |
+| **lap row present, valid Position, still not served** | **5** | **NO** |
+
+The five: **Silverstone VER L15 (P2), VER L16 (P2), HAM L16 (P8), SAI L16 (P11) — all under
+`TrackStatus 4`, a Safety Car** — and **Monaco GAS L8 (P19), a pit in-lap under `TrackStatus 12`**.
+The report's sentence *"A gap in BOTH arms is the replay engine declining to serve a lap (a retired
+car, a lap with no position)"* accounts for 19 of 24. The remaining 5 are a third mechanism — the
+neutralised-and-pit-lap filter — and they are not incidental: four of them are Safety Car laps at
+Silverstone, the race whose deterministic arm scores 1 of 11 with 10 `no_call_in_window`.
+
+Severity: MEDIUM. The numbers are right and the non-comparability is stated; the shortfall figure is
+absent, its stated cause is incomplete, and the near-identical scored shares are an unguarded trap.
+Evidence: `measure()` output above; planned-vs-served diff against `spec_tierA_all.json` and
+`data/raw/2025/*/laps.parquet`; window-coverage measurement; `llm_decision.py:135-136` against
+`decision_modes.py:546-547`.
+
+### H. Population discipline, swept — THE LOG AND THE GENERATED REPORT ARE DISCIPLINED. The PR BODY is not, one "(measured)" sentence is hardcoded and false, and the 70-race de-dup fixed one twin of two pairs.
+
+**Credit first, because it is the majority of the material.** `REPORT_partial.md` opens with
+*"**Population, stated once and applying to every rate below**"* naming the draw, the seed, the nine
+races and the non-comparability — the correct pattern. `docs/pages/thesis.md:31` states *"Over 552
+green-flag stops across the 24 races of 2025"* with the population in the same sentence as the rate,
+`:33` explains why 2025, and `:41` states the tables' wider scope explicitly and adds *"The two
+scopes are different on purpose and each is stated where it applies."* `decision_modes.md`'s Scope
+section names its six races, its season, and its arm. The log labels both arms in every table.
+
+**H1 (HIGH). `scripts/report_llm_2025.py:156` hardcodes a false claim and stamps it "(measured)".**
+
+```
+"$0.75/$4.50 per 1M. Zero prompt tokens are cacheable here (measured), so the "
+"prompt bill is paid in full on every lap."
+```
+
+It is a string literal, not a computed value. **The JSONL rows carry no cached-token field at all**
+(keys: `agents, completion_tokens, driver, lap, llm_calls, pass_index, profile, prompt_tokens, race,
+recommendation, seconds, state`), so the report is structurally incapable of measuring what it says
+it measured. The claim is also false — verdict A measured 18.2% and 34.8% cached on the completed
+runs. This is the defect shape the brief names: **executed-evidence-shaped prose that was not
+executed**, with the word "(measured)" doing the work, in the auto-generated artefact where a reader
+trusts it most, and it will be re-emitted into every future report until the line is deleted. Note
+the same report already prints 10.1 calls/lap in the paragraph above it, refuting the probe's 6 —
+so the file contradicts itself.
+
+**H2 (MEDIUM-HIGH). PR #828's BODY still carries five refuted claims.** The corrections exist only
+as comments underneath it:
+
+| in the body | status |
+|---|---|
+| "15.93 s/lap (max 17.4)" | refuted (18.07 / 22.92 measured) |
+| "6/lap: 5 on `gpt-4.1-mini`, 1 on `gpt-5.4-mini`" | refuted (mode, not mean; 7.91) |
+| "8,080 prompt + 814 completion per lap" | refuted (13,226 / 1,014) |
+| "cacheable prompt tokens **zero** (the prompt drifts numerically every lap)" | refuted, and the mechanism is wrong |
+| "$0.0071/lap, **~$0.43 per hour of running**" | refuted; off by ~4x and self-contradictory |
+| "#826 — the RAG returns a **fabricated** Safety Car tyre rule" | refuted by verdict B: a distortion of the real Art. 30.5 n) |
+
+A merged PR body is the durable summary; a reader who does not scroll into the comments gets the
+retracted version of every cost figure and the wrong characterisation of #826.
+
+**H3 (MEDIUM). The refutation comment publishes a rate with no population.** PR #828's third comment
+states *"Over 180 paired Tier A laps"* with pit-class shares of 37.2% / 41.1% and never names the
+races. Per verdict J that population is **Budapest + Barcelona, eight drivers, Monza excluded** — and
+the comment's whole subject is that a rate must not be drawn from two windows. (Cosmetic, same
+comment: one table cell renders as `\multicolumn — 68.3% of laps`, a broken LaTeX artefact in
+Markdown.)
+
+**H4 (MEDIUM). One figure measured in `no-llm` IS presented as an LLM-path property.**
+`docs/pages/multi-agent.md:192` — a page whose first line defines the subject as *"a LangGraph
+pipeline of six sub-agents"* — states *"the scored sample rises from 54 to 67 of 178, and agreement
+within two laps rises from 51.9% to 61.2%"* **without saying anywhere on the page that those figures
+come from `profile="no-llm"`, the layer with the LLM synthesis switched off.** `decision_modes.md`
+says it plainly (*"never the LLM synthesis"*); the page quoting its numbers does not. This session
+has now measured that the two arms differ (identical action on 76.9% of paired laps; the LLM arm
+never calls the Budapest stop the deterministic arm hits exactly), so the omission is load-bearing
+rather than pedantic. Note the shape: **a caveat was added to that exact sentence today** (the #829
+race-state constants block) and it names the constants but not the arm — one defect fixed on a line
+whose other defect went untouched.
+
+**H5 (MEDIUM). The 70-race de-dup fixed one member of two pairs.** `mc_measured_v1.json` reports
+`races_measured: 70`, and `projection.md` says *"Counted off 70 races"*. But:
+
+| file:line | says | correct |
+|---|---|---|
+| `docs/pages/thesis.md:41` | "70 races of raw laps across 2023 to 2025" | ok |
+| **`docs/pages/thesis.md:61`** | "The measured tables themselves, from **71 races** of raw laps" | STALE |
+| `docs/pages/multi-agent.md:175` | "1,852 of them across the **70 races** of 2023-2025" | ok |
+| **`docs/pages/multi-agent.md:300`** | "measured across **71 races**, the median gap between consecutive cars is 2.23 s" | STALE |
+
+Both files were edited today; in both, the corrected line and the stale line describe **the same
+artefact**. 71 is the retired count that included the duplicated 2023 Spanish GP.
+
+**H6 (LOW). The train/holdout gap is published as two different numbers.**
+`docs/pages/thesis.md:35` says *"the gap ... is **0.3 points**"*; PR #828's body and the session log
+say *"the **0.4**-point train/holdout gap"*. The measured difference is 86.431 - 86.051 =
+**0.380**. The page subtracted the rounded values (86.4 - 86.1) instead of rounding the difference.
+Immaterial to the argument, but it is the same quantity printed two ways in two published places.
+
+Severity: H1 HIGH, H2/H3/H4/H5 MEDIUM, H6 LOW.
+Evidence: `scripts/report_llm_2025.py:156` and the JSONL key list; `gh pr view 828` body and
+comments; `docs/pages/{thesis,multi-agent}.md` at the lines cited; `data/mc_measured_v1.json`
+`races_measured`; arithmetic shown.
+
+---
+
+## Findings from this continuation (E, H, I, J, K), ranked
+
+| # | sev | finding | `file:line` | concrete failing scenario |
+|---|---|---|---|---|
+| 1 | **HIGH** | A false claim is hardcoded into the generated report and stamped "(measured)". The rows it reads carry no cached-token field, so it cannot have been measured; the true value is 18-35%. | `scripts/report_llm_2025.py:156` | PR 7 quotes "zero cacheable, the prompt bill is paid in full on every lap" out of the auto-generated report, and it regenerates on every future run. |
+| 2 | **HIGH** | Decision-agreement figures measured with the LLM switched off are published on the multi-agent page with no arm stated. | `docs/pages/multi-agent.md:192` | A reader takes "agreement within two laps 61.2%" as the shipped LangGraph system's accuracy. This session measured the arms agreeing on only 76.9% of paired laps, and the LLM arm never calls the Budapest stop the deterministic arm hits exactly. |
+| 3 | **MED-HIGH** | Step 8's counter-rate was computed on **two races** (Budapest 96 + Barcelona 68 laps) and **eight alphabetically-first drivers**, with Monza's 103 LLM laps silently unpaired — inside the correction whose subject is "two windows are not a system". | `MEASUREMENT_SESSION_2025_LOG.md` Step 8; PR #828 comment 3 | The rate is published, cited as a refutation, and its own population is the error it refutes. All its absolutes are already 9-11 points stale. |
+| 4 | **MED-HIGH** | PR #828's body still carries five refuted cost claims plus "fabricated" for #826. Corrections live only in comments. | PR #828 body | The merged PR body is the durable record; a reader who does not scroll gets $0.43/hour, 6 calls/lap and "zero cacheable". |
+| 5 | **MEDIUM** | The published argument for "no leakage" is a **subset-against-its-own-superset** comparison, and the sample has **no power** to detect the leak (z = 0.21; 95% half-width 2.89 points). | `src/strategy/eval/projection.py:56-57` | A future edit widens the scope, sees "barely moves", and concludes no leakage — for a metric that *does* read a model, where the same non-comparison would be silent. |
+| 6 | **MEDIUM** | "The press convention" is asserted as a systematic +1 offset; reachable accounts disagree with each other, and the session applies +1 at Budapest and 0 at Qatar, each time in the direction that makes the thesis right. | `MEASUREMENT_SESSION_2025_LOG.md` Step 0 vs Step 3 | The thesis keeps two lap numbers for one stop (V20 preamble, "cierre de la vuelta 19" body) with neither convention stated, and the correction list omits it. |
+| 7 | **MEDIUM** | The 24-lap Tier A shortfall (1,066 of 1,090) is stated nowhere, and the offered mechanism accounts for only 19 of 24. Five laps had a running car with a valid position. | `REPORT_partial.md` coverage section | Silverstone VER L15/L16, HAM L16, SAI L16 (all `TrackStatus 4`) and Monaco GAS L8 (pit in-lap) are dropped by a third mechanism nobody has named — and Silverstone is the race that scores 1 of 11. |
+| 8 | **MEDIUM** | The 70-race de-dup fixed one member of two pairs; the stale 71 sits on the same pages as the corrected 70, describing the same artefact. | `docs/pages/thesis.md:61`; `docs/pages/multi-agent.md:300` | Someone regenerating the tables reads "71 races" and believes the duplicate is still in. |
+| 9 | **MEDIUM** | `projection.json` carries `scoring_years: [2025]` and a `tables` list with **no season scope**, and `projection.md:4`'s header asserts "data/raw laps 2025" over a document whose second half is 2023-2025. | `documents/eval_reports/projection.{md,json}`; `src/strategy/eval/projection.py:444` | A machine consumer joins the two and attributes 2025 to seven tables counted off 70 races — the exact half-a-fix the code's own docstring warns about, left open in the machine-readable half. |
+| 10 | **LOW** | Module docstring says the file carries **six** tables; it carries seven. | `src/strategy/eval/projection.py:5-6` | — |
+| 11 | **LOW** | The train/holdout gap is published as 0.3 (docs) and 0.4 (PR body, log); measured 0.380. Rounded values were subtracted instead of the difference being rounded. | `docs/pages/thesis.md:35` | — |
+| 12 | **LOW** | The population is described as "drawn by a seeded uniform draw", but ~7% of the stops actually graded (7 of 98) were never in the draw — neighbours caught inside a replayed span. `score_window` grades a stop when 1 of its 11 laps was evaluated. | `REPORT_partial.md`; `src/strategy/eval/llm_decision.py:130-133` | — |
+| 13 | **LOW** | Broken table cell renders as `\multicolumn — 68.3% of laps`. | PR #828 comment 3 | — |
+
+## Fix list, ordered by value then risk
+
+1. **Delete or compute the cacheability sentence** (`scripts/report_llm_2025.py:156`). Either drop it, or persist the cached-token count into the JSONL row and render the real share. Do this before PR 7 quotes the report. *(finding 1)*
+2. **State the arm** on `docs/pages/multi-agent.md:192` — "measured on `profile="no-llm"`, the deterministic layer with the LLM synthesis off" — beside the existing #829 caveat. *(finding 2)*
+3. **Rewrite Step 8 and PR #828 comment 3** to the retraction without the counter-rate, or re-derive the rate over the completed sample and print the race and driver composition on the same line. *(finding 3)*
+4. **Edit PR #828's body** to the corrected cost table and "distortion of Art. 30.5 n)", so the merged record is not the retracted one. *(finding 4)*
+5. **Re-argue the no-leak claim from the code, not the gap** (`projection.py:56-59`): cite the disjoint 2023-2024 figure (86.43%), say the scorer reaches no measured artefact — which is now verified by execution — and say the sample could not resolve a gap of that size either way. *(finding 5)*
+6. **Correct 71 to 70** at `docs/pages/thesis.md:61` and `docs/pages/multi-agent.md:300`, and grep for further instances before PR 7. *(finding 8)*
+7. **State the shortfall**: 1,066 of 1,090 served, 18 retired-car laps, 1 no-position lap, 5 neutralised/pit laps — and add the third mechanism to the report's explanatory paragraph. *(finding 7)*
+8. **Carry the tables' season scope into `projection.json`** (a `tables_years` / `tables_races` field) and stop the report header asserting the ground truth's dataset over the tables section. *(finding 9)*
+9. **Decide the thesis lap-indexing edit deliberately**: either re-index the §5.5 preamble to V19 (one consistent repair, matches the body and the Qatar case), or keep V20 and state the convention. Do not leave both unflagged. *(finding 6)*
+10. Housekeeping: "six tables" to seven; 0.3 to 0.4; the `\multicolumn` cell; and a line in `REPORT_partial.md` noting that a small share of graded stops were not drawn. *(findings 10-13)*
+
+## What I tried to break and could NOT
+
+Listed so the coordinator knows which parts need no re-auditing.
+
+- **The three projection figures.** Re-measured independently: 2025 = 552/24/86.051/59.601/+0.5670/0.6685; 2023-2025 = 1,768/70/86.312/59.219; 2023-2024 = 1,216/46/86.431/59.046. Every digit the log and `projection.{md,json}` print is right.
+- **The causal claim that the scorer reads no learned model and none of the seven measured tables.** I attacked it three ways and it held every time: an AST call graph from `project_positions` reaches no measured-artefact reader; monkeypatching all seven readers to `raise` leaves the number unchanged at 552/24/86.051/59.601; and tracing `open` + `Path.read_text` shows **24 files opened, all `laps.parquet`, zero non-parquet**. I specifically hunted the one field whose default is a frozen measured value (`undercut_band_s = 4.91`) and it is genuinely unreachable — only `undercut_targets` reads it, which the ground truth never calls. **The claim is true as published.**
+- **Claim K's numbers.** 100 eligible, 39 scored, 39.0%, `masked`, 12.8% exact, 30.8% within one, -2.308 mean signed, 1,066 laps — all reproduce exactly from `llm_decision.measure`.
+- **Two candidate mechanisms for the Tier A vs `decision_modes` accuracy gap.** Window width: refuted, both tiers use the same imported `DECISION_WINDOW_LAPS = 5`. Partial window coverage: measured and largely refuted, 82.7% of eligible windows are fully covered and restricting to them moves exact only 12.8% to 14.3%. **I have no explanation for the gap and I am not offering one.**
+- **A private copy of the shipped scorer inside the eval harness** (this repo's signature defect). I looked: `llm_decision.py` imports `green_flag_stops`, `_neutralised_laps`, `guard_rail_block`, `DECISION_WINDOW_LAPS` and the verdict/aggregate types rather than restating them. No fifth copy on this path.
+- **The FastF1 lap mechanics behind the indexing offset.** Confirmed on the data, not assumed: the in-lap carries `PitInTime` and only pit-entry deceleration, the out-lap carries `PitOutTime`, the stationary time and the new compound, and both Budapest cars entered the pit lane ~1.7 s *before* the timing line. The physical basis of the offset is real; only its promotion to "the press convention" is not.
+- **Step 8's internal arithmetic.** Every cell of both tables sums to 180 and all five derived percentages reproduce from its own crosstab. The numbers were right about the laps they described.
+- **Step 8's qualitative conclusion.** At 554 paired laps the arms still ask to pit at similar rates (27.8% vs 31.6%) and the "different kind of stop" asymmetry is stronger, not weaker. The retraction of "the LLM layer is more reluctant" stands.
+- **A statement anywhere implying the Tier A and `decision_modes` numbers are comparable.** I went looking for one and there is none — the opposite is stated three times.
+- **The Tier A draw's own arithmetic.** `spec_tierA_all.json` expands to **exactly 1,090** distinct planned laps across 91 windows and 80 race-drivers, and the deterministic run served **zero** laps outside the plan.
+
+*No repository file was modified except this report. No LLM API call and no simulator run was made; every number above came from pandas, AST, `gh`, four web fetches and the committed JSONL.*

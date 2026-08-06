@@ -137,9 +137,23 @@ def _paired_rows(llm: dict, det: dict) -> list[str]:
 
 
 def _cost_lines(llm: dict) -> list[str]:
+    """Cost from the rows, and NOTHING the rows cannot support.
+
+    An earlier version of this function printed the string "Zero prompt tokens
+    are cacheable here (measured)" as a literal. It was false, and worse, it was
+    unmeasurable: the rows carried no cached-token field at all, so nothing in
+    this report could ever have contradicted it. A hardcoded sentence with
+    "(measured)" in it is the strongest possible claim and the weakest possible
+    evidence, and an adversarial gate caught it in a file whose entire purpose is
+    stating what was measured.
+
+    The cached share now comes off the rows or is not printed.
+    """
     tokens = llm["tokens"]
     laps = llm["laps_measured"]
     hours = llm["wall_clock_seconds"] / 3600
+    cached = tokens.get("cached_prompt")
+
     lines = [
         "",
         "## What it cost",
@@ -151,10 +165,19 @@ def _cost_lines(llm: dict) -> list[str]:
         f"- {tokens['calls'] / laps:.1f} calls/lap, "
         f"{(tokens['prompt'] + tokens['completion']) / laps:,.0f} tokens/lap, "
         f"{llm['wall_clock_seconds'] / laps:.2f} s/lap",
+    ]
+    if cached is None:
+        lines.append(
+            "- cached prompt tokens: **not recorded in these rows**, so the money figure "
+            "below is an upper bound"
+        )
+    else:
+        share = cached / tokens["prompt"] if tokens["prompt"] else 0.0
+        lines.append(f"- **{cached:,} cached prompt tokens ({share:.1%} of prompt)**")
+    lines += [
         "",
-        "Prices read 2026-08-06: `gpt-4.1-mini` $0.40/$1.60 per 1M, `gpt-5.4-mini` "
-        "$0.75/$4.50 per 1M. Zero prompt tokens are cacheable here (measured), so the "
-        "prompt bill is paid in full on every lap.",
+        "Prices read 2026-08-06: `gpt-4.1-mini` $0.40 / $1.60 / $0.10 cached per 1M, "
+        "`gpt-5.4-mini` $0.75 / $4.50 / $0.075 cached per 1M.",
         "",
     ]
     return lines

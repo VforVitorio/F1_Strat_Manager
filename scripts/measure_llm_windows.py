@@ -106,6 +106,11 @@ class WindowRecorder:
             "llm_calls": after.calls - before.calls,
             "prompt_tokens": after.prompt_tokens - before.prompt_tokens,
             "completion_tokens": after.completion_tokens - before.completion_tokens,
+            # Recorded because a report downstream asserted "zero prompt tokens are
+            # cacheable (measured)" while the rows carried no such field, so nothing
+            # could contradict it. A claim about the rows has to be answerable from
+            # the rows.
+            "cached_prompt_tokens": after.cached_prompt_tokens - before.cached_prompt_tokens,
             "state": {
                 "position": getattr(race_state, "position", None),
                 "compound": getattr(race_state, "compound", None),

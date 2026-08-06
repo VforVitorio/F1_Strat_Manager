@@ -702,11 +702,20 @@ All nine races, **1,066 distinct laps of the 1,090 the sample asks for (97.8%)**
 | Silverstone | 132 | 128 | 97% | HAM 16, SAI 16, VER 15-16 (inside the lap 13-21 neutralisation) |
 | Suzuka | 120 | 120 | 100% | - |
 
-**Every gap is the replay engine declining a lap it cannot serve**, not a harness failure: a
-retired car keeps yielding lap states with an empty driver dict, and a lap with no position is
-skipped by design because a sentinel position has already collided with a real one in this
-codebase. Naming this here because #827 proved that a broken arm and a thin sample look
-identical from a row count, so a shortfall now gets an explanation rather than a shrug.
+**19 of the 24 gaps are the replay engine declining a lap it cannot serve**: a retired car keeps
+yielding lap states with an empty driver dict, and a lap with no position is skipped by design
+because a sentinel position has already collided with a real one in this codebase.
+
+> ⚠️ **The other five are not explained, and I first wrote that all of them were.** The gate
+> checked and found five laps where the car was running with a valid position: four Silverstone
+> laps inside a Safety Car block and one Monaco pit in-lap. Whatever declines those is a
+> different mechanism, and "every gap is X" was a generalisation from the majority. It is
+> 1.8% of the deterministic arm and it does not move any figure here, but a shortfall with a
+> confident single cause is exactly the shape #827 taught this session to distrust.
+
+Naming this here because #827 proved that a broken arm and a thin sample look identical from a
+row count, so a shortfall gets an explanation rather than a shrug — and, per the five above,
+gets one only as far as the evidence reaches.
 
 ### Its own numbers, and what they may NOT be compared with
 
