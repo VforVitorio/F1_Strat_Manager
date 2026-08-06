@@ -1491,6 +1491,54 @@ def _run_mc_simulation(
 # Layer 3 — LLM synthesis
 # ==============================================================================
 
+# Logged once per process, not once per lap. A locked store fails every lap
+# identically, and 60 identical WARNING lines is how a configuration problem
+# disguises itself as flaky data.
+_rag_unavailable_logged = False
+
+
+def _run_rag_agent_or_degrade(question: str):
+    """N30's answer, or None when the regulation store cannot be opened.
+
+    The store is local single-writer (`QdrantClient(path=...)`), so a second
+    concurrent process holds an exclusive lock and every retrieval in this one
+    raises. Before #827 that exception propagated out of `run_lap`, and the CLI's
+    per-lap `except Exception` turned it into a red row: an entire race of them,
+    with the cause named nowhere. Two surfaces at once is not exotic (the CLI
+    while the backend is up, an arcade session plus a CLI run, two measurement
+    batches), and from a row count alone the result is indistinguishable from
+    laps the replay engine legitimately declines to serve.
+
+    Degrading is the right direction because N30 is an ENRICHMENT: it is one of
+    fourteen recommendation fields and the orchestrator already has a path for it
+    not being routed at all. An unavailable store should cost the regulation
+    block, not the recommendation.
+
+    Only the lock family is caught. A corrupt collection, a missing embedding
+    model or a bad question must still surface: those are not "another process is
+    running", and swallowing them would trade one silent failure for another.
+    """
+    global _rag_unavailable_logged
+    try:
+        from portalocker.exceptions import BaseLockException
+    except ImportError:  # portalocker ships with qdrant-client; be safe anyway
+        BaseLockException = ()
+
+    try:
+        return run_rag_agent(question)
+    except BaseLockException as exc:
+        if not _rag_unavailable_logged:
+            logger.warning(
+                "N30 disabled for this process: the regulation store is locked by "
+                "another process (%s). Recommendations continue WITHOUT regulation "
+                "context. Give each process its own store via F1_STRAT_DATA_ROOT, or "
+                "run one at a time. This is logged once, not per lap.",
+                exc,
+            )
+            _rag_unavailable_logged = True
+        return None
+
+
 def _build_rag_question(
     sc_active:  bool,
     pit_action: str | None,
@@ -1503,9 +1551,17 @@ def _build_rag_question(
     pit stop regulation question when neither condition is specific.
     """
     if sc_active:
+        # Asks what the PROCEDURE is, not what the RESTRICTIONS are. The old
+        # wording presupposed that restrictions exist, and under an ordinary
+        # mid-race Safety Car they do not: the pit lane is open and stopping is
+        # the whole point. A question that assumes a constraint pulls the
+        # retriever toward the one article mentioning Safety Cars and tyre
+        # specification together (Art. 30.5 n), a wet-start and resumption rule)
+        # and invites the answer to drop its condition (#826).
         return (
-            "What are the FIA regulations for pit stops and tyre changes "
-            "during a Safety Car period?"
+            "What is the procedure for drivers and teams when the safety car is "
+            "deployed during a race? Describe what drivers must do, and state any "
+            "conditions that limit when each requirement applies."
         )
     if pit_action == "UNDERCUT":
         return (
@@ -1766,7 +1822,14 @@ def _build_orchestrator_prompt(
         f"     (cite the cliff P50 lap AND the pace delta explicitly).\n"
         f"  2. Add a situational line: overtake prob, SC prob, or radio alert intent\n"
         f"     if any of those meaningfully shaped the decision — name the signal.\n"
-        f"  3. If regulation_context is present, quote at least one article number.\n"
+        # Conditional on an article actually being there. The unconditional form
+        # manufactured a citation on every lap where the RAG answered without one,
+        # and it is the instruction that made a re-scoped rule sound authoritative
+        # enough to override the Monte Carlo (#826).
+        f"  3. If regulation_context cites an article, quote it AND the condition\n"
+        f"     under which that article applies. If it states no condition, say the\n"
+        f"     regulation context was inconclusive rather than inventing one, and\n"
+        f"     do NOT let it override the numeric evidence.\n"
         f"  4. Close with how the MC score either confirms or is overridden by the\n"
         f"     evidence above. Never start with MC.\n"
         f"Example of a rich reasoning paragraph (do NOT copy verbatim, use as shape):\n"
@@ -2018,6 +2081,10 @@ def _run_conditional_agents(
 
     regulation_context: str | None = None
     rag_dict: dict | None          = None
+    # None means "no regulation context this lap", which happens two ways that the
+    # rest of the function does not need to tell apart: N30 was not routed, or it
+    # was routed and the store was unavailable (#827).
+    reg_out = None
     if "N30" in active:
         pit_action = pit_out.action if pit_out else None
         question   = _build_rag_question(
@@ -2039,7 +2106,9 @@ def _run_conditional_agents(
             pit_action = pit_action,
             compound   = race_state.compound,
         )
-        reg_out            = run_rag_agent(question)
+        reg_out = _run_rag_agent_or_degrade(question)
+
+    if reg_out is not None:
         regulation_context = reg_out.answer
         rag_dict = {
             "question": reg_out.question,
