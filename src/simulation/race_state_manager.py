@@ -443,9 +443,7 @@ class RaceStateManager:
             # each DriverNumber split down its left branch (W-F2). The value is right
             # here in the row. None rather than 0 when it is genuinely missing, so the
             # absence stays an absence.
-            "driver_number": int(r["DriverNumber"])
-            if pd.notna(r.get("DriverNumber"))
-            else None,
+            "driver_number": int(r["DriverNumber"]) if pd.notna(r.get("DriverNumber")) else None,
             # --- Speed traps (all four sensor points) ---
             "speed_i1": float(r["SpeedI1"]) if pd.notna(r.get("SpeedI1")) else None,
             "speed_i2": float(r["SpeedI2"]) if pd.notna(r.get("SpeedI2")) else None,
