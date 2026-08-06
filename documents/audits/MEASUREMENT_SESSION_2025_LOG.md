@@ -618,3 +618,47 @@ converts to a plain stop (18) or declines outright (20).
 
 `ALERT` has not appeared once in 336 LLM laps, so the fork about how to bucket it dissolves: it
 is not in the measured distribution.
+
+---
+
+## Step 9: the deterministic arm is complete, and its lap shortfall is accounted for
+
+All nine races, **1,066 distinct laps of the 1,090 the sample asks for (97.8%)**, 80 measured
+`(race, driver)` window groups covering the 91 spec windows.
+
+| race | planned | evaluated | coverage | what is missing |
+|---|---|---|---|---|
+| Barcelona | 191 | 185 | 97% | ALB 28-32 (retired on lap 27), ANT 54 |
+| Budapest | 168 | 168 | 100% | - |
+| Lusail | 60 | 56 | 93% | BEA 42-45 |
+| Mexico_City | 84 | 84 | 100% | - |
+| Monaco | 96 | 88 | 92% | GAS 8-13 and two more |
+| Montréal | 84 | 84 | 100% | - |
+| Monza | 155 | 153 | 99% | ALO 25, STR 53 |
+| Silverstone | 132 | 128 | 97% | HAM 16, SAI 16, VER 15-16 (inside the lap 13-21 neutralisation) |
+| Suzuka | 120 | 120 | 100% | - |
+
+**Every gap is the replay engine declining a lap it cannot serve**, not a harness failure: a
+retired car keeps yielding lap states with an empty driver dict, and a lap with no position is
+skipped by design because a sentinel position has already collided with a real one in this
+codebase. Naming this here because #827 proved that a broken arm and a thin sample look
+identical from a row count, so a shortfall now gets an explanation rather than a shrug.
+
+### Its own numbers, and what they may NOT be compared with
+
+| | this arm (9 races, product race state) | published `decision_modes.md` (6 races) |
+|---|---|---|
+| eligible stops | 100 | 178 |
+| scored | 39 (**39.0%**) | 67 (37.6%) |
+| coverage verdict | **masked** | **masked** |
+| exact lap | **12.8%** | 31.3% |
+| within one lap | **30.8%** | 47.8% |
+| mean signed error | -2.31 | -1.52 |
+
+**These two columns are NOT comparable and nothing in this session should be read as comparing
+them.** Three things differ at once: a different race sample, a different window construction
+(per-stop rather than a contiguous per-driver span), and the published column is measured on the
+constant 2.0 s gap and constant 0.0 pace delta of #829 while this one goes through the product's
+own `build_race_state`. **Do not read the lower exact-lap rate here as "the fix made it worse".**
+Which of the three moves it, and in which direction, is unmeasured, and saying otherwise would be
+the same unproven attribution the gate already caught once in this document.
