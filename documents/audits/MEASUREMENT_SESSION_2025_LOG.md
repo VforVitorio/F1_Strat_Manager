@@ -271,6 +271,15 @@ That is the first direct evidence that **the two paths do not agree with each ot
 runs in the direction nobody had checked: the layer that ships is more reluctant than the layer
 that was measured.
 
+**Confirmed by the scorer rather than by reading the action list** — the distinction matters,
+because "emitted PIT_NOW on lap 19" and "the tier's transition rule locates the decision on lap
+19" are different statements and only the second is the metric:
+
+```
+thesis_windows_nollm.jsonl  Budapest LEC  actual_lap 19  chosen_lap 19  offset 0  bucket 'scored'
+thesis_windows.jsonl        Budapest LEC  actual_lap 19  chosen_lap None          bucket 'no_call_in_window'
+```
+
 ### Finding 2: Qatar. The shipped SC fix works, and the LLM vetoes it on a regulation that does not exist
 
 The deterministic layer **does** call the Safety Car stop, on laps 8 and 9. So the
