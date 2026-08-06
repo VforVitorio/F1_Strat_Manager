@@ -2,7 +2,7 @@
 
 Two things live here, and they answer two different questions.
 
-**Is the layer measured?** ``data/mc_measured_v1.json`` carries six tables the
+**Is the layer measured?** ``data/mc_measured_v1.json`` carries seven tables the
 Monte Carlo scorer reads at runtime, each one counted off real laps rather than
 assumed. This report lists them with their sample sizes, so "measured" is a
 number a reader can check and not a word in a commit message.
@@ -64,6 +64,14 @@ MEASURED_TABLES_PATH = "data/mc_measured_v1.json"
 # against 86.31%", which is a subset against the superset containing it: the 552
 # stops of 2025 are 31% of the 1,768, so those two are algebraically pulled together
 # and their gap is not a train/holdout contrast at all.
+#
+# AND THE GAP IS NOT THE ARGUMENT EITHER WAY. At n=552 the disjoint difference is
+# z = 0.21 with a 95% half-width of about 2.9 points, so this sample could not have
+# distinguished no leakage from a two-point leak. The claim rests on the CODE (the
+# scorer reaches no learned artefact, verified by execution above), never on the
+# smallness of the gap. A future reader who widens a scope, sees "barely moves" and
+# concludes "no leakage" for a metric that DOES read a model would be reasoning from
+# the half of this comment that proves nothing.
 #
 # Do not carry this reasoning over to any figure that does read a model.
 DEFAULT_SCORING_YEARS: tuple[int, ...] = (2023, 2024, 2025)
@@ -450,7 +458,19 @@ def build_projection_report(
     seasons = (
         "-".join(str(year) for year in (years[0], years[-1])) if len(years) > 1 else str(years[0])
     )
-    header = build_header(dataset=f"data/raw laps {seasons} (RAW, not featured)")
+    # Names BOTH scopes, because the second half of this document is the measured
+    # tables and they are not scored over `years`.
+    table_seasons = (
+        "-".join(str(year) for year in (tables["years"][0], tables["years"][-1]))
+        if tables.get("years")
+        else "unknown"
+    )
+    header = build_header(
+        dataset=(
+            f"data/raw laps, ground truth {seasons}, measured tables {table_seasons} "
+            "(RAW, not featured)"
+        )
+    )
     md_path, json_path = write_report(
         "projection",
         header,
@@ -468,6 +488,14 @@ def build_projection_report(
                 "mean_absolute_error": truth.mean_absolute_error,
             },
             "tables": rows,
+            # The tables carry their OWN season scope, which is deliberately wider
+            # than `scoring_years`. Emitted here because a machine consumer that
+            # reads `scoring_years: [2025]` and this list together would otherwise
+            # attribute 2025 to seven tables counted off 70 races across three
+            # seasons: the exact half-a-fix the constant above warns about, left
+            # open in the half a human never reads.
+            "tables_years": list(tables.get("years", [])),
+            "tables_races": tables.get("races_measured"),
             "measured_tables_path": MEASURED_TABLES_PATH,
         },
     )

@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "a97f5dd",
-    "dataset": "data/raw laps 2025 (RAW, not featured)",
+    "harness_sha": "840289a",
+    "dataset": "data/raw laps, ground truth 2025, measured tables 2023-2025 (RAW, not featured)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-08-06T13:58:14+00:00",
+    "generated_at": "2026-08-06T15:27:15+00:00",
     "artifacts": {}
   },
   "scoring_years": [
@@ -64,5 +64,11 @@
       "present": true
     }
   ],
+  "tables_years": [
+    2023,
+    2024,
+    2025
+  ],
+  "tables_races": 70,
   "measured_tables_path": "data/mc_measured_v1.json"
 }

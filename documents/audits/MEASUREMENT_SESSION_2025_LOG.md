@@ -621,7 +621,7 @@ I wrote "the layer that ships is more reluctant than the layer that was measured
 | | LLM (`rich`) | deterministic (`no-llm`) |
 |---|---|---|
 | **pit-class share of laps** | **27.2%** | **29.9%** |
-| identical action | \multicolumn{2}{c}{**75.7%** of laps} | |
+| identical action | **75.7%** of laps | (same figure, both arms) |
 
 **And the direction is not even consistent across races**, which is the strongest evidence
 against a systematic reluctance:

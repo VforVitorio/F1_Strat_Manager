@@ -124,6 +124,14 @@ def score_window(
     the point of the exercise is what the stack said near the real decision, and
     grading a stop the window never approached would count the sampling as a
     model failure.
+
+    NOTE ON THE POPULATION, because it is not exactly the draw. The test is that
+    ONE lap of the stop's plus-or-minus-five window was evaluated, so a stop that
+    was never drawn can still be graded when a neighbouring driver-window happens
+    to span it. Measured on this sample: about 7% of graded stops arrived that way.
+    They are real green-flag stops and rail-eligible like the rest, so they are not
+    contamination, but "drawn by a seeded uniform draw" describes the WINDOWS and
+    not every stop the windows end up reaching.
     """
     neutralised = _neutralised_laps(laps)
     stops = green_flag_stops(laps, neutralised).get(key.driver, [])

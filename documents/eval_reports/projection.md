@@ -1,7 +1,7 @@
 # projection
 
-- harness `a97f5dd` · schema v1 · generated 2026-08-06T13:58:14+00:00
-- era 2022-2025 · dataset data/raw laps 2025 (RAW, not featured) · seed deterministic · llm none
+- harness `840289a` · schema v1 · generated 2026-08-06T15:27:15+00:00
+- era 2022-2025 · dataset data/raw laps, ground truth 2025, measured tables 2023-2025 (RAW, not featured) · seed deterministic · llm none
 - artifacts: —
 
 ## Position projection against real pit stops
