@@ -52,11 +52,20 @@ MEASURED_TABLES_PATH = "data/mc_measured_v1.json"
 # CLAIM about what the number describes, and the number was published for a year
 # with the scope living only in a default argument nobody read. 2023 and 2024 are
 # training seasons for every model in the stack; 2025 is the holdout. Restricting
-# to 2025 barely moves this particular metric (86.05% against 86.31%) and that is
-# not reassurance, it is a property of THIS scorer: it runs on a fixed
-# ``ProjectionConfig`` and consumes no learned model and none of the measured
-# tables, so the season scope cannot leak into it. Do not carry that reasoning
-# over to any figure that does read a model.
+# to 2025 barely moves this particular metric, and that is not reassurance: it is a
+# property of THIS scorer, which runs on a fixed ``ProjectionConfig`` and consumes
+# no learned model and none of the measured tables, so the season scope cannot leak
+# into it. Verified rather than argued: with every measured-artefact reader in
+# ``position_projection`` patched to raise, the 2025 measurement is unchanged, and
+# the only file the run opens is one ``laps.parquet`` per race.
+#
+# The comparison to quote is the DISJOINT one, 86.05% (2025) against 86.43%
+# (2023-2024), 0.38 points. An earlier version of this comment argued it as "86.05%
+# against 86.31%", which is a subset against the superset containing it: the 552
+# stops of 2025 are 31% of the 1,768, so those two are algebraically pulled together
+# and their gap is not a train/holdout contrast at all.
+#
+# Do not carry this reasoning over to any figure that does read a model.
 DEFAULT_SCORING_YEARS: tuple[int, ...] = (2023, 2024, 2025)
 
 # A stop is a stop whether or not the tyre falls off a cliff two laps later, so

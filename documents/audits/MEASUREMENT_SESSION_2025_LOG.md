@@ -16,21 +16,47 @@ Source: `~/Desktop/Documents/Cuarto Año/TFG/Docs/Memoria/capitulos/05_resultado
 | 5.5.2 | Hungary 2025 (Budapest) | CLI | LEC / PIA | V17-V19 | undercut cover on the hard compound; tests DIVERGENCE from the real wall |
 | 5.5.3 | Qatar 2025 (Lusail) | Arcade | PIA / VER | V7 | SC pit-window; the press calls it the season's worst wall error |
 
-### The thesis contradiction, RESOLVED, and my first reading of it was wrong
+### The thesis contradiction: my first reading was wrong, and so was my correction of it
 
-**Correction, made after checking the press against the parquet.** I first wrote that the
-thesis section intro ("la parada de Leclerc en V20") was wrong and its body (V19) was right.
-That was reading one source. The press accounts of the race number the same two stops
-**PIA lap 19, LEC lap 20**; the parquet numbers them **PIA 18, LEC 19**. Neither is an error:
-`PitInTime` sits on the lap the car was completing when it entered the pit lane, and the
-timing-screen convention the press follows counts the lap the car spends in the pit lane. It
-is a one-lap indexing offset, not a factual disagreement, and both describe the identical
-event.
+I wrote three things here in sequence and the middle one was the worst.
 
-What that means for the thesis: the intro is right in press indexing, the body is right in the
-indexing the system actually runs on, and only the second one can be used to build a window.
-The intro's other claim, "las cinco vueltas", is genuinely inconsistent with the three-lap
-command in the same section, and that one is worth fixing.
+**First** I said the thesis intro ("la parada de Leclerc en V20") was simply wrong against the
+parquet's 19. **Then** I "corrected" that: press accounts number the stops PIA 19 / LEC 20, so
+it is a one-lap indexing convention, not an error, and the intro is right in its own frame.
+**The adversarial gate refuted the correction, and it is right.**
+
+What is true, and it is only the mechanics: `PitInTime` sits on the lap the car was completing
+when it entered the pit lane; `PitOutTime`, the stationary time and the new compound all sit on
+the next lap. Verified on the data: LEC's in-lap 19 carries a 1:24.552 with the pit-entry
+deceleration and his lap-20 row carries 1:39.083 on a HARD at `TyreLife` 1. Both cars crossed
+the timing line about 1.7 s **after** entering the pit lane, so "the lap spent in the pit lane"
+genuinely is 20 for LEC.
+
+**What is NOT true is that the press follows that as a convention.** Reachable accounts
+disagree with each other. Wikipedia's race report: *"On lap 18, Piastri pitted from second to
+take hard tyres"* and *"Leclerc responded the following lap"* — **18 / 19, the parquet's
+numbering**. Other accounts say 19 / 20. There is no single press convention to appeal to.
+
+**And the decisive test is inside this very document.** Step 3 below reads *"16 cars pit on lap
+7"* straight off `PitInTime` at Lusail and treats the thesis's *"diecisiete coches pitan en esa
+misma vuelta"* as the same event with **no offset**. If a systematic +1 existed, the press would
+call those stops lap 8. It does not (Sky Sports: *"pitting on Lap 7 provided key strategic
+gain"*, and *"McLaren's decision not to pit their two cars at the end of that lap"*, which is
+in-lap numbering said out loud). Lusail's `PitInTime` on lap 6 is **empty**, so "vuelta 7"
+cannot be press-plus-one under any reading.
+
+**So I answered the same convention question two different ways in one session, each time in
+the direction that made the thesis right: +1 at Budapest, 0 at Qatar.** Each reading is locally
+defensible and no single rule generates both, which means it was not a reconciliation. It was
+rescuing a sentence.
+
+**The honest statement:** the parquet's numbering is the one the system runs on and the one the
+thesis body uses ("al cierre de la vuelta 19", which is literally what the data shows). The
+preamble's "V20" is most simply an error, and Occam agrees: under the plain reading, "tres
+vueltas en torno a la parada de Leclerc en V19" is exactly the executed `--laps 17-19`, so
+**one consistent re-indexing fixes the sentence**. Under the rescue reading, "five laps around
+V20" is 18-22, which is still not the window, so it needs two repairs and leaves the thesis
+carrying two lap numbers for one stop.
 
 The press claim the case rests on does hold: Leclerc on the compound, verbatim, *"The hard was
 much more difficult, but you discover this a bit too late. We were trying to do the undercut,
@@ -50,9 +76,9 @@ is the indexing the replay engine, the windows and every number below use:
 | NOR | 31 | - |
 
 In this indexing Leclerc's covering stop is lap **19** and Piastri's undercut is lap **18**,
-which is what section 5.5.2 says. The intro's "V20" is the press indexing of the same stop and
-is not an error; its "las cinco vueltas" is inconsistent with the three-lap command beside it
-and is the one worth correcting in the thesis source.
+which is what section 5.5.2 says and what Wikipedia's race report says. The recommended thesis
+edit is the single consistent one: the preamble becomes "las tres vueltas en torno a la parada
+de Leclerc en V19", which then matches both the body and the executed command.
 
 ### Qatar: which of the three brakes survived
 
