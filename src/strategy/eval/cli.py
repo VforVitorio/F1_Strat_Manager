@@ -30,7 +30,7 @@ from src.strategy.eval.calibration import build_calibration_report
 from src.strategy.eval.decision_modes import build_decision_modes_report
 from src.strategy.eval.hygiene import build_hygiene_report
 from src.strategy.eval.nlp import build_nlp_report
-from src.strategy.eval.projection import build_projection_report
+from src.strategy.eval.projection import DEFAULT_SCORING_YEARS, build_projection_report
 from src.strategy.eval.registry import build_registry
 from src.strategy.eval.stint_lengths import build_stint_lengths_report
 from src.strategy.eval.reproduce import build_reproduction_report
@@ -74,13 +74,15 @@ def _run_nlp() -> None:
     print("nlp " + _summarise(payload, "results", ("flagged", "delta", "blocked", "pending")))
 
 
-def _run_projection() -> None:
-    payload = build_projection_report()
+def _run_projection(years: tuple[int, ...] = DEFAULT_SCORING_YEARS) -> None:
+    payload = build_projection_report(years=years)
     truth = payload["ground_truth"]
+    seasons = ", ".join(str(year) for year in years)
     accuracy = (
         "not measured (no data/raw)"
         if truth is None
-        else f"{truth.within_one:.1%} within one position over {truth.sample_size} real stops"
+        else f"{truth.within_one:.1%} within one position over {truth.sample_size} real stops "
+        f"in {seasons}"
     )
     print(f"projection -> {payload['md_path']} ({accuracy}; {len(payload['tables'])} tables)")
 
@@ -149,7 +151,21 @@ def main(argv: list[str] | None = None) -> int:
         choices=[*_COMMANDS, "alert-llm", "decision-modes", "all"],
         help="which report to regenerate",
     )
+    parser.add_argument(
+        "--years",
+        type=int,
+        nargs="+",
+        default=None,
+        metavar="YEAR",
+        help=(
+            "seasons the projection ground truth is scored over "
+            f"(default: {' '.join(str(y) for y in DEFAULT_SCORING_YEARS)}). "
+            "2023 and 2024 are TRAINING seasons; 2025 is the holdout the shipped "
+            "system infers on, so `--years 2025` is the figure that describes it."
+        ),
+    )
     args = parser.parse_args(argv)
+    years = tuple(args.years) if args.years else DEFAULT_SCORING_YEARS
 
     # Both of these are opt-in only, so `all` never runs them: alert-llm spends API
     # calls, and decision-modes drives the agent stack over hundreds of laps.
@@ -160,9 +176,14 @@ def main(argv: list[str] | None = None) -> int:
         _run_decision_modes()
         return 0
 
-    commands = _COMMANDS.values() if args.command == "all" else [_COMMANDS[args.command]]
-    for run in commands:
-        run()
+    # `projection` is the only builder that takes a season scope, so it is bound
+    # here rather than given every builder a parameter none of the others has.
+    commands = list(_COMMANDS) if args.command == "all" else [args.command]
+    for name in commands:
+        if name == "projection":
+            _run_projection(years)
+        else:
+            _COMMANDS[name]()
     return 0
 
 

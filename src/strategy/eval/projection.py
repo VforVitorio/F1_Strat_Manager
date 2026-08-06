@@ -46,6 +46,19 @@ from src.strategy.eval.report import build_header, write_report
 
 MEASURED_TABLES_PATH = "data/mc_measured_v1.json"
 
+# Seasons the ground truth is scored over when the caller does not say.
+#
+# It is a named constant rather than an inline tuple because the season scope is a
+# CLAIM about what the number describes, and the number was published for a year
+# with the scope living only in a default argument nobody read. 2023 and 2024 are
+# training seasons for every model in the stack; 2025 is the holdout. Restricting
+# to 2025 barely moves this particular metric (86.05% against 86.31%) and that is
+# not reassurance, it is a property of THIS scorer: it runs on a fixed
+# ``ProjectionConfig`` and consumes no learned model and none of the measured
+# tables, so the season scope cannot leak into it. Do not carry that reasoning
+# over to any figure that does read a model.
+DEFAULT_SCORING_YEARS: tuple[int, ...] = (2023, 2024, 2025)
+
 # A stop is a stop whether or not the tyre falls off a cliff two laps later, so
 # the ground truth uses a flat degradation profile and a cliff far outside the
 # window. What is under test is the geometry of the rejoin, not the tyre model.
@@ -260,7 +273,9 @@ def project_one_stop(pivot, medians, pitters, driver, lap) -> int | None:
     return int(result.positions[0]) - _actual_position(pivot, row_after, driver, ours_after)
 
 
-def measure_projection_ground_truth(years: tuple[int, ...] = (2023, 2024, 2025)) -> GroundTruth:
+def measure_projection_ground_truth(
+    years: tuple[int, ...] = DEFAULT_SCORING_YEARS,
+) -> GroundTruth:
     """Project every real green-flag pit stop and compare with what actually happened.
 
     Neutralised stops are excluded, and not to flatter the number. Under a Safety
@@ -346,8 +361,14 @@ def _table_rows(tables: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables: dict) -> str:
+def _render_table(
+    rows: list[dict[str, Any]],
+    truth: GroundTruth | None,
+    tables: dict,
+    years: tuple[int, ...] = DEFAULT_SCORING_YEARS,
+) -> str:
     """Two sections: the accuracy headline, then the tables that feed the scorer."""
+    seasons = ", ".join(str(year) for year in years)
     lines = ["## Position projection against real pit stops", ""]
     if truth is None:
         lines += ["Not measured: `data/raw/` is absent from this checkout.", ""]
@@ -355,6 +376,7 @@ def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables:
         lines += [
             "| quantity | value |",
             "|---|---|",
+            f"| seasons scored | {seasons} |",
             f"| green-flag stops projected | {truth.sample_size} |",
             f"| races covered | {truth.races} |",
             f"| within one position | {truth.within_one:.1%} |",
@@ -366,6 +388,11 @@ def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables:
             "this is measured accuracy and not a proxy. Neutralised stops are excluded",
             "because the pit-loss reconstruction, not the projection, is wrong under a",
             "Safety Car.",
+            "",
+            "**The seasons row is not decoration.** 2023 and 2024 are TRAINING seasons for",
+            "every model in the stack and 2025 is the holdout the shipped system infers on,",
+            "so a figure that mixes them is partly the system reading back its own training",
+            "data. Quote the season scope on the same line as the number, always.",
             "",
         ]
 
@@ -391,22 +418,36 @@ def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables:
     return "\n".join(lines)
 
 
-def build_projection_report() -> dict[str, Any]:
-    """Write ``documents/eval_reports/projection.{md,json}`` and return the payload."""
+def build_projection_report(
+    years: tuple[int, ...] = DEFAULT_SCORING_YEARS,
+) -> dict[str, Any]:
+    """Write ``documents/eval_reports/projection.{md,json}`` and return the payload.
+
+    ``years`` scopes the GROUND TRUTH only. The measured tables keep whatever
+    seasons they were counted off, and the report says so on its own line, because
+    re-scoping one without the other silently is how half a fix looks like a whole
+    one. For this metric the distinction is moot in the arithmetic (the scorer
+    never reads the tables) and it is still worth stating, since the next reader
+    will assume it does.
+    """
     tables = _measured_tables()
     rows = _table_rows(tables)
 
     try:
-        truth: GroundTruth | None = measure_projection_ground_truth()
+        truth: GroundTruth | None = measure_projection_ground_truth(years=years)
     except FileNotFoundError:
         truth = None
 
-    header = build_header(dataset="data/raw laps 2023-2025 (RAW, not featured)")
+    seasons = (
+        "-".join(str(year) for year in (years[0], years[-1])) if len(years) > 1 else str(years[0])
+    )
+    header = build_header(dataset=f"data/raw laps {seasons} (RAW, not featured)")
     md_path, json_path = write_report(
         "projection",
         header,
-        _render_table(rows, truth, tables),
+        _render_table(rows, truth, tables, years),
         {
+            "scoring_years": list(years),
             "ground_truth": None
             if truth is None
             else {
