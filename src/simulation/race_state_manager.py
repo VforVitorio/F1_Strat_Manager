@@ -436,6 +436,16 @@ class RaceStateManager:
                 self._stint_baselines.get(int(r["Stint"])) if pd.notna(r.get("Stint")) else None
             ),
             "fresh_tyre": bool(r.get("FreshTyre", False)),
+            # N06 trains on DriverNumber as a real feature (car numbers 1-81; 0 never
+            # occurs). Nothing emitted it, so `pace_agent.run_from_state` fell back to
+            # `or 0` on every replay lap: a constant outside the trained vocabulary,
+            # and a findable one, since 0 sorts below every real car number and sends
+            # each DriverNumber split down its left branch (W-F2). The value is right
+            # here in the row. None rather than 0 when it is genuinely missing, so the
+            # absence stays an absence.
+            "driver_number": int(r["DriverNumber"])
+            if pd.notna(r.get("DriverNumber"))
+            else None,
             # --- Speed traps (all four sensor points) ---
             "speed_i1": float(r["SpeedI1"]) if pd.notna(r.get("SpeedI1")) else None,
             "speed_i2": float(r["SpeedI2"]) if pd.notna(r.get("SpeedI2")) else None,

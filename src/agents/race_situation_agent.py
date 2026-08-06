@@ -252,8 +252,19 @@ class RaceSituationConfig:
         # The bands below are deliberately NOT the classifier operating points; they
         # are pit-wall alert levels, set on the served calibrated scale (#665).
 
-        # Circuit cluster map (k=4 parquet from N05)
-        _cl = pd.read_parquet(_PROCESSED / "circuit_clustering" / "circuit_clusters_k4.parquet")
+        # Circuit cluster map (k=4 parquet from N05).
+        #
+        # The _2025 file, which is what `pace_agent` already loads and what the served
+        # models were fitted against. MEASURED against the `Cluster` column of
+        # `laps_featured_2025.parquet`, which is the value N14's training rows actually
+        # carry: `circuit_clusters_k4_2025.parquet` agrees on **24 of 24** GPs, the
+        # pooled `circuit_clusters_k4.parquet` this used to read agrees on **17 of 24**.
+        # So the pooled file would hand N14 a cluster its own training rows never had
+        # for seven races (Budapest alone moves 3 -> 1). Same split the PR 6 gate found
+        # in the producer; this is its consumer-side twin.
+        _cl = pd.read_parquet(
+            _PROCESSED / "circuit_clustering" / "circuit_clusters_k4_2025.parquet"
+        )
         self.circuit_cluster_map: dict = dict(zip(_cl["GP_Name"], _cl["Cluster"].astype(int)))
 
         # Circuit SC base rates (from N13 labeled parquet)
@@ -1274,7 +1285,20 @@ class RaceSituationAgent:
         yel_esc = feat.get("yellow_escalation_count", 0)
         feat["anomaly_and_yellow"] = int(anom_hard > 0 and yel_esc > 0)
         feat["lap1_chaos"] = is_lap1 * abs(feat.get("n_drivers_delta", 0))
-        feat["circuit_cluster"] = int(session_meta.get("circuit_cluster", 0))
+        # RESOLVED from the circuit, not defaulted. `session_meta` carries `gp_name`
+        # and never `circuit_cluster` on the replay path (measured: its keys are
+        # driver / gp_name / team / total_laps / year), so `get(..., 0)` fired on 100%
+        # of laps — and 0 is a REAL cluster, one of {0,1,2,3}, so every race was
+        # silently told it was a cluster-0 circuit with no way to tell that apart from
+        # a race that genuinely is one. A default the code can also legitimately find
+        # is the #428 shape this repo has been bitten by repeatedly.
+        #
+        # `cluster_for` is the resolver the sibling `circuit_sc_rate` feature already
+        # uses, and it handles all four GP spellings. NaN, not -1, when it genuinely
+        # cannot resolve: LightGBM has a learned direction for missing and none for a
+        # cluster that does not exist.
+        _cluster = CFG.cluster_for(str(session_meta.get("gp_name", "")))
+        feat["circuit_cluster"] = float("nan") if _cluster is None else int(_cluster)
         feat["circuit_sc_rate"] = float(session_meta.get("circuit_sc_rate", 0.10))
         feat["lap_pct"] = lap_pct
         feat["is_lap1"] = is_lap1
