@@ -827,10 +827,18 @@ class PaceAgent:
         session median for the current GP/year/compound.
 
         Args:
-            driver_number: Car number used to look up TeamID encoding.
+            driver_number: Car number. A RAW feature the model splits on, not a
+                lookup key for anything - the TeamID encoding this line used to
+                claim comes from `team`. None when the source has no reading, and
+                it must stay None: 0 is not absent, it is a value the model finds,
+                sorting below every real car number (#831).
             lap_number: Current race lap; used for FuelLoad estimation.
             stint: Stint number (1-indexed), forwarded as a raw feature.
-            tyre_life: Laps on current tyre set; drives FreshTyre flag.
+            tyre_life: Laps on current tyre set. It no longer drives FreshTyre on
+                the `from_state` path - the state manager emits FastF1's real
+                set-was-new flag and `tyre_life <= 1` was only ever a proxy for it,
+                agreeing on outlaps and disagreeing on every lap 2+ of a fresh-set
+                stint (#831). The fallback still uses it when the flag is absent.
             compound: Pirelli compound name.
             position: Current race position (1-based). None when the source
                 telemetry has no reading for this lap; propagates as a missing
