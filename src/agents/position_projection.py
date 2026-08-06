@@ -92,7 +92,7 @@ import numpy as np
 _MEASURED_TABLES = Path(__file__).resolve().parents[2] / "data" / "mc_measured_v1.json"
 
 # Fallbacks used only when the measured tables are unavailable (a wheel install
-# without data/). They are the values measured on 2026-07-25 over 71 races, so a
+# without data/). They are the values measured on 2026-07-25 over 70 races, so a
 # missing file degrades to the same numbers rather than to invented ones.
 DEFAULT_UNDERCUT_BAND_S = 4.91
 DEFAULT_NEUTRALISATION_RATE = 0.0179

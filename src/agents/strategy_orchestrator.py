@@ -648,20 +648,20 @@ FRESH_GAIN   = 0.25  # s/lap advantage of fresh vs degraded tyre
 CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff.
                      # No counterpart in Heilmeier, who models degradation as linear
                      # (t_tire = k0 + k1*age) with no cliff term. About 14x the
-                     # degradation rate measured on this repo's 71 races (HARD .052 /
+                     # degradation rate measured on this repo's 70 races (HARD .052 /
                      # MEDIUM .059 / SOFT .072 s/lap), so it stands as a cliff parameter,
                      # not a Heilmeier citation.
 POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation).
                      # LEGACY PATH ONLY. The projection scoring counts the actual
                      # cars and needs no such constant. Measured over this repo's
-                     # 71 races, the median gap between consecutive cars is 2.23 s
+                     # 70 races, the median gap between consecutive cars is 2.23 s
                      # while racing and 1.48 s under a Safety Car, so a single
                      # figure cannot serve both regimes: 1.5 is close to the
                      # bunched-field value and was being applied to green-flag
                      # racing, where most decisions are taken. Kept unchanged
                      # because the goldens pin the legacy output to the digit.
 SC_PIT_BONUS = 8.0   # seconds saved by pitting under a full Safety Car (Art. 55, no
-                     # delta-lap loss). Measured on this repo's 71 races: 5.75 s, 95% CI
+                     # delta-lap loss). Measured on this repo's 70 races: 5.75 s, 95% CI
                      # [3.14, 8.25] (n=124), so 8.0 sits inside the interval. Close to the
                      # mean of Heilmeier's four published circuits (8.18 s, section 3.5 of
                      # 10/4229). The N28 prompt's earlier "~12 s" is outside that CI.
@@ -801,7 +801,7 @@ def simulate_lap_window(
 # caller that knows the GP must pass its own figure through pit_context, because
 # a 7.9 s spread is the difference between a stop that costs a place and one that
 # does not. The 20.0 fallback is a traversal, so adding a ~2.6 s stop lands near
-# the 22.6 s pooled green pit loss measured over this repo's 71 races (n=1746) —
+# the 22.6 s pooled green pit loss measured over this repo's 70 races (n=1746) —
 # do NOT pass that 22.6 s figure in as traversal or the stop is counted twice.
 DEFAULT_PIT_TRAVERSAL_S = 20.0
 
