@@ -1,15 +1,29 @@
 """Guards for #827: a locked regulation store costs the regulation block, not the lap.
 
-`RagRetriever` opens the store as `QdrantClient(path=...)`, which is local
-single-writer mode with an exclusive lock. A second concurrent process therefore
-raises on every retrieval. Before this fix that exception propagated out of
-`run_lap` and the CLI's per-lap `except Exception` rendered it as a red row, for
-an entire race, with the cause named nowhere: three races in one measurement run
-produced zero rows while their batches walked every window and reported success.
+`RagRetriever` opens the store as `QdrantClient(path=...)`, local single-writer mode
+with an exclusive lock, so a second concurrent process fails on every retrieval.
+Before this fix the exception propagated out of `run_lap` and the CLI's per-lap
+`except Exception` rendered a red row for an entire race, naming the cause nowhere:
+three races in one measurement run produced zero rows while their batches walked
+every window and reported success.
 
-The direction of the degradation is the point. N30 is an enrichment, one of
-fourteen recommendation fields, and the orchestrator already has a path for it not
-being routed. An unavailable store should cost that block and nothing else.
+WHY THIS FILE WAS REWRITTEN, AND IT IS THE POINT
+------------------------------------------------
+Its first version monkeypatched `portalocker.AlreadyLocked` and `LockException`,
+taken from `retriever.py`'s docstring. **qdrant never raises those.**
+`qdrant_local.py:148-151` catches portalocker's exception itself and re-raises a
+BARE `RuntimeError`. So the guard under test never fired, and these tests could not
+notice, because they raised the exception the docstring named rather than the one the
+library raises.
+
+Worse: the old `test_any_other_failure_still_surfaces` asserted that a `RuntimeError`
+must propagate. The real lock error IS a `RuntimeError`. **The test written to keep
+the except narrow was the test guaranteeing the failure escaped.** That is this
+repository's "a guard that asserts nothing" shape, with the guard's own test holding
+the door.
+
+So the fixture below is built from the library's actual message, and one test asserts
+against the real qdrant source text rather than against a docstring.
 """
 
 from __future__ import annotations
@@ -17,9 +31,16 @@ from __future__ import annotations
 import logging
 
 import pytest
-from portalocker.exceptions import AlreadyLocked, LockException
 
 from src.agents import strategy_orchestrator as orch
+
+# Verbatim from qdrant_client/local/qdrant_local.py, the RuntimeError raised on a
+# second open. Reproduced here so a qdrant upgrade that rewords it fails this test
+# loudly instead of silently re-breaking the guard.
+_REAL_QDRANT_LOCK_MESSAGE = (
+    "Storage folder data/rag/qdrant_local is already accessed by another instance "
+    "of Qdrant client. If you require concurrent access, use Qdrant server instead."
+)
 
 
 @pytest.fixture(autouse=True)
@@ -30,11 +51,26 @@ def _reset_once_flag():
     orch._rag_unavailable_logged = False
 
 
+def test_the_real_qdrant_lock_error_is_recognised():
+    """The whole defect: the previous guard did not recognise this exception at all."""
+    assert orch._is_store_locked(RuntimeError(_REAL_QDRANT_LOCK_MESSAGE)) is True
+
+
+def test_an_unrelated_runtime_error_is_not_mistaken_for_a_lock():
+    """Failing safe is the reason text matching is acceptable here.
+
+    Catching bare `RuntimeError` and swallowing it would trade one silent failure
+    for another. Only the lock signature degrades; everything else propagates.
+    """
+    assert orch._is_store_locked(RuntimeError("collection 'fia_regulations' not found")) is False
+    assert orch._is_store_locked(ValueError("bad question")) is False
+
+
 def test_a_locked_store_returns_none_instead_of_raising(monkeypatch):
-    """The whole point: the lap survives without a regulation block."""
+    """The lap survives without a regulation block."""
 
     def _locked(_question):
-        raise AlreadyLocked("another process holds data/rag/qdrant_local/.lock")
+        raise RuntimeError(_REAL_QDRANT_LOCK_MESSAGE)
 
     monkeypatch.setattr(orch, "run_rag_agent", _locked)
     assert orch._run_rag_agent_or_degrade("what happens under a safety car?") is None
@@ -44,25 +80,24 @@ def test_the_cause_is_named_once_and_not_once_per_lap(monkeypatch, caplog):
     """Sixty identical warnings is how a configuration problem looks like flaky data."""
 
     def _locked(_question):
-        raise LockException("locked")
+        raise RuntimeError(_REAL_QDRANT_LOCK_MESSAGE)
 
     monkeypatch.setattr(orch, "run_rag_agent", _locked)
     with caplog.at_level(logging.WARNING, logger=orch.logger.name):
         for _ in range(5):
             orch._run_rag_agent_or_degrade("q")
 
-    locked_warnings = [r for r in caplog.records if "regulation store is locked" in r.message]
-    assert len(locked_warnings) == 1, [r.message for r in caplog.records]
-    assert "F1_STRAT_DATA_ROOT" in locked_warnings[0].message
+    locked = [r for r in caplog.records if "regulation store is locked" in r.message]
+    assert len(locked) == 1, [r.message for r in caplog.records]
+    assert "F1_STRAT_DATA_ROOT" in locked[0].message
 
 
-def test_any_other_failure_still_surfaces(monkeypatch):
-    """Only the lock family is swallowed.
+def test_a_different_runtime_error_still_surfaces(monkeypatch):
+    """A corrupt collection is not 'another process is running'.
 
-    A corrupt collection, a missing embedding model or a malformed question are
-    not "another process is running", and catching them here would trade one
-    silent failure for another. This is the assertion that keeps the except
-    narrow: widening it to `Exception` makes this test fail.
+    Note this raises a RuntimeError deliberately: the previous version of this test
+    asserted that ANY RuntimeError propagates, which is what let the real lock error
+    escape. The distinction is the message, not the type.
     """
 
     def _broken(_question):
@@ -78,3 +113,20 @@ def test_a_working_store_is_passed_straight_through(monkeypatch):
     sentinel = object()
     monkeypatch.setattr(orch, "run_rag_agent", lambda _q: sentinel)
     assert orch._run_rag_agent_or_degrade("q") is sentinel
+
+
+def test_the_signature_matches_the_installed_qdrant_source():
+    """Pins the text to the library, so an upgrade that rewords it fails here.
+
+    This is the assertion the first version of this file needed and did not have:
+    it tests the guard against what the INSTALLED library does, not against what a
+    docstring says it does.
+    """
+    from pathlib import Path
+
+    import qdrant_client.local.qdrant_local as ql
+
+    source = Path(ql.__file__).read_text(encoding="utf-8")
+    assert orch._QDRANT_LOCK_SIGNATURE in source, (
+        "qdrant no longer raises the message this guard matches on; #827 is re-broken"
+    )

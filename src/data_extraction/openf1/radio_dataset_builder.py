@@ -313,9 +313,31 @@ class RadioDatasetBuilder:
         asking for the main race, so the Sprint sibling is never selected
         even on weekends where it shares the country name with the GP.
 
-        Returns the full session dict so the caller can also read
-        ``meeting_key``, ``date_start`` and ``circuit_short_name`` without a
-        second round trip to ``/v1/sessions``.
+        A **second** and larger ``sessions[0]`` hazard sits behind that one, and it
+        is what #825 was: several countries host more than one race in a season
+        (Italy = Imola + Monza, United States = Miami + Austin + Las Vegas), so
+        ``country_name`` alone does not name a race even after the Sprint filter.
+        Whichever OpenF1 listed first won, and three 2025 races were built on
+        another race's radio and RCM corpus — Monza inheriting Imola's Virtual
+        Safety Car among them. ``circuit_short_name`` resolves it; see
+        :meth:`_disambiguate_by_circuit`, which raises rather than guessing when
+        the country is ambiguous and no circuit was given.
+
+        Args:
+            circuit_short_name: OpenF1's own circuit label (``"Monza"``,
+                ``"Miami"``). REQUIRED for a country with more than one race in
+                ``year``; optional otherwise. Comes from ``/v1/sessions`` itself,
+                so callers that already discovered the race have it to hand.
+
+        Raises:
+            ValueError: no session for this country/year, no main Race session
+                on a Sprint weekend, or an ambiguous country with no
+                ``circuit_short_name`` to disambiguate it.
+
+        Returns:
+            The full session dict, so the caller can also read ``meeting_key``,
+            ``date_start`` and ``circuit_short_name`` without a second round trip
+            to ``/v1/sessions``.
         """
         response = self._session.get(
             f"{OPENF1_BASE}/sessions",
@@ -341,7 +363,12 @@ class RadioDatasetBuilder:
                     f"{[s.get('session_name') for s in sessions]}"
                 )
             return self._disambiguate_by_circuit(main_race, year, country_name, circuit_short_name)
-        return sessions[0]
+        # The twin. Nothing calls this with a non-Race type today (`build_and_write`,
+        # `prepare_session_bundle` and the __main__ demo all take the default), so a
+        # bare `sessions[0]` here was latent rather than live - and latent is exactly
+        # how #825 started. A country with two circuits is ambiguous for Practice and
+        # Qualifying too, so the same resolution applies.
+        return self._disambiguate_by_circuit(sessions, year, country_name, circuit_short_name)
 
     @staticmethod
     def _disambiguate_by_circuit(
@@ -357,7 +384,12 @@ class RadioDatasetBuilder:
         ``[0]`` silently gave every sibling the SAME session (#825): `italy_monza/`
         held Imola's messages and both `united_states_austin/` and
         `united_states_las_vegas/` held Miami's. Monza has no neutralisation of its
-        own in 2025 and was being served a Safety Car on laps 29 and 30 as a result.
+        own in 2025 and was being served Imola's **Virtual** Safety Car (deployed on
+        lap 29, ending on lap 31) as a result. Calling that a Safety Car, as this
+        docstring first did, names the wrong mechanism: `rcm_state.py` tracks the two
+        separately (`sc_kind == "VSC"`) and Art. 56 makes a VSC materially different
+        for the value of a pit stop, a distinction #471 already paid for. Both set
+        `sc_active`, so the conclusion here is unchanged; the label was not.
 
         The output PATH already disambiguated by circuit (``_gp_directory`` takes
         ``circuit_short_name`` for exactly this reason, and its docstring says so).

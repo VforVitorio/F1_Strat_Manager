@@ -1491,6 +1491,41 @@ def _run_mc_simulation(
 # Layer 3 — LLM synthesis
 # ==============================================================================
 
+# The signature qdrant_client puts in the RuntimeError it raises when the on-disk
+# store is already open. Matched on TEXT because there is nothing else to match on:
+# `qdrant_local.py:148-151` (client 1.16.2) catches portalocker's own LockException
+# and re-raises a BARE RuntimeError, so the exception that reaches us carries no
+# type, no attribute and no code that distinguishes it.
+#
+# The first version of this guard caught `portalocker.BaseLockException`, taken from
+# `retriever.py`'s docstring rather than from an executed collision. It never fired,
+# and its tests could not tell, because they monkeypatched the exception the
+# docstring named. One of them asserted that a RuntimeError must propagate, which is
+# exactly what the real lock error is: the test written to keep the except narrow was
+# the test guaranteeing the failure escaped. A real two-process collision settled it.
+_QDRANT_LOCK_SIGNATURE = "already accessed by another instance"
+
+try:  # portalocker ships with qdrant-client; tolerate its absence anyway
+    from portalocker.exceptions import BaseLockException as _BaseLockException
+
+    _LOCK_EXCEPTIONS: tuple = (_BaseLockException,)
+except ImportError:  # pragma: no cover - portalocker is a qdrant dependency
+    _LOCK_EXCEPTIONS = ()
+
+
+def _is_store_locked(exc: BaseException) -> bool:
+    """True when this exception means another process holds the regulation store.
+
+    Text matching is fragile and it is the only option here, so it fails SAFE: an
+    unrecognised RuntimeError propagates rather than being swallowed as a lock. If a
+    qdrant upgrade rewords the message, the symptom returns to a loud failure rather
+    than becoming a silent one.
+    """
+    if _LOCK_EXCEPTIONS and isinstance(exc, _LOCK_EXCEPTIONS):
+        return True
+    return isinstance(exc, RuntimeError) and _QDRANT_LOCK_SIGNATURE in str(exc)
+
+
 # Logged once per process, not once per lap. A locked store fails every lap
 # identically, and 60 identical WARNING lines is how a configuration problem
 # disguises itself as flaky data.
@@ -1502,31 +1537,27 @@ def _run_rag_agent_or_degrade(question: str):
 
     The store is local single-writer (`QdrantClient(path=...)`), so a second
     concurrent process holds an exclusive lock and every retrieval in this one
-    raises. Before #827 that exception propagated out of `run_lap`, and the CLI's
-    per-lap `except Exception` turned it into a red row: an entire race of them,
-    with the cause named nowhere. Two surfaces at once is not exotic (the CLI
-    while the backend is up, an arcade session plus a CLI run, two measurement
-    batches), and from a row count alone the result is indistinguishable from
-    laps the replay engine legitimately declines to serve.
+    fails. Before #827 that exception propagated out of `run_lap`, and the CLI's
+    per-lap `except Exception` rendered it as a red row, for an entire race, with
+    the cause named nowhere: three races in one measurement run produced zero rows
+    while their batches walked every window and reported success.
 
     Degrading is the right direction because N30 is an ENRICHMENT: it is one of
     fourteen recommendation fields and the orchestrator already has a path for it
-    not being routed at all. An unavailable store should cost the regulation
-    block, not the recommendation.
+    not being routed at all. An unavailable store should cost the regulation block,
+    not the recommendation.
 
-    Only the lock family is caught. A corrupt collection, a missing embedding
-    model or a bad question must still surface: those are not "another process is
-    running", and swallowing them would trade one silent failure for another.
+    Only the lock is caught, via :func:`_is_store_locked`. A corrupt collection, a
+    missing embedding model or a bad question must still surface: those are not
+    "another process is running", and swallowing them would trade one silent
+    failure for another.
     """
     global _rag_unavailable_logged
     try:
-        from portalocker.exceptions import BaseLockException
-    except ImportError:  # portalocker ships with qdrant-client; be safe anyway
-        BaseLockException = ()
-
-    try:
         return run_rag_agent(question)
-    except BaseLockException as exc:
+    except (RuntimeError, *_LOCK_EXCEPTIONS) as exc:
+        if not _is_store_locked(exc):
+            raise
         if not _rag_unavailable_logged:
             logger.warning(
                 "N30 disabled for this process: the regulation store is locked by "
@@ -1842,9 +1873,16 @@ def _build_orchestrator_prompt(
         # from the corpus PDFs), and this block asks the LLM to cite article numbers, so a
         # hardcoded one would be echoed into the output and wrong for most years. N30
         # reads the season's own regulations; the article should come from that context.
+        # The example must OBEY rule 3, because an exemplar marked "use as shape"
+        # beats a rule it contradicts. It used to state the two-compound rule with no
+        # condition at all - and that rule is itself conditional (it does not bind if
+        # wet-weather tyres were used, and it is a dry-race rule), so the example was
+        # unconditioned about a CONDITIONAL rule, which is the exact failure #826 is
+        # about, shipped inside the fix for it.
         f"  The mandatory two-compound rule (see the regulation context above for the\n"
         f"  article, it is renumbered between seasons) requires no fewer than two dry\n"
-        f"  compounds used, so switching to HARD satisfies it. MC ranks PIT_NOW first\n"
+        f"  compounds used IN A DRY RACE, and this is a dry race with no wet tyre so\n"
+        f"  far, so the condition holds and switching to HARD satisfies it. MC ranks PIT_NOW first\n"
         f"  (score +0.81) and the tire and radio evidence reinforce that call.\"\n\n"
         f"Return a StrategyRecommendation filling EVERY field:\n"
         f"  action:             one of STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT / ALERT.\n"

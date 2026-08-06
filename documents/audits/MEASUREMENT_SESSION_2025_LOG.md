@@ -576,8 +576,30 @@ it is the value, on every lap of every race. `build_race_state` derives the real
 Both fields feed N27's overtake scoring, the orchestrator prompt and the Monte Carlo the tier
 grades. **So the published 67-of-178 / 31.3% exact / 78-decline figures describe a stack told,
 on every lap, that the car ahead sits exactly 2.0 s away and matches its pace exactly.** And
-2.0 is inside the plausible range (the real gaps above run 0.43 to 1.08), so nothing downstream
-could tell it from a measurement. Filed as **#829**.
+2.0 is a plausible-looking number, so nothing downstream could tell it from a measurement.
+Filed as **#829**.
+
+**Corrected 2026-08-06 after an adversarial gate (F5).** The five laps tabled above are a
+probe, and the sentence this paragraph used to carry — *"the real gaps run 0.43 to 1.08"* —
+generalised them into a distribution. Over all 2744 laps the metric actually scores, the real
+`gap_ahead_s` is:
+
+```
+count 2744   mean 4.778   std 6.554
+min 0.000    25% 1.012   50% 2.507   75% 5.686   max 54.327
+share of laps below the 2.0 constant : 44.2 %
+share of laps above it               : 55.8 %
+share inside the probe's 0.43-1.08   : 16.5 %
+```
+
+**The median real gap is WIDER than the constant, not tighter**, and per-race medians spread
+from Silverstone 1.52 to Barcelona 3.29 — including in 2025 Barcelona, the very race the
+probe was taken from (median 3.294, only 11.5% of its laps inside the probe band). So the
+mechanism "N27 saw a tighter fight everywhere and therefore committed more often" is FALSE
+for the majority of laps; the hardcode biases the gap in both directions depending on the
+lap, which is a different and less tidy story. The DIRECTION of #829's effect stands (it is
+measured); the explanation offered for it did not, and it was mine. This is the repo's own
+"a probe is not a distribution" shape reappearing inside the write-up of a fix for it.
 
 Root cause is the family this repo keeps paying for: #784 replaced three drifted RaceState
 copies with one canonical builder, and `lap_inputs` is a fifth copy written into the eval
@@ -719,14 +741,23 @@ gets one only as far as the evidence reaches.
 
 ### Its own numbers, and what they may NOT be compared with
 
-| | this arm (9 races, product race state) | published `decision_modes.md` (6 races) |
-|---|---|---|
-| eligible stops | 100 | 178 |
-| scored | 39 (**39.0%**) | 67 (37.6%) |
-| coverage verdict | **masked** | **masked** |
-| exact lap | **12.8%** | 31.3% |
-| within one lap | **30.8%** | 47.8% |
-| mean signed error | -2.31 | -1.52 |
+| | this arm (9 races, product race state) | the tier BEFORE #830 (6 races, constant-fed) | `decision_modes.md` as published TODAY (6 races) |
+|---|---|---|---|
+| eligible stops | 100 | 178 | 178 |
+| scored | 39 (**39.0%**) | 67 (37.6%) | 66 (37.1%) |
+| coverage verdict | **masked** | **masked** | **masked** |
+| exact lap | **12.8%** | 31.3% | **21.2%** |
+| within one lap | **30.8%** | 47.8% | **37.9%** |
+| mean signed error | -2.31 | -1.52 | -1.97 |
+
+**Corrected 2026-08-06 (gate finding F10).** The middle column used to be headed *"published
+`decision_modes.md`"*, and after #829 landed that file publishes none of those numbers — the
+header named a file whose contents had moved. Both columns are kept because they answer
+different questions, but only the third is what the repository currently ships. The substantive
+change is that the exact-lap distance between this LLM arm and the deterministic tier was 12.8
+vs 31.3 and is now 12.8 vs **21.2**, less than half as wide. Updating the artefact and leaving
+its comparison table behind is this repository's twin-not-fixed shape, appearing inside the
+document that catalogues it.
 
 **These two columns are NOT comparable and nothing in this session should be read as comparing
 them.** Three things differ at once: a different race sample, a different window construction
@@ -807,7 +838,14 @@ now refuses a paid run by default and prints the bill; `--yes-spend` is the opt-
    skips everything on disk. **Ask before running.**
 2. Then regenerate `REPORT.md`; the paired numbers will move.
 3. ~~Fix #829 and re-measure~~ **DONE** (PR #830): every accuracy band dropped about ten points
-   once the tier stopped receiving a constant 2.0 s gap.
+   once the tier started receiving the product's real race state. **Three inputs moved, not one**
+   — the singular "once it stopped receiving a constant 2.0 s gap" was my sentence and a gate
+   corrected it. Over the 2744 eligible laps: `gap_ahead_s` differs on 2744 (100%),
+   `pace_delta_s` on 2470 (90.0%), and `rainfall` on 86 (3.1%, all of them 2025 Silverstone,
+   where the old harness passed the `RaceState` model default `False` through a wet race and
+   `RaceState`'s docstring says the weather fields feed N14). Silverstone accounts for 2 of the
+   51 changed verdicts, so rainfall is negligible in magnitude — which is the reason to name it
+   rather than the reason to omit it. The other seven `RaceState` fields differ on zero laps.
 4. ~~#825~~ **DONE** (PR #830): the corpora are rebuilt and Monza's phantom Safety Car is gone.
 5. **#826 stays open**, and the fix it needs is not the one the issue proposed. Measured on the
    retriever alone, at zero cost: the chunk that carried the rule **starts mid-word**, so the

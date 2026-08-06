@@ -625,9 +625,12 @@ def _render_table(
         f"| Within 2 laps | {agreement.within_two:.1%} | same strategic window |",
         f"| Mean signed error | {agreement.mean_signed_error:+.2f} laps | "
         "negative = earlier than the team. **Do not quote as a system property** "
-        f"— still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 "
-        "at w=3/5/10 on one race), because a wider window admits more distant, and "
-        "therefore earlier, transitions |",
+        "— it still moves with `DECISION_WINDOW_LAPS`, because a wider window admits "
+        "more distant, and therefore earlier, transitions. The levels this caveat used "
+        "to quote (-0.33 / -1.29 / -2.50 at w=3/5/10) were measured on ONE race and on "
+        "the constant-fed inputs #829 retired, so they are withdrawn rather than "
+        "restated; the direction is arithmetic and survives, the magnitudes are "
+        "unmeasured on this input set |",
         f"| Mean absolute error | {agreement.mean_absolute_error:.2f} laps | magnitude, "
         "same width caveat |",
         f"| Coverage verdict | **{status}** | `masked` when under "
