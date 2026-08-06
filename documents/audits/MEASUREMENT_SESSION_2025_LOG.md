@@ -735,3 +735,72 @@ constant 2.0 s gap and constant 0.0 pace delta of #829 while this one goes throu
 own `build_race_state`. **Do not read the lower exact-lap rate here as "the fix made it worse".**
 Which of the three moves it, and in which direction, is unmeasured, and saying otherwise would be
 the same unproven attribution the gate already caught once in this document.
+
+---
+
+## Step 10: the run STOPPED, and not because of a bug
+
+At **17:17:2x-17:17:41** all four running batches stopped writing rows, within 13 seconds of
+each other. A single external event, not four independent failures. Diagnosed by re-running one
+window with the CLI's stdout captured, which the batch runs had sent to `/dev/null`:
+
+```
+RateLimitError: Error code: 429 - {'error': {'message': 'You have no credits ...
+```
+
+**The OpenAI account ran out of credit.** Every subsequent lap raised inside the agent stack and
+the CLI's per-lap `except Exception` rendered it as a red row, which is the exact silent-shape
+of #827 arriving by a different route: three races produced **zero** rows while their batches
+walked all their windows and reported `done`. Mexico City wrote 5 laps of 84, Silverstone 0 of
+132, Suzuka 0 of 120.
+
+**This is a hard stop and it is Víctor's call**, not something to work around: continuing needs
+credit added to the account. Everything already measured is on disk, the resume logic skips it,
+and re-running costs only the missing laps.
+
+### Where the measurement ended up
+
+| arm | races covered | laps of 1,090 |
+|---|---|---|
+| **deterministic (`no-llm`)** | **9 of 9** (complete) | **1,066 (97.8%)** |
+| LLM (`rich`) | 7 of 9 (Silverstone and Suzuka absent, Mexico City at 5 laps) | 669 (61.4%) |
+| thesis windows, 3 repeat passes | complete | 97 |
+
+Report: `documents/eval_reports/llm_2025/REPORT.{md,json}`. It names the races each arm actually
+covers on its own second line, because the design is nine races and quoting the design as the
+population is the error this whole session was built to avoid.
+
+### The paired result, on the 67 stops BOTH arms measured
+
+| | |
+|---|---|
+| same bucket in both arms | **42 of 67 (62.7%)** |
+| scored by both | 23, of which **the same chosen lap in 5 (21.7%)** |
+| deterministic scored, LLM did not | **7**, of which **1 was an exact agreement the LLM lost** (Budapest LEC 19) |
+| LLM scored, deterministic did not | **18** |
+
+**The headline finding, and it is not the one this session set out to find.** The LLM arm
+locates a decision **more** often than the deterministic arm (41 scored of 67 eligible, 61.2%,
+verdict `ok`, against 39 of 100, 39.0%, `masked`) and lands on the **right lap less** often
+(exact 4.9% against 12.8%; within one 22.0% against 30.8%).
+
+So the two layers fail in opposite directions: **the deterministic layer declines more and is
+right more often when it does commit; the LLM layer commits more often and is further out.**
+That is a sharper statement than "the LLM is more reluctant", which is what I wrote from two
+windows and then had to retract twice.
+
+Read with the caveats that apply and are not optional: the two arms cover different race sets,
+the LLM arm is missing the wet race entirely, `mean_signed_error` is a property of
+`DECISION_WINDOW_LAPS` and not of the system, and agreement with the real wall is evidence
+rather than a verdict, because the wall can be wrong and Qatar is in this sample precisely
+because the press says it was.
+
+### What is left, in order
+
+1. **Add credit and re-run the three missing races** (Silverstone 132 laps, Suzuka 120, Mexico
+   City 79). About 331 laps, roughly **$2.65** and 1.5 to 2 hours. The resume skips everything
+   already on disk.
+2. Then regenerate `REPORT.md` and re-check the paired numbers, which will move.
+3. Fix #829 and re-measure `f1-eval decision-modes`, since its published figures are measured
+   on two constant inputs.
+4. #825 and #826 are P0 for the flagship case and both block a clean Qatar claim.

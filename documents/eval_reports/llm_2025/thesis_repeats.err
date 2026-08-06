@@ -1,0 +1,68 @@
+Loading weights:   0%|          | 0/197 [00:00<?, ?it/s]Loading weights: 100%|##########| 197/197 [00:00<00:00, 13406.42it/s]
+[transformers] [1mRobertaForSequenceClassification LOAD REPORT[0m from: roberta-base
+Key                        | Status     | 
+---------------------------+------------+-
+lm_head.dense.bias         | [38;5;208mUNEXPECTED[0m | 
+lm_head.layer_norm.weight  | [38;5;208mUNEXPECTED[0m | 
+lm_head.dense.weight       | [38;5;208mUNEXPECTED[0m | 
+lm_head.layer_norm.bias    | [38;5;208mUNEXPECTED[0m | 
+lm_head.bias               | [38;5;208mUNEXPECTED[0m | 
+classifier.dense.bias      | [31mMISSING[0m    | 
+classifier.out_proj.weight | [31mMISSING[0m    | 
+classifier.dense.weight    | [31mMISSING[0m    | 
+classifier.out_proj.bias   | [31mMISSING[0m    | 
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [31mMISSING:[0m	[3mthose params were newly initialized because missing from the checkpoint. Consider training on your downstream task.[0m
+Loading weights:   0%|          | 0/134 [00:00<?, ?it/s]Loading weights: 100%|##########| 134/134 [00:00<00:00, 11222.11it/s]
+[transformers] You passed `num_labels=19` which is incompatible to the `id2label` map of length `9`.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|##########| 391/391 [00:00<00:00, 12351.89it/s]
+[transformers] [1mBertForTokenClassification LOAD REPORT[0m from: dbmdz/bert-large-cased-finetuned-conll03-english
+Key                      | Status     |                                                                                          
+-------------------------+------------+------------------------------------------------------------------------------------------
+bert.pooler.dense.bias   | [38;5;208mUNEXPECTED[0m |                                                                                          
+bert.pooler.dense.weight | [38;5;208mUNEXPECTED[0m |                                                                                          
+classifier.weight        | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9, 1024]) vs model:torch.Size([19, 1024])
+classifier.bias          | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9]) vs model:torch.Size([19])            
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [33mMISMATCH:[0m	[3mckpt weights were loaded, but they did not match the original empty weight shapes.[0m
+[measure] 3 windows x 3 pass(es), 75 laps planned
+[measure] run  Lusail/PIA/p0 laps 4-14
+[measure] run  Budapest/LEC/p0 laps 14-24
+[measure] run  Budapest/LEC/p0 laps 17-19
+[measure] run  Lusail/PIA/p1 laps 4-14
+[measure] run  Budapest/LEC/p1 laps 14-24
+[measure] run  Budapest/LEC/p1 laps 17-19
+[measure] run  Lusail/PIA/p2 laps 4-14
+[measure] run  Budapest/LEC/p2 laps 14-24
+[measure] run  Budapest/LEC/p2 laps 17-19
+[measure] done: 75 laps in 29.0 min -> documents\eval_reports\llm_2025\thesis_repeats.jsonl
+{
+  "by_model": {
+    "gpt-4.1-mini-2025-04-14": {
+      "calls": 518,
+      "prompt_tokens": 725526,
+      "completion_tokens": 36251,
+      "cached_prompt_tokens": 282624,
+      "total_tokens": 761777
+    },
+    "gpt-5.4-mini-2026-03-17": {
+      "calls": 75,
+      "prompt_tokens": 266429,
+      "completion_tokens": 39771,
+      "cached_prompt_tokens": 62720,
+      "total_tokens": 306200
+    }
+  },
+  "total": {
+    "calls": 593,
+    "prompt_tokens": 991955,
+    "completion_tokens": 76022,
+    "cached_prompt_tokens": 345344,
+    "total_tokens": 1067977
+  },
+  "unattributed_calls": 0
+}

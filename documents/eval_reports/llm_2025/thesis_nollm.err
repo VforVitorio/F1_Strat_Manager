@@ -1,0 +1,46 @@
+Loading weights:   0%|          | 0/197 [00:00<?, ?it/s]Loading weights: 100%|##########| 197/197 [00:00<00:00, 11293.81it/s]
+[transformers] [1mRobertaForSequenceClassification LOAD REPORT[0m from: roberta-base
+Key                        | Status     | 
+---------------------------+------------+-
+lm_head.dense.bias         | [38;5;208mUNEXPECTED[0m | 
+lm_head.dense.weight       | [38;5;208mUNEXPECTED[0m | 
+lm_head.layer_norm.bias    | [38;5;208mUNEXPECTED[0m | 
+lm_head.bias               | [38;5;208mUNEXPECTED[0m | 
+lm_head.layer_norm.weight  | [38;5;208mUNEXPECTED[0m | 
+classifier.out_proj.bias   | [31mMISSING[0m    | 
+classifier.out_proj.weight | [31mMISSING[0m    | 
+classifier.dense.weight    | [31mMISSING[0m    | 
+classifier.dense.bias      | [31mMISSING[0m    | 
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [31mMISSING:[0m	[3mthose params were newly initialized because missing from the checkpoint. Consider training on your downstream task.[0m
+Loading weights:   0%|          | 0/134 [00:00<?, ?it/s]Loading weights: 100%|##########| 134/134 [00:00<00:00, 11614.97it/s]
+[transformers] You passed `num_labels=19` which is incompatible to the `id2label` map of length `9`.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|##########| 391/391 [00:00<00:00, 11500.91it/s]
+[transformers] [1mBertForTokenClassification LOAD REPORT[0m from: dbmdz/bert-large-cased-finetuned-conll03-english
+Key                      | Status     |                                                                                          
+-------------------------+------------+------------------------------------------------------------------------------------------
+bert.pooler.dense.weight | [38;5;208mUNEXPECTED[0m |                                                                                          
+bert.pooler.dense.bias   | [38;5;208mUNEXPECTED[0m |                                                                                          
+classifier.weight        | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9, 1024]) vs model:torch.Size([19, 1024])
+classifier.bias          | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9]) vs model:torch.Size([19])            
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [33mMISMATCH:[0m	[3mckpt weights were loaded, but they did not match the original empty weight shapes.[0m
+[measure] 2 windows x 1 pass(es), 22 laps planned
+[measure] run  Budapest/LEC/p0 laps 14-24
+[measure] run  Lusail/PIA/p0 laps 4-14
+[measure] done: 22 laps in 0.3 min -> documents\eval_reports\llm_2025\thesis_windows_nollm.jsonl
+{
+  "by_model": {},
+  "total": {
+    "calls": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_prompt_tokens": 0,
+    "total_tokens": 0
+  },
+  "unattributed_calls": 0
+}

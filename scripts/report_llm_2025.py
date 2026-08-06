@@ -85,6 +85,18 @@ def _coverage_lines(spec_paths: list[str], llm: dict, det: dict) -> list[str]:
     return lines
 
 
+def _race_list(measured: dict) -> str:
+    """The races an arm actually has rows for, named.
+
+    The design is nine races; an arm that stopped early covers fewer, and the
+    difference is exactly the kind of thing a population sentence hides when it
+    quotes the design instead of the data. Printed from the verdicts so it cannot
+    drift from what was scored.
+    """
+    races = sorted({v["race"] for v in measured["verdicts"]})
+    return f"{len(races)} ({', '.join(races)})" if races else "none"
+
+
 def _paired_rows(llm: dict, det: dict) -> list[str]:
     """Verdict-by-verdict contrast on the windows both arms actually measured."""
     key = lambda v: (v["race"], v["driver"], v["actual_lap"])  # noqa: E731
@@ -267,9 +279,12 @@ def main() -> None:
         "",
         "**Population, stated once and applying to every rate below:** rail-eligible "
         "green-flag pit stops of the 2025 season, drawn by a seeded uniform draw "
-        "(`seed 20250806`, at most 3 windows per race-lap) from nine races covering all four "
-        "circuit clusters. It is **not** a season-wide figure and it is not comparable to the "
-        "published `decision_modes.md` numbers, whose sample is different.",
+        "(`seed 20250806`, at most 3 windows per race-lap) from a nine-race design covering all "
+        "four circuit clusters. It is **not** a season-wide figure and it is not comparable to "
+        "the published `decision_modes.md` numbers, whose sample is different.",
+        "",
+        f"**Races each arm ACTUALLY covers**, which is not the design and must not be quoted as "
+        f"it: LLM arm {_race_list(llm)}; deterministic arm {_race_list(det)}.",
         "",
         "## Headline",
         "",
