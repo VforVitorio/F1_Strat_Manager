@@ -156,3 +156,36 @@ def test_raw_folder_map_covers_every_featured_name_that_differs() -> None:
     for featured, folder in llm_decision._RAW_FOLDER.items():
         assert featured != folder, featured
         assert " " in featured or "_" not in featured
+
+
+def test_a_paid_run_refuses_by_default_and_says_what_it_would_cost():
+    """The money guard. It defaults to REFUSING, and that is deliberate.
+
+    This harness emptied an OpenAI account mid-run once, and the failure was
+    worse than the bill: the CLI's per-lap `except Exception` turned every
+    subsequent 429 into a red row, so three races produced zero rows while their
+    batches walked every window and reported success. An exhausted account does
+    not stop a run, it silently produces a fake one.
+
+    A refusal rather than an interactive prompt, because these runs are launched
+    as background processes and a prompt there is an unanswered question that
+    blocks forever.
+    """
+    import argparse
+    import importlib
+
+    measure = importlib.import_module("scripts.measure_llm_windows")
+    windows = [{"race": "Lusail", "driver": "PIA", "low": 4, "high": 14}]
+
+    paid = argparse.Namespace(no_llm=False, provider="openai", repeats=1, yes_spend=False)
+    assert measure._confirm_spend(paid, windows) is False
+
+    authorised = argparse.Namespace(no_llm=False, provider="openai", repeats=1, yes_spend=True)
+    assert measure._confirm_spend(authorised, windows) is True
+
+    # The free paths must never be gated, or the guard becomes the thing people
+    # work around instead of the thing that protects them.
+    offline = argparse.Namespace(no_llm=True, provider="openai", repeats=1, yes_spend=False)
+    local = argparse.Namespace(no_llm=False, provider="lmstudio", repeats=1, yes_spend=False)
+    assert measure._confirm_spend(offline, windows) is True
+    assert measure._confirm_spend(local, windows) is True

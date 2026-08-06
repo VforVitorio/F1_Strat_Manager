@@ -252,6 +252,48 @@ def _run_window(window: dict, year: int, provider: str, no_llm: bool, extra: lis
     run(_parse_args())
 
 
+# Measured 2026-08-06 over 75 real laps, not estimated: 7.91 LLM calls, 13,226
+# prompt and 1,014 completion tokens per lap, 34.8% of prompt served from cache,
+# $0.0080 at the list prices of that date. Wall clock 16 s/lap alone, 23 s under
+# contention. Kept here so the warning quotes a number rather than a feeling.
+_COST_PER_LAP_USD = 0.0080
+_SECONDS_PER_LAP = 20.0
+
+
+def _confirm_spend(args: argparse.Namespace, windows: list[dict]) -> bool:
+    """True when the run may proceed. Prints the bill and refuses by default.
+
+    This script emptied an OpenAI account mid-run once, and the failure was worse
+    than the bill: the CLI's per-lap ``except Exception`` turned every subsequent
+    429 into a red row, so three races produced ZERO rows while their batches
+    walked every window and reported ``done``. An exhausted account does not stop
+    a run, it silently produces a fake one.
+
+    So a paid run is opt-in, and the refusal is the default rather than a prompt:
+    a confirmation prompt cannot be answered by a background process, which is
+    exactly how these runs are launched.
+    """
+    if args.no_llm or args.provider == "lmstudio":
+        return True
+
+    laps = sum((int(w["high"]) - int(w["low"]) + 1) for w in windows for _ in range(args.repeats))
+    print(
+        f"[measure] PAID RUN: {len(windows)} window(s) x {args.repeats} pass(es) = "
+        f"{laps} laps, about ${laps * _COST_PER_LAP_USD:.2f} and "
+        f"{laps * _SECONDS_PER_LAP / 3600:.1f} h on provider {args.provider!r}.",
+        file=sys.stderr,
+    )
+    if args.yes_spend:
+        return True
+    print(
+        "[measure] Refusing to spend. Pass --yes-spend if this cost is intended.\n"
+        "[measure] Laps already on disk in --out are skipped, so a resumed run "
+        "costs less than the figure above.",
+        file=sys.stderr,
+    )
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("spec", help="Path to the sample-spec JSON")
@@ -275,11 +317,22 @@ def main() -> None:
         default=[],
         help="Extra flag forwarded to f1-sim verbatim, repeatable.",
     )
+    parser.add_argument(
+        "--yes-spend",
+        action="store_true",
+        help=(
+            "Required for a paid run. Without it the script prints the estimated "
+            "cost and exits, which is deliberate: this tool emptied an account once."
+        ),
+    )
     args = parser.parse_args()
 
     windows = json.loads(Path(args.spec).read_text(encoding="utf-8"))
     if args.only:
         windows = [w for w in windows if args.only.lower() in str(w["race"]).lower()]
+
+    if not _confirm_spend(args, windows):
+        return
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
