@@ -112,6 +112,8 @@ The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-termi
         "pace":      { "lap_time_pred": 93.42, "ci_p10": 92.81, "ci_p90": 94.03 },
         "tire":      { "laps_to_cliff_p50": 12, "warning_level": "MONITOR" },
         "situation": { "overtake_prob": 0.42, "sc_prob_3lap": 0.11 },
+        // overtake_prob is null when the car ahead is farther than the 2.5s gap the
+        // model was trained on; the dashboards render that as "—", never as 0%.
         "pit":       { "action": "HOLD", "compound_recommendation": "C3" }
       },
       "reasoning_per_agent": { "pace": "...", "tire": "..." },

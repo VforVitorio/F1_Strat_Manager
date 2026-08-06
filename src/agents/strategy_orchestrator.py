@@ -1621,8 +1621,19 @@ def _build_orchestrator_prompt(
     tire_block = _build_tire_block(tire_out)
 
     if situation_out is not None:
+        # Spelled out rather than rendered as a number, because this line is read by the
+        # LLM that writes the recommendation. N11 never saw a labelled pair beyond 2.5 s,
+        # so on those laps there is no probability to quote — and a synthesised one here
+        # does not get averaged away, it gets ARGUED from. Saying "unknown, the cars are
+        # too far apart for the model" is a fact the model can reason with; a fabricated
+        # 0.07 is one it cannot tell from a measurement.
+        overtake_text = (
+            "unknown (cars farther apart than the model's trained range)"
+            if situation_out.overtake_prob is None
+            else f"{situation_out.overtake_prob:.2f}"
+        )
         sit_block = (
-            f"  [N27 Situation] overtake={situation_out.overtake_prob:.2f}  "
+            f"  [N27 Situation] overtake={overtake_text}  "
             f"sc_3lap={situation_out.sc_prob_3lap:.2f}  "
             f"threat={situation_out.threat_level}\n"
             f"                  reasoning: {situation_out.reasoning or '(empty)'}"

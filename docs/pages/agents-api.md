@@ -56,7 +56,7 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 
 | Field | Type | Description |
 |---|---|---|
-| `overtake_prob` | float | Probability of being overtaken (0–1) |
+| `overtake_prob` | float \| None | Probability that **our car passes the car ahead** (0–1). `None` when that car is farther away than the 2.5 s gap N11 was trained on — the model has no labelled example out there, so it declines rather than extrapolating. `None` is not `0.0`: zero is what the regulation asserts under a Safety Car (Art. 55.8). |
 | `sc_prob_3lap` | float | Safety car probability within 3 laps (0–1) |
 | `sc_currently_active` | bool | Any neutralisation (full Safety Car **or** Virtual Safety Car) is deployed **right now**. Not a prediction: it is read from the lap's RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces the regulatory facts (`sc_prob_3lap = 1.0`, `overtake_prob = 0` per Art. 55.8/56.6, `drs_window = 0` per Art. 22.1(c)) and activates N28. It does **not** force the action: whether to pit under a neutralisation is race state, not a rule. See [Multi-agent system](#/multi-agent). |
 | `vsc_active` | bool | The active neutralisation is specifically a **Virtual** Safety Car (Art. 56), only meaningful when `sc_currently_active` is true. Split out (#471) because a VSC and a full SC differ in pit-time saving, and the Monte Carlo / N28 prompt need to tell them apart, the single `sc_currently_active` flag could not. `sc_active` (a derived property, not a stored field) is true only under a full SC: `sc_currently_active and not vsc_active`. |
