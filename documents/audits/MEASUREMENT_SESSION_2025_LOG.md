@@ -739,6 +739,67 @@ Naming this here because #827 proved that a broken arm and a thin sample look id
 row count, so a shortfall gets an explanation rather than a shrug — and, per the five above,
 gets one only as far as the evidence reaches.
 
+## Step 12: the second gate, and the control it forced
+
+Two Opus gates ran over the two PRs this session opened (`GATE_830_four_fixes.md`,
+`GATE_831_input_wiring.md`). Both reproduced the headline exactly — 178 of 178 verdicts identical
+to the committed JSON, all nine aggregate fields — so the levels are real. Everything they found
+is about what was *said* around them, plus one fix that did not work.
+
+**#827's fix was decorative and I had already reported it as shipped.** The guard caught
+portalocker's `BaseLockException`, taken from `retriever.py`'s docstring rather than from an
+executed collision. `qdrant_local.py:148-151` catches that exception itself and re-raises a
+**bare `RuntimeError`**, so the guard could not fire. Its four tests monkeypatched the exception
+the docstring named, so they could only ever confirm the docstring — and one of them asserted
+that a `RuntimeError` must propagate, which is precisely what the real lock error is. **The test
+written to keep the `except` narrow was the test guaranteeing the failure escaped.** Confirmed by
+opening two clients on one path: `builtins.RuntimeError`. Now matched on the message, verified
+against a real collision, and pinned to the installed library's source so an upgrade fails loudly
+rather than silently re-opening the hole.
+
+### The control the docs page needed and nobody had run
+
+The page attributed an effect to #716's bound recalibration by pairing **54** (old bounds, old
+inputs) with **66** (new bounds, NEW inputs). Two variables in the one sentence written to
+isolate one, and the controlled pair existed nowhere. Ran it — old bounds on the product's real
+race state, same 178 eligible stops:
+
+| decision-agreement tier, 2025 | old bounds (8/12/15, wet 10) | shipped bounds (2/7/8, wet 6) |
+|---|---|---|
+| `min_stint` exclusion bucket | 17 | **5** |
+| scored | 54 (30.34%) | **66 (37.08%)** |
+| exact lap | 25.9% | 21.2% |
+| within one lap | 40.7% | 37.9% |
+| within two laps | 46.3% | **51.5%** |
+| mean signed error | -2.20 | **-1.97** |
+
+**The recalibration buys sample, not accuracy.** Exact and within-one FALL; within-two and the
+mean error improve. The twelve stops it admits are harder than the ones already scored, which is
+what a bound that excludes its own hardest cases would predict — and it is the argument for the
+change, not an accuracy claim. Note also that `min_stint 17` and `scored 54` come out identical
+with the old and the new inputs, which is why the arithmetic half of the retired sentence
+survived; that was luck, not the argument.
+
+### And the Monza detail was inverted
+
+The generated report said the `no_boundary_in_window` bucket held *"4 of 4 occupants, one of them
+flipping to STAY_OUT on the exact lap the team really stopped"*. The occupants had changed
+underneath it (`dev`: STR, PIA → now VER, NOR, HAD, PIA). Re-derived on the current inputs, the
+count survives and the detail reverses:
+
+```
+VER stop 37  PIT_NOW  32 33 34 35 36 37 | STAY_OUT 38..42
+NOR stop 46  PIT_NOW  41 42 43 44 45 46 | STAY_OUT 47..51
+HAD stop 32  UNDERCUT 27 28 29 30 31 32 | STAY_OUT 33..37
+PIA stop 45  PIT/UC   40 41 42 43 44 45 | STAY_OUT 46..50
+```
+
+All four are **still asking on the exact lap the team really stopped**, and withdraw the lap
+after. So this bucket is holding four cases where the stack agreed with the team and the metric
+is structurally unable to say so — the opposite of what the sentence implied.
+
+---
+
 ### Its own numbers, and what they may NOT be compared with
 
 | | this arm (9 races, product race state) | the tier BEFORE #830 (6 races, constant-fed) | `decision_modes.md` as published TODAY (6 races) |
