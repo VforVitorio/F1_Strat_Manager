@@ -311,7 +311,7 @@ thesis_windows_nollm.jsonl  Budapest LEC  actual_lap 19  chosen_lap 19  offset 0
 thesis_windows.jsonl        Budapest LEC  actual_lap 19  chosen_lap None          bucket 'no_call_in_window'
 ```
 
-### Finding 2: Qatar. The shipped SC fix works, and the LLM vetoes it on a regulation that does not exist
+### Finding 2: Qatar. The shipped SC fix works, and the LLM vetoes it on a real rule read out of its condition
 
 The deterministic layer **does** call the Safety Car stop, on laps 8 and 9. So the
 cross-integration module the thesis describes is alive and doing its job: the RCM is parsed,
@@ -331,21 +331,49 @@ And the `regulation_context` field it was handed, which comes from the RAG agent
 > track. A penalty under Article 54.3d) will be imposed if a driver changes tyres to a different
 > specification during this time (Article 54.3)."
 
-**No such rule exists.** Searched all three rulebooks in `data/rag/documents/`
-(2023: 309,732 chars; 2024: 320,974; 2025: 371,849). Article 54.3 is the **penalties** article:
-54.3a) to 54.3g) enumerate penalty TYPES, which is why Art. 4.2 refers to "a penalty applied
-under the Code or Article 54.3" and Art. 17.3 forbids appeals against "penalties imposed under
-Articles 54.3a) ... 54.3g)". The phrase "different specification" appears six times in the 2025
-book and every one is either a replacement-component clause (Art. 40.2) or the two-compound race
-requirement (Art. 30.2c). Not one of them is about a Safety Car.
+> ⚠️ **I first wrote here that no such rule exists and that the RAG had fabricated it. That was
+> wrong.** The adversarial gate refuted it and I verified the refutation against the PDF myself.
+> The corrected finding is below, and it is a **distortion**, not a fabrication. The
+> six-occurrence classification I published ("every one is a replacement-component clause or the
+> two-compound requirement, not one is about a Safety Car") was also false: the count of six was
+> right and occurrence five is the Safety Car rule. I wrote executed-evidence-shaped prose from a
+> sample of the occurrences instead of from all of them, which is the exact shape of
+> `feedback_grep_is_not_an_audit`.
 
-**The empirical refutation is in the same parquet the run reads: sixteen cars, Verstappen
-included, changed tyres on lap 7 of this exact Safety Car.** If the rule existed, sixteen cars
-took a penalty.
+**The rule exists, conditionally.** 2025 Sporting Regulations, **Article 30.5 n)**, read out of
+`data/rag/documents/sporting_regs_2025.pdf` verbatim:
 
-So this is a regulation **fabricated by the RAG agent** out of penalty-article chunks and
-tyre-specification chunks, and it is **decisive**: it is the stated reason the flagship case
-comes out wrong.
+> "n) If the formation lap is started behind the safety car in accordance with Article 49.1a, or
+> the sprint session or race is resumed in accordance with Article 58.1, the use of wet-weather
+> tyres until the safety car orange lights are extinguished and it returns to the pit lane is
+> compulsory. **A penalty under Article 54.3d) will be imposed on any driver whose tyre(s) are
+> changed for a different specification or who uses any other specification of tyres whilst the
+> safety car is on the track at such times.**"
+
+(Art. 30.5 o) in 2023, 30.5 n) in 2024.)
+
+**The transformation is amputating the condition.** "At such times" points back to a wet
+formation-lap start behind the Safety Car, or a resumption. The RAG's sentence lifts the second
+half and re-scopes it to every Safety Car period. Almost every phrase in its output is a
+quotation: "changed for a different specification", "uses any other specification of tyres",
+"whilst the safety car is on the track", "a penalty under Article 54.3d)". Even the article
+number it cites is the real rule's own cross-reference, so **citing 54.3d) is quotation, not
+invention** — 54.3 is indeed the penalties article, and 30.5 n) is what points at it.
+
+The stored rows show the retriever reached the right chunk: `regulation_context` cites
+`(Article 30.5)` on lap 7, `(Article 58.10)` on lap 8 — 30.5's own resumption cross-reference in
+the 2023/2024 wording — and reproduces the 2025 phrase "orange lights are extinguished and it
+returns to the pit lane" on lap 9.
+
+**The empirical refutation still holds, against the re-scoped version: sixteen cars, Verstappen
+included, changed tyres on lap 7 of this Safety Car**, which was an ordinary dry mid-race
+deployment. Under the real rule that is legal; under the RAG's version, sixteen cars took a
+penalty.
+
+So the defect is **decisive and real**, and it is a condition dropped in summarisation rather
+than a rule invented from nothing. That changes the fix: grounding the CITATION would not have
+caught it, because every article number involved was genuinely retrieved. **Grounding the
+CONDITION is what would.**
 
 ### Finding 3: the Monte Carlo is a point mass on the deployment lap
 
@@ -354,8 +382,18 @@ On Lusail lap 7, the lap the whole case is about, `scenario_scores` reads
 UNDERCUT and OVERCUT are ineligible. The layer supplies **no discrimination at all** on the most
 consequential lap of the 2025 season, and the argmax picks STAY_OUT on tie order.
 
-A related and separate defect: the LLM's reasoning calls PIT_NOW "MC-favoured" on that lap.
-The scores it was given are tied. **The narrative misdescribes the numbers in the same prompt.**
+> ⚠️ **A second claim of mine the gate refuted, and I verified the refutation.** I wrote here
+> that "the LLM's reasoning calls PIT_NOW 'MC-favoured' on that lap; the scores it was given are
+> tied; the narrative misdescribes the numbers in the same prompt." **False.** The
+> "MC-favoured PIT_NOW" phrase is on **lap 9**, not lap 7, and on lap 9 the Monte Carlo genuinely
+> did favour pitting (-0.76 against -1.76). Every stored lap-7 narrative describes the tie
+> correctly: *"STAY_OUT and PIT_NOW are tied on score"*, *"MC is neutral between stay out and
+> pit"*, *"the MC tie"*, *"The MC result is effectively neutral"*. I attributed a lap-9 sentence
+> to lap 7 and built a finding on it.
+
+What survives, and it is the half that matters: the tied point mass on lap 7 is real and
+reproduces on every sample. The layer supplies no discrimination on the lap the case is about,
+and the LLM correctly says so before overriding it on the regulation instead.
 
 ### The three repeat passes, and the correction they forced
 
