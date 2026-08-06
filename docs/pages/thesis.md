@@ -55,10 +55,11 @@ The source is the **raw** parquet and never the featured one, which drops the ne
 ## How to regenerate
 
 ```bash
-# Monte Carlo projection accuracy + the measured-table inventory (~1 min)
-uv run f1-eval projection
+# Monte Carlo projection accuracy + the measured-table inventory (~1 min).
+# Add --years 2025 for the holdout-only headline above; the default is all three.
+uv run f1-eval projection --years 2025
 
-# The measured tables themselves, from 71 races of raw laps (~10 min)
+# The measured tables themselves, from 70 races of raw laps (~10 min)
 uv run python scripts/measure_mc_tables.py
 
 # Threshold sweeps + MC Dropout figures (one notebook, ~5 min on GPU)
