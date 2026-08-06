@@ -438,18 +438,29 @@ stable veto is a bug with a fixed sign, and this is a bug with a random one.
 
 ### Stability of the planning fields, over 22 repeated laps
 
-| field | laps differing across passes |
-|---|---|
-| `action` | **9.1%** |
-| `compound_next` | 50.0% |
-| `pit_lap_target` | **68.2%** |
-| `pace_mode` | 77.3% |
-| `confidence` | **100%** |
+| field | pooled across window definitions | **same-context (3 passes of one window)** |
+|---|---|---|
+| `action` | 9.1% | **9.1%** |
+| `compound_next` | 50.0% | **50.0%** |
+| `pit_lap_target` | 68.2% | **59.1%** |
+| `pace_mode` | 77.3% | **72.7%** |
+| `confidence` | 100% | **100%** |
+
+> ⚠️ **The right-hand column is the honest one and I published the left.** Three of the 22
+> repeated laps (Budapest 17-19) carry SIX observations rather than three, because they appear
+> in both the 14-24 window and the cold-opened 17-19 window. A lap 17 cold-opened at the window
+> start carries different `DecisionMemory` than a lap 17 warmed from lap 14 — a distinction this
+> very document draws when it rules out the memory confound for `action`. Counting those six as
+> repeats of one lap charges **context variation to path noise**, and it inflates
+> `pit_lap_target` by 9.1 points and `pace_mode` by 4.6. `action`, `confidence` and
+> `compound_next` are identical either way, so the pre-committed 20% gate outcome does not move.
+> Caught by the gate; the recorder now stores each row's window bounds so the two cannot be
+> pooled again by accident.
 
 The pre-committed 20% gate applies to `action`, and `action` passes it at 9.1%, so a
 single-pass agreement headline is quotable with the discordance stated beside it.
 
-**But `pit_lap_target` changing on two runs in three is its own finding, and it is the field
+**But `pit_lap_target` changing on three runs in five is its own finding, and it is the field
 the thesis quotes.** Section 5.5.2 reports the system "planifica la siguiente parada en la
 vuelta 22". That number is a draw, not a plan. The discrete action is roughly stable; every
 field that describes the plan around it is not.

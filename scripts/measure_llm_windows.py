@@ -63,9 +63,20 @@ class WindowRecorder:
         self.done: set[tuple[str, str, int, int]] = _already_measured(out_path)
         self.rows_this_run = 0
 
-    def begin(self, race: str, driver: str, pass_index: int) -> None:
-        """Point the recorder at the window about to run."""
+    def begin(self, race: str, driver: str, pass_index: int, window: dict | None = None) -> None:
+        """Point the recorder at the window about to run.
+
+        ``window_low``/``window_high`` are recorded because the same lap measured
+        from two different window starts is NOT a repeat of itself: the
+        ``DecisionMemory`` block that enters the orchestrator prompt is warmer the
+        further back the window began. Pooling the two as repeats charges context
+        variation to run-to-run noise, which overstated two of the published
+        stability figures before the rows carried enough to tell them apart.
+        """
         self._context = {"race": race, "driver": driver, "pass_index": pass_index}
+        if window:
+            self._context["window_low"] = int(window["low"])
+            self._context["window_high"] = int(window["high"])
 
     def install(self) -> None:
         """Patch ``engine.run_lap``. Idempotent by construction (called once)."""
@@ -285,7 +296,7 @@ def main() -> None:
             if _window_is_complete(recorder, window, pass_index):
                 print(f"[measure] skip {label}: already on disk", file=sys.stderr)
                 continue
-            recorder.begin(str(window["race"]), str(window["driver"]), pass_index)
+            recorder.begin(str(window["race"]), str(window["driver"]), pass_index, window)
             print(f"[measure] run  {label} laps {window['low']}-{window['high']}", file=sys.stderr)
             try:
                 _run_window(window, args.year, args.provider, args.no_llm, args.sim_arg)

@@ -378,3 +378,169 @@ prose does not say so).
 Evidence: recount executed above, both ways, reproducing the log's figures exactly under
 reading B.
 
+### E. The 2025 projection figures — ALL THREE ROWS REPRODUCE EXACTLY. The causal half is TRUE and I could not break it; but its COMPARISON is a subset against its own superset, and the sample has no power to detect the leak it claims to rule out.
+
+**The arithmetic, re-measured independently** (`measure_projection_ground_truth(years=...)`,
+executed this session, no API calls):
+
+| scope | races | stops | within one | exact | mean signed | mean abs |
+|---|---|---|---|---|---|---|
+| 2025 only | 24 | 552 | 86.051% | 59.601% | +0.5670 | 0.6685 |
+| 2023-2025 | 70 | 1,768 | 86.312% | 59.219% | +0.5752 | 0.6623 |
+| 2023-2024 | 46 | 1,216 | 86.431% | 59.046% | +0.5789 | 0.6595 |
+
+Every figure in the log's Step 4 table and in `documents/eval_reports/projection.{md,json}`
+matches to the digit printed. `projection.json` carries `scoring_years: [2025]`,
+`sample_size 552`, `races 24`, `within_one 0.860507`, `exact 0.596014` — consistent with the
+md and with my recount. Nothing to refute here.
+
+**The causal claim survives the hardest test I could build for it.** I did not stop at
+reading; I ran the measurement with every measured-artefact reader on
+`src/agents/position_projection.py` monkeypatched to `raise`
+(`measured_tables`, `measured_undercut_band_s`, `measured_neutralisation_rate`,
+`measured_clean_air_s`, `measured_racing_laps`, `traversal_seconds`, `_traversal_table`)
+and with `builtins.open` + `Path.read_text` traced:
+
+```
+2025 with every measured reader booby-trapped: 552 24 86.051 59.601
+suspicious files opened: []   (mc_measured_v1.json, model_config.json, *.pkl/*.joblib/*.pt)
+distinct non-parquet files opened: []
+total files opened: 24        (one laps.parquet per race)
+```
+
+A static call graph agrees: from `project_positions` the reachable set is exactly
+`{_usable_rivals, driver_time_delta, rival_time_deltas, _terminal_gaps, _tyre_cost_s,
+_stop_residual_s}` and **no** measured-artefact reader. The `ProjectionConfig` fields read on
+that path are `racing_laps, fresh_gain_s, cliff_loss_s, neutralisation_saving_s, deg_cost_s,
+future_neutralisation_prob, mandatory_stop_pending, clean_air_gain_s,
+neutralisation_onset_rate` — the first four pinned by `_GROUND_TRUTH_CONFIG`, the rest inert
+defaults (`None`/`0.0`). **The one field whose default IS a frozen copy of a measured table
+(`undercut_band_s = DEFAULT_UNDERCUT_BAND_S = 4.91`, the `undercut_band` table's `u_band_s`)
+is not read on this path at all** — it is only used by `undercut_targets`
+(`position_projection.py:842`), which the ground truth never calls. I went looking for exactly
+this and it is genuinely unreachable. So *"consumes no learned model and none of the seven
+measured tables"* is **CONFIRMED**, and the published sentence is safe.
+
+**What I do dispute, and it is the reasoning rather than the result:**
+
+1. **The comparison in the code comment is a subset against the superset that contains it.**
+   `src/strategy/eval/projection.py:56-57` argues the point with *"86.05% against 86.31%"* —
+   but the 552 stops of 2025 are 31% of the 1,768 stops of 2023-2025, so those two numbers
+   are algebraically pulled together and the 0.26-point gap is not a train/holdout contrast at
+   all. The **disjoint** contrast is 86.05% (2025) against 86.43% (2023-2024), 0.38 points. The
+   log's Step 4 table does have the disjoint row; the comment that will be read by the next
+   person editing the scope does not, and it is the one phrased as an argument.
+2. **The sample could not have detected the leak the sentence rules out.** At n=552 the
+   within-one 95% interval is 83.16%-88.94% (half-width **2.89 points**), and the disjoint
+   train/holdout difference is **z = 0.21** (0.38 pp against a 1.77 pp standard error; exact:
+   z = 0.22). Treating stops as independent flatters this — they cluster within race and
+   driver, so the true interval is wider still. So "the gap is 0.4 points, therefore nothing
+   leaked" is an argument this design cannot make in either direction: **a real leak of 2
+   points would also have printed as 'barely moves'.** The code-reading argument (point above)
+   is the one carrying the claim; the smallness of the gap is corroboration with no power, and
+   the prose currently presents it as the evidence.
+3. **"six tables" vs seven.** `src/strategy/eval/projection.py:5-6` says
+   *"`data/mc_measured_v1.json` carries six tables the Monte Carlo scorer reads at runtime"*.
+   The file carries **seven** (`clean_air, gap_density, neutralisation_rate, sc_window,
+   status_mix, stop_hazard, undercut_band`), `_TABLE_PURPOSE` has seven entries, the report
+   renders seven rows, and the session log says "seven" — the module docstring is the only
+   place that says six.
+
+**On the "seasons scored" row being misread — the markdown is safe, the JSON and the HEADER
+are not.**
+
+- The md is fine: the accuracy section says `seasons scored | 2025`, and the tables section
+  independently says *"Counted off 70 races (2023, 2024, 2025)"*. A reader of the md cannot
+  conflate them.
+- **`projection.json` carries no season scope for the tables at all.** Its payload is
+  `scoring_years: [2025]` plus a `tables` list of `{table, answers, cells, present}`. The
+  tables' own 70-race / 3-season scope exists only in the prose the JSON does not carry, and
+  `projection.py:85-86` states the JSON is the machine-read surface. A consumer joining
+  `scoring_years` to `tables` gets the wrong scope with no way to notice — the exact "half a
+  fix" the docstring at `build_projection_report` (`:427-431`) warns about, left open in the
+  machine-readable half.
+- **The report HEADER makes a season claim that is false for its own second half.**
+  `projection.md:4` reads `dataset data/raw laps 2025 (RAW, not featured)` and governs the
+  whole document, including the tables section counted off 2023-2025. `build_header` is called
+  once with the ground truth's scope (`projection.py:444`).
+
+Severity: the numbers LOW (nothing wrong); the reasoning MEDIUM (a no-power comparison
+published as the evidence, and the subset/superset framing sits in the comment that governs
+future edits); the JSON/header scope MEDIUM-LOW (machine-readable surface asserts one scope
+over two populations, which is the defect the whole rescope exists to remove); "six tables"
+LOW.
+Evidence: booby-trapped runtime measurement and file trace above; AST call graph over
+`position_projection.py`; `data/mc_measured_v1.json` key list; `documents/eval_reports/projection.{md,json}`;
+binomial arithmetic shown.
+
+### I. The lap-indexing reconciliation — THE OFFSET IS SOURCEABLE, BUT "the press convention" IS REFUTED. It is variation between accounts, and the session applies it selectively: +1 at Budapest to rescue the thesis, 0 at Qatar to rescue the thesis.
+
+**The parquet mechanics are exactly as described.** `data/raw/2025/Budapest/laps.parquet`:
+
+| driver | in-lap (`PitInTime`) | out-lap (`PitOutTime`) | in-lap `LapTime` | out-lap `LapTime` | compound / stint on the out-lap |
+|---|---|---|---|---|---|
+| PIA | **18** @ 01:22:35.491 | **19** @ 01:22:56.632 | 1:24.668 | 1:38.914 | HARD, stint 2 |
+| LEC | **19** @ 01:23:55.108 | **20** @ 01:24:16.388 | 1:24.552 | 1:39.083 | HARD, stint 2, TyreLife 1 |
+
+FastF1's convention is confirmed on the data, not assumed: the in-lap carries `PitInTime` and only
+the pit-entry deceleration (LEC 1:24.552 against 1:22.316 the lap before), and the **out-lap**
+carries `PitOutTime`, the stationary time (1:39.083) and the new compound. And the physical claim
+behind the offset holds at this circuit: LEC crossed the timing line **1.723 s after** entering the
+pit lane (lap-19 `Time` 01:23:56.831 vs `PitInTime` 01:23:55.108), PIA 1.648 s after. Both cars were
+already inside the pit lane when their lap counter ticked over, so "the lap the car spends in the
+pit lane" is genuinely lap 20 / lap 19.
+
+**The thesis body is in parquet indexing and is precise about it.** `05_resultados.tex`, 5.5.2:
+*"Charles Leclerc lidera desde la pole position hasta la **vuelta 18**, cuando Oscar Piastri entra a
+boxes... Ferrari cubre el movimiento **al cierre de la vuelta 19**"*. "Al cierre de la vuelta 19" is
+literally what the data shows. Only the section-5.5 preamble says *"la parada de Leclerc en V20"*.
+
+**Now the part that does not survive.** The log states this as a fact about the press: *"The press
+accounts of the race number the same two stops PIA lap 19, LEC lap 20"*, and derives from it a
+systematic rule (*"the timing-screen convention the press follows counts the lap the car spends in
+the pit lane... It is a one-lap indexing offset, not a factual disagreement"*). I checked reachable
+accounts and **they do not agree with each other**:
+
+| account | PIA | LEC |
+|---|---|---|
+| Wikipedia, 2025 Hungarian Grand Prix race report (direct fetch): *"On lap 18, Piastri pitted from second to take hard tyres, re-joining the race in fifth"* / *"Leclerc responded the following lap"* | **18** | **19** |
+| Autosport live text: *"he pitted on lap 19 and rejoined behind Alonso"* | **19** | — |
+| Secondary race report surfaced by search: *"Piastri pitted on Lap 19 ... the Ferrari covered him off with a stop one lap later"* (search summary, not a direct fetch — weaker evidence) | 19 | 20 |
+| formula1.com's own race report (direct fetch) | no lap number | no lap number |
+
+So **both numberings are in the press for this race**, and the most timing-derived account uses the
+parquet's. "The press convention" does not exist as a single thing; the offset is an
+account-to-account variation, and the log promotes one sample of accounts to a rule.
+
+**The decisive test is inside this session's own material: Qatar.** Step 3 of the log reads *"16
+cars pit on lap 7"* straight off `PitInTime` and treats the thesis's *"Diecisiete coches pitan en
+esa misma vuelta [7]"* as describing the same event with **no offset applied**. I verified the
+structure is identical to Budapest's: at Lusail, `PitInTime` counts are 16 on lap 7 / 1 on 8 / 1 on
+9, and `PitOutTime` counts are 16 on lap 8 / 1 on 9 / 1 on 10. If the +1 convention were real, the
+press would number those stops **lap 8**. It does not — Sky Sports: *"pitting on **Lap 7** provided
+key strategic gain"*, and *"It was McLaren's decision not to pit their two cars **at the end of that
+lap**"*, which is in-lap numbering stated explicitly. `PitInTime` lap 6 at Lusail is **empty**, so
+the thesis's "vuelta 7" cannot be press-plus-one indexing under any reading.
+
+**The consequence is the finding.** Within one session, the same convention question is answered
+two different ways, each time in the direction that makes the thesis right: +1 at Budapest (so V20
+is not an error) and 0 at Qatar (so "vuelta 7" is not an error). That is the shape the task asked me
+to look for, and it is here. It is not fraud — each reading is locally defensible — but it is not a
+reconciliation either, because no single rule generates both.
+
+**And Occam points the other way for the thesis edit.** The preamble sentence is *"las cinco vueltas
+en torno a la parada de Leclerc en V20"*; the executed command is `--laps 17-19`, three laps. Under
+the press reading, "five laps around V20" is laps 18-22 — still not the window, so **two** repairs
+are needed (V20 stays, "cinco"→"tres", and the window still does not centre on it). Under the plain
+reading, "three laps around V19" is 17-19 exactly, so **one** repair fixes the sentence
+(V20→V19, cinco→tres — a single consistent re-indexing). The log's recommendation, that only "las
+cinco vueltas" is worth correcting, leaves the thesis with two lap numbers for one stop and no
+statement of which convention each uses.
+
+Severity: MEDIUM. No measured number moves; what moves is the thesis-correction list and a stated
+mechanism that is presented as executed fact ("the press accounts number...") on a sample of
+accounts that disagree.
+Evidence: Budapest/Lusail parquet reads shown above (in-lap/out-lap, `PitInTime` vs lap `Time`,
+per-lap stop censuses); `05_resultados.tex` §5.5 preamble and §5.5.2 body; the four press sources
+listed, two by direct fetch.
+

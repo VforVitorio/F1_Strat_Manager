@@ -183,9 +183,24 @@ def repeat_disagreement(rows: list[dict[str, Any]]) -> dict[str, Any]:
     shipped model, so a run-to-run difference is the expected state and its size
     is the question.
     """
-    by_lap: dict[tuple[str, str, int], list[dict[str, Any]]] = defaultdict(list)
+    # Keyed on the WINDOW as well as the lap. The same lap measured from two
+    # different window starts is not a repeat of itself: the ``DecisionMemory``
+    # block entering the orchestrator prompt is warmer the further back the
+    # window began. Pooling them charges context variation to run-to-run noise,
+    # which overstated `pit_lap_target` by 9.1 points and `pace_mode` by 4.6 the
+    # first time these figures were published. Rows written before the recorder
+    # stored window bounds fall back to the old pooled key, which is the honest
+    # degradation: it cannot separate what was never recorded.
+    by_lap: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        by_lap[(str(row["race"]), str(row["driver"]), int(row["lap"]))].append(row)
+        key = (
+            str(row["race"]),
+            str(row["driver"]),
+            int(row["lap"]),
+            row.get("window_low"),
+            row.get("window_high"),
+        )
+        by_lap[key].append(row)
 
     repeated = {lap: rs for lap, rs in by_lap.items() if len(rs) > 1}
     if not repeated:
@@ -280,8 +295,7 @@ def measure(jsonl: Path, year: int, raw_root: Path) -> dict[str, Any]:
     # duplicate by taking the later row; the count has to resolve it too, or the
     # coverage line reports more laps than were ever distinctly evaluated.
     distinct = {
-        (str(r["race"]), str(r["driver"]), int(r["lap"]), int(r.get("pass_index", 0)))
-        for r in rows
+        (str(r["race"]), str(r["driver"]), int(r["lap"]), int(r.get("pass_index", 0))) for r in rows
     }
     result = {
         "source": str(jsonl),
