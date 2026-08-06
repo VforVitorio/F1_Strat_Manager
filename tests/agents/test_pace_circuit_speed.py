@@ -141,19 +141,56 @@ def test_the_training_seasons_are_one_artefact_generation_not_two(agent):
         ), gp
 
 
-def test_las_vegas_2025_is_a_known_artefact_hole_and_stays_unknown(agent):
-    """The one race the correct artefact cannot answer, pinned so it is not "fixed" wrongly.
+def test_las_vegas_2025_is_answered_from_the_artefact_and_not_from_another_season(agent):
+    """The one race FastF1 could not measure, and the two ways of getting it wrong.
 
-    `laps_featured_2025.parquet` carries NaN on all 760 Las Vegas rows. The tempting repair
-    is to fall back to the training-era value, which sits in three other artefacts and is
-    228.96. That would be the same defect as the speed-trap substitution this whole fix
-    removes, only quieter: a 2025 lap served a measurement from a different season.
+    FastF1 has no SpeedI2 reading for the entire 2025 race, so the circuit's speed was NaN
+    on all 760 rows. This test used to pin that NaN, with its own docstring saying the
+    missing value "belongs in the artefact rather than in a fallback here" — which is where
+    it now is: imputed from the circuit's own trap-offset (MAE 1.22 km/h leave-era-out) and
+    carried with a `mean_sector_speed_imputed` flag on every affected row.
 
-    So it stays NaN, and the missing value belongs in the artefact rather than in a
-    fallback here.
+    The property that mattered has not moved. The tempting repair was always to serve the
+    TRAINING-era value, 228.96, and that is still the defect this file exists to prevent:
+    a 2025 lap answered with a different season's measurement. So the assertion is not
+    "Vegas has a number" but "Vegas has ITS OWN number, and it is not 2023's".
     """
-    assert agent._resolve_mean_sector_speed("Las Vegas", 2023) == pytest.approx(228.9645, abs=1e-3)
-    assert math.isnan(agent._resolve_mean_sector_speed("Las Vegas", 2025))
+    training_era = agent._resolve_mean_sector_speed("Las Vegas", 2023)
+    served = agent._resolve_mean_sector_speed("Las Vegas", 2025)
+
+    assert training_era == pytest.approx(228.9645, abs=1e-3)
+    assert not math.isnan(served), "the artefact no longer carries the hole"
+    assert served != pytest.approx(training_era, abs=1e-3), (
+        "2025 is being served the 2023 measurement — the cross-season substitution this "
+        "whole fix removes"
+    )
+    assert served == pytest.approx(232.827, abs=1e-2)
+
+
+@pytest.mark.data
+@pytest.mark.skipif(not _HAS_RAW, reason="raw data absent")
+def test_an_imputed_circuit_speed_is_flagged_in_the_artefact():
+    """A fabricated number that looks like a measurement is how a model trains on one.
+
+    Asserted on the artefact rather than through the agent, because the flag is the
+    dataset's contract with every consumer, not this agent's private business.
+    """
+    import pandas as pd
+
+    from src.f1_strat_manager.data_cache import get_data_root
+
+    featured = pd.read_parquet(
+        get_data_root() / "processed" / "laps_featured_2025.parquet",
+        columns=["GP_Name", "mean_sector_speed", "mean_sector_speed_imputed"],
+    )
+    imputed = featured[featured["mean_sector_speed_imputed"]]
+
+    assert set(imputed["GP_Name"]) == {"Las Vegas"}, "something else was quietly filled in"
+    assert len(imputed) == 760
+    unflagged_holes = (~featured["mean_sector_speed_imputed"]) & featured[
+        "mean_sector_speed"
+    ].isna()
+    assert unflagged_holes.sum() == 0, "a missing circuit speed with no flag on it"
 
 
 def test_the_row_fed_to_n06_carries_the_circuit_value_not_the_speed_trap(agent):
@@ -217,11 +254,11 @@ def test_every_race_on_disk_resolves(agent):
                 unresolved.append((year_dir.name, race_dir.name, gp_name))
 
     assert checked > 0, "no races found on disk: this would hold vacuously"
-    # Las Vegas 2025 is a hole in the artefact, not a resolution failure, and is pinned
-    # by its own test above. Listing it here rather than widening the assertion keeps a
-    # NEW unresolved race failing loudly.
-    known_holes = [("2025", "Las_Vegas", "Las Vegas")]
-    assert sorted(unresolved) == sorted(known_holes), (
+    # No exceptions left. Las Vegas 2025 was the one entry here — a hole in the artefact
+    # rather than a resolution failure — and the regeneration filled it from the circuit's
+    # own trap-offset, flagged. An empty list is the stronger assertion, and it is the one
+    # that makes a NEW unresolved race fail loudly instead of joining a tolerated set.
+    assert unresolved == [], (
         f"{len(unresolved)} of {checked} races resolve to NaN: {unresolved}"
     )
 

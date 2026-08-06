@@ -418,7 +418,7 @@ class PaceAgent:
         forms matches), and the FastF1 event name ('Qatar Grand Prix'). Resolving only the
         first and last sent every lap of the 2025 Miami and 2023 Spanish races to NaN while
         their value sat in the map. That is the #448/#450 dual-keyspace trap for the third
-        time, and this time the enumeration is checked rather than assumed: all 71 races
+        time, and this time the enumeration is checked rather than assumed: all 70 races
         under `data/raw/` resolve through the chain below, asserted in
         `tests/agents/test_pace_circuit_speed.py`.
         """

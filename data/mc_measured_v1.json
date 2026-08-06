@@ -23,13 +23,13 @@
       },
       "Barcelona": {
         "ci95": [
-          -0.0534,
-          0.2914
+          -0.1457,
+          0.3064
         ],
-        "corrected_mean_s": 0.019,
-        "mean": 0.119,
-        "median_raw_s": 0.2197,
-        "n": 54
+        "corrected_mean_s": -0.0196,
+        "mean": 0.0804,
+        "median_raw_s": 0.208,
+        "n": 39
       },
       "Budapest": {
         "ci95": [
@@ -246,7 +246,7 @@
     "degradation_correction_s": -0.1,
     "degradation_slope": {
       "definition": "Lap-to-lap change in lap time between consecutive racing laps of the same stint, excluding pit laps. The median is the degradation slope used to correct the clean-air estimate.",
-      "n": 65179,
+      "n": 64017,
       "p10": -0.74,
       "p50": -0.02,
       "p90": 0.54
@@ -255,13 +255,13 @@
     "min_cell_n": 30,
     "pooled": {
       "ci95": [
-        0.0767,
-        0.3703
+        0.0722,
+        0.3751
       ],
-      "corrected_mean_s": 0.1235,
-      "mean": 0.2235,
-      "median_raw_s": 0.2377,
-      "n": 479
+      "corrected_mean_s": 0.1236,
+      "mean": 0.2236,
+      "median_raw_s": 0.2382,
+      "n": 464
     },
     "proximity_s": 2.0,
     "window_laps": 3
@@ -270,14 +270,14 @@
     "definition": "Seconds between consecutive cars on the same lap, from elapsed session time (the Time column), pooled over every lap of every race. Racing covers clear and local-yellow laps.",
     "racing": {
       "ci95": [
-        4.5037,
-        4.6854
+        4.5053,
+        4.6901
       ],
-      "mean": 4.5945,
-      "n": 69487,
-      "p10": 0.58,
-      "p50": 2.227,
-      "p90": 10.658
+      "mean": 4.5977,
+      "n": 68241,
+      "p10": 0.579,
+      "p50": 2.218,
+      "p90": 10.66
     },
     "retires_constant": "POS_GAP_S = 1.5 s/position (legacy scoring path only)",
     "safety_car": {
@@ -320,12 +320,12 @@
       },
       "Barcelona": {
         "ci95": [
-          0.0007,
-          0.0217
+          0.0009,
+          0.0291
         ],
-        "n": 257,
-        "races": 4,
-        "rate": 0.0039,
+        "n": 191,
+        "races": 3,
+        "rate": 0.0052,
         "successes": 1,
         "thin": false
       },
@@ -563,17 +563,17 @@
     },
     "pooled": {
       "ci95": [
-        0.0142,
-        0.0225
+        0.0144,
+        0.0229
       ],
-      "n": 3970,
-      "rate": 0.0179,
+      "n": 3904,
+      "rate": 0.0182,
       "successes": 71,
       "thin": false
     },
     "q_f_form": "1 - exp(-rate * laps_remaining)"
   },
-  "races_measured": 71,
+  "races_measured": 70,
   "sc_window": {
     "by_kind": {
       "sc": {
@@ -665,31 +665,31 @@
   "status_mix": {
     "by_status": {
       "clear": {
-        "laps": 3796,
-        "share": 0.8871
+        "laps": 3730,
+        "share": 0.8854
       },
       "red": {
         "laps": 13,
-        "share": 0.003
+        "share": 0.0031
       },
       "sc": {
         "laps": 215,
-        "share": 0.0502
+        "share": 0.051
       },
       "vsc": {
         "laps": 81,
-        "share": 0.0189
+        "share": 0.0192
       },
       "yellow": {
         "laps": 174,
-        "share": 0.0407
+        "share": 0.0413
       }
     },
     "racing_is": [
       "clear",
       "yellow"
     ],
-    "total_laps": 4279
+    "total_laps": 4213
   },
   "stop_hazard": {
     "by_cell": {
@@ -705,11 +705,11 @@
       },
       "HARD|0-9|racing": {
         "ci95": [
-          0.027,
-          0.0336
+          0.0275,
+          0.0342
         ],
-        "n": 10291,
-        "rate": 0.0301,
+        "n": 10102,
+        "rate": 0.0307,
         "successes": 310,
         "thin": false
       },
@@ -725,12 +725,12 @@
       },
       "HARD|10-19|racing": {
         "ci95": [
-          0.0954,
-          0.1064
+          0.0942,
+          0.1052
         ],
-        "n": 11533,
-        "rate": 0.1008,
-        "successes": 1162,
+        "n": 11329,
+        "rate": 0.0996,
+        "successes": 1128,
         "thin": false
       },
       "HARD|20-29|neutralised": {
@@ -745,12 +745,12 @@
       },
       "HARD|20-29|racing": {
         "ci95": [
-          0.1374,
-          0.153
+          0.1361,
+          0.1518
         ],
-        "n": 7771,
-        "rate": 0.145,
-        "successes": 1127,
+        "n": 7652,
+        "rate": 0.1438,
+        "successes": 1100,
         "thin": false
       },
       "HARD|30+|neutralised": {
@@ -768,9 +768,9 @@
           0.1158,
           0.1338
         ],
-        "n": 5180,
+        "n": 5148,
         "rate": 0.1245,
-        "successes": 645,
+        "successes": 641,
         "thin": false
       },
       "INTERMEDIATE|0-9|neutralised": {
@@ -865,12 +865,12 @@
       },
       "MEDIUM|0-9|racing": {
         "ci95": [
-          0.0989,
-          0.1106
+          0.1002,
+          0.1122
         ],
-        "n": 10363,
-        "rate": 0.1046,
-        "successes": 1084,
+        "n": 10210,
+        "rate": 0.1061,
+        "successes": 1083,
         "thin": false
       },
       "MEDIUM|10-19|neutralised": {
@@ -885,12 +885,12 @@
       },
       "MEDIUM|10-19|racing": {
         "ci95": [
-          0.2176,
-          0.234
+          0.2185,
+          0.2351
         ],
-        "n": 9948,
-        "rate": 0.2257,
-        "successes": 2245,
+        "n": 9786,
+        "rate": 0.2267,
+        "successes": 2218,
         "thin": false
       },
       "MEDIUM|20-29|neutralised": {
@@ -905,12 +905,12 @@
       },
       "MEDIUM|20-29|racing": {
         "ci95": [
-          0.2899,
-          0.3165
+          0.2894,
+          0.3162
         ],
-        "n": 4581,
-        "rate": 0.303,
-        "successes": 1388,
+        "n": 4497,
+        "rate": 0.3026,
+        "successes": 1361,
         "thin": false
       },
       "MEDIUM|30+|neutralised": {
@@ -925,11 +925,11 @@
       },
       "MEDIUM|30+|racing": {
         "ci95": [
-          0.2715,
-          0.3203
+          0.2721,
+          0.321
         ],
-        "n": 1341,
-        "rate": 0.2953,
+        "n": 1338,
+        "rate": 0.296,
         "successes": 396,
         "thin": false
       },
@@ -945,12 +945,12 @@
       },
       "SOFT|0-9|racing": {
         "ci95": [
-          0.1495,
-          0.1732
+          0.1489,
+          0.173
         ],
-        "n": 3714,
-        "rate": 0.161,
-        "successes": 598,
+        "n": 3550,
+        "rate": 0.1606,
+        "successes": 570,
         "thin": false
       },
       "SOFT|10-19|neutralised": {
@@ -965,12 +965,12 @@
       },
       "SOFT|10-19|racing": {
         "ci95": [
-          0.2144,
-          0.2431
+          0.2147,
+          0.2441
         ],
-        "n": 3288,
-        "rate": 0.2284,
-        "successes": 751,
+        "n": 3130,
+        "rate": 0.2291,
+        "successes": 717,
         "thin": false
       },
       "SOFT|20-29|neutralised": {
@@ -985,12 +985,12 @@
       },
       "SOFT|20-29|racing": {
         "ci95": [
-          0.2625,
-          0.3161
+          0.2488,
+          0.3028
         ],
-        "n": 1095,
-        "rate": 0.2886,
-        "successes": 316,
+        "n": 1051,
+        "rate": 0.275,
+        "successes": 289,
         "thin": false
       },
       "SOFT|30+|neutralised": {
