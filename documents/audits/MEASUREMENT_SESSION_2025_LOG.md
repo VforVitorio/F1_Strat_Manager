@@ -610,8 +610,9 @@ Car that never happened and report it as 2025 Monza.
 
 ## Step 8: the two-window generalisation, refuted by my own sample
 
-**Written from PARTIAL Tier A data (180 laps measured by both arms of the 1,090 planned). The
-direction is already unambiguous and the exact rates will move.**
+**Updated at 639 paired laps (from the 180 this section first reported). Still partial: three
+races dominate the subset and three are not yet measured at all. Both facts are stated below
+rather than left for a reader to discover.**
 
 Budapest and Lusail both showed the LLM arm declining where the deterministic arm committed, and
 I wrote "the layer that ships is more reluctant than the layer that was measured" into this log.
@@ -619,10 +620,36 @@ I wrote "the layer that ships is more reluctant than the layer that was measured
 
 | | LLM (`rich`) | deterministic (`no-llm`) |
 |---|---|---|
-| STAY_OUT | 113 | 106 |
-| PIT_NOW | 49 | 21 |
-| UNDERCUT | 18 | 53 |
-| **pit-class share of laps** | **37.2%** | **41.1%** |
+| **pit-class share of laps** | **27.2%** | **29.9%** |
+| identical action | \multicolumn{2}{c}{**75.7%** of laps} | |
+
+**And the direction is not even consistent across races**, which is the strongest evidence
+against a systematic reluctance:
+
+| race | paired laps | LLM pit-class | deterministic pit-class | identical action |
+|---|---|---|---|---|
+| Barcelona | 169 | 29.0% | 26.6% | 74.6% |
+| Budapest | 164 | 33.5% | 38.4% | 66.5% |
+| Monza | 152 | 26.3% | 36.8% | 80.3% |
+| Montréal | 56 | 32.1% | 25.0% | 71.4% |
+| Lusail | 53 | 3.8% | 0.0% | 96.2% |
+| Monaco | 45 | 22.2% | 28.9% | 80.0% |
+| **all** | **639** | **27.2%** | **29.9%** | **75.7%** |
+
+The LLM arm is the more willing one at Barcelona and Montréal and the less willing one at
+Budapest, Monza and Monaco. A single ordering does not survive the race breakdown.
+
+**Two things that bias this table and are not fixed by more laps:**
+
+1. **Three races carry 76% of it** (Barcelona, Budapest, Monza) because they finished first.
+   Silverstone (the wet regime), Suzuka and Mexico City are absent entirely. The rates will
+   move when they land, and the wet race is the one most likely to move them.
+2. **Monza's rows are radio-free on BOTH arms** (the #825 workaround), so its inputs differ from
+   every other race in the table. The pairing stays internally valid, and Monza is also the
+   race with the largest gap in the table, which is exactly the kind of coincidence worth
+   naming rather than hoping nobody checks.
+
+The earlier per-action counts at 180 laps are superseded by the table above.
 
 Near-identical willingness to stop. What actually differs is **which** stop:
 
