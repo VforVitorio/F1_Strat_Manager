@@ -1,10 +1,15 @@
 """Eval report for the DECISION, not the rejoin: does the stack pick the right lap to stop?
 
 ``projection.py`` answers "given that the driver stopped on lap L, where does he
-rejoin" — 86.5% within one place over 1810 real stops. That is pit-cycle
+rejoin" — 86.1% within one place over 552 real stops of 2025. That is pit-cycle
 geometry, and it is the number this project has been quoting. It is not the
 claim the system actually makes. The claim is *when to stop*, and until this
 report existed nobody had measured it.
+
+(That figure used to read 86.5% over 1810 stops in 71 races here. It was retired
+on 2026-08-06: it mixed the two training seasons into a headline and its 71st
+race was the 2023 Spanish GP counted twice. A docstring is a reference like any
+other and this one outlived the number it quoted.)
 
 The gap survived because the projection number is good. A strong metric is
 effective camouflage for the adjacent claim nobody tested.
@@ -656,6 +661,27 @@ def _render_table(
         "The same applies at the opening guard rail: a transition on lap",
         f"{_NO_PIT_BEFORE_LAP} or earlier is the rail releasing, not the model deciding,",
         "so it is bucketed here too.",
+        "",
+        "### ⚠️ Every figure above is measured on two constant inputs (#829)",
+        "",
+        "`lap_inputs` in this module builds its own `RaceState` instead of calling",
+        "`src/agents/race_state_builder.build_race_state`, the canonical mapping the CLI,",
+        "the arcade and the backend all route through. Two of the fields it invents are",
+        "constants:",
+        "",
+        "- **`gap_ahead_s` is 2.0 on every lap of every race.** The line reads",
+        '  `car.get("gap_ahead_s") or 2.0`, and `gap_ahead_s` is not a key in the lap',
+        "  state's driver dict at all (it carries `gap_to_leader_s`), so the fallback is",
+        "  the value rather than a fallback. Measured against the builder on 2025",
+        "  Barcelona, the real gaps over the same laps run 0.431 to 1.075 s.",
+        "- **`pace_delta_s` is hardcoded to 0.0.** The builder computes it as this",
+        "  driver's lap time minus the reference car's.",
+        "",
+        "Both feed N27's overtake scoring and the Monte Carlo this tier grades, and 2.0 s",
+        "sits inside the plausible range, so nothing downstream can tell it from a",
+        "measurement. **Do not quote these figures as properties of the shipped stack",
+        "until #829 is fixed and this report is regenerated.** They are a valid",
+        "measurement of a stack fed two constants, and nothing wider.",
         "",
         "### Scope",
         "",

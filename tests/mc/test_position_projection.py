@@ -43,10 +43,17 @@ _skip_no_raw = pytest.mark.skipif(
     reason="data/raw/ not present (CI runner without the HF dataset)",
 )
 
-# Frozen from the measurement below on 2026-07-25: green-flag stops score 86.5%
-# within one position over n=1810. The threshold sits under the measured value
-# with room for data churn, but far above what a broken projection could reach —
-# a flipped sign or a dropped rival collapses this to near zero.
+# Frozen from the measurement below, re-taken 2026-08-06 on the de-duplicated
+# dataset: green-flag stops score 86.3% within one position over n=1768 across
+# 2023-2025, which is what `measure_projection_ground_truth` defaults to. The
+# threshold sits under the measured value with room for data churn, but far above
+# what a broken projection could reach — a flipped sign or a dropped rival
+# collapses this to near zero.
+#
+# The sample floor tracks the DEFAULT season scope, not the published headline.
+# The published figure moved to 2025 alone (86.1% over n=552) on the same day;
+# if the default here ever follows it, this floor has to come down with it or the
+# guard fails for the right reason and the wrong one at once.
 MIN_WITHIN_ONE = 0.80
 MIN_GROUND_TRUTH_SAMPLE = 1500
 

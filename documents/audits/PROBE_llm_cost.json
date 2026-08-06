@@ -1,0 +1,66 @@
+{
+  "command": "Budapest LEC Ferrari --year 2025 --laps 17-19 --rival PIA --provider openai",
+  "wall_clock_seconds_total": 72.4,
+  "wall_clock_seconds_in_laps": 47.8,
+  "wall_clock_seconds_boot_and_render": 24.6,
+  "per_lap": {
+    "laps": 3,
+    "mean_seconds_per_lap": 15.93,
+    "max_seconds_per_lap": 17.38,
+    "mean_llm_calls_per_lap": 6.0,
+    "mean_prompt_tokens_per_lap": 8080,
+    "mean_completion_tokens_per_lap": 814
+  },
+  "tokens": {
+    "by_model": {
+      "gpt-4.1-mini-2025-04-14": {
+        "calls": 15,
+        "prompt_tokens": 14044,
+        "completion_tokens": 999,
+        "cached_prompt_tokens": 0,
+        "total_tokens": 15043
+      },
+      "gpt-5.4-mini-2026-03-17": {
+        "calls": 3,
+        "prompt_tokens": 10196,
+        "completion_tokens": 1442,
+        "cached_prompt_tokens": 0,
+        "total_tokens": 11638
+      }
+    },
+    "total": {
+      "calls": 18,
+      "prompt_tokens": 24240,
+      "completion_tokens": 2441,
+      "cached_prompt_tokens": 0,
+      "total_tokens": 26681
+    },
+    "unattributed_calls": 0
+  },
+  "laps": [
+    {
+      "lap": 17,
+      "seconds": 16.875,
+      "calls": 6,
+      "prompt_tokens": 7856,
+      "completion_tokens": 813,
+      "cached_prompt_tokens": 0
+    },
+    {
+      "lap": 18,
+      "seconds": 13.535,
+      "calls": 6,
+      "prompt_tokens": 8031,
+      "completion_tokens": 770,
+      "cached_prompt_tokens": 0
+    },
+    {
+      "lap": 19,
+      "seconds": 17.379,
+      "calls": 6,
+      "prompt_tokens": 8353,
+      "completion_tokens": 858,
+      "cached_prompt_tokens": 0
+    }
+  ]
+}

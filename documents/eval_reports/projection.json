@@ -1,21 +1,24 @@
 {
   "header": {
-    "harness_sha": "863c6f1",
-    "dataset": "data/raw laps 2023-2025 (RAW, not featured)",
+    "harness_sha": "840289a",
+    "dataset": "data/raw laps, ground truth 2025, measured tables 2023-2025 (RAW, not featured)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-26T15:26:04+00:00",
+    "generated_at": "2026-08-06T15:27:15+00:00",
     "artifacts": {}
   },
+  "scoring_years": [
+    2025
+  ],
   "ground_truth": {
-    "sample_size": 1810,
-    "races": 71,
-    "within_one": 0.8646408839779005,
-    "exact": 0.5911602209944752,
-    "mean_signed_error": 0.5718232044198895,
-    "mean_absolute_error": 0.6591160220994475
+    "sample_size": 552,
+    "races": 24,
+    "within_one": 0.8605072463768116,
+    "exact": 0.5960144927536232,
+    "mean_signed_error": 0.5670289855072463,
+    "mean_absolute_error": 0.6684782608695652
   },
   "tables": [
     {
@@ -61,5 +64,11 @@
       "present": true
     }
   ],
+  "tables_years": [
+    2023,
+    2024,
+    2025
+  ],
+  "tables_races": 70,
   "measured_tables_path": "data/mc_measured_v1.json"
 }

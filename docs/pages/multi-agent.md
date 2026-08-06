@@ -172,15 +172,17 @@ Removing that rail did not remove the pit bounds, because they are a different k
 | **Prescriptive** rail | Makes the strategic decision *for* the model | A regulation, or nothing |
 | **Proscriptive** bound | Forbids an action so a generative model cannot emit nonsense | **Calibration** |
 
-Bounding an LLM's output space is legitimate engineering with or without an FIA article: the bounds exist so nothing can recommend a lap-2 stop because it felt like one. But a bound only earns that description if it sits where real strategy essentially never goes. The rule the project holds them to is explicit: **a bound may veto at most 5% of real green-flag stops**, measured over 1900 of them across 71 races of 2023-2025.
+Bounding an LLM's output space is legitimate engineering with or without an FIA article: the bounds exist so nothing can recommend a lap-2 stop because it felt like one. But a bound only earns that description if it sits where real strategy essentially never goes. The rule the project holds them to is explicit: **a bound may veto at most 5% of real green-flag stints**, measured over **1,852 of them across the 70 races of 2023-2025**.
+
+Re-measured on the corrected dataset, **all four bounds now clear that ceiling**: SOFT vetoes 3.4%, MEDIUM 4.6%, HARD 4.9%, and the INTERMEDIATE/WET fallback 4.5%. The bound family that prompted the rule now satisfies it.
 
 Checked against that rule, three of the four minimum-stint bounds were separating *unusual* from *usual* rather than *absurd* from *sane*, and were reset to the largest value that clears the ceiling:
 
 | Bound | Was | Vetoed | Now | Vetoes |
 |---|---|---|---|---|
-| Minimum stint, SOFT | 8 laps | 15.5% | **2** | 3.2% |
+| Minimum stint, SOFT | 8 laps | 15.5% | **2** | 3.4% |
 | Minimum stint, MEDIUM | 12 laps | 17.0% | **7** | 4.6% |
-| Minimum stint, HARD | 15 laps | 12.2% | **8** | 4.7% |
+| Minimum stint, HARD | 15 laps | 12.2% | **8** | 4.9% |
 | Minimum stint, wet fallback | 10 laps | 20.0% | **6** | 4.5% |
 | No pit before lap 5 | 5 | 2.21% | unchanged | 2.21% |
 | No pit in the last 3 laps | 3 | 1.37% | unchanged | 1.37% |
@@ -188,6 +190,8 @@ Checked against that rule, three of the four minimum-stint bounds were separatin
 The end-of-race bound is the only one that is partly a *fact*: under a Safety Car, Art. 55.17 ends the race behind it if it is still deployed on the final lap, so the position a late stop surrenders is unrecoverable by regulation rather than merely expensive. That article does not reach a green-flag lap, where the bound rests on the stop cost and on the measurement above.
 
 The compounding effect is what made the old values worth changing rather than merely wrong. A stop inside a bound can never be agreed with, so it is excluded from the decision-agreement measurement: the bound was removing its own hardest cases from the evidence about itself. After the recalibration the `min_stint` exclusion bucket falls from 17 stops to 5, the scored sample rises from 54 to 67 of 178, and agreement within two laps rises from 51.9% to 61.2%.
+
+> **Caveat on that last sentence, added 2026-08-06.** First: those three figures describe the **deterministic** layer, `profile="no-llm"` — the Monte Carlo plus the guard rails, with zero LLM calls. Twelve of the fourteen recommendation fields the multi-agent system emits are written by the LLM, so this is not a measurement of the system this page describes end to end. Second: they come from a harness that builds its own `RaceState` rather than the one the product builds, and two of its inputs are constants: the gap to the car ahead is served as a flat 2.0 s on every lap because the key it reads does not exist in the lap state, and the pace delta is hardcoded to 0.0. The *direction* of the recalibration effect is not in doubt (a smaller exclusion bucket is arithmetic), but the levels are measured on a stack fed two constants and will move when that is fixed. Tracked as issue #829.
 
 `documents/eval_reports/stint_lengths.md` regenerates these shares from the live constants on every run, so the report always grades what is actually shipping rather than what was shipping when it was written.
 
@@ -293,7 +297,7 @@ graph TD
 
 Four things in that graph are the whole redesign. Eligibility can return **no number at all** rather than a sentinel. The measured tables enter as *configuration*, not as constants in the code. Each draw picks a racing or a neutralised config, which is what makes the Art. 55.17 endgame arithmetic rather than a rule. And the terminal liability applies only to the candidates that do not stop, because a deferred obligation is a cost only while it is still owed.
 
-The layer used to score in generic seconds divided by a flat 1.5 s/position, over a sampled state that contained **no cars at all**. That constant cannot be right in both regimes: measured across 71 races, the median gap between consecutive cars is **2.23 s while racing and 1.48 s under a Safety Car**, so a single figure was a bunched-field number applied to green-flag racing. And losing 20 s costs zero positions with a 25 s cushion behind but three positions with cars at +2 / +8 / +15 s, a difference only a model that knows *which cars are where* can see.
+The layer used to score in generic seconds divided by a flat 1.5 s/position, over a sampled state that contained **no cars at all**. That constant cannot be right in both regimes: measured across 70 races, the median gap between consecutive cars is **2.23 s while racing and 1.48 s under a Safety Car**, so a single figure was a bunched-field number applied to green-flag racing. And losing 20 s costs zero positions with a 25 s cushion behind but three positions with cars at +2 / +8 / +15 s, a difference only a model that knows *which cars are where* can see.
 
 Scoring now runs on a per-rival gap projection (`src/agents/position_projection.py`). Each candidate moves every gap by the difference between what a rival loses and what we lose; a gap crossing zero is a car changing sides, so counting the cars projected ahead gives the position directly. Three behaviours that used to need special cases now fall out of that arithmetic:
 
