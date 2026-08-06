@@ -1,0 +1,90 @@
+[
+ {
+  "race": "Silverstone",
+  "driver": "ALB",
+  "team": "Williams",
+  "low": 36,
+  "high": 47,
+  "note": "tier A, anchored at stop(s) [42]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "HAM",
+  "team": "Ferrari",
+  "low": 5,
+  "high": 16,
+  "note": "tier A, anchored at stop(s) [11]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "HUL",
+  "team": "Kick Sauber",
+  "low": 36,
+  "high": 47,
+  "note": "tier A, anchored at stop(s) [42]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "PIA",
+  "team": "McLaren",
+  "low": 37,
+  "high": 48,
+  "note": "tier A, anchored at stop(s) [43]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 4,
+  "high": 15,
+  "note": "tier A, anchored at stop(s) [10]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 32,
+  "high": 43,
+  "note": "tier A, anchored at stop(s) [38]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 5,
+  "high": 16,
+  "note": "tier A, anchored at stop(s) [11]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 35,
+  "high": 46,
+  "note": "tier A, anchored at stop(s) [41]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "TSU",
+  "team": "Red Bull Racing",
+  "low": 35,
+  "high": 46,
+  "note": "tier A, anchored at stop(s) [41]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "VER",
+  "team": "Red Bull Racing",
+  "low": 5,
+  "high": 16,
+  "note": "tier A, anchored at stop(s) [11]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "VER",
+  "team": "Red Bull Racing",
+  "low": 35,
+  "high": 46,
+  "note": "tier A, anchored at stop(s) [41]"
+ }
+]
