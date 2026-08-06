@@ -538,9 +538,17 @@ class RadioDatasetCLI:
                 continue
 
             try:
+                # `circuit_short_name` goes into the FETCH, not only into the path
+                # (#825). Resolving by country alone returns every race that country
+                # holds and the resolver used to take the first, so `italy_monza/`
+                # was written with Imola's messages and both `united_states_austin/`
+                # and `united_states_las_vegas/` with Miami's. The path had this
+                # disambiguation from the start; the fetch did not, which is the
+                # one-twin-fixed shape this repo keeps paying for.
                 bundle = self._builder.prepare_session_bundle(
                     race.year,
                     race.country_name,
+                    circuit_short_name=race.circuit_short_name,
                 )
                 # Prefer the value already on the RaceMeta (captured in
                 # discover_races) so the slug rule stays consistent across

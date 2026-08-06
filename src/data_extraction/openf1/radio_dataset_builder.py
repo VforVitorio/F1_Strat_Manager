@@ -52,7 +52,6 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-
 # ── Module-level constants ───────────────────────────────────────────────────
 # OpenF1 REST base URL. Centralised so tests or mirrors can monkeypatch it in
 # one place instead of hunting through every request call.
@@ -212,7 +211,7 @@ class SessionBundle:
                     the structural filter (``lap_number < total_laps``).
     """
 
-    session:    dict
+    session: dict
     laps_index: dict
     total_laps: int
 
@@ -269,9 +268,7 @@ class RadioDatasetBuilder:
         """
         self._output_dir: Path = Path(output_dir)
         self._http_timeout: int = http_timeout
-        self._session: requests.Session = (
-            session if session is not None else build_retry_session()
-        )
+        self._session: requests.Session = session if session is not None else build_retry_session()
 
     # ── Public properties ────────────────────────────────────────────────────
 
@@ -293,6 +290,8 @@ class RadioDatasetBuilder:
         year: int,
         country_name: str,
         session_type: str = "Race",
+        *,
+        circuit_short_name: Optional[str] = None,
     ) -> dict:
         """Look up the OpenF1 session metadata for a specific GP race session.
 
@@ -330,22 +329,66 @@ class RadioDatasetBuilder:
         response.raise_for_status()
         sessions = response.json()
         if not sessions:
-            raise ValueError(
-                f"No {session_type} session found for {country_name} {year}"
-            )
+            raise ValueError(f"No {session_type} session found for {country_name} {year}")
         # Sprint weekends: drop the Sprint sibling so we never accidentally
         # pick it up instead of the main GP race.
         if session_type == "Race":
-            main_race = [
-                s for s in sessions if s.get("session_name") == "Race"
-            ]
+            main_race = [s for s in sessions if s.get("session_name") == "Race"]
             if not main_race:
                 raise ValueError(
                     f"No main Race session (session_name='Race') found for "
                     f"{country_name} {year}; got "
                     f"{[s.get('session_name') for s in sessions]}"
                 )
-            return main_race[0]
+            return self._disambiguate_by_circuit(main_race, year, country_name, circuit_short_name)
+        return sessions[0]
+
+    @staticmethod
+    def _disambiguate_by_circuit(
+        sessions: list,
+        year: int,
+        country_name: str,
+        circuit_short_name: Optional[str],
+    ) -> dict:
+        """Pick the one session at ``circuit_short_name`` when a country holds several.
+
+        Italy runs Imola and Monza; the United States runs Miami, Austin and Las
+        Vegas. A query keyed on country alone returns all of them and taking
+        ``[0]`` silently gave every sibling the SAME session (#825): `italy_monza/`
+        held Imola's messages and both `united_states_austin/` and
+        `united_states_las_vegas/` held Miami's. Monza has no neutralisation of its
+        own in 2025 and was being served a Safety Car on laps 29 and 30 as a result.
+
+        The output PATH already disambiguated by circuit (``_gp_directory`` takes
+        ``circuit_short_name`` for exactly this reason, and its docstring says so).
+        The FETCH did not: one half of the pair got the fix and its twin did not,
+        which is this repository's most repeated defect shape.
+
+        Raises rather than guessing when the country is ambiguous and the caller
+        gave no circuit. A wrong-but-plausible corpus is the failure mode that cost
+        three races; an exception is the one that costs a re-run.
+        """
+        if circuit_short_name:
+            matched = [
+                s
+                for s in sessions
+                if str(s.get("circuit_short_name", "")).lower() == circuit_short_name.lower()
+            ]
+            if not matched:
+                raise ValueError(
+                    f"No Race session at circuit {circuit_short_name!r} for "
+                    f"{country_name} {year}; OpenF1 offers "
+                    f"{[s.get('circuit_short_name') for s in sessions]}"
+                )
+            return matched[0]
+
+        if len(sessions) > 1:
+            raise ValueError(
+                f"{country_name} {year} has {len(sessions)} Race sessions "
+                f"({[s.get('circuit_short_name') for s in sessions]}); pass "
+                "circuit_short_name to say which one. Selecting the first is how "
+                "three 2025 races ended up with another race's corpus (#825)."
+            )
         return sessions[0]
 
     def fetch_team_radio(self, session_key: int) -> pd.DataFrame:
@@ -372,9 +415,7 @@ class RadioDatasetBuilder:
         response.raise_for_status()
         payload = response.json()
         if not payload:
-            return pd.DataFrame(
-                columns=["date", "driver_number", "recording_url", "session_key"]
-            )
+            return pd.DataFrame(columns=["date", "driver_number", "recording_url", "session_key"])
         radios = pd.DataFrame(payload)
         # OpenF1 mixes ISO8601 variants across races (some timestamps include
         # microseconds, some do not). format="ISO8601" accepts both shapes
@@ -416,7 +457,9 @@ class RadioDatasetBuilder:
         # the season, and laps is the heaviest endpoint so a single bad
         # microsecond row would otherwise abort the whole build for that GP.
         laps["date_start"] = pd.to_datetime(
-            laps["date_start"], utc=True, format="ISO8601",
+            laps["date_start"],
+            utc=True,
+            format="ISO8601",
         )
         laps = laps.dropna(subset=["date_start", "lap_duration"])
         index: dict[int, list[tuple[int, pd.Timestamp, pd.Timestamp]]] = {}
@@ -458,8 +501,14 @@ class RadioDatasetBuilder:
         if not payload:
             return pd.DataFrame(
                 columns=[
-                    "date", "driver_number", "lap_number",
-                    "category", "flag", "scope", "sector", "message",
+                    "date",
+                    "driver_number",
+                    "lap_number",
+                    "category",
+                    "flag",
+                    "scope",
+                    "sector",
+                    "message",
                 ]
             )
         rcms = pd.DataFrame(payload)
@@ -521,15 +570,11 @@ class RadioDatasetBuilder:
         the same way it drops unmappable radios.
         """
         if driver_number is not None:
-            return RadioDatasetBuilder.assign_lap_to_radio(
-                rcm_date, driver_number, laps_index
-            )
+            return RadioDatasetBuilder.assign_lap_to_radio(rcm_date, driver_number, laps_index)
         if not laps_index:
             return None
         leader = max(laps_index.keys(), key=lambda d: len(laps_index[d]))
-        return RadioDatasetBuilder.assign_lap_to_radio(
-            rcm_date, leader, laps_index
-        )
+        return RadioDatasetBuilder.assign_lap_to_radio(rcm_date, leader, laps_index)
 
     # ── Orchestration ────────────────────────────────────────────────────────
 
@@ -537,6 +582,8 @@ class RadioDatasetBuilder:
         self,
         year: int,
         country_name: str,
+        *,
+        circuit_short_name: Optional[str] = None,
     ) -> SessionBundle:
         """Resolve session metadata + lap intervals in a single fetch pair.
 
@@ -554,7 +601,9 @@ class RadioDatasetBuilder:
         the failure and continue with the next GP instead of producing a
         corrupted parquet.
         """
-        session = self.resolve_session(year, country_name, "Race")
+        session = self.resolve_session(
+            year, country_name, "Race", circuit_short_name=circuit_short_name
+        )
         session_key = int(session["session_key"])
         laps_index = self.fetch_laps_index(session_key)
         if not laps_index:
@@ -562,9 +611,7 @@ class RadioDatasetBuilder:
                 f"No laps returned by OpenF1 for session_key={session_key} "
                 f"({country_name} {year}); cannot compute total_laps"
             )
-        total_laps = max(
-            lap for intervals in laps_index.values() for lap, _, _ in intervals
-        )
+        total_laps = max(lap for intervals in laps_index.values() for lap, _, _ in intervals)
         return SessionBundle(
             session=session,
             laps_index=laps_index,
@@ -577,6 +624,7 @@ class RadioDatasetBuilder:
         country_name: str,
         *,
         bundle: Optional[SessionBundle] = None,
+        circuit_short_name: Optional[str] = None,
     ) -> pd.DataFrame:
         """Run the full pipeline for one GP and return a filtered radio table.
 
@@ -605,15 +653,16 @@ class RadioDatasetBuilder:
         from legitimately empty sessions.
         """
         if bundle is None:
-            bundle = self.prepare_session_bundle(year, country_name)
+            bundle = self.prepare_session_bundle(
+                year, country_name, circuit_short_name=circuit_short_name
+            )
         session_key = int(bundle.session["session_key"])
 
         radios = self.fetch_team_radio(session_key)
 
         if radios.empty:
             logger.warning(
-                "[%s %d] no team radios returned by OpenF1 (session_key=%d); "
-                "emitting empty table",
+                "[%s %d] no team radios returned by OpenF1 (session_key=%d); emitting empty table",
                 country_name,
                 year,
                 session_key,
@@ -654,7 +703,10 @@ class RadioDatasetBuilder:
         radios["audio_path"] = None
 
         logger.info(
-            "[%s %d] total radios: %d", country_name, year, n_total,
+            "[%s %d] total radios: %d",
+            country_name,
+            year,
+            n_total,
         )
         logger.info(
             "[%s %d] after dropping unmapped: %d (-%d)",
@@ -685,6 +737,7 @@ class RadioDatasetBuilder:
         country_name: str,
         *,
         bundle: Optional[SessionBundle] = None,
+        circuit_short_name: Optional[str] = None,
     ) -> pd.DataFrame:
         """Run the full pipeline for one GP and return a filtered RCM table.
 
@@ -716,7 +769,9 @@ class RadioDatasetBuilder:
         the source payload's exact shape.
         """
         if bundle is None:
-            bundle = self.prepare_session_bundle(year, country_name)
+            bundle = self.prepare_session_bundle(
+                year, country_name, circuit_short_name=circuit_short_name
+            )
         session_key = int(bundle.session["session_key"])
 
         rcms = self.fetch_race_control(session_key)
@@ -740,9 +795,7 @@ class RadioDatasetBuilder:
                 return int(openf1_lap)
             driver = row.get("driver_number")
             driver_int = int(driver) if pd.notna(driver) else None
-            return self.assign_lap_to_rcm(
-                row["date"], driver_int, bundle.laps_index
-            )
+            return self.assign_lap_to_rcm(row["date"], driver_int, bundle.laps_index)
 
         rcms["lap_number"] = rcms.apply(_resolve_lap, axis=1)
 
@@ -775,7 +828,10 @@ class RadioDatasetBuilder:
                 rcms[col] = None
 
         logger.info(
-            "[%s %d] total RCMs: %d", country_name, year, n_total,
+            "[%s %d] total RCMs: %d",
+            country_name,
+            year,
+            n_total,
         )
         logger.info(
             "[%s %d] after dropping unmapped RCMs: %d (-%d)",
@@ -874,7 +930,9 @@ class RadioDatasetBuilder:
             try:
                 target_dir.mkdir(parents=True, exist_ok=True)
                 resp = self._session.get(
-                    url, timeout=self._http_timeout, stream=True,
+                    url,
+                    timeout=self._http_timeout,
+                    stream=True,
                 )
                 resp.raise_for_status()
                 with target.open("wb") as fh:
@@ -885,7 +943,9 @@ class RadioDatasetBuilder:
                 audio_paths.append(str(relative))
             except Exception as exc:  # noqa: BLE001 — log + continue per row
                 logger.error(
-                    "Failed to download radio MP3 %s: %s", url, exc,
+                    "Failed to download radio MP3 %s: %s",
+                    url,
+                    exc,
                 )
                 n_failed += 1
                 audio_paths.append(None)
@@ -895,7 +955,10 @@ class RadioDatasetBuilder:
 
         logger.info(
             "audio download: %d new, %d cached, %d failed (root=%s)",
-            n_downloaded, n_skipped, n_failed, audio_root,
+            n_downloaded,
+            n_skipped,
+            n_failed,
+            audio_root,
         )
         return table
 
@@ -1067,6 +1130,8 @@ class RadioDatasetBuilder:
         self,
         year: int,
         country_name: str,
+        *,
+        circuit_short_name: Optional[str] = None,
     ) -> tuple[Path, Path]:
         """Build both the radio and RCM tables for a GP and write both parquets.
 
@@ -1080,10 +1145,16 @@ class RadioDatasetBuilder:
         layout) and returns both paths as a tuple so a multi-GP loop can
         record them in a build summary without reconstructing the filenames.
         """
-        bundle = self.prepare_session_bundle(year, country_name)
+        bundle = self.prepare_session_bundle(
+            year, country_name, circuit_short_name=circuit_short_name
+        )
         # Pull the circuit name from the already-fetched session payload so
         # both writers can apply the multi-race-country disambiguation rule
-        # without a second /v1/sessions round trip.
+        # without a second /v1/sessions round trip. Without the argument above
+        # this path could only ever reach the FIRST race of a multi-race country:
+        # it is self-consistent (the folder is derived from the session it really
+        # fetched, so it cannot mis-file) but it could never build Monza, Austin
+        # or Las Vegas at all.
         circuit_short_name = bundle.session.get("circuit_short_name")
         radio_table = self.build_radio_table(year, country_name, bundle=bundle)
         rcm_table = self.build_rcm_table(year, country_name, bundle=bundle)
@@ -1125,9 +1196,7 @@ class RadioDatasetBuilder:
         the empty-frame construction in one helper guarantees the schema
         stays consistent with :meth:`build_rcm_table`'s non-empty return.
         """
-        return pd.DataFrame(
-            {col: pd.Series(dtype="object") for col in RCM_OUTPUT_SCHEMA}
-        )
+        return pd.DataFrame({col: pd.Series(dtype="object") for col in RCM_OUTPUT_SCHEMA})
 
 
 if __name__ == "__main__":
@@ -1154,25 +1223,23 @@ if __name__ == "__main__":
         bundle = builder.prepare_session_bundle(year=2025, country_name="Bahrain")
 
         bahrain_radios = builder.build_radio_table(
-            year=2025, country_name="Bahrain", bundle=bundle,
+            year=2025,
+            country_name="Bahrain",
+            bundle=bundle,
         )
         print("RADIOS (pre-audio):")
         print(bahrain_radios.head(10))
-        print(
-            f"radio rows: {len(bahrain_radios)} | "
-            f"columns: {list(bahrain_radios.columns)}"
-        )
+        print(f"radio rows: {len(bahrain_radios)} | columns: {list(bahrain_radios.columns)}")
         print()
 
         bahrain_rcms = builder.build_rcm_table(
-            year=2025, country_name="Bahrain", bundle=bundle,
+            year=2025,
+            country_name="Bahrain",
+            bundle=bundle,
         )
         print("RCMs:")
         print(bahrain_rcms.head(10))
-        print(
-            f"rcm rows: {len(bahrain_rcms)} | "
-            f"columns: {list(bahrain_rcms.columns)}"
-        )
+        print(f"rcm rows: {len(bahrain_rcms)} | columns: {list(bahrain_rcms.columns)}")
         print()
 
         bahrain_radios = builder.download_audio_files(
