@@ -915,3 +915,33 @@ now refuses a paid run by default and prints the bill; `--yes-spend` is the opt-
    outside the top 5); the real fix is clause-aware re-chunking plus labelling from the
    containing heading. **Its end-to-end verification is deliberately NOT run**, because that
    costs credits and the rule above applies.
+
+---
+
+## Step 13: where the four defects stand, and what is blocking each
+
+State at the end of the session, 2026-08-06. Everything below was verified, not recalled.
+
+| | what it was | state | what is left |
+|---|---|---|---|
+| **#829** | `decision-modes` built a private `RaceState` whose `gap_ahead_s` was **2.0 on 100% of laps** and `pace_delta_s` **0.0** | **fixed and re-measured**, plus the single-variable control the docs page never had | nothing; closes with the PR |
+| **#825** | three 2025 races served another race's radio/RCM corpus (Monza got Imola's VSC) | **code fixed**, corpora rebuilt locally, twin branch and guard test added | ⛔ **the data is NOT published.** `data/processed/**` is gitignored and the Hub still serves Imola's `session_key` as Monza's. One command, in the issue, Víctor's call |
+| **#826** | the RAG amputates Art. 30.5 n)'s condition and the LLM cites it to override a correct PIT_NOW | **mitigated and measured** (bad chunk falls from rank 1 to outside the top 5); the few-shot example that violated its own new rule is fixed | real fix is clause-aware re-chunking; end-to-end check costs credits, so it waits to be asked for |
+| **#827** | a locked Qdrant store made every lap of three races fail silently | **fixed on the second attempt.** The first guard caught an exception qdrant never raises | a genuine two-process run, which is paid |
+
+### The two things that are NOT done, stated plainly
+
+1. **#825's fix reaches nobody.** The guard test added for it reads the LOCAL tree, so it is
+   green in CI and structurally cannot see the Hub. If it is meant to protect installs it needs
+   a scheduled Hub fetch, and PR CI can never provide one.
+2. **CI could not confirm any of this.** GitHub Actions entered a **major outage** at 21:30 UTC
+   and its own incident text says *"webhook triggers remain throttled, so many push and pull
+   request events are not triggering new workflow runs"* — which is exactly what was observed:
+   every push after `88bd948` produced **zero** runs. One `CI` run completed green, on
+   `88bd948`, covering the first two commits of #831 and nothing later. **Do not merge either PR
+   on a stale check summary.** `gh pr checks` reports the last run it can find, not the last
+   commit, and that is precisely how a red branch looks green during an outage.
+
+The local substitute: `ruff check .` and `ruff format --check .` clean repo-wide (157 files), and
+the full suite minus `test_nlp_golden.py`, whose three failures are a local model-artefact gap on
+a path neither branch touches.
