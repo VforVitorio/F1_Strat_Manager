@@ -38,12 +38,8 @@ and it was working at one stage, you anticipate the pit stop and you can't react
 
 ### The stops, in the indexing the system runs on
 
-The section intro (line 501) says *"las cinco vueltas en torno a la parada de Leclerc en V20"*.
-Section 5.5.2 and the command say **V17-V19**, with Piastri stopping V18 and Ferrari covering
-V19.
-
-**The data settles it: the body is right and the intro is wrong.** From
-`data/raw/2025/Budapest/pitstops.parquet`, in-lap (`PitInTime` non-null) per driver:
+From `data/raw/2025/Budapest/pitstops.parquet`, in-lap (`PitInTime` non-null) per driver. This
+is the indexing the replay engine, the windows and every number below use:
 
 | driver | stop 1 | stop 2 |
 |---|---|---|
@@ -53,8 +49,10 @@ V19.
 | RUS | 19 | 43 |
 | NOR | 31 | - |
 
-Leclerc's covering stop is lap **19**, not 20, and the window is three laps, not five.
-The intro paragraph of section 5.5 needs correcting in the thesis source.
+In this indexing Leclerc's covering stop is lap **19** and Piastri's undercut is lap **18**,
+which is what section 5.5.2 says. The intro's "V20" is the press indexing of the same stop and
+is not an error; its "las cinco vueltas" is inconsistent with the three-lap command beside it
+and is the one worth correcting in the thesis source.
 
 ### Qatar: which of the three brakes survived
 
@@ -151,22 +149,51 @@ point in opposite directions.
 **What does NOT change**: the binding constraint is still wall clock, not money. 1,090 laps is
 **$8.72** and hours.
 
-### What the probe costs in money, and the surprise
+### What a lap costs in money, corrected
 
 Published list prices read 2026-08-06 (state them with this date; they move):
 
-| model | input / 1M | output / 1M |
+| model | input / 1M | output / 1M | cached input / 1M |
+|---|---|---|---|
+| `gpt-4.1-mini` | $0.40 | $1.60 | $0.10 |
+| `gpt-5.4-mini` | $0.75 | $4.50 | $0.075 |
+
+Over the completed 75-lap run: **$0.0080 per lap**, $0.263 on the sub-agents and $0.337 on the
+orchestrator. The orchestrator is the larger share despite making one call in eight, because
+its completions are long and priced at $4.50/1M.
+
+**Per hour of running: about $1.3 to $1.6**, depending on where in the measured latency range
+the run sits (157 laps/h at 22.9 s/lap, 199 laps/h at 18.1 s/lap).
+
+> ⚠️ **A fourth error the adversarial gate caught, which I had missed.** This paragraph used to
+> say **"$0.43 per hour of running"**. That is wrong by roughly a factor of four and, worse, it
+> contradicted a figure three lines below it in the same paragraph: "1,500 laps is about $11 and
+> about 6.6 hours" implies $1.67/hour. **Two numbers in one paragraph that cannot both be true,
+> and I published both.** Neither the correction pass I did on the token counts nor my own
+> re-reading caught it; the gate did, by dividing.
+
+**The binding constraint is still WALL CLOCK, not money.** The full 1,090-lap Tier A sample is
+**$8.72** and hours. Any framing of this session as expensive in API spend is wrong.
+
+### The wall-clock figure is the head of a right-tailed distribution, not its middle
+
+The gate is right about this too and it changes the budget. Measured per-lap seconds:
+
+| sample | mean | max |
 |---|---|---|
-| `gpt-4.1-mini` | $0.40 | $1.60 |
-| `gpt-5.4-mini` | $0.75 | $4.50 |
+| the 3-lap probe | **15.93** | 17.38 |
+| `thesis_windows`, n=22 | **18.07** | 35.60 |
+| `thesis_repeats`, n=75 | **22.92** | 55.63 |
 
-Per evaluated lap that is **$0.0024** on the sub-agents plus **$0.0047** on the orchestrator,
-so **$0.0071 per lap**, or **$0.43 per hour of running**.
+The medians of the larger samples sit near the probe's value, so the probe was not unlucky, it
+was **short**: it sampled three laps from the head of a distribution with a long right tail
+(one lap reached 77,484 prompt tokens against a median of 8,322). Calls per lap behaves the
+same way: **6 is the MODE, not the mean** (28% of laps take 10 to 21 calls as the ReAct loops
+iterate), and the mean is 7.6 to 7.9.
 
-**The binding constraint is WALL CLOCK, not money.** 1,500 laps is about **$11** and about
-**6.6 hours**. Any framing of this session as expensive in API spend is wrong; it is expensive
-in time. Prompt caching would help the money and not the clock, and it does not apply here
-anyway because the measured cached-prompt count is zero.
+Consequence for the design's budget: Tier A's "4.82 h at 15.93 s/lap" is realistically **5.5 to
+7 h**, and its "12.33 M tokens" is realistically **15 to 18 M**. Every completed sample sits
+above the probe on every axis, always in the direction that made the plan look cheaper.
 
 ---
 
