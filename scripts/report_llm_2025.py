@@ -45,6 +45,46 @@ def _bucket_table(buckets: dict[str, int], total: int) -> list[str]:
     return lines
 
 
+def _coverage_lines(spec_paths: list[str], llm: dict, det: dict) -> list[str]:
+    """Laps the spec asked for against laps each arm actually produced.
+
+    This exists because of a real failure in this session: a second concurrent
+    process could not open the single-writer Qdrant store, every lap of that
+    process raised inside the RAG agent, and the CLI's per-lap ``except
+    Exception`` turned the whole run into skipped laps. From the outside that is
+    indistinguishable from laps the replay engine legitimately declines to serve
+    (a retired car, a missing position). The only thing that separates them is
+    counting what was asked for.
+
+    A low LLM-arm coverage with a high deterministic-arm coverage over the same
+    windows means the LLM arm broke, not that the sample is thin.
+    """
+    if not spec_paths:
+        return []
+
+    planned = 0
+    for path in spec_paths:
+        for window in json.loads(Path(path).read_text(encoding="utf-8")):
+            planned += int(window["high"]) - int(window["low"]) + 1
+
+    llm_laps, det_laps = llm["laps_measured"], det["laps_measured"]
+    lines = [
+        "",
+        "## Coverage: laps asked for against laps produced",
+        "",
+        "| arm | laps planned | laps produced | coverage |",
+        "| --- | --- | --- | --- |",
+        f"| LLM (`rich`) | {planned} | {llm_laps} | {llm_laps / planned:.1%} |",
+        f"| deterministic (`no-llm`) | {planned} | {det_laps} | {det_laps / planned:.1%} |",
+        "",
+        "A gap in BOTH arms is the replay engine declining to serve a lap (a retired car, "
+        "a lap with no position). A gap in the LLM arm ALONE is the LLM arm failing, and "
+        "it looks identical from the row count alone, which is why it is counted here.",
+        "",
+    ]
+    return lines
+
+
 def _paired_rows(llm: dict, det: dict) -> list[str]:
     """Verdict-by-verdict contrast on the windows both arms actually measured."""
     key = lambda v: (v["race"], v["driver"], v["actual_lap"])  # noqa: E731
@@ -175,6 +215,12 @@ def main() -> None:
     parser.add_argument("--det", required=True, nargs="+", help="Deterministic-arm JSONL file(s)")
     parser.add_argument("--out", default="documents/eval_reports/llm_2025/REPORT.md")
     parser.add_argument("--year", type=int, default=2025)
+    parser.add_argument(
+        "--spec",
+        nargs="*",
+        default=[],
+        help="Sample-spec JSON(s), so the report can state laps planned vs produced",
+    )
     args = parser.parse_args()
 
     raw_root = REPO_ROOT / "data/raw"
@@ -226,6 +272,7 @@ def main() -> None:
     lines += _bucket_table(llm["buckets"], agree["eligible"])
     lines += ["", "### Buckets, deterministic arm", ""]
     lines += _bucket_table(det["buckets"], det["agreement"]["eligible"])
+    lines += _coverage_lines(args.spec, llm, det)
     lines += _paired_rows(llm, det)
     lines += _regime_lines(llm)
 

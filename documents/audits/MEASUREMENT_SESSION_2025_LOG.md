@@ -16,7 +16,27 @@ Source: `~/Desktop/Documents/Cuarto Año/TFG/Docs/Memoria/capitulos/05_resultado
 | 5.5.2 | Hungary 2025 (Budapest) | CLI | LEC / PIA | V17-V19 | undercut cover on the hard compound; tests DIVERGENCE from the real wall |
 | 5.5.3 | Qatar 2025 (Lusail) | Arcade | PIA / VER | V7 | SC pit-window; the press calls it the season's worst wall error |
 
-### The thesis contradiction, RESOLVED against the data
+### The thesis contradiction, RESOLVED, and my first reading of it was wrong
+
+**Correction, made after checking the press against the parquet.** I first wrote that the
+thesis section intro ("la parada de Leclerc en V20") was wrong and its body (V19) was right.
+That was reading one source. The press accounts of the race number the same two stops
+**PIA lap 19, LEC lap 20**; the parquet numbers them **PIA 18, LEC 19**. Neither is an error:
+`PitInTime` sits on the lap the car was completing when it entered the pit lane, and the
+timing-screen convention the press follows counts the lap the car spends in the pit lane. It
+is a one-lap indexing offset, not a factual disagreement, and both describe the identical
+event.
+
+What that means for the thesis: the intro is right in press indexing, the body is right in the
+indexing the system actually runs on, and only the second one can be used to build a window.
+The intro's other claim, "las cinco vueltas", is genuinely inconsistent with the three-lap
+command in the same section, and that one is worth fixing.
+
+The press claim the case rests on does hold: Leclerc on the compound, verbatim, *"The hard was
+much more difficult, but you discover this a bit too late. We were trying to do the undercut,
+and it was working at one stage, you anticipate the pit stop and you can't react."*
+
+### The stops, in the indexing the system runs on
 
 The section intro (line 501) says *"las cinco vueltas en torno a la parada de Leclerc en V20"*.
 Section 5.5.2 and the command say **V17-V19**, with Piastri stopping V18 and Ferrari covering
@@ -264,13 +284,61 @@ consequential lap of the 2025 season, and the argmax picks STAY_OUT on tie order
 A related and separate defect: the LLM's reasoning calls PIT_NOW "MC-favoured" on that lap.
 The scores it was given are tied. **The narrative misdescribes the numbers in the same prompt.**
 
-### What is deliberately NOT concluded here yet
+### The three repeat passes, and the correction they forced
+
+I wrote the stability claim with **two** of the three passes on disk. The third refutes part of
+it. Corrected:
+
+| window | lap-decisions | STAY_OUT | pit-class |
+|---|---|---|---|
+| Budapest LEC, 3 passes over both window definitions (14-24 and the exact thesis 17-19) | 42 | **42** | 0 |
+| Lusail PIA L4-L14, 3 passes | 33 | 31 | **2** (pass 2, laps 9 and 10) |
+| **Lusail lap 7 alone, the SC deployment lap** | 3 | **3** | **0** |
+
+- **Budapest is fully stable.** The exact agreement the deterministic layer achieves is lost on
+  every pass, under both window definitions. The window-start and memory confound is therefore
+  ruled out: the exact thesis command returns the same answer as the wider window.
+- **Qatar needs restating, and the restatement is worse.** Lap 7, the lap the case is about and
+  the lap sixteen cars pitted on, is STAY_OUT on every pass (0.86, 0.96, 0.92). The stop is
+  asked for on laps 9 and 10 in one pass of three.
+
+### And the sharper version of finding 2
+
+**The fabricated article is in the RAG output on every pass. What is unstable is how the LLM
+reads it.** Passes 0 and 1: *"under Article 54.3d) [it is] forbidden ... so we cannot take the
+MC-favoured PIT_NOW"*. Pass 2, recommending PIT_NOW: *"Regulation Article 54.3 allows the stop
+only once the Safety Car orange lights are extinguished"*. Same non-existent rule, read once as
+a prohibition and once as a timing condition.
+
+That is a stronger argument for grounding the citation than a stable veto would have been: a
+stable veto is a bug with a fixed sign, and this is a bug with a random one.
+
+### Stability of the planning fields, over 22 repeated laps
+
+| field | laps differing across passes |
+|---|---|
+| `action` | **9.1%** |
+| `compound_next` | 50.0% |
+| `pit_lap_target` | **68.2%** |
+| `pace_mode` | 77.3% |
+| `confidence` | **100%** |
+
+The pre-committed 20% gate applies to `action`, and `action` passes it at 9.1%, so a
+single-pass agreement headline is quotable with the discordance stated beside it.
+
+**But `pit_lap_target` changing on two runs in three is its own finding, and it is the field
+the thesis quotes.** Section 5.5.2 reports the system "planifica la siguiente parada en la
+vuelta 22". That number is a draw, not a plan. The discrete action is roughly stable; every
+field that describes the plan around it is not.
+
+### What is deliberately NOT concluded
 
 The thesis reports `PIT_NOW` at 97% confidence for Qatar V7 after the fix, on the **Arcade**
-surface, before PRs 1-6 changed the served data. This run is the **CLI**, on the corrected data,
-and the LLM path is not deterministic. Three passes per window are running to separate a stable
-behaviour from one sample of a distribution. Nothing above is stated as a reproduction failure
-until that returns.
+surface and before PRs 1-6 changed the served data. This run is the **CLI**, on the corrected
+data. The measured statement is therefore: *under the CLI surface, on the regenerated 2025
+data, across three passes, lap 7 does not reproduce that recommendation.* Whether the Arcade
+surface differs is unmeasured, and the data has changed underneath either way, so this is not
+stated as "the thesis is wrong".
 
 ---
 
