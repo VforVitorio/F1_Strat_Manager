@@ -267,9 +267,13 @@ same lap, answered STAY_OUT with confidence 0.90 and the stop was never called. 
 tier's own vocabulary the deterministic path scores `scored, offset 0` and the LLM path scores
 `no_call_in_window`.
 
-That is the first direct evidence that **the two paths do not agree with each other**, and it
-runs in the direction nobody had checked: the layer that ships is more reluctant than the layer
-that was measured.
+That is the first direct evidence that **the two paths do not agree with each other**.
+
+> ⚠️ **DO NOT read "the LLM layer is more reluctant" out of this.** I wrote that sentence here
+> first and the wider sample refutes it. See "the two-window generalisation, refuted" below:
+> over 180 paired laps of Tier A the LLM arm asks to pit on **37.2%** of laps and the
+> deterministic arm on **41.1%** — near-identical rates. Budapest and Lusail are two windows,
+> and a system property drawn from two windows is the exact error this session exists to avoid.
 
 **Confirmed by the scorer rather than by reading the action list** — the distinction matters,
 because "emitted PIT_NOW on lap 19" and "the tier's transition rule locates the decision on lap
@@ -476,3 +480,53 @@ Car that never happened and report it as 2025 Monza.
 
 
 
+
+---
+
+## Step 8: the two-window generalisation, refuted by my own sample
+
+**Written from PARTIAL Tier A data (180 laps measured by both arms of the 1,090 planned). The
+direction is already unambiguous and the exact rates will move.**
+
+Budapest and Lusail both showed the LLM arm declining where the deterministic arm committed, and
+I wrote "the layer that ships is more reluctant than the layer that was measured" into this log.
+**The wider sample does not support it.** Over the 180 laps both arms have evaluated so far:
+
+| | LLM (`rich`) | deterministic (`no-llm`) |
+|---|---|---|
+| STAY_OUT | 113 | 106 |
+| PIT_NOW | 49 | 21 |
+| UNDERCUT | 18 | 53 |
+| **pit-class share of laps** | **37.2%** | **41.1%** |
+
+Near-identical willingness to stop. What actually differs is **which** stop:
+
+| deterministic said | LLM said | laps |
+|---|---|---|
+| STAY_OUT | STAY_OUT | 90 |
+| UNDERCUT | STAY_OUT | 20 |
+| UNDERCUT | PIT_NOW | 18 |
+| PIT_NOW | PIT_NOW | 18 |
+| UNDERCUT | UNDERCUT | 15 |
+| STAY_OUT | PIT_NOW | 13 |
+| STAY_OUT | UNDERCUT | 3 |
+| PIT_NOW | STAY_OUT | 3 |
+
+Identical action on **68.3%** of laps; same pit/no-pit class on **78.3%**. The deterministic
+layer reaches for `UNDERCUT` (53 laps) where the LLM reaches for `PIT_NOW` (49), and the single
+largest disagreement is the deterministic layer proposing an undercut that the LLM either
+converts to a plain stop (18) or declines outright (20).
+
+**Two lessons, and the second is about me.**
+
+1. The interesting question is not "does the LLM stop less" but "does the LLM pick a *different
+   kind* of stop", and the answer so far is yes. That was not on the list of things this session
+   set out to measure.
+2. **Two windows are not a system.** I generalised from Budapest and Lusail inside the same
+   document that opens by warning against exactly that, and the correction came from my own
+   sample rather than from a reviewer. The Budapest and Lusail findings stand as **case
+   results** — they are about specific, consequential laps, and the Qatar mechanism (#826) is a
+   real defect either way. They are not a rate.
+
+`ALERT` has not appeared once in 336 LLM laps, so the fork about how to bucket it dissolves: it
+is not in the measured distribution.
