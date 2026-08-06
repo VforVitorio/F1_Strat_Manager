@@ -570,8 +570,11 @@ def measure_decision_agreement(
                     # transition can be located" is the model already committed when
                     # we started looking, and reporting the window edge as its choice
                     # is what #752 retired. The second bucket says only that - it does
-                    # NOT say the stack asked on every lap, which measured false on
-                    # 4 of 4 real occupants (they withdrew mid-window).
+                    # NOT say the stack asked on every lap: re-measured on 2025 Monza
+                    # (2026-08-06, on the post-#829 inputs), 4 of 4 occupants withdrew
+                    # mid-window, and all four were still asking on the exact lap the
+                    # team really stopped. So the bucket can hold an AGREEMENT the
+                    # metric is structurally unable to score.
                     unscored = (
                         "no_boundary_in_window"
                         if _asks_to_stop(actions, window_low, window_high)
@@ -659,9 +662,12 @@ def _render_table(
         "Three different shapes land here and they are not the same finding:",
         "",
         "- already asking when the window opened, and still asking on every lap;",
-        "- already asking when the window opened, then **withdrawing** later - on the",
-        "  measured 2025 Monza sample this was 4 of 4 occupants, one of them flipping to",
-        "  STAY_OUT on the exact lap the team really stopped;",
+        "- already asking when the window opened, then **withdrawing** later. Re-measured",
+        "  on 2025 Monza (2026-08-06, on these inputs): this is 4 of 4 occupants, and all",
+        "  four were STILL ASKING on the exact lap the team really stopped, flipping to",
+        "  STAY_OUT only the lap after - VER asks laps 32-37 for a lap-37 stop, NOR 41-46",
+        "  for 46, HAD 27-32 for 32, PIA 40-45 for 45. So this bucket is holding four",
+        "  cases where the stack agreed with the team and the metric cannot say so;",
         "- a lap inside the window that was never evaluated, so the only pit ask has no",
         "  witness for its predecessor.",
         "",

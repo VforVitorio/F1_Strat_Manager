@@ -189,9 +189,24 @@ Checked against that rule, three of the four minimum-stint bounds were separatin
 
 The end-of-race bound is the only one that is partly a *fact*: under a Safety Car, Art. 55.17 ends the race behind it if it is still deployed on the final lap, so the position a late stop surrenders is unrecoverable by regulation rather than merely expensive. That article does not reach a green-flag lap, where the bound rests on the stop cost and on the measurement above.
 
-The compounding effect is what made the old values worth changing rather than merely wrong. A stop inside a bound can never be agreed with, so it is excluded from the decision-agreement measurement: the bound was removing its own hardest cases from the evidence about itself. After the recalibration the `min_stint` exclusion bucket falls from 17 stops to 5 and the scored sample rises from 54 to 66 of 178.
+The compounding effect is what made the old values worth changing rather than merely wrong. A stop inside a bound can never be agreed with, so it is excluded from the decision-agreement measurement: the bound was removing its own hardest cases from the evidence about itself.
 
-> **Those figures are retired, and the corrected ones are lower (2026-08-06).** They came from a harness that built its own `RaceState` instead of the product's, and two of its inputs were constants: the gap to the car ahead was a flat 2.0 s on every lap because the key it read does not exist in the lap state, and the pace delta was hardcoded to 0.0. Both feed the overtake model and the Monte Carlo the tier grades. Re-measured on the identical sample with the real inputs (#829), **exact drops 31.3% to 21.2%, within one 47.8% to 37.9%, within two 61.2% to 51.5%**, and declines fall from 78 stops to 72. The recalibration effect this paragraph describes still holds in direction (a smaller exclusion bucket is arithmetic), and the levels are the new ones.
+Measured as a **single-variable comparison** — both columns run on the product's real race state, so only the bounds differ:
+
+| decision-agreement tier, 2025, 178 eligible stops | old bounds (8 / 12 / 15, wet 10) | shipped bounds (2 / 7 / 8, wet 6) |
+|---|---|---|
+| `min_stint` exclusion bucket | 17 stops | **5** |
+| scored sample | 54 | **66** |
+| exact lap | 25.9% | 21.2% |
+| within one lap | 40.7% | 37.9% |
+| within two laps | 46.3% | **51.5%** |
+| mean signed error | -2.20 laps | -1.97 |
+
+**The recalibration buys sample, not accuracy, and the honest reading is that the twelve stops it admits are harder than the ones already there.** Exact and within-one fall; within-two and the mean error improve. A bound that excludes a case is not scoring it well, it is refusing to be graded on it, so a lower rate over a wider sample is the more informative number — but calling that an accuracy improvement would be the same flattery the bound itself was performing.
+
+> **The levels above are the 2026-08-06 re-measurement, and everything published before that date is retired.** The old harness built its own `RaceState` instead of the product's, and three of its inputs diverged: the gap to the car ahead was a flat 2.0 s on every lap because the key it read does not exist in the lap state, the pace delta was hardcoded to 0.0, and `rainfall` took the model default `False` through a wet Silverstone. All three feed the overtake model, the prompt, or the Monte Carlo the tier grades. On the identical sample with the real inputs (#829), **exact drops 31.3% to 21.2%, within one 47.8% to 37.9%, within two 61.2% to 51.5%**, and declines fall from 78 stops to 72.
+>
+> The table above is deliberately **not** that comparison. It used to read "54 to 66", pairing a pre-#829 number with a post-#829 one, so two variables moved inside the one sentence written to attribute an effect to the bounds. Both of its columns are now measured on the fixed inputs; only the constants differ. The `min_stint` and scored counts happen to be identical either way (17 and 54 under the old bounds, with or without the input fix), which is why the arithmetic half of the old claim survived — but that was luck, not the argument.
 >
 > Read them as the **deterministic** layer, `profile="no-llm"`: the Monte Carlo plus the guard rails, with the LLM synthesis off. Twelve of the fourteen recommendation fields the multi-agent system emits are written by the LLM, so this is not a measurement of the system this page describes end to end.
 
