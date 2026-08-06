@@ -1,0 +1,266 @@
+[
+ {
+  "race": "Budapest",
+  "driver": "ALB",
+  "team": "Williams",
+  "low": 8,
+  "high": 19,
+  "note": "tier A, anchored at stop(s) [14]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "ALB",
+  "team": "Williams",
+  "low": 32,
+  "high": 43,
+  "note": "tier A, anchored at stop(s) [38]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "ALO",
+  "team": "Aston Martin",
+  "low": 33,
+  "high": 44,
+  "note": "tier A, anchored at stop(s) [39]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "BEA",
+  "team": "Haas F1 Team",
+  "low": 24,
+  "high": 35,
+  "note": "tier A, anchored at stop(s) [30]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "BOR",
+  "team": "Kick Sauber",
+  "low": 34,
+  "high": 45,
+  "note": "tier A, anchored at stop(s) [40]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "COL",
+  "team": "Alpine",
+  "low": 7,
+  "high": 18,
+  "note": "tier A, anchored at stop(s) [13]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "COL",
+  "team": "Alpine",
+  "low": 29,
+  "high": 40,
+  "note": "tier A, anchored at stop(s) [35]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "GAS",
+  "team": "Alpine",
+  "low": 26,
+  "high": 37,
+  "note": "tier A, anchored at stop(s) [32]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "HAM",
+  "team": "Ferrari",
+  "low": 36,
+  "high": 47,
+  "note": "tier A, anchored at stop(s) [42]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "LEC",
+  "team": "Ferrari",
+  "low": 13,
+  "high": 24,
+  "note": "tier A, anchored at stop(s) [19]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "NOR",
+  "team": "McLaren",
+  "low": 25,
+  "high": 36,
+  "note": "tier A, anchored at stop(s) [31]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 13,
+  "high": 24,
+  "note": "tier A, anchored at stop(s) [19]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 37,
+  "high": 48,
+  "note": "tier A, anchored at stop(s) [43]"
+ },
+ {
+  "race": "Budapest",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 45,
+  "high": 56,
+  "note": "tier A, anchored at stop(s) [51]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "ALB",
+  "team": "Williams",
+  "low": 34,
+  "high": 45,
+  "note": "tier A, anchored at stop(s) [40]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "GAS",
+  "team": "Alpine",
+  "low": 2,
+  "high": 13,
+  "note": "tier A, anchored at stop(s) [8]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "HAD",
+  "team": "Racing Bulls",
+  "low": 8,
+  "high": 19,
+  "note": "tier A, anchored at stop(s) [14]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "HUL",
+  "team": "Kick Sauber",
+  "low": 6,
+  "high": 17,
+  "note": "tier A, anchored at stop(s) [12]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "LEC",
+  "team": "Ferrari",
+  "low": 16,
+  "high": 27,
+  "note": "tier A, anchored at stop(s) [22]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 56,
+  "high": 67,
+  "note": "tier A, anchored at stop(s) [62]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 42,
+  "high": 53,
+  "note": "tier A, anchored at stop(s) [48]"
+ },
+ {
+  "race": "Monaco",
+  "driver": "TSU",
+  "team": "Red Bull Racing",
+  "low": 67,
+  "high": 78,
+  "note": "tier A, anchored at stop(s) [73]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "ALB",
+  "team": "Williams",
+  "low": 36,
+  "high": 47,
+  "note": "tier A, anchored at stop(s) [42]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "HAM",
+  "team": "Ferrari",
+  "low": 5,
+  "high": 16,
+  "note": "tier A, anchored at stop(s) [11]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "HUL",
+  "team": "Kick Sauber",
+  "low": 36,
+  "high": 47,
+  "note": "tier A, anchored at stop(s) [42]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "PIA",
+  "team": "McLaren",
+  "low": 37,
+  "high": 48,
+  "note": "tier A, anchored at stop(s) [43]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 4,
+  "high": 15,
+  "note": "tier A, anchored at stop(s) [10]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 32,
+  "high": 43,
+  "note": "tier A, anchored at stop(s) [38]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 5,
+  "high": 16,
+  "note": "tier A, anchored at stop(s) [11]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 35,
+  "high": 46,
+  "note": "tier A, anchored at stop(s) [41]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "TSU",
+  "team": "Red Bull Racing",
+  "low": 35,
+  "high": 46,
+  "note": "tier A, anchored at stop(s) [41]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "VER",
+  "team": "Red Bull Racing",
+  "low": 5,
+  "high": 16,
+  "note": "tier A, anchored at stop(s) [11]"
+ },
+ {
+  "race": "Silverstone",
+  "driver": "VER",
+  "team": "Red Bull Racing",
+  "low": 35,
+  "high": 46,
+  "note": "tier A, anchored at stop(s) [41]"
+ }
+]
