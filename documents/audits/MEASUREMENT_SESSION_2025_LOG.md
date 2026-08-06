@@ -795,12 +795,24 @@ the LLM arm is missing the wet race entirely, `mean_signed_error` is a property 
 rather than a verdict, because the wall can be wrong and Qatar is in this sample precisely
 because the press says it was.
 
-### What is left, in order
+### What is left, and the sample stays unfinished ON PURPOSE
 
-1. **Add credit and re-run the three missing races** (Silverstone 132 laps, Suzuka 120, Mexico
-   City 79). About 331 laps, roughly **$2.65** and 1.5 to 2 hours. The resume skips everything
-   already on disk.
-2. Then regenerate `REPORT.md` and re-check the paired numbers, which will move.
-3. Fix #829 and re-measure `f1-eval decision-modes`, since its published figures are measured
-   on two constant inputs.
-4. #825 and #826 are P0 for the flagship case and both block a clean Qatar claim.
+**Standing rule set by Víctor on 2026-08-06, after this session drained the account: no runs
+that spend LLM credits without asking first.** So the three missing races are not a TODO waiting
+for a spare moment, they are a decision he takes when he wants the number. `measure_llm_windows.py`
+now refuses a paid run by default and prints the bill; `--yes-spend` is the opt-in.
+
+1. **The three missing races**: Silverstone (132 laps, and it is the WET regime, absent
+   entirely), Suzuka (120), Mexico City (79). About 331 laps, **$2.65**, 1.5 to 2 h. The resume
+   skips everything on disk. **Ask before running.**
+2. Then regenerate `REPORT.md`; the paired numbers will move.
+3. ~~Fix #829 and re-measure~~ **DONE** (PR #830): every accuracy band dropped about ten points
+   once the tier stopped receiving a constant 2.0 s gap.
+4. ~~#825~~ **DONE** (PR #830): the corpora are rebuilt and Monza's phantom Safety Car is gone.
+5. **#826 stays open**, and the fix it needs is not the one the issue proposed. Measured on the
+   retriever alone, at zero cost: the chunk that carried the rule **starts mid-word**, so the
+   article's applicability clause is in the previous chunk and the agent never had it. The
+   prompt changes shipped in #830 are a measured mitigation (the bad chunk falls from rank 1 to
+   outside the top 5); the real fix is clause-aware re-chunking plus labelling from the
+   containing heading. **Its end-to-end verification is deliberately NOT run**, because that
+   costs credits and the rule above applies.
