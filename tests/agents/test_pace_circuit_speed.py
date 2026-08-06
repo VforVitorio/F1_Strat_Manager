@@ -258,9 +258,7 @@ def test_every_race_on_disk_resolves(agent):
     # rather than a resolution failure — and the regeneration filled it from the circuit's
     # own trap-offset, flagged. An empty list is the stronger assertion, and it is the one
     # that makes a NEW unresolved race fail loudly instead of joining a tolerated set.
-    assert unresolved == [], (
-        f"{len(unresolved)} of {checked} races resolve to NaN: {unresolved}"
-    )
+    assert unresolved == [], f"{len(unresolved)} of {checked} races resolve to NaN: {unresolved}"
 
 
 # --- an unresolvable circuit stays unknown -----------------------------------

@@ -72,50 +72,70 @@ _WEATHER_COLUMNS = ("AirTemp", "TrackTemp", "Humidity", "Rainfall")
 
 _COLS_TO_DROP = [
     # Raw FastF1 timedeltas — already converted to *_s during this notebook
-    'Time', 'PitOutTime', 'PitInTime',
-    'Sector1Time', 'Sector2Time', 'Sector3Time',
-    'LapStartTime', 'LapStartDate',
-    'Sector1SessionTime', 'Sector2SessionTime', 'Sector3SessionTime',
-    'Time_s',
+    "Time",
+    "PitOutTime",
+    "PitInTime",
+    "Sector1Time",
+    "Sector2Time",
+    "Sector3Time",
+    "LapStartTime",
+    "LapStartDate",
+    "Sector1SessionTime",
+    "Sector2SessionTime",
+    "Sector3SessionTime",
+    "Time_s",
     # Superseded by derived columns
-    'LapTime',     # -> LapTime_s
-    'TrackStatus', # -> track_status_clean
+    "LapTime",  # -> LapTime_s
+    "TrackStatus",  # -> track_status_clean
     # Zero variance after baseline filter (all True / all False)
-    'Deleted', 'DeletedReason', 'IsAccurate',
+    "Deleted",
+    "DeletedReason",
+    "IsAccurate",
     # Metadata not useful as ML features
-    'FastF1Generated', 'IsPersonalBest',
+    "FastF1Generated",
+    "IsPersonalBest",
 ]
 
 
 _GP_NAME_ALIASES_2025 = {
-    'Miami Gardens': 'Miami',
-    'Miami_Gardens': 'Miami',
+    "Miami Gardens": "Miami",
+    "Miami_Gardens": "Miami",
 }
 
 
 def load_single_gp(gp_path: Path, year: str, gp_name: str) -> dict:
     try:
-        laps_file      = gp_path / "laps.parquet"
+        laps_file = gp_path / "laps.parquet"
         intervals_file = gp_path / "intervals.parquet"
-        weather_file   = gp_path / "weather.parquet"
-        pitstops_file  = gp_path / "pitstops.parquet"
+        weather_file = gp_path / "weather.parquet"
+        pitstops_file = gp_path / "pitstops.parquet"
 
-        if not all([laps_file.exists(), intervals_file.exists(),
-                    weather_file.exists(), pitstops_file.exists()]):
+        if not all(
+            [
+                laps_file.exists(),
+                intervals_file.exists(),
+                weather_file.exists(),
+                pitstops_file.exists(),
+            ]
+        ):
             print(f"  WARNING: {gp_name}: Missing files, skipping...")
             return None
 
-        laps_df      = pd.read_parquet(laps_file)
+        laps_df = pd.read_parquet(laps_file)
         intervals_df = pd.read_parquet(intervals_file)
-        weather_df   = pd.read_parquet(weather_file)
-        pitstops_df  = pd.read_parquet(pitstops_file)
+        weather_df = pd.read_parquet(weather_file)
+        pitstops_df = pd.read_parquet(pitstops_file)
 
         for df in [laps_df, intervals_df, weather_df, pitstops_df]:
-            df['GP_Name'] = gp_name
-            df['Year']    = int(year)
+            df["GP_Name"] = gp_name
+            df["Year"] = int(year)
 
-        return {'laps': laps_df, 'intervals': intervals_df,
-                'weather': weather_df, 'pitstops': pitstops_df}
+        return {
+            "laps": laps_df,
+            "intervals": intervals_df,
+            "weather": weather_df,
+            "pitstops": pitstops_df,
+        }
 
     except Exception as e:
         print(f"  ERROR: {gp_name}: {str(e)}")
@@ -123,18 +143,18 @@ def load_single_gp(gp_path: Path, year: str, gp_name: str) -> dict:
 
 
 def combine_master_dataframes(all_laps, all_intervals, all_weather, all_pitstops):
-    laps_master      = pd.concat(all_laps,      ignore_index=True)
+    laps_master = pd.concat(all_laps, ignore_index=True)
     intervals_master = pd.concat(all_intervals, ignore_index=True)
-    weather_master   = pd.concat(all_weather,   ignore_index=True)
-    pitstops_master  = pd.concat(all_pitstops,  ignore_index=True)
+    weather_master = pd.concat(all_weather, ignore_index=True)
+    pitstops_master = pd.concat(all_pitstops, ignore_index=True)
 
     laps_master = laps_master.sort_values(
-        ['Year', 'GP_Name', 'DriverNumber', 'LapNumber']
+        ["Year", "GP_Name", "DriverNumber", "LapNumber"]
     ).reset_index(drop=True)
 
-    intervals_master = intervals_master.sort_values(
-        ['Year', 'GP_Name', 'date']
-    ).reset_index(drop=True)
+    intervals_master = intervals_master.sort_values(["Year", "GP_Name", "date"]).reset_index(
+        drop=True
+    )
 
     return laps_master, intervals_master, weather_master, pitstops_master
 
@@ -142,21 +162,25 @@ def combine_master_dataframes(all_laps, all_intervals, all_weather, all_pitstops
 def filter_baseline_laps(laps_master):
     """Convert LapTime to seconds and apply baseline quality filters."""
     laps = laps_master.copy()
-    laps['LapTime_s'] = laps['LapTime'].dt.total_seconds()
+    laps["LapTime_s"] = laps["LapTime"].dt.total_seconds()
 
-    laps_clean = laps[
-        (laps['IsAccurate'] == True) &
-        (laps['Deleted']    == False) &
-        (laps['LapTime_s']  <  180)  &
-        (laps['LapNumber']  >  1)
-    ].copy().reset_index(drop=True)
+    laps_clean = (
+        laps[
+            (laps["IsAccurate"] == True)
+            & (laps["Deleted"] == False)
+            & (laps["LapTime_s"] < 180)
+            & (laps["LapNumber"] > 1)
+        ]
+        .copy()
+        .reset_index(drop=True)
+    )
 
     removed = len(laps_master) - len(laps_clean)
     print(f"Original laps : {len(laps_master):,}")
     print(f"Removed       : {removed:,}  ({removed / len(laps_master) * 100:.1f}%)")
     print(f"Clean laps    : {len(laps_clean):,}")
     print(f"\nBy year:")
-    print(laps_clean.groupby('Year').size().rename('laps').to_string())
+    print(laps_clean.groupby("Year").size().rename("laps").to_string())
     return laps_clean
 
 
@@ -176,36 +200,34 @@ def add_fuel_corrected_features(df: pd.DataFrame) -> pd.DataFrame:
     FUEL_EFFECT_PER_LAP = 0.055  # s/lap
 
     result = df.copy()
-    result['FuelEffect']          = np.nan
-    result['FuelAdjustedLapTime'] = np.nan
-    result['FuelAdjustedDegAbsolute'] = np.nan
-    result['FuelAdjustedDegPercent']  = np.nan
+    result["FuelEffect"] = np.nan
+    result["FuelAdjustedLapTime"] = np.nan
+    result["FuelAdjustedDegAbsolute"] = np.nan
+    result["FuelAdjustedDegPercent"] = np.nan
 
-    groups = result.groupby(
-        ['Year', 'GP_Name', 'DriverNumber', 'Stint'], sort=False
-    )
+    groups = result.groupby(["Year", "GP_Name", "DriverNumber", "Stint"], sort=False)
 
     for name, group in groups:
-        if group['LapTime_s'].isna().all():
+        if group["LapTime_s"].isna().all():
             continue
 
         # Baseline: first lap of the stint
-        baseline_tyrelife = group['TyreLife'].min()
-        baseline_mask     = group['TyreLife'] == baseline_tyrelife
-        baseline_laptime  = group.loc[baseline_mask, 'LapTime_s'].mean()
+        baseline_tyrelife = group["TyreLife"].min()
+        baseline_mask = group["TyreLife"] == baseline_tyrelife
+        baseline_laptime = group.loc[baseline_mask, "LapTime_s"].mean()
 
         if pd.isna(baseline_laptime):
             continue
 
         # Fuel effect: laps since stint start × 0.055 s/lap
-        laps_from_baseline = group['TyreLife'] - baseline_tyrelife
-        fuel_effect        = laps_from_baseline * FUEL_EFFECT_PER_LAP
-        adjusted           = group['LapTime_s'] + fuel_effect
+        laps_from_baseline = group["TyreLife"] - baseline_tyrelife
+        fuel_effect = laps_from_baseline * FUEL_EFFECT_PER_LAP
+        adjusted = group["LapTime_s"] + fuel_effect
 
-        result.loc[group.index, 'FuelEffect']              = fuel_effect
-        result.loc[group.index, 'FuelAdjustedLapTime']     = adjusted
-        result.loc[group.index, 'FuelAdjustedDegAbsolute'] = adjusted - baseline_laptime
-        result.loc[group.index, 'FuelAdjustedDegPercent']  = (adjusted / baseline_laptime - 1) * 100
+        result.loc[group.index, "FuelEffect"] = fuel_effect
+        result.loc[group.index, "FuelAdjustedLapTime"] = adjusted
+        result.loc[group.index, "FuelAdjustedDegAbsolute"] = adjusted - baseline_laptime
+        result.loc[group.index, "FuelAdjustedDegPercent"] = (adjusted / baseline_laptime - 1) * 100
 
     return result
 
@@ -223,30 +245,28 @@ def add_sequential_features(df: pd.DataFrame) -> pd.DataFrame:
                     LapTime_Delta, Speed*_Delta, LapTime_Trend
     """
     result = df.copy()
-    speed_cols = ['SpeedI1', 'SpeedI2', 'SpeedFL', 'SpeedST']
+    speed_cols = ["SpeedI1", "SpeedI2", "SpeedFL", "SpeedST"]
 
     result = result.sort_values(
-        ['Year', 'GP_Name', 'DriverNumber', 'Stint', 'LapNumber']
+        ["Year", "GP_Name", "DriverNumber", "Stint", "LapNumber"]
     ).reset_index(drop=True)
 
-    grp = result.groupby(
-        ['Year', 'GP_Name', 'DriverNumber', 'Stint'], sort=False
-    )
+    grp = result.groupby(["Year", "GP_Name", "DriverNumber", "Stint"], sort=False)
 
     # Previous values
-    result['Prev_LapTime']  = grp['LapTime_s'].shift(1)
-    result['Prev_TyreLife'] = grp['TyreLife'].shift(1)
+    result["Prev_LapTime"] = grp["LapTime_s"].shift(1)
+    result["Prev_TyreLife"] = grp["TyreLife"].shift(1)
     for col in speed_cols:
-        result[f'Prev_{col}'] = grp[col].shift(1)
+        result[f"Prev_{col}"] = grp[col].shift(1)
 
     # Deltas
-    result['LapTime_Delta'] = result['LapTime_s'] - result['Prev_LapTime']
+    result["LapTime_Delta"] = result["LapTime_s"] - result["Prev_LapTime"]
     for col in speed_cols:
-        result[f'{col}_Delta'] = result[col] - result[f'Prev_{col}']
+        result[f"{col}_Delta"] = result[col] - result[f"Prev_{col}"]
 
     # Trend (second derivative of lap time)
-    result['LapTime_Trend'] = grp['LapTime_Delta'].shift(1)
-    result['LapTime_Trend'] = result['LapTime_Delta'] - result['LapTime_Trend']
+    result["LapTime_Trend"] = grp["LapTime_Delta"].shift(1)
+    result["LapTime_Trend"] = result["LapTime_Delta"] - result["LapTime_Trend"]
 
     # No fillna — NaN on first lap of each stint is meaningful signal.
     return result
@@ -265,18 +285,16 @@ def add_degradation_rate_features(df: pd.DataFrame) -> pd.DataFrame:
     XGBoost handles NaN natively via its missing value branch.
     """
     result = df.copy()
-    result['DegradationRate'] = np.nan
-    result['CumulativeDeg']   = np.nan
-    result['DegAcceleration'] = np.nan
+    result["DegradationRate"] = np.nan
+    result["CumulativeDeg"] = np.nan
+    result["DegAcceleration"] = np.nan
 
-    groups = result.groupby(
-        ['Year', 'GP_Name', 'DriverNumber', 'Stint'], sort=False
-    )
+    groups = result.groupby(["Year", "GP_Name", "DriverNumber", "Stint"], sort=False)
 
     for name, group in groups:
         idx = group.index
-        adj_times  = group['FuelAdjustedLapTime'].values
-        tyre_lives = group['TyreLife'].values
+        adj_times = group["FuelAdjustedLapTime"].values
+        tyre_lives = group["TyreLife"].values
         n = len(group)
 
         if n < 2:
@@ -284,28 +302,26 @@ def add_degradation_rate_features(df: pd.DataFrame) -> pd.DataFrame:
 
         # Rolling 3-lap slope (window=3, min_periods=2)
         deg_rates = np.full(n, np.nan)
-        for i in range(1, n):          # start at index 1 (need ≥2 points)
-            start = max(0, i - 2)      # up to 3 laps back
-            x = tyre_lives[start:i+1]
-            y = adj_times[start:i+1]
+        for i in range(1, n):  # start at index 1 (need ≥2 points)
+            start = max(0, i - 2)  # up to 3 laps back
+            x = tyre_lives[start : i + 1]
+            y = adj_times[start : i + 1]
             if len(x) >= 2 and not np.isnan(y).any():
                 slope = np.polyfit(x, y, 1)[0]
                 deg_rates[i] = slope
 
-        result.loc[idx, 'DegradationRate'] = deg_rates
+        result.loc[idx, "DegradationRate"] = deg_rates
 
         # Cumulative degradation since stint start
-        base = group['FuelAdjustedDegAbsolute'].iloc[0]
-        result.loc[idx, 'CumulativeDeg'] = (
-            group['FuelAdjustedDegAbsolute'] - base
-        ).values
+        base = group["FuelAdjustedDegAbsolute"].iloc[0]
+        result.loc[idx, "CumulativeDeg"] = (group["FuelAdjustedDegAbsolute"] - base).values
 
         # Degradation acceleration (change in rate)
         accel = np.full(n, np.nan)
         for i in range(1, n):
-            if not np.isnan(deg_rates[i]) and not np.isnan(deg_rates[i-1]):
-                accel[i] = deg_rates[i] - deg_rates[i-1]
-        result.loc[idx, 'DegAcceleration'] = accel
+            if not np.isnan(deg_rates[i]) and not np.isnan(deg_rates[i - 1]):
+                accel[i] = deg_rates[i] - deg_rates[i - 1]
+        result.loc[idx, "DegAcceleration"] = accel
 
     # No fillna — NaN on first lap of each stint is meaningful signal.
     return result
@@ -314,19 +330,18 @@ def add_degradation_rate_features(df: pd.DataFrame) -> pd.DataFrame:
 def clip_degradation_outliers(laps_clean, clip_range=(-2.0, 2.0)):
     """Clip DegradationRate and DegAcceleration to a realistic s/lap range."""
     lo, hi = clip_range
-    outside = (
-        (laps_clean['DegradationRate'] < lo) |
-        (laps_clean['DegradationRate'] > hi)
+    outside = (laps_clean["DegradationRate"] < lo) | (laps_clean["DegradationRate"] > hi)
+    print(
+        f"DegradationRate outside [{lo}, {hi}] s/lap: "
+        f"{outside.sum()} laps  ({outside.mean() * 100:.2f}%)"
     )
-    print(f"DegradationRate outside [{lo}, {hi}] s/lap: "
-          f"{outside.sum()} laps  ({outside.mean() * 100:.2f}%)")
 
     laps = laps_clean.copy()
-    laps['DegradationRate'] = laps['DegradationRate'].clip(lo, hi)
-    laps['DegAcceleration'] = laps['DegAcceleration'].clip(lo, hi)
+    laps["DegradationRate"] = laps["DegradationRate"].clip(lo, hi)
+    laps["DegAcceleration"] = laps["DegAcceleration"].clip(lo, hi)
 
     print(f"\nAfter clipping:")
-    print(laps['DegradationRate'].describe().to_string())
+    print(laps["DegradationRate"].describe().to_string())
     return laps
 
 
@@ -342,37 +357,35 @@ def add_weather_features(laps_df: pd.DataFrame, weather_df: pd.DataFrame) -> pd.
     NaN policy: Rainfall filled with 0 (no rain); other weather cols left NaN
     if no weather data available for a race (rare edge case).
     """
-    WEATHER_COLS = ['AirTemp', 'TrackTemp', 'Humidity', 'Rainfall']
+    WEATHER_COLS = ["AirTemp", "TrackTemp", "Humidity", "Rainfall"]
     result = laps_df.copy()
 
     for col in WEATHER_COLS:
         result[col] = np.nan
 
-    for (year, gp), lap_group in result.groupby(['Year', 'GP_Name']):
+    for (year, gp), lap_group in result.groupby(["Year", "GP_Name"]):
         wth = (
-            weather_df[
-                (weather_df['Year'] == year) & (weather_df['GP_Name'] == gp)
-            ][['Time'] + WEATHER_COLS]
-            .dropna(subset=['Time'])
-            .sort_values('Time')
+            weather_df[(weather_df["Year"] == year) & (weather_df["GP_Name"] == gp)][
+                ["Time"] + WEATHER_COLS
+            ]
+            .dropna(subset=["Time"])
+            .sort_values("Time")
         )
         if wth.empty:
             continue
 
         # Sort laps by session time for merge_asof
-        laps_sorted = lap_group[['Time']].sort_values('Time')
+        laps_sorted = lap_group[["Time"]].sort_values("Time")
 
         # Nearest-time join: each lap gets the closest weather sample
-        merged = pd.merge_asof(
-            laps_sorted, wth, on='Time', direction='nearest'
-        )
+        merged = pd.merge_asof(laps_sorted, wth, on="Time", direction="nearest")
         merged.index = laps_sorted.index
 
         for col in WEATHER_COLS:
             result.loc[merged.index, col] = merged[col].values
 
     # Rainfall: fill NaN as 0 (no rain) and cast to int flag
-    result['Rainfall'] = result['Rainfall'].fillna(0).astype(int)
+    result["Rainfall"] = result["Rainfall"].fillna(0).astype(int)
 
     return result
 
@@ -385,44 +398,41 @@ def add_race_context_features(df: pd.DataFrame) -> pd.DataFrame:
     result = df.copy()
 
     # --- Sector times as float (seconds) ---
-    for col, new_col in [('Sector1Time', 'Sector1_s'),
-                         ('Sector2Time', 'Sector2_s'),
-                         ('Sector3Time', 'Sector3_s')]:
+    for col, new_col in [
+        ("Sector1Time", "Sector1_s"),
+        ("Sector2Time", "Sector2_s"),
+        ("Sector3Time", "Sector3_s"),
+    ]:
         if col in result.columns:
             result[new_col] = result[col].dt.total_seconds()
 
     # --- Max laps per race ---
-    max_laps = (
-        result.groupby(['Year', 'GP_Name'])['LapNumber']
-        .transform('max')
-    )
+    max_laps = result.groupby(["Year", "GP_Name"])["LapNumber"].transform("max")
 
     # --- Race phase (early / mid / late) ---
-    lap_fraction = result['LapNumber'] / max_laps
-    result['race_phase'] = pd.cut(
+    lap_fraction = result["LapNumber"] / max_laps
+    result["race_phase"] = pd.cut(
         lap_fraction,
         bins=[0, 0.33, 0.67, 1.0],
-        labels=['early', 'mid', 'late'],
-        include_lowest=True
+        labels=["early", "mid", "late"],
+        include_lowest=True,
     )
 
     # --- Laps remaining ---
-    result['laps_remaining'] = (max_laps - result['LapNumber']).astype(int)
+    result["laps_remaining"] = (max_laps - result["LapNumber"]).astype(int)
 
     # --- Track status simplified ---
     # FastF1 codes: 1=clear, 2=yellow, 3=SC deployed, 4=SC ending,
     #               5=red flag, 6=VSC deployed, 7=VSC ending
     status_map = {1: 0, 2: 1, 3: 2, 4: 2, 5: 2, 6: 1, 7: 1}
-    result['track_status_clean'] = (
-        result['TrackStatus'].map(status_map).fillna(0).astype(int)
-    )
+    result["track_status_clean"] = result["TrackStatus"].map(status_map).fillna(0).astype(int)
 
     return result
 
 
-def add_cluster_features(df: pd.DataFrame,
-                         clusters: pd.DataFrame,
-                         circuit_features: pd.DataFrame) -> pd.DataFrame:
+def add_cluster_features(
+    df: pd.DataFrame, clusters: pd.DataFrame, circuit_features: pd.DataFrame
+) -> pd.DataFrame:
     """
     Merge N03 circuit clustering artifacts into lap-level data.
 
@@ -435,27 +445,26 @@ def add_cluster_features(df: pd.DataFrame,
 
     # Cluster mean lap time (from circuit_features)
     cluster_mean = (
-        circuit_features.groupby('Cluster')['mean_laptime']
+        circuit_features.groupby("Cluster")["mean_laptime"]
         .mean()
         .reset_index()
-        .rename(columns={'mean_laptime': 'cluster_mean_laptime'})
+        .rename(columns={"mean_laptime": "cluster_mean_laptime"})
     )
 
     # Merge Cluster + mean_sector_speed on GP_Name
     circuit_lookup = clusters.merge(
-        circuit_features[['GP_Name', 'mean_sector_speed']],
-        on='GP_Name', how='left'
+        circuit_features[["GP_Name", "mean_sector_speed"]], on="GP_Name", how="left"
     )
-    result = result.merge(circuit_lookup, on='GP_Name', how='left')
+    result = result.merge(circuit_lookup, on="GP_Name", how="left")
 
     # Merge cluster mean lap time on Cluster
-    result = result.merge(cluster_mean, on='Cluster', how='left')
+    result = result.merge(cluster_mean, on="Cluster", how="left")
 
     # Delta from cluster mean
-    result['lap_time_vs_cluster_mean'] = result['LapTime_s'] - result['cluster_mean_laptime']
+    result["lap_time_vs_cluster_mean"] = result["LapTime_s"] - result["cluster_mean_laptime"]
 
     # Drop helper column
-    result = result.drop(columns=['cluster_mean_laptime'])
+    result = result.drop(columns=["cluster_mean_laptime"])
 
     return result
 
@@ -467,25 +476,24 @@ def fix_spain_cluster_artefact(laps_clean, circuit_clusters, circuit_features):
     to match Barcelona so downstream models see consistent data.
     """
     laps = laps_clean.copy()
-    spain_mask = laps['GP_Name'] == 'Spain'
+    spain_mask = laps["GP_Name"] == "Spain"
     print(f"Spain laps without cluster: {spain_mask.sum()}")
 
     if spain_mask.sum() > 0:
         barcelona_cluster = circuit_clusters.loc[
-            circuit_clusters['GP_Name'] == 'Barcelona', 'Cluster'
+            circuit_clusters["GP_Name"] == "Barcelona", "Cluster"
         ].iloc[0]
         barcelona_speed = circuit_features.loc[
-            circuit_features['GP_Name'] == 'Barcelona', 'mean_sector_speed'
+            circuit_features["GP_Name"] == "Barcelona", "mean_sector_speed"
         ].iloc[0]
-        cluster_mean_barcelona = (
-            circuit_features.groupby('Cluster')['mean_laptime']
-            .mean()[barcelona_cluster]
-        )
+        cluster_mean_barcelona = circuit_features.groupby("Cluster")["mean_laptime"].mean()[
+            barcelona_cluster
+        ]
 
-        laps.loc[spain_mask, 'Cluster']           = barcelona_cluster
-        laps.loc[spain_mask, 'mean_sector_speed'] = barcelona_speed
-        laps.loc[spain_mask, 'lap_time_vs_cluster_mean'] = (
-            laps.loc[spain_mask, 'LapTime_s'] - cluster_mean_barcelona
+        laps.loc[spain_mask, "Cluster"] = barcelona_cluster
+        laps.loc[spain_mask, "mean_sector_speed"] = barcelona_speed
+        laps.loc[spain_mask, "lap_time_vs_cluster_mean"] = (
+            laps.loc[spain_mask, "LapTime_s"] - cluster_mean_barcelona
         )
 
     print(f"Nulls remaining in Cluster : {laps['Cluster'].isna().sum()}")
@@ -511,12 +519,9 @@ def add_temporal_normalization_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     result = df.copy()
 
-    race_fastest = (
-        result.groupby(['Year', 'GP_Name'])['LapTime_s']
-        .transform('min')
-    )
+    race_fastest = result.groupby(["Year", "GP_Name"])["LapTime_s"].transform("min")
 
-    result['lap_time_pct_of_race_fastest'] = result['LapTime_s'] / race_fastest
+    result["lap_time_pct_of_race_fastest"] = result["LapTime_s"] / race_fastest
 
     return result
 
@@ -824,9 +829,7 @@ def main() -> int:
     # rather than something the regeneration does on the way past.
     if args.impute_circuit_speed:
         print(f"\n{'=' * 70}\nImputing absent circuit speeds\n{'=' * 70}")
-        seasons = {
-            year: impute_circuit_speed(frame, raw_root) for year, frame in seasons.items()
-        }
+        seasons = {year: impute_circuit_speed(frame, raw_root) for year, frame in seasons.items()}
 
     combined = pd.concat(seasons.values(), ignore_index=True)
 
@@ -834,14 +837,10 @@ def main() -> int:
     for year, frame in seasons.items():
         shipped = processed_root / f"laps_featured_{year}.parquet"
         if shipped.exists():
-            reproduces &= _compare(
-                frame, pd.read_parquet(shipped), f"laps_featured_{year}.parquet"
-            )
+            reproduces &= _compare(frame, pd.read_parquet(shipped), f"laps_featured_{year}.parquet")
     shipped_combined = processed_root / "laps_featured.parquet"
     if shipped_combined.exists():
-        reproduces &= _compare(
-            combined, pd.read_parquet(shipped_combined), "laps_featured.parquet"
-        )
+        reproduces &= _compare(combined, pd.read_parquet(shipped_combined), "laps_featured.parquet")
 
     missing_weather = [c for c in _WEATHER_COLUMNS if c not in combined.columns]
     if missing_weather:
