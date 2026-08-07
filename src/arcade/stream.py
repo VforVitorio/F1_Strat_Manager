@@ -11,6 +11,26 @@ and trimmed to stdlib-only: the arcade process must not import PySide6 so
 we can launch the dashboard as a subprocess without pulling Qt into the
 replay window. The client class lives in the dashboard package (Qt-aware),
 kept separate so this module never needs to import PySide6.
+
+The payload contract
+--------------------
+Every message is one JSON object on its own line, built by
+`F1ArcadeView._broadcast_if_due`, carrying:
+
+- `schema_version` (`STREAM_SCHEMA_VERSION`): bumped when a key is renamed,
+  removed, or changes meaning. Adding a key an old consumer can ignore does
+  not bump it.
+- `seq`: strictly increasing by 1 per message sent. It exists because a
+  consumer that polls a latest-payload slot on its own timer beats against
+  this producer, and both failure modes are otherwise invisible: a `seq`
+  repeated is a duplicate read, a `seq` skipped is a dropped frame.
+- `arcade`, `strategy`, `playback`: the state itself. The frozen shape lives
+  in `tests/surfaces/test_arcade_wire_contract.py`, which is the thing that
+  actually fails when a producer-side change breaks a consumer.
+
+Nothing non-finite may reach the wire: `json.dumps` writes a bare `NaN`,
+which Python's parser accepts and `JSON.parse` rejects, so one missing
+telemetry value would otherwise drop the whole message for a web consumer.
 """
 
 from __future__ import annotations

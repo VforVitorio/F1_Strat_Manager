@@ -173,6 +173,11 @@ SSE_MAX_CONSECUTIVE_FAILURES: Final[int] = 3
 SSE_BACKOFF_AFTER_FAILURES_S: Final[float] = 10.0
 
 # --- Telemetry stream (arcade -> dashboard process) ----------------------
+# Version of the broadcast payload's shape. Bump it whenever a key is
+# renamed, removed, or changes meaning; adding a key an old consumer can
+# ignore does not need a bump. A consumer that reads a version it does not
+# know should say so rather than silently render a field it guessed at.
+STREAM_SCHEMA_VERSION: Final[int] = 1
 STREAM_HOST: Final[str] = os.environ.get("F1_STREAM_HOST", "127.0.0.1")
 STREAM_PORT: Final[int] = int(os.environ.get("F1_STREAM_PORT", "9998"))
 # Broadcast every N arcade frames. At 60 FPS on_update, N=6 gives ~10 Hz,
