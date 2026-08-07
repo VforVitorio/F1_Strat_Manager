@@ -243,6 +243,20 @@ class PaceOutput:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _previous_tyre_life(tyre_life: Optional[int]) -> Optional[int]:
+    """The previous lap's tyre age, or None where training had no previous lap.
+
+    N04 builds ``Prev_TyreLife`` as a stint-grouped shift, so a stint opener is
+    NaN. Inference used to send ``max(0, tyre_life - 1)`` unconditionally, which
+    made an opener 0: below the trained minimum of 2.0, and a NUMBER where
+    training had an ABSENCE. XGBoost has a learned default direction for missing;
+    it has none for a tyre younger than any it ever saw.
+    """
+    if tyre_life is None or tyre_life <= 1:
+        return None
+    return tyre_life - 1
+
+
 class PaceAgent:
     """Encapsulates the N06 XGBoost lap-time prediction pipeline.
 
@@ -488,11 +502,14 @@ class PaceAgent:
         total_laps: int,
         mean_sector_speed: float,
         stint_baseline_tyre_life: Optional[int] = None,
+        fresh_tyre: Optional[bool] = None,
     ) -> dict:
         """Compute features derived from raw inputs that are not in the source data.
 
-        FreshTyre: binary flag for the first lap on a new tyre set — captures
-        the outlap pace loss caused by tyre heating and rubber laydown.
+        FreshTyre: FastF1's "the fitted set was NEW" flag, TRUE for every lap of
+        that stint. It is NOT a first-lap flag, and this docstring said it was:
+        naming the wrong mechanism is how a proxy survives review, because the
+        code then matches its own description (W-F3).
         FuelEffect: cumulative fuel burn pace gain (lighter car = faster lap).
         laps_remaining: inverted lap count used as a proxy for race phase.
         mean_sector_speed: passed through untouched, already resolved by the caller.
@@ -542,7 +559,16 @@ class PaceAgent:
             fuel_effect = (tyre_life - stint_baseline_tyre_life) * FUEL_GAIN_PER_LAP_S
 
         return {
-            "FreshTyre": int(tyre_life <= 1),
+            # The FITTED-SET flag, which is what N06 trained on, and not a first-lap
+            # flag. FastF1's `FreshTyre` says the set was NEW when it went on and stays
+            # True for EVERY lap of that stint; `int(tyre_life <= 1)` is an outlap flag,
+            # so the two agreed only on outlaps and on used-set stints and disagreed on
+            # every lap 2 or later of a fresh-set stint, which is most racing laps
+            # (W-F3). The state manager has emitted the real flag all along
+            # (`race_state_manager.py:438`) and this function computed a proxy beside
+            # it. `fresh_tyre` falls back to the old expression only for callers that do
+            # not supply it, which is the direct `run()` path and its tests.
+            "FreshTyre": int(fresh_tyre) if fresh_tyre is not None else int(tyre_life <= 1),
             "FuelEffect": fuel_effect,
             "laps_remaining": max(0, total_laps - lap_number),
             "mean_sector_speed": mean_sector_speed,
@@ -550,7 +576,7 @@ class PaceAgent:
 
     def _build_feature_row(
         self,
-        driver_number: int,
+        driver_number: Optional[int],
         lap_number: int,
         stint: int,
         tyre_life: int,
@@ -561,7 +587,7 @@ class PaceAgent:
         fuel_load: float,
         year: int,
         prev_lap_time: float,
-        prev_tyre_life: int,
+        prev_tyre_life: Optional[int],
         prev_speed_st: float,
         air_temp: float,
         track_temp: float,
@@ -574,6 +600,7 @@ class PaceAgent:
         prev_cum_deg: float = 0.0,
         prev_deg_accel: float = 0.0,
         stint_baseline_tyre_life: Optional[int] = None,
+        fresh_tyre: Optional[bool] = None,
     ) -> pd.DataFrame:
         """Pack raw race state into a single-row DataFrame ready for predict().
 
@@ -601,6 +628,7 @@ class PaceAgent:
             total_laps,
             resolved_mean_sector_speed,
             stint_baseline_tyre_life,
+            fresh_tyre,
         )
 
         row = {
@@ -766,7 +794,7 @@ class PaceAgent:
 
     def run(
         self,
-        driver_number: int,
+        driver_number: Optional[int],
         lap_number: int,
         stint: int,
         tyre_life: int,
@@ -777,7 +805,7 @@ class PaceAgent:
         fuel_load: float,
         year: int,
         prev_lap_time: float,
-        prev_tyre_life: int,
+        prev_tyre_life: Optional[int],
         prev_speed_st: float,
         air_temp: float,
         track_temp: float,
@@ -790,6 +818,7 @@ class PaceAgent:
         prev_cum_deg: float = 0.0,
         prev_deg_accel: float = 0.0,
         stint_baseline_tyre_life: Optional[int] = None,
+        fresh_tyre: Optional[bool] = None,
     ) -> PaceOutput:
         """Run pace prediction for a single lap and return a PaceOutput.
 
@@ -798,10 +827,18 @@ class PaceAgent:
         session median for the current GP/year/compound.
 
         Args:
-            driver_number: Car number used to look up TeamID encoding.
+            driver_number: Car number. A RAW feature the model splits on, not a
+                lookup key for anything - the TeamID encoding this line used to
+                claim comes from `team`. None when the source has no reading, and
+                it must stay None: 0 is not absent, it is a value the model finds,
+                sorting below every real car number (#831).
             lap_number: Current race lap; used for FuelLoad estimation.
             stint: Stint number (1-indexed), forwarded as a raw feature.
-            tyre_life: Laps on current tyre set; drives FreshTyre flag.
+            tyre_life: Laps on current tyre set. It no longer drives FreshTyre on
+                the `from_state` path - the state manager emits FastF1's real
+                set-was-new flag and `tyre_life <= 1` was only ever a proxy for it,
+                agreeing on outlaps and disagreeing on every lap 2+ of a fresh-set
+                stint (#831). The fallback still uses it when the flag is absent.
             compound: Pirelli compound name.
             position: Current race position (1-based). None when the source
                 telemetry has no reading for this lap; propagates as a missing
@@ -814,7 +851,8 @@ class PaceAgent:
             fuel_load: Estimated fuel fraction in [0, 1].
             year: Race year (2023/2024/2025).
             prev_lap_time: Previous lap time in seconds.
-            prev_tyre_life: TyreLife on the previous lap.
+            prev_tyre_life: TyreLife on the previous lap, or None on a stint
+                opener, where the trained column is NaN by construction.
             prev_speed_st: Speed trap reading in km/h from the previous lap.
             air_temp: Air temperature in °C.
             track_temp: Track surface temperature in °C.
@@ -933,7 +971,17 @@ class PaceAgent:
         _rainfall = reading_or_default(wx, "rainfall", 0)
 
         return self.run(
-            driver_number=d.get("driver_number") or 0,
+            # The real car number, now that the state manager emits it (W-F2). It used
+            # to be `or 0` against a key nobody produced, so every replay lap served 0:
+            # a value outside the trained vocabulary (1-81) AND a findable one, since 0
+            # sorts below every real number and sends each DriverNumber split down its
+            # left branch. `.get` without `or`, because a genuinely missing number must
+            # stay None and reach the model as NaN, which is a direction XGBoost
+            # learned, rather than as a car that does not exist.
+            driver_number=d.get("driver_number"),
+            # The real fitted-set flag, which the state manager has emitted all along
+            # while this call computed a first-lap proxy from tyre_life instead (W-F3).
+            fresh_tyre=d.get("fresh_tyre"),
             lap_number=lap_number,
             stint=d.get("stint") or 1,
             tyre_life=d.get("tyre_life") or 1,
@@ -979,7 +1027,14 @@ class PaceAgent:
             # order-of-magnitude placeholder the old (wrong) code used, now only
             # reached on a genuinely missing previous lap.
             prev_lap_time=d.get("prev_lap_time") or MISSING_PREV_LAP_TIME_S,
-            prev_tyre_life=max(0, (d.get("tyre_life") or 1) - 1),
+            # None on a stint opener, where N04's grouped shift leaves NaN, instead of
+            # the 0 this used to send (W-F5). 0 is below the trained minimum of 2.0, so
+            # the model read a tyre younger than any it was fitted on rather than the
+            # absence training taught it to handle; NaN is a direction XGBoost learned.
+            # Off a stint opener the value stays current-1, which is the right answer
+            # whenever consecutive laps survived N04's filter, and an approximation
+            # where they did not.
+            prev_tyre_life=_previous_tyre_life(d.get("tyre_life")),
             prev_speed_st=_prev_speed_st,
             air_temp=float(_air_temp),
             track_temp=float(_trk_temp),

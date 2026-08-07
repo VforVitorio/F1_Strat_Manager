@@ -2548,7 +2548,13 @@ def run_strategy_orchestrator_from_state(
             "lap_number": race_state.lap,
             "driver": {
                 "driver":        race_state.driver,
-                "driver_number": 0,
+                # None, not 0. This is the synthetic lap state built when no real one
+                # exists, so the car number is genuinely unknown, and 0 is a value the
+                # model can also legitimately find: it sorts below every real number
+                # (1-81) and sends each DriverNumber split down its left branch. A
+                # PRESENT key set to 0 also defeats the consumer's `.get`, which is why
+                # fixing the reader alone was not enough (W-F2).
+                "driver_number": None,
                 "team":          team,
                 "position":      race_state.position,
                 "compound":      race_state.compound,
