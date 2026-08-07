@@ -46,6 +46,7 @@ from src.arcade.config import (
     STREAM_HOST,
     STREAM_MAX_SPAN_FRAMES,
     STREAM_PORT,
+    STREAM_SCHEMA_VERSION,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TEXT_TERTIARY,
@@ -207,6 +208,12 @@ class F1ArcadeView(arcade.View):
         # attached, so a dashboard that connects on lap 40 gets the current
         # tick's span and not 40 laps of backlog.
         self._last_broadcast_idx: int = -1
+        # Counts payloads actually put on the wire, so a consumer can tell a
+        # duplicate read from a skipped one. Both are real: two independent
+        # 10 Hz pollers reading one latest-payload slot were measured
+        # duplicating 15 of 54 reads and skipping 15 of 54. Without a
+        # sequence neither is visible from the consumer side.
+        self._broadcast_seq: int = 0
 
         self._frame_index: float = 0.0
         self._speed_idx: int = DEFAULT_SPEED_IDX
@@ -513,7 +520,10 @@ class F1ArcadeView(arcade.View):
         self._last_broadcast_idx = frame_idx
         if self._stream_server.client_count() == 0:
             return  # no subscriber, skip the serialisation cost
+        self._broadcast_seq += 1
         payload = {
+            "schema_version": STREAM_SCHEMA_VERSION,
+            "seq": self._broadcast_seq,
             "arcade": self._build_arcade_snapshot(frame_idx, span_start, rewound),
             "strategy": self._strategy_state.snapshot_dict(STREAM_HISTORY_TAIL),
             "playback": {
