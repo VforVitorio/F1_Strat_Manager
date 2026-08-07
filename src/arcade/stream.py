@@ -24,6 +24,10 @@ Every message is one JSON object on its own line, built by
   consumer that polls a latest-payload slot on its own timer beats against
   this producer, and both failure modes are otherwise invisible: a `seq`
   repeated is a duplicate read, a `seq` skipped is a dropped frame.
+  **It counts messages this server sent, not messages this client
+  received**, so a window that attaches mid-race sees its first `seq`
+  somewhere in the hundreds. A consumer treats its own first observed
+  value as the origin and only the deltas as meaningful.
 - `arcade`, `strategy`, `playback`: the state itself. The frozen shape lives
   in `tests/surfaces/test_arcade_wire_contract.py`, which is the thing that
   actually fails when a producer-side change breaks a consumer.
@@ -37,11 +41,66 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import socket
 import threading
 import time
 
 logger = logging.getLogger(__name__)
+
+# How long a client may take to accept a broadcast before it is treated as
+# dead. `sendall` is called from the pyglet main thread, so a subscriber that
+# stops reading blocks the replay window itself, not just its own view. The
+# span change made that worse rather than better: a bigger message fills the
+# socket buffer in fewer broadcasts, cutting the measured time-to-freeze from
+# about 130 s to 0.7 s. A real dashboard on localhost accepts a 30 KB message
+# in microseconds, so anything past 50 ms is not slow, it is gone.
+CLIENT_SEND_TIMEOUT_S = 0.05
+
+
+def _json_safe(value):
+    """Replace every non-finite float with None, recursively.
+
+    The `arcade` block guards its own floats, but `strategy` is a bare
+    `asdict()` of DTOs carrying raw XGBoost, TCN and LightGBM output, and a
+    model that cannot compute a value hands back NaN. Three of the guards
+    on the way in are `or`/truthiness tests, which NaN passes: `nan or 0.0`
+    is `nan`.
+
+    Sanitising rather than dropping is deliberate. One unusable model
+    output should cost that field, not the whole tick: the panels that do
+    not depend on it keep updating, and None is a value every consumer
+    already has to handle. `allow_nan=False` below is then the assertion
+    that this worked, not the policy itself.
+    """
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+def _blame(value, path: str = "") -> str:
+    """Point at the first non-finite leaf in a payload, for the drop log.
+
+    Without it the encoder's message names the type and not the field, and
+    the whole reason a broadcast was dropped stays invisible.
+    """
+    if isinstance(value, dict):
+        for key, item in value.items():
+            found = _blame(item, f"{path}.{key}" if path else str(key))
+            if found:
+                return found
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            found = _blame(item, f"{path}[{index}]")
+            if found:
+                return found
+    elif isinstance(value, float) and not math.isfinite(value):
+        return f"{path or '<root>'}={value}"
+    return ""
 
 
 class TelemetryStreamServer:
@@ -109,10 +168,22 @@ class TelemetryStreamServer:
         with self._clients_lock:
             if not self._clients:
                 return
+        payload = _json_safe(data)
         try:
-            message = json.dumps(data, separators=(",", ":")).encode("utf-8") + b"\n"
+            # allow_nan=False is what makes the "nothing non-finite reaches
+            # the wire" promise above a mechanism rather than a claim. The
+            # default is True: json.dumps writes a bare NaN or Infinity,
+            # Python's own parser reads it back, and JSON.parse rejects the
+            # whole message. A web consumer would have lost every tick that
+            # carried one model output it could not compute.
+            message = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode() + b"\n"
         except (TypeError, ValueError) as exc:
-            logger.warning("Broadcast JSON encode failed: %s", exc)
+            # Dropping the message is the point: an unparseable one is worse
+            # than a missing one, and `seq` makes the hole visible. Blame the
+            # ORIGINAL, not the sanitised copy: the copy cannot contain a
+            # non-finite value by construction, so pointing the log at it
+            # would print nothing every time.
+            logger.warning("Broadcast dropped, payload not JSON-safe: %s | %s", exc, _blame(data))
             return
 
         dead: list[socket.socket] = []
@@ -122,6 +193,10 @@ class TelemetryStreamServer:
             try:
                 client.sendall(message)
             except OSError:
+                # socket.timeout is an OSError subclass, so a subscriber that
+                # stopped reading is pruned by the same path as one that
+                # closed. Losing a slow client beats freezing the window; the
+                # Qt client already reconnects.
                 dead.append(client)
         if dead:
             self._prune_clients(dead)
@@ -141,6 +216,9 @@ class TelemetryStreamServer:
                     logger.debug("Accept interrupted")
                 return
             logger.info("Stream client connected from %s", addr)
+            # Bounded so one stalled subscriber cannot freeze the replay's
+            # own frame loop; a timeout is then treated as death, below.
+            client_socket.settimeout(CLIENT_SEND_TIMEOUT_S)
             with self._clients_lock:
                 self._clients.append(client_socket)
             threading.Thread(

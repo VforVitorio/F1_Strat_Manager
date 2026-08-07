@@ -19,6 +19,7 @@ the most fields and is the one the PITWALL agents window reads one by one.
 
 from __future__ import annotations
 
+import json
 from functools import partial
 from types import SimpleNamespace
 
@@ -227,6 +228,7 @@ GOLDEN_SHAPE = {
                     "throttle": "float",
                 }
             ],
+            "dropped": "int",
             "rewound": "bool",
             "rival": [
                 {
@@ -328,6 +330,68 @@ GOLDEN_SHAPE = {
 }
 
 
+def _minimal_payload() -> dict:
+    """The other end of the range: no rival pinned, no decision yet, an error set.
+
+    The session still carries every car - single-driver mode is a choice of
+    which two are charted, not a smaller field - so only `driver_rival`
+    goes null here, not the `drivers` block.
+    """
+    session = SessionData(
+        gp_name="Australia",
+        location="Melbourne",
+        year=2025,
+        frames_by_driver={"NOR": _frames(40), "PIA": _frames(40)},
+        min_lap_number=1,
+        max_lap_number=4,
+        circuit_length_m=CIRCUIT_LENGTH_M,
+        total_frames=40,
+        global_t_min=4260.355,
+    )
+    state = StrategyState()
+    state.error = "lap 12: pipeline failed"
+    _sent.clear()
+    F1ArcadeView._broadcast_if_due(_view(session, state, rival=None, clients=1))
+    assert _sent, "the fixture must actually broadcast"
+    return _sent[-1]
+
+
+# What the same payload looks like before the first decision exists, with no
+# rival pinned and an error set. Frozen separately rather than unioned into
+# GOLDEN_SHAPE, because a union hides WHICH state makes a field null and a
+# consumer needs exactly that. Five fields differ, and they are the five a
+# type generated from the rich shape alone would get wrong.
+GOLDEN_MINIMAL_DIFFS = {
+    "arcade.driver_rival": "NoneType",
+    "arcade.telemetry.rival": [],
+    "strategy.start": "NoneType",
+    "strategy.latest": "NoneType",
+    "strategy.history_tail": [],
+    "strategy.error": "str",
+}
+
+
+def _highest_diffs(rich, minimal, path: str = "") -> dict:
+    """Where the two shapes part company, reported at the highest node.
+
+    A subtree that collapses to `None` is one difference, not one per leaf:
+    "strategy.latest is null before the first decision" is the fact a
+    consumer needs, and 22 entries saying its fields are absent is noise.
+    """
+    if rich == minimal:
+        return {}
+    if isinstance(rich, dict) and isinstance(minimal, dict):
+        diffs: dict = {}
+        for key in rich:
+            child = f"{path}.{key}" if path else key
+            if key not in minimal:
+                diffs[child] = "absent"
+            else:
+                diffs.update(_highest_diffs(rich[key], minimal[key], child))
+        return diffs
+    return {path: minimal}
+
+
 def test_the_payload_shape_is_the_frozen_one():
     """Every key and type on the wire, pinned.
 
@@ -337,6 +401,19 @@ def test_the_payload_shape_is_the_frozen_one():
     gone.
     """
     assert _shape(_payload()) == GOLDEN_SHAPE
+
+
+def test_the_states_that_make_a_field_null_are_frozen_too():
+    """A consumer typed off the rich shape alone gets five wrong non-nullables.
+
+    Before the first lap the pipeline decides, with no rival pinned and an
+    error set, these five fields differ from the rich payload. Everything
+    else must be identical: if a sixth field starts varying, that is a new
+    optionality nobody declared.
+    """
+    diffs = _highest_diffs(_shape(_payload()), _shape(_minimal_payload()))
+
+    assert diffs == GOLDEN_MINIMAL_DIFFS
 
 
 def test_the_payload_carries_the_schema_version():
@@ -405,3 +482,64 @@ def test_no_seq_is_burned_while_nobody_is_listening():
     check downstream would be measuring the wrong thing.
     """
     assert _seq_of(10, clients=0) == []
+
+
+# --- Nothing non-finite reaches the wire, enforced at the encoder -----------
+
+
+def _sent_bytes(payload: dict) -> list[bytes]:
+    """Run the real `TelemetryStreamServer.broadcast` against a fake socket.
+
+    Through the server, not around it: the guarantee lives in `json.dumps`
+    and the sanitiser that feeds it, and a test that builds the dict and
+    encodes it itself would prove nothing about either.
+    """
+    from src.arcade.stream import TelemetryStreamServer
+
+    written: list[bytes] = []
+    server = TelemetryStreamServer()
+    server._running = True
+    server._clients = [SimpleNamespace(sendall=written.append)]
+    server.broadcast(payload)
+    return written
+
+
+def _reject_non_finite(token: str) -> float:
+    raise AssertionError(f"non-finite token on the wire: {token}")
+
+
+def test_a_nan_from_a_model_costs_its_field_and_not_the_whole_tick():
+    """The `strategy` block is a bare `asdict()` of raw model output.
+
+    A model that cannot compute a value hands back NaN, and three of the
+    guards on the way in are `or`/truthiness tests, which NaN passes:
+    `nan or 0.0` is `nan`. `json.dumps` then writes a bare `NaN` that
+    Python reads back and `JSON.parse` rejects, so one unusable prediction
+    would have dropped every field on the tick for a web consumer.
+
+    The panels that do not depend on that prediction keep updating; the one
+    that does gets `null`, which it already has to handle.
+    """
+    payload = _payload()
+    payload["strategy"]["latest"]["lap_time_s"] = float("nan")
+    payload["strategy"]["latest"]["scenario_scores"]["PIT_NOW"] = float("inf")
+    payload["strategy"]["history_tail"][0]["confidence"] = float("-inf")
+
+    written = _sent_bytes(payload)
+
+    assert written, "a NaN must not silence the whole broadcast"
+    decoded = json.loads(written[0], parse_constant=_reject_non_finite)
+    assert decoded["strategy"]["latest"]["lap_time_s"] is None
+    assert decoded["strategy"]["latest"]["scenario_scores"]["PIT_NOW"] is None
+    assert decoded["strategy"]["history_tail"][0]["confidence"] is None
+    # Everything that was computable is still there.
+    assert decoded["strategy"]["latest"]["action"] == "PIT_NOW"
+    assert decoded["seq"] == payload["seq"]
+
+
+def test_a_payload_that_cannot_be_encoded_is_dropped_rather_than_half_sent():
+    """The encoder is the backstop, and a dropped message is visible in `seq`."""
+    payload = _payload()
+    payload["strategy"]["latest"]["reasoning"] = {1, 2}  # a set is not JSON
+
+    assert _sent_bytes(payload) == []
