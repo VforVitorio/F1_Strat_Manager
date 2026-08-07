@@ -99,6 +99,15 @@ class SessionData:
     circuit_rotation_deg: float = 0.0
     total_frames: int = 0
     timeline: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    # Session-time origin of the frame clock, in seconds. `timeline` starts at
+    # 0.0 by construction (`_build_timeline`), so a frame's `t` is an offset,
+    # not a session time, and on its own it is just `frame_index * DT`. Adding
+    # this back recovers FastF1 `SessionTime` seconds — the clock that
+    # `laps.parquet` (`Time`, `LapStartTime`, `Sector*SessionTime`) and
+    # `weather.parquet` are keyed on. Without it nothing on the broadcast can
+    # be joined by time to anything on disk, which is why `intervals.parquet`
+    # is downloaded for every race and read by nothing.
+    global_t_min: float = 0.0
     ref_lap_xy: tuple[np.ndarray, np.ndarray] = field(
         default_factory=lambda: (np.zeros(0), np.zeros(0))
     )
@@ -324,6 +333,7 @@ class SessionLoader:
             circuit_rotation_deg=rotation_deg,
             total_frames=len(timeline),
             timeline=timeline,
+            global_t_min=float(global_t_min),
             ref_lap_xy=(ref_x, ref_y),
             ref_lap_drs=ref_drs,
             events=[],
