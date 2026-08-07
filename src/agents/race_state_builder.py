@@ -62,7 +62,7 @@ from src.agents.position_projection import GAP_UNKNOWN_FALLBACK_S
 logger = logging.getLogger(__name__)
 
 # Canonical defaults. Each literal below was measured on the shipped 2023-2025
-# parquets (71 races) before being chosen; the numbers are in the #784 decision
+# parquets (70 races) before being chosen; the numbers are in the #784 decision
 # table and in documents/audits/DESIGN_race_state_single_contract.md (F10).
 
 # Zero rows carry the literal "UNKNOWN" in any season, so it can never collide

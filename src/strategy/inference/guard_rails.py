@@ -53,7 +53,7 @@ _PIT_ACTIONS = frozenset({"PIT_NOW", "UNDERCUT", "OVERCUT", "REACTIVE_SC"})
 # largest passing value would be a change nobody asked for on evidence that only says
 # they are not currently wrong.
 #
-# The sample is 1900 real green-flag stops across 71 races of 2023-2025 raw laps.
+# The sample is 1900 real green-flag stops across 70 races of 2023-2025 raw laps.
 # `documents/eval_reports/stint_lengths.md` regenerates the four minimum-stint shares
 # from these constants on every run, so that report always grades what is actually
 # shipping, and `tests/eval/test_stint_lengths.py` asserts the ceiling holds on them.

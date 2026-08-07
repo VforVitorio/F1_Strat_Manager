@@ -87,11 +87,16 @@ _PIT_CONTEXT = {
 }
 
 _GOLDEN_PROJECTION_ALPHA_05 = {
+    # STAY_OUT moved when the 2023 Spanish GP duplicate left the dataset: E 1.276 -> 1.28,
+    # score 1.288 -> 1.29. The other three candidates are identical to the digit. The race
+    # was in the featured files and the raw tree twice, so the per-circuit and per-team
+    # aggregates the projection reads were computed over one weekend counted double; this
+    # is the same correction that moved the published sample from 1,810 stops to 1,768.
     "STAY_OUT": {
-        "E": 1.276,
+        "E": 1.28,
         "P10": 1.3,
         "P90": 1.3,
-        "score": 1.288,
+        "score": 1.29,
         "eligible": True,
         "target": None,
     },

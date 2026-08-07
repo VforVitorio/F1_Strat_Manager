@@ -39,11 +39,17 @@ at a page that no longer exists. See
 |---|---|---|
 | N25 | `PaceOutput` | `lap_time_pred`, `ci_p10`, `ci_p90`, `delta_vs_prev`, `reasoning` |
 | N26 | `TireOutput` | `laps_to_cliff_p10/p50/p90`, `warning_level`, `deg_rate`, `reasoning` |
-| N27 | `RaceSituationOutput` | `overtake_prob`, `sc_prob_3lap`, `threat_level`, `reasoning` |
+| N27 | `RaceSituationOutput` | `overtake_prob` (nullable — see below), `sc_prob_3lap`, `threat_level`, `reasoning` |
 | N28 | `PitStrategyOutput` | `action`, `compound_recommendation`, `stop_duration_p05/p50/p95`, `undercut_prob`, `reasoning` |
 | N29 | `RadioOutput` | `radio_events`, `rcm_events`, `alerts`, `reasoning`, `corrections` |
 | N30 | `RegulationContext` | `answer`, `articles`, `chunks`, `.reasoning` (alias for answer) |
 | N31 | `StrategyRecommendation` | `action`, `reasoning`, `confidence`, `scenario_scores`, `regulation_context` |
+
+**N27's `overtake_prob` is `float | None`.** N11 dropped every training pair more than 2.5 s
+apart before labelling, so the model has no labelled example beyond that gap — 43.1% of real
+position-adjacent pairs in 2025. There it returns `None` rather than an extrapolation. `None`
+is not `0.0`: zero is the value the regulation asserts under a Safety Car (Art. 55.8), and
+consumers have to tell the two apart.
 
 ---
 

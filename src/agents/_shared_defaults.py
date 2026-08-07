@@ -13,7 +13,7 @@ from typing import Any, Mapping
 # it unconditionally). This constant only guards a hand-built session_meta -- a test
 # fixture, or a partially populated state -- from resolving a missing key to a
 # different number at every call site. 57 is the median/mode race length across the
-# 2023-2025 dataset (71 races) -- NOT "2022-2025": there is no 2022 season anywhere in
+# 2023-2025 dataset (70 races) -- NOT "2022-2025": there is no 2022 season anywhere in
 # data/ (CLAUDE.md section 1). Previously restated as a bare literal in
 # pit_strategy_agent.py (x3), race_situation_agent.py (x2) and tire_agent.py (x1);
 # consolidated here so a future change updates every caller at once instead of drifting
@@ -56,9 +56,8 @@ def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> f
 
 # The air and track temperature a consumer reads when the reading is genuinely absent.
 #
-# MEASURED, not chosen: the medians over the 68,122 laps of 2023-2025, taken through
-# ``augment_featured_laps`` so the weather columns the 2025 artefact ships without are
-# restored first (#782). AirTemp median 24.20, TrackTemp median 34.20.
+# MEASURED, not chosen: the medians over the 66,924 laps of 2023-2025, taken through
+# ``augment_featured_laps``. AirTemp median 24.6, TrackTemp median 34.7.
 #
 # One pair, because there were FIVE for the same two quantities (#789), three of them
 # feeding models: pace read 25.0/35.0, tire and race_situation read 28.0/38.0, and the
@@ -78,5 +77,9 @@ def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> f
 # So this is a dedup of a LATENT disagreement, and the paths where it does bite are the
 # ones with no weather frame at all: a hand-built session_meta, a test fixture, or the
 # backend producer that emits None per key (#788).
-DEFAULT_AIR_TEMP_C: float = 24.2
-DEFAULT_TRACK_TEMP_C: float = 34.2
+# Re-measured after the 2023 Spanish GP duplicate left the dataset. That race was in the
+# featured files twice, so the earlier 24.2 / 34.2 described a sample of 68,122 laps that
+# counted one weekend's weather double. The move is small and its direction is the point:
+# the constants are a claim about the dataset, and it was the dataset that was wrong.
+DEFAULT_AIR_TEMP_C: float = 24.6
+DEFAULT_TRACK_TEMP_C: float = 34.7

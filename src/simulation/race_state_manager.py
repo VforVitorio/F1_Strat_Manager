@@ -145,6 +145,7 @@ class RaceStateManager:
         # Precomputed for the same reason as the two above: get_driver_state is an
         # O(1) lookup and a per-lap rescan would break that promise.
         self._derived_prev_lap: dict[int, float] = self._precompute_prev_lap_times()
+        self._derived_prev_speed_st: dict[int, float] = self._precompute_prev_speed_traps()
 
         # Art. 30.5(m) flags, one timeline per driver, built on first ask.
         # `get_lap_state` needs ours plus one per rival, and the per-lap helper
@@ -154,6 +155,13 @@ class RaceStateManager:
         # pass brings it back to 3.9 ms. Lazy per driver, because a caller asking
         # about three cars should not pay for twenty.
         self._stint_flags: dict[str, dict[int, dict[str, Any]]] = {}
+
+        # Per-lap weather aligned by session time, for ONE frame at a time. See
+        # `_weather_for_lap`: the alignment is a whole-race merge_asof and doing it per
+        # lap would cost the O(1) lookup above. The frame itself is held so `is` stays a
+        # real identity test, which `id()` is not once an object dies.
+        self._weather_frame: pd.DataFrame | None = None
+        self._weather_aligned: pd.DataFrame | None = None
 
     def _precompute_pit_laps(self) -> tuple[int, ...]:
         """The lap numbers on which our driver entered the pit lane, ascending.
@@ -230,12 +238,37 @@ class RaceStateManager:
             keeps that as ``None`` rather than inventing a number. An empty map is
             the honest result for a frame lacking the columns this needs.
         """
+        return self._precompute_previous(column="_lap_time_s")
+
+    def _precompute_prev_speed_traps(self) -> dict[int, float]:
+        """The same reconstruction, for N04's ``Prev_SpeedST``.
+
+        N04 builds every ``Prev_*`` column in one loop over the SAME grouped shift
+        (`.nb_py/N04_feature_engineering.py:389-392`), so the previous speed trap obeys
+        the identical rule as the previous lap time: same stint grouping, same survivor
+        filter. #435 restored ``Prev_LapTime`` through this machinery and left its
+        siblings alone, and the pace agent went on feeding the CURRENT lap's trap where
+        training had the previous one.
+
+        Sharing the helper is the point rather than an economy: two reconstructions of
+        one transform is how the pair drifts apart the next time either is corrected.
+        """
+        return self._precompute_previous(column="SpeedST")
+
+    def _precompute_previous(self, column: str) -> dict[int, float]:
+        """``{lap_number: the previous SURVIVING lap's value}`` for one N04 ``Prev_`` column.
+
+        Kept private and column-parametric because the survivor filter, not the shift, is
+        what makes this correct, and it is identical for every such column.
+        """
         needed = {"LapNumber", "LapTime", "Stint"}
         if self._driver.empty or not needed <= set(self._driver.columns):
             return {}
 
         laps = self._driver.copy()
         laps["_lap_time_s"] = laps["LapTime"].map(_to_seconds)
+        if column not in laps.columns:
+            return {}
 
         # N04's filter_baseline_laps, term for term. IsAccurate and Deleted are
         # FastF1 quality flags absent from some hand-built frames, so a missing
@@ -251,7 +284,7 @@ class RaceStateManager:
         if ordered.empty:
             return {}
 
-        previous = ordered.groupby("Stint", sort=False)["_lap_time_s"].shift(1)
+        previous = ordered.groupby("Stint", sort=False)[column].shift(1)
         return {
             int(lap): float(value)
             for lap, value in zip(ordered["LapNumber"], previous, strict=True)
@@ -403,11 +436,29 @@ class RaceStateManager:
                 self._stint_baselines.get(int(r["Stint"])) if pd.notna(r.get("Stint")) else None
             ),
             "fresh_tyre": bool(r.get("FreshTyre", False)),
+            # N06 trains on DriverNumber as a real feature (car numbers 1-81; 0 never
+            # occurs). Nothing emitted it, so `pace_agent.run_from_state` fell back to
+            # `or 0` on every replay lap: a constant outside the trained vocabulary,
+            # and a findable one, since 0 sorts below every real car number and sends
+            # each DriverNumber split down its left branch (W-F2). The value is right
+            # here in the row. None rather than 0 when it is genuinely missing, so the
+            # absence stays an absence.
+            "driver_number": int(r["DriverNumber"]) if pd.notna(r.get("DriverNumber")) else None,
             # --- Speed traps (all four sensor points) ---
             "speed_i1": float(r["SpeedI1"]) if pd.notna(r.get("SpeedI1")) else None,
             "speed_i2": float(r["SpeedI2"]) if pd.notna(r.get("SpeedI2")) else None,
             "speed_fl": float(r["SpeedFL"]) if pd.notna(r.get("SpeedFL")) else None,
             "speed_st": float(r["SpeedST"]) if pd.notna(r.get("SpeedST")) else None,
+            # N04's Prev_SpeedST, emitted for exactly the reason prev_lap_time above is:
+            # the pace agent had no previous trap to read, so it served THIS lap's
+            # (`d.get('speed_st') or 300.0`) into a feature trained on the preceding
+            # one. Same producer, same rule, same None-means-unknown convention — the
+            # first lap of a stint genuinely has no predecessor and says so.
+            "prev_speed_st": (
+                float(r["Prev_SpeedST"])
+                if pd.notna(r.get("Prev_SpeedST"))
+                else self._derived_prev_speed_st.get(int(lap_number))
+            ),
             # --- Fuel (linear depletion estimate from FuelLoad feature) ---
             "fuel_load": float(r["FuelLoad"]) if pd.notna(r.get("FuelLoad")) else None,
             # --- Track & pit state ---
@@ -486,6 +537,64 @@ class RaceStateManager:
 
         return sorted(states, key=lambda s: s["position"] or 99)
 
+    def _weather_for_lap(self, lap_number: int, weather_df: pd.DataFrame) -> pd.Series:
+        """Our driver's weather sample for this lap, aligned by session time.
+
+        Built once per weather frame and cached: the alignment is a `merge_asof`
+        over the whole race, and paying it per lap would break the O(1) promise
+        `get_lap_state` makes.
+
+        THE CACHE HOLDS THE FRAME, not `id(weather_df)`. An id is only unique among
+        LIVE objects and CPython reuses a dead one eagerly: a caller that re-reads
+        `weather.parquet` per call and lets the previous frame die gets the previous
+        race's alignment, silently, with no error and no log. That was reproduced on
+        the second trial. Keeping a reference makes `is` a real identity test, and one
+        slot rather than a growing dict means the cache cannot leak either. A frame
+        MUTATED IN PLACE is still served stale; that is a precondition of any identity
+        cache and is why the contract is "hand back the same frame you built from".
+
+        WHEN THERE IS NO ROW FOR THIS LAP the four readings come back as NaN, so the
+        caller emits None. The trigger is not a lap with no session time, which never
+        happens (0 of 79,032 raw driver-laps): it is a driver with no row at all for a
+        lap the race still ran, which is every lap after a retirement, and 6,236
+        driver-lap pairs across the dataset. This used to serve `weather_df.iloc[0]`,
+        the session's FIRST sample, described as "a real gap rather than a substituted
+        reading". It was exactly a substituted reading, and a bad one: over 405 real
+        fallback laps it was 2.67 C off on average and up to 8.9, with the rain flag
+        wrong on 92 of them, which is WORSE than the proportional lookup this fix
+        replaced (1.86 C) on that same territory. N04 has no such row and therefore no
+        convention to copy, so the honest emission is nothing at all.
+        """
+        aligned = self._weather_aligned if self._weather_frame is weather_df else None
+        if aligned is None:
+            from src.f1_strat_manager.weather_restore import weather_for_race
+
+            trained = weather_for_race(self._driver, weather_df)
+            # Wind is display-only and not in N04's four, so it is carried on the
+            # same aligned rows rather than looked up a second way.
+            if "WindSpeed" in weather_df.columns and "Time" in weather_df.columns:
+                samples = weather_df[["Time", "WindSpeed"]].dropna(subset=["Time"])
+                laps = self._driver[["Time"]].dropna(subset=["Time"])
+                if not samples.empty and not laps.empty:
+                    merged = pd.merge_asof(
+                        laps.sort_values("Time"),
+                        samples.sort_values("Time"),
+                        on="Time",
+                        direction="nearest",
+                    )
+                    merged.index = laps.sort_values("Time").index
+                    trained = trained.assign(WindSpeed=merged["WindSpeed"])
+            aligned = trained
+            self._weather_frame = weather_df
+            self._weather_aligned = aligned
+
+        row = self._driver[self._driver["LapNumber"] == lap_number]
+        if not row.empty and row.index[0] in aligned.index:
+            return aligned.loc[row.index[0]]
+        # No row for this lap: our driver has retired or been lapped out of the frame.
+        # An all-NaN row, so every field the caller guards with `pd.notna` becomes None.
+        return pd.Series(dtype="float64")
+
     def get_weather_state(
         self,
         lap_number: int,
@@ -495,12 +604,31 @@ class RaceStateManager:
 
         ``TrackStatus`` is always present (sourced from laps). Optional
         ``weather_df`` (from weather.parquet) adds temperature, humidity,
-        wind, and rainfall when available. The row is picked by mapping the
-        lap fraction onto ``weather_df``'s row index (``int(lap_frac *
-        (len(weather_df) - 1))``): a proportional lookup, not an
-        interpolation between two samples. Weather changes slowly enough
-        over a race that a single nearest row is close enough for a replay
-        demo.
+        wind, and rainfall when available.
+
+        THE ROW IS PICKED BY SESSION TIME, which is how N04 built the trained
+        columns: ``merge_asof(direction='nearest')`` of each lap's ``Time``
+        against the weather samples' ``Time``.
+
+        It used to be picked by mapping the lap fraction onto ``weather_df``'s
+        row index, a proportional lookup that ignores session time entirely, on
+        the reasoning that weather changes slowly enough for a replay demo. The
+        reasoning was wrong twice over. Weather samples are not evenly spaced in
+        time, and neither are laps: a Safety Car or a red flag stretches the gap
+        between two laps while the samples keep their own cadence, so the two
+        indices drift apart exactly when conditions are changing.
+
+        Measured across 26,692 driver-laps of 24 races: the proportional lookup
+        disagreed with N04's join on **92.6%** of laps, mean 1.11 C and up to
+        11.8 C on TrackTemp, and **flipped the rain flag on 1,279 laps**. N06's
+        weather block is 39.7% of that model's gain, and its predictions moved
+        on 26.8% of laps, mean 0.037 s and up to 8.28 s.
+
+        The four trained columns come from ``weather_restore.weather_for_race``,
+        which is the verified reference (22,760/22,760 against N04's own output)
+        rather than a second implementation of the same join. Wind rides on the
+        same aligned row: nothing trains on it, but a second alignment inside one
+        dict is how the two weather paths drifted apart in the first place.
 
         Args:
             lap_number:  1-indexed lap number.
@@ -513,9 +641,7 @@ class RaceStateManager:
         weather: dict[str, Any] = {"track_status": track_status}
 
         if weather_df is not None and not weather_df.empty:
-            lap_frac = (lap_number - 1) / max(self.total_laps - 1, 1)
-            idx = int(lap_frac * (len(weather_df) - 1))
-            w = weather_df.iloc[idx]
+            w = self._weather_for_lap(lap_number, weather_df)
             weather.update(
                 {
                     "air_temp": float(w["AirTemp"]) if pd.notna(w.get("AirTemp")) else None,

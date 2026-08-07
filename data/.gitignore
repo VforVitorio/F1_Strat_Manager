@@ -1,3 +1,8 @@
 /raw
 /processed
 /models
+
+# Pre-regeneration copies of the featured artefacts. Written by
+# scripts/rebuild_featured_laps.py's operator before a run, so the acceptance diff has
+# something to compare against; megabytes of parquet that must never reach git.
+/_backup*

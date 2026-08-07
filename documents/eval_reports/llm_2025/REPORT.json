@@ -1,0 +1,1501 @@
+{
+  "llm": {
+    "source": "C:\\Users\\victo\\Desktop\\Documents\\Cuarto Año\\TFG\\F1_Strat_Manager\\documents\\eval_reports\\llm_2025\\_merged_llm.jsonl",
+    "laps_measured": 669,
+    "rows_on_disk": 764,
+    "windows": 53,
+    "wall_clock_seconds": 19300.8,
+    "tokens": {
+      "prompt": 12625965,
+      "completion": 825340,
+      "calls": 6792,
+      "cached_prompt": null
+    },
+    "agreement": {
+      "scored": 41,
+      "eligible": 67,
+      "scored_share": 0.6119,
+      "coverage_verdict": "ok",
+      "exact": 0.0488,
+      "within_one": 0.2195,
+      "within_two": 0.3659,
+      "mean_signed_error": -2.244,
+      "mean_absolute_error": 3.073
+    },
+    "buckets": {
+      "scored": 41,
+      "no_call_in_window": 18,
+      "no_boundary_in_window": 7,
+      "min_stint": 1
+    },
+    "verdicts": [
+      {
+        "race": "Barcelona",
+        "driver": "ALB",
+        "actual_lap": 6,
+        "chosen_lap": 10,
+        "offset_laps": 4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ALB",
+        "actual_lap": 26,
+        "chosen_lap": 22,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ALB",
+        "actual_lap": 27,
+        "chosen_lap": 22,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ALO",
+        "actual_lap": 42,
+        "chosen_lap": 38,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ANT",
+        "actual_lap": 21,
+        "chosen_lap": 19,
+        "offset_laps": -2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ANT",
+        "actual_lap": 49,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "BOR",
+        "actual_lap": 19,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "BOR",
+        "actual_lap": 49,
+        "chosen_lap": 44,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "COL",
+        "actual_lap": 14,
+        "chosen_lap": 16,
+        "offset_laps": 2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "HAM",
+        "actual_lap": 16,
+        "chosen_lap": 16,
+        "offset_laps": 0,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "LAW",
+        "actual_lap": 44,
+        "chosen_lap": 46,
+        "offset_laps": 2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "NOR",
+        "actual_lap": 21,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "PIA",
+        "actual_lap": 49,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "SAI",
+        "actual_lap": 9,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "SAI",
+        "actual_lap": 34,
+        "chosen_lap": 29,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "TSU",
+        "actual_lap": 8,
+        "chosen_lap": 7,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "TSU",
+        "actual_lap": 24,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "ALB",
+        "actual_lap": 14,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "ALB",
+        "actual_lap": 38,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "ALO",
+        "actual_lap": 39,
+        "chosen_lap": 34,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "BEA",
+        "actual_lap": 30,
+        "chosen_lap": 26,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "BOR",
+        "actual_lap": 40,
+        "chosen_lap": 36,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "COL",
+        "actual_lap": 13,
+        "chosen_lap": 12,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "COL",
+        "actual_lap": 35,
+        "chosen_lap": 33,
+        "offset_laps": -2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "GAS",
+        "actual_lap": 32,
+        "chosen_lap": 34,
+        "offset_laps": 2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "HAM",
+        "actual_lap": 42,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "LEC",
+        "actual_lap": 19,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "NOR",
+        "actual_lap": 31,
+        "chosen_lap": 30,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "RUS",
+        "actual_lap": 19,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "RUS",
+        "actual_lap": 43,
+        "chosen_lap": 38,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "SAI",
+        "actual_lap": 51,
+        "chosen_lap": 46,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Lusail",
+        "driver": "BEA",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "BEA",
+        "actual_lap": 40,
+        "chosen_lap": 40,
+        "offset_laps": 0,
+        "bucket": "scored"
+      },
+      {
+        "race": "Lusail",
+        "driver": "BEA",
+        "actual_lap": 41,
+        "chosen_lap": 40,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Lusail",
+        "driver": "COL",
+        "actual_lap": 32,
+        "chosen_lap": 34,
+        "offset_laps": 2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Lusail",
+        "driver": "HAD",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "HAM",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "OCO",
+        "actual_lap": 34,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "ALO",
+        "actual_lap": 20,
+        "chosen_lap": 17,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "ALB",
+        "actual_lap": 32,
+        "chosen_lap": 37,
+        "offset_laps": 5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "ALB",
+        "actual_lap": 40,
+        "chosen_lap": 37,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "GAS",
+        "actual_lap": 8,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monaco",
+        "driver": "HAD",
+        "actual_lap": 14,
+        "chosen_lap": 10,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "HAD",
+        "actual_lap": 19,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monaco",
+        "driver": "HUL",
+        "actual_lap": 12,
+        "chosen_lap": 9,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "LEC",
+        "actual_lap": 22,
+        "chosen_lap": 18,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "RUS",
+        "actual_lap": 53,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "ANT",
+        "actual_lap": 14,
+        "chosen_lap": 13,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Montréal",
+        "driver": "COL",
+        "actual_lap": 14,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "GAS",
+        "actual_lap": 53,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "HUL",
+        "actual_lap": 19,
+        "chosen_lap": 18,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Montréal",
+        "driver": "LAW",
+        "actual_lap": 38,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "LEC",
+        "actual_lap": 53,
+        "chosen_lap": 49,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "ALB",
+        "actual_lap": 41,
+        "chosen_lap": 37,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "ALO",
+        "actual_lap": 20,
+        "chosen_lap": 17,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "ALO",
+        "actual_lap": 24,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "min_stint"
+      },
+      {
+        "race": "Monza",
+        "driver": "ANT",
+        "actual_lap": 28,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "BOR",
+        "actual_lap": 20,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "COL",
+        "actual_lap": 33,
+        "chosen_lap": 29,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "HAD",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "LEC",
+        "actual_lap": 33,
+        "chosen_lap": 28,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "NOR",
+        "actual_lap": 46,
+        "chosen_lap": 41,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "PIA",
+        "actual_lap": 45,
+        "chosen_lap": 42,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "SAI",
+        "actual_lap": 30,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "STR",
+        "actual_lap": 49,
+        "chosen_lap": 46,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "TSU",
+        "actual_lap": 19,
+        "chosen_lap": 18,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "VER",
+        "actual_lap": 37,
+        "chosen_lap": 33,
+        "offset_laps": -4,
+        "bucket": "scored"
+      }
+    ],
+    "llm_fields": {
+      "laps": 764,
+      "actions": {
+        "STAY_OUT": 562,
+        "PIT_NOW": 122,
+        "UNDERCUT": 80
+      },
+      "pace_modes": {
+        "MANAGE": 500,
+        "PUSH": 164,
+        "NEUTRAL": 66,
+        "LIFT_AND_COAST": 34
+      },
+      "risk_postures": {
+        "BALANCED": 578,
+        "AGGRESSIVE": 127,
+        "DEFENSIVE": 59
+      },
+      "confidence": {
+        "n": 764,
+        "mean": 0.866,
+        "median": 0.89,
+        "min": 0.58,
+        "max": 0.99
+      },
+      "fields_populated": {
+        "pit_lap_target": 764,
+        "compound_next": 473,
+        "undercut_target": 342,
+        "target_lap_time_s": 762,
+        "pace_mode": 764,
+        "risk_posture": 764,
+        "contingencies": 764
+      }
+    },
+    "repeats": {
+      "laps_with_repeats": 88,
+      "laps_differing": {
+        "action": 17,
+        "confidence": 79,
+        "pit_lap_target": 42,
+        "compound_next": 24,
+        "pace_mode": 23
+      },
+      "share_differing": {
+        "action": 0.193,
+        "confidence": 0.898,
+        "pit_lap_target": 0.477,
+        "compound_next": 0.273,
+        "pace_mode": 0.261
+      }
+    }
+  },
+  "deterministic": {
+    "source": "C:\\Users\\victo\\Desktop\\Documents\\Cuarto Año\\TFG\\F1_Strat_Manager\\documents\\eval_reports\\llm_2025\\_merged_det.jsonl",
+    "laps_measured": 1066,
+    "rows_on_disk": 1261,
+    "windows": 80,
+    "wall_clock_seconds": 1076.7,
+    "tokens": {
+      "prompt": 0,
+      "completion": 0,
+      "calls": 0,
+      "cached_prompt": null
+    },
+    "agreement": {
+      "scored": 39,
+      "eligible": 100,
+      "scored_share": 0.39,
+      "coverage_verdict": "masked",
+      "exact": 0.1282,
+      "within_one": 0.3077,
+      "within_two": 0.4615,
+      "mean_signed_error": -2.308,
+      "mean_absolute_error": 2.615
+    },
+    "buckets": {
+      "scored": 39,
+      "no_call_in_window": 35,
+      "no_boundary_in_window": 24,
+      "min_stint": 2
+    },
+    "verdicts": [
+      {
+        "race": "Barcelona",
+        "driver": "ALB",
+        "actual_lap": 6,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ALB",
+        "actual_lap": 26,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ALB",
+        "actual_lap": 27,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ALO",
+        "actual_lap": 42,
+        "chosen_lap": 39,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ANT",
+        "actual_lap": 21,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "ANT",
+        "actual_lap": 49,
+        "chosen_lap": 45,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "BOR",
+        "actual_lap": 19,
+        "chosen_lap": 17,
+        "offset_laps": -2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "BOR",
+        "actual_lap": 49,
+        "chosen_lap": 48,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "COL",
+        "actual_lap": 14,
+        "chosen_lap": 11,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "HAM",
+        "actual_lap": 16,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "LAW",
+        "actual_lap": 44,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "NOR",
+        "actual_lap": 21,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "PIA",
+        "actual_lap": 49,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "SAI",
+        "actual_lap": 9,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "SAI",
+        "actual_lap": 34,
+        "chosen_lap": 34,
+        "offset_laps": 0,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "TSU",
+        "actual_lap": 8,
+        "chosen_lap": 7,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Barcelona",
+        "driver": "TSU",
+        "actual_lap": 24,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "ALB",
+        "actual_lap": 14,
+        "chosen_lap": 11,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "ALB",
+        "actual_lap": 38,
+        "chosen_lap": 34,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "ALO",
+        "actual_lap": 39,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "BEA",
+        "actual_lap": 30,
+        "chosen_lap": 28,
+        "offset_laps": -2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "BOR",
+        "actual_lap": 40,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "COL",
+        "actual_lap": 13,
+        "chosen_lap": 8,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "COL",
+        "actual_lap": 35,
+        "chosen_lap": 33,
+        "offset_laps": -2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "GAS",
+        "actual_lap": 32,
+        "chosen_lap": 31,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "HAM",
+        "actual_lap": 42,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "LEC",
+        "actual_lap": 19,
+        "chosen_lap": 19,
+        "offset_laps": 0,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "NOR",
+        "actual_lap": 31,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Budapest",
+        "driver": "RUS",
+        "actual_lap": 19,
+        "chosen_lap": 15,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "RUS",
+        "actual_lap": 43,
+        "chosen_lap": 43,
+        "offset_laps": 0,
+        "bucket": "scored"
+      },
+      {
+        "race": "Budapest",
+        "driver": "SAI",
+        "actual_lap": 51,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "BEA",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "BEA",
+        "actual_lap": 40,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "BEA",
+        "actual_lap": 41,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "COL",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "HAD",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "HAM",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Lusail",
+        "driver": "OCO",
+        "actual_lap": 34,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "ALO",
+        "actual_lap": 20,
+        "chosen_lap": 16,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "BEA",
+        "actual_lap": 48,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "GAS",
+        "actual_lap": 33,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "LEC",
+        "actual_lap": 31,
+        "chosen_lap": 29,
+        "offset_laps": -2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "RUS",
+        "actual_lap": 48,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "STR",
+        "actual_lap": 26,
+        "chosen_lap": 25,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Mexico_City",
+        "driver": "VER",
+        "actual_lap": 37,
+        "chosen_lap": 33,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "ALB",
+        "actual_lap": 32,
+        "chosen_lap": 36,
+        "offset_laps": 4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "ALB",
+        "actual_lap": 40,
+        "chosen_lap": 36,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "GAS",
+        "actual_lap": 8,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monaco",
+        "driver": "HAD",
+        "actual_lap": 14,
+        "chosen_lap": 9,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "HAD",
+        "actual_lap": 19,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monaco",
+        "driver": "HUL",
+        "actual_lap": 12,
+        "chosen_lap": 9,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "LEC",
+        "actual_lap": 22,
+        "chosen_lap": 22,
+        "offset_laps": 0,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "RUS",
+        "actual_lap": 53,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monaco",
+        "driver": "RUS",
+        "actual_lap": 62,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monaco",
+        "driver": "RUS",
+        "actual_lap": 68,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monaco",
+        "driver": "SAI",
+        "actual_lap": 48,
+        "chosen_lap": 44,
+        "offset_laps": -4,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monaco",
+        "driver": "SAI",
+        "actual_lap": 53,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "min_stint"
+      },
+      {
+        "race": "Monaco",
+        "driver": "TSU",
+        "actual_lap": 73,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "ANT",
+        "actual_lap": 14,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "COL",
+        "actual_lap": 14,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "GAS",
+        "actual_lap": 53,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "HUL",
+        "actual_lap": 19,
+        "chosen_lap": 18,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Montréal",
+        "driver": "LAW",
+        "actual_lap": 38,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "LEC",
+        "actual_lap": 53,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Montréal",
+        "driver": "SAI",
+        "actual_lap": 57,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "ALB",
+        "actual_lap": 41,
+        "chosen_lap": 36,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "ALO",
+        "actual_lap": 20,
+        "chosen_lap": 15,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "ALO",
+        "actual_lap": 24,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "min_stint"
+      },
+      {
+        "race": "Monza",
+        "driver": "ANT",
+        "actual_lap": 28,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "BOR",
+        "actual_lap": 20,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "COL",
+        "actual_lap": 33,
+        "chosen_lap": 28,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "HAD",
+        "actual_lap": 32,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "LEC",
+        "actual_lap": 33,
+        "chosen_lap": 33,
+        "offset_laps": 0,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "NOR",
+        "actual_lap": 46,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "PIA",
+        "actual_lap": 45,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Monza",
+        "driver": "SAI",
+        "actual_lap": 30,
+        "chosen_lap": 27,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "STR",
+        "actual_lap": 49,
+        "chosen_lap": 51,
+        "offset_laps": 2,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "TSU",
+        "actual_lap": 19,
+        "chosen_lap": 18,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Monza",
+        "driver": "VER",
+        "actual_lap": 37,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "ALB",
+        "actual_lap": 42,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "HAM",
+        "actual_lap": 11,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "HUL",
+        "actual_lap": 42,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "PIA",
+        "actual_lap": 43,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "RUS",
+        "actual_lap": 10,
+        "chosen_lap": 9,
+        "offset_laps": -1,
+        "bucket": "scored"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "RUS",
+        "actual_lap": 38,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "SAI",
+        "actual_lap": 11,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "SAI",
+        "actual_lap": 41,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "TSU",
+        "actual_lap": 41,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "VER",
+        "actual_lap": 11,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Silverstone",
+        "driver": "VER",
+        "actual_lap": 41,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_call_in_window"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "ANT",
+        "actual_lap": 31,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "BEA",
+        "actual_lap": 23,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "BOR",
+        "actual_lap": 31,
+        "chosen_lap": 26,
+        "offset_laps": -5,
+        "bucket": "scored"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "DOO",
+        "actual_lap": 15,
+        "chosen_lap": 12,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "GAS",
+        "actual_lap": 24,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "HAM",
+        "actual_lap": 30,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "NOR",
+        "actual_lap": 21,
+        "chosen_lap": 18,
+        "offset_laps": -3,
+        "bucket": "scored"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "SAI",
+        "actual_lap": 33,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "STR",
+        "actual_lap": 30,
+        "chosen_lap": null,
+        "offset_laps": null,
+        "bucket": "no_boundary_in_window"
+      },
+      {
+        "race": "Suzuka",
+        "driver": "VER",
+        "actual_lap": 21,
+        "chosen_lap": 19,
+        "offset_laps": -2,
+        "bucket": "scored"
+      }
+    ],
+    "llm_fields": {
+      "laps": 1261,
+      "actions": {
+        "STAY_OUT": 909,
+        "UNDERCUT": 246,
+        "PIT_NOW": 106
+      },
+      "pace_modes": {
+        "NEUTRAL": 1261
+      },
+      "risk_postures": {
+        "BALANCED": 1261
+      },
+      "confidence": {
+        "n": 1261,
+        "mean": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "fields_populated": {
+        "pit_lap_target": 0,
+        "compound_next": 0,
+        "undercut_target": 0,
+        "target_lap_time_s": 0,
+        "pace_mode": 1261,
+        "risk_posture": 1261,
+        "contingencies": 0
+      }
+    },
+    "repeats": {
+      "laps_with_repeats": 195,
+      "laps_differing": {
+        "action": 0,
+        "confidence": 0,
+        "pit_lap_target": 0,
+        "compound_next": 0,
+        "pace_mode": 0
+      },
+      "share_differing": {
+        "action": 0.0,
+        "confidence": 0.0,
+        "pit_lap_target": 0.0,
+        "compound_next": 0.0,
+        "pace_mode": 0.0
+      }
+    }
+  }
+}

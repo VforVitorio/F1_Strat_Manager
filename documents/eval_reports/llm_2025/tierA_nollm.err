@@ -1,0 +1,83 @@
+Loading weights:   0%|          | 0/197 [00:00<?, ?it/s]Loading weights: 100%|##########| 197/197 [00:00<00:00, 11851.38it/s]
+[transformers] [1mRobertaForSequenceClassification LOAD REPORT[0m from: roberta-base
+Key                        | Status     | 
+---------------------------+------------+-
+lm_head.layer_norm.bias    | [38;5;208mUNEXPECTED[0m | 
+lm_head.layer_norm.weight  | [38;5;208mUNEXPECTED[0m | 
+lm_head.dense.weight       | [38;5;208mUNEXPECTED[0m | 
+lm_head.bias               | [38;5;208mUNEXPECTED[0m | 
+lm_head.dense.bias         | [38;5;208mUNEXPECTED[0m | 
+classifier.out_proj.bias   | [31mMISSING[0m    | 
+classifier.dense.weight    | [31mMISSING[0m    | 
+classifier.out_proj.weight | [31mMISSING[0m    | 
+classifier.dense.bias      | [31mMISSING[0m    | 
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [31mMISSING:[0m	[3mthose params were newly initialized because missing from the checkpoint. Consider training on your downstream task.[0m
+Loading weights:   0%|          | 0/134 [00:00<?, ?it/s]Loading weights: 100%|##########| 134/134 [00:00<00:00, 317355.58it/s]
+[transformers] You passed `num_labels=19` which is incompatible to the `id2label` map of length `9`.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|##########| 391/391 [00:00<00:00, 12018.06it/s]
+[transformers] [1mBertForTokenClassification LOAD REPORT[0m from: dbmdz/bert-large-cased-finetuned-conll03-english
+Key                      | Status     |                                                                                          
+-------------------------+------------+------------------------------------------------------------------------------------------
+bert.pooler.dense.bias   | [38;5;208mUNEXPECTED[0m |                                                                                          
+bert.pooler.dense.weight | [38;5;208mUNEXPECTED[0m |                                                                                          
+classifier.weight        | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9, 1024]) vs model:torch.Size([19, 1024])
+classifier.bias          | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9]) vs model:torch.Size([19])            
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [33mMISMATCH:[0m	[3mckpt weights were loaded, but they did not match the original empty weight shapes.[0m
+[measure] 91 windows x 1 pass(es), 1090 laps planned
+[measure] run  Barcelona/ALB/p0 laps 1-11
+[measure] run  Barcelona/ALB/p0 laps 21-32
+[measure] run  Barcelona/ALO/p0 laps 36-47
+[measure] run  Barcelona/ANT/p0 laps 15-26
+[measure] run  Barcelona/ANT/p0 laps 43-54
+[measure] run  Barcelona/BOR/p0 laps 13-24
+[measure] run  Barcelona/BOR/p0 laps 43-54
+[measure] run  Barcelona/COL/p0 laps 8-19
+[measure] run  Barcelona/HAM/p0 laps 10-21
+[measure] run  Barcelona/LAW/p0 laps 38-49
+[measure] run  Barcelona/NOR/p0 laps 15-26
+[measure] run  Barcelona/PIA/p0 laps 43-54
+[measure] run  Barcelona/SAI/p0 laps 3-14
+[measure] run  Barcelona/SAI/p0 laps 28-39
+[measure] run  Barcelona/TSU/p0 laps 2-13
+[measure] run  Barcelona/TSU/p0 laps 18-29
+[measure] run  Budapest/ALB/p0 laps 8-19
+[measure] run  Budapest/ALB/p0 laps 32-43
+[measure] run  Budapest/ALO/p0 laps 33-44
+[measure] run  Budapest/BEA/p0 laps 24-35
+[measure] run  Budapest/BOR/p0 laps 34-45
+[measure] run  Budapest/COL/p0 laps 7-18
+[measure] run  Budapest/COL/p0 laps 29-40
+[measure] run  Budapest/GAS/p0 laps 26-37
+[measure] run  Budapest/HAM/p0 laps 36-47
+[measure] run  Budapest/LEC/p0 laps 13-24
+[measure] run  Budapest/NOR/p0 laps 25-36
+[measure] run  Budapest/RUS/p0 laps 13-24
+[measure] run  Budapest/RUS/p0 laps 37-48
+[measure] run  Budapest/SAI/p0 laps 45-56
+[measure] run  Lusail/BEA/p0 laps 34-45
+[measure] run  Lusail/COL/p0 laps 26-37
+[measure] run  Lusail/HAD/p0 laps 26-37
+[measure] run  Lusail/HAM/p0 laps 26-37
+[measure] run  Lusail/OCO/p0 laps 28-39
+[measure] run  Mexico_City/ALO/p0 laps 14-25
+[measure] run  Mexico_City/BEA/p0 laps 42-53
+[measure] run  Mexico_City/GAS/p0 laps 27-38
+[measure] run  Mexico_City/LEC/p0 laps 25-36
+[measure] run  Mexico_City/RUS/p0 laps 42-53
+[measure] run  Mexico_City/STR/p0 laps 20-31
+[measure] run  Mexico_City/VER/p0 laps 31-42
+[measure] run  Monaco/ALB/p0 laps 34-45
+[measure] run  Monaco/GAS/p0 laps 2-13
+[measure] run  Monaco/HAD/p0 laps 8-19
+[measure] run  Monaco/HUL/p0 laps 6-17
+[measure] run  Monaco/LEC/p0 laps 16-27
+[measure] run  Monaco/RUS/p0 laps 56-67
+[measure] run  Monaco/SAI/p0 laps 42-53
+[measure] run  Monaco/TSU/p0 laps 67-78
+[measure] run  Montréal/ANT/p0 laps 8-19

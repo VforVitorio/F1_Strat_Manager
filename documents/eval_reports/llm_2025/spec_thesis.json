@@ -1,0 +1,6 @@
+[
+ {"race":"Budapest","driver":"LEC","team":"Ferrari","low":14,"high":24,"rival":"PIA",
+  "note":"thesis 5.5.2 - decision window +/-5 around LEC's real stop on L19, witness lap at 14"},
+ {"race":"Lusail","driver":"PIA","team":"McLaren","low":4,"high":14,"rival":"VER",
+  "note":"thesis 5.5.3 - SC deployed L7 (TrackStatus 4 on L7-L10), 16 cars pit on L7, both McLarens stay out"}
+]

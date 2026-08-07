@@ -2,7 +2,7 @@
 
 Two things live here, and they answer two different questions.
 
-**Is the layer measured?** ``data/mc_measured_v1.json`` carries six tables the
+**Is the layer measured?** ``data/mc_measured_v1.json`` carries seven tables the
 Monte Carlo scorer reads at runtime, each one counted off real laps rather than
 assumed. This report lists them with their sample sizes, so "measured" is a
 number a reader can check and not a word in a commit message.
@@ -45,6 +45,36 @@ from src.f1_strat_manager.data_cache import _find_repo_root
 from src.strategy.eval.report import build_header, write_report
 
 MEASURED_TABLES_PATH = "data/mc_measured_v1.json"
+
+# Seasons the ground truth is scored over when the caller does not say.
+#
+# It is a named constant rather than an inline tuple because the season scope is a
+# CLAIM about what the number describes, and the number was published for a year
+# with the scope living only in a default argument nobody read. 2023 and 2024 are
+# training seasons for every model in the stack; 2025 is the holdout. Restricting
+# to 2025 barely moves this particular metric, and that is not reassurance: it is a
+# property of THIS scorer, which runs on a fixed ``ProjectionConfig`` and consumes
+# no learned model and none of the measured tables, so the season scope cannot leak
+# into it. Verified rather than argued: with every measured-artefact reader in
+# ``position_projection`` patched to raise, the 2025 measurement is unchanged, and
+# the only file the run opens is one ``laps.parquet`` per race.
+#
+# The comparison to quote is the DISJOINT one, 86.05% (2025) against 86.43%
+# (2023-2024), 0.38 points. An earlier version of this comment argued it as "86.05%
+# against 86.31%", which is a subset against the superset containing it: the 552
+# stops of 2025 are 31% of the 1,768, so those two are algebraically pulled together
+# and their gap is not a train/holdout contrast at all.
+#
+# AND THE GAP IS NOT THE ARGUMENT EITHER WAY. At n=552 the disjoint difference is
+# z = 0.21 with a 95% half-width of about 2.9 points, so this sample could not have
+# distinguished no leakage from a two-point leak. The claim rests on the CODE (the
+# scorer reaches no learned artefact, verified by execution above), never on the
+# smallness of the gap. A future reader who widens a scope, sees "barely moves" and
+# concludes "no leakage" for a metric that DOES read a model would be reasoning from
+# the half of this comment that proves nothing.
+#
+# Do not carry this reasoning over to any figure that does read a model.
+DEFAULT_SCORING_YEARS: tuple[int, ...] = (2023, 2024, 2025)
 
 # A stop is a stop whether or not the tyre falls off a cliff two laps later, so
 # the ground truth uses a flat degradation profile and a cliff far outside the
@@ -260,7 +290,9 @@ def project_one_stop(pivot, medians, pitters, driver, lap) -> int | None:
     return int(result.positions[0]) - _actual_position(pivot, row_after, driver, ours_after)
 
 
-def measure_projection_ground_truth(years: tuple[int, ...] = (2023, 2024, 2025)) -> GroundTruth:
+def measure_projection_ground_truth(
+    years: tuple[int, ...] = DEFAULT_SCORING_YEARS,
+) -> GroundTruth:
     """Project every real green-flag pit stop and compare with what actually happened.
 
     Neutralised stops are excluded, and not to flatter the number. Under a Safety
@@ -346,8 +378,14 @@ def _table_rows(tables: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables: dict) -> str:
+def _render_table(
+    rows: list[dict[str, Any]],
+    truth: GroundTruth | None,
+    tables: dict,
+    years: tuple[int, ...] = DEFAULT_SCORING_YEARS,
+) -> str:
     """Two sections: the accuracy headline, then the tables that feed the scorer."""
+    seasons = ", ".join(str(year) for year in years)
     lines = ["## Position projection against real pit stops", ""]
     if truth is None:
         lines += ["Not measured: `data/raw/` is absent from this checkout.", ""]
@@ -355,6 +393,7 @@ def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables:
         lines += [
             "| quantity | value |",
             "|---|---|",
+            f"| seasons scored | {seasons} |",
             f"| green-flag stops projected | {truth.sample_size} |",
             f"| races covered | {truth.races} |",
             f"| within one position | {truth.within_one:.1%} |",
@@ -366,6 +405,11 @@ def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables:
             "this is measured accuracy and not a proxy. Neutralised stops are excluded",
             "because the pit-loss reconstruction, not the projection, is wrong under a",
             "Safety Car.",
+            "",
+            "**The seasons row is not decoration.** 2023 and 2024 are TRAINING seasons for",
+            "every model in the stack and 2025 is the holdout the shipped system infers on,",
+            "so a figure that mixes them is partly the system reading back its own training",
+            "data. Quote the season scope on the same line as the number, always.",
             "",
         ]
 
@@ -391,22 +435,48 @@ def _render_table(rows: list[dict[str, Any]], truth: GroundTruth | None, tables:
     return "\n".join(lines)
 
 
-def build_projection_report() -> dict[str, Any]:
-    """Write ``documents/eval_reports/projection.{md,json}`` and return the payload."""
+def build_projection_report(
+    years: tuple[int, ...] = DEFAULT_SCORING_YEARS,
+) -> dict[str, Any]:
+    """Write ``documents/eval_reports/projection.{md,json}`` and return the payload.
+
+    ``years`` scopes the GROUND TRUTH only. The measured tables keep whatever
+    seasons they were counted off, and the report says so on its own line, because
+    re-scoping one without the other silently is how half a fix looks like a whole
+    one. For this metric the distinction is moot in the arithmetic (the scorer
+    never reads the tables) and it is still worth stating, since the next reader
+    will assume it does.
+    """
     tables = _measured_tables()
     rows = _table_rows(tables)
 
     try:
-        truth: GroundTruth | None = measure_projection_ground_truth()
+        truth: GroundTruth | None = measure_projection_ground_truth(years=years)
     except FileNotFoundError:
         truth = None
 
-    header = build_header(dataset="data/raw laps 2023-2025 (RAW, not featured)")
+    seasons = (
+        "-".join(str(year) for year in (years[0], years[-1])) if len(years) > 1 else str(years[0])
+    )
+    # Names BOTH scopes, because the second half of this document is the measured
+    # tables and they are not scored over `years`.
+    table_seasons = (
+        "-".join(str(year) for year in (tables["years"][0], tables["years"][-1]))
+        if tables.get("years")
+        else "unknown"
+    )
+    header = build_header(
+        dataset=(
+            f"data/raw laps, ground truth {seasons}, measured tables {table_seasons} "
+            "(RAW, not featured)"
+        )
+    )
     md_path, json_path = write_report(
         "projection",
         header,
-        _render_table(rows, truth, tables),
+        _render_table(rows, truth, tables, years),
         {
+            "scoring_years": list(years),
             "ground_truth": None
             if truth is None
             else {
@@ -418,6 +488,14 @@ def build_projection_report() -> dict[str, Any]:
                 "mean_absolute_error": truth.mean_absolute_error,
             },
             "tables": rows,
+            # The tables carry their OWN season scope, which is deliberately wider
+            # than `scoring_years`. Emitted here because a machine consumer that
+            # reads `scoring_years: [2025]` and this list together would otherwise
+            # attribute 2025 to seven tables counted off 70 races across three
+            # seasons: the exact half-a-fix the constant above warns about, left
+            # open in the half a human never reads.
+            "tables_years": list(tables.get("years", [])),
+            "tables_races": tables.get("races_measured"),
             "measured_tables_path": MEASURED_TABLES_PATH,
         },
     )

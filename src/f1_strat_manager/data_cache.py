@@ -105,7 +105,17 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     "data/models/xgb_laptime_final_feature_names.json",
     "data/models/xgb_laptime_global_v1.json",
     "data/models/model_registry.json",
-    # Featured parquet + supporting configs: the CLI loads these directly
+    # Featured parquet + supporting configs: the CLI loads these directly.
+    #
+    # ALL FOUR, not just 2025. The per-year 2023/2024 files are what
+    # `pace_agent._load_circuit_mean_sector_speed` reads to build its (Year, GP) speed map,
+    # and the combined file is what N07 trained the tyre TCN on. A clean install pulled only
+    # the 2025 one, so those two lookups silently resolved against nothing on exactly the
+    # machines that had never run the notebooks — invisible to every developer whose disk
+    # already held them (the same shape as the #798 undercut gap below).
+    "data/processed/laps_featured.parquet",
+    "data/processed/laps_featured_2023.parquet",
+    "data/processed/laps_featured_2024.parquet",
     "data/processed/laps_featured_2025.parquet",
     "data/processed/feature_manifest_laptime.json",
     "data/processed/tiredeg_feature_manifest.json",

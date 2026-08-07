@@ -1,0 +1,106 @@
+[
+ {
+  "race": "Monza",
+  "driver": "ALB",
+  "team": "Williams",
+  "low": 35,
+  "high": 46,
+  "note": "tier A, anchored at stop(s) [41]"
+ },
+ {
+  "race": "Monza",
+  "driver": "ALO",
+  "team": "Aston Martin",
+  "low": 14,
+  "high": 25,
+  "note": "tier A, anchored at stop(s) [20]"
+ },
+ {
+  "race": "Monza",
+  "driver": "ANT",
+  "team": "Mercedes",
+  "low": 22,
+  "high": 33,
+  "note": "tier A, anchored at stop(s) [28]"
+ },
+ {
+  "race": "Monza",
+  "driver": "BOR",
+  "team": "Kick Sauber",
+  "low": 14,
+  "high": 25,
+  "note": "tier A, anchored at stop(s) [20]"
+ },
+ {
+  "race": "Monza",
+  "driver": "COL",
+  "team": "Alpine",
+  "low": 27,
+  "high": 38,
+  "note": "tier A, anchored at stop(s) [33]"
+ },
+ {
+  "race": "Monza",
+  "driver": "HAD",
+  "team": "Racing Bulls",
+  "low": 26,
+  "high": 37,
+  "note": "tier A, anchored at stop(s) [32]"
+ },
+ {
+  "race": "Monza",
+  "driver": "LEC",
+  "team": "Ferrari",
+  "low": 27,
+  "high": 38,
+  "note": "tier A, anchored at stop(s) [33]"
+ },
+ {
+  "race": "Monza",
+  "driver": "NOR",
+  "team": "McLaren",
+  "low": 40,
+  "high": 51,
+  "note": "tier A, anchored at stop(s) [46]"
+ },
+ {
+  "race": "Monza",
+  "driver": "PIA",
+  "team": "McLaren",
+  "low": 39,
+  "high": 50,
+  "note": "tier A, anchored at stop(s) [45]"
+ },
+ {
+  "race": "Monza",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 24,
+  "high": 35,
+  "note": "tier A, anchored at stop(s) [30]"
+ },
+ {
+  "race": "Monza",
+  "driver": "STR",
+  "team": "Aston Martin",
+  "low": 43,
+  "high": 53,
+  "note": "tier A, anchored at stop(s) [49]"
+ },
+ {
+  "race": "Monza",
+  "driver": "TSU",
+  "team": "Red Bull Racing",
+  "low": 13,
+  "high": 24,
+  "note": "tier A, anchored at stop(s) [19]"
+ },
+ {
+  "race": "Monza",
+  "driver": "VER",
+  "team": "Red Bull Racing",
+  "low": 31,
+  "high": 42,
+  "note": "tier A, anchored at stop(s) [37]"
+ }
+]

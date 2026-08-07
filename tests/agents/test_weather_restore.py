@@ -131,24 +131,31 @@ needs_artefacts = pytest.mark.skipif(
 def test_the_restore_reproduces_N04s_own_2025_output_exactly():
     """The check the module's docstring promises, against real published values.
 
-    `laps_featured.parquet` (the combined 2023-2025 artefact) carries the four weather
-    columns for 2025 — N04's actual output was published all along, and only the per-year
-    split dropped them. So the restore can be compared against ground truth rather than
-    against its own reasoning.
+    The artefact now carries the four weather columns natively, which is what the
+    regeneration restored — so the ground truth is the file itself, and the restore is run
+    against a copy with those columns REMOVED.
 
-    This is the test the pace-MAE reproduction CANNOT replace: an adversarial gate showed
+    That stripping is the whole test. An adversarial gate found this had gone vacuous the
+    moment the artefact gained the columns: `augment_featured_laps` declines when any of
+    the four is already present, so it was comparing the file with itself and passed even
+    with the restore poisoned. The suite's only alignment-versus-truth check had died
+    silently, which is precisely the failure it exists to catch, one level up.
+
+    And it is the test the pace-MAE reproduction CANNOT replace: an adversarial gate showed
     a wrong `direction='backward'` join changes 7,014 TrackTemp cells and still reproduces
     the published MAE to within 0.0003. The MAE sees the distribution, not the alignment.
     This sees the alignment.
     """
     from src.f1_strat_manager.laps_augment import augment_featured_laps
 
-    restored = augment_featured_laps(pd.read_parquet(_PER_YEAR_2025), 2025)
-    truth = pd.read_parquet(_COMBINED)
-    truth = truth[truth["Year"] == 2025]
+    truth = pd.read_parquet(_PER_YEAR_2025)
+    assert not [c for c in WEATHER_COLUMNS if c not in truth.columns], (
+        "the artefact carries no weather, so there is nothing to compare the restore "
+        "against and this test would hold vacuously"
+    )
 
-    # The per-year and combined artefacts disagree on one circuit's name.
-    truth = truth.assign(GP_Name=truth["GP_Name"].replace({"Miami Gardens": "Miami"}))
+    stripped = truth.drop(columns=list(WEATHER_COLUMNS))
+    restored = augment_featured_laps(stripped, 2025)
 
     keys = ["GP_Name", "Driver", "LapNumber"]
     joined = restored[[*keys, *WEATHER_COLUMNS]].merge(
@@ -175,8 +182,20 @@ def test_a_partial_weather_set_is_declined_rather_than_merged_into_suffix_column
     """
     from src.f1_strat_manager.laps_augment import augment_featured_laps
 
+    # DROPPING three of the four, not assigning one. This test used to build its partial
+    # frame with `.assign(AirTemp=20.0)` on an artefact that carried none of them, which
+    # made it partial by accident of the era: once the regenerated artefact natively carries
+    # all four, that same line produces a COMPLETE frame and the assertion below fails
+    # against a file that is more correct than before. Constructing the partial state from
+    # whatever the artefact happens to hold keeps the test about the guard rather than
+    # about the vintage of the data underneath it.
     partial = pd.read_parquet(_PER_YEAR_2025)
-    partial = partial.assign(AirTemp=20.0)  # one of four present, three missing
+    for column in ("TrackTemp", "Humidity", "Rainfall"):
+        if column in partial.columns:
+            partial = partial.drop(columns=[column])
+    if "AirTemp" not in partial.columns:
+        partial = partial.assign(AirTemp=20.0)
+    partial["AirTemp"] = 20.0  # one of four present, three missing
 
     result = augment_featured_laps(partial, 2025)
 

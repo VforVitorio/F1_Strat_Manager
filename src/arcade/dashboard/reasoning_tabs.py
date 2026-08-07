@@ -129,7 +129,12 @@ def _tire_lines(t: dict[str, Any]) -> list[str]:
 
 def _situation_lines(s: dict[str, Any]) -> list[str]:
     return [
-        f"overtake_prob = {_pct(s.get('overtake_prob'))}",
+        # The em dash `_pct` renders for a missing value is honest but silent, and this tab
+        # is the one a strategist opens to ask WHY. Its arcade sibling `format_situation`
+        # says "out of model range" for the same state; without the same words here the two
+        # surfaces describe the same lap differently.
+        f"overtake_prob = {_pct(s.get('overtake_prob'))}"
+        + ("  (beyond the model's trained gap)" if s.get("overtake_prob") is None else ""),
         f"sc_prob_3lap  = {_pct(s.get('sc_prob_3lap'))}",
         f"threat_level  = {s.get('threat_level', '—')}",
         f"gap_ahead_s   = {_fnum(s.get('gap_ahead_s'), 2)}s",

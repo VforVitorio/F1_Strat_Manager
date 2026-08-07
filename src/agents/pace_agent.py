@@ -34,7 +34,11 @@ from src.agents._shared_defaults import (
     DEFAULT_TRACK_TEMP_C,
     reading_or_default,
 )
-from src.f1_strat_manager.gp_slugs import canonical_gp_name, slug_from_event_name
+from src.f1_strat_manager.gp_slugs import (
+    normalise_gp_key,
+    resolve_gp_key,
+    slug_from_event_name,
+)
 
 # Safe in this direction: envelope.py is a leaf that imports nothing from src.agents.
 from src.strategy.inference.envelope import OperatingEnvelope
@@ -173,29 +177,28 @@ _N06_ENVELOPE = OperatingEnvelope(name="n06_laptime_delta", bounds=_N06_TRAINED_
 # stray file cannot silently widen what the agent claims to know.
 _FEATURED_SEASONS: tuple[int, ...] = (2023, 2024, 2025)
 
+# N01's compound codes (`.nb_py/N01_data_download.py:114`), which is what the parquet's
+# `CompoundID` column holds and therefore what N06 was trained on. Not the manifest's
+# 0-based `categorical_encoding.Compound` block: that one encodes a column N06 drops.
+#
+# 0 is a TRAINED CLASS, not a spare slot — N01 does `.fillna(0)`, so every lap whose
+# compound FastF1 did not report reached training as a 0. That is why an off-by-one here
+# is worse than a shift: it makes a SOFT lap indistinguishable from an unreported one.
+# `tests/agents/test_pace_compound_encoding.py` re-derives all of this from the artefact.
+_N01_COMPOUND_ID: dict[str, int] = {
+    "SOFT": 1,
+    "MEDIUM": 2,
+    "HARD": 3,
+    "INTERMEDIATE": 4,
+    "WET": 5,
+}
+_COMPOUND_ID_UNKNOWN: int = 0
 
-def _normalise_gp_key(gp_name: str) -> str:
-    """One spelling for a GP, applied to BOTH sides of the circuit-speed lookup.
 
-    A GP is written four ways across this project: the parquet slug ('Miami'), the raw
-    folder ('Miami_Gardens'), the metadata.json name the replay engine puts into
-    `session_meta` ('Miami Gardens', with a SPACE), and the FastF1 event name ('Miami
-    Grand Prix'). Worse, the artefacts do not agree with each other: the combined
-    `laps_featured.parquet` calls this race 'Miami' in 2023-2024 and 'Miami Gardens' in
-    2025, so even a lookup whose query is spelled correctly can miss on the season.
-
-    Normalising the KEYS at load time and the query the same way is what `gp_slugs`'s own
-    docstring prescribes, and it is why this is a function rather than a longer candidate
-    list at the call site: a chain of guesses at the query end still fails the moment the
-    stored spelling is the odd one, which is exactly how the first version of this lookup
-    sent every lap of the 2025 Miami race to NaN.
-
-    Underscores first, because `canonical_gp_name`'s alias table is keyed by the folder
-    form, so 'Miami Gardens' has to become 'Miami_Gardens' before it can become 'Miami'.
-    """
-    if not gp_name:
-        return ""
-    return canonical_gp_name(gp_name.replace(" ", "_"))
+# Moved to `gp_slugs` by the 2026-08-04 keyspace sweep: five consumers across three
+# modules needed the same normalisation, and it was never pace-specific. Re-exported under
+# the old private name so the #797 call sites and their tests do not move.
+_normalise_gp_key = normalise_gp_key
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -240,6 +243,20 @@ class PaceOutput:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _previous_tyre_life(tyre_life: Optional[int]) -> Optional[int]:
+    """The previous lap's tyre age, or None where training had no previous lap.
+
+    N04 builds ``Prev_TyreLife`` as a stint-grouped shift, so a stint opener is
+    NaN. Inference used to send ``max(0, tyre_life - 1)`` unconditionally, which
+    made an opener 0: below the trained minimum of 2.0, and a NUMBER where
+    training had an ABSENCE. XGBoost has a learned default direction for missing;
+    it has none for a tyre younger than any it ever saw.
+    """
+    if tyre_life is None or tyre_life <= 1:
+        return None
+    return tyre_life - 1
+
+
 class PaceAgent:
     """Encapsulates the N06 XGBoost lap-time prediction pipeline.
 
@@ -278,6 +295,11 @@ class PaceAgent:
             self._load_circuit_mean_sector_speed(processed_dir)
         )
         self.laps_ref: pd.DataFrame = self._load_reference_laps(processed_dir)
+        # Cached because `_session_median` resolves the caller's spelling against it on
+        # every lap, and a `.unique()` over the whole reference frame is not a per-lap cost.
+        self._reference_gp_names: frozenset[str] = frozenset(
+            self.laps_ref["GP_Name"].dropna().astype(str).unique()
+        )
 
     # ── Loaders ───────────────────────────────────────────────────────────────
 
@@ -303,11 +325,17 @@ class PaceAgent:
     def _load_encoding_maps(self, processed_dir: Path) -> tuple[dict, dict, dict]:
         """Load compound, circuit-cluster, and team label-encoding maps.
 
-        Reads the compound encoding from the N06 feature manifest, the circuit
-        cluster assignments from the k=4 clustering parquet (N05), and the
-        team-to-integer map derived from the laps_featured parquet. All three
-        are static training artifacts — they must not be recomputed at inference
+        The compound codes are N01's, the circuit clusters come from the k=4 clustering
+        parquet (N05), and the team map is derived from the laps_featured parquet. All
+        three are static training artifacts — they must not be recomputed at inference
         time to avoid encoding drift between train and serve.
+
+        NOT the manifest's `categorical_encoding.Compound` block, which is what this used
+        to read. That block is 0-based and describes N06's `encode_features` step, whose
+        output column (`Compound`) is NOT among the 39 in `features_in`: the model eats
+        `CompoundID`, N01's 1-based column, straight from the parquet. The eval harness
+        says so in its own docstring — "the model consumes the pre-numeric CompoundID" —
+        and inference contradicted it, so every lap arrived one class low.
 
         Args:
             processed_dir: Root of the processed data directory.
@@ -315,8 +343,7 @@ class PaceAgent:
         Returns:
             Tuple (compound_id, circuit_cluster, team_id) dicts.
         """
-        manifest = json.loads((processed_dir / "feature_manifest_laptime.json").read_text())
-        compound_id = manifest["categorical_encoding"]["Compound"]
+        compound_id = dict(_N01_COMPOUND_ID)
 
         clusters_df = pd.read_parquet(
             processed_dir / "circuit_clustering" / "circuit_clusters_k4_2025.parquet",
@@ -405,7 +432,7 @@ class PaceAgent:
         forms matches), and the FastF1 event name ('Qatar Grand Prix'). Resolving only the
         first and last sent every lap of the 2025 Miami and 2023 Spanish races to NaN while
         their value sat in the map. That is the #448/#450 dual-keyspace trap for the third
-        time, and this time the enumeration is checked rather than assumed: all 71 races
+        time, and this time the enumeration is checked rather than assumed: all 70 races
         under `data/raw/` resolve through the chain below, asserted in
         `tests/agents/test_pace_circuit_speed.py`.
         """
@@ -456,9 +483,15 @@ class PaceAgent:
         Returns:
             Tuple (compound_id_int, team_id_int, cluster_int).
         """
-        c_id = self.compound_id.get(compound, 1)
+        # The unknown code, not 1: 1 is SOFT on the trained scale, so an unrecognised
+        # compound string used to be served as a specific tyre rather than as the absent
+        # reading N01 encoded it as.
+        c_id = self.compound_id.get(compound, _COMPOUND_ID_UNKNOWN)
         t_id = self.team_id.get(team, 0)
-        cluster = self.circuit_cluster.get(gp_name, 1)
+        # `circuit_cluster` is keyed by the parquet slug; the replay path queries with the
+        # metadata name. Miami 2025 missed and took the default, which happens to be its
+        # real cluster - a coincidence, not correctness (PR3_GP_KEYSPACE_SWEEP.md).
+        cluster = self.circuit_cluster.get(resolve_gp_key(self.circuit_cluster, gp_name), 1)
         return c_id, t_id, cluster
 
     def _compute_derived(
@@ -469,11 +502,14 @@ class PaceAgent:
         total_laps: int,
         mean_sector_speed: float,
         stint_baseline_tyre_life: Optional[int] = None,
+        fresh_tyre: Optional[bool] = None,
     ) -> dict:
         """Compute features derived from raw inputs that are not in the source data.
 
-        FreshTyre: binary flag for the first lap on a new tyre set — captures
-        the outlap pace loss caused by tyre heating and rubber laydown.
+        FreshTyre: FastF1's "the fitted set was NEW" flag, TRUE for every lap of
+        that stint. It is NOT a first-lap flag, and this docstring said it was:
+        naming the wrong mechanism is how a proxy survives review, because the
+        code then matches its own description (W-F3).
         FuelEffect: cumulative fuel burn pace gain (lighter car = faster lap).
         laps_remaining: inverted lap count used as a proxy for race phase.
         mean_sector_speed: passed through untouched, already resolved by the caller.
@@ -523,7 +559,16 @@ class PaceAgent:
             fuel_effect = (tyre_life - stint_baseline_tyre_life) * FUEL_GAIN_PER_LAP_S
 
         return {
-            "FreshTyre": int(tyre_life <= 1),
+            # The FITTED-SET flag, which is what N06 trained on, and not a first-lap
+            # flag. FastF1's `FreshTyre` says the set was NEW when it went on and stays
+            # True for EVERY lap of that stint; `int(tyre_life <= 1)` is an outlap flag,
+            # so the two agreed only on outlaps and on used-set stints and disagreed on
+            # every lap 2 or later of a fresh-set stint, which is most racing laps
+            # (W-F3). The state manager has emitted the real flag all along
+            # (`race_state_manager.py:438`) and this function computed a proxy beside
+            # it. `fresh_tyre` falls back to the old expression only for callers that do
+            # not supply it, which is the direct `run()` path and its tests.
+            "FreshTyre": int(fresh_tyre) if fresh_tyre is not None else int(tyre_life <= 1),
             "FuelEffect": fuel_effect,
             "laps_remaining": max(0, total_laps - lap_number),
             "mean_sector_speed": mean_sector_speed,
@@ -531,7 +576,7 @@ class PaceAgent:
 
     def _build_feature_row(
         self,
-        driver_number: int,
+        driver_number: Optional[int],
         lap_number: int,
         stint: int,
         tyre_life: int,
@@ -542,7 +587,7 @@ class PaceAgent:
         fuel_load: float,
         year: int,
         prev_lap_time: float,
-        prev_tyre_life: int,
+        prev_tyre_life: Optional[int],
         prev_speed_st: float,
         air_temp: float,
         track_temp: float,
@@ -555,6 +600,7 @@ class PaceAgent:
         prev_cum_deg: float = 0.0,
         prev_deg_accel: float = 0.0,
         stint_baseline_tyre_life: Optional[int] = None,
+        fresh_tyre: Optional[bool] = None,
     ) -> pd.DataFrame:
         """Pack raw race state into a single-row DataFrame ready for predict().
 
@@ -582,6 +628,7 @@ class PaceAgent:
             total_laps,
             resolved_mean_sector_speed,
             stint_baseline_tyre_life,
+            fresh_tyre,
         )
 
         row = {
@@ -731,8 +778,12 @@ class PaceAgent:
         Returns:
             Median lap time in seconds, or None when no matching laps exist.
         """
+        # The parquet spells this race 'Miami'; the replay path asks for 'Miami Gardens'.
+        # Unresolved, the mask was empty for the whole race and N31 lost delta_vs_median
+        # on every lap (PR3_GP_KEYSPACE_SWEEP.md).
+        stored_name = resolve_gp_key(self._reference_gp_names, gp_name)
         mask = (
-            (self.laps_ref["GP_Name"] == gp_name)
+            (self.laps_ref["GP_Name"] == stored_name)
             & (self.laps_ref["Year"] == year)
             & (self.laps_ref["Compound"] == compound)
         )
@@ -743,7 +794,7 @@ class PaceAgent:
 
     def run(
         self,
-        driver_number: int,
+        driver_number: Optional[int],
         lap_number: int,
         stint: int,
         tyre_life: int,
@@ -754,7 +805,7 @@ class PaceAgent:
         fuel_load: float,
         year: int,
         prev_lap_time: float,
-        prev_tyre_life: int,
+        prev_tyre_life: Optional[int],
         prev_speed_st: float,
         air_temp: float,
         track_temp: float,
@@ -767,6 +818,7 @@ class PaceAgent:
         prev_cum_deg: float = 0.0,
         prev_deg_accel: float = 0.0,
         stint_baseline_tyre_life: Optional[int] = None,
+        fresh_tyre: Optional[bool] = None,
     ) -> PaceOutput:
         """Run pace prediction for a single lap and return a PaceOutput.
 
@@ -775,10 +827,18 @@ class PaceAgent:
         session median for the current GP/year/compound.
 
         Args:
-            driver_number: Car number used to look up TeamID encoding.
+            driver_number: Car number. A RAW feature the model splits on, not a
+                lookup key for anything - the TeamID encoding this line used to
+                claim comes from `team`. None when the source has no reading, and
+                it must stay None: 0 is not absent, it is a value the model finds,
+                sorting below every real car number (#831).
             lap_number: Current race lap; used for FuelLoad estimation.
             stint: Stint number (1-indexed), forwarded as a raw feature.
-            tyre_life: Laps on current tyre set; drives FreshTyre flag.
+            tyre_life: Laps on current tyre set. It no longer drives FreshTyre on
+                the `from_state` path - the state manager emits FastF1's real
+                set-was-new flag and `tyre_life <= 1` was only ever a proxy for it,
+                agreeing on outlaps and disagreeing on every lap 2+ of a fresh-set
+                stint (#831). The fallback still uses it when the flag is absent.
             compound: Pirelli compound name.
             position: Current race position (1-based). None when the source
                 telemetry has no reading for this lap; propagates as a missing
@@ -791,7 +851,8 @@ class PaceAgent:
             fuel_load: Estimated fuel fraction in [0, 1].
             year: Race year (2023/2024/2025).
             prev_lap_time: Previous lap time in seconds.
-            prev_tyre_life: TyreLife on the previous lap.
+            prev_tyre_life: TyreLife on the previous lap, or None on a stint
+                opener, where the trained column is NaN by construction.
             prev_speed_st: Speed trap reading in km/h from the previous lap.
             air_temp: Air temperature in °C.
             track_temp: Track surface temperature in °C.
@@ -887,26 +948,40 @@ class PaceAgent:
         total_laps = meta["total_laps"]
         laps_remaining = max(0, total_laps - lap_number)
 
-        # ``dict.get(key, default)`` only applies the default when *key is
-        # absent* — if the key is present with a None value (FastF1 logs
-        # speed_st=None on laps where the trap beam is not crossed cleanly,
-        # e.g. inlaps, traffic interruptions, sector anomalies), the default
-        # is ignored and None flows into the DataFrame. The feature column
-        # then becomes object dtype and XGBoost rejects it with:
-        #     "DataFrame.dtypes for data must be int, float, bool or category"
-        # That is exactly the crash observed on mid-stint laps. The ``or``
-        # pattern handles both missing-key and None-value cases in one step.
-        # This file's inline guard was the ONLY one of the three agents that handled
-        # present-and-None, and it is now the shared helper the other two adopted rather
-        # than a fourth copy of the pattern (#788).
-        _speed_st = d.get("speed_st") or 300.0
+        # The PREVIOUS lap's trap, which is what N04 built and N06 ate: every `Prev_*`
+        # column is one grouped shift within the stint. This used to read `speed_st`,
+        # THIS lap's trap, so the feature was a lap ahead of itself on every call — the
+        # exact defect #435 fixed for `Prev_LapTime` and left in place for its sibling.
+        #
+        # No `or 300.0`. That default was not a neutral filler: 300 km/h sits inside the
+        # trained range (156-362), so an invented reading was indistinguishable from a
+        # measured one, and it fired on the first lap of every stint, where the answer is
+        # genuinely unknown. NaN says unknown, and XGBoost reads a missing feature
+        # natively through its sparse-aware split direction.
+        #
+        # `.get` alone would return a stored None; `_build_feature_row`'s
+        # `to_numeric(errors='coerce')` turns that into the NaN we want, but converting
+        # here keeps the value numeric all the way down, which is what the envelope
+        # labelling and the bootstrap both assume.
+        _prev_speed_st = d.get("prev_speed_st")
+        _prev_speed_st = float("nan") if _prev_speed_st is None else float(_prev_speed_st)
         _air_temp = reading_or_default(wx, "air_temp", DEFAULT_AIR_TEMP_C)
         _trk_temp = reading_or_default(wx, "track_temp", DEFAULT_TRACK_TEMP_C)
         _humidity = reading_or_default(wx, "humidity", 50.0)
         _rainfall = reading_or_default(wx, "rainfall", 0)
 
         return self.run(
-            driver_number=d.get("driver_number") or 0,
+            # The real car number, now that the state manager emits it (W-F2). It used
+            # to be `or 0` against a key nobody produced, so every replay lap served 0:
+            # a value outside the trained vocabulary (1-81) AND a findable one, since 0
+            # sorts below every real number and sends each DriverNumber split down its
+            # left branch. `.get` without `or`, because a genuinely missing number must
+            # stay None and reach the model as NaN, which is a direction XGBoost
+            # learned, rather than as a car that does not exist.
+            driver_number=d.get("driver_number"),
+            # The real fitted-set flag, which the state manager has emitted all along
+            # while this call computed a first-lap proxy from tyre_life instead (W-F3).
+            fresh_tyre=d.get("fresh_tyre"),
             lap_number=lap_number,
             stint=d.get("stint") or 1,
             tyre_life=d.get("tyre_life") or 1,
@@ -952,8 +1027,15 @@ class PaceAgent:
             # order-of-magnitude placeholder the old (wrong) code used, now only
             # reached on a genuinely missing previous lap.
             prev_lap_time=d.get("prev_lap_time") or MISSING_PREV_LAP_TIME_S,
-            prev_tyre_life=max(0, (d.get("tyre_life") or 1) - 1),
-            prev_speed_st=float(_speed_st),
+            # None on a stint opener, where N04's grouped shift leaves NaN, instead of
+            # the 0 this used to send (W-F5). 0 is below the trained minimum of 2.0, so
+            # the model read a tyre younger than any it was fitted on rather than the
+            # absence training taught it to handle; NaN is a direction XGBoost learned.
+            # Off a stint opener the value stays current-1, which is the right answer
+            # whenever consecutive laps survived N04's filter, and an approximation
+            # where they did not.
+            prev_tyre_life=_previous_tyre_life(d.get("tyre_life")),
+            prev_speed_st=_prev_speed_st,
             air_temp=float(_air_temp),
             track_temp=float(_trk_temp),
             humidity=float(_humidity),

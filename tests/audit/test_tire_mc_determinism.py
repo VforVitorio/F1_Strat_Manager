@@ -55,36 +55,51 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.fixture(scope="module")
-def lusail_lap_30():
-    """A real lap_state plus the featured frame the agents are fed, Lusail 2025.
+# Lusail 2025, NOR. A WORN tyre 12 laps into its stint, and both halves matter.
+#
+# Mid-stint, because the first laps of a stint are where the degradation rate's own floor
+# fires and a lap chosen there could be repeatable for a reason that has nothing to do with
+# the dropout seed.
+#
+# WORN, because the projection saturates at the race distance on a fresh one. This fixture
+# used to sit on lap 30, five laps into a stint, and the fix for the tyre serving frame
+# (#816) changed that lap's answer from `deg_rate -0.184, cliff 12.8/13.6/14.4` to
+# `+0.0231, cliff 57/57/57` — the new value being the plausible one, since a sustained
+# -0.18 s/lap after fuel correction does not happen. But a cliff pinned at the race end has
+# no spread left to observe, so six unseeded runs came out identical and the mutation check
+# below could no longer fail. It was guarding nothing, exactly as its own message said.
+#
+# Measured on this lap: p90 20.4 laps against a 57-lap race, and four of four unseeded runs
+# distinct. Barcelona lap 12 and Monza lap 14 behave the same way if this one ever goes flat.
+_DEMONSTRATOR_LAP = 12
 
-    Mid-stint on purpose. The first laps of a stint are where the degradation
-    rate's own floor fires, so a lap chosen there could be repeatable for a
-    reason that has nothing to do with the dropout seed.
+
+@pytest.fixture(scope="module")
+def lusail_worn_tyre():
+    """A real lap_state plus the featured frame the agents are fed, Lusail 2025.
 
     Scoped to the GP the way ``engine.py`` scopes it (#429) before any agent sees
     the frame. The first version of this fixture passed the season-wide parquet
     straight in — the assertions held either way, because determinism does not
-    care, but it was measuring a configuration nothing runs. Unscoped, this same
-    lap reports a cumulative degradation of -33.840 s/lap against a real range of
-    roughly -0.9 to +0.5.
+    care, but it was measuring a configuration nothing runs. Unscoped, the lap it
+    then used reported a cumulative degradation of -33.840 s/lap against a real
+    range of roughly -0.9 to +0.5.
     """
     from src.f1_strat_manager.laps_augment import augment_featured_laps
     from src.simulation.replay_engine import RaceReplayEngine
     from src.strategy.inference.engine import _scope_laps_to_gp
 
     replay = RaceReplayEngine(RACE_DIR, driver_code="NOR", team="McLaren", interval_seconds=0.0)
-    lap_state = next(islice(replay.replay(), 29, 30))  # 0-indexed 29 -> lap 30
+    lap_state = next(islice(replay.replay(), _DEMONSTRATOR_LAP - 1, _DEMONSTRATOR_LAP))
     laps = augment_featured_laps(pd.read_parquet(FEATURED), 2025)
     return lap_state, _scope_laps_to_gp(laps, lap_state)
 
 
-def test_two_identical_calls_return_an_identical_tyre_output(lusail_lap_30):
+def test_two_identical_calls_return_an_identical_tyre_output(lusail_worn_tyre):
     """The whole dataclass, not a chosen field — the wobble moved p90, not deg_rate."""
     from src.strategy.inference.no_llm import _tire_no_llm
 
-    lap_state, laps = lusail_lap_30
+    lap_state, laps = lusail_worn_tyre
 
     first = _tire_no_llm(lap_state, laps)
     second = _tire_no_llm(lap_state, laps)
@@ -92,7 +107,7 @@ def test_two_identical_calls_return_an_identical_tyre_output(lusail_lap_30):
     assert first == second
 
 
-def test_the_seed_is_what_makes_it_repeatable(lusail_lap_30, monkeypatch):
+def test_the_seed_is_what_makes_it_repeatable(lusail_worn_tyre, monkeypatch):
     """Mutation check: with the seed removed, this test must be able to fail.
 
     Without it the assertion above could pass for an unrelated reason — a model
@@ -107,12 +122,15 @@ def test_the_seed_is_what_makes_it_repeatable(lusail_lap_30, monkeypatch):
 
     from src.strategy.inference.no_llm import _tire_no_llm
 
-    lap_state, laps = lusail_lap_30
+    lap_state, laps = lusail_worn_tyre
     monkeypatch.setattr(torch, "manual_seed", lambda _seed: None)
 
     outputs = [_tire_no_llm(lap_state, laps) for _ in range(6)]
 
     assert any(o != outputs[0] for o in outputs[1:]), (
         "unseeded MC Dropout produced six identical outputs, so this lap cannot "
-        "demonstrate the property — pick a lap with a longer stint history"
+        "demonstrate the property. The usual cause is a SATURATED projection: on a fresh "
+        "tyre the cliff pins to the race distance and the quantiles have no spread left to "
+        "show. Pick a lap with a worn tyre whose p90 sits inside the race — Barcelona 12 "
+        "and Monza 14 both work — and update _DEMONSTRATOR_LAP with the measurement"
     )

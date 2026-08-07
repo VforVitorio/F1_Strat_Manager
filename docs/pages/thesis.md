@@ -28,13 +28,17 @@ Raw coverage stays around **0.20** across all compounds, active dropout only cap
 
 The strategy layer scores its four candidates in **projected track position**, not in seconds. That claim is directly checkable, because every real pit stop in the dataset is already a labelled example of it: project the stop from the lap before, then compare against where the car actually came out on the lap after. No hand-labelling is involved, which is what makes this a measured result rather than a plausibility argument.
 
-Over **1810 green-flag stops across 71 races** (2023 to 2025), the projection lands **within one position 86.5 %** of the time and is **exactly right 59.1 %** of the time, with a mean signed error of **+0.57 positions**. The bias is positive, so the projection is mildly pessimistic about the rejoin, which is the safer direction for a strategy call.
+Over **552 green-flag stops across the 24 races of 2025**, the projection lands **within one position 86.1 %** of the time and is **exactly right 59.6 %** of the time, with a mean signed error of **+0.57 positions**. The bias is positive, so the projection is mildly pessimistic about the rejoin, which is the safer direction for a strategy call.
+
+**Why 2025 and not all three seasons.** 2023 and 2024 are training seasons for every model in the stack; 2025 is the holdout the shipped system infers on. A figure that mixes them is partly the system reading back its own training data, so the headline is scoped to the season that describes the product. On all three seasons the same measurement reads 86.3 % over 1,768 stops in 70 races, and the earlier published **86.5 % over 1,810 stops in 71 races** is retired on two counts: it mixed the training seasons in, and its 71st race was the 2023 Spanish GP counted twice.
+
+The gap between the training seasons (86.4 %, disjoint from the holdout) and the holdout itself (86.1 %) is 0.4 points, and that is **not** evidence the projection generalises well. It is a property of this particular measurement: the scorer runs on a fixed `ProjectionConfig` and consumes no learned model and none of the seven measured tables below, so the season scope has nothing to leak through. Do not carry that reasoning over to any figure that does read a model.
 
 Neutralised stops are excluded, and not to flatter the number. Under a Safety Car every lap is slow, so the "two normal laps" baseline used to reconstruct the realised pit loss is wrong there: that corrupts the measurement's **input** rather than the projection itself. Measured separately, those stops show a mean error of +1.54 positions against +0.57 under green, which is the signature of exactly that problem.
 
 ### The tables the scorer reads
 
-Seven tables are counted off the same 71 races of raw laps rather than assumed, and the scorer reads them at runtime from `data/mc_measured_v1.json`.
+Seven tables are counted off **70 races of raw laps across 2023 to 2025** rather than assumed, and the scorer reads them at runtime from `data/mc_measured_v1.json`. Their season scope is deliberately wider than the accuracy figure above: they are descriptive priors about how races behave, not predictions, so more seasons is more data rather than more leakage. The two scopes are different on purpose and each is stated where it applies.
 
 | Table | What it answers |
 |---|---|
@@ -51,10 +55,11 @@ The source is the **raw** parquet and never the featured one, which drops the ne
 ## How to regenerate
 
 ```bash
-# Monte Carlo projection accuracy + the measured-table inventory (~1 min)
-uv run f1-eval projection
+# Monte Carlo projection accuracy + the measured-table inventory (~1 min).
+# Add --years 2025 for the holdout-only headline above; the default is all three.
+uv run f1-eval projection --years 2025
 
-# The measured tables themselves, from 71 races of raw laps (~10 min)
+# The measured tables themselves, from 70 races of raw laps (~10 min)
 uv run python scripts/measure_mc_tables.py
 
 # Threshold sweeps + MC Dropout figures (one notebook, ~5 min on GPU)
@@ -82,7 +87,7 @@ Both notebooks emit CSV and Markdown tables alongside their PNGs:
 | Sub-agent latency | min / max mean | **487 ms** (pace) / **4.4 s** (rag w/ LLM) | `data/eval/subagent_latency.{csv,md}` |
 | RAG agent | Content P@5 | **0.80** | `data/rag_eval/results_v1.md` |
 | MC Dropout (C2) | calibrated 80 % coverage | **0.840** | `data/eval/mc_dropout_coverage.{csv,md}` |
-| Position projection | within one place, 1810 real stops | **86.5 %** | `documents/eval_reports/projection.{md,json}` |
+| Position projection | within one place, 552 real stops (2025 only) | **86.1 %** | `documents/eval_reports/projection.{md,json}` |
 
 All numbers reproducible with the commands above.
 
