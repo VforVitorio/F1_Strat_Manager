@@ -11,7 +11,7 @@ rows, a bug that bit both the reference and our earlier attempts.
 from __future__ import annotations
 
 import logging
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import arcade
 from src.arcade.config import (
@@ -40,6 +40,12 @@ from src.arcade.config import (
     WEATHER_TOP_OFFSET,
     WEATHER_WIDTH,
 )
+
+if TYPE_CHECKING:
+    # Type-only so the drawing layer keeps its independence from the data
+    # layer: importing it for real would pull fastf1 and pandas into every
+    # module that draws a rectangle.
+    from src.arcade.gaps import RaceGapCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +247,8 @@ class DriverInfoPanel:
     def draw(
         self,
         frame: dict,
-        all_drivers_sorted: list[tuple[str, float]] | None = None,
+        all_drivers_sorted: list[tuple[str, float]] | None,
+        gaps: RaceGapCalculator,
     ) -> None:
         data = (frame.get("drivers") or {}).get(self.code)
         if not data:
@@ -261,7 +268,7 @@ class DriverInfoPanel:
         self._subheader.y = header_cy
         self._subheader.draw()
 
-        ahead, behind = self._neighbor_gaps(all_drivers_sorted)
+        ahead, behind = self._neighbor_gaps(all_drivers_sorted, gaps, frame)
         rows: list[tuple[str, str, tuple[int, int, int]]] = [
             ("Speed", f"{data.get('speed', 0):.0f} km/h", TEXT_PRIMARY),
             ("Gear", f"{data.get('gear', 0)}", TEXT_PRIMARY),
@@ -305,36 +312,73 @@ class DriverInfoPanel:
             return (255, 210, 50)
         return TEXT_TERTIARY
 
-    def _neighbor_gaps(self, sorted_drivers: list[tuple[str, float]] | None) -> tuple[str, str]:
+    def _neighbor_gaps(
+        self,
+        sorted_drivers: list[tuple[str, float]] | None,
+        gaps: RaceGapCalculator,
+        frame: dict,
+    ) -> tuple[str, str]:
         if not sorted_drivers:
             return "N/A", "N/A"
         codes = [c for c, _ in sorted_drivers]
         if self.code not in codes:
             return "N/A", "N/A"
+        laps_by_code = {
+            code: int((data or {}).get("lap", 0) or 0)
+            for code, data in (frame.get("drivers") or {}).items()
+        }
         idx = codes.index(self.code)
+        me = sorted_drivers[idx]
         ahead = (
             "LEADER"
             if idx == 0
-            else self._gap_value("+", sorted_drivers[idx - 1], sorted_drivers[idx])
+            else self._gap_label("+", sorted_drivers[idx - 1], me, gaps, laps_by_code)
         )
         behind = (
             "LAST"
             if idx == len(codes) - 1
-            else self._gap_value("-", sorted_drivers[idx + 1], sorted_drivers[idx])
+            else self._gap_label("-", me, sorted_drivers[idx + 1], gaps, laps_by_code)
         )
         return ahead, behind
 
     @staticmethod
-    def _gap_value(
+    def _gap_label(
         sign: str,
-        other: tuple[str, float],
-        self_entry: tuple[str, float],
+        front: tuple[str, float],
+        back: tuple[str, float],
+        gaps: RaceGapCalculator,
+        laps_by_code: dict[str, int],
     ) -> str:
-        other_code, other_prog = other
-        _, self_prog = self_entry
-        dist = abs(other_prog - self_prog)
-        time_s = dist / 55.56 if dist > 0 else 0.0
-        return f"{other_code} {sign}{time_s:.2f}s"
+        """Label the interval between the car in front and the car behind it.
+
+        `sign` is the direction from the panel's own driver: "+" when the
+        pair is (someone ahead, me), "-" when it is (me, someone behind).
+        The arithmetic is identical either way, which is the point of
+        passing the pair rather than a signed distance.
+
+        The seconds are suffixed "(L)" because they are measured at the
+        line and step there. Labelling that is the difference between an
+        honest lap-quantised reading and a precise-looking wrong one;
+        an unlabelled number on a fidelity surface implies a liveness it
+        does not have.
+
+        Lapped cars read as "+1 LAP" the way a timing screen shows them,
+        because ninety seconds is a true but useless answer to "where is
+        the car in front".
+        """
+        front_code, front_dist = front
+        back_code, back_dist = back
+        other_code = back_code if sign == "-" else front_code
+
+        laps = gaps.laps_down(front_dist, back_dist)
+        if laps >= 1:
+            return f"{other_code} {sign}{laps} LAP" + ("S" if laps > 1 else "")
+
+        lap = gaps.last_shared_lap(laps_by_code.get(front_code, 0), laps_by_code.get(back_code, 0))
+        seconds = gaps.interval_at_line(front_code, back_code, lap)
+        if seconds is None:
+            return f"{other_code} N/A"
+        return f"{other_code} {sign}{seconds:.2f}s (L)"
 
 
 class LeaderboardPanel:
@@ -418,11 +462,10 @@ class LeaderboardPanel:
         self,
         frame: dict,
         driver_colors: dict[str, tuple[int, int, int]],
-        track_len: float,
         selected_drivers: set[str] | None = None,
     ) -> None:
         selected_drivers = selected_drivers or set()
-        ranked = self._rank_drivers(frame, track_len)
+        ranked = self._rank_drivers(frame)
         n_rows = min(len(ranked), len(self._rank_texts))
         panel_h = self.HEADER_H + n_rows * LEADERBOARD_ROW_HEIGHT + 8
         self.bottom_y = self.top_y - panel_h
@@ -488,8 +531,8 @@ class LeaderboardPanel:
         strip_cy = self.top_y - self.STRIP_H / 2
         arcade.draw_rect_filled(arcade.XYWH(cx, strip_cy, self.width, self.STRIP_H), ACCENT)
 
-    def sorted_progress(self, frame: dict, track_len: float) -> list[tuple[str, float]]:
-        ranked = self._rank_drivers(frame, track_len)
+    def sorted_progress(self, frame: dict) -> list[tuple[str, float]]:
+        ranked = self._rank_drivers(frame)
         return [(code, progress) for code, _, progress in ranked]
 
     def hit_test(self, mx: float, my: float) -> str | None:
@@ -499,14 +542,23 @@ class LeaderboardPanel:
         return None
 
     @staticmethod
-    def _rank_drivers(frame: dict, track_len: float) -> list[tuple[str, dict, float]]:
+    def _rank_drivers(frame: dict) -> list[tuple[str, dict, float]]:
+        """Rank the field by race progress, which IS `dist`.
+
+        `dist` is the race-cumulative accumulator (`FrameData.dist`), so it
+        already contains every completed lap. The `(lap - 1) * track_len`
+        term this used to add was therefore counted twice, inflating a
+        lapped car's progress by a full circuit length per lap of
+        difference. The order survived it, because the error is monotone
+        in true progress, which is why it went unnoticed while the gaps
+        computed from the same number were wrong by 95 s per lap down on
+        Melbourne.
+        """
         drivers = (frame or {}).get("drivers") or {}
         out: list[tuple[str, dict, float]] = []
         for code, data in drivers.items():
-            lap = max(1, int(data.get("lap", 1) or 1))
             dist = float(data.get("dist", 0.0) or 0.0)
-            progress = (lap - 1) * max(track_len, 1.0) + dist
-            out.append((code, data, progress))
+            out.append((code, data, dist))
         out.sort(key=lambda e: e[2], reverse=True)
         return out
 
