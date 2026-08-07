@@ -135,6 +135,7 @@ def _view(session: SessionData, state: StrategyState, rival: str | None, clients
         _broadcast_tick=-1,
         _broadcast_seq=0,
         _last_broadcast_idx=15,
+        _last_broadcast_clock=15.0,
         _frame_index=20.0,
         playback_speed=1.0,
         _is_paused=False,
@@ -195,6 +196,7 @@ GOLDEN_SHAPE = {
                 "active": "bool",
                 "compound": "int",
                 "dist": "float",
+                "has_position": "bool",
                 "lap": "int",
                 "rel_dist": "float",
                 "speed": "float",
@@ -204,6 +206,7 @@ GOLDEN_SHAPE = {
                 "active": "bool",
                 "compound": "int",
                 "dist": "float",
+                "has_position": "bool",
                 "lap": "int",
                 "rel_dist": "float",
                 "speed": "float",
@@ -494,13 +497,25 @@ def _sent_bytes(payload: dict) -> list[bytes]:
     and the sanitiser that feeds it, and a test that builds the dict and
     encodes it itself would prove nothing about either.
     """
+    import threading
+    import time
+
     from src.arcade.stream import TelemetryStreamServer
 
     written: list[bytes] = []
     server = TelemetryStreamServer()
     server._running = True
     server._clients = [SimpleNamespace(sendall=written.append)]
+    # `broadcast` only queues now: it returns without touching a socket so it
+    # cannot block the pyglet frame loop. Run the sender to see what reaches
+    # the wire, because that is the thing under test.
+    sender = threading.Thread(target=server._send_loop, daemon=True)
+    sender.start()
     server.broadcast(payload)
+    deadline = time.perf_counter() + 2.0
+    while not written and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    server._running = False
     return written
 
 

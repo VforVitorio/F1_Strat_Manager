@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import queue
 import socket
 import threading
 import time
@@ -120,6 +121,10 @@ class TelemetryStreamServer:
         self._clients: list[socket.socket] = []
         self._clients_lock = threading.Lock()
         self._running = False
+        # Depth 1 with drop-oldest. Each payload is a COMPLETE snapshot, not a
+        # delta, so a consumer that falls behind wants the newest one and
+        # nothing else; `seq` is what makes the discard visible to it.
+        self._outbox: queue.Queue[bytes] = queue.Queue(maxsize=1)
 
     def start(self) -> None:
         """Bind the listening socket and spawn the accept thread."""
@@ -134,6 +139,7 @@ class TelemetryStreamServer:
         threading.Thread(
             target=self._accept_loop, daemon=True, name="TelemetryStreamAccept"
         ).start()
+        threading.Thread(target=self._send_loop, daemon=True, name="TelemetryStreamSend").start()
         logger.info("TelemetryStreamServer listening on %s:%d", self.host, self.port)
 
     def stop(self) -> None:
@@ -157,12 +163,19 @@ class TelemetryStreamServer:
         logger.info("TelemetryStreamServer stopped")
 
     def broadcast(self, data: dict) -> None:
-        """Send one JSON-encoded payload to every connected client.
+        """Queue one JSON-encoded payload for every connected client.
 
-        Failed sockets are removed from the pool, so a dead dashboard does
-        not block the arcade window. Called from arcade's main thread via
-        `on_update`; the JSON encode happens inline (sub-millisecond for
-        our payload size ≤ 10 KB) to keep the wire order deterministic."""
+        **Returns without touching a socket.** `sendall` blocks, and this is
+        called from the pyglet main thread on `on_update`, so a subscriber
+        that stops reading used to freeze the replay window itself — not its
+        own view, the whole race. The span change made that far likelier by
+        enlarging the message: the measured time-to-freeze against a stalled
+        client fell from about 130 s to 0.7 s, and the product always opens
+        two subscribers.
+
+        The encode stays here, on the caller's thread: it is sub-millisecond,
+        it keeps wire order deterministic, and it keeps the "which field was
+        NaN" log next to the tick that produced it."""
         if not self._running:
             return
         with self._clients_lock:
@@ -186,20 +199,47 @@ class TelemetryStreamServer:
             logger.warning("Broadcast dropped, payload not JSON-safe: %s | %s", exc, _blame(data))
             return
 
-        dead: list[socket.socket] = []
-        with self._clients_lock:
-            clients_snapshot = list(self._clients)
-        for client in clients_snapshot:
+        self._enqueue(message)
+
+    def _enqueue(self, message: bytes) -> None:
+        """Hand the message to the sender thread, discarding a stale one."""
+        try:
+            self._outbox.put_nowait(message)
+            return
+        except queue.Full:
+            pass
+        try:
+            self._outbox.get_nowait()
+        except queue.Empty:
+            # The sender drained it between the two calls; nothing to discard.
+            pass
+        try:
+            self._outbox.put_nowait(message)
+        except queue.Full:
+            # It refilled again, which means the sender is keeping up with a
+            # newer payload than this one. Dropping this is the right outcome.
+            logger.debug("Broadcast outbox full, dropping a superseded payload")
+
+    def _send_loop(self) -> None:
+        """Drain the outbox onto the sockets, off the pyglet thread."""
+        while self._running:
             try:
-                client.sendall(message)
-            except OSError:
-                # socket.timeout is an OSError subclass, so a subscriber that
-                # stopped reading is pruned by the same path as one that
-                # closed. Losing a slow client beats freezing the window; the
-                # Qt client already reconnects.
-                dead.append(client)
-        if dead:
-            self._prune_clients(dead)
+                message = self._outbox.get(timeout=0.5)
+            except queue.Empty:
+                continue  # the timeout is what lets `stop()` end this thread
+            dead: list[socket.socket] = []
+            with self._clients_lock:
+                clients_snapshot = list(self._clients)
+            for client in clients_snapshot:
+                try:
+                    client.sendall(message)
+                except OSError:
+                    # socket.timeout is an OSError subclass, so a subscriber
+                    # that stopped reading is pruned by the same path as one
+                    # that closed. The Qt client already reconnects.
+                    dead.append(client)
+            if dead:
+                self._prune_clients(dead)
 
     def client_count(self) -> int:
         with self._clients_lock:

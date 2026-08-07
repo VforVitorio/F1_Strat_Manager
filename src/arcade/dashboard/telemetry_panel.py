@@ -243,7 +243,13 @@ class TelemetryPanel(QFrame):
         driver_main = arcade.get("driver_main") or "—"
         driver_rival = arcade.get("driver_rival")
         lap = arcade.get("lap")
-        self._lap_label.setText(f"LAP {lap}" if lap else "LAP —")
+        # A driver whose telemetry never places the car produces four empty
+        # charts. Saying so beats a populated header over a blank grid, which
+        # reads as a broken panel rather than as absent data.
+        main_car = (arcade.get("drivers") or {}).get(driver_main) or {}
+        blind = main_car.get("has_position") is False
+        lap_text = f"LAP {lap}" if lap else "LAP —"
+        self._lap_label.setText(f"{lap_text}  ·  NO POSITION DATA" if blind else lap_text)
         self._main_chip.set_code(driver_main)
         self._update_legend_codes(driver_main, driver_rival)
         if driver_rival:
@@ -286,7 +292,7 @@ class TelemetryPanel(QFrame):
             # here and the last tick were never sent, so appending would
             # splice two unrelated parts of the race into one trace.
             self._reset_buffers()
-        self._refresh_speed_brake_throttle()
+        self._refresh_speed_brake_throttle(has_rival=bool(driver_rival))
         # Two-driver mode is a property of the session, not of whether this
         # particular tick happened to carry a rival sample — an empty span
         # while paused must not collapse the delta chart to its placeholder.
@@ -312,7 +318,7 @@ class TelemetryPanel(QFrame):
 
     # --- Chart refresh ----------------------------------------------
 
-    def _refresh_speed_brake_throttle(self) -> None:
+    def _refresh_speed_brake_throttle(self, has_rival: bool) -> None:
         main_xs, main_rows = self._sorted(self._main_buffer)
         rival_xs, rival_rows = self._sorted(self._rival_buffer)
 
@@ -320,7 +326,12 @@ class TelemetryPanel(QFrame):
         self._brake_main.setData(main_xs, [r[_BUCKET_BR] for r in main_rows])
         self._throttle_main.setData(main_xs, [r[_BUCKET_TH] for r in main_rows])
 
-        if rival_xs:
+        # Visibility follows the SESSION's rival, not this tick's buffer.
+        # Keyed on the buffer, the three traces and their legends vanished
+        # for the whole of a rewind hold and every lap change, which reads
+        # as single-driver mode rather than as an empty moment. Same fix
+        # `_refresh_delta` already got; this was its twin.
+        if has_rival:
             self._speed_rival.setData(rival_xs, [r[_BUCKET_S] for r in rival_rows])
             self._brake_rival.setData(rival_xs, [r[_BUCKET_BR] for r in rival_rows])
             self._throttle_rival.setData(rival_xs, [r[_BUCKET_TH] for r in rival_rows])

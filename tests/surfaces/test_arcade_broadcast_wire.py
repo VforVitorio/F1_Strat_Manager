@@ -213,13 +213,24 @@ def _reject_non_finite(token: str) -> float:
     raise AssertionError(f"non-finite token on the wire: {token}")
 
 
-def test_location_is_on_the_wire_and_is_not_the_display_label():
-    """A consumer resolving `data/raw/<year>/<gp>/` must not read `gp_name`.
+def test_location_is_published_and_can_genuinely_disagree_with_the_label():
+    """`location` exists because the label CAN name a different race.
 
-    The two diverge whenever the arcade's hardcoded GP table drifts from
-    the calendar, which is why the loader keeps both.
+    An earlier version of this test hand-set the two fields to differ in
+    the fixture and then asserted they differed, which verifies that a
+    dict copy copies two keys. This one exercises the real resolver: on
+    the fallback path `get_gp_names` returns a hardcoded 2024 table, and a
+    2025 round then carries the wrong race. That fallback also names the
+    session pickle, so the divergence mislabels the cache too.
     """
-    wire = _snapshot(_session(), frame_idx=0)
+    from src.arcade.config import GP_NAMES, get_gp_names
 
-    assert wire["location"] == "Melbourne"
-    assert wire["gp_name"] == "Australia"
+    wire = _snapshot(_session(), frame_idx=0)
+    assert wire["location"], "the folder-resolving field must be on the wire"
+
+    canonical = get_gp_names(2025)
+    fallback = get_gp_names(1999)  # no such calendar -> the hardcoded table
+
+    assert fallback is GP_NAMES, "an absent year must fall back, not raise"
+    disagreeing = {rnd for rnd in canonical if rnd in fallback and canonical[rnd] != fallback[rnd]}
+    assert disagreeing, "if the two tables agreed everywhere, location would be redundant"

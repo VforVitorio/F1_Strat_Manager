@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 
 def _telemetry_span_bounds(
-    last_sent_idx: int, frame_idx: int, max_span: int
+    last_sent_idx: int, frame_idx: int, max_span: int, moved_back: bool = False
 ) -> tuple[int, bool, int]:
     """Return `(span_start, rewound, dropped)` for the frames this tick should send.
 
@@ -95,9 +95,15 @@ def _telemetry_span_bounds(
     returned and published: a consumer that only saw `rewound` would read a
     contiguous `seq` and a forward-only clock and conclude nothing was
     lost, which is precisely the thing `seq` exists to make impossible.
+
+    `moved_back` carries what the integer comparison cannot see: the clock
+    is a float, so a backwards seek that does not cross a frame boundary
+    looks exactly like a pause and the consumer never clears. It is
+    reachable on any `on_key_release(LEFT)` landing mid-tick, and bounded
+    at one frame of stale samples, which is why it is small and not zero.
     """
-    if frame_idx < last_sent_idx:
-        return frame_idx + 1, True, 0
+    if frame_idx < last_sent_idx or moved_back:
+        return min(frame_idx, last_sent_idx) + 1, True, 0
     span_start = last_sent_idx + 1
     capped = max(span_start, frame_idx - max_span + 1)
     return capped, False, capped - span_start
@@ -123,18 +129,22 @@ def _frames_to_telemetry_span(
 def _lap_fraction(rel_dist: float) -> float | None:
     """Clamp a fraction-of-lap into [0, 1], or return None when it is unknown.
 
-    FastF1 does not always deliver ``RelativeDistance``: on Melbourne 2025
-    it is NaN for 100 % of HAD's frames, the only non-finite value in the
-    whole session. Two things break if that NaN is passed through.
+    The loader now derives `rel_dist` from the driver's own distance
+    (`data.py:_lap_fraction_from_distance`), so it is finite and inside
+    [0, 1] for every frame of every driver — this guard fires on nothing
+    in the sessions measured. It stays because the two failure modes it
+    exists for are both silent, and one of them was live:
 
-    First, ``json.dumps`` writes a bare ``NaN``, which is not valid JSON.
-    Python's own parser accepts it, so the Qt dashboard never noticed, but
-    a strict parser (``JSON.parse``) rejects the whole payload.
+    - ``json.dumps`` writes a bare ``NaN``, which Python's own parser
+      accepts and ``JSON.parse`` rejects, so a single unknown value took
+      the whole payload down for a web consumer. FastF1 used to leave
+      ``RelativeDistance`` NaN for 100 % of one driver's frames.
+    - clamping is worse than dropping: ``min(1.0, nan)`` is ``1.0``, and
+      1.0 means "at the line", so the car with no position data would be
+      drawn exactly on the lap boundary rather than nowhere.
 
-    Second, clamping it is worse than dropping it: ``min(1.0, nan)`` is
-    ``1.0``, and 1.0 is a legitimate value meaning "at the line", so the
-    car with no position data would be drawn exactly at the lap boundary
-    rather than nowhere. Unknown stays None and every consumer handles it.
+    Unknown stays None. `has_position` on the wire is what tells a
+    consumer to say so instead of rendering an empty chart.
     """
     value = float(rel_dist)
     if not math.isfinite(value):
@@ -151,17 +161,17 @@ def _frame_to_telemetry(frame, circuit_length_m: float) -> dict | None:
     telemetry chart wants per-lap distance (resets to 0 each lap) so
     the traces always occupy the full circuit-length range.
 
-    Throttle / brake normalised to 0-100 % regardless of the FastF1
-    delivery format (some sessions carry them as 0-1). ``t`` is included
-    so the delta-time chart can interpolate rival vs main."""
+    Throttle and brake arrive already on 0-100 and already clamped: the
+    scale is decided ONCE per session in `data.py` (`_pedal_multiplier`),
+    not guessed per frame here. The guess used to be `if value <= 1.0:
+    value *= 100`, which cannot tell "0-1 scale, full throttle" from
+    "0-100 scale, barely lifting" and published 72,104 sub-1 % openings as
+    80-odd per cent on Melbourne 2025 alone. ``t`` is included so the
+    delta-time chart can interpolate rival vs main."""
     if frame is None:
         return None
     throttle = float(frame.throttle)
-    if throttle <= 1.0:
-        throttle *= 100.0
     brake = float(frame.brake)
-    if brake <= 1.0:
-        brake *= 100.0
     rel_dist = _lap_fraction(frame.rel_dist)
     lap_dist = None if rel_dist is None else round(rel_dist * float(circuit_length_m or 0.0), 1)
     return {
@@ -227,6 +237,9 @@ class F1ArcadeView(arcade.View):
         # duplicating 15 of 54 reads and skipping 15 of 54. Without a
         # sequence neither is visible from the consumer side.
         self._broadcast_seq: int = 0
+        # The float clock as of the last due tick. `_last_broadcast_idx` is
+        # truncated, so on its own it cannot see a sub-frame rewind.
+        self._last_broadcast_clock: float = -1.0
 
         self._frame_index: float = 0.0
         self._speed_idx: int = DEFAULT_SPEED_IDX
@@ -525,8 +538,12 @@ class F1ArcadeView(arcade.View):
             return
         frame_idx = int(self._frame_index)
         span_start, rewound, dropped = _telemetry_span_bounds(
-            self._last_broadcast_idx, frame_idx, STREAM_MAX_SPAN_FRAMES
+            self._last_broadcast_idx,
+            frame_idx,
+            STREAM_MAX_SPAN_FRAMES,
+            moved_back=self._frame_index < self._last_broadcast_clock,
         )
+        self._last_broadcast_clock = self._frame_index
         # Advance the marker before the no-subscriber return, so the span
         # always covers one tick of playback and never the backlog since
         # whenever a client last happened to be attached.
@@ -584,6 +601,10 @@ class F1ArcadeView(arcade.View):
                 "compound": f.tyre,
                 "tyre_life": round(f.tyre_life, 1),
                 "active": bool(f.active),
+                # False when this driver's telemetry never places the car, so a
+                # consumer says "no position data" instead of drawing an empty
+                # chart under a populated header.
+                "has_position": bool(self._session.has_position.get(code, True)),
             }
         main_frame = None
         main_frames = self._session.frames_by_driver.get(self._driver_main)
@@ -622,11 +643,17 @@ class F1ArcadeView(arcade.View):
         }
         return {
             "gp_name": self._session.gp_name,
-            # FastF1's authoritative Location, which is also the folder name
-            # under data/raw/<year>/. `gp_name` is a display label from a
-            # hardcoded table and the two diverge, so a consumer that needs to
-            # find the session on disk must resolve from this, never from the
-            # label on screen.
+            # FastF1's authoritative Location. `gp_name` is whatever the
+            # caller resolved through `get_gp_names(year)`, which normally
+            # reads the same canonical calendar and agrees with this to the
+            # letter. The two diverge on ONE path: when
+            # `data/tire_compounds_by_race.json` is missing or lacks the year,
+            # `get_gp_names` falls back to a hardcoded 2024 table, and 2025
+            # round 3 comes back "Australia" when it is Suzuka. That fallback
+            # is also what names the session pickle, so a wrong `gp_name`
+            # mislabels the cache as well as the header - which is exactly why
+            # a consumer resolving `data/raw/<year>/<gp>/` must read this
+            # field and not the label on screen.
             "location": self._session.location,
             "year": self._year,
             "lap": main_frame.lap if main_frame else 1,
