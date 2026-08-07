@@ -84,11 +84,15 @@ class SessionData:
     version: str = CACHE_VERSION
     gp_name: str = ""
     # FastF1 ``session.event['Location']`` — matches the per-race folder name
-    # under ``data/raw/<year>/`` (``Suzuka``, ``Melbourne``, …). Kept
-    # separate from ``gp_name`` which is the arcade-facing display label so
-    # the header can still read "Australia" while the strategy pipeline
-    # loads from ``data/raw/2025/Suzuka/`` — the two diverge whenever the
-    # hardcoded ``GP_NAMES`` table drifts from the active season calendar.
+    # under ``data/raw/<year>/`` (``Suzuka``, ``Melbourne``, …). Normally
+    # identical to ``gp_name``, because both resolve from the same canonical
+    # calendar. They diverge on one path: when
+    # ``data/tire_compounds_by_race.json`` is missing or lacks the year,
+    # ``get_gp_names`` falls back to a hardcoded 2024 table and 2025 round 3
+    # comes back "Australia" when it is Suzuka. ``gp_name`` also names the
+    # session pickle (``_cache_path``), so on that path the cache is
+    # mislabelled too — which is why this field exists and why every path
+    # that touches disk must read it instead.
     location: str = ""
     year: int = 0
     frames_by_driver: dict[str, list[FrameData]] = field(default_factory=dict)
@@ -131,6 +135,72 @@ class SessionData:
     # panel's own ``.get(key, default)`` calls keep the old constants as the
     # last-resort display instead of raising.
     weather_by_lap: dict[int, dict[str, Any]] = field(default_factory=dict)
+    # Whether each driver's telemetry actually places the car. False when the
+    # distance never advances: on Melbourne 2025 that is HAD, whose position
+    # channel FastF1 does not deliver at all. Every panel that plots position
+    # renders empty for such a driver, and without this flag it renders empty
+    # with a populated header and a "live" status bar, which reads as a broken
+    # chart rather than as absent data. An empty dict means an older cache;
+    # consumers treat an unlisted driver as having position.
+    has_position: dict[str, bool] = field(default_factory=dict)
+
+
+def _pedal_multiplier(results: list[dict], channel: str) -> float:
+    """Decide once per session whether a pedal channel is 0-1 or 0-100.
+
+    FastF1 delivers throttle and brake on either scale depending on the
+    session, and the old code guessed **per frame**: `if value <= 1.0:
+    value *= 100`. That cannot tell "0-1 scale, full throttle" from
+    "0-100 scale, barely lifting", and it resolves the ambiguity the wrong
+    way for a lifting car. Measured on Melbourne 2025, where the throttle
+    channel is 0-100 (max 104): **72,104 frames, 2.34 % of the race**, were
+    genuine sub-1 % openings published as 80-odd per cent.
+
+    The session maximum has no such ambiguity: a 0-100 channel exceeds 1.0
+    somewhere in a race and a 0-1 channel never does. One look at the whole
+    array replaces three million guesses.
+    """
+    peak = max(
+        (float(np.nanmax(r["data"][channel])) for r in results if len(r["data"][channel])),
+        default=0.0,
+    )
+    return 1.0 if peak > 1.0 else 100.0
+
+
+def _lap_fraction_from_distance(
+    dist: np.ndarray, lap_numbers: np.ndarray, circuit_length_m: float
+) -> np.ndarray:
+    """Fraction of the current lap, derived from the driver's own distance.
+
+    NOT FastF1's `RelativeDistance` resampled. That column is normalised
+    per lap and then interpolated across the concatenation of every lap, so
+    at a boundary `np.interp` draws a straight line down through the whole
+    [0, 1] range: measured on Melbourne 2025, **594 frames where it falls
+    while `dist` rises**, up to half a lap in a single step, on 18 of the
+    20 drivers. A consumer placing a car from it drew the car running
+    backwards around the circuit for up to a second.
+
+    Deriving it from `dist` cannot do that, because `dist` is monotone. It
+    also normalises each lap by that lap's own length, so an in-lap and an
+    out-lap map onto [0, 1] correctly instead of against a constant taken
+    from the fastest lap. The last lap has no end yet, so it borrows the
+    previous lap's length, and lap 1 borrows the circuit length.
+    """
+    fraction = np.zeros_like(dist)
+    starts = np.flatnonzero(np.diff(lap_numbers) > 0) + 1
+    bounds = [0, *starts.tolist(), len(dist)]
+    previous_length = float(circuit_length_m) or 1.0
+    for index in range(len(bounds) - 1):
+        lo, hi = bounds[index], bounds[index + 1]
+        if lo >= hi:
+            continue
+        start = float(dist[lo])
+        length = float(dist[hi]) - start if hi < len(dist) else previous_length
+        if length <= 0.0:
+            length = previous_length
+        fraction[lo:hi] = np.clip((dist[lo:hi] - start) / length, 0.0, 1.0)
+        previous_length = length
+    return fraction
 
 
 def _enable_fastf1_cache() -> None:
@@ -311,14 +381,21 @@ class SessionLoader:
             raise RuntimeError(f"No driver telemetry could be extracted for {gp_name} {year}")
 
         timeline, global_t_min = self._build_timeline(results)
-        frames_by_driver = self._resample_all(results, timeline, global_t_min)
 
         max_lap = max(r["max_lap"] for r in results)
         ref_x, ref_y, ref_drs = self._extract_reference_lap(session, year, round_)
         rotation_deg = self._safe_rotation(session)
         circuit_length = self._session_circuit_length(session, ref_x, ref_y)
+        # Resampling needs the circuit length: lap 1 has no previous lap to
+        # normalise its distance fraction against.
+        frames_by_driver = self._resample_all(results, timeline, global_t_min, circuit_length)
         track_status_by_lap = self._extract_track_status_by_lap(session)
         weather_by_lap = self._extract_weather_by_lap(session)
+
+        has_position = {
+            code: bool(len(frames)) and frames[-1].dist > frames[0].dist
+            for code, frames in frames_by_driver.items()
+        }
 
         sd = SessionData(
             version=CACHE_VERSION,
@@ -339,6 +416,7 @@ class SessionLoader:
             events=[],
             track_status_by_lap=track_status_by_lap,
             weather_by_lap=weather_by_lap,
+            has_position=has_position,
         )
 
         with cache_path.open("wb") as f:
@@ -387,13 +465,22 @@ class SessionLoader:
         return timeline, global_t_min
 
     def _resample_all(
-        self, results: list[dict], timeline: np.ndarray, global_t_min: float
+        self,
+        results: list[dict],
+        timeline: np.ndarray,
+        global_t_min: float,
+        circuit_length_m: float,
     ) -> dict[str, list[FrameData]]:
+        # Pedal scales are decided ONCE for the session, not per frame. See
+        # `_pedal_multiplier`.
+        multipliers = {name: _pedal_multiplier(results, name) for name in ("throttle", "brake")}
         out: dict[str, list[FrameData]] = {}
         for r in results:
             t = r["data"]["t"] - global_t_min
             t_max_local = r["t_max"] - global_t_min
-            out[r["code"]] = self._resample_driver(r["data"], t, timeline, t_max_local)
+            out[r["code"]] = self._resample_driver(
+                r["data"], t, timeline, t_max_local, multipliers, circuit_length_m
+            )
         return out
 
     def _resample_driver(
@@ -402,12 +489,21 @@ class SessionLoader:
         t: np.ndarray,
         timeline: np.ndarray,
         t_max_local: float,
+        pedal_multipliers: dict[str, float],
+        circuit_length_m: float,
     ) -> list[FrameData]:
         cont = {
             k: np.interp(timeline, t, data[k])
-            for k in ("x", "y", "speed", "throttle", "brake", "dist", "rel_dist", "tyre_life")
+            for k in ("x", "y", "speed", "throttle", "brake", "dist", "tyre_life")
         }
         disc = {k: np.interp(timeline, t, data[k]) for k in ("gear", "drs", "lap", "tyre")}
+        for name, multiplier in pedal_multipliers.items():
+            cont[name] = np.clip(cont[name] * multiplier, 0.0, 100.0)
+        # Race distance cannot decrease; the per-lap accumulator leaves float
+        # seams at lap boundaries (measured worst 0.11 m on Melbourne 2025).
+        cont["dist"] = np.maximum.accumulate(cont["dist"])
+        lap_numbers = np.maximum(1, np.rint(disc["lap"]).astype(int))
+        rel_dist = _lap_fraction_from_distance(cont["dist"], lap_numbers, circuit_length_m)
         frames: list[FrameData] = []
         for i, ti in enumerate(timeline):
             active = ti <= t_max_local
@@ -421,9 +517,9 @@ class SessionLoader:
                     drs=int(round(disc["drs"][i])),
                     throttle=float(cont["throttle"][i]),
                     brake=float(cont["brake"][i]),
-                    lap=max(1, int(round(disc["lap"][i]))),
+                    lap=int(lap_numbers[i]),
                     dist=float(cont["dist"][i]),
-                    rel_dist=float(cont["rel_dist"][i]),
+                    rel_dist=float(rel_dist[i]),
                     tyre=int(round(disc["tyre"][i])),
                     tyre_life=float(cont["tyre_life"][i]),
                     active=active,
