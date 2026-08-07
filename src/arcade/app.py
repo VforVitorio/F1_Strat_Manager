@@ -646,23 +646,25 @@ class F1ArcadeView(arcade.View):
         if self._driver_rival:
             self._draw_car(self._driver_rival, self._car_label_rival, above=False)
 
-        self._leaderboard.draw(frame, self._session.driver_colors, self._selected_drivers)
+        self._leaderboard.draw(
+            frame, self._session.driver_colors, self._gaps, frame_idx, self._selected_drivers
+        )
         # Anchor the race-events pill right under the leaderboard's bottom
         # edge — the leaderboard's row count varies per session, so we read
         # ``bottom_y`` (set during draw above) instead of hard-coding an offset.
         self._race_events.set_top(self._leaderboard.bottom_y - RaceEventsPanel.GAP_FROM_LEADERBOARD)
         self._race_events.draw()
         self._weather.draw(frame, self.window.height)
-        sorted_progress = self._leaderboard.sorted_progress(frame)
+        sorted_progress = self._leaderboard.sorted_progress(frame, self._gaps, frame_idx)
         # DRIVER_BOX_GAP also controls the weather → main-driver gap for
         # a consistent rhythm between the three stacked cards.
         self._driver_info_main.set_top(self._weather.bottom_y - DRIVER_BOX_GAP)
-        self._driver_info_main.draw(frame, sorted_progress, self._gaps)
+        self._driver_info_main.draw(frame, sorted_progress, self._gaps, frame_idx)
         if self._driver_info_rival:
             self._driver_info_rival.set_top(
                 self._weather.bottom_y - DRIVER_BOX_GAP - DRIVER_BOX_HEIGHT - DRIVER_BOX_GAP
             )
-            self._driver_info_rival.draw(frame, sorted_progress, self._gaps)
+            self._driver_info_rival.draw(frame, sorted_progress, self._gaps, frame_idx)
 
         if self._show_progress_bar:
             self._progress_bar.draw(self.window.width, frame_idx)
