@@ -6,7 +6,7 @@ tests) and run locally where the weights are present. They lock the harness's
 retro-validation contract - the three claims #206 must keep true:
 
 - the registry reconciles the pace 0.392 -> 0.4104 divergence to the canonical;
-- calibration "finds" the known-broken pit P05-P95 coverage (177/252) as drift;
+- calibration "finds" the known-broken pit P05-P95 coverage (176/252) as drift;
 - reproduction re-derives overtake AUC-PR back to its published 0.5491.
 
 They call the ``collect_*`` functions (pure, no report I/O) so the assertions
@@ -58,9 +58,16 @@ def test_calibration_flags_pit_coverage_drift():
     red and stayed red, because `tests/eval/` is data-gated and CI runners have
     no dataset to run it with. Nobody was ever told (#634).
 
-    177/252 is the current value, re-derived here rather than copied: the alias
-    fix in #629 was checked against it and moves it by exactly nothing (it moved
-    P50 MAE by -0.0045 s instead).
+    176/252 is the current value, and it moved once more for a reason worth writing
+    down: removing the duplicated 2023 Spanish GP took its stops out of the pool the
+    holdout builds its per-circuit and per-team aggregates from (`_collect_pit_stops`
+    globs the raw tree; Spain now contributes 0 stops against Barcelona's 136). The
+    denominator is unchanged at 252 because the coverage is scored on 2025, so what
+    moved is one 2025 stop's interval, through an aggregate that had been counting one
+    weekend twice. 177 -> 176.
+
+    Before that, 177/252: the alias fix in #629 was checked against it and moved it by
+    exactly nothing (it moved P50 MAE by -0.0045 s instead).
     """
     from src.strategy.eval.calibration import collect_results
 
@@ -68,7 +75,7 @@ def test_calibration_flags_pit_coverage_drift():
         r for r in collect_results() if r.model == "pit_duration" and r.metric == "p05_p95_coverage"
     ]
     assert len(pit) == 1
-    assert pit[0].value == pytest.approx(177 / 252, abs=1e-6)
+    assert pit[0].value == pytest.approx(176 / 252, abs=1e-6)
     assert pit[0].status == "drift", "coverage below 0.90 nominal must flag drift"
 
 

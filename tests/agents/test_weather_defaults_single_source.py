@@ -55,11 +55,23 @@ def test_the_pair_is_the_measured_median_not_a_round_number():
     A rounded 25/35 looks tidier and is what one of the five pairs used; it is the
     TrackTemp mean rather than its median. The bound between "measured" and "chosen" is
     the only thing separating this constant from the four it replaced.
+
+    Asserts the PROPERTY rather than a literal copy of the constants. It used to read
+    `assert DEFAULT_AIR_TEMP_C == 24.2`, which is the constant compared against itself:
+    it can only ever fail when someone edits the constant, including when they edit it
+    correctly. Removing the 2023 Spanish GP duplicate legitimately moved the medians to
+    24.6 / 34.7 and this test failed for that, which is a test asking to be rewritten.
+    The measurement itself is guarded by the one below, against the dataset.
     """
     from src.agents._shared_defaults import DEFAULT_AIR_TEMP_C, DEFAULT_TRACK_TEMP_C
 
-    assert DEFAULT_AIR_TEMP_C == pytest.approx(24.2)
-    assert DEFAULT_TRACK_TEMP_C == pytest.approx(34.2)
+    assert (DEFAULT_AIR_TEMP_C, DEFAULT_TRACK_TEMP_C) != (25.0, 35.0), (
+        "the tidy pair is the TrackTemp MEAN, not its median — the substitution this exists "
+        "to prevent"
+    )
+    for name, value in (("air", DEFAULT_AIR_TEMP_C), ("track", DEFAULT_TRACK_TEMP_C)):
+        assert value % 1 != 0, f"{name} default is a whole number: chosen, not measured"
+        assert 10.0 < value < 60.0, f"{name} default is outside any plausible circuit reading"
 
 
 @pytest.mark.data
@@ -70,8 +82,14 @@ def test_the_pair_is_the_measured_median_not_a_round_number():
 def test_the_pair_still_matches_the_median_of_the_real_seasons():
     """Re-measure rather than re-read: the constant is a claim about the dataset.
 
-    Through `augment_featured_laps`, because the 2025 artefact ships without the weather
-    columns (#782) and a direct read would measure two seasons and call it three.
+    Still through `augment_featured_laps`, though the reason has changed: the artefacts now
+    carry the weather columns natively, and the restore declines when they are present. It
+    stays because a checkout whose artefacts predate that regeneration must measure the same
+    thing, and because the restore is what any consumer gets either way.
+
+    This assertion is what caught the 2023 Spanish GP duplicate moving the medians: the race
+    was in the dataset twice, so 24.2 / 34.2 described a sample counting one weekend's
+    weather double. De-duplicated, it is 24.6 / 34.7.
     """
     import pandas as pd
 

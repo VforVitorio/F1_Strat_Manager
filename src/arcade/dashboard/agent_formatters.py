@@ -203,7 +203,12 @@ def format_situation(s: dict[str, Any] | None) -> Formatted:
             [],
             STATUS_IDLE,
         )
-    ot = float(s.get("overtake_prob", 0.0) or 0.0)
+    # NOT `or 0.0`: N27 reports None when the car ahead is farther than the overtake
+    # model's trained range, and rendering that as "overtake 0%" tells the wall the model
+    # says NO CHANCE when it actually says nothing. The two readings would prompt
+    # opposite calls.
+    _ot_raw = s.get("overtake_prob")
+    ot = None if _ot_raw is None else float(_ot_raw)
     sc = float(s.get("sc_prob_3lap", 0.0) or 0.0)
     gap = float(s.get("gap_ahead_s", 0.0) or 0.0)
     pace_delta = float(s.get("pace_delta_s", 0.0) or 0.0)
@@ -215,7 +220,10 @@ def format_situation(s: dict[str, Any] | None) -> Formatted:
 
     sc_color = WARNING if sc > 0.15 else TEXT_SECONDARY
     body: list[Line] = [
-        (f"overtake {ot * 100:.0f}%", TEXT_SECONDARY),
+        (
+            "overtake — (out of model range)" if ot is None else f"overtake {ot * 100:.0f}%",
+            TEXT_TERTIARY if ot is None else TEXT_SECONDARY,
+        ),
         (f"safety car {sc * 100:.0f}%", sc_color),
         (f"gap {gap:.1f}s · Δpace {_signed(pace_delta, 2)}s/lap", TEXT_TERTIARY),
     ]

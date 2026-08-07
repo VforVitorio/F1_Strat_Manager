@@ -24,7 +24,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 import numpy as np
 import pandas as pd
@@ -67,6 +67,8 @@ except (ImportError, OSError, RuntimeError):
     # serve, and a container with no HOME would take it. Falling back to the
     # repo-relative data/ is right for all three.
     _DATA_ROOT = _REPO_ROOT / "data"
+
+from src.f1_strat_manager.gp_slugs import resolve_gp_key  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +327,28 @@ class TireAgentConfig:
         self.abs_compound_id_map: dict = enc["absolute_compound_id"]
         self.compound_hardness_map: dict = enc["compound_hardness"]
 
+    # The per-cluster mean lap time N04 subtracted to build `lap_time_vs_cluster_mean`,
+    # which is a TCN input. MEASURED, not chosen: recovered from `laps_tiredeg.parquet`
+    # as `LapTime_s - lap_time_vs_cluster_mean`, which comes out to ONE value per
+    # cluster with standard deviation exactly 0.0. `tests/agents/test_tire_cluster_mean.py`
+    # re-derives them and fails if they drift.
+    #
+    # Hardcoded rather than read at runtime because neither source ships on a clean
+    # install: `_build_allow_patterns` pulls only `laps_featured_2025.parquet`, and
+    # reading an artefact that is not downloaded is the #798 failure class.
+    #
+    # THE FAMILY MATTERS. N07 builds `laps_tiredeg` by reading the COMBINED
+    # `laps_featured.parquet` (`.nb_py/N07_tiredeg_eda.py:92`) and inheriting its
+    # cluster columns, so the TCN trained on the POOLED clustering. That is the one
+    # `circuit_clusters_k4.parquet` carries, and it agrees with `laps_tiredeg` on 24 of
+    # 24 GPs, where `circuit_clusters_k4_2025.parquet` agrees on only 17.
+    _TRAINED_CLUSTER_MEAN_LAP_S: ClassVar[dict[int, float]] = {
+        0: 100.92462574340107,
+        1: 95.43860940701592,
+        2: 84.6488860957042,
+        3: 81.36461922886834,
+    }
+
     def _load_circuit_clusters(self) -> dict:
         """Load k=4 circuit cluster parquet and return GP_Name → Cluster int dict."""
         cluster_df = pd.read_parquet(
@@ -355,6 +379,19 @@ class TireAgentConfig:
             self.cliff_monitor_by_cluster = {}
             self.cliff_overrides_by_gp = {}
 
+    def cluster_for(self, gp_name: str, default: Optional[int] = None) -> Optional[int]:
+        """This circuit's cluster, whichever of its four spellings the caller holds.
+
+        The map is keyed by the parquet slug ('Miami'); the replay path queries with the
+        metadata name ('Miami Gardens'). Today that particular query still lands, but only
+        because the pooled clustering artefact carries the race TWICE under both spellings
+        (25 rows for 24 circuits) - a duplicate PR 6 removes, at which point an unresolved
+        query would start defaulting silently. See PR3_GP_KEYSPACE_SWEEP.md.
+        """
+        return self.circuit_cluster_map.get(
+            resolve_gp_key(self.circuit_cluster_map, gp_name), default
+        )
+
     def get_cliff_thresholds(self, gp_name: str) -> tuple[int, int]:
         """Return (pit_soon_laps, monitor_laps) for the given GP.
 
@@ -369,10 +406,11 @@ class TireAgentConfig:
         Returns:
             Tuple (pit_soon_laps, monitor_laps) as integers.
         """
-        if gp_name in self.cliff_overrides_by_gp:
-            ov = self.cliff_overrides_by_gp[gp_name]
+        override_key = resolve_gp_key(self.cliff_overrides_by_gp, gp_name)
+        if override_key in self.cliff_overrides_by_gp:
+            ov = self.cliff_overrides_by_gp[override_key]
             return ov["pit_soon"], ov["monitor"]
-        cluster_id = self.circuit_cluster_map.get(gp_name)
+        cluster_id = self.cluster_for(gp_name)
         if cluster_id is not None:
             pit_soon = self.cliff_pit_soon_by_cluster.get(cluster_id, self.cliff_pit_soon_laps)
             monitor = self.cliff_monitor_by_cluster.get(cluster_id, self.cliff_monitor_laps)
@@ -570,7 +608,15 @@ def _add_timing_cols(df: pd.DataFrame) -> pd.DataFrame:
     - FastF1 raw: LapTime/Sector*Time are pandas Timedelta objects
     - Featured parquet: LapTime_s/Sector*_s are already plain floats
 
-    LapsSincePitStop is aliased from TyreLife.
+    LapsSincePitStop is left alone when the frame already carries it, which both
+    featured artefacts do. It used to be OVERWRITTEN with TyreLife unconditionally,
+    and the two are different quantities: TyreLife is the age of the tyre SET and
+    counts laps run before this race, so they coincide only when the set was fitted
+    at the last stop. The alias disagreed with the trained column on 15.8% of rows.
+    Same defect as #800 on the pace path; this is its twin on the tire path.
+
+    A frame that genuinely lacks the column still gets the alias, because a missing
+    feature would break the scaler outright, and the alias is right four rows in five.
     """
 
     def _to_seconds(df, td_col, s_col):
@@ -590,7 +636,8 @@ def _add_timing_cols(df: pd.DataFrame) -> pd.DataFrame:
     df = _to_seconds(df, "Sector1Time", "Sector1_s")
     df = _to_seconds(df, "Sector2Time", "Sector2_s")
     df = _to_seconds(df, "Sector3Time", "Sector3_s")
-    df["LapsSincePitStop"] = df["TyreLife"]
+    if "LapsSincePitStop" not in df.columns:
+        df["LapsSincePitStop"] = df["TyreLife"]
     return df
 
 
@@ -605,8 +652,18 @@ def _add_weather_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
 def _add_prev_cols(df: pd.DataFrame) -> pd.DataFrame:
     """Shift timing and speed measurements back one lap to create prev-lap context.
 
-    First lap of a stint has no predecessor — filled with the current lap's value
-    to avoid NaN in the scaler input. Must run before _add_delta_cols.
+    A row with no predecessor keeps NaN, which is what the TCN trained on: N10's
+    scaler does `fillna(0)` (`.nb_py/N10_tiredeg_compound_finetuning.py:176,181`),
+    so the model learned a raw zero there, not a repeat of the current lap.
+
+    This used to fill the gap with the CURRENT lap's own value, described as "first
+    lap of a stint has no predecessor". Two things were wrong with that. The frame is
+    not grouped by stint here, so the fill actually hit only the first row of the
+    whole frame plus any row whose source was itself missing; and substituting the
+    current lap makes `Prev_X - X` read exactly zero where training read whatever the
+    scaled zero mapped to. It moved the TCN's output by a mean of 0.198 s.
+
+    Must run before _add_delta_cols.
     """
     for new_col, src_col in [
         ("Prev_LapTime", "LapTime_s"),
@@ -616,7 +673,7 @@ def _add_prev_cols(df: pd.DataFrame) -> pd.DataFrame:
         ("Prev_SpeedST", "SpeedST"),
         ("Prev_TyreLife", "TyreLife"),
     ]:
-        df[new_col] = df[src_col].shift(1).fillna(df[src_col])
+        df[new_col] = df[src_col].shift(1)
     return df
 
 
@@ -640,15 +697,41 @@ def _add_degradation_rate(df: pd.DataFrame) -> pd.DataFrame:
 
     DegAcceleration: change in DegradationRate between consecutive laps.
 
-    Both are shifted by 1 lap (leakage fix matching N10 training) so at position i
-    the model sees the rate from lap i-1.
+    NEITHER IS SHIFTED, because training never shifted them. Both used to carry a
+    `.shift(1)` described as a "leakage fix matching N10 training", and that comment
+    named a mechanism training never had: N04 computes both unshifted
+    (`.nb_py/N04_feature_engineering.py:481-504`) and N09 consumed them as stored
+    (`.nb_py/N09_tiredeg_tcn.py:219-220`). Serving a lagged value moved the TCN's
+    output by a mean of 0.185 s, concentrated at cliff onset, which is the one place
+    the number is read against a threshold.
+
+    The lag was not leakage protection either way: `raw_deg[i]` is fitted over laps
+    i-2..i, all of which have already happened at the moment the model is asked about
+    lap i. There was nothing from the future to exclude.
+
+    THREE THINGS N04 DOES THAT THIS HAS TO DO TOO, all of them missed when the shift
+    came out (`.nb_py/N04_feature_engineering.py:478-556`):
+
+    1. Both arrays start as NaN, not zeros. N04 says so in its own words: "No fillna -
+       NaN on first lap of each stint is meaningful signal." A zero is a reading; a NaN
+       is the absence of one, and the tensor builder's single `fillna(0)` is what turns
+       it into the value the scaler saw.
+    2. The acceleration at index 1 is NaN, because N04 writes it only when BOTH
+       neighbours are non-NaN and `deg_rates[0]` is always NaN. Computing it as
+       `deg[1] - deg[0]` with a zero-filled `deg[0]` served `deg[1]` itself on 326 of
+       327 real stints, where training served nothing. The old lagged code was
+       accidentally right on that one row, which is why the shift removal made this
+       row worse before this fix put it back.
+    3. Both are clipped to [-2.0, 2.0] s/lap. Without it the TCN is handed values
+       outside the range it was fitted on precisely at cliff and chaos laps, which are
+       the laps the number exists to describe.
     """
     tyre_lives = df["TyreLife"].values
     adj_times = df["FuelAdjustedLapTime"].values
     n = len(df)
 
-    raw_deg = np.zeros(n)
-    raw_accel = np.zeros(n)
+    raw_deg = np.full(n, np.nan)
+    raw_accel = np.full(n, np.nan)
 
     for i in range(1, n):
         start = max(0, i - 2)
@@ -658,10 +741,11 @@ def _add_degradation_rate(df: pd.DataFrame) -> pd.DataFrame:
             raw_deg[i] = np.polyfit(x, y, 1)[0]
 
     for i in range(1, n):
-        raw_accel[i] = raw_deg[i] - raw_deg[i - 1]
+        if not np.isnan(raw_deg[i]) and not np.isnan(raw_deg[i - 1]):
+            raw_accel[i] = raw_deg[i] - raw_deg[i - 1]
 
-    df["DegradationRate"] = pd.Series(raw_deg, index=df.index).shift(1).fillna(0)
-    df["DegAcceleration"] = pd.Series(raw_accel, index=df.index).shift(1).fillna(0)
+    df["DegradationRate"] = pd.Series(raw_deg, index=df.index).clip(-2.0, 2.0)
+    df["DegAcceleration"] = pd.Series(raw_accel, index=df.index).clip(-2.0, 2.0)
     return df
 
 
@@ -765,8 +849,12 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     (0.0000 s delta across all 24 GPs).
     """
     df["lap_time_pct_of_race_fastest"] = df["LapTime_s"] / session_meta["fastest_lap_s"]
-    if "lap_time_vs_cluster_mean" not in df.columns:
-        df["lap_time_vs_cluster_mean"] = df["LapTime_s"] - session_meta["cluster_mean_lap_s"]
+    # UNCONDITIONALLY, not guarded on the column's absence. Guarding it kept whatever
+    # the handed-in frame carried, and the featured artefacts carry the 2025 clustering
+    # while `Cluster` beside it comes from the POOLED map the TCN trained on. Serving one
+    # family's delta next to the other family's cluster id is a mix neither model saw:
+    # the two disagree on 100% of rows, mean 5.75 s.
+    df["lap_time_vs_cluster_mean"] = df["LapTime_s"] - session_meta["cluster_mean_lap_s"]
     df["laps_remaining"] = session_meta["total_laps"] - df["LapNumber"]
     if "mean_sector_speed" not in df.columns:
         df["mean_sector_speed"] = (df["SpeedI1"] + df["SpeedI2"] + df["SpeedFL"]) / 3
@@ -817,7 +905,10 @@ def _compound_name_to_id(compound_name: str, gp_name: str, year: int) -> str:
         alloc = json.load(f)
 
     year_data = alloc.get(str(year), {})
-    gp_data = year_data.get(gp_name, {})
+    # The JSON is keyed by the parquet slug. Queried with the metadata name, 2025 Miami
+    # missed and took the fallback, routing MEDIUM/HARD stints to the C2/C1 TCN bundle
+    # instead of C4/C3 for the whole race (PR3_GP_KEYSPACE_SWEEP.md).
+    gp_data = year_data.get(resolve_gp_key(year_data, gp_name), {})
     return gp_data.get(compound_name.upper(), fallback.get(compound_name.upper(), "C3"))
 
 
@@ -1443,9 +1534,16 @@ class TireAgent:
 
         self.session_meta = {
             "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
-            "cluster_mean_lap_s": _clean["LapTime"].dt.total_seconds().mean(),
+            # The TRAINED per-cluster constant, not this race's own mean lap time.
+            # It used to be `_clean["LapTime"].dt.total_seconds().mean()`, which is a
+            # different quantity: N04 subtracted one constant per CLUSTER (std 0.0
+            # within a cluster), and a race's own mean is a per-race number that
+            # happens to have the same units.
+            "cluster_mean_lap_s": TireAgentConfig._TRAINED_CLUSTER_MEAN_LAP_S.get(
+                self.cfg.cluster_for(gp_name, 0), 0.0
+            ),
             "total_laps": int(session.total_laps),
-            "cluster_id": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "cluster_id": self.cfg.cluster_for(gp_name, 0),
             "team_id": _encode_team_id(self.cfg.team_id_map, stint_state.get("team", "Unknown")),
             "year": stint_state.get("year", 2025),
             "AirTemp": float(_weather.get("AirTemp", DEFAULT_AIR_TEMP_C)),
@@ -1521,9 +1619,14 @@ class TireAgent:
 
         self.session_meta = {
             "fastest_lap_s": float(clean_times.min()) if len(clean_times) > 0 else 90.0,
-            "cluster_mean_lap_s": float(clean_times.mean()) if len(clean_times) > 0 else 90.0,
+            # The TRAINED per-cluster constant, for the same reason as the FastF1 path
+            # above: this race's own mean lap time is a different quantity wearing the
+            # same units.
+            "cluster_mean_lap_s": TireAgentConfig._TRAINED_CLUSTER_MEAN_LAP_S.get(
+                self.cfg.cluster_for(gp_name, 0), 0.0
+            ),
             "total_laps": total_laps,
-            "cluster_id": self.cfg.circuit_cluster_map.get(gp_name, 0),
+            "cluster_id": self.cfg.cluster_for(gp_name, 0),
             "team_id": _encode_team_id(self.cfg.team_id_map, team),
             "year": year,
             # reading_or_default, not .get(key, default): the producers report an

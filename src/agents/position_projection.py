@@ -92,7 +92,7 @@ import numpy as np
 _MEASURED_TABLES = Path(__file__).resolve().parents[2] / "data" / "mc_measured_v1.json"
 
 # Fallbacks used only when the measured tables are unavailable (a wheel install
-# without data/). They are the values measured on 2026-07-25 over 71 races, so a
+# without data/). They are the values measured on 2026-07-25 over 70 races, so a
 # missing file degrades to the same numbers rather than to invented ones.
 DEFAULT_UNDERCUT_BAND_S = 4.91
 DEFAULT_NEUTRALISATION_RATE = 0.0179
@@ -270,8 +270,11 @@ class ProjectionResult:
 
     Attributes:
         positions:   Projected track position at the end of the window. This is
-                     the REJOIN horizon, and it is what the 1810-stop ground
-                     truth grades, so it must keep meaning exactly that.
+                     the REJOIN horizon, and it is what the green-flag-stop
+                     ground truth grades, so it must keep meaning exactly that.
+                     (Named by its sample size here until 2026-08-06, when the
+                     published sample changed; the identity of the thing graded
+                     did not, so the count no longer appears in this contract.)
         margins_s:   Seconds of buffer to the nearest projected car behind,
                      clipped, and 0.0 when nothing is behind us.
         terminal_positions:

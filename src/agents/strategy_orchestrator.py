@@ -648,20 +648,20 @@ FRESH_GAIN   = 0.25  # s/lap advantage of fresh vs degraded tyre
 CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff.
                      # No counterpart in Heilmeier, who models degradation as linear
                      # (t_tire = k0 + k1*age) with no cliff term. About 14x the
-                     # degradation rate measured on this repo's 71 races (HARD .052 /
+                     # degradation rate measured on this repo's 70 races (HARD .052 /
                      # MEDIUM .059 / SOFT .072 s/lap), so it stands as a cliff parameter,
                      # not a Heilmeier citation.
 POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation).
                      # LEGACY PATH ONLY. The projection scoring counts the actual
                      # cars and needs no such constant. Measured over this repo's
-                     # 71 races, the median gap between consecutive cars is 2.23 s
+                     # 70 races, the median gap between consecutive cars is 2.23 s
                      # while racing and 1.48 s under a Safety Car, so a single
                      # figure cannot serve both regimes: 1.5 is close to the
                      # bunched-field value and was being applied to green-flag
                      # racing, where most decisions are taken. Kept unchanged
                      # because the goldens pin the legacy output to the digit.
 SC_PIT_BONUS = 8.0   # seconds saved by pitting under a full Safety Car (Art. 55, no
-                     # delta-lap loss). Measured on this repo's 71 races: 5.75 s, 95% CI
+                     # delta-lap loss). Measured on this repo's 70 races: 5.75 s, 95% CI
                      # [3.14, 8.25] (n=124), so 8.0 sits inside the interval. Close to the
                      # mean of Heilmeier's four published circuits (8.18 s, section 3.5 of
                      # 10/4229). The N28 prompt's earlier "~12 s" is outside that CI.
@@ -801,7 +801,7 @@ def simulate_lap_window(
 # caller that knows the GP must pass its own figure through pit_context, because
 # a 7.9 s spread is the difference between a stop that costs a place and one that
 # does not. The 20.0 fallback is a traversal, so adding a ~2.6 s stop lands near
-# the 22.6 s pooled green pit loss measured over this repo's 71 races (n=1746) —
+# the 22.6 s pooled green pit loss measured over this repo's 70 races (n=1746) —
 # do NOT pass that 22.6 s figure in as traversal or the stop is counted twice.
 DEFAULT_PIT_TRAVERSAL_S = 20.0
 
@@ -1491,6 +1491,61 @@ def _run_mc_simulation(
 # Layer 3 — LLM synthesis
 # ==============================================================================
 
+# Lock detection lives in `src/rag/store_lock.py`, not here, and moving it IS the
+# fix for a defect this guard already carried twice. Reached through this module
+# it can only be tested by importing the whole agent stack, which reads four
+# artefacts at IMPORT time - so the tests pinning the behaviour skipped on CI and
+# ERRORED on the tree `scripts/download_data.py` actually produces. See that
+# module's header for the qdrant behaviour itself.
+from src.rag.store_lock import LOCK_EXCEPTIONS as _LOCK_EXCEPTIONS
+from src.rag.store_lock import QDRANT_LOCK_SIGNATURE as _QDRANT_LOCK_SIGNATURE  # noqa: F401
+from src.rag.store_lock import is_store_locked as _is_store_locked
+
+
+# Logged once per process, not once per lap. A locked store fails every lap
+# identically, and 60 identical WARNING lines is how a configuration problem
+# disguises itself as flaky data.
+_rag_unavailable_logged = False
+
+
+def _run_rag_agent_or_degrade(question: str):
+    """N30's answer, or None when the regulation store cannot be opened.
+
+    The store is local single-writer (`QdrantClient(path=...)`), so a second
+    concurrent process holds an exclusive lock and every retrieval in this one
+    fails. Before #827 that exception propagated out of `run_lap`, and the CLI's
+    per-lap `except Exception` rendered it as a red row, for an entire race, with
+    the cause named nowhere: three races in one measurement run produced zero rows
+    while their batches walked every window and reported success.
+
+    Degrading is the right direction because N30 is an ENRICHMENT: it is one of
+    fourteen recommendation fields and the orchestrator already has a path for it
+    not being routed at all. An unavailable store should cost the regulation block,
+    not the recommendation.
+
+    Only the lock is caught, via :func:`_is_store_locked`. A corrupt collection, a
+    missing embedding model or a bad question must still surface: those are not
+    "another process is running", and swallowing them would trade one silent
+    failure for another.
+    """
+    global _rag_unavailable_logged
+    try:
+        return run_rag_agent(question)
+    except (RuntimeError, *_LOCK_EXCEPTIONS) as exc:
+        if not _is_store_locked(exc):
+            raise
+        if not _rag_unavailable_logged:
+            logger.warning(
+                "N30 disabled for this process: the regulation store is locked by "
+                "another process (%s). Recommendations continue WITHOUT regulation "
+                "context. Give each process its own store via F1_STRAT_DATA_ROOT, or "
+                "run one at a time. This is logged once, not per lap.",
+                exc,
+            )
+            _rag_unavailable_logged = True
+        return None
+
+
 def _build_rag_question(
     sc_active:  bool,
     pit_action: str | None,
@@ -1503,9 +1558,17 @@ def _build_rag_question(
     pit stop regulation question when neither condition is specific.
     """
     if sc_active:
+        # Asks what the PROCEDURE is, not what the RESTRICTIONS are. The old
+        # wording presupposed that restrictions exist, and under an ordinary
+        # mid-race Safety Car they do not: the pit lane is open and stopping is
+        # the whole point. A question that assumes a constraint pulls the
+        # retriever toward the one article mentioning Safety Cars and tyre
+        # specification together (Art. 30.5 n), a wet-start and resumption rule)
+        # and invites the answer to drop its condition (#826).
         return (
-            "What are the FIA regulations for pit stops and tyre changes "
-            "during a Safety Car period?"
+            "What is the procedure for drivers and teams when the safety car is "
+            "deployed during a race? Describe what drivers must do, and state any "
+            "conditions that limit when each requirement applies."
         )
     if pit_action == "UNDERCUT":
         return (
@@ -1621,8 +1684,19 @@ def _build_orchestrator_prompt(
     tire_block = _build_tire_block(tire_out)
 
     if situation_out is not None:
+        # Spelled out rather than rendered as a number, because this line is read by the
+        # LLM that writes the recommendation. N11 never saw a labelled pair beyond 2.5 s,
+        # so on those laps there is no probability to quote — and a synthesised one here
+        # does not get averaged away, it gets ARGUED from. Saying "unknown, the cars are
+        # too far apart for the model" is a fact the model can reason with; a fabricated
+        # 0.07 is one it cannot tell from a measurement.
+        overtake_text = (
+            "unknown (cars farther apart than the model's trained range)"
+            if situation_out.overtake_prob is None
+            else f"{situation_out.overtake_prob:.2f}"
+        )
         sit_block = (
-            f"  [N27 Situation] overtake={situation_out.overtake_prob:.2f}  "
+            f"  [N27 Situation] overtake={overtake_text}  "
             f"sc_3lap={situation_out.sc_prob_3lap:.2f}  "
             f"threat={situation_out.threat_level}\n"
             f"                  reasoning: {situation_out.reasoning or '(empty)'}"
@@ -1755,7 +1829,14 @@ def _build_orchestrator_prompt(
         f"     (cite the cliff P50 lap AND the pace delta explicitly).\n"
         f"  2. Add a situational line: overtake prob, SC prob, or radio alert intent\n"
         f"     if any of those meaningfully shaped the decision — name the signal.\n"
-        f"  3. If regulation_context is present, quote at least one article number.\n"
+        # Conditional on an article actually being there. The unconditional form
+        # manufactured a citation on every lap where the RAG answered without one,
+        # and it is the instruction that made a re-scoped rule sound authoritative
+        # enough to override the Monte Carlo (#826).
+        f"  3. If regulation_context cites an article, quote it AND the condition\n"
+        f"     under which that article applies. If it states no condition, say the\n"
+        f"     regulation context was inconclusive rather than inventing one, and\n"
+        f"     do NOT let it override the numeric evidence.\n"
         f"  4. Close with how the MC score either confirms or is overridden by the\n"
         f"     evidence above. Never start with MC.\n"
         f"Example of a rich reasoning paragraph (do NOT copy verbatim, use as shape):\n"
@@ -1768,9 +1849,16 @@ def _build_orchestrator_prompt(
         # from the corpus PDFs), and this block asks the LLM to cite article numbers, so a
         # hardcoded one would be echoed into the output and wrong for most years. N30
         # reads the season's own regulations; the article should come from that context.
+        # The example must OBEY rule 3, because an exemplar marked "use as shape"
+        # beats a rule it contradicts. It used to state the two-compound rule with no
+        # condition at all - and that rule is itself conditional (it does not bind if
+        # wet-weather tyres were used, and it is a dry-race rule), so the example was
+        # unconditioned about a CONDITIONAL rule, which is the exact failure #826 is
+        # about, shipped inside the fix for it.
         f"  The mandatory two-compound rule (see the regulation context above for the\n"
         f"  article, it is renumbered between seasons) requires no fewer than two dry\n"
-        f"  compounds used, so switching to HARD satisfies it. MC ranks PIT_NOW first\n"
+        f"  compounds used IN A DRY RACE, and this is a dry race with no wet tyre so\n"
+        f"  far, so the condition holds and switching to HARD satisfies it. MC ranks PIT_NOW first\n"
         f"  (score +0.81) and the tire and radio evidence reinforce that call.\"\n\n"
         f"Return a StrategyRecommendation filling EVERY field:\n"
         f"  action:             one of STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT / ALERT.\n"
@@ -2007,6 +2095,10 @@ def _run_conditional_agents(
 
     regulation_context: str | None = None
     rag_dict: dict | None          = None
+    # None means "no regulation context this lap", which happens two ways that the
+    # rest of the function does not need to tell apart: N30 was not routed, or it
+    # was routed and the store was unavailable (#827).
+    reg_out = None
     if "N30" in active:
         pit_action = pit_out.action if pit_out else None
         question   = _build_rag_question(
@@ -2028,7 +2120,9 @@ def _run_conditional_agents(
             pit_action = pit_action,
             compound   = race_state.compound,
         )
-        reg_out            = run_rag_agent(question)
+        reg_out = _run_rag_agent_or_degrade(question)
+
+    if reg_out is not None:
         regulation_context = reg_out.answer
         rag_dict = {
             "question": reg_out.question,
@@ -2430,7 +2524,13 @@ def run_strategy_orchestrator_from_state(
             "lap_number": race_state.lap,
             "driver": {
                 "driver":        race_state.driver,
-                "driver_number": 0,
+                # None, not 0. This is the synthetic lap state built when no real one
+                # exists, so the car number is genuinely unknown, and 0 is a value the
+                # model can also legitimately find: it sorts below every real number
+                # (1-81) and sends each DriverNumber split down its left branch. A
+                # PRESENT key set to 0 also defeats the consumer's `.get`, which is why
+                # fixing the reader alone was not enough (W-F2).
+                "driver_number": None,
                 "team":          team,
                 "position":      race_state.position,
                 "compound":      race_state.compound,

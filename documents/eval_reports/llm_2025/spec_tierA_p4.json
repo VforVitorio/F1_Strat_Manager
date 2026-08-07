@@ -1,0 +1,234 @@
+[
+ {
+  "race": "Lusail",
+  "driver": "BEA",
+  "team": "Haas F1 Team",
+  "low": 34,
+  "high": 45,
+  "note": "tier A, anchored at stop(s) [40]"
+ },
+ {
+  "race": "Lusail",
+  "driver": "COL",
+  "team": "Alpine",
+  "low": 26,
+  "high": 37,
+  "note": "tier A, anchored at stop(s) [32]"
+ },
+ {
+  "race": "Lusail",
+  "driver": "HAD",
+  "team": "Racing Bulls",
+  "low": 26,
+  "high": 37,
+  "note": "tier A, anchored at stop(s) [32]"
+ },
+ {
+  "race": "Lusail",
+  "driver": "HAM",
+  "team": "Ferrari",
+  "low": 26,
+  "high": 37,
+  "note": "tier A, anchored at stop(s) [32]"
+ },
+ {
+  "race": "Lusail",
+  "driver": "OCO",
+  "team": "Haas F1 Team",
+  "low": 28,
+  "high": 39,
+  "note": "tier A, anchored at stop(s) [34]"
+ },
+ {
+  "race": "Mexico_City",
+  "driver": "ALO",
+  "team": "Aston Martin",
+  "low": 14,
+  "high": 25,
+  "note": "tier A, anchored at stop(s) [20]"
+ },
+ {
+  "race": "Mexico_City",
+  "driver": "BEA",
+  "team": "Haas F1 Team",
+  "low": 42,
+  "high": 53,
+  "note": "tier A, anchored at stop(s) [48]"
+ },
+ {
+  "race": "Mexico_City",
+  "driver": "GAS",
+  "team": "Alpine",
+  "low": 27,
+  "high": 38,
+  "note": "tier A, anchored at stop(s) [33]"
+ },
+ {
+  "race": "Mexico_City",
+  "driver": "LEC",
+  "team": "Ferrari",
+  "low": 25,
+  "high": 36,
+  "note": "tier A, anchored at stop(s) [31]"
+ },
+ {
+  "race": "Mexico_City",
+  "driver": "RUS",
+  "team": "Mercedes",
+  "low": 42,
+  "high": 53,
+  "note": "tier A, anchored at stop(s) [48]"
+ },
+ {
+  "race": "Mexico_City",
+  "driver": "STR",
+  "team": "Aston Martin",
+  "low": 20,
+  "high": 31,
+  "note": "tier A, anchored at stop(s) [26]"
+ },
+ {
+  "race": "Mexico_City",
+  "driver": "VER",
+  "team": "Red Bull Racing",
+  "low": 31,
+  "high": 42,
+  "note": "tier A, anchored at stop(s) [37]"
+ },
+ {
+  "race": "Montréal",
+  "driver": "ANT",
+  "team": "Mercedes",
+  "low": 8,
+  "high": 19,
+  "note": "tier A, anchored at stop(s) [14]"
+ },
+ {
+  "race": "Montréal",
+  "driver": "COL",
+  "team": "Alpine",
+  "low": 8,
+  "high": 19,
+  "note": "tier A, anchored at stop(s) [14]"
+ },
+ {
+  "race": "Montréal",
+  "driver": "GAS",
+  "team": "Alpine",
+  "low": 47,
+  "high": 58,
+  "note": "tier A, anchored at stop(s) [53]"
+ },
+ {
+  "race": "Montréal",
+  "driver": "HUL",
+  "team": "Kick Sauber",
+  "low": 13,
+  "high": 24,
+  "note": "tier A, anchored at stop(s) [19]"
+ },
+ {
+  "race": "Montréal",
+  "driver": "LAW",
+  "team": "Racing Bulls",
+  "low": 32,
+  "high": 43,
+  "note": "tier A, anchored at stop(s) [38]"
+ },
+ {
+  "race": "Montréal",
+  "driver": "LEC",
+  "team": "Ferrari",
+  "low": 47,
+  "high": 58,
+  "note": "tier A, anchored at stop(s) [53]"
+ },
+ {
+  "race": "Montréal",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 51,
+  "high": 62,
+  "note": "tier A, anchored at stop(s) [57]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "ANT",
+  "team": "Mercedes",
+  "low": 25,
+  "high": 36,
+  "note": "tier A, anchored at stop(s) [31]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "BEA",
+  "team": "Haas F1 Team",
+  "low": 17,
+  "high": 28,
+  "note": "tier A, anchored at stop(s) [23]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "BOR",
+  "team": "Kick Sauber",
+  "low": 25,
+  "high": 36,
+  "note": "tier A, anchored at stop(s) [31]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "DOO",
+  "team": "Alpine",
+  "low": 9,
+  "high": 20,
+  "note": "tier A, anchored at stop(s) [15]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "GAS",
+  "team": "Alpine",
+  "low": 18,
+  "high": 29,
+  "note": "tier A, anchored at stop(s) [24]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "HAM",
+  "team": "Ferrari",
+  "low": 24,
+  "high": 35,
+  "note": "tier A, anchored at stop(s) [30]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "NOR",
+  "team": "McLaren",
+  "low": 15,
+  "high": 26,
+  "note": "tier A, anchored at stop(s) [21]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "SAI",
+  "team": "Williams",
+  "low": 27,
+  "high": 38,
+  "note": "tier A, anchored at stop(s) [33]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "STR",
+  "team": "Aston Martin",
+  "low": 24,
+  "high": 35,
+  "note": "tier A, anchored at stop(s) [30]"
+ },
+ {
+  "race": "Suzuka",
+  "driver": "VER",
+  "team": "Red Bull Racing",
+  "low": 15,
+  "high": 26,
+  "note": "tier A, anchored at stop(s) [21]"
+ }
+]

@@ -1,0 +1,122 @@
+Loading weights:   0%|          | 0/197 [00:00<?, ?it/s]Loading weights: 100%|##########| 197/197 [00:00<00:00, 4081.47it/s]
+[transformers] [1mRobertaForSequenceClassification LOAD REPORT[0m from: roberta-base
+Key                        | Status     | 
+---------------------------+------------+-
+lm_head.layer_norm.bias    | [38;5;208mUNEXPECTED[0m | 
+lm_head.dense.bias         | [38;5;208mUNEXPECTED[0m | 
+lm_head.bias               | [38;5;208mUNEXPECTED[0m | 
+lm_head.layer_norm.weight  | [38;5;208mUNEXPECTED[0m | 
+lm_head.dense.weight       | [38;5;208mUNEXPECTED[0m | 
+classifier.dense.weight    | [31mMISSING[0m    | 
+classifier.out_proj.bias   | [31mMISSING[0m    | 
+classifier.dense.bias      | [31mMISSING[0m    | 
+classifier.out_proj.weight | [31mMISSING[0m    | 
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [31mMISSING:[0m	[3mthose params were newly initialized because missing from the checkpoint. Consider training on your downstream task.[0m
+Loading weights:   0%|          | 0/134 [00:00<?, ?it/s]Loading weights: 100%|##########| 134/134 [00:00<00:00, 3476.66it/s]
+[transformers] You passed `num_labels=19` which is incompatible to the `id2label` map of length `9`.
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|##########| 391/391 [00:00<00:00, 6223.48it/s]
+[transformers] [1mBertForTokenClassification LOAD REPORT[0m from: dbmdz/bert-large-cased-finetuned-conll03-english
+Key                      | Status     |                                                                                          
+-------------------------+------------+------------------------------------------------------------------------------------------
+bert.pooler.dense.bias   | [38;5;208mUNEXPECTED[0m |                                                                                          
+bert.pooler.dense.weight | [38;5;208mUNEXPECTED[0m |                                                                                          
+classifier.bias          | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9]) vs model:torch.Size([19])            
+classifier.weight        | [33mMISMATCH[0m   | Reinit due to size mismatch - ckpt: torch.Size([9, 1024]) vs model:torch.Size([19, 1024])
+
+Notes:
+- [38;5;208mUNEXPECTED:[0m	[3mcan be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+- [33mMISMATCH:[0m	[3mckpt weights were loaded, but they did not match the original empty weight shapes.[0m
+[measure] 78 windows x 1 pass(es), 935 laps planned
+[measure] skip Budapest/ALB/p0: already on disk
+[measure] skip Budapest/ALB/p0: already on disk
+[measure] skip Budapest/ALO/p0: already on disk
+[measure] skip Budapest/BEA/p0: already on disk
+[measure] skip Budapest/BOR/p0: already on disk
+[measure] skip Budapest/COL/p0: already on disk
+[measure] skip Budapest/COL/p0: already on disk
+[measure] skip Budapest/GAS/p0: already on disk
+[measure] skip Budapest/HAM/p0: already on disk
+[measure] skip Budapest/LEC/p0: already on disk
+[measure] skip Budapest/NOR/p0: already on disk
+[measure] skip Budapest/RUS/p0: already on disk
+[measure] skip Budapest/RUS/p0: already on disk
+[measure] skip Budapest/SAI/p0: already on disk
+[measure] skip Monaco/ALB/p0: already on disk
+[measure] run  Monaco/GAS/p0 laps 2-13
+[measure] skip Monaco/HAD/p0: already on disk
+[measure] skip Monaco/HUL/p0: already on disk
+[measure] skip Monaco/LEC/p0: already on disk
+[measure] skip Monaco/RUS/p0: already on disk
+[measure] skip Monaco/SAI/p0: already on disk
+[measure] run  Monaco/TSU/p0 laps 67-78
+[measure] run  Silverstone/ALB/p0 laps 36-47
+[measure] run  Silverstone/HAM/p0 laps 5-16
+[measure] run  Silverstone/HUL/p0 laps 36-47
+[measure] run  Silverstone/PIA/p0 laps 37-48
+[measure] run  Silverstone/RUS/p0 laps 4-15
+[measure] run  Silverstone/RUS/p0 laps 32-43
+[measure] run  Silverstone/SAI/p0 laps 5-16
+[measure] run  Silverstone/SAI/p0 laps 35-46
+[measure] run  Silverstone/TSU/p0 laps 35-46
+[measure] run  Silverstone/VER/p0 laps 5-16
+[measure] run  Silverstone/VER/p0 laps 35-46
+[measure] skip Barcelona/ALB/p0: already on disk
+[measure] run  Barcelona/ALB/p0 laps 21-32
+[measure] skip Barcelona/ALO/p0: already on disk
+[measure] skip Barcelona/ANT/p0: already on disk
+[measure] run  Barcelona/ANT/p0 laps 43-54
+[measure] skip Barcelona/BOR/p0: already on disk
+[measure] skip Barcelona/BOR/p0: already on disk
+[measure] skip Barcelona/COL/p0: already on disk
+[measure] skip Barcelona/HAM/p0: already on disk
+[measure] skip Barcelona/LAW/p0: already on disk
+[measure] skip Barcelona/NOR/p0: already on disk
+[measure] skip Barcelona/PIA/p0: already on disk
+[measure] skip Barcelona/SAI/p0: already on disk
+[measure] skip Barcelona/SAI/p0: already on disk
+[measure] skip Barcelona/TSU/p0: already on disk
+[measure] skip Barcelona/TSU/p0: already on disk
+[measure] run  Lusail/BEA/p0 laps 34-45
+[measure] skip Lusail/COL/p0: already on disk
+[measure] skip Lusail/HAD/p0: already on disk
+[measure] skip Lusail/HAM/p0: already on disk
+[measure] skip Lusail/OCO/p0: already on disk
+[measure] skip Mexico_City/ALO/p0: already on disk
+[measure] skip Mexico_City/BEA/p0: already on disk
+[measure] skip Mexico_City/GAS/p0: already on disk
+[measure] skip Mexico_City/LEC/p0: already on disk
+[measure] skip Mexico_City/RUS/p0: already on disk
+[measure] skip Mexico_City/STR/p0: already on disk
+[measure] skip Mexico_City/VER/p0: already on disk
+[measure] run  Montréal/ANT/p0 laps 8-19
+[measure] run  Montréal/COL/p0 laps 8-19
+[measure] run  Montréal/GAS/p0 laps 47-58
+[measure] run  Montréal/HUL/p0 laps 13-24
+[measure] run  Montréal/LAW/p0 laps 32-43
+[measure] run  Montréal/LEC/p0 laps 47-58
+[measure] run  Montréal/SAI/p0 laps 51-62
+[measure] run  Suzuka/ANT/p0 laps 25-36
+[measure] run  Suzuka/BEA/p0 laps 17-28
+[measure] run  Suzuka/BOR/p0 laps 25-36
+[measure] run  Suzuka/DOO/p0 laps 9-20
+[measure] run  Suzuka/GAS/p0 laps 18-29
+[measure] run  Suzuka/HAM/p0 laps 24-35
+[measure] run  Suzuka/NOR/p0 laps 15-26
+[measure] run  Suzuka/SAI/p0 laps 27-38
+[measure] run  Suzuka/STR/p0 laps 24-35
+[measure] run  Suzuka/VER/p0 laps 15-26
+[measure] done: 374 laps in 14.6 min -> documents\eval_reports\llm_2025\tierA_nollm.jsonl
+{
+  "by_model": {},
+  "total": {
+    "calls": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_prompt_tokens": 0,
+    "total_tokens": 0
+  },
+  "unattributed_calls": 0
+}

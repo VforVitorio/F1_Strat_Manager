@@ -861,15 +861,22 @@ def _add_situation_row(tbl: Table, sit_out) -> None:
     and "safety car") to kill the OT/SC jargon that made the v1 row
     unreadable at first glance.
     """
-    ot = float(getattr(sit_out, "overtake_prob", 0.0)) * 100
-    sc = float(getattr(sit_out, "sc_prob_3lap", 0.0)) * 100
+    # `getattr(obj, name, default)` only substitutes when the ATTRIBUTE IS ABSENT, never
+    # when it is present holding None — the same trap as dict.get and Series.get, which
+    # this project has now hit in all three forms. N27 reports None for a pair beyond the
+    # overtake model's trained range, so `float(...)` raised here on 35 of 57 Lusail laps.
+    _ot = getattr(sit_out, "overtake_prob", None)
+    ot = None if _ot is None else float(_ot) * 100
+    sc = float(getattr(sit_out, "sc_prob_3lap", None) or 0.0) * 100
     th = getattr(sit_out, "threat_level", "LOW")
 
     glyph, g_col = _glyph_for(th)
     headline = Text(f"threat {th}", style=f"bold {g_col}")
 
     ctx = Text()
-    ctx.append(f"overtake {ot:.0f}%", style=COL_DIM)
+    # An em dash, not "0%": the model declining to answer and the model saying there is no
+    # chance would send the strategist in opposite directions.
+    ctx.append("overtake —" if ot is None else f"overtake {ot:.0f}%", style=COL_DIM)
     ctx.append(
         f"  safety car {sc:.0f}%",
         style=COL_WATCH if sc > 15 else COL_DIM,

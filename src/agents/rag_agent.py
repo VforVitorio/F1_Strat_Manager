@@ -115,14 +115,36 @@ class RegulationContext:
 # LangGraph ReAct agent — lazy singleton
 # ==============================================================================
 
+# The CONDITION rule (rules 3 and 4) is the load-bearing one and it was added after
+# a measured failure, not as good practice. Asked what the regulations say about
+# tyre changes under a Safety Car, this agent returned Art. 30.5 n) with its
+# applicability clause amputated: the real rule makes wet-weather tyres compulsory
+# "if the formation lap is started behind the safety car ... or the race is
+# resumed", and penalises a specification change "whilst the safety car is on the
+# track AT SUCH TIMES". Dropping the last three words turns a narrow wet-start rule
+# into a blanket ban on pitting under any Safety Car. The orchestrator then cited it
+# to override a Monte Carlo that favoured stopping, on the lap sixteen cars really
+# did stop, in the flagship case of the whole project (#826).
+#
+# Note what the fix is NOT. Every article number in that answer was genuine, so
+# grounding the CITATION would not have caught it. The condition is the thing.
 _SYSTEM_PROMPT = """You are an FIA Formula 1 regulation expert agent.
 You have access to a tool that retrieves passages from the official FIA Sporting
 Regulations (2023–2025). When asked a regulation question:
 1. Call query_rag_tool with a precise, focused question.
 2. Read the retrieved passages carefully.
-3. Answer in 2-3 sentences, citing the exact article numbers (e.g. "Article 48.3").
-4. If the question spans multiple articles, cite each one.
-5. If no relevant passage is found, say "The regulation does not cover this case."
+3. **State the CONDITIONS under which each rule applies, in the same sentence as the
+   rule.** Most FIA articles are conditional ("if the race is resumed...", "at such
+   times", "during a suspension", "for the race in Monaco"). A rule quoted without
+   its condition becomes a different and usually false rule.
+4. **Never generalise a conditional rule to the unconditioned case.** If the
+   retrieved passage restricts something only under specific circumstances and the
+   question asks about the general case, say so explicitly: "this applies only when
+   X; it does not apply otherwise."
+5. Answer in 2-4 sentences, citing the exact article numbers (e.g. "Article 48.3").
+6. If the question spans multiple articles, cite each one.
+7. If no relevant passage is found, say "The regulation does not cover this case."
+   Say this rather than stretching a nearby article to fit.
 
 Always prefer the most recent regulation year (2025) unless the question specifies otherwise.
 """

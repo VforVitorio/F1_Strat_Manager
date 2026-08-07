@@ -1,0 +1,8 @@
+[
+ {"race":"Lusail","driver":"PIA","team":"McLaren","low":4,"high":14,"rival":"VER",
+  "note":"thesis 5.5.3 - SC deployed L7. Repeats test whether STAY_OUT is stable or a sampling fluke"},
+ {"race":"Budapest","driver":"LEC","team":"Ferrari","low":14,"high":24,"rival":"PIA",
+  "note":"thesis 5.5.2 - decision window around the real L19 stop"},
+ {"race":"Budapest","driver":"LEC","team":"Ferrari","low":17,"high":19,"rival":"PIA",
+  "note":"the EXACT thesis command, to test whether the 3-lap window start changes the answer"}
+]
