@@ -104,14 +104,22 @@ def _session(n_frames: int = 40) -> SessionData:
     )
 
 
-def _snapshot(session: SessionData, frame_idx: int, rival: str | None = None) -> dict:
+def _snapshot(
+    session: SessionData,
+    frame_idx: int,
+    rival: str | None = None,
+    span_start: int | None = None,
+    rewound: bool = False,
+) -> dict:
+    """Build one broadcast snapshot. Defaults to a one-sample span at `frame_idx`."""
     view = SimpleNamespace(
         _session=session,
         _driver_main=MAIN,
         _driver_rival=rival,
         _year=session.year,
     )
-    return F1ArcadeView._build_arcade_snapshot(view, frame_idx)
+    start = frame_idx if span_start is None else span_start
+    return F1ArcadeView._build_arcade_snapshot(view, frame_idx, start, rewound)
 
 
 # --- #842: the four scalars the wire used to drop ---------------------------
@@ -179,8 +187,8 @@ def test_a_car_with_no_position_data_is_unknown_rather_than_at_the_line():
     assert wire["drivers"][MAIN]["rel_dist"] is not None
     # The two-car telemetry block takes the same route, so it must agree.
     telemetry = _snapshot(_session(), frame_idx=3, rival="HAD")["telemetry"]
-    assert telemetry["rival"]["dist"] is None
-    assert telemetry["main"]["dist"] is not None
+    assert telemetry["rival"][0]["dist"] is None
+    assert telemetry["main"][0]["dist"] is not None
 
 
 def test_the_payload_survives_a_strict_json_parser():
