@@ -297,9 +297,20 @@ def get_retriever(
 
     Wrapped in ``functools.lru_cache`` so the embedded Qdrant client is
     instantiated exactly once per process. A second ``QdrantClient(path=...)``
-    on the same storage directory raises ``AlreadyLocked`` (local mode holds a
-    file lock), which would break any caller (N31 orchestrator, the chat tool
+    on the same storage directory fails (local mode holds an exclusive file
+    lock), which would break any caller (N31 orchestrator, the chat tool
     ``query_rag_tool``) that reaches into the retriever more than once.
+
+    **What it actually raises is a bare ``RuntimeError``**, not portalocker's
+    ``AlreadyLocked``: ``qdrant_client/local/qdrant_local.py`` catches the lock
+    exception itself and re-raises ``"Storage folder ... is already accessed by
+    another instance of Qdrant client."``. This sentence used to name the
+    portalocker type, and #827's first guard was written from it rather than
+    from an executed collision — so the guard caught an exception that never
+    occurs and three races of a measurement run died silently. If you need to
+    detect the lock, match that message (see
+    ``strategy_orchestrator._is_store_locked``), and confirm it against a real
+    two-client collision, not against this docstring.
 
     Args:
         qdrant_path:     Path to the on-disk Qdrant storage. Defaults to

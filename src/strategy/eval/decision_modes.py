@@ -282,8 +282,8 @@ def _team_of(laps, driver: str) -> str | None:
     return str(rows.iloc[0]) if len(rows) else None
 
 
-def lap_inputs(state: dict[str, Any]) -> dict[str, Any] | None:
-    """The primitive fields a ``RaceState`` needs from a lap state, or None to skip.
+def lap_inputs(state: dict[str, Any]) -> int | None:
+    """The lap number when this lap can be asked about at all, else None.
 
     Pure and free of any agent import on purpose: this is the part that decides
     which laps are answerable at all, it is where two real bugs lived, and keeping
@@ -299,26 +299,23 @@ def lap_inputs(state: dict[str, Any]) -> dict[str, Any] | None:
       sentinel position has already collided with a real one in this codebase. A
       lap with no position is not a lap the stack can be asked about.
 
-    ``tyre_life`` is read the long way for the same family of reason: ``or 10``
-    would turn a legitimate fresh tyre (0) into a ten-lap-old one and quietly move
-    what the tyre agent answers.
+    IT RETURNS ONLY THE LAP NUMBER, AND THAT IS THE POINT (#829). It used to
+    return a dict of field values that ``_decisions_in_window`` fed straight into
+    a hand-built ``RaceState``, and two of those values were constants: a
+    ``gap_ahead_s`` read from a key the driver dict does not have (2.0 on every
+    lap of every race) and a ``pace_delta_s`` of 0.0. The values now come from
+    ``race_state_builder.build_race_state``, the canonical mapping every surface
+    shares, and this function keeps the one job it was good at.
+
+    The builder is also strictly better on the field this function used to guard:
+    an unknown tyre life becomes ``UNKNOWN_TYRE_LIFE = 0``, which is measured to
+    occur zero times in 2023-2025, where this function's ``10`` is a perfectly
+    real tyre age. Its contract is tested in ``tests/agents/test_race_state_builder.py``.
     """
     car = state.get("driver") or {}
     if "lap_number" not in car or car.get("position") is None:
         return None
-
-    tyre_life = car.get("tyre_life")
-    weather = state.get("weather") or {}
-    return {
-        "lap": int(car["lap_number"]),
-        "total_laps": int(state["session_meta"]["total_laps"]),
-        "position": int(car["position"]),
-        "compound": car.get("compound") or "MEDIUM",
-        "tyre_life": 10 if tyre_life is None else int(tyre_life),
-        "gap_ahead_s": car.get("gap_ahead_s") or 2.0,
-        "air_temp": weather.get("air_temp") or 25.0,
-        "track_temp": weather.get("track_temp") or 35.0,
-    }
+    return int(car["lap_number"])
 
 
 def _decisions_in_window(
@@ -335,26 +332,37 @@ def _decisions_in_window(
     generator itself is cheap and the agent stack is not, so skipping the rest of
     the race is where the runtime budget comes from.
     """
-    from src.agents.strategy_orchestrator import RaceState
+    # The CANONICAL mapping (#784), the one the CLI, the arcade and the backend all
+    # route through, rather than a private one built here. This module used to
+    # construct its own ``RaceState`` and two of its fields were constants: the gap
+    # to the car ahead was `car.get("gap_ahead_s") or 2.0` on a dict that has no
+    # such key (it carries `gap_to_leader_s`), so 2.0 was the value on 100% of laps
+    # of every race, and `pace_delta_s` was hardcoded to 0.0 beside it. Both feed
+    # N27's overtake scoring and the Monte Carlo this tier grades, so every figure
+    # it published described a stack fed two constants (#829).
+    #
+    # Imported here and not at module scope because ``build_race_state`` lazily
+    # imports ``RaceState`` from the orchestrator on CALL, which pulls the whole
+    # agent stack. ``lap_inputs`` above stays free of it so the answerability rules
+    # keep their tests on a runner with no model weights.
+    from src.agents.race_state_builder import build_race_state
     import src.strategy.inference.engine as inference_engine
 
     actions: dict[int, str] = {}
     for state in engine.replay():
-        inputs = lap_inputs(state)
-        if inputs is None:
+        lap = lap_inputs(state)
+        if lap is None:
             continue
-        if inputs["lap"] < low:
+        if lap < low:
             continue
-        if inputs["lap"] > high:
+        if lap > high:
             break
 
-        race_state = RaceState(
-            driver=driver, pace_delta_s=0.0, risk_tolerance=risk_tolerance, **inputs
-        )
+        race_state = build_race_state(state, driver=driver, risk_tolerance=risk_tolerance)
         recommendation, _outputs, _timings = inference_engine.run_lap(
             race_state, laps_df, state, profile="no-llm", return_agent_outputs=True
         )
-        actions[inputs["lap"]] = recommendation.action
+        actions[lap] = recommendation.action
     return actions
 
 
@@ -562,8 +570,11 @@ def measure_decision_agreement(
                     # transition can be located" is the model already committed when
                     # we started looking, and reporting the window edge as its choice
                     # is what #752 retired. The second bucket says only that - it does
-                    # NOT say the stack asked on every lap, which measured false on
-                    # 4 of 4 real occupants (they withdrew mid-window).
+                    # NOT say the stack asked on every lap: re-measured on 2025 Monza
+                    # (2026-08-06, on the post-#829 inputs), 4 of 4 occupants withdrew
+                    # mid-window, and all four were still asking on the exact lap the
+                    # team really stopped. So the bucket can hold an AGREEMENT the
+                    # metric is structurally unable to score.
                     unscored = (
                         "no_boundary_in_window"
                         if _asks_to_stop(actions, window_low, window_high)
@@ -617,9 +628,12 @@ def _render_table(
         f"| Within 2 laps | {agreement.within_two:.1%} | same strategic window |",
         f"| Mean signed error | {agreement.mean_signed_error:+.2f} laps | "
         "negative = earlier than the team. **Do not quote as a system property** "
-        f"— still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 "
-        "at w=3/5/10 on one race), because a wider window admits more distant, and "
-        "therefore earlier, transitions |",
+        "— it still moves with `DECISION_WINDOW_LAPS`, because a wider window admits "
+        "more distant, and therefore earlier, transitions. The levels this caveat used "
+        "to quote (-0.33 / -1.29 / -2.50 at w=3/5/10) were measured on ONE race and on "
+        "the constant-fed inputs #829 retired, so they are withdrawn rather than "
+        "restated; the direction is arithmetic and survives, the magnitudes are "
+        "unmeasured on this input set |",
         f"| Mean absolute error | {agreement.mean_absolute_error:.2f} laps | magnitude, "
         "same width caveat |",
         f"| Coverage verdict | **{status}** | `masked` when under "
@@ -648,9 +662,12 @@ def _render_table(
         "Three different shapes land here and they are not the same finding:",
         "",
         "- already asking when the window opened, and still asking on every lap;",
-        "- already asking when the window opened, then **withdrawing** later - on the",
-        "  measured 2025 Monza sample this was 4 of 4 occupants, one of them flipping to",
-        "  STAY_OUT on the exact lap the team really stopped;",
+        "- already asking when the window opened, then **withdrawing** later. Re-measured",
+        "  on 2025 Monza (2026-08-06, on these inputs): this is 4 of 4 occupants, and all",
+        "  four were STILL ASKING on the exact lap the team really stopped, flipping to",
+        "  STAY_OUT only the lap after - VER asks laps 32-37 for a lap-37 stop, NOR 41-46",
+        "  for 46, HAD 27-32 for 32, PIA 40-45 for 45. So this bucket is holding four",
+        "  cases where the stack agreed with the team and the metric cannot say so;",
         "- a lap inside the window that was never evaluated, so the only pit ask has no",
         "  witness for its predecessor.",
         "",
@@ -662,26 +679,15 @@ def _render_table(
         f"{_NO_PIT_BEFORE_LAP} or earlier is the rail releasing, not the model deciding,",
         "so it is bucketed here too.",
         "",
-        "### ⚠️ Every figure above is measured on two constant inputs (#829)",
+        "### Inputs: the canonical RaceState, since #829",
         "",
-        "`lap_inputs` in this module builds its own `RaceState` instead of calling",
-        "`src/agents/race_state_builder.build_race_state`, the canonical mapping the CLI,",
-        "the arcade and the backend all route through. Two of the fields it invents are",
-        "constants:",
-        "",
-        "- **`gap_ahead_s` is 2.0 on every lap of every race.** The line reads",
-        '  `car.get("gap_ahead_s") or 2.0`, and `gap_ahead_s` is not a key in the lap',
-        "  state's driver dict at all (it carries `gap_to_leader_s`), so the fallback is",
-        "  the value rather than a fallback. Measured against the builder on 2025",
-        "  Barcelona, the real gaps over the same laps run 0.431 to 1.075 s.",
-        "- **`pace_delta_s` is hardcoded to 0.0.** The builder computes it as this",
-        "  driver's lap time minus the reference car's.",
-        "",
-        "Both feed N27's overtake scoring and the Monte Carlo this tier grades, and 2.0 s",
-        "sits inside the plausible range, so nothing downstream can tell it from a",
-        "measurement. **Do not quote these figures as properties of the shipped stack",
-        "until #829 is fixed and this report is regenerated.** They are a valid",
-        "measurement of a stack fed two constants, and nothing wider.",
+        "This tier used to build its own ``RaceState`` instead of calling",
+        "``src/agents/race_state_builder.build_race_state``, and two of the fields it",
+        "invented were constants: ``gap_ahead_s`` came from a key the driver dict does",
+        "not carry, so it was **2.0 s on every lap of every race**, and ``pace_delta_s``",
+        "was hardcoded to 0.0. Both feed N27's overtake scoring and the Monte Carlo this",
+        "tier grades, so every figure published before this fix described a stack fed two",
+        "constants. **Figures generated before 2026-08-06 are not comparable to these.**",
         "",
         "### Scope",
         "",

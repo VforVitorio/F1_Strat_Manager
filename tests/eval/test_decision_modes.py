@@ -400,7 +400,7 @@ def test_laps_without_a_position_are_skipped_not_defaulted():
     so the fix is to skip the lap, not to invent a plausible place.
     """
     assert lap_inputs(_lap_state(10, position=None)) is None
-    assert lap_inputs(_lap_state(11))["position"] == 4
+    assert lap_inputs(_lap_state(11)) == 11
 
 
 def test_retired_cars_yield_nothing_to_evaluate():
@@ -409,14 +409,34 @@ def test_retired_cars_yield_nothing_to_evaluate():
     assert lap_inputs({}) is None
 
 
-def test_fresh_tyre_is_not_rounded_up_to_ten_laps():
-    """`tyre_life=0` is a real reading, and `or 10` would silently age the tyre."""
-    assert lap_inputs(_lap_state(11, tyre_life=0))["tyre_life"] == 0
+def test_lap_inputs_decides_answerability_and_nothing_else():
+    """It returns a lap number, never field values (#829).
+
+    It used to return a dict that the caller fed into a hand-built ``RaceState``,
+    and two of those fields were constants: a ``gap_ahead_s`` read from a key the
+    driver dict does not carry, so 2.0 on every lap of every race, and a
+    ``pace_delta_s`` of 0.0. The values now come from the canonical
+    ``build_race_state``. This asserts the shape so nothing can drift back into
+    inventing them here.
+    """
+    result = lap_inputs(_lap_state(11, tyre_life=0))
+    assert isinstance(result, int)
+    assert result == 11
 
 
-def test_unknown_tyre_life_falls_back_but_a_known_one_never_does():
-    assert lap_inputs(_lap_state(11, tyre_life=None))["tyre_life"] == 10
-    assert lap_inputs(_lap_state(11, tyre_life=3))["tyre_life"] == 3
+def test_tyre_life_is_the_builders_contract_now():
+    """The guard this module used to carry lives where the value is produced.
+
+    ``build_race_state`` maps an unknown tyre life to ``UNKNOWN_TYRE_LIFE = 0``,
+    measured to occur zero times across 2023-2025, so it cannot collide with a
+    real reading. This module's old fallback was ``10``, which is a perfectly
+    ordinary tyre age. The contract is asserted in
+    ``tests/agents/test_race_state_builder.py``; duplicating it here is how two
+    copies of one rule start to drift.
+    """
+    from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE
+
+    assert UNKNOWN_TYRE_LIFE == 0
 
 
 # --- the report's honesty --------------------------------------------------
