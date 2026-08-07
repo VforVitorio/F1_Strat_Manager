@@ -36,7 +36,13 @@ _CARDS = (
     ("docs/huggingface/MODEL_CARD.md", "VforVitorio/f1-strategy-models", "model"),
 )
 
-pytestmark = pytest.mark.data
+# NOT marked `data`, and the distinction matters. That marker means "requires the
+# HF dataset or model weights (skipped on CI runners)"; this needs neither - only
+# an unauthenticated read of two public README files. Marking it `data` would
+# have labelled it as one of the tests nobody expects to run, which is halfway to
+# a guard that never fires, and this whole file exists because of one of those.
+#
+# Confirmed green on a CI runner, so the fetch really executes there.
 
 
 def test_the_test_and_the_publisher_agree_on_which_cards_exist():
