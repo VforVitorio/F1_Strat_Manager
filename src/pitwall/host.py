@@ -1,0 +1,82 @@
+"""The object the two windows see as `pywebview.api`, and nothing else.
+
+It holds no rendering logic and no formatting. Every method maps one to one
+onto something the UI needs, and each is short enough to read at a glance.
+
+Two properties this file exists to guarantee, both of which were named as
+traps before a line was written:
+
+1. **`get_tick` is sequenced, never a blind slot.** Two windows polling one
+   latest-payload slot on independent 10 Hz timers were measured reading a
+   different frame on 58 % of polls - 15 duplicate reads and 15 skips out of
+   54. Passing the last sequence a window saw removes both, and the sequence
+   is not invented here: the producer already stamps `seq` on every message.
+2. **Closing one window must not stop the shared client.** The client is
+   owned by this host, not by a window, and the count below is what makes
+   that explicit rather than accidental. It is the single place the property
+   can regress, and it regresses silently.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from src.pitwall.stream_client import ArcadeStreamClient
+
+logger = logging.getLogger(__name__)
+
+
+class PitwallHost:
+    """The js_api surface: one sequenced tick reader, shared by every window.
+
+    Invariants:
+
+    - The client is started once and stopped once, by this object. A window
+      never touches it.
+    - `get_tick` returns None when the caller is already up to date. That is
+      "nothing new", not "nothing there": the UI keeps what it has.
+    """
+
+    def __init__(self, client: ArcadeStreamClient, window_count: int) -> None:
+        self._client = client
+        self._windows_open = window_count
+
+    def start(self) -> None:
+        self._client.start()
+
+    def get_tick(self, since_seq: int = -1) -> dict | None:
+        """Return the latest payload if the caller has not seen it yet.
+
+        `since_seq` is the `seq` of the last payload this window rendered.
+        A window that has never rendered one passes -1, which is below every
+        sequence the producer emits.
+
+        A payload with no `seq` is returned unconditionally. That only
+        happens against a producer older than the one in this repo, where
+        there is nothing to compare and the honest answer is the data.
+        """
+        payload = self._client.latest
+        if payload is None:
+            return None
+        seq = payload.get("seq")
+        if seq is None or seq > since_seq:
+            return payload
+        return None
+
+    def release_window(self) -> int:
+        """Record that one window has closed; stop the client at the last one.
+
+        Returns how many are still open, which is what makes the property
+        testable without a display: closing one of two must leave the client
+        running, and only the second close tears it down.
+        """
+        self._windows_open = max(0, self._windows_open - 1)
+        if self._windows_open == 0:
+            logger.info("Last Pitwall window closed - stopping the stream client")
+            self._client.stop()
+        return self._windows_open
+
+    def shutdown(self) -> None:
+        """Unconditional teardown, for the process exiting rather than a window closing."""
+        self._windows_open = 0
+        self._client.stop()

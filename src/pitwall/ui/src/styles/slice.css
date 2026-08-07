@@ -1,0 +1,36 @@
+/* Sprint-2 only. Deleted with SliceProof when the real panels land. */
+body {
+  margin: 0;
+  background: var(--bg-1);
+  color: var(--text-1);
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+.slice {
+  padding: 2rem;
+  max-width: 40rem;
+}
+.slice h1 {
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  color: var(--purple-300);
+  margin: 0 0 1.5rem;
+}
+.slice-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-1, rgba(255, 255, 255, 0.08));
+}
+.slice-label {
+  color: var(--text-3, rgba(255, 255, 255, 0.5));
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.slice-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.slice-waiting {
+  color: var(--text-3, rgba(255, 255, 255, 0.5));
+}

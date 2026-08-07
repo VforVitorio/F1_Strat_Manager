@@ -224,6 +224,7 @@ class F1ArcadeView(arcade.View):
         self._strategy_state = None
         self._stream_server = None
         self._dashboard_proc: subprocess.Popen | None = None
+        self._pitwall_proc: subprocess.Popen | None = None
         self._broadcast_tick: int = 0
         # Highest frame index already put on the wire. -1 means "nothing sent
         # yet", so the first broadcast emits a single sample rather than the
@@ -427,6 +428,7 @@ class F1ArcadeView(arcade.View):
             self._stream_server = None
 
         self._spawn_dashboard()
+        self._spawn_pitwall()
 
     def _spawn_dashboard(self) -> None:
         """Launch the PySide6 strategy dashboard as a child process.
@@ -452,6 +454,30 @@ class F1ArcadeView(arcade.View):
                 exc,
             )
             self._dashboard_proc = None
+
+    def _spawn_pitwall(self) -> None:
+        """Launch the PITWALL windows as a child process.
+
+        Runs ALONGSIDE the Qt dashboard for now. The two surfaces read the
+        same broadcast and neither knows about the other, so keeping both
+        alive through sprints 2-6 means every PITWALL panel can be compared
+        against the window it replaces while that window still exists. The
+        Qt spawn is what disappears in sprint 7, not this one.
+
+        A failed spawn is logged and swallowed for the same reason the
+        dashboard's is: the replay keeps playing without its companion. The
+        commonest failure is simply that the UI bundle has not been built,
+        which `src.pitwall.__main__` reports with the exact command."""
+        try:
+            creationflags = subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
+            self._pitwall_proc = subprocess.Popen(
+                [sys.executable, "-m", "src.pitwall"],
+                creationflags=creationflags,
+            )
+            logger.info("Pitwall subprocess spawned (pid=%s)", self._pitwall_proc.pid)
+        except (OSError, ValueError) as exc:
+            logger.warning("Pitwall spawn failed (%s) — arcade continues without it", exc)
+            self._pitwall_proc = None
 
     def _resolve_gp_name(self) -> str:
         """Return the GP label fed to the strategy pipeline.
@@ -488,6 +514,29 @@ class F1ArcadeView(arcade.View):
                 # nothing else is documented for these two calls.
                 logger.warning("Dashboard teardown error: %s", exc)
             self._dashboard_proc = None
+        self._pitwall_proc = self._terminate(self._pitwall_proc, "Pitwall")
+
+    @staticmethod
+    def _terminate(proc: subprocess.Popen | None, name: str) -> None:
+        """Stop a companion window process, whatever state it is in.
+
+        Same three outcomes as the dashboard's teardown above, which is why
+        this exists: a second copy of that block would be the twin that
+        stops getting fixed.
+        """
+        if proc is None:
+            return None
+        try:
+            proc.terminate()
+            proc.wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            logger.warning("%s did not exit in 3s — killing", name)
+            proc.kill()
+        except OSError as exc:
+            # terminate()/wait() on an already-dead or inaccessible process
+            # raise OSError subclasses; nothing else is documented for these.
+            logger.warning("%s teardown error: %s", name, exc)
+        return None
 
     # --- Arcade event loop -----------------------------------------------
 
