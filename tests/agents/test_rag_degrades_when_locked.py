@@ -58,6 +58,7 @@ def orch():
 
     return strategy_orchestrator
 
+
 # Verbatim from qdrant_client/local/qdrant_local.py, the RuntimeError raised on a
 # second open. Reproduced here so a qdrant upgrade that rewords it fails this test
 # loudly instead of silently re-breaking the guard.
