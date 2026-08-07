@@ -66,8 +66,10 @@ from src.arcade.track import Track
 logger = logging.getLogger(__name__)
 
 
-def _telemetry_span_bounds(last_sent_idx: int, frame_idx: int, max_span: int) -> tuple[int, bool]:
-    """Return `(span_start, rewound)` for the frames this tick should send.
+def _telemetry_span_bounds(
+    last_sent_idx: int, frame_idx: int, max_span: int
+) -> tuple[int, bool, int]:
+    """Return `(span_start, rewound, dropped)` for the frames this tick should send.
 
     The span is `frames[span_start : frame_idx + 1]`, so `span_start >
     frame_idx` is how "no new samples" is expressed. Pause and rewind get
@@ -85,15 +87,20 @@ def _telemetry_span_bounds(last_sent_idx: int, frame_idx: int, max_span: int) ->
       holds samples for track the car has yet to re-drive, and only a
       clear fixes that.
 
-    `max_span` caps a span the clock could not have produced smoothly.
-    Normal playback tops out around 60 frames per tick (0.1 s at 8x with
-    the seek multiplier); anything larger means the process stalled, and
-    a stall should not turn into a multi-megabyte blocking `sendall`.
+    `max_span` caps the span. Smooth playback never reaches it: the widest
+    the clock produces is about 60 frames per tick, 0.1 s at 8x with the
+    seek multiplier. What does reach it is **a click on the progress bar**,
+    which can jump the index by tens of thousands of frames, and a process
+    stall. Either way the frames in between are not sent, so the count is
+    returned and published: a consumer that only saw `rewound` would read a
+    contiguous `seq` and a forward-only clock and conclude nothing was
+    lost, which is precisely the thing `seq` exists to make impossible.
     """
     if frame_idx < last_sent_idx:
-        return frame_idx + 1, True
+        return frame_idx + 1, True, 0
     span_start = last_sent_idx + 1
-    return max(span_start, frame_idx - max_span + 1), False
+    capped = max(span_start, frame_idx - max_span + 1)
+    return capped, False, capped - span_start
 
 
 def _frames_to_telemetry_span(
@@ -517,7 +524,7 @@ class F1ArcadeView(arcade.View):
         if self._broadcast_tick != 0:
             return
         frame_idx = int(self._frame_index)
-        span_start, rewound = _telemetry_span_bounds(
+        span_start, rewound, dropped = _telemetry_span_bounds(
             self._last_broadcast_idx, frame_idx, STREAM_MAX_SPAN_FRAMES
         )
         # Advance the marker before the no-subscriber return, so the span
@@ -530,7 +537,7 @@ class F1ArcadeView(arcade.View):
         payload = {
             "schema_version": STREAM_SCHEMA_VERSION,
             "seq": self._broadcast_seq,
-            "arcade": self._build_arcade_snapshot(frame_idx, span_start, rewound),
+            "arcade": self._build_arcade_snapshot(frame_idx, span_start, rewound, dropped),
             "strategy": self._strategy_state.snapshot_dict(STREAM_HISTORY_TAIL),
             "playback": {
                 "speed": self.playback_speed,
@@ -541,7 +548,9 @@ class F1ArcadeView(arcade.View):
         }
         self._stream_server.broadcast(payload)
 
-    def _build_arcade_snapshot(self, frame_idx: int, span_start: int, rewound: bool) -> dict:
+    def _build_arcade_snapshot(
+        self, frame_idx: int, span_start: int, rewound: bool, dropped: int = 0
+    ) -> dict:
         """Compact version of the per-frame dict the dashboard needs.
 
         Lighter than the internal `_build_frame_dict` consumed by the
@@ -603,6 +612,13 @@ class F1ArcadeView(arcade.View):
             # distance-within-lap holds samples for track the car has not
             # re-driven yet, and nothing else would ever evict them.
             "rewound": rewound,
+            # Frames the clock crossed that this tick could NOT carry,
+            # because a forward jump (a progress-bar click) outran the span
+            # cap. Zero on every normal tick. Without it a forward seek is
+            # invisible: the sequence stays contiguous and the clock still
+            # runs forwards, so a consumer appending samples would splice
+            # two unrelated parts of the race into one trace.
+            "dropped": dropped,
         }
         return {
             "gp_name": self._session.gp_name,

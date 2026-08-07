@@ -281,6 +281,11 @@ class TelemetryPanel(QFrame):
             if int(sample.get("lap") or 0) == self._current_lap:
                 self._append(self._rival_buffer, sample)
 
+        if telemetry.get("dropped"):
+            # A forward seek the span could not cover: the frames between
+            # here and the last tick were never sent, so appending would
+            # splice two unrelated parts of the race into one trace.
+            self._reset_buffers()
         self._refresh_speed_brake_throttle()
         # Two-driver mode is a property of the session, not of whether this
         # particular tick happened to carry a rival sample — an empty span

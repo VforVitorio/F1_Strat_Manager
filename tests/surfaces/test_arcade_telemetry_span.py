@@ -58,7 +58,7 @@ def _collect_spans(speeds_and_ticks, start_frame: float = 0.0):
         for _ in range(n_ticks):
             frame_index += TICK_SECONDS * FPS * speed
             frame_idx = int(frame_index)
-            span_start, rewound = _telemetry_span_bounds(
+            span_start, rewound, _ = _telemetry_span_bounds(
                 last_sent, frame_idx, STREAM_MAX_SPAN_FRAMES
             )
             last_sent = frame_idx
@@ -112,7 +112,7 @@ def test_pause_sends_no_new_samples_rather_than_repeating_the_last_one():
     sample went out ten times a second and any consumer that appends
     accumulated duplicates.
     """
-    span_start, rewound = _telemetry_span_bounds(400, 400, STREAM_MAX_SPAN_FRAMES)
+    span_start, rewound, dropped = _telemetry_span_bounds(400, 400, STREAM_MAX_SPAN_FRAMES)
 
     assert span_start > 400, "a paused tick must produce an empty span"
     assert rewound is False, "pause is not a discontinuity"
@@ -121,32 +121,37 @@ def test_pause_sends_no_new_samples_rather_than_repeating_the_last_one():
 
 def test_a_backwards_seek_is_empty_and_flagged():
     """Rewind must be a branch, not a negative slice."""
-    span_start, rewound = _telemetry_span_bounds(400, 250, STREAM_MAX_SPAN_FRAMES)
+    span_start, rewound, dropped = _telemetry_span_bounds(400, 250, STREAM_MAX_SPAN_FRAMES)
 
     assert rewound is True
     assert span_start > 250, "nothing may be appended on a rewind"
 
 
-def test_a_stall_cannot_put_an_unbounded_span_on_the_wire():
-    """A frame-index jump the clock could not produce smoothly is capped.
+def test_a_forward_jump_is_capped_and_the_lost_frames_are_counted():
+    """A jump smooth playback could not produce is capped and reported.
 
-    Normal playback tops out near 60 frames per tick; a process stall is
-    what produces thousands, and `sendall` is blocking on the pyglet
-    thread.
+    Smooth playback tops out near 60 frames per tick. What reaches the cap
+    is a click on the progress bar, which sets the index directly; a
+    process stall is the rarer second case.
     """
-    span_start, rewound = _telemetry_span_bounds(10, 90_000, STREAM_MAX_SPAN_FRAMES)
+    span_start, rewound, dropped = _telemetry_span_bounds(10, 90_000, STREAM_MAX_SPAN_FRAMES)
 
     assert rewound is False
     assert 90_000 - span_start + 1 == STREAM_MAX_SPAN_FRAMES
+    # The frames the cap could not carry are counted and published, because
+    # a forward jump is otherwise invisible: the sequence stays contiguous
+    # and the clock still runs forwards.
+    assert dropped == 90_000 - 10 - STREAM_MAX_SPAN_FRAMES
+    assert _telemetry_span_bounds(10, 40, STREAM_MAX_SPAN_FRAMES)[2] == 0
 
     # The cap must never resurrect a span that pause emptied.
-    paused_start, _ = _telemetry_span_bounds(400, 400, STREAM_MAX_SPAN_FRAMES)
+    paused_start, _, _ = _telemetry_span_bounds(400, 400, STREAM_MAX_SPAN_FRAMES)
     assert paused_start == 401
 
 
 def test_the_first_tick_sends_one_sample_not_the_whole_race():
     """`last_sent_idx` starts at -1, which must mean "nothing yet", not "from zero"."""
-    span_start, _ = _telemetry_span_bounds(-1, 0, STREAM_MAX_SPAN_FRAMES)
+    span_start, _, _ = _telemetry_span_bounds(-1, 0, STREAM_MAX_SPAN_FRAMES)
 
     assert span_start == 0
     assert list(range(span_start, 1)) == [0]

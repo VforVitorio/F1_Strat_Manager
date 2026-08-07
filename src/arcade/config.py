@@ -183,13 +183,20 @@ STREAM_PORT: Final[int] = int(os.environ.get("F1_STREAM_PORT", "9998"))
 # Broadcast every N arcade frames. At 60 FPS on_update, N=6 gives ~10 Hz,
 # smooth enough for the live charts without saturating localhost.
 STREAM_BROADCAST_EVERY_N_FRAMES: Final[int] = 6
-# Ceiling on how many telemetry samples one tick may carry. Normal playback
+# Ceiling on how many telemetry samples one tick may carry. Smooth playback
 # cannot reach it: the widest span the clock produces is a ~0.1 s broadcast
-# interval at 8x with the 3x seek multiplier, about 60 frames. It exists for
-# the case the clock did NOT produce smoothly — a GC pause or a blocking load
-# stalls on_update, delta_time comes back large, and the frame index jumps.
-# Without the cap that stall becomes a multi-megabyte blocking sendall on the
-# pyglet thread, i.e. a hitch turning into a freeze.
+# interval at 8x with the 3x seek multiplier, about 60 frames.
+#
+# What DOES reach it is a click on the progress bar, which sets the frame
+# index directly and can jump tens of thousands of frames; a process stall is
+# the rarer second case. Either way the frames in between never go out, so the
+# tick publishes `dropped` alongside the span - a forward jump is otherwise
+# invisible to a consumer, which sees a contiguous `seq` and a forward clock.
+#
+# The cap is not free. `sendall` runs on the pyglet main thread, so a bigger
+# message freezes the replay sooner against a stalled subscriber, measured at
+# 0.7 s instead of about 130 s. That is why `stream.py` gives every client a
+# send timeout: the cap bounds the message, the timeout bounds the wait.
 STREAM_MAX_SPAN_FRAMES: Final[int] = 250
 # Cap how many LapDecision entries we keep in the broadcast history tail.
 STREAM_HISTORY_TAIL: Final[int] = 30

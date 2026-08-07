@@ -119,7 +119,7 @@ def _snapshot(
         _year=session.year,
     )
     start = frame_idx if span_start is None else span_start
-    return F1ArcadeView._build_arcade_snapshot(view, frame_idx, start, rewound)
+    return F1ArcadeView._build_arcade_snapshot(view, frame_idx, start, rewound, 0)
 
 
 # --- #842: the four scalars the wire used to drop ---------------------------
@@ -191,13 +191,14 @@ def test_a_car_with_no_position_data_is_unknown_rather_than_at_the_line():
     assert telemetry["main"][0]["dist"] is not None
 
 
-def test_the_payload_survives_a_strict_json_parser():
+def test_the_arcade_block_carries_nothing_non_finite():
     """`json.dumps` writes a bare `NaN`, which no strict parser accepts.
 
-    Python's own `json.loads` takes it, which is why the Qt dashboard
-    never surfaced this, but the payload's next consumer is JavaScript and
-    `JSON.parse` rejects the whole message. Nothing non-finite may reach
-    the wire.
+    Scoped to the `arcade` block on purpose, and named for it. An earlier
+    version of this test claimed to cover "the payload" while building
+    only this sub-dict, so it passed while the `strategy` block put NaN on
+    the wire unguarded. The whole-payload guarantee is enforced at the
+    encoder and tested in `test_arcade_wire_contract.py`.
     """
     wire = _snapshot(_session(), frame_idx=3, rival="HAD")
 
