@@ -158,7 +158,7 @@ FLAG_COLORS: Final[dict[str, tuple[int, int, int]]] = {
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 FASTF1_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "fastf1"
 ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
-CACHE_VERSION: Final[str] = "v7"  # adds weather_by_lap, real FastF1 weather for the weather panel
+CACHE_VERSION: Final[str] = "v8"  # adds global_t_min, the session-time origin of the frame clock
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial by default — Windows spawn + pickling a loaded session across 8

@@ -11,6 +11,7 @@ panels) has an active GL context from the start.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import subprocess
 import sys
@@ -62,6 +63,28 @@ from src.arcade.track import Track
 logger = logging.getLogger(__name__)
 
 
+def _lap_fraction(rel_dist: float) -> float | None:
+    """Clamp a fraction-of-lap into [0, 1], or return None when it is unknown.
+
+    FastF1 does not always deliver ``RelativeDistance``: on Melbourne 2025
+    it is NaN for 100 % of HAD's frames, the only non-finite value in the
+    whole session. Two things break if that NaN is passed through.
+
+    First, ``json.dumps`` writes a bare ``NaN``, which is not valid JSON.
+    Python's own parser accepts it, so the Qt dashboard never noticed, but
+    a strict parser (``JSON.parse``) rejects the whole payload.
+
+    Second, clamping it is worse than dropping it: ``min(1.0, nan)`` is
+    ``1.0``, and 1.0 is a legitimate value meaning "at the line", so the
+    car with no position data would be drawn exactly at the lap boundary
+    rather than nowhere. Unknown stays None and every consumer handles it.
+    """
+    value = float(rel_dist)
+    if not math.isfinite(value):
+        return None
+    return min(1.0, max(0.0, value))
+
+
 def _frame_to_telemetry(frame, circuit_length_m: float) -> dict | None:
     """Pack a ``FrameData`` into the dict the telemetry window consumes.
 
@@ -82,12 +105,12 @@ def _frame_to_telemetry(frame, circuit_length_m: float) -> dict | None:
     brake = float(frame.brake)
     if brake <= 1.0:
         brake *= 100.0
-    rel_dist = max(0.0, min(1.0, float(frame.rel_dist)))
-    lap_dist = rel_dist * float(circuit_length_m or 0.0)
+    rel_dist = _lap_fraction(frame.rel_dist)
+    lap_dist = None if rel_dist is None else round(rel_dist * float(circuit_length_m or 0.0), 1)
     return {
         "lap": int(frame.lap),
         "t": round(float(frame.t), 3),
-        "dist": round(lap_dist, 1),
+        "dist": lap_dist,
         "speed": round(float(frame.speed), 1),
         "throttle": round(throttle, 1),
         "brake": round(brake, 1),
@@ -445,19 +468,36 @@ class F1ArcadeView(arcade.View):
         """Compact version of the per-frame dict the dashboard needs.
 
         Lighter than the internal `_build_frame_dict` consumed by the
-        panels: we drop fields the dashboard does not use (rel_dist,
-        throttle, brake, active flag) to keep the broadcast JSON small."""
+        panels: `throttle` and `brake` stay out of the 20-car block
+        because only the two featured cars chart them, and they ride in
+        `telemetry` instead.
+
+        `active` and `rel_dist` are here on purpose and are NOT
+        cosmetic. Without `active` a retired car is indistinguishable
+        from a running one: `np.interp` clamps past a driver's last
+        sample, so a lap-1 DNF keeps broadcasting its crash-site `dist`,
+        `speed` and `lap` for the rest of the race. Without `rel_dist`
+        there is no way to place a car around the current lap —
+        `dist % circuit_length_m` is not a substitute, because `dist`
+        accumulates each lap as actually driven (an in-lap and an
+        out-lap are neither the same length as each other nor as the
+        fastest lap `circuit_length_m` is measured from), so the
+        residual drifts across a race and drifts most for the cars that
+        pitted."""
         drivers: dict[str, dict] = {}
         for code, frames in self._session.frames_by_driver.items():
             if not frames or frame_idx >= len(frames):
                 continue
             f = frames[frame_idx]
+            lap_fraction = _lap_fraction(f.rel_dist)
             drivers[code] = {
                 "lap": f.lap,
                 "dist": round(f.dist, 1),
+                "rel_dist": None if lap_fraction is None else round(lap_fraction, 4),
                 "speed": round(f.speed, 1),
                 "compound": f.tyre,
                 "tyre_life": round(f.tyre_life, 1),
+                "active": bool(f.active),
             }
         main_frame = None
         main_frames = self._session.frames_by_driver.get(self._driver_main)
@@ -479,9 +519,19 @@ class F1ArcadeView(arcade.View):
         telemetry = {"main": main_tel, "rival": rival_tel}
         return {
             "gp_name": self._session.gp_name,
+            # FastF1's authoritative Location, which is also the folder name
+            # under data/raw/<year>/. `gp_name` is a display label from a
+            # hardcoded table and the two diverge, so a consumer that needs to
+            # find the session on disk must resolve from this, never from the
+            # label on screen.
+            "location": self._session.location,
             "year": self._year,
             "lap": main_frame.lap if main_frame else 1,
             "t": main_frame.t if main_frame else 0.0,
+            # Session-time origin of `t`: `t + global_t_min` is FastF1
+            # SessionTime seconds, the clock laps/weather/intervals parquet
+            # are keyed on. `t` alone is only `frame_index * DT`.
+            "global_t_min": round(float(self._session.global_t_min), 3),
             "total_laps": self._session.max_lap_number,
             # Circuit length lets the telemetry window anchor the X axis
             # once and forget — without it the charts would autorange to
