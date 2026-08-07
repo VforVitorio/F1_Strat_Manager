@@ -5,9 +5,15 @@ frame's row index. That ignores session time, and neither side is evenly spaced:
 Car stretches the gap between laps while the samples keep their own cadence, so the two
 indices drift apart exactly when conditions are moving.
 
-Measured over 79,032 driver-laps of all 71 races, the proportional lookup disagreed with
+Measured over 79,032 driver-laps of the then-71-race tree, the proportional lookup
+disagreed with
 N04's join on **94.3%** of laps, mean 1.49 C and up to 17.3 C on TrackTemp, and **flipped
 the rain flag on 3,399 laps**. N06's weather block is 39.7% of that model's gain.
+
+The race count is left as measured rather than restated as 70: the 2023 Spanish GP was
+de-duplicated on 2026-08-06 (#823) and this measurement predates it, so 71 is what the
+run actually saw. Editing the scope of a number nobody re-ran is how a figure stops
+matching its own evidence.
 
 These assert the EFFECT: what the replay serves must equal what N04 computed, to the cell.
 """

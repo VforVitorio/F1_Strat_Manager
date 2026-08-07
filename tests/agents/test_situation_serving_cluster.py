@@ -36,7 +36,11 @@ _CLUSTERS = ROOT / "data" / "processed" / "circuit_clustering"
 _POOLED_NAME = "circuit_clusters_k4.parquet"
 _SEASON_NAME = "circuit_clusters_k4_2025.parquet"
 
-_N13_SOURCE = ROOT / ".nb_py" / "N13_sc_eda.py"
+# The TRACKED notebook, not the gitignored `.nb_py/` mirror of it. Reading the
+# mirror made this half skip on every CI runner with a reason that was true and
+# therefore useless: `.nb_py/` is excluded by `.gitignore:148`, but the same
+# evidence sits in a notebook git actually ships.
+_N13_SOURCE = ROOT / "notebooks" / "strategy" / "sc_probability" / "N13_sc_eda.ipynb"
 _N27_SOURCE = ROOT / "src" / "agents" / "race_situation_agent.py"
 
 
@@ -54,17 +58,18 @@ def test_the_sc_agent_loads_the_pooled_map_and_only_that_one():
     )
 
 
-@pytest.mark.skipif(
-    not _N13_SOURCE.exists(),
-    reason=".nb_py/ is gitignored, so this half cannot run on a CI runner",
-)
 def test_the_map_n27_serves_is_the_one_n13_built_the_labels_from():
-    """The other half of the pairing, checkable only where the notebooks are.
+    """The other half of the pairing, and it runs everywhere.
 
-    `.nb_py/` is gitignored (`.gitignore:148`), so without this marker the test
-    would fail on every CI runner rather than skip -- the mirror of the mistake
-    that turned this branch's sibling red: guard on the artefact the test READS,
-    and check whether git actually ships it.
+    This used to read `.nb_py/N13_sc_eda.py` and skip, because `.gitignore:148`
+    excludes that directory. The reason was true and the guard was useless: the
+    `.nb_py/` tree is a mirror of notebooks git DOES track, so the same evidence
+    was reachable all along. A skip whose reason is accurate is still a guard
+    that never fires.
+
+    Reads the `.ipynb` as raw text rather than parsing its JSON: the assertion is
+    about which filename the notebook names, and cell structure is not part of
+    the claim.
     """
     n13 = _N13_SOURCE.read_text(encoding="utf-8")
     assert _POOLED_NAME in n13, (

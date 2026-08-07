@@ -3,7 +3,10 @@
 Until now the Monte Carlo's only tyre signal was the cliff, a discrete event that
 falls inside the 5-lap window on 4 of 110 measured laps. A set 0.4 s off the pace but
 ten laps from the cliff scored identically to a fresh one, which is most of why the
-decision layer declines to call 46% of real stops.
+decision layer declines to call a large share of real stops. The level is deliberately
+not quoted here: it was 46%, then 65%, and is 72 of 178 (40.4%) on the post-#829
+inputs. `documents/eval_reports/decision_modes.md` regenerates it; a copy in a test
+docstring only ever goes stale.
 
 WHAT IS BEING REPLACED, AND WHY IT IS A REPLACEMENT
 ----------------------------------------------------

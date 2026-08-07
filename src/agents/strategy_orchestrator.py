@@ -1491,39 +1491,15 @@ def _run_mc_simulation(
 # Layer 3 — LLM synthesis
 # ==============================================================================
 
-# The signature qdrant_client puts in the RuntimeError it raises when the on-disk
-# store is already open. Matched on TEXT because there is nothing else to match on:
-# `qdrant_local.py:148-151` (client 1.16.2) catches portalocker's own LockException
-# and re-raises a BARE RuntimeError, so the exception that reaches us carries no
-# type, no attribute and no code that distinguishes it.
-#
-# The first version of this guard caught `portalocker.BaseLockException`, taken from
-# `retriever.py`'s docstring rather than from an executed collision. It never fired,
-# and its tests could not tell, because they monkeypatched the exception the
-# docstring named. One of them asserted that a RuntimeError must propagate, which is
-# exactly what the real lock error is: the test written to keep the except narrow was
-# the test guaranteeing the failure escaped. A real two-process collision settled it.
-_QDRANT_LOCK_SIGNATURE = "already accessed by another instance"
-
-try:  # portalocker ships with qdrant-client; tolerate its absence anyway
-    from portalocker.exceptions import BaseLockException as _BaseLockException
-
-    _LOCK_EXCEPTIONS: tuple = (_BaseLockException,)
-except ImportError:  # pragma: no cover - portalocker is a qdrant dependency
-    _LOCK_EXCEPTIONS = ()
-
-
-def _is_store_locked(exc: BaseException) -> bool:
-    """True when this exception means another process holds the regulation store.
-
-    Text matching is fragile and it is the only option here, so it fails SAFE: an
-    unrecognised RuntimeError propagates rather than being swallowed as a lock. If a
-    qdrant upgrade rewords the message, the symptom returns to a loud failure rather
-    than becoming a silent one.
-    """
-    if _LOCK_EXCEPTIONS and isinstance(exc, _LOCK_EXCEPTIONS):
-        return True
-    return isinstance(exc, RuntimeError) and _QDRANT_LOCK_SIGNATURE in str(exc)
+# Lock detection lives in `src/rag/store_lock.py`, not here, and moving it IS the
+# fix for a defect this guard already carried twice. Reached through this module
+# it can only be tested by importing the whole agent stack, which reads four
+# artefacts at IMPORT time - so the tests pinning the behaviour skipped on CI and
+# ERRORED on the tree `scripts/download_data.py` actually produces. See that
+# module's header for the qdrant behaviour itself.
+from src.rag.store_lock import LOCK_EXCEPTIONS as _LOCK_EXCEPTIONS
+from src.rag.store_lock import QDRANT_LOCK_SIGNATURE as _QDRANT_LOCK_SIGNATURE  # noqa: F401
+from src.rag.store_lock import is_store_locked as _is_store_locked
 
 
 # Logged once per process, not once per lap. A locked store fails every lap

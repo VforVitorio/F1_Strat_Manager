@@ -679,7 +679,8 @@ def impute_circuit_speed(frame: pd.DataFrame, raw_root: Path) -> pd.DataFrame:
     FastF1 has no SpeedI2 reading for the whole 2025 Las Vegas race — 0% of 886 raw laps,
     against 80% for I1 and 97% for FL — so N03's all-three-traps filter yields zero valid
     laps and the circuit's speed comes out NaN on all 760 featured rows. It is the only hole
-    of its shape in 71 races, and no re-run can recover it: the reading does not exist.
+    of its shape in the season tree, and no re-run can recover it: the reading does not
+    exist.
 
     THE ESTIMATOR, AND WHY THIS ONE
     -------------------------------
