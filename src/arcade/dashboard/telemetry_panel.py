@@ -224,8 +224,13 @@ class TelemetryPanel(QFrame):
             return
         arcade = data.get("arcade") or {}
         telemetry = arcade.get("telemetry") or {}
-        main = telemetry.get("main")
-        rival = telemetry.get("rival")
+        # Both are SPANS: every sample the replay clock crossed since the
+        # previous tick, oldest first. Empty means "no new samples this
+        # tick" (paused, or a backwards seek), never "no driver" — treating
+        # an empty span as absence would blank the charts ten times a
+        # second while the user holds pause.
+        main_span = telemetry.get("main") or []
+        rival_span = telemetry.get("rival") or []
 
         # Lock the X axis the first time we know the circuit length.
         if not self._x_range_set:
@@ -249,17 +254,22 @@ class TelemetryPanel(QFrame):
             self._vs_label.hide()
             self._rival_chip.hide()
 
-        if not main:
+        # A backwards seek invalidates everything held: the buffers are
+        # keyed on distance-within-lap, so they contain samples for track
+        # the car has not re-driven yet and nothing else would evict them.
+        if telemetry.get("rewound"):
             self._reset_buffers()
-            return
 
-        lap_n = int(main.get("lap") or 0)
-        if lap_n != self._current_lap:
-            self._current_lap = lap_n
-            self._main_buffer.clear()
-            self._rival_buffer.clear()
+        # The span can cross a lap boundary at high playback speed, so the
+        # lap-change clear is applied per sample rather than once per tick.
+        for sample in main_span:
+            lap_n = int(sample.get("lap") or 0)
+            if lap_n != self._current_lap:
+                self._current_lap = lap_n
+                self._main_buffer.clear()
+                self._rival_buffer.clear()
+            self._append(self._main_buffer, sample)
 
-        self._append(self._main_buffer, main)
         # Only accumulate rival samples that match the main driver's
         # current lap. When the two drivers are on different laps (one
         # pitted, one lapped, one half a track ahead) the buffer would
@@ -267,11 +277,15 @@ class TelemetryPanel(QFrame):
         # laps, and the delta interpolation produces ~4-6 s spikes at
         # the point where the older-lap samples sort next to the newer
         # ones.
-        if rival and int(rival.get("lap") or 0) == lap_n:
-            self._append(self._rival_buffer, rival)
+        for sample in rival_span:
+            if int(sample.get("lap") or 0) == self._current_lap:
+                self._append(self._rival_buffer, sample)
 
         self._refresh_speed_brake_throttle()
-        self._refresh_delta(has_rival=bool(rival))
+        # Two-driver mode is a property of the session, not of whether this
+        # particular tick happened to carry a rival sample — an empty span
+        # while paused must not collapse the delta chart to its placeholder.
+        self._refresh_delta(has_rival=bool(driver_rival))
 
     # --- Buffer ingestion -------------------------------------------
 

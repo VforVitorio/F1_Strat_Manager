@@ -44,6 +44,7 @@ from src.arcade.config import (
     STREAM_BROADCAST_EVERY_N_FRAMES,
     STREAM_HISTORY_TAIL,
     STREAM_HOST,
+    STREAM_MAX_SPAN_FRAMES,
     STREAM_PORT,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -61,6 +62,53 @@ from src.arcade.overlays import (
 from src.arcade.track import Track
 
 logger = logging.getLogger(__name__)
+
+
+def _telemetry_span_bounds(last_sent_idx: int, frame_idx: int, max_span: int) -> tuple[int, bool]:
+    """Return `(span_start, rewound)` for the frames this tick should send.
+
+    The span is `frames[span_start : frame_idx + 1]`, so `span_start >
+    frame_idx` is how "no new samples" is expressed. Pause and rewind get
+    explicit branches here rather than falling out of a negative slice,
+    which would silently send the wrong window:
+
+    - **forward** (the normal case): everything after the last frame sent,
+      up to and including the current one. Every frame the clock crossed
+      goes out exactly once, at any playback speed.
+    - **paused**: `frame_idx == last_sent_idx`, so the span is empty. Zero
+      new samples, not a repeat of the last one. Repeats are what made a
+      paused arcade look alive on the wire while nothing moved.
+    - **rewound**: the user seeked backwards. The span is empty and the
+      caller is told, because a consumer keyed on distance-within-lap now
+      holds samples for track the car has yet to re-drive, and only a
+      clear fixes that.
+
+    `max_span` caps a span the clock could not have produced smoothly.
+    Normal playback tops out around 60 frames per tick (0.1 s at 8x with
+    the seek multiplier); anything larger means the process stalled, and
+    a stall should not turn into a multi-megabyte blocking `sendall`.
+    """
+    if frame_idx < last_sent_idx:
+        return frame_idx + 1, True
+    span_start = last_sent_idx + 1
+    return max(span_start, frame_idx - max_span + 1), False
+
+
+def _frames_to_telemetry_span(
+    frames: list | None, span_start: int, frame_idx: int, circuit_length_m: float
+) -> list[dict]:
+    """Pack `frames[span_start : frame_idx + 1]` for the wire, oldest first.
+
+    Bounds are clamped to the array rather than trusted: a driver whose
+    telemetry is shorter than the global timeline would otherwise raise
+    at the end of the race.
+    """
+    if not frames:
+        return []
+    lo = max(0, span_start)
+    hi = min(len(frames) - 1, frame_idx)
+    samples = (_frame_to_telemetry(frames[i], circuit_length_m) for i in range(lo, hi + 1))
+    return [s for s in samples if s is not None]
 
 
 def _lap_fraction(rel_dist: float) -> float | None:
@@ -153,6 +201,12 @@ class F1ArcadeView(arcade.View):
         self._stream_server = None
         self._dashboard_proc: subprocess.Popen | None = None
         self._broadcast_tick: int = 0
+        # Highest frame index already put on the wire. -1 means "nothing sent
+        # yet", so the first broadcast emits a single sample rather than the
+        # whole race. Advanced on every due tick even when no client is
+        # attached, so a dashboard that connects on lap 40 gets the current
+        # tick's span and not 40 laps of backlog.
+        self._last_broadcast_idx: int = -1
 
         self._frame_index: float = 0.0
         self._speed_idx: int = DEFAULT_SPEED_IDX
@@ -449,11 +503,18 @@ class F1ArcadeView(arcade.View):
         self._broadcast_tick = (self._broadcast_tick + 1) % STREAM_BROADCAST_EVERY_N_FRAMES
         if self._broadcast_tick != 0:
             return
+        frame_idx = int(self._frame_index)
+        span_start, rewound = _telemetry_span_bounds(
+            self._last_broadcast_idx, frame_idx, STREAM_MAX_SPAN_FRAMES
+        )
+        # Advance the marker before the no-subscriber return, so the span
+        # always covers one tick of playback and never the backlog since
+        # whenever a client last happened to be attached.
+        self._last_broadcast_idx = frame_idx
         if self._stream_server.client_count() == 0:
             return  # no subscriber, skip the serialisation cost
-        frame_idx = int(self._frame_index)
         payload = {
-            "arcade": self._build_arcade_snapshot(frame_idx),
+            "arcade": self._build_arcade_snapshot(frame_idx, span_start, rewound),
             "strategy": self._strategy_state.snapshot_dict(STREAM_HISTORY_TAIL),
             "playback": {
                 "speed": self.playback_speed,
@@ -464,7 +525,7 @@ class F1ArcadeView(arcade.View):
         }
         self._stream_server.broadcast(payload)
 
-    def _build_arcade_snapshot(self, frame_idx: int) -> dict:
+    def _build_arcade_snapshot(self, frame_idx: int, span_start: int, rewound: bool) -> dict:
         """Compact version of the per-frame dict the dashboard needs.
 
         Lighter than the internal `_build_frame_dict` consumed by the
@@ -503,20 +564,30 @@ class F1ArcadeView(arcade.View):
         main_frames = self._session.frames_by_driver.get(self._driver_main)
         if main_frames and frame_idx < len(main_frames):
             main_frame = main_frames[frame_idx]
-        # Live telemetry for the main driver (always) + rival driver when
-        # two-driver mode is active. Published as {main: {...}, rival: {...}}
-        # so the telemetry window can render delta / speed / brake /
-        # throttle charts with both traces overlaid. In single-driver
-        # mode ``rival`` is null and the delta chart collapses to a
-        # "single driver" placeholder.
+        # Telemetry for the main driver (always) + the rival when two-driver
+        # mode is active, published as {main: [...], rival: [...]} — a SPAN
+        # of samples, oldest first, not the single current point.
+        #
+        # The clock advances `delta_time * FPS * speed` indices per second
+        # over 25 Hz data while the broadcast fires at ~10 Hz, so sending one
+        # point per tick discarded 60 % of the trace at 1x and 95 % at 8x: a
+        # speed trace went from a point every 8 metres to one every 170. The
+        # producer already holds the whole array, so the span costs a slice
+        # and no disk read. In single-driver mode `rival` is an empty list
+        # and the delta chart collapses to its "single driver" placeholder.
         circuit_length = float(self._session.circuit_length_m or 0.0)
-        main_tel = _frame_to_telemetry(main_frame, circuit_length)
-        rival_tel: dict | None = None
-        if self._driver_rival:
-            rival_frames = self._session.frames_by_driver.get(self._driver_rival)
-            if rival_frames and frame_idx < len(rival_frames):
-                rival_tel = _frame_to_telemetry(rival_frames[frame_idx], circuit_length)
-        telemetry = {"main": main_tel, "rival": rival_tel}
+        rival_frames = (
+            self._session.frames_by_driver.get(self._driver_rival) if self._driver_rival else None
+        )
+        telemetry = {
+            "main": _frames_to_telemetry_span(main_frames, span_start, frame_idx, circuit_length),
+            "rival": _frames_to_telemetry_span(rival_frames, span_start, frame_idx, circuit_length),
+            # True when the user seeked backwards. The span is empty and the
+            # consumer must drop what it has: a buffer keyed on
+            # distance-within-lap holds samples for track the car has not
+            # re-driven yet, and nothing else would ever evict them.
+            "rewound": rewound,
+        }
         return {
             "gp_name": self._session.gp_name,
             # FastF1's authoritative Location, which is also the folder name
