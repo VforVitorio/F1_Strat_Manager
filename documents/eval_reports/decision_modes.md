@@ -1,17 +1,17 @@
 # decision_modes
 
-- harness `06a8f32` · schema v1 · generated 2026-08-03T09:26:58+00:00
+- harness `ea9c319` · schema v1 · generated 2026-08-06T18:57:01+00:00
 - era 2022-2025 · dataset data/raw laps, stratified 6-race subset (RAW, not featured) · seed deterministic · llm none
 - artifacts: —
 
 | Metric | Value | Meaning |
 | --- | --- | --- |
-| Stops scored | 67 of 178 (37.6%) | real green-flag stops the tier could grade |
-| Exact lap | 31.3% | chose the lap the team chose |
-| Within 1 lap | 47.8% | same call, one lap either side |
-| Within 2 laps | 61.2% | same strategic window |
-| Mean signed error | -1.52 laps | negative = earlier than the team. **Do not quote as a system property** — still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 at w=3/5/10 on one race), because a wider window admits more distant, and therefore earlier, transitions |
-| Mean absolute error | 1.97 laps | magnitude, same width caveat |
+| Stops scored | 66 of 178 (37.1%) | real green-flag stops the tier could grade |
+| Exact lap | 21.2% | chose the lap the team chose |
+| Within 1 lap | 37.9% | same call, one lap either side |
+| Within 2 laps | 51.5% | same strategic window |
+| Mean signed error | -1.97 laps | negative = earlier than the team. **Do not quote as a system property** — still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 at w=3/5/10 on one race), because a wider window admits more distant, and therefore earlier, transitions |
+| Mean absolute error | 2.42 laps | magnitude, same width caveat |
 | Coverage verdict | **masked** | `masked` when under 60% of eligible stops were scored |
 
 ### Buckets
@@ -20,9 +20,9 @@
 | --- | --- |
 | `closing_laps` | 4 |
 | `min_stint` | 5 |
-| `no_boundary_in_window` | 24 |
-| `no_call_in_window` | 78 |
-| `scored` | 67 |
+| `no_boundary_in_window` | 31 |
+| `no_call_in_window` | 72 |
+| `scored` | 66 |
 
 `opening_laps` / `closing_laps` / `min_stint` are stops the guard rails make
 impossible to agree with, so they are excluded from the headline rather than
@@ -52,6 +52,16 @@ instead of with the model. A stop here is counted as looked-at and left unscored
 The same applies at the opening guard rail: a transition on lap
 5 or earlier is the rail releasing, not the model deciding,
 so it is bucketed here too.
+
+### Inputs: the canonical RaceState, since #829
+
+This tier used to build its own ``RaceState`` instead of calling
+``src/agents/race_state_builder.build_race_state``, and two of the fields it
+invented were constants: ``gap_ahead_s`` came from a key the driver dict does
+not carry, so it was **2.0 s on every lap of every race**, and ``pace_delta_s``
+was hardcoded to 0.0. Both feed N27's overtake scoring and the Monte Carlo this
+tier grades, so every figure published before this fix described a stack fed two
+constants. **Figures generated before 2026-08-06 are not comparable to these.**
 
 ### Scope
 

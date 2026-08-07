@@ -576,8 +576,30 @@ it is the value, on every lap of every race. `build_race_state` derives the real
 Both fields feed N27's overtake scoring, the orchestrator prompt and the Monte Carlo the tier
 grades. **So the published 67-of-178 / 31.3% exact / 78-decline figures describe a stack told,
 on every lap, that the car ahead sits exactly 2.0 s away and matches its pace exactly.** And
-2.0 is inside the plausible range (the real gaps above run 0.43 to 1.08), so nothing downstream
-could tell it from a measurement. Filed as **#829**.
+2.0 is a plausible-looking number, so nothing downstream could tell it from a measurement.
+Filed as **#829**.
+
+**Corrected 2026-08-06 after an adversarial gate (F5).** The five laps tabled above are a
+probe, and the sentence this paragraph used to carry — *"the real gaps run 0.43 to 1.08"* —
+generalised them into a distribution. Over all 2744 laps the metric actually scores, the real
+`gap_ahead_s` is:
+
+```
+count 2744   mean 4.778   std 6.554
+min 0.000    25% 1.012   50% 2.507   75% 5.686   max 54.327
+share of laps below the 2.0 constant : 44.2 %
+share of laps above it               : 55.8 %
+share inside the probe's 0.43-1.08   : 16.5 %
+```
+
+**The median real gap is WIDER than the constant, not tighter**, and per-race medians spread
+from Silverstone 1.52 to Barcelona 3.29 — including in 2025 Barcelona, the very race the
+probe was taken from (median 3.294, only 11.5% of its laps inside the probe band). So the
+mechanism "N27 saw a tighter fight everywhere and therefore committed more often" is FALSE
+for the majority of laps; the hardcode biases the gap in both directions depending on the
+lap, which is a different and less tidy story. The DIRECTION of #829's effect stands (it is
+measured); the explanation offered for it did not, and it was mine. This is the repo's own
+"a probe is not a distribution" shape reappearing inside the write-up of a fix for it.
 
 Root cause is the family this repo keeps paying for: #784 replaced three drifted RaceState
 copies with one canonical builder, and `lap_inputs` is a fifth copy written into the eval
@@ -717,16 +739,86 @@ Naming this here because #827 proved that a broken arm and a thin sample look id
 row count, so a shortfall gets an explanation rather than a shrug — and, per the five above,
 gets one only as far as the evidence reaches.
 
+## Step 12: the second gate, and the control it forced
+
+Two Opus gates ran over the two PRs this session opened (`GATE_830_four_fixes.md`,
+`GATE_831_input_wiring.md`). Both reproduced the headline exactly — 178 of 178 verdicts identical
+to the committed JSON, all nine aggregate fields — so the levels are real. Everything they found
+is about what was *said* around them, plus one fix that did not work.
+
+**#827's fix was decorative and I had already reported it as shipped.** The guard caught
+portalocker's `BaseLockException`, taken from `retriever.py`'s docstring rather than from an
+executed collision. `qdrant_local.py:148-151` catches that exception itself and re-raises a
+**bare `RuntimeError`**, so the guard could not fire. Its four tests monkeypatched the exception
+the docstring named, so they could only ever confirm the docstring — and one of them asserted
+that a `RuntimeError` must propagate, which is precisely what the real lock error is. **The test
+written to keep the `except` narrow was the test guaranteeing the failure escaped.** Confirmed by
+opening two clients on one path: `builtins.RuntimeError`. Now matched on the message, verified
+against a real collision, and pinned to the installed library's source so an upgrade fails loudly
+rather than silently re-opening the hole.
+
+### The control the docs page needed and nobody had run
+
+The page attributed an effect to #716's bound recalibration by pairing **54** (old bounds, old
+inputs) with **66** (new bounds, NEW inputs). Two variables in the one sentence written to
+isolate one, and the controlled pair existed nowhere. Ran it — old bounds on the product's real
+race state, same 178 eligible stops:
+
+| decision-agreement tier, 2025 | old bounds (8/12/15, wet 10) | shipped bounds (2/7/8, wet 6) |
+|---|---|---|
+| `min_stint` exclusion bucket | 17 | **5** |
+| scored | 54 (30.34%) | **66 (37.08%)** |
+| exact lap | 25.9% | 21.2% |
+| within one lap | 40.7% | 37.9% |
+| within two laps | 46.3% | **51.5%** |
+| mean signed error | -2.20 | **-1.97** |
+
+**The recalibration buys sample, not accuracy.** Exact and within-one FALL; within-two and the
+mean error improve. The twelve stops it admits are harder than the ones already scored, which is
+what a bound that excludes its own hardest cases would predict — and it is the argument for the
+change, not an accuracy claim. Note also that `min_stint 17` and `scored 54` come out identical
+with the old and the new inputs, which is why the arithmetic half of the retired sentence
+survived; that was luck, not the argument.
+
+### And the Monza detail was inverted
+
+The generated report said the `no_boundary_in_window` bucket held *"4 of 4 occupants, one of them
+flipping to STAY_OUT on the exact lap the team really stopped"*. The occupants had changed
+underneath it (`dev`: STR, PIA → now VER, NOR, HAD, PIA). Re-derived on the current inputs, the
+count survives and the detail reverses:
+
+```
+VER stop 37  PIT_NOW  32 33 34 35 36 37 | STAY_OUT 38..42
+NOR stop 46  PIT_NOW  41 42 43 44 45 46 | STAY_OUT 47..51
+HAD stop 32  UNDERCUT 27 28 29 30 31 32 | STAY_OUT 33..37
+PIA stop 45  PIT/UC   40 41 42 43 44 45 | STAY_OUT 46..50
+```
+
+All four are **still asking on the exact lap the team really stopped**, and withdraw the lap
+after. So this bucket is holding four cases where the stack agreed with the team and the metric
+is structurally unable to say so — the opposite of what the sentence implied.
+
+---
+
 ### Its own numbers, and what they may NOT be compared with
 
-| | this arm (9 races, product race state) | published `decision_modes.md` (6 races) |
-|---|---|---|
-| eligible stops | 100 | 178 |
-| scored | 39 (**39.0%**) | 67 (37.6%) |
-| coverage verdict | **masked** | **masked** |
-| exact lap | **12.8%** | 31.3% |
-| within one lap | **30.8%** | 47.8% |
-| mean signed error | -2.31 | -1.52 |
+| | this arm (9 races, product race state) | the tier BEFORE #830 (6 races, constant-fed) | `decision_modes.md` as published TODAY (6 races) |
+|---|---|---|---|
+| eligible stops | 100 | 178 | 178 |
+| scored | 39 (**39.0%**) | 67 (37.6%) | 66 (37.1%) |
+| coverage verdict | **masked** | **masked** | **masked** |
+| exact lap | **12.8%** | 31.3% | **21.2%** |
+| within one lap | **30.8%** | 47.8% | **37.9%** |
+| mean signed error | -2.31 | -1.52 | -1.97 |
+
+**Corrected 2026-08-06 (gate finding F10).** The middle column used to be headed *"published
+`decision_modes.md`"*, and after #829 landed that file publishes none of those numbers — the
+header named a file whose contents had moved. Both columns are kept because they answer
+different questions, but only the third is what the repository currently ships. The substantive
+change is that the exact-lap distance between this LLM arm and the deterministic tier was 12.8
+vs 31.3 and is now 12.8 vs **21.2**, less than half as wide. Updating the artefact and leaving
+its comparison table behind is this repository's twin-not-fixed shape, appearing inside the
+document that catalogues it.
 
 **These two columns are NOT comparable and nothing in this session should be read as comparing
 them.** Three things differ at once: a different race sample, a different window construction
@@ -795,12 +887,61 @@ the LLM arm is missing the wet race entirely, `mean_signed_error` is a property 
 rather than a verdict, because the wall can be wrong and Qatar is in this sample precisely
 because the press says it was.
 
-### What is left, in order
+### What is left, and the sample stays unfinished ON PURPOSE
 
-1. **Add credit and re-run the three missing races** (Silverstone 132 laps, Suzuka 120, Mexico
-   City 79). About 331 laps, roughly **$2.65** and 1.5 to 2 hours. The resume skips everything
-   already on disk.
-2. Then regenerate `REPORT.md` and re-check the paired numbers, which will move.
-3. Fix #829 and re-measure `f1-eval decision-modes`, since its published figures are measured
-   on two constant inputs.
-4. #825 and #826 are P0 for the flagship case and both block a clean Qatar claim.
+**Standing rule set by Víctor on 2026-08-06, after this session drained the account: no runs
+that spend LLM credits without asking first.** So the three missing races are not a TODO waiting
+for a spare moment, they are a decision he takes when he wants the number. `measure_llm_windows.py`
+now refuses a paid run by default and prints the bill; `--yes-spend` is the opt-in.
+
+1. **The three missing races**: Silverstone (132 laps, and it is the WET regime, absent
+   entirely), Suzuka (120), Mexico City (79). About 331 laps, **$2.65**, 1.5 to 2 h. The resume
+   skips everything on disk. **Ask before running.**
+2. Then regenerate `REPORT.md`; the paired numbers will move.
+3. ~~Fix #829 and re-measure~~ **DONE** (PR #830): every accuracy band dropped about ten points
+   once the tier started receiving the product's real race state. **Three inputs moved, not one**
+   — the singular "once it stopped receiving a constant 2.0 s gap" was my sentence and a gate
+   corrected it. Over the 2744 eligible laps: `gap_ahead_s` differs on 2744 (100%),
+   `pace_delta_s` on 2470 (90.0%), and `rainfall` on 86 (3.1%, all of them 2025 Silverstone,
+   where the old harness passed the `RaceState` model default `False` through a wet race and
+   `RaceState`'s docstring says the weather fields feed N14). Silverstone accounts for 2 of the
+   51 changed verdicts, so rainfall is negligible in magnitude — which is the reason to name it
+   rather than the reason to omit it. The other seven `RaceState` fields differ on zero laps.
+4. ~~#825~~ **DONE** (PR #830): the corpora are rebuilt and Monza's phantom Safety Car is gone.
+5. **#826 stays open**, and the fix it needs is not the one the issue proposed. Measured on the
+   retriever alone, at zero cost: the chunk that carried the rule **starts mid-word**, so the
+   article's applicability clause is in the previous chunk and the agent never had it. The
+   prompt changes shipped in #830 are a measured mitigation (the bad chunk falls from rank 1 to
+   outside the top 5); the real fix is clause-aware re-chunking plus labelling from the
+   containing heading. **Its end-to-end verification is deliberately NOT run**, because that
+   costs credits and the rule above applies.
+
+---
+
+## Step 13: where the four defects stand, and what is blocking each
+
+State at the end of the session, 2026-08-06. Everything below was verified, not recalled.
+
+| | what it was | state | what is left |
+|---|---|---|---|
+| **#829** | `decision-modes` built a private `RaceState` whose `gap_ahead_s` was **2.0 on 100% of laps** and `pace_delta_s` **0.0** | **fixed and re-measured**, plus the single-variable control the docs page never had | nothing; closes with the PR |
+| **#825** | three 2025 races served another race's radio/RCM corpus (Monza got Imola's VSC) | **code fixed**, corpora rebuilt locally, twin branch and guard test added | ⛔ **the data is NOT published.** `data/processed/**` is gitignored and the Hub still serves Imola's `session_key` as Monza's. One command, in the issue, Víctor's call |
+| **#826** | the RAG amputates Art. 30.5 n)'s condition and the LLM cites it to override a correct PIT_NOW | **mitigated and measured** (bad chunk falls from rank 1 to outside the top 5); the few-shot example that violated its own new rule is fixed | real fix is clause-aware re-chunking; end-to-end check costs credits, so it waits to be asked for |
+| **#827** | a locked Qdrant store made every lap of three races fail silently | **fixed on the second attempt.** The first guard caught an exception qdrant never raises | a genuine two-process run, which is paid |
+
+### The two things that are NOT done, stated plainly
+
+1. **#825's fix reaches nobody.** The guard test added for it reads the LOCAL tree, so it is
+   green in CI and structurally cannot see the Hub. If it is meant to protect installs it needs
+   a scheduled Hub fetch, and PR CI can never provide one.
+2. **CI could not confirm any of this.** GitHub Actions entered a **major outage** at 21:30 UTC
+   and its own incident text says *"webhook triggers remain throttled, so many push and pull
+   request events are not triggering new workflow runs"* — which is exactly what was observed:
+   every push after `88bd948` produced **zero** runs. One `CI` run completed green, on
+   `88bd948`, covering the first two commits of #831 and nothing later. **Do not merge either PR
+   on a stale check summary.** `gh pr checks` reports the last run it can find, not the last
+   commit, and that is precisely how a red branch looks green during an outage.
+
+The local substitute: `ruff check .` and `ruff format --check .` clean repo-wide (157 files), and
+the full suite minus `test_nlp_golden.py`, whose three failures are a local model-artefact gap on
+a path neither branch touches.
