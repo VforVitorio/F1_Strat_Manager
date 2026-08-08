@@ -325,10 +325,14 @@ class DriverInfoPanel:
         codes = [code for code, _ in sorted_drivers]
         if self.code not in codes:
             return "N/A", "N/A"
+        # Inactive is not retired. A finisher's telemetry ends the moment he
+        # takes the flag, so reading `active` alone put "NOR OUT" on the
+        # winner's neighbours from the instant he won, and 19 of 20 rows
+        # read OUT at the final frame (#855).
         retired = {
             code
             for code, data in (frame.get("drivers") or {}).items()
-            if not (data or {}).get("active", True)
+            if not (data or {}).get("active", True) and not gaps.has_finished(code)
         }
         idx = codes.index(self.code)
         me = sorted_drivers[idx]
@@ -515,7 +519,9 @@ class LeaderboardPanel:
                     (*ACCENT, 70),
                 )
 
-            is_out = not data.get("active", True)
+            # Same rule as the neighbour label: a car that took the flag is
+            # inactive and is not out.
+            is_out = not data.get("active", True) and not gaps.has_finished(code)
             rt = self._rank_texts[i]
             rt.text = f"{i + 1:>2}"
             rt.color = TEXT_TERTIARY
@@ -583,6 +589,13 @@ class LeaderboardPanel:
         sorts last and carries `None` rather than a position it does not
         have. It is still drawn, because a car with no position data is
         still on the track.
+
+        **The tie-break is not decoration.** Every car that has finished
+        sits at exactly the total laps, so from the leader's flag to the
+        end of the replay the whole podium ties and a plain sort falls back
+        to dict insertion order. Ordering ties by who crossed first is what
+        makes those last seconds - the frame the replay parks on, and the
+        one a viewer reads as the result - the actual classification.
         """
         drivers = (frame or {}).get("drivers") or {}
         ranked: list[tuple[str, dict, float | None]] = []
@@ -590,7 +603,10 @@ class LeaderboardPanel:
         for code, data in drivers.items():
             progress = gaps.progress(code, frame_idx)
             (unknown if progress is None else ranked).append((code, data, progress))
-        ranked.sort(key=lambda entry: entry[2], reverse=True)
+        ranked.sort(
+            key=lambda entry: (entry[2], -gaps.last_crossing_frame(entry[0], frame_idx)),
+            reverse=True,
+        )
         return ranked + unknown
 
 
