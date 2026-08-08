@@ -20,12 +20,18 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 pytest.importorskip("arcade", reason="the arcade replay is an optional surface")
 
 from src.arcade.app import F1ArcadeView  # noqa: E402
-from src.arcade.data import DT, FrameData, SessionData  # noqa: E402
+from src.arcade.data import (  # noqa: E402
+    DT,
+    FrameData,
+    SessionData,
+    _lap_fraction_from_distance,
+)
 
 # The three numbers a synthetic session needs to be self-consistent: a
 # circuit length the distances accumulate against, a session-time origin
@@ -78,13 +84,34 @@ def _retired_car(n_frames: int, last_live_index: int) -> list[FrameData]:
 
 
 def _car_without_position_data(n_frames: int) -> list[FrameData]:
-    """A car FastF1 gives no `RelativeDistance` for.
+    """A car FastF1 gives no position channel for, built the way the LOADER builds it.
 
-    Not hypothetical: on Melbourne 2025 this is HAD, NaN on 100 % of his
-    frames and the only non-finite value anywhere in the session.
+    Not hypothetical: on Melbourne 2025 this is HAD. An earlier version of
+    this fixture hand-set `rel_dist` to NaN, which is what FastF1 used to
+    deliver and what the loader can no longer produce: since the derivation
+    moved to `_lap_fraction_from_distance` over the driver's own distance,
+    a car that never moves comes out **finite 0.0** on every frame -
+    measured, one unique value across all 154,173 of his.
+
+    So the fixture runs a flat distance through the real derivation. A
+    hand-set NaN would keep the guard green while asserting about an input
+    production cannot emit, and the value that production DOES emit means
+    "at the line" (#856).
     """
-    frames = _running_car(n_frames)
-    return [FrameData(**{**vars(f), "rel_dist": float("nan")}) for f in frames]
+    dist = np.zeros(n_frames)
+    lap_numbers = np.ones(n_frames, dtype=int)
+    rel_dist = _lap_fraction_from_distance(dist, lap_numbers, CIRCUIT_LENGTH_M)
+    return [
+        FrameData(
+            **{
+                **vars(_frame(i, lap=1, rel_dist=0.0)),
+                "dist": float(dist[i]),
+                "rel_dist": float(rel_dist[i]),
+                "speed": 0.0,
+            }
+        )
+        for i in range(n_frames)
+    ]
 
 
 def _session(n_frames: int = 40) -> SessionData:
@@ -101,6 +128,8 @@ def _session(n_frames: int = 40) -> SessionData:
         circuit_length_m=CIRCUIT_LENGTH_M,
         total_frames=n_frames,
         global_t_min=GLOBAL_T_MIN,
+        # What the loader computes: `frames[-1].dist > frames[0].dist`.
+        has_position={MAIN: True, "SAI": True, "HAD": False},
     )
 
 
@@ -175,17 +204,29 @@ def test_global_t_min_turns_the_frame_clock_back_into_session_time():
 
 
 def test_a_car_with_no_position_data_is_unknown_rather_than_at_the_line():
-    """An absent `rel_dist` must not be clamped to a value that means something.
+    """The value the loader produces for such a car means something, and must not ship.
 
-    `min(1.0, nan)` is `1.0`, and 1.0 is a real position meaning "at the
-    line", so clamping would draw the car with no data exactly on the lap
-    boundary. Unknown is None, which is not a position any car can hold.
+    The old guard was against `min(1.0, nan) == 1.0`. That input is gone:
+    the loader derives the fraction from the driver's own distance, and a
+    car that never moves comes out finite **0.0** — which is not a clamp
+    but is still a position, "at the line", and on Melbourne 2025 it rides
+    the wire on 100 % of HAD's frames with `active` true for 2,935 of them.
+
+    The fixture is built by the real derivation, so this asserts about a
+    state production can actually reach.
     """
-    wire = _snapshot(_session(), frame_idx=3)
+    session = _session()
+    had_frames = session.frames_by_driver["HAD"]
+    assert had_frames[3].rel_dist == 0.0, "the premise: the loader emits a finite at-the-line 0.0"
+
+    wire = _snapshot(session, frame_idx=3)
 
     assert wire["drivers"]["HAD"]["rel_dist"] is None
     assert wire["drivers"][MAIN]["rel_dist"] is not None
     # The two-car telemetry block takes the same route, so it must agree.
+    # It did not: `has_position` was read for the drivers block only, so the
+    # same car read "no position" in one half of the payload and sat in
+    # distance bucket 0 in the other.
     telemetry = _snapshot(_session(), frame_idx=3, rival="HAD")["telemetry"]
     assert telemetry["rival"][0]["dist"] is None
     assert telemetry["main"][0]["dist"] is not None

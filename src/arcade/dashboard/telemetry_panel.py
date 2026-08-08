@@ -246,10 +246,21 @@ class TelemetryPanel(QFrame):
         # A driver whose telemetry never places the car produces four empty
         # charts. Saying so beats a populated header over a blank grid, which
         # reads as a broken panel rather than as absent data.
-        main_car = (arcade.get("drivers") or {}).get(driver_main) or {}
-        blind = main_car.get("has_position") is False
+        #
+        # BOTH charted drivers, not just the main one. The first version read
+        # the main driver alone, so picking the blind car as the RIVAL drew a
+        # single point at x=0 and an empty delta chart under a header that
+        # said nothing was wrong - the same twin the fix two functions below
+        # already names (#856).
+        drivers_block = arcade.get("drivers") or {}
+        blind_codes = [
+            code
+            for code in (driver_main, driver_rival)
+            if code and (drivers_block.get(code) or {}).get("has_position") is False
+        ]
         lap_text = f"LAP {lap}" if lap else "LAP —"
-        self._lap_label.setText(f"{lap_text}  ·  NO POSITION DATA" if blind else lap_text)
+        blind_note = f"  ·  NO POSITION DATA ({', '.join(blind_codes)})" if blind_codes else ""
+        self._lap_label.setText(lap_text + blind_note)
         self._main_chip.set_code(driver_main)
         self._update_legend_codes(driver_main, driver_rival)
         if driver_rival:

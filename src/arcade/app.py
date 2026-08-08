@@ -110,7 +110,11 @@ def _telemetry_span_bounds(
 
 
 def _frames_to_telemetry_span(
-    frames: list | None, span_start: int, frame_idx: int, circuit_length_m: float
+    frames: list | None,
+    span_start: int,
+    frame_idx: int,
+    circuit_length_m: float,
+    has_position: bool = True,
 ) -> list[dict]:
     """Pack `frames[span_start : frame_idx + 1]` for the wire, oldest first.
 
@@ -122,7 +126,9 @@ def _frames_to_telemetry_span(
         return []
     lo = max(0, span_start)
     hi = min(len(frames) - 1, frame_idx)
-    samples = (_frame_to_telemetry(frames[i], circuit_length_m) for i in range(lo, hi + 1))
+    samples = (
+        _frame_to_telemetry(frames[i], circuit_length_m, has_position) for i in range(lo, hi + 1)
+    )
     return [s for s in samples if s is not None]
 
 
@@ -152,7 +158,7 @@ def _lap_fraction(rel_dist: float) -> float | None:
     return min(1.0, max(0.0, value))
 
 
-def _frame_to_telemetry(frame, circuit_length_m: float) -> dict | None:
+def _frame_to_telemetry(frame, circuit_length_m: float, has_position: bool = True) -> dict | None:
     """Pack a ``FrameData`` into the dict the telemetry window consumes.
 
     Uses ``frame.rel_dist * circuit_length`` as the broadcast ``dist``
@@ -172,7 +178,7 @@ def _frame_to_telemetry(frame, circuit_length_m: float) -> dict | None:
         return None
     throttle = float(frame.throttle)
     brake = float(frame.brake)
-    rel_dist = _lap_fraction(frame.rel_dist)
+    rel_dist = _lap_fraction(frame.rel_dist) if has_position else None
     lap_dist = None if rel_dist is None else round(rel_dist * float(circuit_length_m or 0.0), 1)
     return {
         "lap": int(frame.lap),
@@ -641,7 +647,17 @@ class F1ArcadeView(arcade.View):
             if not frames or frame_idx >= len(frames):
                 continue
             f = frames[frame_idx]
-            lap_fraction = _lap_fraction(f.rel_dist)
+            # A car whose telemetry never places it has NO fraction of the lap,
+            # and the loader cannot say so in the value: it derives `rel_dist`
+            # from a distance that never advances, which comes out as a finite
+            # 0.0 - "at the line", a position a real car can hold. On Melbourne
+            # 2025 that is HAD on all 154,173 frames, 2,935 of them `active`
+            # (#856). Saying it here rather than in the loader keeps the pickle
+            # format untouched: a CACHE_VERSION bump would cost every user a
+            # full reload of every GP to express something the wire expresses
+            # for free.
+            has_position = bool(self._session.has_position.get(code, True))
+            lap_fraction = _lap_fraction(f.rel_dist) if has_position else None
             drivers[code] = {
                 "lap": f.lap,
                 "dist": round(f.dist, 1),
@@ -653,7 +669,7 @@ class F1ArcadeView(arcade.View):
                 # False when this driver's telemetry never places the car, so a
                 # consumer says "no position data" instead of drawing an empty
                 # chart under a populated header.
-                "has_position": bool(self._session.has_position.get(code, True)),
+                "has_position": has_position,
             }
         main_frame = None
         main_frames = self._session.frames_by_driver.get(self._driver_main)
@@ -674,9 +690,20 @@ class F1ArcadeView(arcade.View):
         rival_frames = (
             self._session.frames_by_driver.get(self._driver_rival) if self._driver_rival else None
         )
+        positions = self._session.has_position
+        main_has_position = bool(positions.get(self._driver_main, True))
+        rival_has_position = bool(positions.get(self._driver_rival, True))
         telemetry = {
-            "main": _frames_to_telemetry_span(main_frames, span_start, frame_idx, circuit_length),
-            "rival": _frames_to_telemetry_span(rival_frames, span_start, frame_idx, circuit_length),
+            # `has_position` rides along so the span says the same thing the
+            # drivers block does. Without it the same car reads "no position"
+            # in one half of the payload and "at the line" in the other, and
+            # the telemetry window keys every sample into distance bucket 0.
+            "main": _frames_to_telemetry_span(
+                main_frames, span_start, frame_idx, circuit_length, main_has_position
+            ),
+            "rival": _frames_to_telemetry_span(
+                rival_frames, span_start, frame_idx, circuit_length, rival_has_position
+            ),
             # True when the user seeked backwards. The span is empty and the
             # consumer must drop what it has: a buffer keyed on
             # distance-within-lap holds samples for track the car has not
