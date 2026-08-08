@@ -275,3 +275,22 @@ def test_location_is_published_and_can_genuinely_disagree_with_the_label():
     assert fallback is GP_NAMES, "an absent year must fall back, not raise"
     disagreeing = {rnd for rnd in canonical if rnd in fallback and canonical[rnd] != fallback[rnd]}
     assert disagreeing, "if the two tables agreed everywhere, location would be redundant"
+
+
+def test_the_pedal_scale_is_not_decided_by_which_driver_sorts_first():
+    """`max()` keeps a NaN that arrives FIRST, because every `x > nan` is False.
+
+    One driver whose whole throttle channel is NaN, sorting ahead of the
+    others, therefore flipped the session multiplier from 1.0 to 100.0 —
+    every pedal reading above 1 % published as 100.0, for all twenty cars,
+    on nothing but driver order. Not triggered on Melbourne 2025, where
+    HAD's pedal channels are real; silent and global when it is.
+    """
+    from src.arcade.data import _pedal_multiplier
+
+    all_nan = {"data": {"throttle": np.full(5, np.nan)}}
+    real = {"data": {"throttle": np.array([0.0, 55.0, 100.0])}}
+
+    assert _pedal_multiplier([all_nan, real], "throttle") == 1.0
+    assert _pedal_multiplier([real, all_nan], "throttle") == 1.0
+    assert _pedal_multiplier([{"data": {"throttle": np.array([0.0, 0.9])}}], "throttle") == 100.0

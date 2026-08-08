@@ -84,10 +84,17 @@ def _json_safe(value):
 
 
 def _blame(value, path: str = "") -> str:
-    """Point at the first non-finite leaf in a payload, for the drop log.
+    """Point at the first leaf `json.dumps` cannot encode, for the drop log.
 
     Without it the encoder's message names the type and not the field, and
     the whole reason a broadcast was dropped stays invisible.
+
+    Two kinds of leaf get named, because the sanitiser only handles the
+    first: a non-finite float, which `_json_safe` would have turned into
+    None, and anything the encoder simply cannot take. `np.float32(nan)`,
+    `np.int64` and `np.bool_` are not `float`/`int`/`bool` subclasses, so
+    they slip past the sanitiser, kill the whole tick, and used to leave
+    this function returning the empty string exactly when it was needed.
     """
     if isinstance(value, dict):
         for key, item in value.items():
@@ -101,6 +108,8 @@ def _blame(value, path: str = "") -> str:
                 return found
     elif isinstance(value, float) and not math.isfinite(value):
         return f"{path or '<root>'}={value}"
+    elif not isinstance(value, (str, int, float, bool, type(None))):
+        return f"{path or '<root>'}=<{type(value).__name__}>"
     return ""
 
 
@@ -269,9 +278,15 @@ class TelemetryStreamServer:
             ).start()
 
     def _keepalive_loop(self, client_socket: socket.socket) -> None:
-        """Hold the socket open until it dies. We do not expect reads from
-        the dashboard; this thread just keeps the FD alive and prunes it
-        once the remote end closes."""
+        """Hold a reference to the socket until the server stops.
+
+        It never reads, so it CANNOT see the remote end close - measured: a
+        client that disconnects is still counted three seconds later, and
+        only disappears once a broadcast fails to send. A dead client is
+        detected by `_send_loop`, never here, so `client_count()` may
+        include ghosts until the next broadcast. The docstring used to
+        promise the prune this loop does not do.
+        """
         try:
             while self._running:
                 time.sleep(1.0)

@@ -271,10 +271,20 @@ class TelemetryPanel(QFrame):
             self._vs_label.hide()
             self._rival_chip.hide()
 
-        # A backwards seek invalidates everything held: the buffers are
+        # Either discontinuity invalidates everything held: the buffers are
         # keyed on distance-within-lap, so they contain samples for track
-        # the car has not re-driven yet and nothing else would evict them.
-        if telemetry.get("rewound"):
+        # the car has not re-driven yet (a backwards seek) or for a part of
+        # the race the span never covered (a forward jump), and nothing else
+        # would evict them.
+        #
+        # Evicting BEFORE appending matters for the forward jump. The tick
+        # that carries `dropped` also carries a valid post-jump span, and
+        # clearing afterwards threw those samples away — up to 250 of them,
+        # ten seconds of trace the payload had already delivered, leaving
+        # four blank charts to refill over the next ~25 s. The two branches
+        # were the same operation in opposite orders and one of them was
+        # wrong.
+        if telemetry.get("rewound") or telemetry.get("dropped"):
             self._reset_buffers()
 
         # The span can cross a lap boundary at high playback speed, so the
@@ -298,11 +308,6 @@ class TelemetryPanel(QFrame):
             if int(sample.get("lap") or 0) == self._current_lap:
                 self._append(self._rival_buffer, sample)
 
-        if telemetry.get("dropped"):
-            # A forward seek the span could not cover: the frames between
-            # here and the last tick were never sent, so appending would
-            # splice two unrelated parts of the race into one trace.
-            self._reset_buffers()
         self._refresh_speed_brake_throttle(has_rival=bool(driver_rival))
         # Two-driver mode is a property of the session, not of whether this
         # particular tick happened to carry a rival sample — an empty span
