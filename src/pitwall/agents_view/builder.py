@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.pitwall.agents_view.decision import build_orchestrator, build_scenarios
 from src.pitwall.agents_view.history import LapHistory
 from src.pitwall.agents_view.panels import build_cards, build_header, build_status_bar
 
@@ -52,6 +53,8 @@ class AgentsViewBuilder:
             "view_version": AGENTS_VIEW_VERSION,
             "seq": payload.get("seq"),
             "header": build_header(payload, connection),
+            "orchestrator": build_orchestrator(latest or None),
+            "scenarios": build_scenarios(latest.get("scenario_scores") if latest else None),
             "cards": build_cards(latest or None),
             "history": {
                 "pace": [{"lap": lap, **row} for lap, row in sorted(self._history.pace.items())],

@@ -380,3 +380,115 @@ def test_the_status_glyphs_match_the_qt_cards():
     }
 
     assert STATUS_GLYPHS == qt_map
+
+
+# --- The decision panel -----------------------------------------------------
+
+
+def test_the_orchestrator_card_is_the_qt_one_field_for_field():
+    view = _host(_payload()).get_agents_view(-1)["orchestrator"]
+
+    assert view["action"] == "PIT NOW"
+    assert view["action_colour"] == "#ef4444"
+    assert view["confidence_label"] == "Confidence: 71%"
+    assert view["confidence_colour"] == "#10b981", "0.71 is over the 0.66 green tier"
+    assert view["pace"] == "Pace: PUSH"
+    assert view["pace_colour"] == "#ef4444"
+    assert view["risk"] == "Risk: AGGRESSIVE"
+    assert view["plan"].startswith("Pit: L24 · Next: <span")
+    assert view["plan"].endswith("· UCUT: RUS")
+    assert view["guardrail"] == ""
+
+
+def test_the_confidence_tiers_are_the_three_qt_paints():
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    tiers = {
+        conf: build_orchestrator({"confidence": conf})["confidence_colour"]
+        for conf in (0.0, 0.32, 0.33, 0.65, 0.66, 1.0)
+    }
+
+    assert tiers == {
+        0.0: "#ef4444",
+        0.32: "#ef4444",
+        0.33: "#f59e0b",
+        0.65: "#f59e0b",
+        0.66: "#10b981",
+        1.0: "#10b981",
+    }
+
+
+def test_an_empty_plan_on_stay_out_says_the_stint_continues():
+    """Three "--" chips read as noise; the orchestrator leaves them blank on purpose."""
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    stay = build_orchestrator({"action": "STAY_OUT", "confidence": 0.5})
+    other = build_orchestrator({"action": "UNDERCUT", "confidence": 0.5})
+    idle = build_orchestrator(None)
+
+    assert stay["plan"] == "stint continues · no pit window yet"
+    assert other["plan"] == "Pit plan pending"
+    assert idle["plan"] == "Pit: -- · Next: -- · UCUT: --"
+    assert idle["action"] == "--"
+
+
+def test_the_guardrail_line_only_exists_when_the_orchestrator_overrode_the_winner():
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    assert build_orchestrator({"guardrail_reason": "min stint"})["guardrail"] == (
+        "⚠ Guardrail: min stint"
+    )
+    assert build_orchestrator({"guardrail_reason": None})["guardrail"] == ""
+
+
+def test_the_scenario_bars_normalise_across_scores_that_are_all_negative():
+    """The Monte Carlo scores are gains against STAY_OUT and are frequently all negative.
+
+    Shifting by the minimum before scaling is what keeps the widths valid.
+    Get it wrong and the winner is whichever row happens to be least
+    negative in absolute terms, which is a different scenario.
+    """
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    rows = {
+        row["key"]: row
+        for row in build_scenarios(
+            {"STAY_OUT": -0.90, "PIT_NOW": -0.10, "UNDERCUT": -0.50, "OVERCUT": -1.30}
+        )
+    }
+
+    assert rows["PIT_NOW"]["fill"] == 1.0 and rows["PIT_NOW"]["is_winner"]
+    assert rows["OVERCUT"]["fill"] == 0.0
+    assert rows["UNDERCUT"]["fill"] == pytest.approx((-0.50 + 1.30) / 1.20)
+    assert rows["STAY_OUT"]["score"] == "-0.90"
+    assert rows["PIT_NOW"]["bar_colour"] == "#a78bfa", "the winner is the accent"
+    assert rows["STAY_OUT"]["bar_colour"] == "#d1d5db"
+
+
+def test_a_scenario_the_orchestrator_did_not_score_draws_nothing_and_prints_dashes():
+    """Absent is not zero, and an empty bar with `--` is how the Qt row says so."""
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    rows = {row["key"]: row for row in build_scenarios({"PIT_NOW": 0.7, "STAY_OUT": 0.2})}
+
+    assert rows["OVERCUT"]["score"] == "  --"
+    assert rows["OVERCUT"]["fill"] == 0.0
+    assert rows["OVERCUT"]["is_winner"] is False
+    assert [row["key"] for row in build_scenarios(None)] == [
+        "STAY_OUT",
+        "PIT_NOW",
+        "UNDERCUT",
+        "OVERCUT",
+    ], "all four rows exist even with no scores at all"
+
+
+def test_the_action_badge_comes_from_classify_action_and_is_not_a_second_table():
+    """A hand-copied twin of that table lived in theme.py until 2026-08-01 and drifted."""
+    from src.arcade.strategy import classify_action
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    for action in ("STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT", "DNF", "SOMETHING_NEW"):
+        colour, label = classify_action(action)
+        view = build_orchestrator({"action": action, "confidence": 0.5})
+        assert view["action"] == label
+        assert view["action_colour"] == "#{:02x}{:02x}{:02x}".format(*colour)
