@@ -1,0 +1,206 @@
+/* PITWALL · AGENTS — the Qt window's geometry, in CSS.
+ *
+ * Every number here comes from a Qt call in `src/arcade/dashboard/`:
+ * the 44 px header (`HeaderBar.setFixedHeight`), the 540 / 740 split
+ * (`splitter.setSizes`), the 10 px panel margins and 8 px spacing
+ * (`setContentsMargins` / `setSpacing`), the card border and radius
+ * (`theme.apply_dark_palette`'s `QFrame[card="true"]` rule), and the
+ * font sizes on each widget.
+ *
+ * The COLOURS are the arcade palette, not `tokens.css`. The two
+ * deliberately differ and `test_pitwall_tokens.py` freezes the
+ * difference; adopting the web palette here would be the redesign
+ * sprint 8 owns, not a port. `tokens.css` is still loaded for its type
+ * scale and for the DATA window.
+ */
+
+:root {
+  --qt-bg: #121127;
+  --qt-panel: #181633;
+  --qt-elevated: #1e1b4b;
+  --qt-border: #2d2d3a;
+  --qt-fg-1: #ffffff;
+  --qt-fg-2: #d1d5db;
+  --qt-fg-3: #9ca3af;
+  --qt-accent: #a78bfa;
+  --qt-mono: "FiraCode Nerd Font Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
+}
+
+body {
+  margin: 0;
+  background: var(--qt-bg);
+  color: var(--qt-fg-1);
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: 13px;
+}
+
+.agents-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* --- Header ------------------------------------------------------------- */
+
+.header-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 6px 14px;
+  box-sizing: border-box;
+}
+.header-session {
+  font-size: 14px;
+  font-weight: 600;
+}
+.header-driver {
+  color: var(--qt-fg-2);
+  font-size: 13px;
+  margin-left: 6px;
+}
+.header-spacer {
+  flex: 1;
+}
+.chip {
+  color: var(--qt-fg-2);
+  background: var(--qt-elevated);
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+/* The connection chip carries no background in Qt: only its text is
+ * coloured, which is what makes the three states readable at a glance. */
+.header-conn {
+  background: none;
+  font-weight: 600;
+}
+
+/* --- The split ---------------------------------------------------------- */
+
+.agents-split {
+  display: grid;
+  grid-template-columns: 540fr 740fr;
+  gap: 2px; /* QSplitter.setHandleWidth(2) */
+  flex: 1;
+  min-height: 0;
+}
+.agents-left,
+.agents-right {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+.agents-left {
+  /* Orchestrator and scenarios size to content; the reasoning tabs take
+   * the rest. In Qt that left them ~268 px and the decision-memory block
+   * fell below the fold. */
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+}
+.agents-right {
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: minmax(140px, auto);
+}
+
+/* --- Cards -------------------------------------------------------------- */
+
+.card {
+  background: var(--qt-panel);
+  border: 1px solid var(--qt-border);
+  border-radius: 6px;
+}
+.agent-card {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.agent-card.is-idle {
+  opacity: 0.45;
+}
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+.agent-title {
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.agent-headline {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.agent-line {
+  margin: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.agent-chart {
+  margin-top: auto;
+  min-height: 140px;
+}
+
+/* --- Tooltip ------------------------------------------------------------ */
+
+.agent-tooltip-host {
+  margin-left: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--qt-border);
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: help;
+}
+.agent-tooltip {
+  display: none;
+  position: absolute;
+  top: 18px;
+  right: 0;
+  z-index: 10;
+  width: 30rem;
+  max-height: 22rem;
+  overflow: auto;
+  padding: 8px 10px;
+  background: var(--qt-elevated);
+  border: 1px solid var(--qt-border);
+  border-radius: 6px;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.5;
+}
+.agent-tooltip-host:hover .agent-tooltip {
+  display: block;
+}
+
+/* --- Status bar --------------------------------------------------------- */
+
+.status-bar {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  background: var(--qt-panel);
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}

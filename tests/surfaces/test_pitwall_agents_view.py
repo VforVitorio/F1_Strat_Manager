@@ -12,6 +12,8 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 REUSED_BY_PITWALL = (
     "src.arcade.dashboard.agent_formatters",
     "src.arcade.palette",
@@ -352,3 +354,29 @@ def test_before_the_first_connection_the_chip_says_connecting():
 
 def test_nothing_to_render_is_none_rather_than_an_empty_view():
     assert _host(None, connected=False).get_agents_view(-1) is None
+
+
+def test_the_status_glyphs_match_the_qt_cards():
+    """The twin-detector for the one map that had to be repeated.
+
+    `agent_card.py::_GLYPH_FOR` lives inside a QFrame subclass and cannot
+    be imported from a process with no Qt, so `panels.STATUS_GLYPHS`
+    repeats it. Repeating a map without a guard is how this repo's most
+    frequent defect starts, so the two are compared for as long as both
+    exist. It skips where Qt does not import; the port's own copy is
+    still exercised by every card test above.
+    """
+    agent_card = pytest.importorskip(
+        "src.arcade.dashboard.agent_card",
+        reason="the Qt dashboard is an optional surface and needs a display stack",
+        exc_type=ImportError,
+    )
+    from src.arcade.palette import hex_str
+    from src.pitwall.agents_view.panels import STATUS_GLYPHS
+
+    qt_map = {
+        status: (glyph, hex_str(colour))
+        for status, (glyph, colour) in agent_card._GLYPH_FOR.items()
+    }
+
+    assert STATUS_GLYPHS == qt_map
