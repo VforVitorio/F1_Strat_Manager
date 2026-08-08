@@ -343,7 +343,14 @@ def test_no_assumed_speed_constant_survives_in_the_gap_path():
 
 
 def test_laps_down_is_positional_and_survives_the_accumulation_drift():
-    """The case the `dist` form got wrong on 4.9 % of same-corner pairs.
+    """The case the `dist` form gets wrong.
+
+    The rate carried here used to be "4.9 % of same-corner pairs", which
+    is a number nothing in this repo measured: the figure #862 actually
+    published for same-corner disagreement is 3.4 % over n=4,934, under a
+    convention this docstring never stated. An unsourced percentage in a
+    test is how a wrong number gets quoted back as evidence, so it is gone
+    rather than swapped for one whose population may differ.
 
     Both cars sit at the same point on track, exactly one lap apart, and
     the lapped car runs long enough per lap that its `dist` deficit is

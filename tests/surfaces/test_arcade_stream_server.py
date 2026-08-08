@@ -135,3 +135,21 @@ def test_the_drop_log_names_the_leaf_the_encoder_choked_on():
     ):
         assert _blame({"per_agent": [{"pace": leaf}]}) == f"per_agent[0].pace=<{name}>"
     assert _blame({"a": 1, "b": "ok", "c": None, "d": True, "e": 1.5}) == ""
+
+
+def test_the_drop_log_does_not_blame_a_leaf_the_encoder_can_take():
+    """A tuple encodes as an array, and blaming it hid the real culprit.
+
+    The allowlist version answered `a=<tuple>` for a payload `json.dumps`
+    handles fine — and because the first blame wins, a payload carrying
+    both a tuple and a genuine culprit named the tuple and stopped. The
+    drop log accused an innocent field while the tick that actually died
+    went unexplained. The oracle is now the encoder itself.
+    """
+    import numpy as np
+
+    from src.arcade.stream import _blame
+
+    assert _blame({"a": (1, 2)}) == "", "a tuple is JSON-encodable"
+    assert _blame({"a": (1, 2), "b": np.float32("nan")}) == "b=<float32>", "reach the real one"
+    assert _blame({"a": ({"deep": np.int64(3)},)}) == "a[0].deep=<int64>", "recurse into tuples"
