@@ -169,9 +169,21 @@ const columns = await page.evaluate(
 );
 check(columns.startsWith("540px"), `left column is 540px (got ${columns})`);
 
-// The tooltip is a child of a card that scrolls; it must not be clipped
-// away, and it must only exist where the host sent content.
+// The tooltip must exist only where the host sent content, and it must not
+// be clipped by the card. Those two fought each other once: the whole-card
+// hover target put the popup inside a card that had just been given
+// `overflow: auto`, and a 502 px transcript in a 375 px card lost the first
+// 140 px of every line, unreachably — overflow to the LEFT of a scroll box
+// cannot even be scrolled to.
 check((await page.locator(".agent-tooltip").count()) === 1, "one tooltip, on RADIO only");
+const clipping = await page.evaluate(() => {
+  const tooltip = document.querySelector(".agent-tooltip");
+  const card = tooltip.closest(".agent-card");
+  const scroller = tooltip.closest(".agent-card-body");
+  return { cardOverflow: getComputedStyle(card).overflowX, insideTheScroller: Boolean(scroller) };
+});
+check(clipping.cardOverflow === "visible", `the card does not clip (got ${clipping.cardOverflow})`);
+check(!clipping.insideTheScroller, "the tooltip is outside the scrolling box");
 
 // Qt's `showMessage(text, 1500)` clears itself. The port typed a
 // `transient` flag and read it nowhere until #871.
@@ -183,6 +195,38 @@ await page.waitForTimeout(1800);
 check((await page.locator(".status-bar").innerText()).trim() === "", "the status bar auto-clears");
 
 await ctx.close();
+
+// --- and it must NOT clear while the producer is still talking --------------
+//
+// Qt re-arms `showMessage` on every broadcast, so the message is visible
+// the whole time it is streaming. Keyed on the text instead of the tick it
+// re-armed once per LAP, and the bar sat blank for the other eighty
+// seconds of it. The settled stub above cannot see that: it is the dead
+// producer, the case that already worked.
+const live = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+const livePage = await live.newPage();
+await livePage.addInitScript((view) => {
+  let seq = 0;
+  window.pywebview = {
+    api: {
+      // A new sequence every poll, with the SAME status text, which is
+      // what a real producer does for the ~85 s a lap lasts.
+      get_agents_view: async () => ({ ...view, seq: ++seq }),
+      get_tick: async () => null,
+    },
+  };
+}, VIEW);
+await livePage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+  waitUntil: "domcontentloaded",
+});
+await livePage.waitForSelector(".status-bar", { timeout: 5000 });
+await livePage.waitForTimeout(2500);
+check(
+  (await livePage.locator(".status-bar").innerText()).includes("lap 23"),
+  "the status bar stays visible while the producer streams",
+);
+await live.close();
+
 await browser.close();
 server.close();
 
@@ -191,4 +235,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log("smoke OK: 10 checks");
+console.log("smoke OK: 13 checks");

@@ -54,6 +54,8 @@ _RULES: tuple[tuple[re.Pattern[str], str, bool], ...] = (
     (re.compile(r"\b(PIT_NOW|STAY_OUT|UNDERCUT|OVERCUT)\b"), _ACTION, True),
 )
 
+_SEPARATORS = re.compile(r"(\r\n|\r|\n)")
+
 DEFAULT_COLOUR = hex_str(TEXT_PRIMARY)
 
 TABS: tuple[tuple[str, str], ...] = (
@@ -72,7 +74,8 @@ def highlight(text: str) -> list[dict[str, Any]]:
     **The rules are applied per LINE, not over the whole string.**
     `QSyntaxHighlighter.highlightBlock` is called once per paragraph, so a
     match can never span a newline in Qt - and two of the five rules
-    contain ``\\s``, which matches a newline. Whole-string matching
+    contain ``\\s``, which matches a newline (and a carriage return).
+    Whole-string matching
     therefore painted things Qt leaves plain: measured, a body carrying
     ``extend the lap`` then ``22 target`` on the next line came out with
     the two joined and painted in the lap colour, where Qt paints nothing,
@@ -87,13 +90,19 @@ def highlight(text: str) -> list[dict[str, Any]]:
     colours: list[str | None] = [None] * len(text)
     bolds = [False] * len(text)
     line_start = 0
-    for line in text.split("\n"):
+    # `QTextDocument.setPlainText` starts a new paragraph on \r\n and on a
+    # lone \r as well as on \n, so all three end a match here. Splitting on
+    # \n alone left the one separator Qt also breaks on.
+    for part in _SEPARATORS.split(text):
+        if _SEPARATORS.fullmatch(part):
+            line_start += len(part)
+            continue
         for pattern, colour, bold in _RULES:
-            for match in pattern.finditer(line):
+            for match in pattern.finditer(part):
                 for index in range(line_start + match.start(), line_start + match.end()):
                     colours[index] = colour
                     bolds[index] = bold
-        line_start += len(line) + 1
+        line_start += len(part)
 
     segments: list[dict[str, Any]] = []
     start = 0

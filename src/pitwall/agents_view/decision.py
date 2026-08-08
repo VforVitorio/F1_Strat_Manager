@@ -166,6 +166,12 @@ def build_scenarios(scores: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "key": key,
                 "label": SCENARIO_LABELS[key],
                 "fill": fill,
+                # The bar's width in per cent, to the 0.1 % Qt's gradient
+                # stop resolves to. Its twin one card up already came from
+                # here; this one was still scaling 0-1 in the renderer,
+                # unrounded, which is the arithmetic the view exists to
+                # keep out of it.
+                "fill_pct": round(fill * 100, 1),
                 "score": f"{value:+.2f}" if present else "  --",
                 "is_winner": is_winner,
                 "bar_colour": hex_str(ACCENT if is_winner else TEXT_SECONDARY),

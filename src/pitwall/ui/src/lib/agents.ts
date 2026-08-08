@@ -79,6 +79,8 @@ export interface ScenarioRow {
   label: string;
   /** Min-max normalised across the scenarios present, already clamped. */
   fill: number;
+  /** The same value as a percentage, rounded host side; this is the width. */
+  fill_pct: number;
   score: string;
   is_winner: boolean;
   bar_colour: string;

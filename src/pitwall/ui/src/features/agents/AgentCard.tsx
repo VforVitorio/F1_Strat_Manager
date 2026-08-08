@@ -41,22 +41,30 @@ export function AgentCard({
         <span className="agent-tooltip" dangerouslySetInnerHTML={{ __html: card.tooltip }} />
       ) : null}
 
-      <p
-        className="agent-headline"
-        style={{ color: card.headline_colour }}
-        dangerouslySetInnerHTML={{ __html: card.headline }}
-      />
-
-      {card.lines.map((line, index) => (
+      {/* The scroll lives on this box, not on the card. An absolutely
+          positioned popup is clipped by any positioned ancestor that
+          scrolls, and overflow to the LEFT of a scroll container cannot
+          even be scrolled to: measured, a 502 px transcript inside a
+          375 px card lost the first 140 px of every line, unreachably.
+          Qt uses a native QToolTip, which floats above everything. */}
+      <div className="agent-card-body">
         <p
-          key={index}
-          className="agent-line"
-          style={{ color: line.colour }}
-          dangerouslySetInnerHTML={{ __html: line.text }}
+          className="agent-headline"
+          style={{ color: card.headline_colour }}
+          dangerouslySetInnerHTML={{ __html: card.headline }}
         />
-      ))}
 
-      {children ? <div className="agent-chart">{children}</div> : null}
+        {card.lines.map((line, index) => (
+          <p
+            key={index}
+            className="agent-line"
+            style={{ color: line.colour }}
+            dangerouslySetInnerHTML={{ __html: line.text }}
+          />
+        ))}
+
+        {children ? <div className="agent-chart">{children}</div> : null}
+      </div>
     </section>
   );
 }
