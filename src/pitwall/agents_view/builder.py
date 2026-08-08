@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.pitwall.agents_view.charts import build_pace_series, build_tire_series
 from src.pitwall.agents_view.decision import build_orchestrator, build_scenarios
 from src.pitwall.agents_view.history import LapHistory
 from src.pitwall.agents_view.panels import build_cards, build_header, build_status_bar
@@ -58,6 +59,17 @@ class AgentsViewBuilder:
             "scenarios": build_scenarios(latest.get("scenario_scores") if latest else None),
             "reasoning": build_reasoning(latest or None),
             "cards": build_cards(latest or None),
+            "charts": {
+                "pace": build_pace_series(self._history.pace),
+                "tire": build_tire_series(
+                    self._history.tire_rows(),
+                    latest.get("lap_number") if latest else None,
+                    (latest.get("per_agent") or {}).get("tire") if latest else None,
+                ),
+            },
+            # The raw stores stay on the view as well: the charts are a
+            # rendering of them, and a test that could only see the drawn
+            # series could not tell an accumulator bug from a plotting one.
             "history": {
                 "pace": [{"lap": lap, **row} for lap, row in sorted(self._history.pace.items())],
                 "tire": self._history.tire_rows(),

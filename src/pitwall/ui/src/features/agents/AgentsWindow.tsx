@@ -20,6 +20,8 @@ import { OrchestratorCard } from "./OrchestratorCard";
 import { ReasoningTabs } from "./ReasoningTabs";
 import { ScenarioBars } from "./ScenarioBars";
 import { HeaderBar } from "./HeaderBar";
+import { PaceChart } from "./PaceChart";
+import { TireChart } from "./TireChart";
 import { useAgentsView, type AgentCardView, type AgentsView } from "../../lib/agents";
 
 /** Grid order, reading across then down, exactly as `window.py` adds them. */
@@ -90,6 +92,24 @@ const IDLE_VIEW: AgentsView = {
     ["pit", "Pit"],
   ].map(([key, label]) => ({ key, label, segments: [] })),
   cards: Object.fromEntries(CARDS.map(([key]) => [key, IDLE_CARD])),
+  charts: {
+    pace: {
+      actual: [],
+      pred: [],
+      band: [],
+      actual_colour: "#3b82f6",
+      pred_colour: "#a78bfa",
+      band_colour: "#a78bfa",
+    },
+    tire: {
+      stints: [],
+      trend: [],
+      trend_colour: "#ffffff",
+      cliff: null,
+      cliff_colour: "#f59e0b",
+      x_range: [0, 1],
+    },
+  },
   history: { pace: [], tire: [] },
   status_bar: { text: "Waiting for arcade stream…", transient: false },
 };
@@ -110,7 +130,10 @@ export function AgentsWindow() {
         </div>
         <div className="agents-right">
           {CARDS.map(([key, title]) => (
-            <AgentCard key={key} title={title} card={shown.cards[key] ?? IDLE_CARD} />
+            <AgentCard key={key} title={title} card={shown.cards[key] ?? IDLE_CARD}>
+              {key === "pace" ? <PaceChart series={shown.charts.pace} /> : null}
+              {key === "tire" ? <TireChart series={shown.charts.tire} /> : null}
+            </AgentCard>
           ))}
         </div>
       </div>

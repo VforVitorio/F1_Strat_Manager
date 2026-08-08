@@ -97,6 +97,34 @@ export interface ReasoningTab {
   segments: ReasoningSegment[];
 }
 
+export interface PaceSeries {
+  /** `[lap, seconds]`, already filtered to plausible lap times. */
+  actual: [number, number][];
+  pred: [number, number][];
+  /** `[lap, p10, p90]`. */
+  band: [number, number, number][];
+  actual_colour: string;
+  pred_colour: string;
+  band_colour: string;
+}
+
+export interface TireStint {
+  compound: string;
+  colour: string;
+  points: [number, number][];
+}
+
+export interface TireSeries {
+  /** One entry per compound run: the break IS the compound change. */
+  stints: TireStint[];
+  trend: [number, number][];
+  trend_colour: string;
+  /** Absolute lap numbers, or null when the projection is out of range. */
+  cliff: { lo: number | null; hi: number | null; p50: number | null } | null;
+  cliff_colour: string;
+  x_range: [number, number];
+}
+
 export interface AgentsView {
   view_version: number;
   seq: number | null;
@@ -105,6 +133,7 @@ export interface AgentsView {
   scenarios: ScenarioRow[];
   reasoning: ReasoningTab[];
   cards: Record<string, AgentCardView>;
+  charts: { pace: PaceSeries; tire: TireSeries };
   history: { pace: PaceHistoryRow[]; tire: TireHistoryRow[] };
   status_bar: { text: string; transient: boolean };
 }
