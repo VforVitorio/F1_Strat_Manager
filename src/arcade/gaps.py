@@ -22,11 +22,24 @@ Melbourne 2025, the drift reaches **1877 m for a single car and 1469 m
 between two cars on a 5220 m circuit** — 28 % of a lap, not the "tens of
 metres" an earlier version of this docstring claimed.
 
-Sampled every 500 frames against the timing classification rebuilt from
-the crossings, a descending `dist` sort puts **the wrong car in the lead
-on 85 % of frames**. The coordinate below gets it wrong on **2.0 %** and
-reproduces the whole order exactly on 239 of 305 frames — and of the six
-disagreements, all are cars racing within a tenth of a lap of each other,
+Everything measured below uses ONE convention, stated here because three
+mutually inconsistent versions of these figures were once published in
+two docstrings and a session log:
+
+> Truth is the at-the-line classification rebuilt from `laps.parquet`
+> (`Time` minus `global_t_min`): at replay time t, a driver's key is
+> (laps completed by t, then the time of that last crossing). Only cars
+> STILL RUNNING at the sampled frame are compared, because a retired
+> car's official place is decided by retirement order, which this replay
+> does not model. Sampling is every 500 frames, excluding the opening lap,
+> where no classification exists yet. Melbourne 2025, 300 sampled frames.
+
+Under it, the form this code replaced — `(lap - 1) * circuit_length` added
+to a `dist` that already contains the completed laps — puts **the wrong
+car in the lead on 37 %** of those frames, and so does a plain descending
+`dist` sort. The coordinate below gets the leader wrong on **1.7 %**
+(5 of 300) and reproduces the whole running order exactly on **236 of
+300**. Every one of the five is a pair racing within a tenth of a lap,
 where "leader" legitimately differs between on-track order and the
 at-the-line classification.
 
@@ -35,9 +48,9 @@ is normalising it per car, by the true length of the lap that car is on,
 so the drift cancels instead of accumulating. See `progress`.
 
 The same drift is why `laps_down` cannot be a `dist` difference over a
-circuit length: it disagrees with the positional answer on 4.9 % of
-same-corner pairs, always in the direction that makes a lapped car read
-as a same-lap car.
+circuit length: over 4,934 same-corner pairs (within 2 % of a lap of each
+other) it disagrees with the positional answer on **3.4 %**, always in
+the direction that makes a lapped car read as a same-lap car.
 
 Why the interval is at the line and not live
 --------------------------------------------
@@ -51,19 +64,26 @@ refuted (against `laps.parquet` line-crossing times, over the full race):
 | `(lap - 1) + rel_dist` | 5 ms | +-1 lap spikes: `lap` is a rounded interpolation of a step function |
 | counting `rel_dist` resets | 6.7 ms | p95 92 s: the resampler interpolates `rel_dist` THROUGH its own reset |
 | last crossing of the back car's `rel_dist` | 80 s | worse throughout |
-| **line crossings (this module)** | **17 ms** | **p95 101 ms, worst 568 ms, no tail** |
+| **line crossings (this module)** | **17 ms** | **p95 105 ms, p99 208 ms, worst 568 ms** |
 
-Two honest caveats on that headline figure, both established by an
-adversarial gate that reproduced it exactly:
+That row is 7,017 distinct pairs. Three honest caveats on it:
 
 1. **`laps.parquet` is not an independent artefact.** It is `session.laps`,
    the table that slices the very telemetry these arrays come from, so the
    comparison is a self-consistency check, not an external validation. The
-   residual is one-sided (+22 ms).
-2. **The error budget is not "one frame".** 14.9 % of crossings land more
-   than 40 ms from the parquet time and the worst is 486 ms, because the
-   `lap` field is `np.interp` plus `round` over a step function rather than
-   a true line detector.
+   one place there IS an external check is the chequered flag: NOR-VER
+   comes out at 0.880 s against an official 0.895 s and NOR-RUS at 8.480 s
+   against an official 8.481 s.
+2. **The error budget is not "one frame".** Per crossing (n=921) the error
+   is median 22 ms, p95 67 ms and worst 486 ms, and **9.8 % land more than
+   one 40 ms frame from the parquet time**, because the `lap` field is
+   `np.interp` plus `round` over a step function rather than a true line
+   detector.
+3. **The tail moved when the keying did.** Keying on the LAST frame of an
+   increment measured p95 101 ms / p99 160 ms, and the first-frame keying
+   this module ships improves the per-crossing error while making the pair
+   tail slightly worse. The p95 105 / p99 208 above is the shipped code;
+   the older pair of numbers described the version it replaced.
 
 It costs one property: the interval updates once a lap and steps at the
 line. That is what a real timing screen does, it is labelled `(L)` on
@@ -254,7 +274,16 @@ class RaceGapCalculator:
     # --- Where a car is in the race -----------------------------------------
 
     def laps_completed(self, code: str, frame_idx: int) -> int:
-        """How many laps this driver had finished as of `frame_idx`."""
+        """How many laps this driver had finished as of `frame_idx`.
+
+        **0 also answers an unknown code**, which is the collision the
+        class docstring forbids everywhere else. It stays because the only
+        caller that can hold one, `progress`, returns None before reaching
+        this, so the ranked list never contains an unknown driver and no
+        panel can read the two apart. A caller that CAN hold unknown codes
+        must check `progress` first, or this becomes `int | None` and the
+        three internal callers grow a guard.
+        """
         frames = self._crossing_frames.get(code)
         if frames is None or not len(frames):
             return 0
