@@ -78,32 +78,51 @@ def test_the_canonical_source_actually_defines_the_tokens_the_ui_uses():
 
 
 def test_the_two_python_palettes_still_mirror_each_other():
-    """`dashboard/theme.py` is a copy of `config.py` and says so.
+    """`palette.py` is a copy of `config.py`'s tuples and says so.
 
-    It disappears when `src/arcade/dashboard/` is deleted in sprint 7. Until
-    then a silent divergence between them would put the arcade HUD and the
-    Qt dashboard on different colours with nothing to catch it.
+    The two run in different processes, so the duplication is deliberate;
+    a silent divergence would put the arcade HUD, the Qt dashboard and
+    PITWALL's AGENTS window on different colours with nothing to catch it.
+
+    **This used to be skipped in CI.** The copy lived in
+    `dashboard/theme.py`, importing it needed libEGL on a headless runner,
+    and `importorskip` therefore skipped the only guard the pair had. The
+    Qt-free split is what made it run.
     """
-    # Skip on the module that actually fails, not on PySide6: PySide6 itself
-    # imports fine on a headless runner and `theme.py`'s Qt submodule is what
-    # needs libEGL. `exc_type` is explicit because pytest 9.1 stops swallowing
-    # ImportError by default.
+    from src.arcade import config, palette
+
+    shared = [
+        name
+        for name in dir(config)
+        if name.isupper() and isinstance(getattr(config, name), tuple) and hasattr(palette, name)
+    ]
+
+    assert len(shared) >= 8, "the palette names moved; this test is checking nothing"
+    for name in shared:
+        assert getattr(palette, name) == getattr(config, name), f"{name} drifted between the copies"
+
+
+def test_the_qt_theme_still_serves_the_same_tuples_it_re_exports():
+    """`dashboard/theme.py` keeps every name its widgets import.
+
+    The split moved the values out and left re-exports behind, so a widget
+    doing `from ...theme import ACCENT` must still get the same object. If
+    Qt is unavailable this skips — but the pair above is guarded either
+    way now, which is the point of the split.
+    """
     theme = pytest.importorskip(
         "src.arcade.dashboard.theme",
         reason="the Qt dashboard is an optional surface and needs a display stack",
         exc_type=ImportError,
     )
-    from src.arcade import config
+    from src.arcade import palette
 
-    shared = [
-        name
-        for name in dir(config)
-        if name.isupper() and isinstance(getattr(config, name), tuple) and hasattr(theme, name)
-    ]
-
-    assert len(shared) >= 8, "the palette names moved; this test is checking nothing"
-    for name in shared:
-        assert getattr(theme, name) == getattr(config, name), f"{name} drifted between the copies"
+    for name in ("ACCENT", "SUCCESS", "WARNING", "DANGER", "TEXT_PRIMARY", "MONO_FONT_STACK"):
+        assert getattr(theme, name) is getattr(palette, name), (
+            f"{name} is no longer the same object"
+        )
+    assert theme.compound_pill_html is palette.compound_pill_html
+    assert theme.flag_chip_html is palette.flag_chip_html
 
 
 # The Python palette predates the webapp's current tokens and has NOT been

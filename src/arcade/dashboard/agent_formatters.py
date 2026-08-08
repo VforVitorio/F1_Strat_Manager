@@ -14,6 +14,13 @@ widget maps ``status`` to the glyph + colour.
 
 No agent package imports: formatters accept plain dicts already
 serialised by ``src/arcade/strategy.py::_dump_dataclass``.
+
+**This module must stay importable without a display stack.** PITWALL's
+host calls these same functions so its AGENTS window is the Qt window's
+output by construction rather than by inspection, and it runs in a
+process that has no Qt. That is why the colours come from
+``src.arcade.palette`` and not from ``dashboard.theme``, which imports
+PySide6 and, through ``classify_action``, pandas.
 """
 
 from __future__ import annotations
@@ -21,7 +28,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from src.arcade.dashboard.theme import (
+from src.arcade.palette import (
     DANGER,
     SUCCESS,
     TEXT_PRIMARY,
