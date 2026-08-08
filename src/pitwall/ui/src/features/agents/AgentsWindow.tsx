@@ -16,6 +16,8 @@
  */
 
 import { AgentCard } from "./AgentCard";
+import { OrchestratorCard } from "./OrchestratorCard";
+import { ScenarioBars } from "./ScenarioBars";
 import { HeaderBar } from "./HeaderBar";
 import { useAgentsView, type AgentCardView, type AgentsView } from "../../lib/agents";
 
@@ -50,6 +52,34 @@ const IDLE_VIEW: AgentsView = {
     connection: "Disconnected",
     connection_colour: "#ef4444",
   },
+  orchestrator: {
+    action: "--",
+    action_colour: "#9ca3af",
+    confidence: null,
+    confidence_label: "Confidence: --",
+    confidence_colour: "#9ca3af",
+    pace: "Pace: --",
+    pace_colour: "#9ca3af",
+    risk: "Risk: --",
+    risk_colour: "#9ca3af",
+    plan: "Pit: -- · Next: -- · UCUT: --",
+    guardrail: "",
+  },
+  scenarios: [
+    ["STAY_OUT", "STAY"],
+    ["PIT_NOW", "PIT"],
+    ["UNDERCUT", "UCUT"],
+    ["OVERCUT", "OCUT"],
+  ].map(([key, label]) => ({
+    key,
+    label,
+    fill: 0,
+    score: "  --",
+    is_winner: false,
+    bar_colour: "#d1d5db",
+    label_colour: "#d1d5db",
+    score_colour: "#d1d5db",
+  })),
   cards: Object.fromEntries(CARDS.map(([key]) => [key, IDLE_CARD])),
   history: { pace: [], tire: [] },
   status_bar: { text: "Waiting for arcade stream…", transient: false },
@@ -64,7 +94,11 @@ export function AgentsWindow() {
       <HeaderBar header={shown.header} />
 
       <div className="agents-split">
-        <div className="agents-left">{/* orchestrator, scenarios, reasoning */}</div>
+        <div className="agents-left">
+          <OrchestratorCard view={shown.orchestrator} />
+          <ScenarioBars rows={shown.scenarios} />
+          <div className="reasoning-slot">{/* reasoning tabs */}</div>
+        </div>
         <div className="agents-right">
           {CARDS.map(([key, title]) => (
             <AgentCard key={key} title={title} card={shown.cards[key] ?? IDLE_CARD} />

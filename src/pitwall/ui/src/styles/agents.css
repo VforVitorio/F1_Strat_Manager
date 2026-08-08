@@ -204,3 +204,128 @@ body {
   color: var(--qt-fg-3);
   font-size: 11px;
 }
+
+/* --- Orchestrator card (orchestrator_card.py) ---------------------------- */
+
+.orchestrator {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.orch-top {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.orch-badge {
+  min-width: 200px;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 14px 18px;
+  color: var(--qt-fg-1);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-align: center;
+}
+.orch-conf {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.orch-conf-label {
+  color: var(--qt-fg-2);
+  font-size: 11px;
+}
+.orch-bar {
+  height: 14px;
+  border-radius: 6px;
+  background: #282834; /* the empty stop of Qt's gradient */
+  overflow: hidden;
+}
+.orch-bar-fill {
+  height: 100%;
+}
+.orch-chips {
+  display: flex;
+  gap: 8px;
+}
+.orch-chip {
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.orch-plan {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-size: 12px;
+}
+.orch-guardrail {
+  margin: 0;
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* --- Scenario bars (scenario_bars.py) ------------------------------------ */
+
+.scenarios {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scenarios-title {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.scenario-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.scenario-label {
+  width: 44px;
+  flex: 0 0 44px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.scenario-bar {
+  flex: 1;
+  min-width: 120px;
+  height: 10px;
+  border: 1px solid var(--qt-border);
+  border-radius: 5px;
+  background: var(--qt-elevated);
+  overflow: hidden;
+  display: block;
+}
+.scenario-bar-fill {
+  display: block;
+  height: 100%;
+}
+.scenario-score {
+  width: 46px;
+  flex: 0 0 46px;
+  text-align: right;
+  font-size: 11px;
+  font-family: var(--qt-mono);
+  white-space: pre;
+}
+
+/* The reasoning tabs land here in PR 5; the slot keeps the column's
+ * `auto auto 1fr` honest in the meantime. */
+.reasoning-slot {
+  min-height: 0;
+}

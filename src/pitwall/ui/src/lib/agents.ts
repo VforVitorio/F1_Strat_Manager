@@ -55,10 +55,41 @@ export interface TireHistoryRow {
   compound?: string | null;
 }
 
+export interface OrchestratorView {
+  action: string;
+  action_colour: string;
+  /** null before the first decision; the bar then draws empty. */
+  confidence: number | null;
+  confidence_label: string;
+  confidence_colour: string;
+  pace: string;
+  pace_colour: string;
+  risk: string;
+  risk_colour: string;
+  /** Qt rich text: may carry the compound pill. */
+  plan: string;
+  /** Empty string when the orchestrator did not override the MC winner. */
+  guardrail: string;
+}
+
+export interface ScenarioRow {
+  key: string;
+  label: string;
+  /** Min-max normalised across the scenarios present, already clamped. */
+  fill: number;
+  score: string;
+  is_winner: boolean;
+  bar_colour: string;
+  label_colour: string;
+  score_colour: string;
+}
+
 export interface AgentsView {
   view_version: number;
   seq: number | null;
   header: HeaderView;
+  orchestrator: OrchestratorView;
+  scenarios: ScenarioRow[];
   cards: Record<string, AgentCardView>;
   history: { pace: PaceHistoryRow[]; tire: TireHistoryRow[] };
   status_bar: { text: string; transient: boolean };
