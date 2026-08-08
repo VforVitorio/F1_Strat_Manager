@@ -26,7 +26,14 @@ from src.arcade.dashboard.agent_formatters import (
     radio_tooltip_html,
     rag_tooltip_html,
 )
-from src.arcade.palette import DANGER, SUCCESS, TEXT_SECONDARY, WARNING, hex_str
+from src.arcade.palette import (
+    DANGER,
+    SUCCESS,
+    TEXT_SECONDARY,
+    TEXT_TERTIARY,
+    WARNING,
+    hex_str,
+)
 
 # window.py's HeaderBar.set_connection, with its three states and their
 # colours. "Connecting..." is what the socket thread reports while it
@@ -35,6 +42,17 @@ CONNECTION_COLOURS: dict[str, str] = {
     "Connected": hex_str(SUCCESS),
     "Connecting...": hex_str(WARNING),
     "Disconnected": hex_str(DANGER),
+}
+
+# `agent_card.py::_GLYPH_FOR`, which cannot be imported because it lives in
+# a QFrame subclass. It is repeated rather than reimplemented, and
+# `test_the_status_glyphs_match_the_qt_cards` compares the two for as long
+# as both exist - which is the twin-detector this repo keeps needing.
+STATUS_GLYPHS: dict[str, tuple[str, str]] = {
+    "OK": ("●", hex_str(SUCCESS)),
+    "WATCH": ("◐", hex_str(WARNING)),
+    "ALERT": ("●", hex_str(DANGER)),
+    "IDLE": ("○", hex_str(TEXT_TERTIARY)),
 }
 
 
@@ -66,11 +84,14 @@ def build_header(payload: dict[str, Any], connection: str) -> dict[str, Any]:
 def _card(formatted: tuple, tooltip: str = "") -> dict[str, Any]:
     """One formatter tuple as JSON: `(headline, colour, lines, status)`."""
     headline, headline_colour, lines, status = formatted
+    glyph, glyph_colour = STATUS_GLYPHS.get(status, STATUS_GLYPHS["IDLE"])
     return {
         "headline": headline,
         "headline_colour": hex_str(headline_colour),
         "lines": [{"text": text, "colour": hex_str(colour)} for text, colour in lines],
         "status": status,
+        "glyph": glyph,
+        "glyph_colour": glyph_colour,
         "tooltip": tooltip,
     }
 

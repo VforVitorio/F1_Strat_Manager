@@ -1,0 +1,96 @@
+/**
+ * Screenshot the built AGENTS window headless, against a stubbed bridge.
+ *
+ * A dev tool, not part of the product. It exists because the acceptance
+ * test for this port is visual - the Qt window rendered beside the React
+ * one - and because a pywebview window cannot be captured without opening
+ * it on somebody's desktop.
+ *
+ * What it captures is the REAL bundle rendering REAL host output: the
+ * view JSON comes from `AgentsViewBuilder` (see the sibling recipe in
+ * `~/.claude/FRONTEND_VISUAL_VERIFICATION.md`), and the only thing faked
+ * is `window.pywebview`, which the OS shell would otherwise inject.
+ *
+ *   npm run build
+ *   node scripts/shot-agents.mjs <view.json> <out.png> [width] [height]
+ *
+ * The Qt side of the comparison is captured with `QWidget.grab()` and
+ * `Qt.WA_DontShowOnScreen` - never a screen rectangle, which returns
+ * whatever is physically in front, and never the `offscreen` platform
+ * plugin, which ships no font database on Windows and renders every
+ * glyph as tofu.
+ */
+import { createReadStream, readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { dirname, extname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "@playwright/test";
+
+const MIME = {
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+};
+
+/**
+ * Serve `dist/` over http on an ephemeral port.
+ *
+ * Not decoration: chromium refuses `<script type="module">` over file://
+ * (CORS treats it as origin `null`), so the bundle loads nothing and the
+ * screenshot is a blank page with two console errors. pywebview reaches
+ * the same files through the OS webview, which does allow it.
+ */
+function serveDist(root) {
+  const server = createServer((req, res) => {
+    const path = join(root, decodeURIComponent(req.url.split("?")[0]));
+    res.setHeader("Content-Type", MIME[extname(path)] ?? "application/octet-stream");
+    createReadStream(path)
+      .on("error", () => {
+        res.statusCode = 404;
+        res.end();
+      })
+      .pipe(res);
+  });
+  return new Promise((ready) => server.listen(0, "127.0.0.1", () => ready(server)));
+}
+
+const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const [viewPath, out, width = "1320", height = "900"] = process.argv.slice(2);
+
+if (!viewPath || !out) {
+  console.error("usage: node scripts/shot-agents.mjs <view.json> <out.png> [w] [h]");
+  process.exit(2);
+}
+
+const view = JSON.parse(readFileSync(viewPath, "utf8"));
+const server = await serveDist(resolve(UI_DIR, "dist"));
+const bundle = `http://127.0.0.1:${server.address().port}/agents.html`;
+
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: +width, height: +height } });
+const page = await ctx.newPage();
+page.on("console", (m) => console.log(`[console:${m.type()}] ${m.text()}`));
+page.on("pageerror", (e) => console.log(`[pageerror] ${e.message}`));
+
+await page.addInitScript((payload) => {
+  window.pywebview = {
+    api: {
+      // The host returns null once the window is up to date; the stub does
+      // the same, so the poll loop settles instead of re-rendering at 10 Hz
+      // under the screenshot.
+      get_agents_view: async (sinceSeq) => (sinceSeq >= payload.seq ? null : payload),
+      get_tick: async () => null,
+    },
+  };
+}, view);
+
+// `domcontentloaded`, not `networkidle`: a file:// bundle has no network to
+// go idle, and Vite's HMR socket keeps `networkidle` from ever firing in dev.
+await page.goto(bundle, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+await page.screenshot({ path: resolve(out), fullPage: false });
+await ctx.close();
+await browser.close();
+server.close();
+console.log(`saved ${out}`);
