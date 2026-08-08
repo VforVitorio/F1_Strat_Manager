@@ -186,15 +186,65 @@ def test_the_order_is_right_when_dist_and_true_progress_disagree():
 
 
 def test_the_leader_is_the_car_that_has_covered_the_most_track():
-    """Three cars, three different drifts, sampled across the race."""
+    """Three cars, three different drifts, sampled across the race.
+
+    P3's drift is 700 m per lap and not the 160 an earlier version used.
+    At 160 the three cars' `dist` never actually inverted, so this test
+    stayed green against a plain `dist` sort and only one test in the file
+    guarded the defect it was written for. The premise assert below is
+    what stops the fixture drifting back into agreement.
+    """
     session = _session(
         P1=_car(56.0, drift_per_lap_m=-80.0),
         P2=_car(53.0, drift_per_lap_m=0.0),
-        P3=_car(50.0, drift_per_lap_m=160.0),
+        P3=_car(50.0, drift_per_lap_m=700.0),
+    )
+    frames = session.frames_by_driver
+    assert frames["P3"][6000].dist > frames["P1"][6000].dist, (
+        "the fixture must invert the dist order, or a dist sort passes this test"
     )
 
     for idx in (2000, 4000, 6000, N_FRAMES - 1):
         assert _order(session, idx) == ["P1", "P2", "P3"], f"wrong at frame {idx}"
+
+
+def test_the_fraction_is_normalised_by_the_cars_own_lap():
+    """The mechanism the whole coordinate rests on, and nothing was pinning it.
+
+    Replace `_current_lap_bounds`'s body with `return start, circuit_length`
+    and every other test in this file still passes: the fixture laps and
+    the [0, 1] clamp conspire to hide it. So the one sentence both
+    docstrings call "what makes it comparable between cars" could be
+    deleted with the suite green.
+
+    A car that runs 5400 m per lap, exactly half way through its second
+    lap, is at 1.5. Normalised by the circuit constant instead it reads
+    1.54, and every car with a different drift reads differently wrong.
+    """
+    session = _session(SOLO=_car(50.0, drift_per_lap_m=400.0))
+    gaps = RaceGapCalculator(session)
+    idx = 3750  # 150 s at 50 m/s: one lap and a half of true progress
+
+    assert gaps.progress("SOLO", idx) == pytest.approx(1.5, abs=0.005)
+
+
+def test_a_crossing_is_the_first_frame_of_the_increment_and_not_the_last():
+    """The other unpinned invariant: `setdefault`, not assignment.
+
+    The resampled `lap` field can flicker for a few frames around the
+    line, so the same lap increments more than once. Keeping the FIRST
+    occurrence measured p95 error 83 ms -> 68 ms; keeping the last is a
+    one-character change that no test could see.
+    """
+    frames = _car(50.0)
+    # The flicker: lap goes 2, back to 1, then 2 again over three frames.
+    for offset, lap in ((0, 2), (1, 1), (2, 2)):
+        frames[2500 + offset] = FrameData(**{**vars(frames[2500 + offset]), "lap": lap})
+    gaps = RaceGapCalculator(_session(SOLO=frames))
+
+    crossing = gaps._crossings["SOLO"][1]
+
+    assert crossing == pytest.approx(2500 * DT, abs=DT / 2), "the first rise, not the third"
 
 
 def test_a_car_whose_rel_dist_is_missing_is_still_ranked():

@@ -579,10 +579,13 @@ class LeaderboardPanel:
         contained the completed laps). It is not one: each car accumulates
         the distance IT drove, so two cars at the same corner hold
         different numbers and the drift reaches 1877 m on a 5220 m
-        circuit. Sampled every 500 frames on Melbourne 2025 against the
-        timing classification, a descending `dist` sort puts the wrong car
-        in the lead on 85 % of frames; this key gets it wrong on 0.7 % and
-        reproduces the whole order exactly on 278 of 305 frames.
+        circuit. Measured under the convention stated at the top of
+        `gaps.py` — do not restate figures here under a different one,
+        which is how this docstring and that one came to publish 0.7 % and
+        2.0 % for the same quantity — a descending `dist` sort puts the
+        wrong car in the lead on 37 % of sampled frames; this key gets it
+        wrong on 1.7 % and reproduces the whole running order exactly on
+        236 of 300.
 
         A car whose progress is unknown (FastF1 delivered no
         `RelativeDistance`, which is a whole driver on Melbourne 2025)
