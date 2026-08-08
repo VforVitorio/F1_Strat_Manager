@@ -63,19 +63,99 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
         agent_alerts=["tyre cliff in 2 laps", "DRS window opens on the main straight"],
         guardrail_reason="none",
         per_agent=PerAgentOutputsDTO(
-            pace={"predicted_lap_time_s": 81.0, "actual_lap_time_s": 81.3, "delta_s": 0.3},
-            tire={"degradation_pct": 62.0, "cliff_lap": lap + 2, "ci_low": 55.0, "ci_high": 68.0},
-            situation={"threat_level": "MEDIUM", "overtake_prob": 0.34, "sc_prob": 0.08},
-            radio={"sentiment": "negative", "intent": "GRIP_COMPLAINT", "confidence": 0.81},
-            pit={"pit_duration_s": 22.4, "p10": 21.1, "p90": 24.8},
+            # Every key below is a real field of the agent's own output
+            # dataclass, and `active` carries the real routing tokens. An
+            # earlier version invented plausible names ("predicted_lap_time_s",
+            # "degradation_pct", "sc_prob") and lower-cased the routing list,
+            # so the tool built to stop the cards being idle rendered
+            # "Dnext +0.000s", "deg - s/lap", "safety car 0%" and left both
+            # conditional cards on their trigger hint. See #853.
+            pace={
+                "lap_time_pred": 81.0 + (lap % 5) * 0.11,
+                "delta_vs_prev": -0.204,
+                "delta_vs_median": 0.118,
+                "ci_p10": 80.45,
+                "ci_p90": 81.55,
+                "reasoning": (
+                    "Pace is holding inside the predicted envelope; the last three laps "
+                    "sit within 0.1 s of the stint median."
+                ),
+            },
+            tire={
+                "compound": "MEDIUM",
+                "current_tyre_life": lap - 8,
+                "deg_rate": 0.031,
+                "laps_to_cliff_p10": 4.0,
+                "laps_to_cliff_p50": 6.0,
+                "laps_to_cliff_p90": 9.0,
+                "cumulative_deg_s": 0.42,
+                "deg_cost_s": 0.18,
+                "warning_level": "MONITOR",
+                "reasoning": "Degradation is inside the envelope but the cliff is six laps out.",
+            },
+            situation={
+                "overtake_prob": 0.34,
+                "sc_prob_3lap": 0.08,
+                "threat_level": "MEDIUM",
+                "gap_ahead_s": 1.42,
+                "pace_delta_s": -0.12,
+                "sc_currently_active": False,
+                "vsc_active": False,
+                "reasoning": "DRS threat building: the gap to PIA has closed for three laps.",
+            },
+            radio={
+                "radio_events": [
+                    {
+                        "driver": "NOR",
+                        "message": "Rear grip is going away, especially through the last sector.",
+                        "analysis": {"intent": "PROBLEM", "sentiment": "negative"},
+                    }
+                ],
+                "rcm_events": [
+                    {
+                        "lap": lap,
+                        "flag": "YELLOW",
+                        "event_type": "YELLOW_FLAG_SECTOR",
+                        "message": "Yellow flag in sector 2 - debris on the racing line.",
+                    }
+                ],
+                "alerts": [{"intent": "PROBLEM", "driver": "NOR"}],
+                "corrections": [],
+                "reasoning": "The driver reports rear grip fading; sector 2 is under yellow.",
+            },
+            pit={
+                "action": "PIT_NOW",
+                "recommended_lap": lap + 1,
+                "compound_recommendation": "HARD",
+                "stop_duration_p05": 21.14,
+                "stop_duration_p50": 22.40,
+                "stop_duration_p95": 24.81,
+                "undercut_prob": 0.63,
+                "undercut_target": "RUS",
+                "sc_reactive": False,
+                "reasoning": "The undercut window against RUS is open for two more laps.",
+            },
             regulation_context="Art. 55.7 - drivers must respect the delta under Safety Car",
             rag={
                 "question": "Does a Safety Car change the mandatory compound rule?",
                 "answer": "No. Art. 30.5(m) still requires two specifications in a dry race.",
-                "articles": ["30.5(m)", "55.7"],
-                "chunks": ["...at least two specifications of dry-weather tyre..."],
+                "articles": ["Article 30.5(m)", "Article 55.7"],
+                "chunks": [
+                    {
+                        "article": "Article 30.5(m)",
+                        "doc_type": "Sporting Regulations",
+                        "year": 2025,
+                        "text": (
+                            "...each driver must use at least two specifications of "
+                            "dry-weather tyre during the race..."
+                        ),
+                    }
+                ],
             },
-            active=["pace", "tire", "situation", "pit"],
+            # The routing layer emits agent IDs, not block names
+            # (`_decide_agents_to_call` in strategy_orchestrator.py), and the
+            # cards gate on exactly these two tokens.
+            active=["N28", "N30"],
         ),
         memory_block=f"lap {lap - 1}: STAY_OUT (0.58) - undercut window not yet open",
         plan_changed=True,

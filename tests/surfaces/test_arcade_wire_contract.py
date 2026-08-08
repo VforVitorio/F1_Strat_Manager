@@ -19,8 +19,10 @@ the most fields and is the one the PITWALL agents window reads one by one.
 
 from __future__ import annotations
 
+import ast
 import json
 from functools import partial
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -38,6 +40,7 @@ from src.arcade.strategy import (  # noqa: E402
 )
 
 CIRCUIT_LENGTH_M = 5278.0
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _shape(value):
@@ -101,15 +104,36 @@ def _decision() -> LapDecisionDTO:
         undercut_target="RUS",
         agent_alerts=["tyre cliff in 2 laps"],
         guardrail_reason="none",
+        # Real field names, taken from the agents' own output dataclasses and
+        # guarded by `test_the_per_agent_fixture_uses_the_producers_real_field_names`.
+        # An invented set used to live here and agreed with the dev producer's
+        # invented set, so this file was green while pinning a contract no
+        # producer emits, and every consumer built against it rendered blanks
+        # (#853).
         per_agent=PerAgentOutputsDTO(
-            pace={"predicted_lap_time_s": 81.0},
-            tire={"degradation_pct": 12.0},
-            situation={"threat_level": "MEDIUM"},
-            radio={"sentiment": "negative"},
-            pit={"pit_duration_s": 22.4},
+            pace={"lap_time_pred": 81.0, "delta_vs_prev": -0.2},
+            tire={"compound": "MEDIUM", "laps_to_cliff_p50": 6.0, "warning_level": "MONITOR"},
+            situation={"threat_level": "MEDIUM", "sc_prob_3lap": 0.08},
+            radio={
+                # Populated, not empty: `_shape` describes a list by its first
+                # element, so empty lists would pin nothing about what the
+                # radio card reads out of these entries.
+                "radio_events": [
+                    {
+                        "driver": "NOR",
+                        "message": "rear grip going away",
+                        "analysis": {"intent": "PROBLEM", "sentiment": "negative"},
+                    }
+                ],
+                "rcm_events": [
+                    {"lap": 12, "flag": "YELLOW", "event_type": "YELLOW_FLAG", "message": "debris"}
+                ],
+                "alerts": [{"driver": "NOR", "intent": "PROBLEM"}],
+            },
+            pit={"stop_duration_p50": 22.4, "compound_recommendation": "HARD"},
             regulation_context="Art. 55.7",
             rag={"question": "q", "answer": "a", "articles": ["55.7"], "chunks": ["c"]},
-            active=["pace", "tire"],
+            active=["N28", "N30"],
         ),
         memory_block="lap 11: STAY_OUT",
         plan_changed=True,
@@ -295,9 +319,21 @@ GOLDEN_SHAPE = {
             "pace_mode": "str",
             "per_agent": {
                 "active": ["str"],
-                "pace": {"predicted_lap_time_s": "float"},
-                "pit": {"pit_duration_s": "float"},
-                "radio": {"sentiment": "str"},
+                "pace": {"delta_vs_prev": "float", "lap_time_pred": "float"},
+                "pit": {"compound_recommendation": "str", "stop_duration_p50": "float"},
+                "radio": {
+                    "alerts": [{"driver": "str", "intent": "str"}],
+                    "radio_events": [
+                        {
+                            "analysis": {"intent": "str", "sentiment": "str"},
+                            "driver": "str",
+                            "message": "str",
+                        }
+                    ],
+                    "rcm_events": [
+                        {"event_type": "str", "flag": "str", "lap": "int", "message": "str"}
+                    ],
+                },
                 "rag": {
                     "answer": "str",
                     "articles": ["str"],
@@ -305,8 +341,12 @@ GOLDEN_SHAPE = {
                     "question": "str",
                 },
                 "regulation_context": "str",
-                "situation": {"threat_level": "str"},
-                "tire": {"degradation_pct": "float"},
+                "situation": {"sc_prob_3lap": "float", "threat_level": "str"},
+                "tire": {
+                    "compound": "str",
+                    "laps_to_cliff_p50": "float",
+                    "warning_level": "str",
+                },
             },
             "pit_lap_target": "int",
             "plan_changed": "bool",
@@ -421,6 +461,77 @@ def test_the_states_that_make_a_field_null_are_frozen_too():
 
 def test_the_payload_carries_the_schema_version():
     assert _payload()["schema_version"] == STREAM_SCHEMA_VERSION
+
+
+# --- the per_agent contract, against the producer rather than against itself -
+
+
+# Which dataclass in `src/agents/` fills each `per_agent` block. `rag` is
+# absent on purpose: the engine assembles it as a plain dict rather than
+# dumping `RegulationContext`, and the golden already pins its four keys.
+_PER_AGENT_SOURCES: dict[str, tuple[str, str]] = {
+    "pace": ("src/agents/pace_agent.py", "PaceOutput"),
+    "tire": ("src/agents/tire_agent.py", "TireOutput"),
+    "situation": ("src/agents/race_situation_agent.py", "RaceSituationOutput"),
+    "radio": ("src/agents/radio_agent.py", "RadioOutput"),
+    "pit": ("src/agents/pit_strategy_agent.py", "PitStrategyOutput"),
+}
+
+
+def _dataclass_field_names(relative_path: str, class_name: str) -> set[str]:
+    """Annotated attribute names of one dataclass, read from its source.
+
+    Parsed with `ast` rather than imported: importing `src/agents/` pulls
+    torch, xgboost and three transformer checkpoints, which is minutes of
+    CI for a list of strings.
+    """
+    tree = ast.parse((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            return {
+                stmt.target.id
+                for stmt in node.body
+                if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+            }
+    raise AssertionError(f"{class_name} is gone from {relative_path}")
+
+
+def test_the_per_agent_fixture_uses_the_producers_real_field_names():
+    """The fixture must be a subset of what the agents actually emit.
+
+    Before #853 it was not, and neither was the dev producer: both invented
+    `predicted_lap_time_s`, `degradation_pct`, `sc_prob`, `pit_duration_s`.
+    They agreed with each other, so this file stayed green while pinning a
+    contract no producer has ever emitted, and the Qt cards - sprint 3's
+    acceptance reference - rendered `pred 0.00s` and `deg - s/lap` against
+    the very rig built to populate them.
+
+    Comparing the fixture against the agents' own dataclasses is what makes
+    this guard about the producer instead of about itself: rename
+    `lap_time_pred` upstream and it goes red.
+    """
+    per_agent = _payload()["strategy"]["latest"]["per_agent"]
+
+    for block, (path, class_name) in _PER_AGENT_SOURCES.items():
+        real = _dataclass_field_names(path, class_name)
+        unknown = set(per_agent[block]) - real
+        assert not unknown, (
+            f"per_agent[{block!r}] invents {sorted(unknown)}; {class_name} has {sorted(real)}"
+        )
+
+
+def test_the_routing_list_carries_agent_ids_and_not_block_names():
+    """`active` gates the two conditional cards, and it is not the block keys.
+
+    `_decide_agents_to_call` returns `{"N28", "N30"}` and the cards test
+    `"N28" in active`. The dev producer used to send
+    `["pace", "tire", "situation", "pit"]`, so both conditional cards stayed
+    on their trigger hint no matter what the rig published.
+    """
+    active = _payload()["strategy"]["latest"]["per_agent"]["active"]
+
+    assert active, "the fixture must exercise the conditional cards"
+    assert all(token.startswith("N") and token[1:].isdigit() for token in active), active
 
 
 # --- seq semantics ----------------------------------------------------------

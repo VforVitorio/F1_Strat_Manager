@@ -43,11 +43,17 @@ locked to the circuit length. Status bar reads `lap 24 · live`.
 
 ## Read these with three caveats
 
-1. **The agent-card numbers are placeholders.** The producer that fed these
-   builds `PerAgentOutputsDTO` with plausible-looking keys that do not all
-   match what the cards read, so PACE shows `+0.000s` and TIRE shows
-   `deg — s/lap`. The **layout, the states and the copy are real**; the
-   figures in those two cards are not. Everything in the left column is real.
+1. **The agent-card numbers in `legacy-qt-strategy.png` are placeholders, and
+   that was a defect in the rig, not a property of the window.** The producer
+   that fed this capture built `PerAgentOutputsDTO` with plausible-looking
+   keys that did not match what the cards read, so PACE shows `+0.000s`,
+   TIRE shows `deg — s/lap`, SITUATION shows `safety car 0%`, and PIT and RAG
+   sit on their trigger hints because `active` carried block names instead of
+   the `N28` / `N30` routing tokens. **Fixed in #853**: re-running
+   `scripts/dev_pitwall_producer.py` today populates all six cards, so a fresh
+   capture will legitimately differ from this one. The **layout, the states
+   and the copy** in this image are real; the figures in those cards are not.
+   Everything in the left column is real.
 2. **The windows were resized before capture.** At their default geometry the
    right column is clipped mid-card and the reasoning tabs get about 268 px,
    which is why the `why this call changed` block normally falls below the
