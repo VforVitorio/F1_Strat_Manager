@@ -51,6 +51,16 @@ class PitwallHost:
         A window that has never rendered one passes -1, which is below every
         sequence the producer emits.
 
+        **The comparison is inequality, not "greater than".** The slot holds
+        only the newest payload, so anything the caller has not already
+        rendered is news - including a LOWER sequence, which can only mean
+        the producer restarted. `seq > since_seq` withheld exactly that
+        case: relaunch the arcade with the windows open and both froze on
+        the dead race, `live` and silent, until the new run's sequence
+        passed the old one's. A ten-minute race meant ten minutes of frozen
+        screen. The consumer side already copes, because the new run's
+        `frame_index` jumps backwards and `FrameClock` reports `rewound`.
+
         A payload with no `seq` is returned unconditionally. That only
         happens against a producer older than the one in this repo, where
         there is nothing to compare and the honest answer is the data.
@@ -59,7 +69,7 @@ class PitwallHost:
         if payload is None:
             return None
         seq = payload.get("seq")
-        if seq is None or seq > since_seq:
+        if seq is None or seq != since_seq:
             return payload
         return None
 

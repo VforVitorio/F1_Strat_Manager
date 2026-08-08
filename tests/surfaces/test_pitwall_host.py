@@ -56,7 +56,25 @@ def test_a_window_only_gets_a_tick_it_has_not_seen():
     assert host.get_tick(since_seq=-1) == _tick(7), "a window with nothing gets the latest"
     assert host.get_tick(since_seq=6) == _tick(7), "a window one behind gets it"
     assert host.get_tick(since_seq=7) is None, "a window up to date gets nothing new"
-    assert host.get_tick(since_seq=99) is None, "and cannot be handed an older one"
+
+
+def test_a_restarted_producer_is_followed_rather_than_withheld():
+    """The one way the slot can hold a LOWER sequence than the window's own.
+
+    An earlier version asked for `seq > since_seq` and read a lower sequence
+    as "an older payload, do not hand it back". The slot only ever holds the
+    newest payload, so that state is unreachable except by a restart -- and
+    there, withholding froze both windows on the dead race, `live` and
+    silent, for as long as the previous run had lasted.
+
+    The old test asserted the CONSTANT (never hand back a lower seq) rather
+    than the EFFECT (the window must follow a restarted producer), so the
+    freeze was pinned rather than caught.
+    """
+    client = _FakeClient(_tick(3))
+    host = PitwallHost(client, window_count=2)
+
+    assert host.get_tick(since_seq=400) == _tick(3), "a relaunched arcade must reach the window"
 
 
 def test_two_windows_polling_independently_never_disagree():
