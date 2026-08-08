@@ -10,10 +10,15 @@
  * tabs about 268 px, so the decision-memory counterweight sentence fell
  * below the fold on the one lap it matters. CSS has no fixed heights.
  *
- * Before the first view arrives the window renders the same idle state
- * the Qt one shows at startup, rather than a spinner: same chips, same
- * placeholders, same six hollow cards.
+ * Before the first view arrives the window renders the state the Qt
+ * window shows AT CONSTRUCTION, rather than a spinner. That is not the
+ * same as `update_from(None)`: the badge is ACCENT purple, the plan line
+ * uses em-dashes and the scenario scores read "0%". `_render_idle` is
+ * what Qt paints once a tick with no decision has arrived, which is a
+ * different moment.
  */
+
+import { useEffect, useState } from "react";
 
 import { AgentCard } from "./AgentCard";
 import { OrchestratorCard } from "./OrchestratorCard";
@@ -57,15 +62,17 @@ const IDLE_VIEW: AgentsView = {
   },
   orchestrator: {
     action: "--",
-    action_colour: "#9ca3af",
+    // ACCENT: `orchestrator_card.py:100` styles the badge at construction.
+    action_colour: "#a78bfa",
     confidence: null,
+    confidence_fill: 0,
     confidence_label: "Confidence: --",
     confidence_colour: "#9ca3af",
     pace: "Pace: --",
     pace_colour: "#9ca3af",
     risk: "Risk: --",
     risk_colour: "#9ca3af",
-    plan: "Pit: -- · Next: -- · UCUT: --",
+    plan: "Pit: — · Next: — · UCUT: —",
     guardrail: "",
   },
   scenarios: [
@@ -77,7 +84,7 @@ const IDLE_VIEW: AgentsView = {
     key,
     label,
     fill: 0,
-    score: "  --",
+    score: "  0%",
     is_winner: false,
     bar_colour: "#d1d5db",
     label_colour: "#d1d5db",
@@ -107,6 +114,9 @@ const IDLE_VIEW: AgentsView = {
       trend_colour: "#ffffff",
       cliff: null,
       cliff_colour: "#f59e0b",
+      boundaries: [],
+      boundary_colour: "#9ca3af",
+      boundary_opacity: 0.31,
       x_range: [0, 1],
     },
   },
@@ -114,9 +124,33 @@ const IDLE_VIEW: AgentsView = {
   status_bar: { text: "Waiting for arcade stream…", transient: false },
 };
 
+/**
+ * The status bar, with Qt's 1.5 s timeout.
+ *
+ * `showMessage(text, 1500)` clears itself, so a Qt window whose producer
+ * dies goes quiet within a second and a half. The port typed a
+ * `transient` flag, documented it, and read it nowhere — so a dead
+ * producer kept saying "lap N · streaming" forever under a red
+ * Disconnected chip. An error message is NOT transient: Qt gives that one
+ * no timeout, because it is the one you must still be able to read.
+ */
+function useStatusText(status: { text: string; transient: boolean }): string {
+  const [shown, setShown] = useState(status.text);
+
+  useEffect(() => {
+    setShown(status.text);
+    if (!status.transient) return;
+    const timer = window.setTimeout(() => setShown(""), 1500);
+    return () => window.clearTimeout(timer);
+  }, [status.text, status.transient]);
+
+  return shown;
+}
+
 export function AgentsWindow() {
   const { view } = useAgentsView();
   const shown = view ?? IDLE_VIEW;
+  const statusText = useStatusText(shown.status_bar);
 
   return (
     <div className="agents-window">
@@ -138,7 +172,7 @@ export function AgentsWindow() {
         </div>
       </div>
 
-      <footer className="status-bar">{shown.status_bar.text}</footer>
+      <footer className="status-bar">{statusText}</footer>
     </div>
   );
 }

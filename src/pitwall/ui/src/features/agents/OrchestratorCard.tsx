@@ -11,7 +11,6 @@
 import type { OrchestratorView } from "../../lib/agents";
 
 export function OrchestratorCard({ view }: { view: OrchestratorView }) {
-  const filled = view.confidence === null ? 0 : Math.round(view.confidence * 100);
   return (
     <section className="card orchestrator">
       <div className="orch-top">
@@ -25,7 +24,7 @@ export function OrchestratorCard({ view }: { view: OrchestratorView }) {
           <div className="orch-bar">
             <div
               className="orch-bar-fill"
-              style={{ width: `${filled}%`, background: view.confidence_colour }}
+              style={{ width: `${view.confidence_fill}%`, background: view.confidence_colour }}
             />
           </div>
         </div>

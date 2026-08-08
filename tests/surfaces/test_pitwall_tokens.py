@@ -166,3 +166,70 @@ def test_the_python_palettes_known_drift_has_not_moved():
         "a Python colour now matches the canonical palette - remove it from "
         "KNOWN_PYTHON_DRIFT rather than leaving a stale exception"
     )
+
+
+# --- The two copies the AGENTS window introduced ----------------------------
+
+AGENTS_CSS = REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "styles" / "agents.css"
+AGENTS_WINDOW = (
+    REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "features" / "agents" / "AgentsWindow.tsx"
+)
+
+# The `--qt-*` custom properties, and what each one copies from `palette.py`.
+QT_CSS_TOKENS = {
+    "qt-bg": "BG_COLOR",
+    "qt-panel": "CONTENT_BG",
+    "qt-elevated": "SECONDARY_BG",
+    "qt-border": "BORDER_COLOR",
+    "qt-fg-1": "TEXT_PRIMARY",
+    "qt-fg-2": "TEXT_SECONDARY",
+    "qt-fg-3": "TEXT_TERTIARY",
+    "qt-accent": "ACCENT",
+}
+
+
+def test_the_agents_css_palette_has_not_drifted_from_palette_py():
+    """Copy number three, and the first one a stylesheet could break silently.
+
+    The AGENTS window renders the arcade palette rather than `tokens.css`,
+    because it is a 1:1 port of a Qt window and the two palettes
+    deliberately differ. That means the hexes are duplicated into CSS,
+    and a duplicate with no guard is how this repo's most frequent defect
+    starts.
+    """
+    from src.arcade import palette
+
+    declared = dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", AGENTS_CSS.read_text("utf-8")))
+
+    assert set(QT_CSS_TOKENS) <= set(declared), (
+        f"a --qt-* token was renamed or removed: {sorted(set(QT_CSS_TOKENS) - set(declared))}"
+    )
+    for token, name in QT_CSS_TOKENS.items():
+        assert declared[token].lower() == _rgb_to_hex(getattr(palette, name)), (
+            f"--{token} is {declared[token]}, but palette.{name} is "
+            f"{_rgb_to_hex(getattr(palette, name))}"
+        )
+
+
+def test_the_boot_state_literals_have_not_drifted_from_palette_py():
+    """Copy number four: the state the window paints before the first tick.
+
+    It cannot come from the host — there is no host answer yet — so the
+    colours are literals in TSX. Every one must still be a colour the
+    palette actually has, or the window boots in a shade nothing else uses.
+    """
+    from src.arcade import palette
+
+    known = {
+        _rgb_to_hex(getattr(palette, name))
+        for name in dir(palette)
+        if name.isupper()
+        and isinstance(getattr(palette, name), tuple)
+        and len(getattr(palette, name)) == 3
+    }
+    literals = set(re.findall(r'"(#[0-9a-fA-F]{6})"', AGENTS_WINDOW.read_text("utf-8")))
+
+    assert literals, (
+        "the boot state stopped carrying colours; is this test still checking anything?"
+    )
+    assert literals <= known, f"boot colours not in the palette: {sorted(literals - known)}"
