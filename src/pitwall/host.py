@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 
+from src.pitwall.agents_view import AgentsViewBuilder
 from src.pitwall.stream_client import ArcadeStreamClient
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ class PitwallHost:
     def __init__(self, client: ArcadeStreamClient, window_count: int) -> None:
         self._client = client
         self._windows_open = window_count
+        self._agents = AgentsViewBuilder()
+        self._agents_connection: str | None = None
 
     def start(self) -> None:
         self._client.start()
@@ -72,6 +75,43 @@ class PitwallHost:
         if seq is None or seq != since_seq:
             return payload
         return None
+
+    def _connection_label(self) -> str:
+        """The three states `HeaderBar.set_connection` paints.
+
+        "Disconnected" needs a memory: before the first tick the socket is
+        retrying and the honest word is "Connecting...", while after one
+        the same state means the arcade went away.
+        """
+        if self._client.connected:
+            return "Connected"
+        return "Disconnected" if self._agents_connection else "Connecting..."
+
+    def get_agents_view(self, since_seq: int = -1) -> dict | None:
+        """The whole AGENTS window, already formatted, or None when nothing changed.
+
+        The window is a renderer. Every headline, body line, colour and
+        status glyph in the returned dict is produced by the code that
+        paints the Qt window, so the two cannot describe the same lap
+        differently - which is what "1:1" has to mean if it is going to
+        survive a sprint.
+
+        Returned on a tick the caller has not seen, **and** on a change of
+        connection state with no new tick, which is the only way a window
+        learns the arcade died: once the producer stops, `seq` stops
+        advancing and a purely sequence-driven view would keep rendering
+        the last frame of a dead race with a green "Connected" chip.
+        """
+        connection = self._connection_label()
+        payload = self.get_tick(since_seq)
+        if payload is None:
+            if connection == self._agents_connection:
+                return None
+            payload = self._client.latest
+            if payload is None:
+                return None
+        self._agents_connection = connection
+        return self._agents.build(payload, connection)
 
     def release_window(self) -> int:
         """Record that one window has closed; stop the client at the last one.
