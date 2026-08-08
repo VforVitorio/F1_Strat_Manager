@@ -20,9 +20,9 @@
  * plugin, which ships no font database on Windows and renders every
  * glyph as tofu.
  */
-import { createReadStream, readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { dirname, extname, resolve, sep } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
@@ -34,32 +34,41 @@ const MIME = {
 };
 
 /**
- * Serve `dist/` over http on an ephemeral port.
+ * Serve `dist/` over http, from a map read once at startup.
  *
- * Not decoration: chromium refuses `<script type="module">` over file://
- * (CORS treats it as origin `null`), so the bundle loads nothing and the
- * screenshot is a blank page with two console errors. pywebview reaches
- * the same files through the OS webview, which does allow it.
+ * Two reasons it is not decoration and not a file server. First,
+ * chromium refuses `<script type="module">` over `file://` (CORS treats
+ * it as origin `null`), so the bundle loads nothing and the screenshot
+ * is a blank page with two console errors. pywebview reaches the same
+ * files through the OS webview, which does allow it.
+ *
+ * Second, nothing here turns a request into a path. The first version
+ * joined the URL onto the root and CodeQL called it a path injection -
+ * correctly, because a URL can carry `../`. Reading the bundle into
+ * memory removes the question rather than guarding it, and a built
+ * bundle is a few hundred kilobytes.
  */
 function serveDist(root) {
+  const files = new Map();
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      const url = `${prefix}/${entry}`;
+      if (statSync(full).isDirectory()) walk(full, url);
+      else files.set(url, { body: readFileSync(full), type: MIME[extname(entry)] });
+    }
+  };
+  walk(root, "");
+
   const server = createServer((req, res) => {
-    // Resolve, then check the result is still inside `dist`. A URL can
-    // carry `../` and `join` will happily walk out of the root: CodeQL
-    // called this out as a path injection on the first run of this file,
-    // and it is right even for a dev tool on an ephemeral local port.
-    const path = resolve(root, "." + decodeURIComponent(req.url.split("?")[0]));
-    if (path !== root && !path.startsWith(root + sep)) {
-      res.statusCode = 403;
+    const file = files.get(req.url.split("?")[0]);
+    if (!file) {
+      res.statusCode = 404;
       res.end();
       return;
     }
-    res.setHeader("Content-Type", MIME[extname(path)] ?? "application/octet-stream");
-    createReadStream(path)
-      .on("error", () => {
-        res.statusCode = 404;
-        res.end();
-      })
-      .pipe(res);
+    res.setHeader("Content-Type", file.type ?? "application/octet-stream");
+    res.end(file.body);
   });
   return new Promise((ready) => server.listen(0, "127.0.0.1", () => ready(server)));
 }
