@@ -84,9 +84,16 @@ def test_the_two_python_palettes_still_mirror_each_other():
     then a silent divergence between them would put the arcade HUD and the
     Qt dashboard on different colours with nothing to catch it.
     """
-    pytest.importorskip("PySide6", reason="the Qt dashboard is an optional surface")
+    # Skip on the module that actually fails, not on PySide6: PySide6 itself
+    # imports fine on a headless runner and `theme.py`'s Qt submodule is what
+    # needs libEGL. `exc_type` is explicit because pytest 9.1 stops swallowing
+    # ImportError by default.
+    theme = pytest.importorskip(
+        "src.arcade.dashboard.theme",
+        reason="the Qt dashboard is an optional surface and needs a display stack",
+        exc_type=ImportError,
+    )
     from src.arcade import config
-    from src.arcade.dashboard import theme
 
     shared = [
         name
