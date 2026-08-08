@@ -158,7 +158,11 @@ FLAG_COLORS: Final[dict[str, tuple[int, int, int]]] = {
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 FASTF1_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "fastf1"
 ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
-CACHE_VERSION: Final[str] = "v10"  # pedal scale per session, rel_dist from dist, has_position
+# v11: the all-NaN pedal channel fix, which runs at BUILD time. A v10 cache
+# built before it has the wrong multiplier baked in and the fix cannot reach
+# it; the same commit also dropped `rel_dist` from the cached arrays, so two
+# incompatible payloads were sharing one tag.
+CACHE_VERSION: Final[str] = "v11"  # pedal peak ignores NaN, rel_dist no longer cached
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial by default — Windows spawn + pickling a loaded session across 8

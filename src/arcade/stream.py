@@ -95,20 +95,31 @@ def _blame(value, path: str = "") -> str:
     `np.int64` and `np.bool_` are not `float`/`int`/`bool` subclasses, so
     they slip past the sanitiser, kill the whole tick, and used to leave
     this function returning the empty string exactly when it was needed.
+
+    **The oracle is the encoder, not an allowlist.** An allowlist of
+    `str/int/float/bool/None` blames a tuple, which `json.dumps` encodes
+    perfectly well as an array — and because the first blame wins, a
+    payload carrying both a tuple and a real culprit named the tuple and
+    never reached the culprit. The drop log then pointed at an innocent
+    field while the tick that died stayed unexplained.
     """
     if isinstance(value, dict):
         for key, item in value.items():
             found = _blame(item, f"{path}.{key}" if path else str(key))
             if found:
                 return found
-    elif isinstance(value, list):
+        return ""
+    if isinstance(value, (list, tuple)):
         for index, item in enumerate(value):
             found = _blame(item, f"{path}[{index}]")
             if found:
                 return found
-    elif isinstance(value, float) and not math.isfinite(value):
+        return ""
+    if isinstance(value, float) and not math.isfinite(value):
         return f"{path or '<root>'}={value}"
-    elif not isinstance(value, (str, int, float, bool, type(None))):
+    try:
+        json.dumps(value)
+    except (TypeError, ValueError):
         return f"{path or '<root>'}=<{type(value).__name__}>"
     return ""
 
