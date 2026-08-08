@@ -610,3 +610,146 @@ def test_the_qt_tabs_and_pitwall_read_the_same_line_builders():
     from src.arcade.dashboard import reasoning_lines
 
     assert qt_tabs.LINE_BUILDERS is reasoning_lines.LINE_BUILDERS
+
+
+# --- The two embedded charts ------------------------------------------------
+
+
+def test_a_stub_lap_time_never_reaches_a_chart():
+    """One value orders of magnitude off flattens the real series to a hairline.
+
+    The TCN emits them on the first laps of a stint, and the guard is the
+    30-200 s window both Qt charts apply before plotting anything.
+    """
+    from src.pitwall.agents_view.charts import build_pace_series, build_tire_series
+
+    pace = build_pace_series({1: {"actual": 4000.0}, 2: {"actual": 81.0}, 3: {"actual": 2.0}})
+    tire = build_tire_series(
+        [
+            {"lap": 1, "lap_time_s": 4000.0, "compound": "MEDIUM"},
+            {"lap": 2, "lap_time_s": 81.0, "compound": "MEDIUM"},
+        ],
+        current_lap=2,
+        tire_out=None,
+    )
+
+    assert pace["actual"] == [[2.0, 81.0]]
+    assert tire["stints"][0]["points"] == [[2.0, 81.0]]
+
+
+def test_the_compound_change_is_a_break_and_not_a_colour_change_on_one_line():
+    """A single line would be drawn through the in-lap and the out-lap.
+
+    Those are neither the same length as each other nor as a racing lap,
+    so the segment between them is a straight line through a number that
+    never happened. One series per stint is the fix, and the colour break
+    is where the compound changed.
+    """
+    from src.pitwall.agents_view.charts import build_tire_series
+
+    rows = [
+        {"lap": 1, "lap_time_s": 81.0, "compound": "MEDIUM"},
+        {"lap": 2, "lap_time_s": 81.4, "compound": "MEDIUM"},
+        {"lap": 3, "lap_time_s": 83.0, "compound": "HARD"},
+        {"lap": 4, "lap_time_s": 82.2, "compound": "HARD"},
+    ]
+
+    stints = build_tire_series(rows, current_lap=4, tire_out=None)["stints"]
+
+    assert [stint["compound"] for stint in stints] == ["MEDIUM", "HARD"]
+    assert [len(stint["points"]) for stint in stints] == [2, 2]
+    assert stints[0]["colour"] != stints[1]["colour"]
+
+
+def test_a_missing_lap_time_does_not_split_a_stint_and_a_missing_compound_inherits():
+    from src.pitwall.agents_view.charts import build_tire_series
+
+    rows = [
+        {"lap": 1, "lap_time_s": 81.0, "compound": "SOFT"},
+        {"lap": 2, "lap_time_s": None, "compound": "SOFT"},
+        {"lap": 3, "lap_time_s": 81.5, "compound": None},
+    ]
+
+    stints = build_tire_series(rows, current_lap=3, tire_out=None)["stints"]
+
+    assert len(stints) == 1, "a gap in the measurement is not a pit stop"
+    assert stints[0]["compound"] == "SOFT"
+    assert [point[0] for point in stints[0]["points"]] == [1.0, 3.0]
+
+
+def test_the_trend_is_a_three_lap_centred_mean_with_min_periods_one():
+    """Heavier smoothing lags visibly over a 30-lap window, which defeats it.
+
+    The edges average over whatever exists so the line starts at the first
+    lap rather than at `window // 2`.
+    """
+    from src.pitwall.agents_view.charts import _rolling_mean
+
+    assert _rolling_mean([1.0, 2.0, 3.0, 10.0]) == pytest.approx([1.5, 2.0, 5.0, 6.5])
+    assert _rolling_mean([]) == []
+    assert _rolling_mean([7.0]) == [7.0]
+
+
+def test_the_cliff_band_is_anchored_on_the_current_lap():
+    """The percentiles are laps REMAINING, so the band is `lap + p`, not `p`."""
+    from src.pitwall.agents_view.charts import build_tire_series
+
+    cliff = build_tire_series(
+        [{"lap": 23, "lap_time_s": 81.0, "compound": "MEDIUM"}],
+        current_lap=23,
+        tire_out={"laps_to_cliff_p10": 4.0, "laps_to_cliff_p50": 6.0, "laps_to_cliff_p90": 9.0},
+    )["cliff"]
+
+    assert cliff == {"lo": 27.0, "hi": 32.0, "p50": 29.0}
+
+
+def test_an_early_stint_projection_suppresses_the_whole_annotation():
+    """The MC Dropout samples return tens of thousands of laps on lap 1-3.
+
+    An unreadable band is worse than none, and a zero would be a lap
+    number the chart could plot.
+    """
+    from src.pitwall.agents_view.charts import build_tire_series
+
+    rows = [{"lap": 2, "lap_time_s": 81.0, "compound": "MEDIUM"}]
+    absurd = {"laps_to_cliff_p10": 40000.0, "laps_to_cliff_p50": -3.0, "laps_to_cliff_p90": 90000.0}
+
+    assert build_tire_series(rows, current_lap=2, tire_out=absurd)["cliff"] is None
+    assert build_tire_series(rows, current_lap=None, tire_out=absurd)["cliff"] is None
+    assert build_tire_series(rows, current_lap=2, tire_out=None)["cliff"] is None
+
+
+def test_the_lap_axis_stops_just_past_the_band_and_not_a_hundred_laps_later():
+    """The deliberate deviation from Qt, asserted so it cannot drift back.
+
+    `tire_chart.py` extends the axis by the whole 100-lap horizon whenever
+    a band is visible, which on lap 23 runs the axis to 123 and squeezes
+    the stint into eight per cent of the width. It fires on every normal
+    cliff, not just a bad one.
+    """
+    from src.pitwall.agents_view.charts import build_tire_series
+
+    series = build_tire_series(
+        [{"lap": lap, "lap_time_s": 81.0, "compound": "MEDIUM"} for lap in range(14, 24)],
+        current_lap=23,
+        tire_out={"laps_to_cliff_p10": 4.0, "laps_to_cliff_p50": 6.0, "laps_to_cliff_p90": 9.0},
+    )
+
+    assert series["x_range"] == [13.5, 35.0]
+
+
+def test_the_pace_series_are_independent_so_a_missing_prediction_draws_nothing():
+    """A lap with an actual and no prediction must not pull the dashed line to zero."""
+    from src.pitwall.agents_view.charts import build_pace_series
+
+    series = build_pace_series(
+        {
+            21: {"actual": 81.0},
+            22: {"actual": 81.2, "pred": 81.1, "ci_p10": 80.6, "ci_p90": 81.6},
+            23: {"pred": 81.3},
+        }
+    )
+
+    assert series["actual"] == [[21.0, 81.0], [22.0, 81.2]]
+    assert series["pred"] == [[22.0, 81.1], [23.0, 81.3]]
+    assert series["band"] == [[22.0, 80.6, 81.6]], "a band needs both bounds"
