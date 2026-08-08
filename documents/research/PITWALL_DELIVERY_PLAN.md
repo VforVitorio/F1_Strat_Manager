@@ -171,6 +171,14 @@ rival overlaid and labelled broadcast tier, and the ring. **Depends on sprint 1*
 the span (#841) and the ring needs `rel_dist` (#842). Retired cars must render as retired, not as
 pending, which needs `active` (#842).
 
+⛔ **Sprint 4 has a prerequisite: #857.** The wire publishes only `lap`, `dist` and `rel_dist` per
+driver — the two coordinates #844 spent a sprint refuting, plus a fraction. It publishes no race
+order, no `progress` and no interval, and a consumer that attaches mid-race cannot rebuild the
+crossing map from a 10 Hz snapshot stream. Decide what the timing band actually needs and publish
+it from the producer, which already owns `self._gaps`; otherwise the DATA window re-derives the
+order from the refuted coordinates and this repo's dominant defect lands one more time. It must
+come after #855, which changed what `progress` returns for a finisher.
+
 **Gate at the end of sprint 6:** adversarial, on tier discipline and on every claim the surface
 makes about what it is showing.
 
@@ -178,7 +186,15 @@ makes about what it is showing.
 
 ## 6. Sprint 7 — retire Qt, package, fix the prose
 
-**Deleting `src/arcade/dashboard/` is bigger than it looks.** Gate B built the reference graph; the
+⛔ **Two modules under `src/arcade/dashboard/` MOVE, they do not get deleted.** Sprint 3 made
+PITWALL render the AGENTS window by calling the Qt window's own formatters, which is what makes
+the port 1:1 by construction rather than by inspection. `agent_formatters.py` and the reasoning
+line builders are therefore live product code with a consumer that outlives Qt; deleting the
+package wholesale takes the AGENTS window's entire content layer with it. Move them to
+`src/pitwall/` and keep going. `src/arcade/palette.py` already lives outside the package for this
+reason and needs nothing.
+
+**Deleting the rest of `src/arcade/dashboard/` is bigger than it looks.** Gate B built the reference graph; the
 one that would not have been found by a doc sweep is
 `tests/agents/test_overtake_domain.py:231`, which imports `format_situation` from the dashboard
 package for a **domain** test. Also: `tests/surfaces/test_arcade_dashboard_imports.py` (13 modules),
