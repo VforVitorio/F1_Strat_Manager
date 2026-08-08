@@ -588,6 +588,51 @@ def test_a_lapped_car_that_takes_the_flag_is_a_finisher_on_its_own_lap():
     assert _order(session, idx) == ["P1", "P2", "P3", "LAPPED"]
 
 
+def test_a_car_that_retires_on_the_final_lap_does_not_take_the_flag():
+    """It set the flag time for everyone and was then drawn P1, ahead of the winner.
+
+    "The leader is the first car to reach the final lap" reads a car that
+    crashes a fifth of the way into it as the winner: its telemetry ends
+    first, so it defined the flag, it was credited a crossing of a lap it
+    never completed, and the tie-break put it top for the whole
+    flag-to-end window. Executed before the fix, the order was
+    `[CRASH, WIN, P2]`.
+
+    The rule that holds is that the flag is taken by the car LEADING when
+    its telemetry ends. Melbourne 2025 has no final-lap retirement, so the
+    broken version measured perfectly on the only race on disk.
+    """
+    crash = _car(50.0, head_start_laps=-0.30, dead_from=6200)
+    session = _finish_session(CRASH=crash)
+    idx = N_FRAMES - 1
+    gaps = RaceGapCalculator(session)
+
+    assert session.frames_by_driver["CRASH"][idx].lap == RACE_LAPS, "it DID reach the final lap"
+    assert gaps.has_finished("CRASH") is False
+    assert gaps.has_finished("P1") is True
+    assert gaps.laps_completed("CRASH", idx) == RACE_LAPS - 1, (
+        "no crossing of the lap it stopped on"
+    )
+    assert _order(session, idx) == ["P1", "P2", "P3", "CRASH"]
+    assert "CRASH OUT" in _labels(session, "P3", idx)
+
+
+def test_the_leader_still_takes_the_flag_when_a_slower_car_ends_first():
+    """The guard must not turn every early ending into a retirement.
+
+    A car a lap down stops producing telemetry before the leader does, on
+    a lap the leader has already passed. It is not leading, so it does not
+    set the flag - and it is also not a finisher, because its telemetry
+    ended before the leader's. Both halves have to hold at once.
+    """
+    session = _finish_session(LAPPED=_car(33.34, dead_from=7498))
+    gaps = RaceGapCalculator(session)
+
+    assert gaps.has_finished("P1") is True, "the leader still takes the flag"
+    assert gaps.has_finished("LAPPED") is True, "and a lapped finisher still finishes"
+    assert gaps.laps_completed("P1", N_FRAMES - 1) == RACE_LAPS
+
+
 def test_without_a_known_final_lap_nobody_is_a_finisher():
     """`max_lap_number` of 0 is what an older cache carries.
 

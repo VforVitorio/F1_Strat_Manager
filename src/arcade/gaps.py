@@ -93,10 +93,17 @@ screen, and it beats a live number that is right 90 % of the time and
 
 from __future__ import annotations
 
+from typing import Callable
+
 import numpy as np
 
 from src.arcade.config import DT
 from src.arcade.data import SessionData
+
+# `(driver, frame) -> laps completed plus fraction`, WITHOUT flag
+# crossings. Passed in rather than imported so `_flag_frames` cannot
+# depend on the flags it is deciding.
+ProgressAt = Callable[[str, int], float | None]
 
 
 def _telemetry_end_frame(frames: list) -> int:
@@ -119,24 +126,39 @@ def _telemetry_end_frame(frames: list) -> int:
     return int(ended[0]) if len(ended) else len(frames) - 1
 
 
-def _flag_frames(frames_by_driver: dict[str, list], final_lap: int) -> dict[str, int | None]:
+def _flag_frames(
+    frames_by_driver: dict[str, list], final_lap: int, progress_at: ProgressAt
+) -> dict[str, int | None]:
     """The frame each car took the chequered flag, `None` for a retirement.
 
     **The rule is the racing one, and it needs no threshold.** When the
     leader takes the flag every other car takes it the next time it crosses
     the line, so a finisher's telemetry ends at or after the leader's does
-    and a retirement's ends before. The leader is the first car to reach
-    `final_lap`; everyone still producing telemetry at that instant
-    finished the race.
+    and a retirement's ends before.
 
-    Why not "reached the final lap": a car a lap down finishes on
-    `final_lap - 1` and would read as a retirement, which is the same
-    mistake in the other direction. Melbourne 2025 has no lapped finisher,
-    so that version would have measured perfectly and still been wrong.
+    Everything therefore turns on finding the LEADER'S flag, and the
+    obvious answer is wrong. "The first car to reach the final lap" reads
+    a car that crashes a fifth of the way into it as the winner: its
+    telemetry ends first, so it set the flag time, it was then credited a
+    crossing of a lap it never completed, and the tie-break drew it **P1
+    ahead of the actual winner** for the whole flag-to-end window. An
+    earlier version of this docstring claimed the only misclassification
+    was a car retiring in the last fraction of a lap. That was false, and
+    a synthetic three-lap race produced the order `[CRASH, WIN, P2]`.
 
-    The one car this misclassifies is one that retires between the leader's
-    flag and its own last crossing - under a lap of running, and a car that
-    far into the race is classified by the FIA anyway.
+    The rule that holds: **the flag is taken by the car that is LEADING
+    when its telemetry ends.** A winner is ahead of everyone at the moment
+    they stop producing data; a car that crashes is not. `progress_at` is
+    the caller's own coordinate WITHOUT any flag crossings, which is what
+    keeps this from being circular.
+
+    Why not "reached the final lap" on its own: a car a lap down finishes
+    on `final_lap - 1` and would read as a retirement, the same mistake in
+    the other direction. Melbourne 2025 has no lapped finisher and no
+    final-lap retirement, so both wrong versions measured perfectly on it.
+
+    What is left misclassified is a car that retires while leading, which
+    is a car that has already won everything except the last few metres.
 
     `final_lap` of 0 means the loader did not record one; nobody is then
     known to have finished, which is the honest answer and the behaviour
@@ -148,17 +170,36 @@ def _flag_frames(frames_by_driver: dict[str, list], final_lap: int) -> dict[str,
     ends = {
         code: _telemetry_end_frame(frames) for code, frames in frames_by_driver.items() if frames
     }
-    reached_final_lap = [
-        end for code, end in ends.items() if frames_by_driver[code][-1].lap >= final_lap
-    ]
-    if not reached_final_lap:
+    candidates = sorted(
+        (end, code) for code, end in ends.items() if frames_by_driver[code][-1].lap >= final_lap
+    )
+    leader_flag = next(
+        (end for end, code in candidates if _leads_at(code, end, ends, progress_at)),
+        None,
+    )
+    if leader_flag is None:
         return {code: None for code in frames_by_driver}
 
-    leader_flag = min(reached_final_lap)
     return {
         code: (ends[code] if code in ends and ends[code] >= leader_flag else None)
         for code in frames_by_driver
     }
+
+
+def _leads_at(code: str, frame: int, ends: dict[str, int], progress_at: ProgressAt) -> bool:
+    """Is `code` the furthest-along car at `frame`?
+
+    A car past its own end is frozen, which is exactly right here: it has
+    stopped gaining ground and the cars still running go past it.
+    """
+    mine = progress_at(code, frame)
+    if mine is None:
+        return False
+    return all(
+        (other := progress_at(rival, frame)) is None or other <= mine
+        for rival in ends
+        if rival != code
+    )
 
 
 class RaceGapCalculator:
@@ -197,10 +238,21 @@ class RaceGapCalculator:
         self._crossing_frames: dict[str, np.ndarray] = {}
         self._dist: dict[str, np.ndarray] = {}
         self._default_lap_m = float(session.circuit_length_m or 0.0)
-        flag_frames = _flag_frames(session.frames_by_driver, int(session.max_lap_number or 0))
-        self._finished: dict[str, bool] = {
-            code: frame is not None for code, frame in flag_frames.items()
-        }
+        self._finished: dict[str, bool] = {}
+        # TWO passes, and the order is the whole point. Deciding who took
+        # the flag needs the race order, the race order needs `progress`,
+        # and `progress` reads the crossings - so the crossings are built
+        # once WITHOUT flags, the flags are decided against that, and only
+        # then are they added. Doing it in one pass is what let a car that
+        # crashed on the final lap define the flag time for everyone.
+        self._build_crossings(session, flag_frames={})
+        flag_frames = _flag_frames(
+            session.frames_by_driver, int(session.max_lap_number or 0), self.progress
+        )
+        self._finished = {code: frame is not None for code, frame in flag_frames.items()}
+        self._build_crossings(session, flag_frames)
+
+    def _build_crossings(self, session: SessionData, flag_frames: dict[str, int | None]) -> None:
         for code, frames in session.frames_by_driver.items():
             crossings = self._lap_crossings(frames, flag_frames.get(code))
             self._crossings[code] = crossings

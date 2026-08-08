@@ -520,6 +520,39 @@ def test_the_per_agent_fixture_uses_the_producers_real_field_names():
         )
 
 
+def test_the_dev_producer_uses_the_same_real_field_names():
+    """The twin. #853 fixed the fixture AND the producer; only one got a guard.
+
+    `scripts/dev_pitwall_producer.py` is what every PITWALL sprint develops
+    against, and sprints 4 to 6 will edit it. Guarding the fixture and not
+    the producer leaves unprotected the exact file whose invented keys made
+    the reference window render `pred 0.00s` for a whole sprint.
+
+    Read with `ast`, like the fixture guard: importing the producer loads a
+    session and opens a socket.
+    """
+    source = (REPO_ROOT / "scripts" / "dev_pitwall_producer.py").read_text(encoding="utf-8")
+    call = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "PerAgentOutputsDTO"
+    )
+    blocks = {
+        keyword.arg: {key.value for key in keyword.value.keys}
+        for keyword in call.keywords
+        if isinstance(keyword.value, ast.Dict)
+    }
+
+    for block, (path, class_name) in _PER_AGENT_SOURCES.items():
+        assert block in blocks, f"the producer stopped sending a {block} block"
+        unknown = blocks[block] - _dataclass_field_names(path, class_name)
+        assert not unknown, f"the dev producer invents {sorted(unknown)} in {block}"
+
+    active = next(keyword for keyword in call.keywords if keyword.arg == "active")
+    tokens = [element.value for element in active.value.elts]
+    assert tokens and all(t.startswith("N") and t[1:].isdigit() for t in tokens), tokens
+
+
 def test_the_routing_list_carries_agent_ids_and_not_block_names():
     """`active` gates the two conditional cards, and it is not the block keys.
 
