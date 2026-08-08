@@ -31,8 +31,8 @@ where "leader" legitimately differs between on-track order and the
 at-the-line classification.
 
 `dist` is still what the fraction is *measured* in; what makes it usable
-is normalising it per car, by that car's own previous lap, so the drift
-cancels instead of accumulating. See `progress`.
+is normalising it per car, by the true length of the lap that car is on,
+so the drift cancels instead of accumulating. See `progress`.
 
 The same drift is why `laps_down` cannot be a `dist` difference over a
 circuit length: it disagrees with the positional answer on 4.9 % of
@@ -79,6 +79,68 @@ from src.arcade.config import DT
 from src.arcade.data import SessionData
 
 
+def _telemetry_end_frame(frames: list) -> int:
+    """Index of the first frame past this driver's last real sample.
+
+    The resampler clamps every field beyond that sample, so this is the
+    first frame whose distance is the driver's FINAL distance, and `active`
+    is the only thing that marks it. Taking the last ACTIVE frame instead
+    looks equivalent and is not: it lands a fraction of a frame short of
+    the real end, so a finisher's progress came out at `total + 0.0004`
+    with the remainder differing per car. Every finisher then had a
+    slightly different number, no two ever tied, and the tie-break that
+    exists to order them never fired.
+
+    A driver whose telemetry runs to the end of the session is never
+    inactive, hence the fallback to the last frame.
+    """
+    active = np.fromiter((bool(f.active) for f in frames), dtype=bool, count=len(frames))
+    ended = np.flatnonzero(~active)
+    return int(ended[0]) if len(ended) else len(frames) - 1
+
+
+def _flag_frames(frames_by_driver: dict[str, list], final_lap: int) -> dict[str, int | None]:
+    """The frame each car took the chequered flag, `None` for a retirement.
+
+    **The rule is the racing one, and it needs no threshold.** When the
+    leader takes the flag every other car takes it the next time it crosses
+    the line, so a finisher's telemetry ends at or after the leader's does
+    and a retirement's ends before. The leader is the first car to reach
+    `final_lap`; everyone still producing telemetry at that instant
+    finished the race.
+
+    Why not "reached the final lap": a car a lap down finishes on
+    `final_lap - 1` and would read as a retirement, which is the same
+    mistake in the other direction. Melbourne 2025 has no lapped finisher,
+    so that version would have measured perfectly and still been wrong.
+
+    The one car this misclassifies is one that retires between the leader's
+    flag and its own last crossing - under a lap of running, and a car that
+    far into the race is classified by the FIA anyway.
+
+    `final_lap` of 0 means the loader did not record one; nobody is then
+    known to have finished, which is the honest answer and the behaviour
+    this replay had before finishers existed at all.
+    """
+    if final_lap <= 0:
+        return {code: None for code in frames_by_driver}
+
+    ends = {
+        code: _telemetry_end_frame(frames) for code, frames in frames_by_driver.items() if frames
+    }
+    reached_final_lap = [
+        end for code, end in ends.items() if frames_by_driver[code][-1].lap >= final_lap
+    ]
+    if not reached_final_lap:
+        return {code: None for code in frames_by_driver}
+
+    leader_flag = min(reached_final_lap)
+    return {
+        code: (ends[code] if code in ends and ends[code] >= leader_flag else None)
+        for code in frames_by_driver
+    }
+
+
 class RaceGapCalculator:
     """Race order and intervals, from the lap-line crossings in `SessionData`.
 
@@ -89,15 +151,21 @@ class RaceGapCalculator:
 
     - A crossing is keyed by the lap it **ends**, so `crossings[7]` is when
       that driver completed lap 7. Verified against `laps.parquet`: 907 of
-      907 crossings keyed correctly, no off-by-one, lap 1 included.
+      907 lap-field increments keyed correctly, no off-by-one, lap 1
+      included. The 14 chequered flags below are additional and were not
+      part of that count; they are keyed by the lap the car was on, which
+      is the lap that crossing completes.
     - The **first** frame of each lap increment is kept, not the last. The
       resampled `lap` field can hold an intermediate value for a few frames
       around the line; taking the first occurrence measured p95 error
       83 ms -> 68 ms and systematic lag +25 ms -> +16 ms.
-    - Only real lap-field increments are crossings. The chequered flag is
-      not one, so the last lap of a race shows the interval from the
-      previous line; crediting it as a completed lap would hand every
-      retirement a lap it never drove.
+    - Only real lap-field increments are crossings, **plus the chequered
+      flag for a car that was still running when the leader took it**.
+      Crediting the flag to everyone handed each retirement a lap it never
+      drove; crediting it to nobody left every finisher short of the lap
+      they had just completed, and the ordering that followed was wrong on
+      19 of 20 positions (#855). Who counts as a finisher is decided by
+      `_flag_frames`, not by a threshold.
     - Unknown is `None`, never a number a caller could also legitimately
       compute. This applies to `laps_down` as much as to `interval_at_line`:
       an earlier version returned `0` for an inverted call, which is also
@@ -109,8 +177,12 @@ class RaceGapCalculator:
         self._crossing_frames: dict[str, np.ndarray] = {}
         self._dist: dict[str, np.ndarray] = {}
         self._default_lap_m = float(session.circuit_length_m or 0.0)
+        flag_frames = _flag_frames(session.frames_by_driver, int(session.max_lap_number or 0))
+        self._finished: dict[str, bool] = {
+            code: frame is not None for code, frame in flag_frames.items()
+        }
         for code, frames in session.frames_by_driver.items():
-            crossings = self._lap_crossings(frames)
+            crossings = self._lap_crossings(frames, flag_frames.get(code))
             self._crossings[code] = crossings
             self._crossing_frames[code] = np.array(
                 sorted(round(t / DT) for t in crossings.values()), dtype=int
@@ -126,17 +198,23 @@ class RaceGapCalculator:
             )
 
     @staticmethod
-    def _lap_crossings(frames: list) -> dict[int, float]:
+    def _lap_crossings(frames: list, flag_frame: int | None) -> dict[int, float]:
         """Map each completed lap to the replay time the driver crossed the line.
 
-        **Only real increments of the lap field count.** An earlier version
-        also recorded the lap the driver was on when their telemetry ended,
-        so that the chequered flag had an interval too. That is right for a
-        finisher and wrong for everyone else: a car that crashes 1700 m
-        into lap 1 has completed no laps, and the synthetic entry credited
-        it with one, which put it a whole lap up the order. The final lap
-        of a race still renders an interval, taken from the last line both
-        cars actually crossed.
+        **Only real increments of the lap field count, plus the chequered
+        flag when `flag_frame` says this car took one.** An earlier version
+        recorded the end of every driver's telemetry as a crossing, which
+        credited a car that crashed 1700 m into lap 1 with a completed lap
+        and put it a whole lap up the order. The correction then swung the
+        other way and recorded no flag at all, which left every finisher on
+        the lap before their last and made the classification unreadable
+        (#855). `flag_frame` is the discrimination the first two versions
+        both lacked.
+
+        A finisher's flag is keyed by the lap they were **on** when their
+        telemetry ended, which is the lap that crossing completes. That is
+        the leader's `max_lap_number` and one less for a car a lap down, so
+        the same line works for both without asking who is lapped.
         """
         if not frames:
             return {}
@@ -144,7 +222,34 @@ class RaceGapCalculator:
         crossings: dict[int, float] = {}
         for i in np.flatnonzero(np.diff(lap_numbers) > 0) + 1:
             crossings.setdefault(int(lap_numbers[i]) - 1, float(i) * DT)
+        if flag_frame is not None:
+            crossings.setdefault(int(lap_numbers[flag_frame]), float(flag_frame) * DT)
         return crossings
+
+    def has_finished(self, code: str) -> bool:
+        """Whether this car took the chequered flag rather than stopping.
+
+        The replay knows when a car's telemetry ends; on its own that says
+        nothing about why. Every consumer that renders "OUT" needs this,
+        because without it the winner's row reads OUT from the instant he
+        wins and 19 of 20 rows read OUT at the final frame.
+        """
+        return bool(self._finished.get(code, False))
+
+    def last_crossing_frame(self, code: str, frame_idx: int) -> int:
+        """Frame of this car's most recent crossing, the tie-break for equal progress.
+
+        Two cars that have both finished sit at exactly the same progress -
+        the total laps - and the one that got there first is ahead. That is
+        the only situation where the value is read, so the 0 returned for a
+        car with no crossings yet cannot collide with it: a car with no
+        crossings has progress below 1 and can never tie with one that has.
+        """
+        frames = self._crossing_frames.get(code)
+        completed = self.laps_completed(code, frame_idx)
+        if frames is None or completed <= 0:
+            return 0
+        return int(frames[completed - 1])
 
     # --- Where a car is in the race -----------------------------------------
 
@@ -161,10 +266,14 @@ class RaceGapCalculator:
         This is the coordinate the field is ordered on, and it is a real
         one. The integer part comes from the line crossings. The fractional
         part is how far the car has driven into its current lap **measured
-        against its own previous lap**, which is what makes it comparable
-        between cars: each is normalised by the distance it actually
-        covers, so the per-car accumulation drift cancels instead of
-        accumulating.
+        against that lap's own length for this car** (see
+        `_current_lap_bounds`), which is what makes it comparable between
+        cars: each is normalised by the distance it actually covers, so the
+        per-car accumulation drift cancels instead of accumulating.
+
+        A car that has finished sits at exactly the total laps, because its
+        flag is a crossing and its distance is frozen at it. Ordering two
+        finishers therefore needs `last_crossing_frame`, not this number.
 
         `rel_dist` is deliberately NOT used, even though it looks like
         exactly this number. FastF1 leaves it NaN for a whole driver on
@@ -188,10 +297,21 @@ class RaceGapCalculator:
     def _current_lap_bounds(self, code: str, completed: int) -> tuple[float, float]:
         """Distance at the start of the current lap, and how long that lap is.
 
-        The current lap has no end yet, so its length is taken from the
-        driver's previous lap, and from the circuit length on lap 1 where
-        there is no previous. Both are that driver's own scale, which is
-        the point.
+        **In a replay the current lap usually has an end.** The crossing
+        that closes it is already in the array, so its true end-to-end
+        length in this driver's own distance is known and is what gets
+        used. The previous lap only stands in past the driver's LAST
+        crossing, and the circuit length only on lap 1 where there is no
+        previous. All three are that driver's own scale, which is the
+        point: normalising by it is what cancels the per-car accumulation
+        drift instead of letting it accumulate.
+
+        The docstring said "taken from the driver's previous lap" as though
+        the fallback were the rule. Measured on Melbourne 2025 the two
+        differ by a median 9.2 m and up to 340 m, so a refactorer who
+        implemented the sentence would have changed behaviour, and until
+        `test_the_fraction_is_normalised_by_the_cars_own_lap` existed no
+        test could see it.
         """
         dist = self._dist[code]
         frames = self._crossing_frames[code]

@@ -85,15 +85,39 @@ def _blind_car(speed_mps: float) -> list[FrameData]:
     return [FrameData(**{**vars(f), "rel_dist": float("nan")}) for f in _car(speed_mps)]
 
 
-def _session(**cars) -> SessionData:
+def _session(*, max_lap_number: int = 0, **cars) -> SessionData:
+    """A session of synthetic cars.
+
+    `max_lap_number` defaults to 0, which is what `SessionData` itself
+    defaults to and means "the loader recorded no final lap". Nobody can
+    then be known to have finished, so the tests that predate finishers
+    keep exercising the same code path they always did.
+    """
     return SessionData(
         gp_name="Test",
         location="Test",
         year=2025,
         frames_by_driver=dict(cars),
         circuit_length_m=CIRCUIT_LENGTH_M,
+        max_lap_number=max_lap_number,
         total_frames=N_FRAMES,
     )
+
+
+# A three-lap race. A car takes the flag by running out of telemetry while
+# still ON its final lap: that is what the real data does, because the
+# resampler stops at the last sample, which is at the line, before the lap
+# field would have incremented. Frame `dead_from + 1` is therefore the flag,
+# and is the first frame carrying the car's frozen final distance.
+RACE_LAPS = 3
+_FLAG_FRAME = {"P1": 7450, "P2": 7475, "P3": 7500}
+
+
+def _finisher(code: str) -> list[FrameData]:
+    """One of three cars that cross the line 1.0 s apart on the final lap."""
+    flag = _FLAG_FRAME[code]
+    head_start = (7500 - flag) / 2500 * 1.0  # laps of head start, so they stagger
+    return _car(50.0, head_start_laps=head_start, dead_from=flag - 1)
 
 
 def _frame(session: SessionData, idx: int) -> dict:
@@ -412,6 +436,119 @@ def test_the_leader_and_the_last_car_have_no_neighbour_to_measure():
 
 
 # --- The crossings themselves -----------------------------------------------
+
+
+# --- Taking the flag is not retiring (#855) ---------------------------------
+
+
+def _finish_session(**extra) -> SessionData:
+    return _session(
+        max_lap_number=RACE_LAPS,
+        # Inserted in the WRONG order on purpose: every finisher sits at
+        # exactly RACE_LAPS, so a plain sort keeps whatever order the dict
+        # was built in and the test would pass without the tie-break.
+        P3=_finisher("P3"),
+        P1=_finisher("P1"),
+        P2=_finisher("P2"),
+        **extra,
+    )
+
+
+def test_the_final_classification_is_the_order_the_cars_crossed_the_line():
+    """The last seconds of the replay, which is the state a viewer reads as THE result.
+
+    Before #855 the flag was not a crossing, so every finisher stayed on
+    the lap before their last and their fraction of the final lap was
+    measured against the length of the PREVIOUS one. Whoever's final lap
+    ran long clamped at exactly 1.0 and jumped above everyone else.
+    Measured on Melbourne 2025 the board agreed with the official
+    classification on 1 of 20 positions: VER (P2) was drawn 8th.
+    """
+    session = _finish_session()
+    idx = N_FRAMES - 1
+    gaps = RaceGapCalculator(session)
+
+    # The premise: all three are level on progress, so only the tie-break
+    # can separate them.
+    assert [gaps.progress(c, idx) for c in ("P1", "P2", "P3")] == [float(RACE_LAPS)] * 3
+
+    assert _order(session, idx) == ["P1", "P2", "P3"]
+
+
+def test_a_car_that_took_the_flag_is_not_rendered_as_retired():
+    """`active` goes False the instant a finisher's telemetry ends.
+
+    Reading it alone put "OUT" on the winner from the moment he won: 19 of
+    20 rows at the final frame of Melbourne 2025, the whole podium among
+    them.
+    """
+    session = _finish_session(RETIRED=_car(50.0, dead_from=3000))
+    idx = N_FRAMES - 1
+    gaps = RaceGapCalculator(session)
+
+    assert session.frames_by_driver["P1"][idx].active is False, "the premise: it looks retired"
+    assert gaps.has_finished("P1") is True
+    assert gaps.has_finished("RETIRED") is False
+
+    ahead, behind = _labels(session, "P2", idx)
+    assert ahead == "P1 +1.00s (L)", ahead
+    assert behind.startswith("P3 -"), behind
+    assert "OUT" not in ahead + behind
+
+    assert "RETIRED OUT" in _labels(session, "P3", idx)
+
+
+def test_the_flag_is_a_crossing_so_the_final_lap_finally_has_an_interval():
+    """The three cross 1.0 s apart, and that is what the last lap must read.
+
+    On Melbourne 2025 this reproduces the published result: NOR-VER comes
+    out at 0.880 s against an official 0.895 s, and NOR-RUS at 8.480 s
+    against an official 8.481 s - an external check, unlike the rest of
+    this module's accuracy work, which compares the replay against the
+    table that sliced it.
+    """
+    gaps = RaceGapCalculator(_finish_session())
+
+    assert gaps.laps_completed("P1", N_FRAMES - 1) == RACE_LAPS
+    assert gaps.interval_at_line("P1", "P2", lap=RACE_LAPS) == pytest.approx(1.0, abs=DT)
+    assert gaps.interval_at_line("P1", "P3", lap=RACE_LAPS) == pytest.approx(2.0, abs=DT)
+    assert gaps.interval_at_line("P2", "P1", lap=RACE_LAPS) is None, "inverted stays None"
+
+
+def test_a_lapped_car_that_takes_the_flag_is_a_finisher_on_its_own_lap():
+    """The case that kills the obvious rule, and that Melbourne 2025 cannot show.
+
+    "A finisher is a car that reached the final lap" measures perfectly on
+    a race where every finisher was on the lead lap, and calls a lapped
+    finisher a retirement. The rule shipped is the racing one instead: when
+    the leader takes the flag, everyone still running takes it at their
+    next line - so a finisher's telemetry ends at or after the leader's.
+
+    LAPPED is on lap 2 when P1 wins and crosses its own line 2 s later. It
+    must be credited lap 2, not the leader's lap 3.
+    """
+    session = _finish_session(LAPPED=_car(33.34, dead_from=7498))
+    idx = N_FRAMES - 1
+    gaps = RaceGapCalculator(session)
+
+    assert session.frames_by_driver["LAPPED"][idx].lap == RACE_LAPS - 1, "never reached lap 3"
+    assert gaps.has_finished("LAPPED") is True
+    assert gaps.laps_completed("LAPPED", idx) == RACE_LAPS - 1
+    assert gaps.progress("LAPPED", idx) == pytest.approx(float(RACE_LAPS - 1))
+    assert _order(session, idx) == ["P1", "P2", "P3", "LAPPED"]
+
+
+def test_without_a_known_final_lap_nobody_is_a_finisher():
+    """`max_lap_number` of 0 is what an older cache carries.
+
+    The honest answer is then that nothing is known about who finished,
+    which is exactly how this replay behaved before finishers existed.
+    """
+    session = _session(P1=_finisher("P1"), P2=_finisher("P2"))
+    gaps = RaceGapCalculator(session)
+
+    assert gaps.has_finished("P1") is False
+    assert gaps.laps_completed("P1", N_FRAMES - 1) == RACE_LAPS - 1, "no flag crossing"
 
 
 def test_a_crossing_is_keyed_by_the_lap_it_ends_and_only_real_laps_count():
