@@ -46,6 +46,35 @@ Commands handed over are PowerShell, one command per physical line, starting wit
 | 5 | DATA band 3: race pace grid + race trace | rewritten #284 (b) | none |
 | 6 | DATA band 4: own-car traces + the ring | rewritten #284 (c) | adversarial: tier discipline and fidelity claims |
 | 7 | Retire Qt, package, fix the prose | rewritten #285, new | **exit gate, then the ONE `dev -> main`** |
+| **8** | **AGENTS: the elevate pass** | new | Fable as senior dashboard designer, P0-P3 with file:line |
+| **9** | **DATA: the elevate pass** | new | same |
+
+### Sprints 8 and 9: where the 1:1 constraint is LIFTED
+
+Added 2026-08-08 by Víctor, deliberately at the END. Sprints 2-7 deliver a faithful port; these
+two are the second half of "1:1 first, improve later", one per window, and neither starts until
+the window it covers is on `dev` rendering real data.
+
+Same shape both times: a **Fable agent framed as a senior dashboard-analytics designer**
+(`~/.claude/projects/.../feedback_tab_migration_flow`, step 7) is handed (1) the before-and-after
+screenshots in the states that matter, (2) the files that render the window, (3) the backend
+wiring — `host.py`, `stream_client.py` and the golden payload, so no proposal can ask for a field
+the tick does not carry — and (4) `tokens.css`, so proposals speak the design system. It returns
+prioritised P0-P3 findings with `file:line` and a concrete fix, covering **layout** (hierarchy,
+density, what earns the top-left) and **surgical** changes (a colour semantic, a truncation, a
+chart baseline, an undesigned state). Install `interface-design`, `critique`, `typeset`, `audit`,
+`baseline-ui` and hallmark's Audit mode first.
+
+**Sprint 8 (AGENTS)** also pays the debt sprint 3 takes on knowingly: the two tooltips still emit
+Qt's restricted rich-text dialect because the Python formatters are reused as-is, and whether the
+formatters get a TypeScript reimplementation at all is this sprint's call.
+
+**Sprint 9 (DATA)** starts differently — its bands were designed fresh, not ported, so the
+question is less "did we lose something" than "does a strategist trust this at a glance".
+
+**Retiring Qt in sprint 7 does not destroy the baseline**: the captures are committed under
+`documents/dev_docs/migration/pitwall/`, which is why they live in the repo and not in a session
+scratchpad.
 
 Deferred beyond this plan, unchanged: #282 (observability contract, independent and also feeds the
 Rival Agent), #286 (rival intent, gated on the Rival Agent), #287 (the parity gate).
