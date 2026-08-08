@@ -22,7 +22,7 @@ export function ScenarioBars({ rows }: { rows: ScenarioRow[] }) {
           <span className="scenario-bar">
             <span
               className="scenario-bar-fill"
-              style={{ width: `${row.fill * 100}%`, background: row.bar_colour }}
+              style={{ width: `${row.fill_pct}%`, background: row.bar_colour }}
             />
           </span>
           <span className="scenario-score" style={{ color: row.score_colour }}>

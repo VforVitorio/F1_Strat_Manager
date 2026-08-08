@@ -777,9 +777,18 @@ def test_a_rule_cannot_paint_across_a_line_break():
     """
     from src.pitwall.agents_view.reasoning import DEFAULT_COLOUR, highlight
 
-    for text in ("extend the lap\n22 target", "the delta is +0.42\ns behind"):
-        painted = [seg["text"] for seg in highlight(text) if seg["colour"] != DEFAULT_COLOUR]
-        assert painted == [], f"{text!r} must paint nothing, as Qt does"
+    # `QTextDocument.setPlainText` starts a paragraph on \r\n and on a lone
+    # \r as well, so all three end a match. Splitting on \n alone left the
+    # carriage return, which is the separator an old-Mac memory block uses.
+    separators = ("\n", "\r\n", "\r")
+    for separator in separators:
+        for text in (
+            f"extend the lap{separator}22 target",
+            f"the delta is +0.42{separator}s behind",
+        ):
+            painted = [seg["text"] for seg in highlight(text) if seg["colour"] != DEFAULT_COLOUR]
+            assert painted == [], f"{text!r} must paint nothing, as Qt does"
+            assert "".join(seg["text"] for seg in highlight(text)) == text, "no character lost"
 
     # The same tokens on one line still paint, so the fix did not disable them.
     on_one_line = {seg["text"] for seg in highlight("lap 22 and +0.42 s") if seg["bold"] is False}

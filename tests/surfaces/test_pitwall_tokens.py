@@ -211,25 +211,74 @@ def test_the_agents_css_palette_has_not_drifted_from_palette_py():
         )
 
 
-def test_the_boot_state_literals_have_not_drifted_from_palette_py():
+# The boot state's colours, SLOT BY SLOT. Membership in the palette is not
+# enough: swapping the badge from ACCENT to DANGER keeps every hex inside
+# the palette and still boots the window in the wrong colour. Measured on a
+# mutated source before this map existed — the membership version passed.
+BOOT_SLOTS = {
+    "action_colour": "ACCENT",
+    "confidence_colour": "TEXT_TERTIARY",
+    "pace_colour": "TEXT_TERTIARY",
+    "risk_colour": "TEXT_TERTIARY",
+    "connection_colour": "WARNING",
+    "bar_colour": "TEXT_SECONDARY",
+    "label_colour": "TEXT_SECONDARY",
+    "score_colour": "TEXT_SECONDARY",
+    "glyph_colour": "TEXT_TERTIARY",
+    "headline_colour": "TEXT_PRIMARY",
+    "actual_colour": "INFO",
+    "pred_colour": "ACCENT",
+    "band_colour": "ACCENT",
+    "trend_colour": "TEXT_PRIMARY",
+    "cliff_colour": "WARNING",
+    "boundary_colour": "TEXT_TERTIARY",
+}
+
+# Copy number five, which had no detector at all: the ECharts axis styling
+# repeats the pens `pace_chart.py` builds from the same two names.
+ECHART_MODULE = (
+    REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "features" / "agents" / "useEChart.ts"
+)
+ECHART_NAMES = ("TEXT_SECONDARY", "BORDER_COLOR")
+
+
+def test_the_boot_state_colours_are_in_the_right_slots():
     """Copy number four: the state the window paints before the first tick.
 
     It cannot come from the host — there is no host answer yet — so the
-    colours are literals in TSX. Every one must still be a colour the
-    palette actually has, or the window boots in a shade nothing else uses.
+    colours are literals in TSX, and each one copies a specific palette
+    name. Asserting only that a hex is SOMEWHERE in the palette lets a
+    wrong-but-known colour through, which is the failure mode a membership
+    test always has.
     """
     from src.arcade import palette
 
-    known = {
-        _rgb_to_hex(getattr(palette, name))
-        for name in dir(palette)
-        if name.isupper()
-        and isinstance(getattr(palette, name), tuple)
-        and len(getattr(palette, name)) == 3
-    }
-    literals = set(re.findall(r'"(#[0-9a-fA-F]{6})"', AGENTS_WINDOW.read_text("utf-8")))
+    source = AGENTS_WINDOW.read_text("utf-8")
+    found = dict(re.findall(r'(\w*_?colour)"?:\s*"(#[0-9a-fA-F]{6})"', source))
 
-    assert literals, (
-        "the boot state stopped carrying colours; is this test still checking anything?"
+    assert set(BOOT_SLOTS) <= set(found), (
+        f"a boot colour slot disappeared: {sorted(set(BOOT_SLOTS) - set(found))}"
     )
-    assert literals <= known, f"boot colours not in the palette: {sorted(literals - known)}"
+    for slot, name in BOOT_SLOTS.items():
+        assert found[slot] == _rgb_to_hex(getattr(palette, name)), (
+            f"{slot} is {found[slot]}, but it copies palette.{name} "
+            f"({_rgb_to_hex(getattr(palette, name))})"
+        )
+
+
+def test_the_chart_axis_palette_has_not_drifted_either():
+    """The fifth copy, and nothing referenced this file before.
+
+    `useEChart.ts` repeats the axis pens `pace_chart.py` builds from
+    BORDER_COLOR and TEXT_SECONDARY. Same duplication as the other four,
+    and it had no guard at all.
+    """
+    from src.arcade import palette
+
+    literals = set(re.findall(r'"(#[0-9a-fA-F]{6})"', ECHART_MODULE.read_text("utf-8")))
+    expected = {_rgb_to_hex(getattr(palette, name)) for name in ECHART_NAMES}
+
+    assert literals, "the chart theme stopped carrying colours"
+    assert literals == expected, (
+        f"the chart axis palette drifted: {sorted(literals)} against {sorted(expected)}"
+    )

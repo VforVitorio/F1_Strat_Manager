@@ -10,12 +10,14 @@
  * tabs about 268 px, so the decision-memory counterweight sentence fell
  * below the fold on the one lap it matters. CSS has no fixed heights.
  *
- * Before the first view arrives the window renders the state the Qt
- * window shows AT CONSTRUCTION, rather than a spinner. That is not the
- * same as `update_from(None)`: the badge is ACCENT purple, the plan line
- * uses em-dashes and the scenario scores read "0%". `_render_idle` is
- * what Qt paints once a tick with no decision has arrived, which is a
- * different moment.
+ * Before the first view arrives the window renders what the Qt window
+ * shows at startup, rather than a spinner. That is not the same as
+ * `update_from(None)`: the badge is ACCENT purple, the plan line uses
+ * em-dashes and the scenario scores read "0%" — `_render_idle` is what Qt
+ * paints once a tick with no decision has arrived, a different moment.
+ * The connection chip is the one field taken from Qt's FIRST PAINTED
+ * FRAME rather than from its constructor, because the constructor's grey
+ * lasts milliseconds and is not a state anybody sees.
  */
 
 import { useEffect, useState } from "react";
@@ -57,8 +59,13 @@ const IDLE_VIEW: AgentsView = {
     driver: "--",
     lap: "L 0/0",
     playback: "-- × · --",
-    connection: "Disconnected",
-    connection_colour: "#ef4444",
+    // Qt builds the chip grey in the constructor and its client thread
+    // flips it to amber within milliseconds; the host's own
+    // `_connection_label` answers "Connecting..." until something has been
+    // rendered. Red "Disconnected" matched none of the three. #871 ported
+    // the badge, the plan line and the scores and left this one behind.
+    connection: "Connecting...",
+    connection_colour: "#f59e0b",
   },
   orchestrator: {
     action: "--",
@@ -84,6 +91,7 @@ const IDLE_VIEW: AgentsView = {
     key,
     label,
     fill: 0,
+    fill_pct: 0,
     score: "  0%",
     is_winner: false,
     bar_colour: "#d1d5db",
@@ -131,10 +139,20 @@ const IDLE_VIEW: AgentsView = {
  * dies goes quiet within a second and a half. The port typed a
  * `transient` flag, documented it, and read it nowhere — so a dead
  * producer kept saying "lap N · streaming" forever under a red
- * Disconnected chip. An error message is NOT transient: Qt gives that one
- * no timeout, because it is the one you must still be able to read.
+ * Disconnected chip.
+ *
+ * **The timer is keyed on `seq`, not on the text.** Qt re-arms
+ * `showMessage` on EVERY broadcast, ten times a second, so the message
+ * stays visible while streaming and clears 1.5 s after the last tick.
+ * Keyed on the text it re-arms once per LAP, because the string does not
+ * change in between — so the bar went blank 1.5 s into every lap and
+ * stayed blank for the other eighty-odd seconds of it. That is the same
+ * bug inverted, and the first version of this hook shipped it.
+ *
+ * An error message is NOT transient: Qt gives that one no timeout,
+ * because it is the one you must still be able to read.
  */
-function useStatusText(status: { text: string; transient: boolean }): string {
+function useStatusText(status: { text: string; transient: boolean }, seq: number | null): string {
   const [shown, setShown] = useState(status.text);
 
   useEffect(() => {
@@ -142,7 +160,7 @@ function useStatusText(status: { text: string; transient: boolean }): string {
     if (!status.transient) return;
     const timer = window.setTimeout(() => setShown(""), 1500);
     return () => window.clearTimeout(timer);
-  }, [status.text, status.transient]);
+  }, [seq, status.text, status.transient]);
 
   return shown;
 }
@@ -150,7 +168,7 @@ function useStatusText(status: { text: string; transient: boolean }): string {
 export function AgentsWindow() {
   const { view } = useAgentsView();
   const shown = view ?? IDLE_VIEW;
-  const statusText = useStatusText(shown.status_bar);
+  const statusText = useStatusText(shown.status_bar, shown.seq);
 
   return (
     <div className="agents-window">
