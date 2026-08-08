@@ -17,6 +17,7 @@
 
 import { AgentCard } from "./AgentCard";
 import { OrchestratorCard } from "./OrchestratorCard";
+import { ReasoningTabs } from "./ReasoningTabs";
 import { ScenarioBars } from "./ScenarioBars";
 import { HeaderBar } from "./HeaderBar";
 import { useAgentsView, type AgentCardView, type AgentsView } from "../../lib/agents";
@@ -80,6 +81,14 @@ const IDLE_VIEW: AgentsView = {
     label_colour: "#d1d5db",
     score_colour: "#d1d5db",
   })),
+  reasoning: [
+    ["orchestrator", "Orchestrator"],
+    ["pace", "Pace"],
+    ["tire", "Tire"],
+    ["situation", "Situation"],
+    ["radio", "Radio"],
+    ["pit", "Pit"],
+  ].map(([key, label]) => ({ key, label, segments: [] })),
   cards: Object.fromEntries(CARDS.map(([key]) => [key, IDLE_CARD])),
   history: { pace: [], tire: [] },
   status_bar: { text: "Waiting for arcade stream…", transient: false },
@@ -97,7 +106,7 @@ export function AgentsWindow() {
         <div className="agents-left">
           <OrchestratorCard view={shown.orchestrator} />
           <ScenarioBars rows={shown.scenarios} />
-          <div className="reasoning-slot">{/* reasoning tabs */}</div>
+          <ReasoningTabs tabs={shown.reasoning} />
         </div>
         <div className="agents-right">
           {CARDS.map(([key, title]) => (
