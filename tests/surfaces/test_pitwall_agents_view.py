@@ -492,3 +492,121 @@ def test_the_action_badge_comes_from_classify_action_and_is_not_a_second_table()
         view = build_orchestrator({"action": action, "confidence": 0.5})
         assert view["action"] == label
         assert view["action_colour"] == "#{:02x}{:02x}{:02x}".format(*colour)
+
+
+# --- The reasoning tabs -----------------------------------------------------
+
+
+def _joined(segments) -> str:
+    return "".join(segment["text"] for segment in segments)
+
+
+def test_the_highlighter_loses_no_characters():
+    """A renderer that drops a run drops text, and prose is the whole panel."""
+    from src.pitwall.agents_view.reasoning import highlight
+
+    text = "PIT_NOW on lap 24: P10 is 34% and the delta is -0.42 s.\nSecond line."
+
+    assert _joined(highlight(text)) == text
+    assert highlight("") == []
+
+
+def test_the_highlighter_colours_the_five_things_qt_colours():
+    from src.pitwall.agents_view.reasoning import DEFAULT_COLOUR, highlight
+
+    coloured = {
+        segment["text"]: (segment["colour"], segment["bold"])
+        for segment in highlight("lap 24 P10 34% -0.42 s PIT_NOW plain")
+        if segment["colour"] != DEFAULT_COLOUR
+    }
+
+    assert coloured["lap 24"] == ("#f472b6", False)
+    assert coloured["P10"] == ("#d946ef", False)
+    assert coloured["34%"] == ("#facc15", False)
+    assert coloured["-0.42 s"] == ("#22d3ee", False)
+    assert coloured["PIT_NOW"] == ("#facc15", True), "the action keywords are the bold rule"
+    assert "plain" not in coloured
+
+
+def test_a_later_rule_overwrites_an_earlier_one_where_they_overlap():
+    """Qt's `setFormat` overwrites, and the rules run in a fixed order.
+
+    Emitting the FIRST match instead would leave the action keyword
+    un-bolded wherever an earlier pattern happened to reach it, which is
+    a difference nobody would notice until the one lap it matters.
+    """
+    from src.pitwall.agents_view.reasoning import highlight
+
+    # `P10` is both a quantile and, inside this token, nothing else; the
+    # overlap case is a delta immediately followed by an action keyword.
+    segments = highlight("-0.42 s PIT_NOW")
+    bold = [segment for segment in segments if segment["bold"]]
+
+    assert [segment["text"] for segment in bold] == ["PIT_NOW"]
+    assert _joined(segments) == "-0.42 s PIT_NOW"
+
+
+def test_the_memory_block_appears_only_on_a_lap_where_the_call_changed():
+    """Unconditional display was measured as wallpaper, and it is the load-bearing field.
+
+    DecisionMemory leaves no trace in `reasoning` even when it drives the
+    call, so this block is the only place the continuity is visible.
+    """
+    from src.pitwall.agents_view.reasoning import build_reasoning
+
+    def body(plan_changed: bool) -> str:
+        latest = {
+            "reasoning": "the undercut window opens now",
+            "memory_block": "lap 22: STAY_OUT (0.58)",
+            "plan_changed": plan_changed,
+        }
+        tabs = {tab["key"]: tab for tab in build_reasoning(latest)}
+        return _joined(tabs["orchestrator"]["segments"])
+
+    assert "why this call changed" in body(True)
+    assert "lap 22: STAY_OUT (0.58)" in body(True)
+    assert "why this call changed" not in body(False)
+
+
+def test_a_tab_with_no_reasoning_still_shows_the_agents_numbers():
+    """The metrics layer is the fallback, and a port that dropped it would look fine.
+
+    `reasoning_lines.py` is not a prettier `agent_formatters`: it renders
+    the same fields as a raw dump, and it is the only thing on screen when
+    an agent produced no LLM reasoning at all.
+    """
+    from src.pitwall.agents_view.reasoning import build_reasoning
+
+    tabs = {
+        tab["key"]: _joined(tab["segments"])
+        for tab in build_reasoning({"per_agent": {"pace": {"lap_time_pred": 81.0, "ci_p10": 80.4}}})
+    }
+
+    assert "lap_time_pred   = 81.000s" in tabs["pace"]
+    assert "ci_p10          = 80.40s" in tabs["pace"]
+    assert tabs["tire"] == "— agent idle —", "an agent with no output says so"
+    assert [tab["key"] for tab in build_reasoning(None)] == [
+        "orchestrator",
+        "pace",
+        "tire",
+        "situation",
+        "radio",
+        "pit",
+    ]
+
+
+def test_the_qt_tabs_and_pitwall_read_the_same_line_builders():
+    """The metrics layer is shared, not repeated.
+
+    `reasoning_tabs.py` is the Qt widget and this is the port; if the two
+    ever hold separate copies of these five functions, they will describe
+    the same lap differently within a sprint.
+    """
+    qt_tabs = pytest.importorskip(
+        "src.arcade.dashboard.reasoning_tabs",
+        reason="the Qt dashboard is an optional surface and needs a display stack",
+        exc_type=ImportError,
+    )
+    from src.arcade.dashboard import reasoning_lines
+
+    assert qt_tabs.LINE_BUILDERS is reasoning_lines.LINE_BUILDERS

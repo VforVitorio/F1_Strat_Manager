@@ -84,12 +84,26 @@ export interface ScenarioRow {
   score_colour: string;
 }
 
+export interface ReasoningSegment {
+  text: string;
+  colour: string;
+  bold: boolean;
+}
+
+export interface ReasoningTab {
+  key: string;
+  label: string;
+  /** Already split into coloured runs by the Qt highlighter's own rules. */
+  segments: ReasoningSegment[];
+}
+
 export interface AgentsView {
   view_version: number;
   seq: number | null;
   header: HeaderView;
   orchestrator: OrchestratorView;
   scenarios: ScenarioRow[];
+  reasoning: ReasoningTab[];
   cards: Record<string, AgentCardView>;
   history: { pace: PaceHistoryRow[]; tire: TireHistoryRow[] };
   status_bar: { text: string; transient: boolean };

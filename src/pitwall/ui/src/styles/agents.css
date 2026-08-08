@@ -329,3 +329,48 @@ body {
 .reasoning-slot {
   min-height: 0;
 }
+
+/* --- Reasoning tabs (reasoning_tabs.py) ---------------------------------- */
+
+.reasoning {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.reasoning-tabbar {
+  display: flex;
+  gap: 0;
+}
+.reasoning-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--qt-fg-2);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.reasoning-tab.is-selected {
+  color: var(--qt-accent);
+  border-bottom-color: var(--qt-accent);
+}
+/* The pane, matching Qt's `QTabWidget::pane` rule, with `top: -1px` folded
+ * into the negative margin so the selected tab sits on its edge. */
+.reasoning-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin-top: -1px;
+  padding: 8px;
+  border: 1px solid var(--qt-border);
+  border-radius: 6px;
+  font-family: var(--qt-mono);
+  font-size: 11px;
+  line-height: 140%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

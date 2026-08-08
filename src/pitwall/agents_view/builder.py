@@ -20,6 +20,7 @@ from typing import Any
 from src.pitwall.agents_view.decision import build_orchestrator, build_scenarios
 from src.pitwall.agents_view.history import LapHistory
 from src.pitwall.agents_view.panels import build_cards, build_header, build_status_bar
+from src.pitwall.agents_view.reasoning import build_reasoning
 
 # Bumped when the view's shape changes in a way a built UI bundle would
 # misread. Separate from the wire's `schema_version`, which describes the
@@ -55,6 +56,7 @@ class AgentsViewBuilder:
             "header": build_header(payload, connection),
             "orchestrator": build_orchestrator(latest or None),
             "scenarios": build_scenarios(latest.get("scenario_scores") if latest else None),
+            "reasoning": build_reasoning(latest or None),
             "cards": build_cards(latest or None),
             "history": {
                 "pace": [{"lap": lap, **row} for lap, row in sorted(self._history.pace.items())],
