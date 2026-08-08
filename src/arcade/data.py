@@ -160,10 +160,19 @@ def _pedal_multiplier(results: list[dict], channel: str) -> float:
     somewhere in a race and a 0-1 channel never does. One look at the whole
     array replaces three million guesses.
     """
-    peak = max(
-        (float(np.nanmax(r["data"][channel])) for r in results if len(r["data"][channel])),
-        default=0.0,
-    )
+    # `max()` keeps a NaN when the NaN comes FIRST, because every later
+    # `x > nan` is False. One driver whose whole channel is NaN and who
+    # happens to sort first would then flip the multiplier for the entire
+    # session - every throttle above 1 % published as 100.0, for all twenty
+    # cars, depending on nothing but driver order. Filtering the peaks makes
+    # an all-NaN channel contribute nothing instead of deciding the answer.
+    peaks: list[float] = []
+    for result in results:
+        samples = result["data"][channel]
+        finite = samples[np.isfinite(samples)] if len(samples) else samples
+        if len(finite):
+            peaks.append(float(finite.max()))
+    peak = max(peaks, default=0.0)
     return 1.0 if peak > 1.0 else 100.0
 
 
@@ -248,7 +257,6 @@ def _process_driver_data(args: tuple) -> dict | None:
             "brake",
             "lap",
             "dist",
-            "rel_dist",
             "tyre",
             "tyre_life",
         )
@@ -280,12 +288,10 @@ def _process_driver_data(args: tuple) -> dict | None:
         d_lap = (
             tel["Distance"].to_numpy().astype(float) if "Distance" in tel.columns else np.zeros(n)
         )
-        rel_dist = (
-            tel["RelativeDistance"].to_numpy().astype(float)
-            if "RelativeDistance" in tel.columns
-            else np.zeros(n)
-        )
-
+        # FastF1's `RelativeDistance` is deliberately NOT collected. The
+        # resampler stopped consuming it when the fraction became a
+        # derivation over the driver's own distance; extracting it was
+        # three lines of work per lap per driver feeding nothing.
         race_dist = total_dist_so_far + d_lap
         total_dist_so_far += float(d_lap[-1]) if n else 0.0
 
@@ -304,7 +310,6 @@ def _process_driver_data(args: tuple) -> dict | None:
         arrays["brake"].append(brk)
         arrays["lap"].append(np.full(n, lap_no, dtype=float))
         arrays["dist"].append(race_dist)
-        arrays["rel_dist"].append(rel_dist)
         arrays["tyre"].append(np.full(n, tyre, dtype=float))
         arrays["tyre_life"].append(np.full(n, tyre_life, dtype=float))
 
