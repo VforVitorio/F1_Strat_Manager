@@ -110,3 +110,28 @@ def test_nothing_non_finite_reaches_a_socket():
         assert decoded["model"]["lap_time_s"] is None
     finally:
         server._running = False
+
+
+def test_the_drop_log_names_the_leaf_the_encoder_choked_on():
+    """`_blame` used to return the empty string for everything but a plain float.
+
+    `np.float32`, `np.int64` and `np.bool_` are not subclasses of Python's
+    float/int/bool, so the sanitiser cannot rewrite them and `json.dumps`
+    cannot encode them: the tick dies whole, which is the right outcome,
+    and the log said nothing about why, which is not. One agent output
+    carrying a `predict()[0]` without its `float()` would drop every tick
+    at 10 Hz behind an empty message.
+    """
+    import numpy as np
+
+    from src.arcade.stream import _blame
+
+    assert _blame({"a": {"b": float("nan")}}) == "a.b=nan"
+    for leaf, name in (
+        (np.float32("nan"), "float32"),
+        (np.float32(1.5), "float32"),
+        (np.int64(3), "int64"),
+        (np.bool_(True), "bool_"),
+    ):
+        assert _blame({"per_agent": [{"pace": leaf}]}) == f"per_agent[0].pace=<{name}>"
+    assert _blame({"a": 1, "b": "ok", "c": None, "d": True, "e": 1.5}) == ""

@@ -501,34 +501,28 @@ class F1ArcadeView(arcade.View):
         return GP_TO_LOCATION.get(gp_name, gp_name)
 
     def on_hide_view(self) -> None:
-        """Tear down the strategy driver, stream server, and dashboard subprocess."""
+        """Tear down the strategy driver, the stream server and both companion windows."""
         if self._strategy_connector is not None:
             self._strategy_connector.stop()
         if self._stream_server is not None:
             self._stream_server.stop()
             self._stream_server = None
-        if self._dashboard_proc is not None:
-            try:
-                self._dashboard_proc.terminate()
-                self._dashboard_proc.wait(timeout=3.0)
-            except subprocess.TimeoutExpired:
-                logger.warning("Dashboard did not exit in 3s — killing")
-                self._dashboard_proc.kill()
-            except OSError as exc:
-                # terminate()/wait() on an already-dead or inaccessible
-                # process raise OSError subclasses (e.g. ProcessLookupError);
-                # nothing else is documented for these two calls.
-                logger.warning("Dashboard teardown error: %s", exc)
-            self._dashboard_proc = None
+        # Both subprocesses go through the same helper. `_terminate`'s own
+        # docstring says a second copy of its block would be the twin that
+        # stops getting fixed, and this inline copy was that twin from the
+        # moment the helper was extracted.
+        self._dashboard_proc = self._terminate(self._dashboard_proc, "Dashboard")
         self._pitwall_proc = self._terminate(self._pitwall_proc, "Pitwall")
 
     @staticmethod
     def _terminate(proc: subprocess.Popen | None, name: str) -> None:
         """Stop a companion window process, whatever state it is in.
 
-        Same three outcomes as the dashboard's teardown above, which is why
-        this exists: a second copy of that block would be the twin that
-        stops getting fixed.
+        Three outcomes: it exits, it does not and gets killed, or it was
+        already gone. Every companion window goes through here, which is
+        the point: a second copy of this block would be the twin that stops
+        getting fixed, and for one release the dashboard's teardown was
+        exactly that copy.
         """
         if proc is None:
             return None

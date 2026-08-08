@@ -193,10 +193,14 @@ STREAM_BROADCAST_EVERY_N_FRAMES: Final[int] = 6
 # tick publishes `dropped` alongside the span - a forward jump is otherwise
 # invisible to a consumer, which sees a contiguous `seq` and a forward clock.
 #
-# The cap is not free. `sendall` runs on the pyglet main thread, so a bigger
-# message freezes the replay sooner against a stalled subscriber, measured at
-# 0.7 s instead of about 130 s. That is why `stream.py` gives every client a
-# send timeout: the cap bounds the message, the timeout bounds the wait.
+# The cap is not free: a bigger message fills a stalled subscriber's socket
+# buffer in fewer broadcasts. Sends run on stream.py's own sender thread and
+# never on the pyglet one (measured: 300 broadcasts against a client that
+# never reads cost the caller 0.98 ms at worst), so the replay cannot freeze;
+# the per-client send timeout is what prunes a subscriber that stops reading.
+# The cap bounds what one tick can carry, the timeout bounds what one client
+# can cost. An earlier version of this comment described the pre-#850
+# architecture, where `sendall` DID run on the pyglet thread.
 STREAM_MAX_SPAN_FRAMES: Final[int] = 250
 # Cap how many LapDecision entries we keep in the broadcast history tail.
 STREAM_HISTORY_TAIL: Final[int] = 30
