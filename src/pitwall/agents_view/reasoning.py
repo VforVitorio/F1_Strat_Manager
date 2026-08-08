@@ -69,19 +69,31 @@ TABS: tuple[tuple[str, str], ...] = (
 def highlight(text: str) -> list[dict[str, Any]]:
     """Split `text` into coloured runs, the way the Qt highlighter paints it.
 
-    `QSyntaxHighlighter.highlightBlock` runs per block, but every rule
-    here is anchored inside a line, so applying them over the whole
-    string is equivalent and keeps the newlines in one segment.
+    **The rules are applied per LINE, not over the whole string.**
+    `QSyntaxHighlighter.highlightBlock` is called once per paragraph, so a
+    match can never span a newline in Qt - and two of the five rules
+    contain ``\\s``, which matches a newline. Whole-string matching
+    therefore painted things Qt leaves plain: measured, a body carrying
+    ``extend the lap`` then ``22 target`` on the next line came out with
+    the two joined and painted in the lap colour, where Qt paints nothing,
+    and the same for a delta split across a line break.
+
+    It is reachable, not theoretical: `clean()` collapses the newlines in
+    `reasoning`, but the orchestrator tab appends `memory_block` raw, and
+    a memory block is multi-line free text.
     """
     if not text:
         return []
     colours: list[str | None] = [None] * len(text)
     bolds = [False] * len(text)
-    for pattern, colour, bold in _RULES:
-        for match in pattern.finditer(text):
-            for index in range(match.start(), match.end()):
-                colours[index] = colour
-                bolds[index] = bold
+    line_start = 0
+    for line in text.split("\n"):
+        for pattern, colour, bold in _RULES:
+            for match in pattern.finditer(line):
+                for index in range(line_start + match.start(), line_start + match.end()):
+                    colours[index] = colour
+                    bolds[index] = bold
+        line_start += len(line) + 1
 
     segments: list[dict[str, Any]] = []
     start = 0

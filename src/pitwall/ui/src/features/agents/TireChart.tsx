@@ -44,16 +44,30 @@ export function TireChart({ series }: { series: TireSeries }) {
             data: [[{ xAxis: cliff.lo }, { xAxis: cliff.hi }] as [object, object]],
           }
         : undefined;
-    const markLine =
-      cliff && cliff.p50 !== null
-        ? {
-            silent: true,
-            symbol: "none" as const,
-            lineStyle: { color: series.cliff_colour, width: 2, type: "dashed" as const },
-            label: { show: false },
-            data: [{ xAxis: cliff.p50 }],
-          }
-        : undefined;
+    // The median marker and one faint dashed vertical per compound change
+    // share a markLine, because each carries its own lineStyle.
+    const marks = [
+      ...(cliff && cliff.p50 !== null
+        ? [
+            {
+              xAxis: cliff.p50,
+              lineStyle: { color: series.cliff_colour, width: 2, type: "dashed" as const },
+            },
+          ]
+        : []),
+      ...series.boundaries.map((lap) => ({
+        xAxis: lap,
+        lineStyle: {
+          color: series.boundary_colour,
+          opacity: series.boundary_opacity,
+          width: 1,
+          type: "dashed" as const,
+        },
+      })),
+    ];
+    const markLine = marks.length
+      ? { silent: true, symbol: "none" as const, label: { show: false }, data: marks }
+      : undefined;
 
     const trend = {
       type: "line" as const,

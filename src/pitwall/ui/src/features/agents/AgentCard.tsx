@@ -32,8 +32,14 @@ export function AgentCard({
           {card.glyph}
         </span>
         <span className="agent-title">{title}</span>
-        {card.tooltip ? <Tooltip html={card.tooltip} /> : null}
       </header>
+
+      {/* The whole card is the hover target, as in Qt, and nothing extra
+          is drawn. An empty string means no tooltip, which is Qt's own
+          convention for suppressing the popup. */}
+      {card.tooltip ? (
+        <span className="agent-tooltip" dangerouslySetInnerHTML={{ __html: card.tooltip }} />
+      ) : null}
 
       <p
         className="agent-headline"
@@ -52,21 +58,5 @@ export function AgentCard({
 
       {children ? <div className="agent-chart">{children}</div> : null}
     </section>
-  );
-}
-
-/**
- * The hover transcript Qt shows as a tooltip.
- *
- * A real element rather than the `title` attribute: the content is rich
- * text, and `title` would print the tags. HTML has no 300 ms delay and no
- * fixed width, so the one thing that improves for free here is that the
- * whole lap fits.
- */
-function Tooltip({ html }: { html: string }) {
-  return (
-    <span className="agent-tooltip-host" aria-label="full transcript">
-      i<span className="agent-tooltip" dangerouslySetInnerHTML={{ __html: html }} />
-    </span>
   );
 }

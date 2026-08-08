@@ -34,9 +34,20 @@ class LapHistory:
     - backfill actuals from `history_tail` on a mid-stream connect;
     - fold each tick's `latest` in, which is the only carrier of the
       per-agent predictions;
-    - drop laps the user rewound past, so a lap that gets re-driven is
-      re-observed rather than read from the timeline that was abandoned;
     - stay bounded.
+
+    **A rewind evicts nothing, which is what the Qt window does too.** An
+    earlier version dropped every lap ahead of the one seeked to, on the
+    theory that a re-driven lap should be re-observed. Two things killed
+    it. The replay is deterministic, so those predictions are not wrong,
+    only early - re-driving the lap reproduces them. And a forward jump
+    past the evicted range never re-drives anything, so the prediction is
+    gone for good: `history_tail` strips `per_agent`, which is the exact
+    loss Gate A's D-11 warned a truncate would cause. Measured: a store
+    holding laps 28-30, rewound to lap 10, ended up holding only lap 30 -
+    it deleted the two it should have kept and kept the one it meant to
+    evict, because `ingest_latest` re-added it on the same tick from a
+    `latest` block that still lagged at lap 30.
     """
 
     def __init__(self, keep: int = KEEP_LAPS) -> None:
@@ -89,19 +100,6 @@ class LapHistory:
         if latest.get("lap_time_s") is not None:
             trow["lap_time_s"] = latest.get("lap_time_s")
         self.trim()
-
-    def evict_after(self, lap: int) -> None:
-        """Drop everything ahead of `lap`, for a backwards seek.
-
-        The Qt window has no equivalent and its charts are wrong after a
-        rewind: they hold laps the replay has not reached again. The guard
-        belongs here rather than in the UI because the store is keyed by
-        lap and the UI clock counts frames - a frame-indexed truncate
-        cannot address this map at all.
-        """
-        for store in (self._pace, self._tire):
-            for stored in [key for key in store if key > lap]:
-                store.pop(stored, None)
 
     def trim(self, keep: int | None = None) -> None:
         """Keep only the most recent `keep` laps so memory stays bounded."""

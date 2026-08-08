@@ -70,10 +70,13 @@ body {
   border-radius: 10px;
   font-size: 11px;
 }
-/* The connection chip carries no background in Qt: only its text is
- * coloured, which is what makes the three states readable at a glance. */
+/* The connection chip is a chip like the other two: `window.py:81` gives
+ * the label `objectName("chip")` and the app stylesheet paints
+ * `QLabel#chip` with the elevated background. `set_connection`'s
+ * widget-level sheet overrides the colour and the padding, never the
+ * background, so Qt's cascade keeps it. An earlier comment here claimed
+ * the opposite. */
 .header-conn {
-  background: none;
   font-weight: 600;
 }
 
@@ -81,7 +84,11 @@ body {
 
 .agents-split {
   display: grid;
-  grid-template-columns: 540fr 740fr;
+  /* 540 PIXELS, not 540fr. `setStretchFactor(0, 0)` pins the left panel
+   * and sends every extra pixel right; a proportional split grew it to
+   * 807 px at 1920, 267 px wider than Qt. The 740 was only ever the
+   * initial size of the half that stretches. */
+  grid-template-columns: 540px 1fr;
   gap: 2px; /* QSplitter.setHandleWidth(2) */
   flex: 1;
   min-height: 0;
@@ -103,7 +110,13 @@ body {
 }
 .agents-right {
   grid-template-columns: 1fr 1fr;
-  grid-auto-rows: minmax(140px, auto);
+  /* Qt's own caps: `agent_card.py:70-72` gives a text card 140-260 and
+   * `attach_chart` bumps the two with charts to 260-420. The grid is a
+   * fixed 3x2, so the three rows are written out rather than inferred.
+   * Equal auto rows put the dead space INSIDE the text cards instead of
+   * between the rows, which measured 264/246/256 against Qt's 416/174/197
+   * on the first payload anyone renders. */
+  grid-template-rows: minmax(260px, 420px) minmax(140px, 260px) minmax(140px, 260px);
 }
 
 /* --- Cards -------------------------------------------------------------- */
@@ -114,12 +127,23 @@ body {
   border-radius: 6px;
 }
 .agent-card {
+  position: relative;
+  /* Qt clips a card that overflows its cap - the migration README records
+   * the right column being "clipped mid-card" at the default geometry.
+   * Scrolling keeps the same footprint and stops the content being lost. */
+  overflow: auto;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
+/* DELIBERATE DIFFERENCE. `agent_card.py:156-158` asks for exactly this
+ * ("Dim the whole card when the agent is idle") and Qt silently ignores
+ * it: `opacity` in a Qt style sheet applies to QToolTip only, measured at
+ * 0 of 115,200 pixels changed with the rule on and off. So the port
+ * renders the intent the Qt author wrote and the toolkit dropped.
+ * Deleting it would mean reproducing a toolkit limitation on purpose. */
 .agent-card.is-idle {
   opacity: 0.45;
 }
@@ -152,31 +176,25 @@ body {
 }
 .agent-chart {
   margin-top: auto;
-  min-height: 140px;
+  min-height: 140px; /* pace_chart.py / tire_chart.py setMinimumHeight(140) */
+  flex: 1;
 }
 
 /* --- Tooltip ------------------------------------------------------------ */
 
-.agent-tooltip-host {
-  margin-left: auto;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid var(--qt-border);
-  color: var(--qt-fg-3);
-  font-size: 9px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+/* Qt puts the tooltip on the CARD (`window.py:323,330`), so hovering
+ * anywhere over it opens the transcript and nothing extra is drawn. An
+ * earlier version added a visible "i" glyph and made only those 14 px
+ * hoverable: a new element with no counterpart in the window being
+ * ported. */
+.agent-card:has(.agent-tooltip) {
   cursor: help;
 }
 .agent-tooltip {
   display: none;
   position: absolute;
-  top: 18px;
-  right: 0;
+  top: 32px;
+  right: 12px;
   z-index: 10;
   width: 30rem;
   max-height: 22rem;
@@ -191,7 +209,7 @@ body {
   text-align: left;
   line-height: 1.5;
 }
-.agent-tooltip-host:hover .agent-tooltip {
+.agent-card:hover .agent-tooltip {
   display: block;
 }
 
@@ -383,5 +401,5 @@ body {
 .chart {
   width: 100%;
   height: 100%;
-  min-height: 150px;
+  min-height: 140px;
 }

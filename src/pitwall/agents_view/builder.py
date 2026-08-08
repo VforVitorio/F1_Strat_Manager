@@ -36,20 +36,19 @@ class AgentsViewBuilder:
 
     - Nothing here formats. Every headline, body line and colour comes
       out of `agent_formatters`, which is the Qt window's own code.
-    - The lap history survives across ticks and is evicted, never
-      truncated blindly, on a backwards seek.
+    - The lap history survives across ticks and across a rewind, because
+      the predictions in it are broadcast exactly once.
     """
 
     def __init__(self) -> None:
         self._history = LapHistory()
-        self._last_lap: int | None = None
 
     def build(self, payload: dict[str, Any], connection: str = "Connected") -> dict[str, Any]:
         """The whole view for one tick."""
         strategy = payload.get("strategy") or {}
         latest = strategy.get("latest") or {}
 
-        self._accumulate(payload, strategy, latest)
+        self._accumulate(strategy, latest)
 
         return {
             "view_version": AGENTS_VIEW_VERSION,
@@ -77,22 +76,13 @@ class AgentsViewBuilder:
             "status_bar": build_status_bar(payload),
         }
 
-    def _accumulate(
-        self, payload: dict[str, Any], strategy: dict[str, Any], latest: dict[str, Any]
-    ) -> None:
-        """Fold this tick into the chart history, evicting first if we rewound.
+    def _accumulate(self, strategy: dict[str, Any], latest: dict[str, Any]) -> None:
+        """Fold this tick into the chart history. A rewind evicts nothing.
 
-        The eviction is keyed on the LAP going backwards rather than on
-        the producer's `rewound` flag, because that flag reports a
-        backwards seek of any size and most of them stay inside the
-        current lap, where there is nothing to evict. A lap that actually
-        gets re-driven must be re-observed: its predictions belong to the
-        timeline the user abandoned.
+        See `LapHistory`: the laps ahead of a backwards seek are real,
+        deterministic observations, and the predictions among them are
+        the one thing the wire sends exactly once. Dropping them is a
+        loss; keeping them is what the Qt window does.
         """
-        lap = (payload.get("arcade") or {}).get("lap")
-        if isinstance(lap, int):
-            if self._last_lap is not None and lap < self._last_lap:
-                self._history.evict_after(lap)
-            self._last_lap = lap
         self._history.seed_from_tail(strategy.get("history_tail") or [])
         self._history.ingest_latest(latest)

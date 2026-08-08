@@ -287,25 +287,37 @@ def test_the_history_keeps_the_predictions_the_wire_only_sends_once():
     assert 24 in pace, "and the new lap is in"
 
 
-def test_a_rewind_drops_the_laps_ahead_and_keeps_the_ones_behind():
-    """The Qt charts have no equivalent and are wrong after a seek back.
+def test_a_rewind_keeps_the_laps_it_already_observed():
+    """The Qt window keeps them, and so must this: the wire sends them once.
 
-    Truncating everything would be worse than doing nothing: the past
-    holds predictions the wire will never resend.
+    An earlier version evicted every lap ahead of the seek. Two things
+    killed it. The replay is deterministic, so those observations are not
+    wrong, only early. And a forward jump past the evicted range never
+    re-drives them, so the prediction is gone: `history_tail` strips
+    `per_agent`, which is exactly the loss Gate A's D-11 predicted.
+
+    The eviction also leaked. On a tick where the arcade clock goes back
+    but `strategy.latest` still lags at the old lap, it removed the future
+    and `ingest_latest` re-added the lagging lap on the same tick: a store
+    holding 28/29/30 rewound to 10 ended up holding **only lap 30** — it
+    deleted the two it should have kept and kept the one it meant to drop.
     """
     from src.pitwall.host import PitwallHost
 
-    client = _FakeClient(_payload(seq=1, lap=20))
+    client = _FakeClient(_payload(seq=1, lap=28))
     host = PitwallHost(client, window_count=1)
     host.get_agents_view(-1)
-    for seq, lap in ((2, 21), (3, 22)):
+    for seq, lap in ((2, 29), (3, 30)):
         client.latest = _payload(seq=seq, lap=lap)
         host.get_agents_view(seq - 1)
 
-    client.latest = _payload(seq=4, lap=21)
+    # The rewind tick: the clock goes back to 10 while `latest` still lags.
+    client.latest = _payload(seq=4, lap=10)
+    client.latest["strategy"]["latest"]["lap_number"] = 30
     view = host.get_agents_view(3)
 
-    assert sorted(row["lap"] for row in view["history"]["pace"]) == [20, 21]
+    laps = sorted(row["lap"] for row in view["history"]["pace"])
+    assert laps == [28, 29, 30], "nothing observed is thrown away by a seek"
 
 
 def test_the_history_stays_bounded():
@@ -753,3 +765,23 @@ def test_the_pace_series_are_independent_so_a_missing_prediction_draws_nothing()
     assert series["actual"] == [[21.0, 81.0], [22.0, 81.2]]
     assert series["pred"] == [[22.0, 81.1], [23.0, 81.3]]
     assert series["band"] == [[22.0, 80.6, 81.6]], "a band needs both bounds"
+
+
+def test_a_rule_cannot_paint_across_a_line_break():
+    r"""`QSyntaxHighlighter` runs per paragraph; two of the five rules match `\s`.
+
+    Applying them over the whole string painted things Qt leaves plain.
+    Reachable, not theoretical: `clean()` collapses the newlines in
+    `reasoning`, but the orchestrator tab appends `memory_block` RAW, and
+    a memory block is multi-line free text.
+    """
+    from src.pitwall.agents_view.reasoning import DEFAULT_COLOUR, highlight
+
+    for text in ("extend the lap\n22 target", "the delta is +0.42\ns behind"):
+        painted = [seg["text"] for seg in highlight(text) if seg["colour"] != DEFAULT_COLOUR]
+        assert painted == [], f"{text!r} must paint nothing, as Qt does"
+
+    # The same tokens on one line still paint, so the fix did not disable them.
+    on_one_line = {seg["text"] for seg in highlight("lap 22 and +0.42 s") if seg["bold"] is False}
+    assert "lap 22" in on_one_line
+    assert "+0.42 s" in on_one_line

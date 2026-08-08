@@ -60,6 +60,8 @@ export interface OrchestratorView {
   action_colour: string;
   /** null before the first decision; the bar then draws empty. */
   confidence: number | null;
+  /** The bar's width in per cent, already clamped and rounded host side. */
+  confidence_fill: number;
   confidence_label: string;
   confidence_colour: string;
   pace: string;
@@ -122,6 +124,10 @@ export interface TireSeries {
   /** Absolute lap numbers, or null when the projection is out of range. */
   cliff: { lo: number | null; hi: number | null; p50: number | null } | null;
   cliff_colour: string;
+  /** Lap numbers where the compound changed: one faint dashed vertical each. */
+  boundaries: number[];
+  boundary_colour: string;
+  boundary_opacity: number;
   x_range: [number, number];
 }
 

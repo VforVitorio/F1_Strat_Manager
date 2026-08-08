@@ -49,6 +49,10 @@ export const CHART_BASE: echarts.EChartsOption = {
   grid: { left: 44, right: 10, top: 10, bottom: 28, containLabel: false },
   xAxis: {
     type: "value",
+    // Without this an ECharts value axis always includes 0, so a window
+    // over laps 12-27 rendered 0-30 and half the plot was dead space.
+    // pyqtgraph autoranges on the data; this is that.
+    scale: true,
     name: "Lap",
     nameLocation: "middle",
     nameGap: 18,

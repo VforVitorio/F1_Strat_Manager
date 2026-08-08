@@ -16,7 +16,15 @@ from __future__ import annotations
 
 from typing import Any, NamedTuple
 
-from src.arcade.palette import ACCENT, INFO, TEXT_PRIMARY, WARNING, compound_color, hex_str
+from src.arcade.palette import (
+    ACCENT,
+    INFO,
+    TEXT_PRIMARY,
+    TEXT_TERTIARY,
+    WARNING,
+    compound_color,
+    hex_str,
+)
 
 # Anything outside this is a pipeline stub, not a lap. The lower bound is
 # well under the fastest modern F1 lap; 200 s is loose enough for a wet
@@ -32,6 +40,9 @@ PRED_COLOUR = hex_str(ACCENT)
 BAND_COLOUR = hex_str(ACCENT)
 TREND_COLOUR = hex_str(TEXT_PRIMARY)
 CLIFF_COLOUR = hex_str(WARNING)
+# TEXT_TERTIARY at the alpha 80/255 the Qt pen uses.
+BOUNDARY_COLOUR = hex_str(TEXT_TERTIARY)
+BOUNDARY_OPACITY = 80 / 255
 
 
 class _Stint(NamedTuple):
@@ -169,10 +180,16 @@ def build_tire_series(
             {"compound": stint.compound, "colour": stint.colour, "points": stint.points}
             for stint in stints
         ],
+        # One faint dashed vertical per compound change, kept faint because
+        # the colour break already says it (`tire_chart.py:184-195`). The
+        # first stint has no boundary in front of it.
+        "boundaries": [stint.points[0][0] for stint in stints[1:] if stint.points],
+        "boundary_colour": BOUNDARY_COLOUR,
         "trend": trend,
         "trend_colour": TREND_COLOUR,
         "cliff": cliff,
         "cliff_colour": CLIFF_COLOUR,
+        "boundary_opacity": BOUNDARY_OPACITY,
         "x_range": _x_range(flat, current_lap, cliff),
     }
 

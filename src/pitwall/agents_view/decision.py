@@ -94,6 +94,7 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
             "action": "--",
             "action_colour": hex_str(TEXT_TERTIARY),
             "confidence": None,
+            "confidence_fill": 0.0,
             "confidence_label": "Confidence: --",
             "confidence_colour": hex_str(TEXT_TERTIARY),
             "pace": "Pace: --",
@@ -115,6 +116,12 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
         "action": badge_label,
         "action_colour": hex_str(badge_colour),
         "confidence": confidence,
+        # The bar's width, to the 0.1 % Qt's gradient stop resolves to
+        # (`orchestrator_card.py::_bar_style` rounds the stop to 3 dp).
+        # The client used to do this with `Math.round`, which is both
+        # coarser and the exact kind of arithmetic the view exists to
+        # keep out of the renderer.
+        "confidence_fill": round(min(1.0, max(0.0, confidence)) * 100, 1),
         "confidence_label": f"Confidence: {confidence * 100:.0f}%",
         "confidence_colour": hex_str(_confidence_colour(confidence)),
         "pace": f"Pace: {pace_mode or '--'}",
