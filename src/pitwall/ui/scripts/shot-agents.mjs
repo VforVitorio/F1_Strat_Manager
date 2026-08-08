@@ -22,7 +22,7 @@
  */
 import { createReadStream, readFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
@@ -43,7 +43,16 @@ const MIME = {
  */
 function serveDist(root) {
   const server = createServer((req, res) => {
-    const path = join(root, decodeURIComponent(req.url.split("?")[0]));
+    // Resolve, then check the result is still inside `dist`. A URL can
+    // carry `../` and `join` will happily walk out of the root: CodeQL
+    // called this out as a path injection on the first run of this file,
+    // and it is right even for a dev tool on an ephemeral local port.
+    const path = resolve(root, "." + decodeURIComponent(req.url.split("?")[0]));
+    if (path !== root && !path.startsWith(root + sep)) {
+      res.statusCode = 403;
+      res.end();
+      return;
+    }
     res.setHeader("Content-Type", MIME[extname(path)] ?? "application/octet-stream");
     createReadStream(path)
       .on("error", () => {
