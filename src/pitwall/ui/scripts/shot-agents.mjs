@@ -20,7 +20,7 @@
  * plugin, which ships no font database on Windows and renders every
  * glyph as tofu.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,12 +50,16 @@ const MIME = {
  */
 function serveDist(root) {
   const files = new Map();
+  // `withFileTypes` answers directory-or-file from the directory read
+  // itself. Asking again with `stat` is a second look at something that
+  // can change in between, which CodeQL calls a file-system race and is
+  // right to.
   const walk = (dir, prefix) => {
-    for (const entry of readdirSync(dir)) {
-      const full = join(dir, entry);
-      const url = `${prefix}/${entry}`;
-      if (statSync(full).isDirectory()) walk(full, url);
-      else files.set(url, { body: readFileSync(full), type: MIME[extname(entry)] });
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      const url = `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) walk(full, url);
+      else files.set(url, { body: readFileSync(full), type: MIME[extname(entry.name)] });
     }
   };
   walk(root, "");
