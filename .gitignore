@@ -177,3 +177,9 @@ data/eval/prompt_ab/**
 
 # AI assistant project context (kept local)
 /CLAUDE.md
+
+# PITWALL UI: node deps and the Vite build. The bundle ships inside the
+# wheel at packaging time (sprint 7); until then `npm run build` is a dev step.
+src/pitwall/ui/node_modules/
+src/pitwall/ui/dist/
+src/pitwall/ui/*.tsbuildinfo

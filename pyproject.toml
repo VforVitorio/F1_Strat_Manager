@@ -87,6 +87,14 @@ dependencies = [
     "scipy>=1.10.0",
     "pyside6>=6.5.0",
     "pyqtgraph>=0.13.0",
+    # PITWALL: the two desktop windows are a React build inside an OS webview.
+    # Chosen over Electron/Tauri because it is an ordinary pyproject dependency,
+    # so `uv sync` installs it and the user installs nothing else. Honest cost:
+    # it uses the platform webview, so Linux needs `webkit2gtk` as a SYSTEM
+    # package (Windows 11 and macOS ship theirs). Nothing outside
+    # `src/pitwall/__main__.py` imports it, so a machine without the system
+    # library still runs every test and every other surface.
+    "pywebview>=5.0",
     # ===================
     # UTILITIES
     # ===================
