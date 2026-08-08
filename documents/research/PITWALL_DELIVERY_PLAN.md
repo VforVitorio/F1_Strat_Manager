@@ -1,0 +1,262 @@
+# PITWALL delivery plan (v2.6.0)
+
+**One sprint per Claude session.** Each sprint closes with every PR merged to `dev` with green CI,
+memory updated, and a handoff prompt written for the next session. Nothing here is code; this is
+the sequencing contract.
+
+Reads with: `documents/research/PITWALL_V2_ARCHITECTURE.md` (the design, including the sections the
+gates refuted), `documents/audits/GATE_PITWALL_ARCH_A.md` (data plane, 15 findings),
+`documents/audits/GATE_PITWALL_ARCH_B.md` (repo fit, 8 findings, plus two inventories that are
+deliverables in their own right).
+
+---
+
+## 0. How to run a sprint
+
+Same shape every time, because the value is in the repetition:
+
+1. **Open a clean session.** Paste the handoff prompt the previous sprint produced.
+2. **Read the pointers it names**, not the whole memory tree.
+3. **One branch per issue**, `feat/`, `fix/` or `docs/`. PR to `dev`, single concern, `Closes #N`.
+4. **Merge with `gh pr merge <N> --merge --body ""`** and `--delete-branch`. The empty body is not
+   optional: `gh` puts the PR title in the merge-commit body and release-please parses it, which is
+   how the CHANGELOG got duplicated twice before.
+5. **CI green on every PR**, not just at the end of the sprint.
+6. **NOTHING reaches `main` until PITWALL is finished** (Víctor, 2026-08-07). Every sprint lands on
+   `dev` and stops there; the single `dev -> main` promotion happens once, after sprint 7's exit
+   gate. Consequence, accepted deliberately: because issues stay open until the work is on `main`,
+   **#841-#844 and the rewritten #281/#284/#285 all stay open for the whole programme.** The open
+   list will not shrink for seven sprints. That is the rule working, not a backlog leak.
+7. **Close the sprint**: update `MEMORY.md` plus the sprint's topic file, then write the next
+   handoff prompt (task, compact, memory pointers).
+
+Commands handed over are PowerShell, one command per physical line, starting with an absolute
+`cd` and then the branch checkout. Víctor runs every commit, push and merge himself.
+
+---
+
+## 1. The sprint table
+
+| # | Sprint | Issues | Gate at the end |
+|---|---|---|---|
+| **1** | **The wire** | #841, #842, #843, #844 | none (verifiable by running) |
+| 2 | PITWALL skeleton: the vertical slice | new | adversarial: does the chain really work end to end |
+| 3 | AGENTS window, 1:1 | rewritten #285 | adversarial: is it ACTUALLY 1:1, field by field |
+| 4 | DATA bands 1-2: status, timing table, bests | rewritten #284 (a) | none |
+| 5 | DATA band 3: race pace grid + race trace | rewritten #284 (b) | none |
+| 6 | DATA band 4: own-car traces + the ring | rewritten #284 (c) | adversarial: tier discipline and fidelity claims |
+| 7 | Retire Qt, package, fix the prose | rewritten #285, new | **exit gate, then the ONE `dev -> main`** |
+
+Deferred beyond this plan, unchanged: #282 (observability contract, independent and also feeds the
+Rival Agent), #286 (rival intent, gated on the Rival Agent), #287 (the parity gate).
+
+---
+
+## 2. Sprint 1 — the wire
+
+**Why it is first and separate.** It is the producer, not PITWALL. All of it is verifiable **today**
+against the existing PySide6 telemetry window, which simply receives better data. Landing it first
+means PITWALL starts against a wire that already works instead of moving two things at once. It
+also fixes a live user-visible bug on the way.
+
+**Order.** #842 and #841 both edit `_build_arcade_snapshot`, so they are sequential; #842 first
+because it carries the `CACHE_VERSION` bump and a stale cache should be invalidated once, not
+twice. #843 lands on top. **#844 touches `src/arcade/overlays.py` only and is independent**, so it
+can be worked in parallel or slotted anywhere.
+
+| PR | Issue | Touches | Notes |
+|---|---|---|---|
+| 1 | #842 | `data.py`, `config.py`, `app.py` | store `global_t_min` on `SessionData`, bump `CACHE_VERSION` from `v7`, add `active` + `rel_dist` per car, add `global_t_min` + `location` once |
+| 2 | #841 | `app.py` | span instead of sample; explicit branches for pause and rewind |
+| 3 | #843 | `app.py`, `stream.py`, `tests/` | `schema_version`, `seq`, golden-payload test |
+| 4 | #844 | `overlays.py`, `tests/` | kill the 55.56 divisor and the per-lap double count |
+
+**Exit criteria.** Four PRs on `dev`, CI green on each. `f1-arcade --strategy` runs and the Qt
+telemetry window shows visibly denser traces at 4x and 8x than it does today. A stale cache
+regenerates rather than being mis-read. **The sprint stops on `dev`. #841-#844 stay OPEN** until the
+single promotion after sprint 7.
+
+**Trap.** The `CACHE_VERSION` bump invalidates every cached session pickle, so the first run of each
+GP after PR 1 pays a full reload. Say so in the PR body; do not let it be mistaken for a regression.
+
+---
+
+## 3. Sprint 2 — the vertical slice
+
+The thinnest thing that proves the whole chain: `f1-arcade` spawns `python -m src.pitwall`, two
+pywebview windows open, and both render the live lap number and playback state from the real
+broadcast.
+
+**What lands:** the `src/pitwall/` package (`__main__`, `config`, `host`, `stream_client`), the Vite
+project with two entry points, `bridge.ts`, `frameClock`, the `tokens.css` copy, and the spawn +
+teardown wiring in `app.py` alongside the existing Qt spawn (both run during sprints 2-6; the Qt one
+dies in sprint 7).
+
+**Three things this sprint must get right, because they are expensive to change later:**
+
+1. **`get_tick(since_seq)`, never a blind slot.** Gate A measured two independent 10 Hz pollers
+   against one slot: the windows read a different frame on 58% of polls, with 15 duplicate reads
+   and 15 skips out of 54. The sequence from #843 is what removes both.
+2. **Closing one window must NOT stop the shared TCP client.** Today's two-client design advertises
+   independent close as a feature (`dashboard/__main__.py:6-8`, `telemetry_window.py:78-82`). One
+   shared client is the single place that regresses, and only if nobody writes this down.
+3. **The token drift test covers every copy, not just the new pair.** Gate B measured that the drift
+   A16 warned about **has already happened**: the Python palette in `config.py` / `theme.py` and the
+   webapp's `tokens.css` disagree on every semantic colour. A test guarding only pitwall-vs-webapp
+   would leave the broken pair uncovered, which is this repo's most-repeated defect committed inside
+   the fix for it.
+
+**Exit criteria.** Both windows open from `f1-arcade`, show live data, survive closing one, and the
+drift test is red-then-green on a deliberate token change.
+
+---
+
+## 4. Sprint 3 — the AGENTS window, 1:1
+
+**The checklist already exists.** Gate B produced the field-by-field inventory of
+`src/arcade/dashboard/window.py:141-207` and its widgets. Use that as the acceptance list; do not
+port from memory.
+
+Layout is frozen: HeaderBar, horizontal split at 540/740, left column
+(OrchestratorCard / ScenarioBars / ReasoningTabs), right column 3x2 AgentCards (Pace+PaceChart,
+Tire+TireChart, Situation, Pit, Radio, RAG), StatusBar.
+
+**The five things Gate B found that are NOT pure dict-in/string-out**, and therefore need a decision
+rather than a port: the `QSyntaxHighlighter` doing regex highlighting in the reasoning tabs (no
+TypeScript home is planned for it), two tooltip builders constrained to Qt rich text,
+`classify_action` living outside `agent_formatters.py`, and a second parallel formatting layer
+(`_LINE_BUILDERS`) the architecture document never named.
+
+**Two accumulators survive here** and they are lap-keyed, not frame-keyed: PaceChart and TireChart
+own their series because `history_tail` strips `per_agent`. Gate A finding D-11: a frame-indexed
+truncate cannot address a lap-keyed map, and truncating destroys `per_agent` predictions that no
+channel can rebuild. **Re-specify `frameClock` in laps here**, and use keyed maps rather than arrays
+so a duplicate tick is idempotent.
+
+One bug fixes itself: Qt gives ReasoningTabs about 268 px, so the decision-memory counterweight
+sentence falls below the fold. HTML has no fixed heights.
+
+**Gate at the end:** an adversarial pass whose only question is *what is different from the Qt
+window*, with the two rendered side by side.
+
+---
+
+## 5. Sprints 4 to 6 — the DATA window
+
+Built band by band so each sprint ends with something on screen.
+
+**Sprint 4, bands 1-2.** Status strip, timing table, bests. Introduces the BULK reader over
+`laps.parquet`, which is (927, 35) on the race checked and carries everything the tower and the
+bests need.
+
+Two rules that must be written into the code, not assumed:
+
+- **The reveal is per driver and strict**: reveal driver *d*'s lap *L* iff `L < wire.drivers[d].lap`.
+  Gate A measured that at **96% of instants the running field spans 2 or 3 different laps**, and the
+  tick carries only the main driver's lap. Masking everyone at the main driver's lap lags the
+  leaders by a lap and leaks 1-2 laps of look-ahead for cars behind, simultaneously. `<` not `<=`,
+  because a lap only has a time once it is crossed.
+- **The gap column is lap-quantised and says so on screen.** Use `interval_to_driver_s` from
+  `get_rival_states`, labelled as at-the-line. **Do not port `overlays._gap_value`** (see #844).
+  A precise-looking wrong number on a fidelity surface is the P3 A2 defect class.
+
+**Sprint 5, band 3.** The Run Timeline heat grid (drivers as columns, laps as rows, purple / green /
+yellow / red, `IN PIT` and `OUT` cells) with Race Trace as a tab of the same panel. The bests panel
+should recompute from the revealed subset rather than trust `IsPersonalBest`: the column is safe
+under masking (Gate A checked, it is a running flag with 18-24 flagged laps per driver, not a
+session-final one) but the two sequences are not identical.
+
+**Sprint 6, band 4.** Own-car traces stacked on one x axis with a shared vertical cursor, pinned
+rival overlaid and labelled broadcast tier, and the ring. **Depends on sprint 1**: the traces need
+the span (#841) and the ring needs `rel_dist` (#842). Retired cars must render as retired, not as
+pending, which needs `active` (#842).
+
+**Gate at the end of sprint 6:** adversarial, on tier discipline and on every claim the surface
+makes about what it is showing.
+
+---
+
+## 6. Sprint 7 — retire Qt, package, fix the prose
+
+**Deleting `src/arcade/dashboard/` is bigger than it looks.** Gate B built the reference graph; the
+one that would not have been found by a doc sweep is
+`tests/agents/test_overtake_domain.py:231`, which imports `format_situation` from the dashboard
+package for a **domain** test. Also: `tests/surfaces/test_arcade_dashboard_imports.py` (13 modules),
+`src/arcade/app.py:332`, `src/arcade/stream.py:6` (docstring), `docs/pages/arcade-quick-start.md:34`,
+two drawio diagrams, and `documents/audits/AUDIT_P2_LOADING.md:71`.
+
+**Packaging has zero precedent** (Gate B, finding H). CI has never run a Node build step, package
+data covers only yaml/yml/json, and the repo already has a scar from that same mechanism leaking
+`node_modules` into a wheel. Treat "the Vite build ships inside the wheel" as real work with its own
+PR and its own verification: build a wheel, install it in a clean venv, run it.
+
+**Also in this sprint, because leaving it is how documentation starts teaching bugs:**
+
+- `ROADMAP.md` v2.6.0 and `docs/pages/roadmap.md:464` say the surfaces move to a "web-native view".
+  Web technology yes, web app no.
+- `src/arcade/__init__.py:4` claims Arcade renders the SSE simulation stream. It has not for a long
+  time.
+- `documents/dev_docs/diagrams/arcade_3window_architecture.drawio` describes three windows that stop
+  existing, and its name is part of the claim.
+- PySide6 and pyqtgraph leave `pyproject.toml`. Gate B correction: **there is no `arcade` extra**;
+  they are unconditional core dependencies today.
+
+**The exit gate, and then the single `dev -> main` of the whole programme.** Adversarial, per
+`~/.claude/ADVERSARIAL_AUDIT.md`. Never close a piece of work this size on "all the sub-issues
+merged" — and here that temptation is at its strongest, because seven sprints of commits promote at
+once. Only after that promotion do #841-#844, #281, #284 and #285 close.
+
+Note that this promotion is also what un-gates release PR #712 (`chore(main): release 2.6.0`), which
+has been held open waiting for PITWALL to exist. Do not merge it before this point.
+
+---
+
+## 7. Patterns that apply throughout
+
+Full directives in `PITWALL_V2_ARCHITECTURE.md` section 6. The five that will actually be violated:
+
+1. **Chart data goes into ECharts imperatively through refs, never through per-frame React state.**
+   This is P3 finding A6 (six cards, six syntax-highlighted text areas and a full chart rebuild ten
+   times a second for content that changes once a lap) applied before it happens instead of after.
+2. **Animate the entrance, never the update.** `useFirstPaintAnimation` in the webapp already
+   encodes the contract. Port it, do not reinvent it.
+3. **Accumulating panels use keyed maps, never arrays**, so a duplicate tick is idempotent. Duplicate
+   ticks are routine below 1x and permanent while paused.
+4. **`None` means unknown data; exceptions mean a failed operation.** Never a sentinel a search could
+   also find. The repo's scar: a NaN `Position` defaulted to `0`, so the leader looked for the car
+   ahead at position 0 and found the one that had just crashed.
+5. **One reader, one resolver.** Gate A finding D-15: "reuse the loader Arcade uses" is not a
+   well-formed instruction because Arcade uses three, on two different roots. Resolve the race
+   directory through the existing resolver, the root through `get_data_root()` only, and run with
+   `F1_STRAT_OFFLINE=1` so PITWALL can never race the arcade into a download.
+
+## 8. Testing
+
+Per sprint, not at the end. The Qt surface's coverage today is one import-smoke file (P3 A18); the
+bar is low and easy to clear.
+
+- **Sprint 1**: sample continuity across a speed change and across a seek; the golden payload; the
+  lapped-car gap case (#844's cause 2 is largest exactly there).
+- **Sprint 2**: token drift across ALL copies; every `js_api` method returns JSON-serialisable data
+  (a numpy scalar or a `Timestamp` fails silently across the bridge, which is the worst kind);
+  `frameClock` truncation.
+- **Sprint 3**: the formatter layer, which is dict-in/string-out and was never tested.
+- **Sprints 4-6**: the masking rule, per driver and strict, including a lapped car and a lap-1
+  retirement.
+- **Sprint 7**: a wheel built, installed clean, and run.
+
+Assert the **effect**, never the constant. A test that asserts `CFG.x == 0.2335` passed for a year
+over a threshold that could never fire.
+
+## 9. Carried forward, unresolved
+
+- **Race control messages have no home** in either PITWALL window, and none in Arcade
+  (`SessionData.events` is always empty, P3 finding A3). Decide before sprint 4.
+- **A latent P2 for whoever writes any trace reader**: the arcade's `lap` channel is interpolated,
+  so it can label ~2,000 frames as a lap that has no telemetry behind it. Gate A reproduced the
+  mechanism by executing the code path but could not show it firing on real data.
+- **#199 Phase D.3 gains weight.** `snapshot_dict` re-runs a recursive `asdict` over the 30-entry
+  tail ten times a second with a blocking `sendall`, so one stalled subscriber can hitch the pyglet
+  frame loop. Inherited, not introduced, but the wire is now load-bearing.
+- **#283 must not be closed wholesale.** Its relay premise is void, but its gap-provider bullet
+  (`intervals.parquet`) is exactly what the timing table's live gaps need once `global_t_min` ships.
