@@ -624,13 +624,18 @@ def test_a_car_that_retires_on_the_final_lap_does_not_take_the_flag():
     assert "CRASH OUT" in _labels(session, "P3", idx)
 
 
-def test_the_leader_still_takes_the_flag_when_a_slower_car_ends_first():
-    """The guard must not turn every early ending into a retirement.
+def test_a_lapped_car_neither_sets_the_flag_nor_loses_its_finish():
+    """The guard must not turn a lapped finisher into a retirement.
 
-    A car a lap down stops producing telemetry before the leader does, on
-    a lap the leader has already passed. It is not leading, so it does not
-    set the flag - and it is also not a finisher, because its telemetry
-    ended before the leader's. Both halves have to hold at once.
+    A car a lap down runs to the end on a lap the leader has already
+    passed. It is never leading, so it must not set the flag; and it took
+    the chequered flag all the same, so it must still read as a finisher.
+    Both halves have to hold at once.
+
+    The name and the docstring used to say the opposite of the asserts -
+    "ends first" for a car that ends 49 frames LATER, and "not a finisher"
+    directly above `has_finished("LAPPED") is True`. A test whose prose
+    contradicts its body is how the wrong behaviour gets defended later.
     """
     session = _finish_session(LAPPED=_car(33.34, dead_from=7498))
     gaps = RaceGapCalculator(session)

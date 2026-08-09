@@ -239,7 +239,7 @@ BOOT_SLOTS = {
 ECHART_MODULE = (
     REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "features" / "agents" / "useEChart.ts"
 )
-ECHART_NAMES = ("TEXT_SECONDARY", "BORDER_COLOR")
+ECHART_SITES = (("TEXT_SECONDARY", 4), ("BORDER_COLOR", 2))
 
 
 def test_the_boot_state_colours_are_in_the_right_slots():
@@ -272,13 +272,49 @@ def test_the_chart_axis_palette_has_not_drifted_either():
     `useEChart.ts` repeats the axis pens `pace_chart.py` builds from
     BORDER_COLOR and TEXT_SECONDARY. Same duplication as the other four,
     and it had no guard at all.
+
+    **Counted per site, not as a set.** Set equality passes when ONE of
+    the four `#d1d5db` sites becomes `rgba(209,213,219,0.4)`: the hex is
+    still present elsewhere, so the set is unchanged and a real render
+    drift goes green. Measured on a mutated copy before this counted.
+    """
+    from collections import Counter
+
+    from src.arcade import palette
+
+    source = ECHART_MODULE.read_text("utf-8")
+    found = Counter(hex_.lower() for hex_ in re.findall(r'"(#[0-9a-fA-F]{6})"', source))
+    expected = Counter({_rgb_to_hex(getattr(palette, name)): count for name, count in ECHART_SITES})
+
+    assert found, "the chart theme stopped carrying colours"
+    assert found == expected, f"the chart axis palette drifted: {found} against {expected}"
+
+    # The two splitLine pens are rgba, so the hex regex above cannot see them
+    # at all. They are value-paired with pyqtgraph's grid alpha.
+    assert source.count("rgba(255,255,255,0.06)") == 2, "the grid alpha moved"
+
+
+def test_the_two_raw_hexes_in_the_stylesheet_are_guarded_too():
+    """The pair the `--qt-*` guard structurally cannot see.
+
+    `test_the_agents_css_palette_has_not_drifted_from_palette_py` reads
+    custom-property declarations, so a literal written straight into a
+    rule is invisible to it. #876's wording -- "useEChart.ts stops being
+    the ONE palette copy with no detector" -- was literally true and
+    stepped around these two.
     """
     from src.arcade import palette
 
-    literals = set(re.findall(r'"(#[0-9a-fA-F]{6})"', ECHART_MODULE.read_text("utf-8")))
-    expected = {_rgb_to_hex(getattr(palette, name)) for name in ECHART_NAMES}
+    css = AGENTS_CSS.read_text("utf-8")
+    declared = set(re.findall(r"--[\w-]+:\s*(#[0-9a-fA-F]{6})", css))
+    raw = sorted({hex_.lower() for hex_ in re.findall(r"(#[0-9a-fA-F]{6})", css)} - declared)
 
-    assert literals, "the chart theme stopped carrying colours"
-    assert literals == expected, (
-        f"the chart axis palette drifted: {sorted(literals)} against {sorted(expected)}"
+    assert raw == ["#282834", "#ef4444"], (
+        f"a new raw hex entered the stylesheet: {raw}. Either use a --qt-* token or add it here "
+        "with the palette name it copies."
     )
+    assert "#ef4444" == _rgb_to_hex(palette.DANGER), "the guardrail rule copies DANGER"
+    # #282834 is the empty half of the confidence/scenario bar. It is NOT in
+    # palette.py: `orchestrator_card.py` writes it straight into its Qt
+    # stylesheet too, so freezing it here is what makes the pair monitored.
+    assert css.count("#282834") == 1, "the empty-bar shade is used in exactly one rule"

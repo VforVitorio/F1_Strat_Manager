@@ -201,12 +201,15 @@ body {
   cursor: help;
 }
 .agent-tooltip {
-  display: none;
-  position: absolute;
-  top: 32px;
-  right: 12px;
+  /* `fixed`, in the body, via a portal: nothing in the window tree can
+   * clip it. Two earlier fixes kept it inside the card and only moved
+   * which ancestor did the clipping. `top`/`left` come from the hovered
+   * card's rect, so there is no `:hover` rule here - the card mounts and
+   * unmounts the popup. */
+  position: fixed;
   z-index: 10;
   width: 30rem;
+  max-width: calc(100vw - 16px);
   max-height: 22rem;
   overflow: auto;
   padding: 8px 10px;
@@ -218,9 +221,6 @@ body {
   font-weight: 400;
   text-align: left;
   line-height: 1.5;
-}
-.agent-card:hover .agent-tooltip {
-  display: block;
 }
 
 /* --- Status bar --------------------------------------------------------- */

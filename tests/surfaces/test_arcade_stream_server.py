@@ -153,3 +153,42 @@ def test_the_drop_log_does_not_blame_a_leaf_the_encoder_can_take():
     assert _blame({"a": (1, 2)}) == "", "a tuple is JSON-encodable"
     assert _blame({"a": (1, 2), "b": np.float32("nan")}) == "b=<float32>", "reach the real one"
     assert _blame({"a": ({"deep": np.int64(3)},)}) == "a[0].deep=<int64>", "recurse into tuples"
+
+
+def test_the_drop_log_names_an_unencodable_dict_KEY_too():
+    """The encoder rejects keys as well, and the walker only read values.
+
+    So the whole class came back on a different input: `{np.int64(lap):
+    prob}` is one comprehension away from a `per_agent` block, it kills
+    the tick, and the log printed the same empty suffix the function was
+    rewritten to stop printing.
+    """
+    import numpy as np
+
+    from src.arcade.stream import _blame
+
+    assert _blame({np.int64(3): "score"}) == "<root>.<key 3>=<int64>"
+    assert _blame({"b": {b"raw": 1}}) == "b.<key b'raw'>=<bytes>"
+
+
+def test_the_sanitiser_walks_tuples_like_the_blame_function_does():
+    """The twin. One walker learned tuples and the other did not.
+
+    `_json_safe` promises "one unusable model output should cost that
+    field, not the whole tick". For one commit that was false for exactly
+    the container `_blame` had just been taught: a NaN inside a tuple
+    survived sanitising and killed the broadcast. `dataclasses.asdict`
+    preserves tuples, so the first tuple-typed model field arms it.
+    """
+    import json
+    import math
+
+    from src.arcade.stream import _json_safe
+
+    cleaned = _json_safe({"quantiles": (1.0, float("nan"), 3.0)})
+
+    assert cleaned == {"quantiles": [1.0, None, 3.0]}, "the NaN became None, the tuple a list"
+    assert json.dumps(cleaned, allow_nan=False), "and the payload now encodes"
+    assert not any(
+        isinstance(v, float) and not math.isfinite(v) for v in cleaned["quantiles"] if v is not None
+    )

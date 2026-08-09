@@ -13,7 +13,47 @@
  * 8 unpicks - not a licence to inject arbitrary markup here.
  */
 
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
 import type { AgentCardView } from "../../lib/agents";
+
+/**
+ * The popup, rendered OUTSIDE the window tree.
+ *
+ * **Two attempts got this wrong before, the same way.** An absolutely
+ * positioned popup is clipped by any scrolling ancestor, and overflow to
+ * the LEFT of a scroll box cannot even be scrolled to. The first fix put
+ * the scroll on the card; the second moved the scroll to
+ * `.agent-card-body` and the clip simply became the next ancestor up —
+ * `.agents-right`, which scrolls because Qt clips that column too. At
+ * 1320x900 it amputated 130 px off every transcript line, and the check
+ * that was supposed to catch it asserted the card's `overflow` and the
+ * popup's DOM placement — the mechanism, never the rendered box.
+ *
+ * A portal ends the class rather than moving it: Qt's `QToolTip` is a
+ * top-level window clipped by nothing, and `position: fixed` in the body
+ * is the same thing. The clamp keeps it on screen near either edge.
+ */
+function Tooltip({ html, anchor }: { html: string; anchor: DOMRect }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [left, setLeft] = useState(anchor.left);
+
+  useLayoutEffect(() => {
+    const width = ref.current?.offsetWidth ?? 0;
+    setLeft(Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)));
+  }, [anchor]);
+
+  return createPortal(
+    <span
+      ref={ref}
+      className="agent-tooltip"
+      style={{ top: anchor.top + 32, left }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />,
+    document.body,
+  );
+}
 
 export function AgentCard({
   title,
@@ -25,8 +65,16 @@ export function AgentCard({
   children?: React.ReactNode;
 }) {
   const idle = card.status === "IDLE";
+  // The whole card is the hover target, as in Qt, and an empty tooltip
+  // string is Qt's own convention for suppressing the popup.
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+
   return (
-    <section className={idle ? "card agent-card is-idle" : "card agent-card"}>
+    <section
+      className={idle ? "card agent-card is-idle" : "card agent-card"}
+      onMouseEnter={(event) => card.tooltip && setAnchor(event.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setAnchor(null)}
+    >
       <header className="agent-card-head">
         <span className="agent-glyph" style={{ color: card.glyph_colour }}>
           {card.glyph}
@@ -34,19 +82,13 @@ export function AgentCard({
         <span className="agent-title">{title}</span>
       </header>
 
-      {/* The whole card is the hover target, as in Qt, and nothing extra
-          is drawn. An empty string means no tooltip, which is Qt's own
-          convention for suppressing the popup. */}
-      {card.tooltip ? (
-        <span className="agent-tooltip" dangerouslySetInnerHTML={{ __html: card.tooltip }} />
-      ) : null}
+      {card.tooltip && anchor ? <Tooltip html={card.tooltip} anchor={anchor} /> : null}
 
-      {/* The scroll lives on this box, not on the card. An absolutely
-          positioned popup is clipped by any positioned ancestor that
-          scrolls, and overflow to the LEFT of a scroll container cannot
-          even be scrolled to: measured, a 502 px transcript inside a
-          375 px card lost the first 140 px of every line, unreachably.
-          Qt uses a native QToolTip, which floats above everything. */}
+      {/* The card scrolls here, not on the card itself, so the card is not
+          a scrolling ancestor of anything. Qt clips a card that overflows
+          its cap - the migration README records the right column "clipped
+          mid-card" - so the footprint matches and the content stays
+          reachable. */}
       <div className="agent-card-body">
         <p
           className="agent-headline"
