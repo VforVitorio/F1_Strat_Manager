@@ -42,9 +42,9 @@ Commands handed over are PowerShell, one command per physical line, starting wit
 | **1** | **The wire** | #841, #842, #843, #844 | none (verifiable by running) |
 | 2 | PITWALL skeleton: the vertical slice | new | adversarial: does the chain really work end to end |
 | 3 | AGENTS window, 1:1 | rewritten #285 | adversarial: is it ACTUALLY 1:1, field by field |
-| 4 | DATA bands 1-2: status, timing table, bests | rewritten #284 (a) | none |
-| 5 | DATA band 3: race pace grid + race trace | rewritten #284 (b) | none |
-| 6 | DATA band 4: own-car traces + the ring | rewritten #284 (c) | adversarial: tier discipline and fidelity claims |
+| 4 | **DATA band 4: own-car traces + the ring** (REORDERED 2026-08-09, see §5) | rewritten #284 (c) | none |
+| 5 | DATA bands 1-2: status, timing table, bests | rewritten #284 (a) | none |
+| 6 | DATA band 3: race pace grid + race trace | rewritten #284 (b) | adversarial: tier discipline and fidelity claims |
 | 7 | Retire Qt, package, fix the prose | rewritten #285, new | **exit gate, then the ONE `dev -> main`** |
 | **8** | **AGENTS: the elevate pass** | new | Fable as senior dashboard designer, P0-P3 with file:line |
 | **9** | **DATA: the elevate pass** | new | same |
@@ -171,6 +171,29 @@ window*, with the two rendered side by side.
 ---
 
 ## 5. Sprints 4 to 6 — the DATA window
+
+> **⇄ ORDER CHANGED 2026-08-09 (Víctor).** Band 4 goes FIRST, then bands 1-2, then band 3. The
+> sections below keep their original band numbering; only the sprint each lands in moved.
+>
+> **Why.** Band 4 is the one band with an EXISTING ORIGINAL to port: the Qt telemetry window
+> (`src/arcade/dashboard/telemetry_window.py` + `telemetry_panel.py`, whose docstring carries the
+> 2x2 layout — Delta Time / Speed over Brake / Throttle, locked axes, a per-trace legend). That is
+> exactly the setup that made sprint 3 work: a reference to compare against field by field, so
+> fidelity is checkable instead of being a matter of taste. Bands 1-3 have no original at all —
+> they are new design, and the 1:1 discipline cannot apply to them.
+>
+> **Its dependencies are already met.** Band 4 was scheduled last because the traces needed the
+> telemetry span (#841) and the ring needed `rel_dist` (#842). Both landed in sprint 1. Nothing
+> blocks it today; it was last only because of the order this plan happened to be written in.
+>
+> **What the reorder costs.** Bands are panels inside one window, so "each sprint ends with
+> something on screen" survives — band 1 being the frame the others sit in is a container
+> question, not a dependency.
+>
+> **⛔ Open before band 4 starts: does the wire carry everything it needs?** #857 asked exactly
+> that for band 1 and found the answer was no. Nobody has asked it for band 4. Do it the same
+> way, against `PITWALL_SPRINT4_SOURCES.md`, before writing any component.
+
 
 Built band by band so each sprint ends with something on screen.
 
