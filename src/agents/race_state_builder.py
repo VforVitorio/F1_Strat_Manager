@@ -99,9 +99,9 @@ DEFAULT_TRACK_TEMP_C = 35.0
 def _targeting_against_rival(
     lap_state: Dict[str, Any],
     rival: str,
-    fallback_gap_s: float,
+    fallback_gap_s: Optional[float],
     fallback_pace_s: float,
-) -> Tuple[float, float]:
+) -> Tuple[Optional[float], float]:
     """Gap and pace delta of our driver measured against a chosen ``rival``.
 
     Returns ``(gap_ahead_s, pace_delta_s)`` framed around the rival the user
@@ -129,8 +129,13 @@ def _targeting_against_rival(
     if match is None:
         return fallback_gap_s, fallback_pace_s
 
+    # The fallback may now be None - no car ahead to measure (#878) - and
+    # round(None) raises, so the measured and fallback branches round apart.
     interval = match.get("interval_to_driver_s")
-    gap_ahead_s = abs(float(interval)) if interval is not None else fallback_gap_s
+    if interval is not None:
+        gap_ahead_s: Optional[float] = round(abs(float(interval)), 3)
+    else:
+        gap_ahead_s = fallback_gap_s
 
     driver_lap_s = lap_state.get("driver", {}).get("lap_time_s")
     rival_lap_s = match.get("lap_time_s")
@@ -139,7 +144,7 @@ def _targeting_against_rival(
     else:
         pace_delta_s = fallback_pace_s
 
-    return round(gap_ahead_s, 3), round(pace_delta_s, 3)
+    return gap_ahead_s, round(pace_delta_s, 3)
 
 
 def _car_ahead(lap_state: Dict[str, Any], our_position: int) -> Optional[Dict[str, Any]]:
@@ -153,24 +158,27 @@ def _car_ahead(lap_state: Dict[str, Any], our_position: int) -> Optional[Dict[st
     return match
 
 
-def _gap_to_car_ahead(car_ahead: Optional[Dict[str, Any]]) -> float:
-    """Absolute interval to the car ahead, without conflating two zeros.
+def _gap_to_car_ahead(car_ahead: Optional[Dict[str, Any]]) -> Optional[float]:
+    """Absolute interval to the car ahead, or None when there is no car ahead.
 
-    No car ahead means we lead, and 0.0 is honest there. A car ahead whose
-    ``interval_to_driver_s`` was never measured is NOT a zero gap: 0.0 reads as
-    side by side, which the orchestrator's clean-air band and N27's sub-1.0s DRS
-    window both act on (#633). It degrades to ``GAP_UNKNOWN_FALLBACK_S`` instead.
+    No car directly ahead - we lead, or the pos-1 car is not classified this
+    lap - is an ABSENCE, and it returns None (#878). It used to return 0.0,
+    called "honest" here for two years: 0.0 is ALSO a real measured value
+    (two cars side by side; the served 2025 season has four such laps), the
+    sub-1.0s DRS band acts on it, and a falsy ``or`` downstream turned it
+    into a fabricated 2.0 rival for the race leader on 1,262 laps. A value
+    meaning "nothing to measure" must not be a value the code can also
+    legitimately find - the rule ``Position`` three files away already
+    follows (#465).
 
-    Be honest about what that fallback still is: 2.0 is fabricated, and a real
-    2.0 s gap is common, so it does not satisfy the rule that a default must
-    never be a value the code can also legitimately find. It is less harmful
-    than 0.0, not correct. The real fix is ``RaceState.gap_ahead_s`` becoming
-    ``float | None``, which ``RivalState`` in position_projection.py already is
-    and whose consumers already guard with ``is not None``. That is a Pydantic
-    contract change, tracked under #628.
+    A car ahead whose ``interval_to_driver_s`` was never measured is a
+    DIFFERENT claim - the car exists, the number does not - and still
+    degrades to ``GAP_UNKNOWN_FALLBACK_S``: fabricated, less harmful than
+    0.0, not correct, and deliberately unchanged here. Retiring it is its
+    own decision over its own population.
     """
     if car_ahead is None:
-        return 0.0
+        return None
     interval = car_ahead.get("interval_to_driver_s")
     if interval is None:
         return GAP_UNKNOWN_FALLBACK_S
@@ -333,10 +341,11 @@ def build_race_state(
         pace_delta_s = _pace_delta_vs_car_ahead(driver_state, car_ahead)
 
     if rival:
+        # The positional fallback may be the leader's None; float(None) raises.
         gap_ahead_s, pace_delta_s = _targeting_against_rival(
             lap_state,
             rival,
-            float(gap_ahead_s),
+            float(gap_ahead_s) if gap_ahead_s is not None else None,
             float(pace_delta_s),
         )
 
@@ -348,7 +357,7 @@ def build_race_state(
         position=position,
         compound=normalise_compound(driver_state.get("compound")),
         tyre_life=tyre_life if tyre_life is not None else UNKNOWN_TYRE_LIFE,
-        gap_ahead_s=float(gap_ahead_s),
+        gap_ahead_s=float(gap_ahead_s) if gap_ahead_s is not None else None,
         pace_delta_s=float(pace_delta_s),
         air_temp=_weather_reading(weather, "air_temp", DEFAULT_AIR_TEMP_C),
         track_temp=_weather_reading(weather, "track_temp", DEFAULT_TRACK_TEMP_C),

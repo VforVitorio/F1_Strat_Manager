@@ -59,7 +59,10 @@ def _race_state_for(lap_state: dict, driver: str, safety_car: bool):
         position=int(driver_state["position"]),
         compound=driver_state.get("compound") or "MEDIUM",
         tyre_life=int(driver_state.get("tyre_life") or 10),
-        gap_ahead_s=driver_state.get("gap_ahead_s") or 2.0,
+        # None is a valid RaceState value now - no car ahead to measure (#878) -
+        # and the old `or 2.0` also destroyed a genuinely measured 0.0, two cars
+        # side by side. The two-arg .get already returns None for a missing key.
+        gap_ahead_s=driver_state.get("gap_ahead_s"),
         pace_delta_s=0.0,
         risk_tolerance=0.5,
         air_temp=weather.get("air_temp") or 25.0,

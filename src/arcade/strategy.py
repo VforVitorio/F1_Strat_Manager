@@ -777,7 +777,12 @@ def _build_decision(
         tyre_life=int(race_state.tyre_life),
         position=int(race_state.position),
         lap_time_s=float(lap_time_s) if lap_time_s else None,
-        gap_ahead_s=float(race_state.gap_ahead_s),
+        # The TCP wire contract pins this slot as float
+        # (tests/surfaces/test_arcade_wire_contract.py) and #857 owns the wire's
+        # future. 0.0 is the wire's existing absent-marker, kept AT THE BOUNDARY
+        # on purpose - not a producer writing 0.0 back into the strategy path,
+        # which is the defect #878 is about. Remove with the wire redesign.
+        gap_ahead_s=(float(race_state.gap_ahead_s) if race_state.gap_ahead_s is not None else 0.0),
         action=str(getattr(rec, "action", "ERROR")),
         confidence=float(getattr(rec, "confidence", 0.0) or 0.0),
         reasoning=str(getattr(rec, "reasoning", "")),
