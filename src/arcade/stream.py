@@ -73,10 +73,18 @@ def _json_safe(value):
     not depend on it keep updating, and None is a value every consumer
     already has to handle. `allow_nan=False` below is then the assertion
     that this worked, not the policy itself.
+
+    **Tuples walk with the lists.** `_blame` was taught them and this
+    function was not, so for one commit the pair disagreed about what is
+    encodable: a NaN inside a tuple survived sanitising, killed the whole
+    tick, and the paragraph above became false for exactly the container
+    the sibling had just learned. `json.dumps` writes a tuple as an array,
+    so returning a list changes no wire byte, and `dataclasses.asdict`
+    preserves tuples — the first tuple-typed model field arms it.
     """
     if isinstance(value, dict):
         return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     if isinstance(value, float) and not math.isfinite(value):
         return None
@@ -105,6 +113,13 @@ def _blame(value, path: str = "") -> str:
     """
     if isinstance(value, dict):
         for key, item in value.items():
+            # The encoder rejects a non-str/int/float/bool/None KEY too, and
+            # walking only the values left this blind to it - the same empty
+            # string the paragraph above says was the original bug, on a
+            # different input class. `{np.int64(lap): prob}` is one
+            # comprehension away from a `per_agent` block.
+            if not isinstance(key, (str, int, float, bool, type(None))):
+                return f"{path or '<root>'}.<key {key!r}>=<{type(key).__name__}>"
             found = _blame(item, f"{path}.{key}" if path else str(key))
             if found:
                 return found

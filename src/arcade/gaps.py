@@ -49,8 +49,11 @@ so the drift cancels instead of accumulating. See `progress`.
 
 The same drift is why `laps_down` cannot be a `dist` difference over a
 circuit length: over 4,934 same-corner pairs (within 2 % of a lap of each
-other) it disagrees with the positional answer on **3.4 %**, always in
-the direction that makes a lapped car read as a same-lap car.
+other) it disagrees with the positional answer on **3.4 %** — 169 pairs,
+measured as `int((d_front - d_back) / L)`, truncation toward zero, which
+is the convention this sentence used to leave unstated (a `//` floor
+gives 34.1 %). **Not "always"**: 148 of the 169 run in the direction that
+makes a lapped car read as a same-lap car, and 21 run the other way.
 
 Why the interval is at the line and not live
 --------------------------------------------
@@ -157,8 +160,31 @@ def _flag_frames(
     the other direction. Melbourne 2025 has no lapped finisher and no
     final-lap retirement, so both wrong versions measured perfectly on it.
 
-    What is left misclassified is a car that retires while leading, which
-    is a car that has already won everything except the last few metres.
+    **This rule does NOT hold in general, and an earlier version of this
+    paragraph claimed it did with one small residual. Two misses, both
+    measured (#879):**
+
+    1. *Any race whose leader retires on the final lap.* The retiree
+       anchors the flag, is credited the full race distance and is drawn
+       P1 above the actual winner — the exact rendering this code was
+       written to stop — and every car still moving past its stop,
+       **including later genuine retirees**, then reads as a finisher. Not
+       "the last few metres" either: a leader who stops at 40 % of the
+       final lap still anchors.
+    2. *A clean winner, whenever adjacent-lap noise exceeds the flag gap.*
+       At its own end a car's fraction is its final-lap distance over the
+       PREVIOUS lap's own length, and this file measures that per-car
+       variation at a median of 9.2 m and up to 340 m. A winner whose
+       previous lap ran long reads under 1.0; a rival whose previous lap
+       ran short clamps to 1.0 while still short of its line. Constructed
+       and executed: the winner reads `has_finished=False` and P2 takes
+       the flag. Melbourne 2025 survives on a 77 m margin, and both
+       ingredients are present in it.
+
+    There is no threshold-free rule that separates a noisy winner from a
+    final-lap crasher with what the loader caches today; #879 carries the
+    options, of which caching FastF1's official classification is the one
+    that ends the class rather than moving it.
 
     `final_lap` of 0 means the loader did not record one; nobody is then
     known to have finished, which is the honest answer and the behaviour

@@ -64,6 +64,11 @@ const VIEW = {
     key: label,
     label,
     fill: index === 1 ? 1 : 0.4,
+    // #876 moved the bar width host-side to `fill_pct` and did not migrate
+    // this stub. React drops `width: undefined%`, so all four bars measured
+    // 382 px - winner and losers identical - and the smoke stayed green
+    // because it counted rows and never measured one.
+    fill_pct: index === 1 ? 100 : 40,
     score: "+0.71",
     is_winner: index === 1,
     bar_colour: index === 1 ? "#a78bfa" : "#d1d5db",
@@ -129,7 +134,13 @@ const VIEW = {
 };
 
 const failures = [];
+// Counted, not written down. Two artifacts in a row shipped a hand-typed
+// total that had drifted from the real one ("36 tests" over 35, then
+// "13 checks" over 12) - harmless until someone deletes a check and
+// trusts the number.
+let checks = 0;
 const check = (ok, what) => {
+  checks += 1;
   if (!ok) failures.push(what);
 };
 
@@ -160,6 +171,13 @@ check((await page.locator(".agent-card").count()) === 6, "six agent cards");
 check((await page.locator(".agent-chart canvas").count()) === 2, "two chart canvases");
 check((await page.locator(".reasoning-tab").count()) === 6, "six reasoning tabs");
 check((await page.locator(".scenario-row").count()) === 4, "four scenario rows");
+
+// ...and the winner's bar is actually wider. Counting rows passed over a
+// board where every bar rendered full width.
+const barWidths = await page.evaluate(() =>
+  [...document.querySelectorAll(".scenario-bar-fill")].map((el) => Math.round(el.getBoundingClientRect().width)),
+);
+check(barWidths[1] > barWidths[0] && barWidths[0] > 0, `the bars carry their fill (${barWidths})`);
 check(await page.locator(".orchestrator").isVisible(), "the orchestrator card");
 
 // Qt pins the left panel at 540 px and sends every extra pixel right
@@ -169,21 +187,32 @@ const columns = await page.evaluate(
 );
 check(columns.startsWith("540px"), `left column is 540px (got ${columns})`);
 
-// The tooltip must exist only where the host sent content, and it must not
-// be clipped by the card. Those two fought each other once: the whole-card
-// hover target put the popup inside a card that had just been given
-// `overflow: auto`, and a 502 px transcript in a 375 px card lost the first
-// 140 px of every line, unreachably — overflow to the LEFT of a scroll box
-// cannot even be scrolled to.
+// The tooltip must appear only where the host sent content, and NOTHING
+// may clip it. Two fixes failed here and the second was passed by a check
+// written right here: it asserted the card's `overflow` and the popup's
+// DOM placement — the MECHANISM — and never hovered or measured. The
+// popup had escaped the card and was being amputated 130 px by
+// `.agents-right` instead. So this hovers and measures the rendered box
+// against every scrolling ancestor, which is the EFFECT and the only
+// thing that was ever in question.
+check((await page.locator(".agent-tooltip").count()) === 0, "no tooltip before hover");
+await page.locator(".agent-card").nth(4).hover();
+await page.waitForTimeout(200);
 check((await page.locator(".agent-tooltip").count()) === 1, "one tooltip, on RADIO only");
-const clipping = await page.evaluate(() => {
-  const tooltip = document.querySelector(".agent-tooltip");
-  const card = tooltip.closest(".agent-card");
-  const scroller = tooltip.closest(".agent-card-body");
-  return { cardOverflow: getComputedStyle(card).overflowX, insideTheScroller: Boolean(scroller) };
+
+const clip = await page.evaluate(() => {
+  const box = document.querySelector(".agent-tooltip").getBoundingClientRect();
+  const cut = [];
+  for (let node = document.querySelector(".agent-tooltip").parentElement; node; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+    const edge = node.getBoundingClientRect();
+    if (edge.left > box.left + 1 || edge.right < box.right - 1) cut.push(node.className || node.tagName);
+  }
+  return { cut, onScreen: box.left >= 0 && box.right <= window.innerWidth };
 });
-check(clipping.cardOverflow === "visible", `the card does not clip (got ${clipping.cardOverflow})`);
-check(!clipping.insideTheScroller, "the tooltip is outside the scrolling box");
+check(clip.cut.length === 0, `nothing clips the tooltip (cut by ${clip.cut.join(", ")})`);
+check(clip.onScreen, "the tooltip stays inside the viewport");
 
 // Qt's `showMessage(text, 1500)` clears itself. The port typed a
 // `transient` flag and read it nowhere until #871.
@@ -235,4 +264,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log("smoke OK: 13 checks");
+console.log(`smoke OK: ${checks} checks`);

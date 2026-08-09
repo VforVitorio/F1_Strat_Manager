@@ -477,6 +477,33 @@ def test_the_scenario_bars_normalise_across_scores_that_are_all_negative():
     assert rows["STAY_OUT"]["bar_colour"] == "#d1d5db"
 
 
+def test_the_percentage_the_bar_actually_renders_is_on_the_0_to_100_scale():
+    """`fill_pct` is the number the stylesheet consumes, and nothing pinned it.
+
+    #876 moved this arithmetic out of TSX so it would be testable and then
+    tested `fill` instead, which no longer renders anything: regressing
+    `fill_pct` to `round(fill, 1)` left every Python test and the browser
+    smoke green while every bar drew at under one percent. The scale is
+    the whole point of the field, so it is what this asserts.
+    """
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    rows = {
+        row["key"]: row
+        for row in build_scenarios(
+            {"STAY_OUT": -0.90, "PIT_NOW": -0.10, "UNDERCUT": -0.50, "OVERCUT": -1.30}
+        )
+    }
+
+    assert rows["PIT_NOW"]["fill_pct"] == 100.0, "the winner fills the bar, in percent"
+    assert rows["OVERCUT"]["fill_pct"] == 0.0
+    assert rows["UNDERCUT"]["fill_pct"] == pytest.approx(66.7, abs=0.05)
+    for row in rows.values():
+        assert row["fill_pct"] == pytest.approx(row["fill"] * 100, abs=0.05), (
+            "the two fields must agree; they are one number in two units"
+        )
+
+
 def test_a_scenario_the_orchestrator_did_not_score_draws_nothing_and_prints_dashes():
     """Absent is not zero, and an empty bar with `--` is how the Qt row says so."""
     from src.pitwall.agents_view.decision import build_scenarios
