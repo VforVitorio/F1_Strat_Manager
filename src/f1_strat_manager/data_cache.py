@@ -101,6 +101,12 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     "data/models/nlp/intent_setfit_modernbert_v1/**",
     "data/models/nlp/ner_v1/bert_bio_v1/**",
     "data/models/nlp/rcm_parser_v1/**",
+    # The RoBERTa sentiment weights, read at MODULE IMPORT by
+    # `radio_agent.py` (a bare `torch.load`, not a lazy accessor). Without
+    # them the orchestrator cannot be imported at all, so the CLI, the
+    # arcade pipeline and every eval tier are unreachable on a clean
+    # install - a harder failure than a degraded feature (#837).
+    "data/models/nlp/bert_sentiment_v1/**",
     "data/models/xgb_laptime_final.json",
     "data/models/xgb_laptime_final_feature_names.json",
     "data/models/xgb_laptime_global_v1.json",
@@ -128,6 +134,13 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     # missing from this list and from the dataset itself, which stayed invisible
     # because every machine that has run the notebook already had the file (#798).
     "data/processed/undercut_labeled/**",
+    # N13's safety-car labels, read at MODULE IMPORT by
+    # `race_situation_agent.py` to build the per-circuit SC base-rate map.
+    # Same class as the undercut gap above and as the sentiment weights
+    # higher up: import-time, so its absence is not a missing feature but
+    # an orchestrator that cannot be constructed (#837). Three artefacts,
+    # one pattern list, and only one of them had ever been noticed.
+    "data/processed/sc_labeled/**",
     # Radio corpus metadata: small parquets (~430 KB total for the full
     # 2025 calendar) that the runner reads to enumerate per-lap team-radio
     # rows and FIA race-control messages. The matching MP3 audio tree under
