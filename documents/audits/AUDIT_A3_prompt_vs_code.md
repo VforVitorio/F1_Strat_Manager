@@ -46,7 +46,7 @@ Also restated verbatim as N31's own guard-rail #5 (`strategy_orchestrator.py:160
 
 Code — the ONLY tool N28 is told to call for a compound suggestion (`pit_strategy_agent.py:91`):
 ```python
-_STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
+_STINT_CAPACITY_LAPS: dict[str, int] = {"SOFT": 18, "MEDIUM": 30, "HARD": 38}
 ```
 used at `pit_strategy_agent.py:1255,1269,1273` inside `recommend_compound_tool` — SOFT capacity 18 (not 15), MEDIUM 30 (matches the upper bound only), HARD 38 (not 20+).
 
@@ -206,13 +206,19 @@ The field both instructions target, `RaceSituationOutput.threat_level`, is decla
 ```python
 threat_level: str = field(init=False)
 ...
+
+
 def __post_init__(self) -> None:
-    if self.sc_currently_active or self.overtake_prob >= CFG.high_overtake or self.sc_prob_3lap >= CFG.high_sc:
-        self.threat_level = 'HIGH'
+    if (
+        self.sc_currently_active
+        or self.overtake_prob >= CFG.high_overtake
+        or self.sc_prob_3lap >= CFG.high_sc
+    ):
+        self.threat_level = "HIGH"
     elif self.overtake_prob >= CFG.medium_overtake or self.sc_prob_3lap >= CFG.medium_sc:
-        self.threat_level = 'MEDIUM'
+        self.threat_level = "MEDIUM"
     else:
-        self.threat_level = 'LOW'
+        self.threat_level = "LOW"
 ```
 No parameter here is `lap_number`. There is no code path — anywhere in `race_situation_agent.py`, grepped fully — that reads the current lap and adjusts `overtake_prob`, `sc_prob_3lap`, `sc_currently_active`, or `threat_level` for laps 1-3. `threat_level` is `init=False`, so the LLM's structured tool call CANNOT set it directly even if it wanted to; it is derived by the dataclass itself from the two probability floats, which come straight from the N12/N14 model calls, also lap-blind at this point in the pipeline (the DRS-window feature IS lap/neutralisation-aware inside `_build_overtake_features`, per `drs_allowed = not _is_neutralised(...)` at line 917 — but that only fixes the SC/VSC case flagged in that comment, not the "DRS not active until lap 3" case the prompt explicitly calls out one line later).
 
@@ -242,18 +248,19 @@ Line 814 ("Always call BOTH tools") and line 815 ("skip overtake tool [if >2.5s]
 
 Worse: on the production entry point (`run_from_state`, the one CLI/arcade/webapp/`/recommend` all use per the RSM `lap_state` contract in `CLAUDE.md` §6), the 2.5s gap is **never actually measured** before the LLM decides whether to call the tool. `rival_ahead` is computed purely by grid position (`race_situation_agent.py:1366-1370`):
 ```python
-driver_pos  = d.get('position')
+driver_pos = d.get("position")
 rival_ahead = (
-    next((r['driver'] for r in rivals if r.get('position') == driver_pos - 1), None)
-    if driver_pos is not None else None
+    next((r["driver"] for r in rivals if r.get("position") == driver_pos - 1), None)
+    if driver_pos is not None
+    else None
 )
 ```
 Then the human-turn message the LLM actually sees (`race_situation_agent.py:1438-1449`) is built from that POSITIONAL result only:
 ```python
 if rival_ahead:
-    message = f'... The car ahead is {rival_ahead}. Determine the overtaking probability ...'
+    message = f"... The car ahead is {rival_ahead}. Determine the overtaking probability ..."
 else:
-    message = f'... No car is within overtaking range (gap > 2.5s). ...'
+    message = f"... No car is within overtaking range (gap > 2.5s). ..."
 ```
 The `else` branch's own wording ("gap > 2.5s") is misleading scaffold text: that branch fires whenever there is no car one position ahead (the leader, or an unresolvable position) — it has **never checked an actual time gap** at that point. Conversely, whenever a positional rival DOES exist, the LLM is told "the car ahead is X" with **no gap value in the message at all** — so an LLM trying to honour "skip if gap > 2.5s" has no way to know the gap without calling the tool it is being told (maybe) to skip. `predict_overtake_tool` itself (`race_situation_agent.py:1104-1165`) has no gap-based short-circuit — it always computes and returns a real N12 probability, however far apart the two cars actually are.
 
@@ -288,13 +295,14 @@ laps_to_cliff_p10: float
 ...
 warning_level: str = field(init=False)
 
+
 def __post_init__(self) -> None:
     if self.laps_to_cliff_p10 < pit_soon:
-        self.warning_level = 'PIT_SOON'
+        self.warning_level = "PIT_SOON"
     elif self.laps_to_cliff_p10 < monitor:
-        self.warning_level = 'MONITOR'
+        self.warning_level = "MONITOR"
     else:
-        self.warning_level = 'OK'
+        self.warning_level = "OK"
 ```
 `TireOutput` (checked the full dataclass) carries `laps_to_cliff_p10/p50/p90`, `deg_rate`, `warning_level`, `reasoning`, `gp_name` — no `tyre_life` field feeds `__post_init__`. `pit_soon`/`monitor` come from `CFG.get_cliff_thresholds(gp_name)` (GP/cluster/global — correctly matches the prompt's stated 3/7 global fallback, no divergence there). Neither guard-rail's trigger condition (`tyre_life <= 3`, `tyre_life > {18,28,38}` by compound) appears anywhere in this derivation, nor anywhere else in the file — grepped `predict_tire_deg_tool` and `estimate_laps_to_cliff_tool` (the only two tools, `tire_agent.py:1024,1065`) for any tyre_life-based clamping of the returned P10/P50/P90 or a confidence flag: none exists. Both tools return the model's raw MC-Dropout percentiles for whatever `tyre_life` they're asked about, fresh or not.
 
@@ -334,13 +342,13 @@ N30's own system prompt (`rag_agent.py:118-128`) actively invites the exact fail
 
 Code, `strategy_orchestrator.py:1924-1929` (`_run_conditional_agents`, called once per lap when N30 is active):
 ```python
-reg_out            = run_rag_agent(question)
-regulation_context = reg_out.answer          # <-- the field the docstring says NOT to cite from
+reg_out = run_rag_agent(question)
+regulation_context = reg_out.answer  # <-- the field the docstring says NOT to cite from
 rag_dict = {
     "question": reg_out.question,
-    "answer":   reg_out.answer,
-    "articles": list(reg_out.articles),      # <-- the safe field: captured, but only for rag_dict
-    "chunks":   [...],
+    "answer": reg_out.answer,
+    "articles": list(reg_out.articles),  # <-- the safe field: captured, but only for rag_dict
+    "chunks": [...],
 }
 ```
 The function's own docstring (`strategy_orchestrator.py:1872-1880`) states this is deliberate, calling `regulation_context_str` "legacy": *"The legacy `regulation_context_str` is preserved verbatim for the orchestrator's own LLM prompt and for `StrategyRecommendation`, **neither of which depend on the structured shape**."* `rag_dict["articles"]` (the safe, chunk-derived list) is routed only to "downstream consumers that need more than just the answer string (the arcade dashboard surfaces article references and chunk text in its RAG card)" — i.e. the safe field reaches the UI, not the LLM prompt.
@@ -366,9 +374,9 @@ N28's decision rule #4 (`pit_strategy_agent.py:611`): `"4. If P(undercut_success
 
 The actual comparison the tool performs uses a config value loaded from disk at runtime, not the literal (`pit_strategy_agent.py:230,1194`):
 ```python
-self.undercut_threshold: float    = uc_cfg['best_threshold']   # from model_config_undercut_v1.json
+self.undercut_threshold: float = uc_cfg["best_threshold"]  # from model_config_undercut_v1.json
 ...
-verdict   = 'YES' if calib_proba >= agent.cfg.undercut_threshold else 'NO'
+verdict = "YES" if calib_proba >= agent.cfg.undercut_threshold else "NO"
 ```
 The tool's own return string DOES report the live threshold correctly (`f'threshold={agent.cfg.undercut_threshold} | ... verdict={verdict}'`), so an LLM that reads the tool's `verdict` field (rather than re-deriving its own YES/NO from the hardcoded "0.522" in decision rule #4 against the raw `P(undercut_success)` number) gets the right answer regardless of drift. But the prompt states BOTH: a literal threshold ("0.522") the LLM could apply itself, AND a tool that supplies an authoritative `verdict`. Nothing forces the LLM to prefer the tool's `verdict` over doing its own comparison against the stale literal.
 
@@ -397,7 +405,7 @@ Two different code paths handle "degradation rate" for two different purposes in
 
 2. `estimate_laps_to_cliff_tool` (`tire_agent.py:1118`), computing the P10/P50/P90 figures the prompt tells the LLM to base its recommendation on ("Base your recommendation on P10"), uses a DIFFERENT, sign-stripped rate for the actual division:
    ```python
-   deg_rate = max(float(feat_df['DegradationRate'].abs().iloc[-1]), 0.001)
+   deg_rate = max(float(feat_df["DegradationRate"].abs().iloc[-1]), 0.001)
    ...
    p50 = min(remaining_budget / deg_rate, cliff_ceiling)
    p10 = min(max(0.0, (remaining_budget - total_std) / deg_rate), cliff_ceiling)

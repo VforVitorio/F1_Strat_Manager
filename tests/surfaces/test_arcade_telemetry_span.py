@@ -226,6 +226,7 @@ def test_the_snapshot_publishes_spans_and_the_rewind_flag():
         _driver_rival="PIA",
         _year=2025,
         _gaps=RaceGapCalculator(session),
+        _color_for=lambda code: (255, 255, 255),
     )
 
     moving = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)["telemetry"]
@@ -256,6 +257,7 @@ def test_single_driver_mode_publishes_an_empty_rival_span():
         _driver_rival=None,
         _year=2025,
         _gaps=RaceGapCalculator(session),
+        _color_for=lambda code: (255, 255, 255),
     )
 
     telemetry = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)["telemetry"]

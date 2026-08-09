@@ -19,8 +19,8 @@ not the same zero.
 N04 fixes the baseline:
 
 ```python
-baseline_tyrelife = group['TyreLife'].min()
-baseline_laptime  = group.loc[group['TyreLife'] == baseline_tyrelife, 'LapTime_s'].mean()
+baseline_tyrelife = group["TyreLife"].min()
+baseline_laptime = group.loc[group["TyreLife"] == baseline_tyrelife, "LapTime_s"].mean()
 FuelAdjustedDegAbsolute = adjusted - baseline_laptime
 ```
 

@@ -184,7 +184,10 @@ def _flag_frames(
     a divergence has to surface rather than pass silently.
 
     A driver the official table does not cover falls back to the derived
-    answer for that driver alone, under the same warning.
+    answer for that driver alone. **It gets no warning**, and cannot: with
+    no official verdict there is nothing to disagree with. That is the one
+    silent path here, so a results table missing a driver hides the same
+    misclassification the derived rule always had.
 
     `final_lap` of 0 means the loader did not record one; nobody is then
     known to have finished, which is the honest answer and the behaviour

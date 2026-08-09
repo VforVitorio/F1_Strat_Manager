@@ -192,6 +192,7 @@ view = SimpleNamespace(
     _driver_rival="PIA",
     _year=2025,
     _gaps=RaceGapCalculator(session),
+    _color_for=lambda code: (255, 255, 255),
     _stream_server=server,
     _strategy_state=state,
     _broadcast_tick=0,

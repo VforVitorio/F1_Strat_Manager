@@ -675,9 +675,13 @@ class F1ArcadeView(arcade.View):
         # Per driver:
         # - `laps_completed` carries the DATA window's strict per-driver
         #   reveal (reveal lap L iff L <= laps_completed). It reads the
-        #   crossing map, so it is monotone while playing forward and never
-        #   flashes a lap open a tick early the way the interpolated `lap`
-        #   can.
+        #   crossing map, so it is monotone while playing forward - swept
+        #   over 20 drivers x 154,173 frames, no counter-example. It is NOT
+        #   exact against the parquet: 76 of 921 crossings (8.3 %) open
+        #   before the parquet's `Time`, worst case 0.463 s, because the
+        #   `lap` field these crossings are detected from is an interpolation
+        #   rather than a line detector. Monotone and per driver, not
+        #   frame-accurate.
         # - `progress` is the ordering coordinate, laps plus fraction of the
         #   current lap; a consumer derives laps-down positionally from it.
         #   None when the telemetry never places the car (#886).
@@ -762,6 +766,11 @@ class F1ArcadeView(arcade.View):
             "global_t_min": round(float(self._session.global_t_min), 3),
             "total_laps": self._session.max_lap_number,
             "race_order": race_order,
+            # The tower colours its rows by driver, and a hardcoded palette in
+            # TypeScript is exactly the drift `palette.py` exists to prevent -
+            # five copies of this palette have already been found. The producer
+            # publishes what the arcade itself draws with.
+            "driver_colors": {code: list(self._color_for(code)) for code in drivers},
             # FastF1 TrackStatus digits for the lap on screen, the same source
             # the arcade's own pill reads. "" when the loader has no entry for
             # that lap, which a consumer renders as clear - the same collapse
@@ -962,7 +971,11 @@ class F1ArcadeView(arcade.View):
             if code in featured or not frames or frame_idx >= len(frames):
                 continue
             f = frames[frame_idx]
-            if not f.active:
+            # A car FastF1 gave no position for has x = y = 0 and would be
+            # drawn at one fixed point on the circuit for the whole race
+            # (HAD, Melbourne 2025: 2,935 active frames there). #886 fixed
+            # the ORDERING to say "unknown"; the drawing kept the sentinel.
+            if not f.active or not self._session.has_position.get(code, True):
                 continue
             sx, sy = self._track.project(f.x, f.y)
             r, g, b = self._color_for(code)
@@ -976,7 +989,10 @@ class F1ArcadeView(arcade.View):
         if idx >= len(frames):
             return
         f = frames[idx]
-        if not f.active:
+        # Same guard as the background field: no position data means there is
+        # nowhere honest to draw this car, and (0, 0) projects to a real point
+        # on the circuit rather than to nothing (#886).
+        if not f.active or not self._session.has_position.get(code, True):
             return
         sx, sy = self._track.project(f.x, f.y)
         color = self._color_for(code)
