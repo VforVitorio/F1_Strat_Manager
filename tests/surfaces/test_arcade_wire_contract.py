@@ -32,6 +32,7 @@ pytest.importorskip("arcade", reason="the arcade replay is an optional surface")
 from src.arcade.app import F1ArcadeView  # noqa: E402
 from src.arcade.config import DT, STREAM_SCHEMA_VERSION  # noqa: E402
 from src.arcade.data import FrameData, SessionData  # noqa: E402
+from src.arcade.gaps import RaceGapCalculator  # noqa: E402
 from src.arcade.strategy import (  # noqa: E402
     LapDecisionDTO,
     PerAgentOutputsDTO,
@@ -152,6 +153,7 @@ def _view(session: SessionData, state: StrategyState, rival: str | None, clients
         _driver_main="NOR",
         _driver_rival=rival,
         _year=2025,
+        _gaps=RaceGapCalculator(session),
         _stream_server=SimpleNamespace(client_count=lambda: clients, broadcast=_sent.append),
         _strategy_state=state,
         # `_broadcast_if_due` increments the tick then broadcasts when it
@@ -220,8 +222,11 @@ GOLDEN_SHAPE = {
                 "active": "bool",
                 "compound": "int",
                 "dist": "float",
+                "has_finished": "bool",
                 "has_position": "bool",
                 "lap": "int",
+                "laps_completed": "int",
+                "progress": "float",
                 "rel_dist": "float",
                 "speed": "float",
                 "tyre_life": "float",
@@ -230,8 +235,11 @@ GOLDEN_SHAPE = {
                 "active": "bool",
                 "compound": "int",
                 "dist": "float",
+                "has_finished": "bool",
                 "has_position": "bool",
                 "lap": "int",
+                "laps_completed": "int",
+                "progress": "float",
                 "rel_dist": "float",
                 "speed": "float",
                 "tyre_life": "float",
@@ -241,6 +249,7 @@ GOLDEN_SHAPE = {
         "gp_name": "str",
         "lap": "int",
         "location": "str",
+        "race_order": ["str"],
         "t": "float",
         "telemetry": {
             "main": [
@@ -271,6 +280,7 @@ GOLDEN_SHAPE = {
             ],
         },
         "total_laps": "int",
+        "track_status": "str",
         "year": "int",
     },
     "playback": {
@@ -702,3 +712,106 @@ def test_a_payload_that_cannot_be_encoded_is_dropped_rather_than_half_sent():
     payload["strategy"]["latest"]["reasoning"] = {1, 2}  # a set is not JSON
 
     assert _sent_bytes(payload) == []
+
+
+# --- #857: the wire can feed a leaderboard ----------------------------------
+
+
+def _drift_frames(n: int, speed_mps: float, drift_per_lap_m: float = 0.0) -> list[FrameData]:
+    """Frames whose odometer accumulates that car's OWN per-lap length.
+
+    `dist` is race-cumulative metres, so it looks like a progress axis and
+    is not one: each car accumulates the distance IT drove. On the real race
+    that drift reaches 1877 m on a 5220 m circuit, and sorting on it put the
+    wrong car in the lead on 37 % of sampled frames.
+    """
+    circuit = 5000.0
+    lap_length = circuit + drift_per_lap_m
+    out = []
+    for i in range(n):
+        travelled = speed_mps * i * DT
+        completed = int(travelled // circuit)
+        fraction = (travelled % circuit) / circuit
+        out.append(
+            FrameData(
+                t=i * DT,
+                x=1.0,
+                y=2.0,
+                speed=speed_mps * 3.6,
+                gear=7,
+                drs=0,
+                throttle=90.0,
+                brake=0.0,
+                lap=1 + completed,
+                dist=(completed + fraction) * lap_length,
+                rel_dist=fraction,
+                tyre=1,
+                tyre_life=9.0,
+                active=True,
+            )
+        )
+    return out
+
+
+def _order_snapshot(**cars) -> dict:
+    """One published snapshot from a session of the given cars."""
+    n = min(len(f) for f in cars.values())
+    session = SessionData(
+        gp_name="Melbourne",
+        location="Melbourne",
+        year=2025,
+        frames_by_driver=dict(cars),
+        circuit_length_m=5000.0,
+        max_lap_number=0,
+        total_frames=n,
+    )
+    view = SimpleNamespace(
+        _session=session,
+        _driver_main=next(iter(cars)),
+        _driver_rival=None,
+        _year=2025,
+        _gaps=RaceGapCalculator(session),
+    )
+    return F1ArcadeView._build_arcade_snapshot(view, n - 1, n - 26, False)
+
+
+def test_the_wire_publishes_an_order_a_dist_sort_would_get_wrong():
+    """`race_order` is the producer's answer, not something a consumer re-derives.
+
+    The fixture makes the two coordinates disagree: SLOW runs long per lap,
+    so its published `dist` exceeds FAST's while FAST is genuinely ahead on
+    track. A consumer sorting `dist` inverts them; the published key does
+    not, because it is `_rank_drivers` - the same code the arcade panel
+    ranks with, so the wire and the panel cannot drift apart.
+    """
+    snapshot = _order_snapshot(
+        # Long enough that every car has a PREVIOUS lap of its own: on a
+        # two-lap fixture nobody does, the circuit length stands in for all
+        # of them, and the per-car drift stops cancelling - which is the
+        # fixture being unrepresentative, not the coordinate failing.
+        FAST=_drift_frames(12000, 52.0),
+        SLOW=_drift_frames(12000, 50.0, drift_per_lap_m=900.0),
+    )
+    drivers = snapshot["drivers"]
+
+    assert drivers["SLOW"]["dist"] > drivers["FAST"]["dist"], "the fixture must invert dist"
+    assert snapshot["race_order"][0] == "FAST", "the published order gets it right anyway"
+
+
+def test_the_reveal_carrier_is_per_driver_and_not_the_main_driver_lap():
+    """Band 1-2 reveals lap L for driver d iff `L <= laps_completed`.
+
+    The tick carries only the MAIN driver's lap, and on the real race the
+    field spans two or three different laps at 96 % of instants - so masking
+    everyone at one lap lags the leaders and leaks look-ahead for the cars
+    behind, at the same time. `laps_completed` reads the crossing map, so it
+    is per driver and monotone forward, unlike the interpolated `lap`.
+    """
+    snapshot = _order_snapshot(FAST=_drift_frames(12000, 52.0), SLOW=_drift_frames(12000, 30.0))
+    fast = snapshot["drivers"]["FAST"]
+    slow = snapshot["drivers"]["SLOW"]
+
+    assert isinstance(fast["laps_completed"], int)
+    assert fast["laps_completed"] > slow["laps_completed"], (
+        "one shared lap number cannot express this, which is why the rule is per driver"
+    )

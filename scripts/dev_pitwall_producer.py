@@ -26,6 +26,7 @@ from types import SimpleNamespace
 from src.arcade.app import F1ArcadeView
 from src.arcade.config import FPS, STREAM_HOST, STREAM_PORT
 from src.arcade.data import SessionLoader
+from src.arcade.gaps import RaceGapCalculator
 from src.arcade.strategy import (
     LapDecisionDTO,
     PerAgentOutputsDTO,
@@ -190,6 +191,7 @@ view = SimpleNamespace(
     _driver_main="NOR",
     _driver_rival="PIA",
     _year=2025,
+    _gaps=RaceGapCalculator(session),
     _stream_server=server,
     _strategy_state=state,
     _broadcast_tick=0,

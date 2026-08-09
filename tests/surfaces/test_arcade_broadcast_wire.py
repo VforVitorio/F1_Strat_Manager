@@ -32,6 +32,7 @@ from src.arcade.data import (  # noqa: E402
     SessionData,
     _lap_fraction_from_distance,
 )
+from src.arcade.gaps import RaceGapCalculator  # noqa: E402
 
 # The three numbers a synthetic session needs to be self-consistent: a
 # circuit length the distances accumulate against, a session-time origin
@@ -146,6 +147,7 @@ def _snapshot(
         _driver_main=MAIN,
         _driver_rival=rival,
         _year=session.year,
+        _gaps=RaceGapCalculator(session),
     )
     start = frame_idx if span_start is None else span_start
     return F1ArcadeView._build_arcade_snapshot(view, frame_idx, start, rewound, 0)

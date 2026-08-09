@@ -22,6 +22,12 @@ export interface DriverState {
   tyre_life: number;
   active: boolean;
   has_position: boolean;
+  /** Laps completed per the crossing map. The reveal carrier: reveal lap L iff L <= laps_completed. */
+  laps_completed: number;
+  /** Laps plus fraction of the current lap, the ordering coordinate. Null when the telemetry never places the car (#886). */
+  progress: number | null;
+  /** Took the chequered flag. OUT = !active && !has_finished (#855); the value's quality is #879. */
+  has_finished: boolean;
 }
 
 export interface TelemetrySample {
@@ -47,6 +53,10 @@ export interface ArcadeState {
   driver_main: string;
   driver_rival: string | null;
   drivers: Record<string, DriverState>;
+  /** Every published driver, best first - the producer's own ranking, so no consumer re-derives it (#857). */
+  race_order: string[];
+  /** FastF1 TrackStatus digits for the lap on screen; "" when the loader has no entry, rendered as clear. */
+  track_status: string;
   telemetry: {
     /** Every sample the replay clock crossed since the previous tick, oldest first. */
     main: TelemetrySample[];
