@@ -315,13 +315,16 @@ over a threshold that could never fire.
 
 ## 9. Carried forward, unresolved
 
-- **Race control messages: DECIDED 2026-08-09, out of scope for sprint 4.** Band 1's status strip
-  is served by `track_status`, the FastF1 TrackStatus digits the wire has carried since #857 -
-  that is what renders the SC / VSC / yellow / red pill, and it is the same source the arcade's
-  own pill reads. The free-text MESSAGES are a different feature with a different producer
-  (`SessionData.events` is always empty, P3 finding A3, and nothing populates it), and building an
-  events pipeline is not bands 1-2. They belong with the RCM work, not here. **Overrule this if the
-  strip is meant to show message text rather than a flag state.**
+- **Race control messages: RESOLVED 2026-08-09 — they already exist, and an earlier note here was
+  wrong.** That note said they had no producer, on the strength of `SessionData.events` being
+  empty. `SessionData.events` is a dead field; the messages come from `src/nlp/radio_runner.py`
+  (out of `rcm.parquet`) as `RaceState.rcm_events`, and the **Radio card already renders them**
+  in its body and tooltip — so PITWALL's AGENTS window shows them today, alongside the radio
+  transcriptions and N29's verdict. A real Melbourne run reports 90 of them.
+  So the sprint-4 question is only WHERE they belong: the flag STATE is the status strip
+  (`track_status`, already on the wire); the message TEXT already has a home. If the DATA window
+  wants its own ticker, that is one additive wire field from an existing producer, not a pipeline.
+  Full source map: `PITWALL_SPRINT4_SOURCES.md`.
 - **A driver whose telemetry drops mid-race under-reveals** (OBS-4). An officially-Finished car
   with a dropout gets its flag crossing at the dropout frame, so `laps_completed` stops there and
   the reveal withholds that driver's later parquet laps. Data-honest - the replay has no telemetry
