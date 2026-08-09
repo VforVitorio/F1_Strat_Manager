@@ -55,6 +55,8 @@ export interface ArcadeState {
   drivers: Record<string, DriverState>;
   /** Every published driver, best first - the producer's own ranking, so no consumer re-derives it (#857). */
   race_order: string[];
+  /** Per-driver RGB, from the arcade's own palette so no consumer hardcodes a second copy. */
+  driver_colors: Record<string, [number, number, number]>;
   /** FastF1 TrackStatus digits for the lap on screen; "" when the loader has no entry, rendered as clear. */
   track_status: string;
   telemetry: {

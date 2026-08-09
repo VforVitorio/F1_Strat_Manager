@@ -187,8 +187,17 @@ Two rules that must be written into the code, not assumed:
   `laps_completed` is read off the crossing map and published per driver since #857.
   Gate A measured that at **96% of instants the running field spans 2 or 3 different laps**, and the
   tick carries only the main driver's lap. Masking everyone at the main driver's lap lags the
-  leaders by a lap and leaks 1-2 laps of look-ahead for cars behind, simultaneously. `<` not `<=`,
-  because a lap only has a time once it is crossed.
+  leaders by a lap and leaks 1-2 laps of look-ahead for cars behind, simultaneously.
+- **`race_order` is meaningless until every car has completed a lap.** On frame 0 the field is
+  ordered by millimetres of accumulated distance (measured: HUL "leads" by 6 mm), and through
+  lap 1 each car's fraction is normalised by its OWN first-lap length, which biases the back of
+  the grid (measured: a car starting P7 reads P2). `gaps.py` says so - "excluding the opening
+  lap, where no classification exists yet" - and the wire publishes it anyway. **Band 1 must
+  render the tower as provisional until `laps_completed >= 1` for every driver**, exactly as a
+  broadcast timing tower does.
+- **A rewind UN-reveals.** `laps_completed` falls when the clock goes back, so a lap that was
+  open must close again; a reveal cache keyed only on "seen once" leaks the whole future after
+  one seek to the end.
 - **The gap column is lap-quantised and says so on screen.** Take it from the BULK reader over `laps.parquet`, labelled
   as at-the-line. **Two API names this line used to give are dead ends**: `get_rival_states` is a
   simulation-layer method PITWALL cannot reach, and `overlays._gap_value` no longer exists (#844

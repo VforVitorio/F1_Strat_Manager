@@ -154,6 +154,7 @@ def _view(session: SessionData, state: StrategyState, rival: str | None, clients
         _driver_rival=rival,
         _year=2025,
         _gaps=RaceGapCalculator(session),
+        _color_for=lambda code: (255, 255, 255),
         _stream_server=SimpleNamespace(client_count=lambda: clients, broadcast=_sent.append),
         _strategy_state=state,
         # `_broadcast_if_due` increments the tick then broadcasts when it
@@ -249,6 +250,7 @@ GOLDEN_SHAPE = {
         "gp_name": "str",
         "lap": "int",
         "location": "str",
+        "driver_colors": {"NOR": ["int"], "PIA": ["int"]},
         "race_order": ["str"],
         "t": "float",
         "telemetry": {
@@ -771,6 +773,7 @@ def _order_snapshot(**cars) -> dict:
         _driver_rival=None,
         _year=2025,
         _gaps=RaceGapCalculator(session),
+        _color_for=lambda code: (255, 255, 255),
     )
     return F1ArcadeView._build_arcade_snapshot(view, n - 1, n - 26, False)
 

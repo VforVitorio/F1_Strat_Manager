@@ -148,6 +148,7 @@ def _snapshot(
         _driver_rival=rival,
         _year=session.year,
         _gaps=RaceGapCalculator(session),
+        _color_for=lambda code: (255, 255, 255),
     )
     start = frame_idx if span_start is None else span_start
     return F1ArcadeView._build_arcade_snapshot(view, frame_idx, start, rewound, 0)
