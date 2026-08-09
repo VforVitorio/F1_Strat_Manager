@@ -665,6 +665,34 @@ class F1ArcadeView(arcade.View):
                 # chart under a populated header.
                 "has_position": has_position,
             }
+        # --- Race order and the reveal coordinates (#857) -------------------
+        # Published by the producer so no consumer re-derives the order from
+        # `dist` (race-cumulative: the wrong leader on 37 % of sampled frames)
+        # or from `lap` (a rounded interpolation that flickers +-1 at the
+        # line). `_rank_drivers` is the SAME code the arcade leaderboard ranks
+        # with, so the wire and the panel cannot drift apart.
+        #
+        # Per driver:
+        # - `laps_completed` carries the DATA window's strict per-driver
+        #   reveal (reveal lap L iff L <= laps_completed). It reads the
+        #   crossing map, so it is monotone while playing forward and never
+        #   flashes a lap open a tick early the way the interpolated `lap`
+        #   can.
+        # - `progress` is the ordering coordinate, laps plus fraction of the
+        #   current lap; a consumer derives laps-down positionally from it.
+        #   None when the telemetry never places the car (#886).
+        # - `has_finished` separates a chequered flag from a retirement:
+        #   `active` alone reads the winner as OUT (#855). Its value is only
+        #   as good as the flag anchor, which since #879 is the official
+        #   classification rather than an inference.
+        ranked = LeaderboardPanel._rank_drivers({"drivers": drivers}, self._gaps, frame_idx)
+        race_order: list[str] = []
+        for code, data, progress in ranked:
+            race_order.append(code)
+            known = progress is not None and data["has_position"]
+            data["progress"] = round(progress, 4) if known else None
+            data["laps_completed"] = self._gaps.laps_completed(code, frame_idx)
+            data["has_finished"] = self._gaps.has_finished(code)
         main_frame = None
         main_frames = self._session.frames_by_driver.get(self._driver_main)
         if main_frames and frame_idx < len(main_frames):
@@ -733,6 +761,14 @@ class F1ArcadeView(arcade.View):
             # are keyed on. `t` alone is only `frame_index * DT`.
             "global_t_min": round(float(self._session.global_t_min), 3),
             "total_laps": self._session.max_lap_number,
+            "race_order": race_order,
+            # FastF1 TrackStatus digits for the lap on screen, the same source
+            # the arcade's own pill reads. "" when the loader has no entry for
+            # that lap, which a consumer renders as clear - the same collapse
+            # the arcade already makes.
+            "track_status": (
+                self._session.track_status_by_lap.get(int(main_frame.lap), "") if main_frame else ""
+            ),
             # Circuit length lets the telemetry window anchor the X axis
             # once and forget — without it the charts would autorange to
             # the current sample's max and shift every broadcast.

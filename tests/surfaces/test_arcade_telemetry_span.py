@@ -34,6 +34,7 @@ from src.arcade.config import (  # noqa: E402
     STREAM_MAX_SPAN_FRAMES,
 )
 from src.arcade.data import FrameData, SessionData  # noqa: E402
+from src.arcade.gaps import RaceGapCalculator  # noqa: E402
 
 # The real cadence: `on_update` runs at the arcade library default 60 Hz and
 # every 6th call broadcasts, so a tick is one sixth of a second of wall
@@ -219,7 +220,13 @@ def test_the_snapshot_publishes_spans_and_the_rewind_flag():
         circuit_length_m=CIRCUIT_LENGTH_M,
         total_frames=50,
     )
-    view = SimpleNamespace(_session=session, _driver_main="NOR", _driver_rival="PIA", _year=2025)
+    view = SimpleNamespace(
+        _session=session,
+        _driver_main="NOR",
+        _driver_rival="PIA",
+        _year=2025,
+        _gaps=RaceGapCalculator(session),
+    )
 
     moving = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)["telemetry"]
     assert len(moving["main"]) == 5
@@ -243,7 +250,13 @@ def test_single_driver_mode_publishes_an_empty_rival_span():
         circuit_length_m=CIRCUIT_LENGTH_M,
         total_frames=50,
     )
-    view = SimpleNamespace(_session=session, _driver_main="NOR", _driver_rival=None, _year=2025)
+    view = SimpleNamespace(
+        _session=session,
+        _driver_main="NOR",
+        _driver_rival=None,
+        _year=2025,
+        _gaps=RaceGapCalculator(session),
+    )
 
     telemetry = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)["telemetry"]
 
