@@ -839,3 +839,30 @@ def test_no_warning_when_official_and_derived_agree(caplog):
         RaceGapCalculator(session)
 
     assert not [r for r in caplog.records if "Flag classification" in r.message]
+
+
+def test_a_car_with_no_position_data_has_no_progress_rather_than_zero():
+    """The absence must not wear the value a car on the grid also reads (#886).
+
+    FastF1 delivers nothing for one whole driver on Melbourne 2025: 154,173
+    frames with `dist`, `x` and `y` all at 0.0. `progress` computed 0.0 from
+    that and returned it, so "we have no data for this car" and "this car is
+    at the start line" were the same number - on the coordinate the entire
+    field is ordered by, one sprint before the wire starts publishing it.
+
+    The panel already partitions `None` out and appends it last. It simply
+    never received one.
+    """
+    session = _session(
+        max_lap_number=RACE_LAPS,
+        RUNNING=_car(50.0),
+        BLIND=[FrameData(**{**vars(f), "dist": 0.0, "x": 0.0, "y": 0.0}) for f in _car(50.0)],
+    )
+    session.has_position["BLIND"] = False
+    gaps = RaceGapCalculator(session)
+
+    assert gaps.progress("BLIND", 4000) is None, "no position data is an absence"
+    assert gaps.progress("RUNNING", 4000) is not None, "and the running car still has one"
+
+    order = _order(session, 4000)
+    assert order[-1] == "BLIND", "the unknown car sorts last rather than leading from the grid"
