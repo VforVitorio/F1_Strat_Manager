@@ -180,13 +180,19 @@ bests need.
 
 Two rules that must be written into the code, not assumed:
 
-- **The reveal is per driver and strict**: reveal driver *d*'s lap *L* iff `L < wire.drivers[d].lap`.
+- **The reveal is per driver and strict**: reveal driver *d*'s lap *L* iff
+  `L <= wire.drivers[d].laps_completed`. **This used to be written against `lap`**, which is a
+  rounded interpolation of a step function: measured non-monotone on 101 frames of 2.49 M, so it
+  flickers a lap open a tick early at the line, and it never opens a finisher's final lap.
+  `laps_completed` is read off the crossing map and published per driver since #857.
   Gate A measured that at **96% of instants the running field spans 2 or 3 different laps**, and the
   tick carries only the main driver's lap. Masking everyone at the main driver's lap lags the
   leaders by a lap and leaks 1-2 laps of look-ahead for cars behind, simultaneously. `<` not `<=`,
   because a lap only has a time once it is crossed.
-- **The gap column is lap-quantised and says so on screen.** Use `interval_to_driver_s` from
-  `get_rival_states`, labelled as at-the-line. **Do not port `overlays._gap_value`** (see #844).
+- **The gap column is lap-quantised and says so on screen.** Take it from the BULK reader over `laps.parquet`, labelled
+  as at-the-line. **Two API names this line used to give are dead ends**: `get_rival_states` is a
+  simulation-layer method PITWALL cannot reach, and `overlays._gap_value` no longer exists (#844
+  removed it). The lap-quantised intent survives both.
   A precise-looking wrong number on a fidelity surface is the P3 A2 defect class.
 
 **Sprint 5, band 3.** The Run Timeline heat grid (drivers as columns, laps as rows, purple / green /
@@ -200,7 +206,12 @@ rival overlaid and labelled broadcast tier, and the ring. **Depends on sprint 1*
 the span (#841) and the ring needs `rel_dist` (#842). Retired cars must render as retired, not as
 pending, which needs `active` (#842).
 
-⛔ **Sprint 4 has a prerequisite: #857.** The wire publishes only `lap`, `dist` and `rel_dist` per
+✅ **#857 is DONE** (the prerequisite below is cleared). The wire now publishes `race_order`,
+and `laps_completed` / `progress` / `has_finished` per driver, plus `track_status`, all from the
+producer's own `_rank_drivers` so the wire and the arcade panel cannot drift apart. The original
+statement of the problem follows, for the record.
+
+⛔ **Sprint 4 had a prerequisite: #857.** The wire publishes only `lap`, `dist` and `rel_dist` per
 driver — the two coordinates #844 spent a sprint refuting, plus a fraction. It publishes no race
 order, no `progress` and no interval, and a consumer that attaches mid-race cannot rebuild the
 crossing map from a 10 Hz snapshot stream. Decide what the timing band actually needs and publish
