@@ -112,7 +112,7 @@ dependencies = [
     "bs4>=0.0.2",
     # pypdf: used by scripts/build_rag_index.py to read the FIA regulation PDFs.
     # Was imported but undeclared, so a fresh env hit ModuleNotFoundError.
-    "pypdf>=4.0.0",
+    "pypdf>=6.15.0",
     "langchain-openai>=1.1.14",
     "rich>=14.3.3",
 ]
