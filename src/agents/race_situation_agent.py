@@ -334,6 +334,11 @@ class RaceSituationOutput:
             elevated SC risk. Same caveat: N14's best_threshold is raw-scale.
         threat_level: LOW / MEDIUM / HIGH derived from both probabilities in __post_init__.
         gap_ahead_s: Gap to the car directly ahead (seconds). < 1.0s = DRS range.
+            None when no overtake was scored - leading, no classified car ahead, or
+            the tool was never called. There was no pair, so there is no gap: the
+            same absence semantics ``overtake_prob`` already carries, and for the
+            same reason, because 0.0 is also what a genuinely side-by-side pair
+            reports (#878).
         pace_delta_s: SINGLE-lap pace delta vs the car ahead (s/lap), this driver's
             lap time minus theirs, so negative = we are faster. The rolling version is
             the separate ``pace_delta_rolling3`` field; this docstring used to describe
@@ -357,7 +362,7 @@ class RaceSituationOutput:
     overtake_prob: Optional[float]
     sc_prob_3lap: float
     threat_level: str = field(init=False)
-    gap_ahead_s: float = 0.0
+    gap_ahead_s: Optional[float] = None
     pace_delta_s: float = 0.0
     reasoning: str = ""
     sc_currently_active: bool = False  # any neutralisation (SC OR VSC) confirmed by RCM this lap
@@ -973,9 +978,11 @@ def _parse_tool_outputs(messages: list) -> dict:
 
     Returns:
         Dict with: overtake_prob, sc_prob_3lap, gap_ahead_s, pace_delta_s.
-        ``overtake_prob`` is None when the tool declined to answer — the pair sat outside
-        N11's trained gap domain, or the tool was never called. The other three default
-        to 0.0, unchanged.
+        ``overtake_prob`` AND ``gap_ahead_s`` are None when the tool declined or was
+        never called: no pair was scored, so neither a probability nor a gap exists.
+        0.0 is also the gap a genuinely side-by-side pair reports, which is the same
+        collision ``overtake_prob`` escaped one paragraph below (#878).
+        ``sc_prob_3lap`` and ``pace_delta_s`` keep their 0.0 defaults, unchanged.
 
     WHY overtake_prob IS THE ONE THAT CAN BE None
     ---------------------------------------------
@@ -988,7 +995,7 @@ def _parse_tool_outputs(messages: list) -> dict:
     result: dict[str, Optional[float]] = {
         "overtake_prob": None,
         "sc_prob_3lap": 0.0,
-        "gap_ahead_s": 0.0,
+        "gap_ahead_s": None,
         "pace_delta_s": 0.0,
     }
     overtake_taken = False
@@ -1396,9 +1403,7 @@ class RaceSituationAgent:
                 x_rows.iloc[0],
                 y_rows.iloc[0],
                 laps_recent,
-                circuit_cluster=agent.session_meta.get(
-                    "circuit_cluster", _UNKNOWN_CIRCUIT_CLUSTER
-                ),
+                circuit_cluster=agent.session_meta.get("circuit_cluster", _UNKNOWN_CIRCUIT_CLUSTER),
                 gp_name=agent.session_meta.get("gp_name", ""),
                 year=agent.session_meta.get("year", 2025),
             )
@@ -1827,7 +1832,9 @@ class RaceSituationAgent:
         return RaceSituationOutput(
             overtake_prob=effective_overtake_prob,
             sc_prob_3lap=effective_sc_prob,
-            gap_ahead_s=round(parsed["gap_ahead_s"], 2),
+            gap_ahead_s=(
+                round(parsed["gap_ahead_s"], 2) if parsed["gap_ahead_s"] is not None else None
+            ),
             pace_delta_s=round(parsed["pace_delta_s"], 3),
             reasoning=effective_reasoning,
             sc_currently_active=is_neutralized,

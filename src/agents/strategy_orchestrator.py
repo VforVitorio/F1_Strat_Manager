@@ -233,7 +233,12 @@ class RaceState(BaseModel):
 
     compound and tyre_life are the current stint values forwarded to N26.
 
-    gap_ahead_s and pace_delta_s are the primary inputs for N27 overtake scoring.
+    gap_ahead_s and pace_delta_s reach the LLM synthesis prompt's RACE CONTEXT
+    block. They do NOT feed the overtake model: N27 computes its own pair gap
+    from laps_df, and this line claimed otherwise for as long as it existed.
+    gap_ahead_s is None when there is no car directly ahead to measure - we
+    lead, or the pos-1 car is not classified this lap (#878). Render the
+    absence; never substitute a number for it.
 
     weather fields (air_temp, track_temp, rainfall) are forwarded to N14 (SC model)
     as contextual features.
@@ -253,7 +258,7 @@ class RaceState(BaseModel):
     position:       int
     compound:       str
     tyre_life:      int
-    gap_ahead_s:    float
+    gap_ahead_s:    Optional[float]
     pace_delta_s:   float
     air_temp:       float
     track_temp:     float
@@ -270,6 +275,24 @@ _PACE_MODE_VALUES = Literal["PUSH", "NEUTRAL", "MANAGE", "LIFT_AND_COAST"]
 _RISK_VALUES      = Literal["AGGRESSIVE", "BALANCED", "DEFENSIVE"]
 _PRIORITY_VALUES  = Literal["HIGH", "MEDIUM", "LOW"]
 _COMPOUND_VALUES  = Literal["SOFT", "MEDIUM", "HARD"]
+
+
+def _gap_ahead_context_line(race_state: RaceState) -> str:
+    """The RACE CONTEXT gap fragment, honest about an absent car ahead.
+
+    None at P1 is the race leader: say so, and say what leading means for
+    strategy, because defending a gap behind is a different problem from
+    chasing one. None below P1 means the car one place ahead has no
+    classified row this lap. Both used to render as a number - 0.00s from
+    the builder, or a fabricated 2.00s once a falsy ``or`` had eaten the
+    zero - and the LLM narrated overtaking pressure that did not exist
+    (#878).
+    """
+    if race_state.gap_ahead_s is not None:
+        return f"Gap ahead: {race_state.gap_ahead_s:.2f}s"
+    if race_state.position == 1:
+        return "Gap ahead: none - LEADING the race (defending a gap behind, not chasing)"
+    return "Gap ahead: none - no car classified directly ahead this lap"
 
 
 class Contingency(BaseModel):
@@ -1808,7 +1831,7 @@ def _build_orchestrator_prompt(
         f"  Driver: {race_state.driver} | Lap: {race_state.lap}/{race_state.total_laps}\n"
         f"  Position: P{race_state.position} | Compound: {race_state.compound} "
         f"TyreLife {race_state.tyre_life}\n"
-        f"  Gap ahead: {race_state.gap_ahead_s:.2f}s | "
+        f"  {_gap_ahead_context_line(race_state)} | "
         f"Pace delta: {race_state.pace_delta_s:+.3f}s\n"
         f"  Air {race_state.air_temp:.1f}°C | Track {race_state.track_temp:.1f}°C | "
         f"Rain {race_state.rainfall}\n"
