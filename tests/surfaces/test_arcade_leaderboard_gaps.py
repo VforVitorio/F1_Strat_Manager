@@ -22,6 +22,7 @@ that were refuted on the way.
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -674,3 +675,167 @@ def test_a_crossing_is_keyed_by_the_lap_it_ends_and_only_real_laps_count():
     assert sorted(crossings) == [1, 2, 3]
     for lap in (1, 2, 3):
         assert crossings[lap] == pytest.approx(lap * LAP_SECONDS, abs=DT)
+
+
+# --- Defect 3: who took the flag, when the official result is on disk --------
+#
+# #879: there is no threshold-free telemetry rule that separates a noisy
+# winner from a final-lap crasher. The replay replays a COMPLETED session,
+# so the loader now caches FastF1's official classification and the
+# calculator consumes it; the derived anchor stays only as the fallback for
+# sessions that have none (synthetic tests, a future live feed).
+
+
+def _own_lengths_frame(i: int, lap: int, dist: float, live: bool) -> FrameData:
+    return FrameData(
+        t=i * DT,
+        x=0.0,
+        y=0.0,
+        speed=180.0,
+        gear=7,
+        drs=0,
+        throttle=100.0,
+        brake=0.0,
+        lap=lap,
+        dist=dist,
+        rel_dist=0.0,
+        tyre=1,
+        tyre_life=5.0,
+        active=live,
+    )
+
+
+def _own_lengths_car(lap_lengths_m: list[float]) -> list[FrameData]:
+    """A car whose laps have different OWN lengths, at a constant 50 m/s.
+
+    This is the noise #879 measured on Melbourne 2025 (adjacent-lap
+    own-length deltas of median 9.2 m, up to 340 m): `dist` accumulates
+    what the car actually drove, so at its own telemetry end a car's
+    final-lap fraction is measured against the PREVIOUS lap's own length.
+    `_car` cannot express it — all its laps are the same length.
+    """
+    speed = 50.0
+    frames: list[FrameData] = []
+    dist = 0.0
+    for lap_no, length in enumerate(lap_lengths_m, start=1):
+        for i in range(int(round(length / speed / DT))):
+            frames.append(_own_lengths_frame(len(frames), lap_no, dist + speed * i * DT, True))
+        dist += length
+    while len(frames) < N_FRAMES:
+        frames.append(_own_lengths_frame(len(frames), len(lap_lengths_m), dist, False))
+    return frames
+
+
+def test_the_wall_clock_winner_finishes_when_the_official_result_says_so():
+    """#879 miss 2, closed: adjacent-lap noise no longer decides the flag.
+
+    WIN's previous lap ran 100 m long, so at its own end its fraction reads
+    5000/5100 < 1.0; P2's ran 50 m short, so P2 clamps to 1.0 while still
+    short of its line. The derived anchor then crowns P2 and classifies the
+    wall-clock winner — who crossed 1.0 s earlier — as a retirement. The
+    official result knows both finished, and it is on disk.
+    """
+    session = _session(
+        max_lap_number=3,
+        WIN=_own_lengths_car([5000.0, 5100.0, 5000.0]),
+        P2=_own_lengths_car([5000.0, 4950.0, 5200.0]),
+    )
+    session.official_status = {"WIN": "Finished", "P2": "Finished"}
+    idx = N_FRAMES - 1
+    gaps = RaceGapCalculator(session)
+
+    assert gaps.has_finished("WIN") is True, "the wall-clock winner took the flag"
+    assert gaps.has_finished("P2") is True
+    assert _order(session, idx) == ["WIN", "P2"]
+    assert gaps.interval_at_line("WIN", "P2", lap=3) == pytest.approx(1.0, abs=DT)
+
+
+def test_a_leading_final_lap_retiree_is_out_and_takes_nobody_with_it():
+    """#879 miss 1, closed: the retiring leader neither wins nor launders others.
+
+    CRASH leads by 0.3 laps and stops ~100 m short of its final line; RET2
+    is a genuine retirement that stops after the winner's flag. The derived
+    anchor let CRASH define the flag: it was drawn P1 with the full race
+    distance and RET2 inherited a finish. The official result says both
+    retired.
+    """
+    session = _finish_session(
+        CRASH=_car(50.0, head_start_laps=0.30, dead_from=6700),
+        RET2=_car(50.0, head_start_laps=-0.50, dead_from=7600),
+    )
+    session.official_status = {
+        "P1": "Finished",
+        "P2": "Finished",
+        "P3": "Finished",
+        "CRASH": "Retired",
+        "RET2": "Retired",
+    }
+    idx = N_FRAMES - 1
+    gaps = RaceGapCalculator(session)
+
+    assert gaps.has_finished("CRASH") is False
+    assert gaps.has_finished("RET2") is False
+    assert gaps.has_finished("P1") is True
+    assert _order(session, idx) == ["P1", "P2", "P3", "CRASH", "RET2"]
+    assert "CRASH OUT" in _labels(session, "P3", idx)
+
+
+@pytest.mark.parametrize("lapped_status", ["Lapped", "+1 Lap"])
+def test_official_truth_survives_a_telemetry_dropout(lapped_status):
+    """A car FastF1 loses mid-race but that officially finished stays FIN.
+
+    Telemetry absence is not retirement: a dropout that ends a car's frames
+    before the leader's flag made the derived rule call it a retirement.
+    The official row knows better. 'Lapped' is the spelling every 2023-2025
+    race actually serves (executed against jolpica; China 2025 classifies
+    BOR/HUL/TSU P14-P16 with it); '+1 Lap' is the deep-historical Ergast
+    form. NOT fastf1's own `DriverResult.dnf`, which calls 'Lapped' a DNF.
+    """
+    session = _finish_session(DROP=_car(33.34, dead_from=7000))
+    session.official_status = {
+        "P1": "Finished",
+        "P2": "Finished",
+        "P3": "Finished",
+        "DROP": lapped_status,
+    }
+    gaps = RaceGapCalculator(session)
+
+    assert gaps.has_finished("DROP") is True
+
+
+def test_a_disagreement_between_official_and_derived_is_logged(caplog):
+    """Two code paths answering one question is this repo's own defect class.
+
+    The official result wins, but a divergence from the derived rule must
+    become evidence in the log — it is the net that catches a vocabulary
+    surprise (a DSQ spelling, a status FastF1 renames) instead of letting
+    the replay and a future live feed drift apart silently.
+    """
+    session = _finish_session(CRASH=_car(50.0, head_start_laps=0.30, dead_from=6700))
+    session.official_status = {
+        "P1": "Finished",
+        "P2": "Finished",
+        "P3": "Finished",
+        "CRASH": "Retired",
+    }
+    with caplog.at_level(logging.WARNING):
+        RaceGapCalculator(session)
+
+    flagged = [r for r in caplog.records if "Flag classification" in r.message]
+    assert flagged, "the official-vs-derived disagreement must be logged"
+    assert any("CRASH" in r.message and "Retired" in r.message for r in flagged)
+
+
+def test_no_warning_when_official_and_derived_agree(caplog):
+    """Melbourne 2025 in miniature: agreement on every driver stays silent."""
+    session = _finish_session(RETIRED=_car(50.0, dead_from=3000))
+    session.official_status = {
+        "P1": "Finished",
+        "P2": "Finished",
+        "P3": "Finished",
+        "RETIRED": "Retired",
+    }
+    with caplog.at_level(logging.WARNING):
+        RaceGapCalculator(session)
+
+    assert not [r for r in caplog.records if "Flag classification" in r.message]

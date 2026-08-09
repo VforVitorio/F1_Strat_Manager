@@ -166,7 +166,7 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # `RelativeDistance` extraction in the worker intermediate, which nothing
 # had consumed since v10 and which left the cached bytes identical. A
 # maintainer trusting the old sentence would have deleted its readers.)
-CACHE_VERSION: Final[str] = "v11"  # pedal peak ignores NaN
+CACHE_VERSION: Final[str] = "v12"  # + official classification (SessionData.official_status)
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial by default — Windows spawn + pickling a loaded session across 8

@@ -143,6 +143,19 @@ class SessionData:
     # chart rather than as absent data. An empty dict means an older cache;
     # consumers treat an unlisted driver as having position.
     has_position: dict[str, bool] = field(default_factory=dict)
+    # FastF1's official classification ``Status`` per driver abbreviation
+    # ({"NOR": "Finished", "DOO": "Retired", ...}), read off
+    # ``session.results`` at load time. The replay always replays a
+    # COMPLETED session, so who took the chequered flag is a recorded fact;
+    # deriving it from telemetry noise misclassified a wall-clock winner as
+    # a retirement and a final-lap crasher as the winner (#879).
+    # ``RaceGapCalculator`` treats this as the source of truth and keeps the
+    # derived anchor only as the fallback for sessions that have none. Only
+    # the status string is stored: position columns would be cached unread,
+    # which is how ``intervals.parquet`` came to be downloaded every race
+    # and read by nothing. Empty dict means an older cache or a results
+    # table FastF1 could not deliver.
+    official_status: dict[str, str] = field(default_factory=dict)
 
 
 def _pedal_multiplier(results: list[dict], channel: str) -> float:
@@ -396,6 +409,7 @@ class SessionLoader:
         frames_by_driver = self._resample_all(results, timeline, global_t_min, circuit_length)
         track_status_by_lap = self._extract_track_status_by_lap(session)
         weather_by_lap = self._extract_weather_by_lap(session)
+        official_status = self._extract_official_status(session, driver_codes)
 
         has_position = {
             code: bool(len(frames)) and frames[-1].dist > frames[0].dist
@@ -422,6 +436,7 @@ class SessionLoader:
             track_status_by_lap=track_status_by_lap,
             weather_by_lap=weather_by_lap,
             has_position=has_position,
+            official_status=official_status,
         )
 
         with cache_path.open("wb") as f:
@@ -714,6 +729,46 @@ class SessionLoader:
             ),
             "rain_state": "WET" if bool(row.get("Rainfall")) else "DRY",
         }
+
+    def _extract_official_status(self, session: Any, driver_codes: dict) -> dict[str, str]:
+        """Map each driver abbreviation to FastF1's official ``Status`` string.
+
+        ``session.results`` is indexed by driver number - the same
+        ``session.drivers`` enumeration ``load()`` built ``driver_codes``
+        from, so the keys here match ``frames_by_driver`` by construction.
+        That matters: a table keyed one way and queried another misses on
+        every lookup while looking perfectly healthy (#448).
+
+        Interpreting the vocabulary is ``gaps._took_flag_officially``'s job,
+        not this one's - this stores the fact and one place decides what it
+        means. A missing row or an empty status is left OUT rather than
+        stored as a guess; the gap calculator then falls back to the derived
+        rule for that driver and logs the disagreement.
+        """
+        try:
+            results = session.results
+            if results is None or results.empty:
+                return {}
+            out: dict[str, str] = {}
+            for number, code in driver_codes.items():
+                if number not in results.index:
+                    continue
+                status = results.loc[number, "Status"]
+                if isinstance(status, str) and status:
+                    out[code] = status
+            return out
+        except Exception as exc:  # noqa: BLE001 - the enumeration is the point
+            # Reading ``session.results`` can raise fastf1's
+            # DataNotLoadedError, which subclasses Exception DIRECTLY - the
+            # same trap ``_extract_weather_by_lap`` documents: a narrow tuple
+            # lets it escape and kills the whole arcade load for a session
+            # that should have degraded to the derived flag rule.
+            logger.warning(
+                "Official classification unavailable (%s) - the flag logic "
+                "falls back to the derived rule",
+                exc,
+            )
+            return {}
 
     def _safe_rotation(self, session: Any) -> float:
         try:

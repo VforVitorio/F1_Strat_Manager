@@ -96,12 +96,15 @@ screen, and it beats a live number that is right 90 % of the time and
 
 from __future__ import annotations
 
+import logging
 from typing import Callable
 
 import numpy as np
 
 from src.arcade.config import DT
 from src.arcade.data import SessionData
+
+logger = logging.getLogger(__name__)
 
 # `(driver, frame) -> laps completed plus fraction`, WITHOUT flag
 # crossings. Passed in rather than imported so `_flag_frames` cannot
@@ -129,62 +132,59 @@ def _telemetry_end_frame(frames: list) -> int:
     return int(ended[0]) if len(ended) else len(frames) - 1
 
 
+_TOOK_FLAG_STATUSES = frozenset({"Finished", "Lapped", "Disqualified"})
+
+
+def _took_flag_officially(status: str) -> bool:
+    """Whether this FastF1 ``Status`` string means the car took the chequered flag.
+
+    The vocabulary is the one the data actually serves: every 2023-2025
+    race carries exactly ``Finished`` / ``Lapped`` / ``Retired`` /
+    ``Disqualified``. ``Lapped`` is a CLASSIFIED finisher one or more laps
+    down, and a modern ``Disqualified`` is post-race, so that car took the
+    flag too. The one case this mis-renders is a mid-race black flag, which
+    no season in range contains and which the disagreement warning below
+    would surface. ``startswith("+")`` accepts the deep-historical Ergast
+    spellings at zero cost.
+
+    **Deliberately NOT fastf1's own** ``DriverResult.dnf``, which is
+    ``not (Status[3:6] == "Lap" or Status == "Finished")``. ``"Lapped"[3:6]``
+    is ``"ped"``, so upstream's own predicate calls every lapped finisher a
+    DNF - the exact defect class #879 exists to kill - and even its docs'
+    ``"+ 1 Lap"`` spelling fails its own slice.
+    """
+    return status in _TOOK_FLAG_STATUSES or status.startswith("+")
+
+
 def _flag_frames(
-    frames_by_driver: dict[str, list], final_lap: int, progress_at: ProgressAt
+    frames_by_driver: dict[str, list],
+    final_lap: int,
+    progress_at: ProgressAt,
+    official_status: dict[str, str],
 ) -> dict[str, int | None]:
     """The frame each car took the chequered flag, `None` for a retirement.
 
-    **The rule is the racing one, and it needs no threshold.** When the
-    leader takes the flag every other car takes it the next time it crosses
-    the line, so a finisher's telemetry ends at or after the leader's does
-    and a retirement's ends before.
+    **The official classification is the source of truth when the loader
+    cached one** (`SessionData.official_status`, off `session.results`).
+    The replay always replays a COMPLETED session, so who finished is a
+    recorded fact rather than something to infer from odometer noise
+    (#879). A car the official result says finished takes the flag at its
+    own telemetry end - every car takes the flag at its own line, which is
+    where its telemetry stops - and a car it says retired takes none.
 
-    Everything therefore turns on finding the LEADER'S flag, and the
-    obvious answer is wrong. "The first car to reach the final lap" reads
-    a car that crashes a fifth of the way into it as the winner: its
-    telemetry ends first, so it set the flag time, it was then credited a
-    crossing of a lap it never completed, and the tie-break drew it **P1
-    ahead of the actual winner** for the whole flag-to-end window. An
-    earlier version of this docstring claimed the only misclassification
-    was a car retiring in the last fraction of a lap. That was false, and
-    a synthetic three-lap race produced the order `[CRASH, WIN, P2]`.
+    **The derived rule stays as the fallback**, for a session with no
+    official result: a future live feed, a synthetic session in the tests,
+    or a results table FastF1 could not deliver. It is a guess with two
+    measured misses (see `_derived_flag_frames`), which is why it is the
+    fallback and not the answer.
 
-    The rule that holds: **the flag is taken by the car that is LEADING
-    when its telemetry ends.** A winner is ahead of everyone at the moment
-    they stop producing data; a car that crashes is not. `progress_at` is
-    the caller's own coordinate WITHOUT any flag crossings, which is what
-    keeps this from being circular.
+    When both can answer, the derived one is still computed and every
+    disagreement is logged with the drivers and statuses named. Two code
+    paths answering the same question is this repo's own defect class, so
+    a divergence has to surface rather than pass silently.
 
-    Why not "reached the final lap" on its own: a car a lap down finishes
-    on `final_lap - 1` and would read as a retirement, the same mistake in
-    the other direction. Melbourne 2025 has no lapped finisher and no
-    final-lap retirement, so both wrong versions measured perfectly on it.
-
-    **This rule does NOT hold in general, and an earlier version of this
-    paragraph claimed it did with one small residual. Two misses, both
-    measured (#879):**
-
-    1. *Any race whose leader retires on the final lap.* The retiree
-       anchors the flag, is credited the full race distance and is drawn
-       P1 above the actual winner — the exact rendering this code was
-       written to stop — and every car still moving past its stop,
-       **including later genuine retirees**, then reads as a finisher. Not
-       "the last few metres" either: a leader who stops at 40 % of the
-       final lap still anchors.
-    2. *A clean winner, whenever adjacent-lap noise exceeds the flag gap.*
-       At its own end a car's fraction is its final-lap distance over the
-       PREVIOUS lap's own length, and this file measures that per-car
-       variation at a median of 9.2 m and up to 340 m. A winner whose
-       previous lap ran long reads under 1.0; a rival whose previous lap
-       ran short clamps to 1.0 while still short of its line. Constructed
-       and executed: the winner reads `has_finished=False` and P2 takes
-       the flag. Melbourne 2025 survives on a 77 m margin, and both
-       ingredients are present in it.
-
-    There is no threshold-free rule that separates a noisy winner from a
-    final-lap crasher with what the loader caches today; #879 carries the
-    options, of which caching FastF1's official classification is the one
-    that ends the class rather than moving it.
+    A driver the official table does not cover falls back to the derived
+    answer for that driver alone, under the same warning.
 
     `final_lap` of 0 means the loader did not record one; nobody is then
     known to have finished, which is the honest answer and the behaviour
@@ -196,6 +196,58 @@ def _flag_frames(
     ends = {
         code: _telemetry_end_frame(frames) for code, frames in frames_by_driver.items() if frames
     }
+    derived = _derived_flag_frames(frames_by_driver, final_lap, ends, progress_at)
+    if not official_status:
+        return derived
+
+    flags: dict[str, int | None] = {}
+    for code in frames_by_driver:
+        status = official_status.get(code)
+        if status is None:
+            flags[code] = derived.get(code)
+        else:
+            flags[code] = ends.get(code) if _took_flag_officially(status) else None
+    _warn_where_the_derived_rule_disagrees(flags, derived, official_status)
+    return flags
+
+
+def _derived_flag_frames(
+    frames_by_driver: dict[str, list],
+    final_lap: int,
+    ends: dict[str, int],
+    progress_at: ProgressAt,
+) -> dict[str, int | None]:
+    """The fallback: infer the flag from telemetry alone. A guess, twice wrong.
+
+    The rule: when the leader takes the flag every other car takes it the
+    next time it crosses the line, so a finisher's telemetry ends at or
+    after the leader's and a retirement's ends before. The leader's flag is
+    anchored on **the car that is LEADING when its own telemetry ends**;
+    `progress_at` is the caller's coordinate WITHOUT any flag crossings,
+    which is what keeps this from being circular. "First to reach the final
+    lap" was tried and crowned a final-lap crasher (`[CRASH, WIN, P2]`,
+    executed); "reached the final lap" alone reads a lapped finisher as a
+    retirement.
+
+    **Two measured misses, unfixable with telemetry alone (#879):**
+
+    1. *A race whose leader retires on the final lap.* The retiree anchors,
+       is credited the full race distance, is drawn P1 above the actual
+       winner, and every car still moving past its stop - later genuine
+       retirees included - reads as a finisher. A leader stopping at 40 %
+       of the final lap still anchors.
+    2. *A clean winner, whenever adjacent-lap noise exceeds the flag gap.*
+       At its own end a car's fraction is its final-lap distance over the
+       PREVIOUS lap's own length, and this file measures that per-car
+       variation at a median of 9.2 m and up to 340 m. Constructed and
+       executed: the winner reads `has_finished=False` and P2 takes the
+       flag. Melbourne 2025 survives on a 77 m margin with both ingredients
+       present in it.
+
+    There is no threshold-free telemetry rule that separates a noisy winner
+    from a final-lap crasher, which is why the official classification is
+    the primary path and this one only answers when nothing better exists.
+    """
     candidates = sorted(
         (end, code) for code, end in ends.items() if frames_by_driver[code][-1].lap >= final_lap
     )
@@ -210,6 +262,37 @@ def _flag_frames(
         code: (ends[code] if code in ends and ends[code] >= leader_flag else None)
         for code in frames_by_driver
     }
+
+
+def _warn_where_the_derived_rule_disagrees(
+    official: dict[str, int | None],
+    derived: dict[str, int | None],
+    official_status: dict[str, str],
+) -> None:
+    """Log every driver the two flag paths classify differently.
+
+    The official result wins either way; this exists so a disagreement is
+    evidence in the log instead of a silent divergence between the replay
+    and a future live feed running the derived rule. On Melbourne 2025 the
+    two paths agree on all twenty drivers and this stays quiet.
+    """
+    disagreements = []
+    for code, frame in official.items():
+        if code not in official_status:
+            continue
+        derived_finished = derived.get(code) is not None
+        if (frame is not None) == derived_finished:
+            continue
+        verdict = "finished" if frame is not None else "retired"
+        other = "finished" if derived_finished else "retired"
+        disagreements.append(
+            f"{code} (official {official_status[code]!r} -> {verdict}, derived -> {other})"
+        )
+    if disagreements:
+        logger.warning(
+            "Flag classification: official result overrides the derived rule for %s",
+            ", ".join(disagreements),
+        )
 
 
 def _leads_at(code: str, frame: int, ends: dict[str, int], progress_at: ProgressAt) -> bool:
@@ -252,7 +335,9 @@ class RaceGapCalculator:
       drove; crediting it to nobody left every finisher short of the lap
       they had just completed, and the ordering that followed was wrong on
       19 of 20 positions (#855). Who counts as a finisher is decided by
-      `_flag_frames`, not by a threshold.
+      `_flag_frames` - the official classification when
+      the loader cached one, the derived anchor otherwise - not by a
+      threshold.
     - Unknown is `None`, never a number a caller could also legitimately
       compute. This applies to `laps_down` as much as to `interval_at_line`:
       an earlier version returned `0` for an inverted call, which is also
@@ -273,7 +358,10 @@ class RaceGapCalculator:
         # crashed on the final lap define the flag time for everyone.
         self._build_crossings(session, flag_frames={})
         flag_frames = _flag_frames(
-            session.frames_by_driver, int(session.max_lap_number or 0), self.progress
+            session.frames_by_driver,
+            int(session.max_lap_number or 0),
+            self.progress,
+            session.official_status,
         )
         self._finished = {code: frame is not None for code, frame in flag_frames.items()}
         self._build_crossings(session, flag_frames)
