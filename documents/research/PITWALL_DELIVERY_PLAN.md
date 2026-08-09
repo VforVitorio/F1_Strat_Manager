@@ -315,8 +315,18 @@ over a threshold that could never fire.
 
 ## 9. Carried forward, unresolved
 
-- **Race control messages have no home** in either PITWALL window, and none in Arcade
-  (`SessionData.events` is always empty, P3 finding A3). Decide before sprint 4.
+- **Race control messages: DECIDED 2026-08-09, out of scope for sprint 4.** Band 1's status strip
+  is served by `track_status`, the FastF1 TrackStatus digits the wire has carried since #857 -
+  that is what renders the SC / VSC / yellow / red pill, and it is the same source the arcade's
+  own pill reads. The free-text MESSAGES are a different feature with a different producer
+  (`SessionData.events` is always empty, P3 finding A3, and nothing populates it), and building an
+  events pipeline is not bands 1-2. They belong with the RCM work, not here. **Overrule this if the
+  strip is meant to show message text rather than a flag state.**
+- **A driver whose telemetry drops mid-race under-reveals** (OBS-4). An officially-Finished car
+  with a dropout gets its flag crossing at the dropout frame, so `laps_completed` stops there and
+  the reveal withholds that driver's later parquet laps. Data-honest - the replay has no telemetry
+  to place them - and unreachable on Melbourne, where all twenty run to the line. Written down so
+  it is not filed as a reveal bug.
 - **A latent P2 for whoever writes any trace reader**: the arcade's `lap` channel is interpolated,
   so it can label ~2,000 frames as a lap that has no telemetry behind it. Gate A reproduced the
   mechanism by executing the code path but could not show it firing on real data.
