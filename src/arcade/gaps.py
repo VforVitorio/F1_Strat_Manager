@@ -350,6 +350,10 @@ class RaceGapCalculator:
         self._dist: dict[str, np.ndarray] = {}
         self._default_lap_m = float(session.circuit_length_m or 0.0)
         self._finished: dict[str, bool] = {}
+        # Drivers FastF1 delivered NO position data for. Their whole `dist`
+        # array is zeros, so every distance-derived answer for them is the
+        # absence wearing the value a car on the grid also reads (#886).
+        self._no_position = {code for code, present in session.has_position.items() if not present}
         # TWO passes, and the order is the whole point. Deciding who took
         # the flag needs the race order, the race order needs `progress`,
         # and `progress` reads the crossings - so the crossings are built
@@ -478,7 +482,17 @@ class RaceGapCalculator:
         on `rel_dist` drew a car that had crashed at turn 1 as the race
         leader for 68 seconds of replay; this form draws him where his
         distance says he is, with no threshold to tune.
+
+        **A car FastF1 gave no position data for gets None, not 0.0.** Its
+        whole `dist` array is zeros (HAD, Melbourne 2025: 154,173 frames at
+        0.0, x and y at 0.0 too), and 0.0 is what every car legitimately
+        reads on the grid - so the absence and the start line were the same
+        number, on the coordinate the whole field is ordered by. The panel
+        already partitions None out and appends it last; it just never
+        received one (#886).
         """
+        if code in self._no_position:
+            return None
         dist = self._dist.get(code)
         if dist is None or frame_idx < 0 or frame_idx >= len(dist):
             return None

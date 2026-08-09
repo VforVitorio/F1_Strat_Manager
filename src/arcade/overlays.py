@@ -587,11 +587,15 @@ class LeaderboardPanel:
         wrong on 1.7 % and reproduces the whole running order exactly on
         236 of 300.
 
-        A car whose progress is unknown (FastF1 delivered no
-        `RelativeDistance`, which is a whole driver on Melbourne 2025)
-        sorts last and carries `None` rather than a position it does not
-        have. It is still drawn, because a car with no position data is
-        still on the track.
+        A car whose progress is unknown sorts last and carries `None`
+        rather than a position it does not have. It is still drawn, because
+        a car with no position data is still on the track.
+
+        That claim used to name `RelativeDistance` as the cause and was
+        wrong twice: `progress` does not read `RelativeDistance` at all,
+        and the value it actually returned for such a car was 0.0, not
+        None - the same number every car reads on the grid. The signal is
+        `SessionData.has_position`, and it is honoured now (#886).
 
         **The tie-break is not decoration.** Every car that has finished
         sits at exactly the total laps, so from the leader's flag to the
