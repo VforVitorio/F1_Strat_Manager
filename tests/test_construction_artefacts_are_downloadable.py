@@ -22,8 +22,20 @@ _AGENTS = ROOT / "src" / "agents"
 
 # Artefacts read during __init__ rather than lazily, keyed by the agent that needs them.
 # A miss here is not a degraded prediction, it is an agent that cannot be built.
+#
+# The two IMPORT-time entries are worse than construction-time and were the twin this
+# file missed for months (#837): they run under `import`, so the orchestrator cannot be
+# built at all and the CLI, the arcade pipeline and every eval tier are unreachable on a
+# clean install. One member of the trio got a comment in `data_cache.py` and the other
+# two never got a pattern - the repo's dominant defect, inside the guard written for it.
+#
+# HOW TO FIND THE NEXT ONE: build a tree from `_DEFAULT_MODEL_PATTERNS` alone and run
+# `python -c "from src.agents import strategy_orchestrator"`. Whatever it raises on
+# belongs here. A grep will not find it; these are bare module-level reads.
 _CONSTRUCTION_READS = {
     "pit_strategy_agent.py": "data/processed/undercut_labeled/undercut_clean.parquet",
+    "race_situation_agent.py": "data/processed/sc_labeled/sc_labeled_2023_2025.parquet",
+    "radio_agent.py": "data/models/nlp/bert_sentiment_v1/best_roberta_sentiment_model.pt",
 }
 
 
