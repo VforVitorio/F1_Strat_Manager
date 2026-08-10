@@ -291,11 +291,24 @@ is not the Qt client renamed: that one is a `QThread` emitting Qt signals, and Q
 **`session_data.py`** is the BULK reader and the one place that touches disk. It exposes
 `lap_table(year, gp)`, `lap_trace(year, gp, driver, lap)` and `circuit_meta(year, gp)`, memoised.
 **It must reuse the project's existing loaders rather than reading parquet directly** (see the
-duplication risk in section 8).
+duplication risk in section 8). **NOT WRITTEN YET** — see the note under `host.py`.
 
-**`host.py`** is the js_api surface and nothing else. Methods map one-to-one to what the UI needs:
-`get_tick()`, `get_bulk()`, `get_lap_trace(driver, lap)`. It holds no rendering logic and no
+**`host.py`** is the js_api surface and nothing else. It holds no rendering logic and no
 formatting. Each method is small enough to read in one screen.
+
+| Method | State |
+|---|---|
+| `get_tick(since_seq)` | shipped, sprint 2 |
+| `get_agents_view(since_seq)` | shipped, sprint 3. Not in the original plan: the AGENTS window is 1:1 by calling the Qt formatters host-side, so the whole view arrives already formatted |
+| `get_bulk()` | **not written.** Arrives with the timing table and the bests, which the 2026-08-09 reorder moved to sprint 5 |
+| `get_lap_trace(driver, lap)` | **not written**, and band 4 does not need it — the traces come off the wire's telemetry span, and the pinned rival is `driver_rival` until the sprint-5 selector exists |
+
+> **The two unwritten methods were listed here as though they existed**, and a design gate found
+> them while asking whether the wire feeds band 4. That is a silent trap rather than a stale
+> sentence: an implementer who reads this section and calls `pywebview.api.get_lap_trace(...)`
+> gets an `AttributeError` **across the bridge**, which this file's own §5 names as the worst kind
+> of failure because nothing surfaces it. Anything added to `host.py` gets a row here in the same
+> PR.
 
 **`bridge.ts`** is the only TypeScript module that knows `window.pywebview` exists. Everything above
 it consumes typed functions. When the transport is upgraded (section 3.5), this is the only file

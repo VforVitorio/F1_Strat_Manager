@@ -190,9 +190,31 @@ window*, with the two rendered side by side.
 > something on screen" survives — band 1 being the frame the others sit in is a container
 > question, not a dependency.
 >
-> **⛔ Open before band 4 starts: does the wire carry everything it needs?** #857 asked exactly
-> that for band 1 and found the answer was no. Nobody has asked it for band 4. Do it the same
-> way, against `PITWALL_SPRINT4_SOURCES.md`, before writing any component.
+> ✅ **ASKED AND ANSWERED, 2026-08-10: the wire carries everything band 4 needs, with zero
+> blocking producer changes** — the opposite of band 1's answer. A Fable design gate measured it
+> on the real Melbourne 2025 session (154,173 frames × 20 drivers) by driving
+> `_build_arcade_snapshot`'s own functions; the report and its field-by-field implementation
+> contract are at `~/.claude/plans/pitwall-sprint4/wire-band4-design.md`. Not luck: #841's span,
+> #842's `rel_dist`/`active` and the #857 batch had already covered it.
+>
+> **Two scope lines the gate forced, because the prose above promises more than sprint 4 can do:**
+>
+> - **"Pinned rival" in sprint 4 means `driver_rival`, nothing else.** The wire carries telemetry
+>   spans for exactly two cars and BOTH are chosen in the arcade process; `host.get_lap_trace`
+>   and `session_data.py` do not exist (the architecture doc claimed otherwise and has been
+>   corrected). Arbitrary pinning arrives with the sprint-5 selector and the BULK reader. The Qt
+>   original renders exactly main + `driver_rival` too, so 1:1 is unaffected.
+> - **The ring is schematic, and it has to be.** `ref_lap_xy`, `circuit_rotation_deg`,
+>   `ref_lap_drs` and per-frame `x`/`y` all exist in the loader and none of them crosses the wire.
+>   `rel_dist` is a fraction of the car's OWN lap, so a dot sits a median 1.3° and up to 24° (a
+>   pit lap) from its true circuit position. An outline ring is a new host capability, not a tweak.
+>
+> **And one thing band 4 will NOT chart: gear and DRS.** They are on the wire and they carry real
+> values, but the Qt original charts neither, `§3.5` of the realism doc describes the *elevated*
+> surface rather than this port, and `drs` is the raw FastF1 code whose open set `{10, 12, 14}`
+> lives only in `src/arcade/track.py:40` — a TypeScript copy would be a cross-language twin of the
+> exact kind `driver_colors` is on the wire to prevent. If they are wanted, the producer publishes
+> a decoded `drs_open` first, in sprint 9.
 
 
 Built band by band so each sprint ends with something on screen.
