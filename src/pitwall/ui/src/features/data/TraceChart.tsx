@@ -74,6 +74,20 @@ export function TraceChart(props: TraceChartProps) {
 
     return {
       backgroundColor: "transparent",
+      // **No animation at all, and this is the 1:1 answer as well as the
+      // correct one.** `useEChart` sets `animationDurationUpdate: 0`, but
+      // `notMerge: true` makes every `setOption` look like a fresh series, so
+      // ECharts uses the ENTRANCE duration instead - ~1 s of growing from the
+      // left, restarted ten times a second and never once completing.
+      // Measured on a real payload: the delta chart's zero baseline reached
+      // 1328 m of a 5220 m axis at +250 ms and only reached 5214 m after four
+      // seconds of silence. On a live screen it is permanently a stub, and it
+      // is the line every value on that chart is read against. pyqtgraph's
+      // `setData` is instantaneous, and `pg.InfiniteLine` is infinite the
+      // moment it is drawn. The architecture's "animate the entrance, never
+      // the update" assumes a surface with a separable entrance; at 10 Hz
+      // there is not one.
+      animation: false,
       animationDurationUpdate: 0,
       grid: { left: 44, right: 12, top: 8, bottom: 36, containLabel: false },
       xAxis: valueAxis({ name: "Distance (m)", nameGap: 20, min: 0, max: xMax }),

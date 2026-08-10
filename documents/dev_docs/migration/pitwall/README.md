@@ -27,7 +27,7 @@ ticks taken off `scripts/dev_pitwall_producer.py`, which drives the real
 the data are both real; the only thing faked is `window.pywebview`, which the
 OS shell would otherwise inject.
 
-**Three differences from the Qt image are deliberate**, and the rest is meant
+**Four differences from the Qt image are deliberate**, and the rest is meant
 to match field for field:
 
 1. The rival legend carries a `BROADCAST` tag. `PITWALL_REALISM_AND_TELEMETRY_
@@ -36,7 +36,11 @@ to match field for field:
    charts. It comes from `drivers[main].rel_dist × circuit_length_m`, not from
    the tail of the telemetry span, because only the drivers block is published
    on a paused tick.
-3. The tick DENSITY differs (ECharts picks 1000 m where pyqtgraph picked 500,
+3. **The track ring** occupies the right-hand column. The Qt window has no
+   equivalent; it answers where the FIELD is while the four charts answer what
+   the own car is doing. Schematic by necessity - no track geometry crosses the
+   wire - and its three dot states are running, finished and out.
+4. The tick DENSITY differs (ECharts picks 1000 m where pyqtgraph picked 500,
    and 100 km/h where it picked 50). That is a renderer choosing labels for the
    width it was given, not a range difference: the ranges are identical and the
    smoke asserts each one against the axis's computed extent.
