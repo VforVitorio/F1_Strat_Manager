@@ -259,3 +259,74 @@ def test_shutdown_stops_the_client_whatever_is_open(window_count):
     host.shutdown()
 
     assert client.stopped is True
+
+
+# --- Window geometry against a real desktop ---------------------------------
+#
+# A window bigger than the desktop is not scrolled, it is CLIPPED, and the part
+# that goes missing is the bottom - where both PITWALL windows keep their
+# status bar. Found by opening the real windows on a 2560x1440 display at
+# 150 %, which is 1707x960 logical with a 912-pixel work area: DATA asks for
+# 950 and its status bar rendered under the taskbar, with the bottom row's
+# "Distance (m)" axis label sliced in half.
+#
+# No headless screenshot can catch this. A Playwright viewport is exactly the
+# size you ask for and has no desktop to not fit on.
+
+
+def test_every_window_opens_fully_inside_the_work_area():
+    """The measured case: both windows on Victor's own display.
+
+    1707x960 logical is a 2560x1440 panel at 150 %, and its work area is 912
+    tall. DATA asks for 950, so its status bar rendered under the taskbar and
+    the bottom row's "Distance (m)" label was sliced in half.
+
+    Asserted as `y + height`, not as `height`, because clamping the size ALONE
+    did not fix it: pywebview cascades, the second window started 38 pixels
+    lower and fell straight back off the bottom. A height-only assertion was
+    green while AGENTS was still broken.
+    """
+    from src.pitwall.config import WINDOWS
+
+    for index, spec in enumerate(WINDOWS):
+        x, y, width, height = spec.place(index, 1707, 960)
+        assert y + height <= 912, f"{spec.key} reaches {y + height}, past the 912 work area"
+        assert x + width <= 1707, f"{spec.key} reaches {x + width}, past the 1707 screen"
+
+
+def test_a_big_screen_does_not_inflate_a_window():
+    """`place` clamps, it never grows.
+
+    A `WindowSpec` is a layout decision - AGENTS mirrors the 540 + 740 Qt
+    columns it ports - and a 4K monitor is not a reason to override it.
+    """
+    from src.pitwall.config import WINDOWS
+
+    for index, spec in enumerate(WINDOWS):
+        _, _, width, height = spec.place(index, 3840, 2160)
+        assert (width, height) == (spec.width, spec.height)
+
+
+def test_every_shipped_window_fits_a_small_laptop():
+    """1366x768 is the floor this has to survive, and both windows exceed it.
+
+    Asserting the EFFECT - where the window actually lands - rather than the
+    constant. A test that pinned `height == 950` would have passed for the
+    whole life of the defect.
+    """
+    from src.pitwall.config import WINDOWS
+
+    for index, spec in enumerate(WINDOWS):
+        x, y, width, height = spec.place(index, 1366, 768)
+        assert x + width <= 1366 and y + height <= 768 - 90, (
+            f"{spec.key} opens at {x},{y} {width}x{height}"
+        )
+
+
+def test_the_second_window_is_still_grabbable():
+    """The two windows overlap - they must, at these sizes - so the one
+    underneath needs its title bar reachable. A zero stagger would bury it."""
+    from src.pitwall.config import WINDOWS
+
+    origins = [spec.place(index, 1707, 960)[0] for index, spec in enumerate(WINDOWS)]
+    assert len(set(origins)) == len(origins), f"two windows share an origin: {origins}"
