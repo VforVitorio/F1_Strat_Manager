@@ -90,6 +90,7 @@ function tick(
     main = MAIN_SPAN,
     rivalSpan = RIVAL_SPAN,
     rewound = false,
+    dropped = 0,
     mainDriver = {},
     drivers = null,
     order = null,
@@ -116,7 +117,7 @@ function tick(
       driver_colors:
         colors ?? Object.fromEntries(Object.keys(field).map((code) => [code, [255, 128, 0]])),
       track_status: "1",
-      telemetry: { main, rival: rivalSpan, rewound, dropped: 0 },
+      telemetry: { main, rival: rivalSpan, rewound, dropped },
     },
     playback: { speed: 1, paused: false, frame_index: 1000 + seq, total_frames: 154173 },
     strategy: {},
@@ -347,6 +348,63 @@ check(
   "the rival legend survives an empty buffer on all four charts",
 );
 
+// The eviction ORDER, which the accumulator's own docstring calls
+// load-bearing and which the rewind above structurally CANNOT see: the
+// producer sends `rewound` with an EMPTY span, so clearing before and
+// clearing after are the same outcome. A forward jump is the case that
+// separates them - `dropped` rides along with a valid post-jump span, and
+// clearing afterwards throws it away. Measured on the Qt panel before it was
+// fixed there: up to 250 samples, ten seconds of trace the payload had
+// already delivered, leaving four blank charts to refill.
+const JUMPED = [3100, 3200, 3300].map((dist, i) => ({
+  lap: 24,
+  t: 40 + i,
+  dist,
+  speed: 300 + i,
+  throttle: 100,
+  brake: 0,
+  gear: 8,
+  drs: 12,
+}));
+await page.evaluate(
+  (payload) => window.__ticks.push(payload),
+  tick(3, { main: JUMPED, rivalSpan: [], dropped: 60 }),
+);
+await page.waitForTimeout(400);
+const afterJump = await page.evaluate(() => {
+  const el = document.querySelectorAll(".trace-plot")[1];
+  return el.__pitwallChart.getOption().series[0].data.map(([x]) => x);
+});
+check(
+  afterJump.length === 3 && afterJump[0] === 3100,
+  `a forward jump keeps the span it arrived with (${JSON.stringify(afterJump)})`,
+);
+
+// The delta plot must SURVIVE going away and coming back. Its container is
+// unmounted whenever the session drops to single-driver mode and remounted
+// when a rival returns, and `useEChart` used to key its init effect on `[]` -
+// which runs once per component, not once per container. After one round trip
+// the instance pointed at a detached node and the chart was dead for the rest
+// of the session, silently. Nothing in the 37 checks before this one could
+// see it: they all measured a chart that had never been unmounted.
+await page.evaluate((payload) => window.__ticks.push(payload), tick(4, { rival: null, rivalSpan: [] }));
+await page.waitForTimeout(400);
+check(
+  (await page.locator(".trace-placeholder").count()) === 1,
+  "losing the rival shows the placeholder",
+);
+await page.evaluate((payload) => window.__ticks.push(payload), tick(5));
+await page.waitForTimeout(500);
+const revived = await page.evaluate(EXTENTS(0));
+check(
+  (await page.locator(".trace-plot canvas").count()) === 4,
+  "the delta plot comes back as a live canvas",
+);
+check(
+  revived !== null && revived.y[0] === -3 && revived.y[1] === 3,
+  `and it is a working chart, not a detached one (${JSON.stringify(revived)})`,
+);
+
 // The status bar, which is Qt's `showMessage(f"lap {lap} · live", 1500)`.
 // It has to be visible while the producer talks and blank 1.5 s after it
 // stops - the AGENTS window shipped BOTH halves of that wrong before #871
@@ -475,6 +533,27 @@ check(
 check(
   (await ringPage.locator(".ring-code").count()) === 2,
   "only the two featured cars are labelled",
+);
+
+// The two labels go on OPPOSITE sides of their dots. The main driver and the
+// car chosen to compare against are routinely seconds apart - on the real
+// session NOR and PIA sit 0.006 of a lap apart - and with both codes above
+// their dots they printed on top of each other. Asserted as rendered
+// geometry, because "two labels exist" was already true while they overlapped.
+const labels = await ringPage.evaluate(() =>
+  [...document.querySelectorAll(".ring-code")].map((el) => {
+    const dot = el.parentElement.querySelector("circle");
+    return {
+      code: el.textContent.trim(),
+      above: Number(el.getAttribute("y")) < Number(dot.getAttribute("cy")),
+    };
+  }),
+);
+const main = labels.find((l) => l.code === "NOR");
+const rival = labels.find((l) => l.code === "PIA");
+check(
+  main?.above === true && rival?.above === false,
+  `the main code sits above its dot and the rival's below (${JSON.stringify(labels)})`,
 );
 // `textContent`, not `innerText`: these are SVG <text> nodes, which are not
 // HTMLElements and have no `innerText` at all.

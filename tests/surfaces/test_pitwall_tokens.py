@@ -51,6 +51,18 @@ def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
+def _without_comments(css: str) -> str:
+    """CSS with its `/* ... */` blocks removed.
+
+    The raw-hex freezes below scan a whole stylesheet, and a comment that
+    NAMES a colour as evidence is not a colour the stylesheet uses. One did:
+    a note explaining that VER's #0600ef was invisible on a dark panel failed
+    the guard that exists to catch an unguarded declaration. Scanning prose
+    is a false positive today and a reason to delete the evidence tomorrow.
+    """
+    return re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+
+
 # --- The pair PITWALL introduces: must be identical, always -----------------
 
 
@@ -351,7 +363,12 @@ def test_the_data_stylesheets_raw_hexes_are_guarded_too():
     from src.arcade import palette
 
     raw = sorted(
-        {hex_.lower() for hex_ in re.findall(r"(#[0-9a-fA-F]{6})", DATA_CSS.read_text("utf-8"))}
+        {
+            hex_.lower()
+            for hex_ in re.findall(
+                r"(#[0-9a-fA-F]{6})", _without_comments(DATA_CSS.read_text("utf-8"))
+            )
+        }
     )
 
     assert raw == ["#3b82f6", "#f59e0b"], (
@@ -373,7 +390,7 @@ def test_the_two_raw_hexes_in_the_stylesheet_are_guarded_too():
     """
     from src.arcade import palette
 
-    css = AGENTS_CSS.read_text("utf-8")
+    css = _without_comments(AGENTS_CSS.read_text("utf-8"))
     declared = set(re.findall(r"--[\w-]+:\s*(#[0-9a-fA-F]{6})", css))
     raw = sorted({hex_.lower() for hex_ in re.findall(r"(#[0-9a-fA-F]{6})", css)} - declared)
 

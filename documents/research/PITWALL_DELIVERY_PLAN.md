@@ -62,8 +62,16 @@ wiring — `host.py`, `stream_client.py` and the golden payload, so no proposal 
 the tick does not carry — and (4) `tokens.css`, so proposals speak the design system. It returns
 prioritised P0-P3 findings with `file:line` and a concrete fix, covering **layout** (hierarchy,
 density, what earns the top-left) and **surgical** changes (a colour semantic, a truncation, a
-chart baseline, an undesigned state). Install `interface-design`, `critique`, `typeset`, `audit`,
-`baseline-ui` and hallmark's Audit mode first.
+chart baseline, an undesigned state).
+
+**Where the skills come from, decided by Víctor 2026-08-10: the catalogue, not improvisation.**
+Before either elevate sprint runs its audit, install from `npx ui-skills` and from `nutlope/hallmark`
+per `~/.claude/FRONTEND_TOOLKIT.md`, which is the standing directive for all frontend work in every
+project and names the flow: `hallmark` **Audit** for the anti-AI-look dimension, `baseline-ui` for
+the deslop pass, `pbakaus/audit` for a11y and anti-patterns, `fixing-motion-performance` for
+anything that moves, `optimize` for load. Route with `npx ui-skills start` and pick by topic →
+stack → specificity rather than loading everything. The Fable agent is then handed the installed
+skills alongside the screenshots, so its findings speak the same vocabulary the fixes will use.
 
 **Sprint 8 (AGENTS)** also pays the debt sprint 3 takes on knowingly: the two tooltips still emit
 Qt's restricted rich-text dialect because the Python formatters are reused as-is, and whether the
