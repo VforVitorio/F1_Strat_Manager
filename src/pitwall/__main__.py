@@ -33,13 +33,34 @@ def main() -> int:
     host = PitwallHost(ArcadeStreamClient(STREAM_HOST, STREAM_PORT), window_count=len(WINDOWS))
     host.start()
 
-    for spec in WINDOWS:
+    # The geometry in `WINDOWS` is what the layout wants; the screen decides
+    # what it gets. A window taller than the desktop is not scrolled, it is
+    # clipped from the bottom - which is exactly where both windows keep their
+    # status bar, so the honest "the producer went quiet" signal was invisible
+    # on the machine this was found on.
+    screen = webview.screens[0]
+
+    for index, spec in enumerate(WINDOWS):
+        x, y, width, height = spec.place(index, screen.width, screen.height)
+        if (width, height) != (spec.width, spec.height):
+            logger.info(
+                "%s opens at %dx%d rather than %dx%d - the %dx%d screen is smaller",
+                spec.title,
+                width,
+                height,
+                spec.width,
+                spec.height,
+                screen.width,
+                screen.height,
+            )
         window = webview.create_window(
             spec.title,
             spec.url,
             js_api=host,
-            width=spec.width,
-            height=spec.height,
+            width=width,
+            height=height,
+            x=x,
+            y=y,
         )
         # The client belongs to the host, so a window closing only decrements
         # a count. Wiring `client.stop` here instead is the regression this
