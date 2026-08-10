@@ -86,7 +86,20 @@ const VIEW = {
       {
         headline: `${key} headline`,
         headline_colour: "#ffffff",
-        lines: [{ text: "a body line", colour: "#d1d5db" }],
+        // The PIT card is deliberately overfull. The scroll-reachability
+        // check below needs a body that overflows, and on CI nothing did:
+        // the runner's font metrics are shorter than a Windows desktop's, so
+        // the four cards that overflow by 14 px locally overflow by nothing
+        // there and the check failed its own precondition. A fixture that
+        // guarantees the condition beats one that happens to meet it on the
+        // machine you wrote it on.
+        lines:
+          key === "pit"
+            ? Array.from({ length: 40 }, (_, i) => ({
+                text: `body line ${i} - long enough that this card must scroll anywhere`,
+                colour: "#d1d5db",
+              }))
+            : [{ text: "a body line", colour: "#d1d5db" }],
         status: "OK",
         glyph: "●",
         glyph_colour: "#10b981",
@@ -213,6 +226,20 @@ const clip = await page.evaluate(() => {
 });
 check(clip.cut.length === 0, `nothing clips the tooltip (cut by ${clip.cut.join(", ")})`);
 check(clip.onScreen, "the tooltip stays inside the viewport");
+
+// ...and it must not cover the card it belongs to. The popup used to open at
+// the card's own left edge, 32 px down: measured at 68,877 px² of overlap on
+// a 216 px card, so hovering a card to read more HID the card. Asserted as
+// rendered geometry, because "the tooltip exists and is on screen" was
+// already true the whole time it was doing this.
+const overlap = await page.evaluate(() => {
+  const tip = document.querySelector(".agent-tooltip").getBoundingClientRect();
+  const card = document.querySelectorAll(".agent-card")[4].getBoundingClientRect();
+  const x = Math.max(0, Math.min(tip.right, card.right) - Math.max(tip.left, card.left));
+  const y = Math.max(0, Math.min(tip.bottom, card.bottom) - Math.max(tip.top, card.top));
+  return Math.round(x * y);
+});
+check(overlap === 0, `the tooltip does not cover its own card (${overlap} px2)`);
 
 // Qt's `showMessage(text, 1500)` clears itself. The port typed a
 // `transient` flag and read it nowhere until #871.
