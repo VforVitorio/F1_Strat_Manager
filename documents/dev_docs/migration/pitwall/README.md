@@ -10,6 +10,36 @@ plus Gate B's field-by-field inventory in
 |---|---|---|
 | `legacy-qt-strategy.png` | `MainWindow` ("F1 Strategy Dashboard") | PITWALL · AGENTS |
 | `legacy-qt-telemetry.png` | `TelemetryWindow` ("F1 Live Telemetry") | PITWALL · DATA, band 4 |
+| `pitwall-data-band4.png` | the PORT of the telemetry window | — (this is the "after") |
+
+## The after, and why it is here
+
+`pitwall-data-band4.png` is the sprint-4 result, captured at the same 2250x1410
+as the Qt image so the two can be laid side by side without scaling either.
+Sprints 8 and 9 (the elevate pass, where the 1:1 constraint is lifted) are
+specified to receive **before-and-after screenshots**, and sprint 7 deletes the
+Qt window that produced the before — so both halves live in the repo rather
+than in a session scratchpad.
+
+Captured by `src/pitwall/ui/scripts/shot-data.mjs` replaying 120 consecutive
+ticks taken off `scripts/dev_pitwall_producer.py`, which drives the real
+`TelemetryStreamServer` from the real Melbourne 2025 session. The bundle and
+the data are both real; the only thing faked is `window.pywebview`, which the
+OS shell would otherwise inject.
+
+**Three differences from the Qt image are deliberate**, and the rest is meant
+to match field for field:
+
+1. The rival legend carries a `BROADCAST` tag. `PITWALL_REALISM_AND_TELEMETRY_
+   SURFACE.md` 2.2 requires it and names the Qt window's omission by name.
+2. A shared vertical cursor marks where the car is on the lap, on all four
+   charts. It comes from `drivers[main].rel_dist × circuit_length_m`, not from
+   the tail of the telemetry span, because only the drivers block is published
+   on a paused tick.
+3. The tick DENSITY differs (ECharts picks 1000 m where pyqtgraph picked 500,
+   and 100 km/h where it picked 50). That is a renderer choosing labels for the
+   width it was given, not a range difference: the ranges are identical and the
+   smoke asserts each one against the axis's computed extent.
 
 ## The decision these serve
 

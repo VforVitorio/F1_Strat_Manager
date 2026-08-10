@@ -1,0 +1,182 @@
+/* PITWALL · DATA — band 4's geometry, in CSS.
+ *
+ * Every number here comes from a Qt call in
+ * `src/arcade/dashboard/telemetry_panel.py` or `telemetry_window.py`:
+ * the 10 px window and panel margins and the 8 px root spacing
+ * (`setContentsMargins` / `setSpacing`), the 10 px grid spacing and equal
+ * row/column stretch (`grid.setSpacing(10)`,
+ * `setColumnStretch/setRowStretch(…, 1)`), the 4 px gap between a chart's
+ * title row and its plot, the (4, 0, 4, 0) title-row margins with 6 px
+ * spacing, the 8 px chip radius with 2/8 padding, and every font size and
+ * weight on each label.
+ *
+ * The palette and the shared chrome (`.card`, `.status-bar`) are in
+ * `qt-base.css`. Trace colours are NOT here: they are per-metric and live
+ * with the component that chooses them, pinned slot by slot by
+ * `test_pitwall_tokens.py`.
+ */
+
+.data-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* `QVBoxLayout(host).setContentsMargins(10, 10, 10, 10)` on the window's
+ * central widget. */
+.data-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.data-waiting {
+  margin: 0;
+  color: var(--qt-fg-3);
+  font-size: 13px;
+}
+
+.data-waiting code {
+  font-family: var(--qt-mono);
+  color: var(--qt-fg-2);
+}
+
+/* --- Band 4: the traces panel (TelemetryPanel) --------------------------- */
+
+/* `QFrame` with `card=true` (so it carries `.card` from `qt-base.css`),
+ * root margins 10 and spacing 8. */
+.traces {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+/* Header row: `setContentsMargins(2, 0, 2, 0)`, `setSpacing(10)`, and the
+ * extra `addSpacing(10)` Qt inserts after the lap label. */
+.traces-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.traces-lap {
+  color: var(--qt-fg-1);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-right: 10px;
+}
+
+.traces-vs {
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}
+
+/* `_DriverChip._apply_style`: 1 px border in the chip's own colour, 8 px
+ * radius, 2/8 padding, 12 px 800 with 1 px tracking. */
+.driver-chip {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 2px 8px;
+}
+
+/* palette.INFO / palette.WARNING, the two chip colours `TelemetryPanel`
+ * constructs with. Guarded by `test_pitwall_tokens.py`. */
+.driver-chip-main {
+  color: #3b82f6;
+}
+.driver-chip-rival {
+  color: #f59e0b;
+}
+
+/* --- The 2x2 grid ------------------------------------------------------- */
+
+/* `grid.setSpacing(10)` with both columns and both rows stretched equally.
+ * `1fr` rather than `auto`: an auto row sizes to content, and the four
+ * plots would then divide whatever the taller title row left over. */
+.traces-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
+}
+
+/* One chart: `QVBoxLayout` margins 0, spacing 4, plot stretched. */
+.trace-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.trace-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.trace-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trace-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+/* `title_row.addStretch()` between the subtitle and the legend chips. */
+.trace-spacer {
+  flex: 1 1 auto;
+}
+
+/* `_LegendChip`: `MAIN · VER`, 10 px 700 with 0.5 px tracking, in the
+ * trace's own colour (set inline, because it varies per chart). */
+.trace-legend {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* The tier tag the Qt window never had. `PITWALL_REALISM_AND_TELEMETRY_
+ * SURFACE.md` 2.2 calls rival traces "broadcast tier": real and public,
+ * but the coarse low-rate channel, not pit-wall-grade telemetry. It reads
+ * as an annotation on the legend, not as a second label. */
+.trace-tier {
+  color: var(--qt-fg-3);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.trace-plot {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* `_delta_placeholder`: centred, italic, tertiary, 12 px — and it REPLACES
+ * the plot rather than sitting over it. */
+.trace-placeholder {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--qt-fg-3);
+  font-style: italic;
+  font-size: 12px;
+}

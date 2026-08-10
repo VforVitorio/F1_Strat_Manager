@@ -168,12 +168,18 @@ def test_the_python_palettes_known_drift_has_not_moved():
     )
 
 
-# --- The two copies the AGENTS window introduced ----------------------------
+# --- The copies the two PITWALL windows introduced --------------------------
 
-AGENTS_CSS = REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "styles" / "agents.css"
-AGENTS_WINDOW = (
-    REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "features" / "agents" / "AgentsWindow.tsx"
-)
+UI_SRC = REPO_ROOT / "src" / "pitwall" / "ui" / "src"
+# Sprint 4 moved the `--qt-*` block out of `agents.css`: the DATA window needs
+# the same tokens, and pasting them into a second stylesheet would have been
+# copy number six. This guard follows the declarations, it does not follow the
+# AGENTS window.
+QT_BASE_CSS = UI_SRC / "styles" / "qt-base.css"
+AGENTS_CSS = UI_SRC / "styles" / "agents.css"
+DATA_CSS = UI_SRC / "styles" / "data.css"
+AGENTS_WINDOW = UI_SRC / "features" / "agents" / "AgentsWindow.tsx"
+OWN_CAR_TRACES = UI_SRC / "features" / "data" / "OwnCarTraces.tsx"
 
 # The `--qt-*` custom properties, and what each one copies from `palette.py`.
 QT_CSS_TOKENS = {
@@ -188,18 +194,18 @@ QT_CSS_TOKENS = {
 }
 
 
-def test_the_agents_css_palette_has_not_drifted_from_palette_py():
+def test_the_qt_base_palette_has_not_drifted_from_palette_py():
     """Copy number three, and the first one a stylesheet could break silently.
 
-    The AGENTS window renders the arcade palette rather than `tokens.css`,
-    because it is a 1:1 port of a Qt window and the two palettes
+    Both PITWALL windows render the arcade palette rather than `tokens.css`,
+    because they are 1:1 ports of Qt windows and the two palettes
     deliberately differ. That means the hexes are duplicated into CSS,
     and a duplicate with no guard is how this repo's most frequent defect
     starts.
     """
     from src.arcade import palette
 
-    declared = dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", AGENTS_CSS.read_text("utf-8")))
+    declared = dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", QT_BASE_CSS.read_text("utf-8")))
 
     assert set(QT_CSS_TOKENS) <= set(declared), (
         f"a --qt-* token was renamed or removed: {sorted(set(QT_CSS_TOKENS) - set(declared))}"
@@ -235,11 +241,26 @@ BOOT_SLOTS = {
 }
 
 # Copy number five, which had no detector at all: the ECharts axis styling
-# repeats the pens `pace_chart.py` builds from the same two names.
-ECHART_MODULE = (
-    REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "features" / "agents" / "useEChart.ts"
-)
-ECHART_SITES = (("TEXT_SECONDARY", 4), ("BORDER_COLOR", 2))
+# repeats the pens `pace_chart.py` and `telemetry_panel.py` build from the
+# same names. Sprint 4 collapsed it from four hard-coded axis blocks to one
+# `valueAxis()` helper both windows call, so the counts fell with it - one
+# site per colour instead of one per axis - and TEXT_TERTIARY joined for
+# band 4's shared cursor.
+ECHART_MODULE = REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "lib" / "chart.ts"
+ECHART_SITES = (("TEXT_SECONDARY", 1), ("BORDER_COLOR", 1), ("TEXT_TERTIARY", 1))
+
+# Copy number six: band 4's four traces. Each metric draws in a DIFFERENT
+# palette colour (`telemetry_panel.py` passes INFO, DANGER and SUCCESS to
+# `_make_chart`), so this is a slot map for the same reason `BOOT_SLOTS` is -
+# swapping brake from DANGER to WARNING keeps every hex inside the palette
+# and is still the wrong chart in the wrong colour.
+TRACE_SLOTS = {
+    "delta_main": "INFO",
+    "speed_main": "INFO",
+    "brake_main": "DANGER",
+    "throttle_main": "SUCCESS",
+    "rival": "WARNING",
+}
 
 
 def test_the_boot_state_colours_are_in_the_right_slots():
@@ -269,12 +290,13 @@ def test_the_boot_state_colours_are_in_the_right_slots():
 def test_the_chart_axis_palette_has_not_drifted_either():
     """The fifth copy, and nothing referenced this file before.
 
-    `useEChart.ts` repeats the axis pens `pace_chart.py` builds from
-    BORDER_COLOR and TEXT_SECONDARY. Same duplication as the other four,
+    `lib/chart.ts` repeats the axis pens `pace_chart.py` and
+    `telemetry_panel.py` build from BORDER_COLOR and TEXT_SECONDARY, plus
+    TEXT_TERTIARY for band 4's cursor. Same duplication as the other four,
     and it had no guard at all.
 
     **Counted per site, not as a set.** Set equality passes when ONE of
-    the four `#d1d5db` sites becomes `rgba(209,213,219,0.4)`: the hex is
+    the `#d1d5db` sites becomes `rgba(209,213,219,0.4)`: the hex is
     still present elsewhere, so the set is unchanged and a real render
     drift goes green. Measured on a mutated copy before this counted.
     """
@@ -289,9 +311,55 @@ def test_the_chart_axis_palette_has_not_drifted_either():
     assert found, "the chart theme stopped carrying colours"
     assert found == expected, f"the chart axis palette drifted: {found} against {expected}"
 
-    # The two splitLine pens are rgba, so the hex regex above cannot see them
-    # at all. They are value-paired with pyqtgraph's grid alpha.
-    assert source.count("rgba(255,255,255,0.06)") == 2, "the grid alpha moved"
+    # The splitLine pen is rgba, so the hex regex above cannot see it at all.
+    # It is value-paired with pyqtgraph's grid alpha.
+    assert source.count("rgba(255,255,255,0.06)") == 1, "the grid alpha moved"
+
+
+def test_the_trace_colours_are_in_the_right_slots():
+    """Copy number six: band 4's four traces, one palette name each.
+
+    `telemetry_panel.py` hands `_make_chart` a DIFFERENT main colour per
+    metric - INFO for delta and speed, DANGER for brake, SUCCESS for
+    throttle, WARNING for the rival on all four. A membership test cannot
+    see brake and throttle swapping places; both hexes stay in the palette
+    and the window is simply wrong.
+    """
+    from src.arcade import palette
+
+    source = OWN_CAR_TRACES.read_text("utf-8")
+    found = dict(re.findall(r"(\w+):\s*\"(#[0-9a-fA-F]{6})\"", source))
+
+    assert set(TRACE_SLOTS) <= set(found), (
+        f"a trace colour slot disappeared: {sorted(set(TRACE_SLOTS) - set(found))}"
+    )
+    for slot, name in TRACE_SLOTS.items():
+        assert found[slot] == _rgb_to_hex(getattr(palette, name)), (
+            f"{slot} is {found[slot]}, but it copies palette.{name} "
+            f"({_rgb_to_hex(getattr(palette, name))})"
+        )
+
+
+def test_the_data_stylesheets_raw_hexes_are_guarded_too():
+    """The DATA window's own pair, the same blind spot `agents.css` had.
+
+    The two driver chips take their colour from the chip's own constructor
+    argument in Qt (`_driver_chip(code, INFO)` / `(code, WARNING)`), so in
+    CSS they are literals rather than `--qt-*` tokens - and a literal is
+    invisible to the declaration-reading guard above.
+    """
+    from src.arcade import palette
+
+    raw = sorted(
+        {hex_.lower() for hex_ in re.findall(r"(#[0-9a-fA-F]{6})", DATA_CSS.read_text("utf-8"))}
+    )
+
+    assert raw == ["#3b82f6", "#f59e0b"], (
+        f"a new raw hex entered the DATA stylesheet: {raw}. Either use a --qt-* token or add it "
+        "here with the palette name it copies."
+    )
+    assert raw[0] == _rgb_to_hex(palette.INFO), "the main driver chip copies INFO"
+    assert raw[1] == _rgb_to_hex(palette.WARNING), "the rival driver chip copies WARNING"
 
 
 def test_the_two_raw_hexes_in_the_stylesheet_are_guarded_too():
