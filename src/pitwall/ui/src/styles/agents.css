@@ -182,10 +182,20 @@
    * unmounts the popup. */
   position: fixed;
   z-index: 10;
-  width: 30rem;
-  max-width: calc(100vw - 16px);
+  /* Sized to its content rather than a flat 30rem. A two-line tooltip used to
+   * be the same 502 px box as a twelve-line one, which reads as a panel that
+   * failed to fill rather than as a popup. */
+  width: max-content;
+  min-width: 18rem;
+  max-width: min(34rem, calc(100vw - 20px));
   max-height: 22rem;
-  overflow: auto;
+  overflow-y: auto;
+  /* The one place the hidden scrollbar has to come BACK. `qt-base.css` hides
+   * it everywhere, which is right for the persistent card chrome Víctor asked
+   * to clear - but this box has a hard height cap and a busy lap overruns it,
+   * so without a bar the transcript is cut with nothing saying so. A popup is
+   * transient, so its scrollbar is not clutter. */
+  scrollbar-width: thin;
   padding: 8px 10px;
   background: var(--qt-elevated);
   border: 1px solid var(--qt-border);
@@ -380,4 +390,19 @@
   width: 100%;
   height: 100%;
   min-height: 140px;
+}
+
+/* Opting the tooltip back INTO a scrollbar, against `qt-base.css`'s blanket
+ * hide. Chromium needs the pseudo-element re-declared; `display: none` there
+ * cannot be undone by `scrollbar-width` alone. */
+.agent-tooltip::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+.agent-tooltip::-webkit-scrollbar-thumb {
+  background: var(--qt-border);
+  border-radius: 3px;
+}
+.agent-tooltip::-webkit-scrollbar-track {
+  background: transparent;
 }

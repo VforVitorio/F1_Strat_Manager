@@ -35,20 +35,49 @@ import type { AgentCardView } from "../../lib/agents";
  * top-level window clipped by nothing, and `position: fixed` in the body
  * is the same thing. The clamp keeps it on screen near either edge.
  */
+/** Breathing room between the card and the popup, and from the viewport edge. */
+const TOOLTIP_GAP = 10;
+
 function Tooltip({ html, anchor }: { html: string; anchor: DOMRect }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const [left, setLeft] = useState(anchor.left);
+  const [box, setBox] = useState({ left: anchor.left, top: anchor.top + 32 });
 
   useLayoutEffect(() => {
-    const width = ref.current?.offsetWidth ?? 0;
-    setLeft(Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)));
-  }, [anchor]);
+    const node = ref.current;
+    if (!node) return;
+    const width = node.offsetWidth;
+    const height = node.offsetHeight;
+
+    // **BESIDE the card, never on top of it.** The popup used to open at the
+    // card's own left edge, 32 px down, which covered the thing you hovered
+    // to read: measured at 68,877 px² of overlap on a 216 px card, so the
+    // card was blanketed and the popup spilled below it. A tooltip that
+    // hides its own subject is worse than no tooltip.
+    //
+    // Right of the card by preference, left when there is no room, and only
+    // then below - which is the old behaviour kept as the last resort for a
+    // card that is wider than the space either side of it.
+    const roomRight = window.innerWidth - anchor.right - TOOLTIP_GAP;
+    const roomLeft = anchor.left - TOOLTIP_GAP;
+    let left: number;
+    if (roomRight >= width) left = anchor.right + TOOLTIP_GAP;
+    else if (roomLeft >= width) left = anchor.left - TOOLTIP_GAP - width;
+    else left = Math.max(TOOLTIP_GAP, Math.min(anchor.left, window.innerWidth - width - TOOLTIP_GAP));
+
+    // Vertically aligned with the card's top, then pulled up only as far as
+    // it must be to stay on screen.
+    const top = Math.max(
+      TOOLTIP_GAP,
+      Math.min(anchor.top, window.innerHeight - height - TOOLTIP_GAP),
+    );
+    setBox({ left, top });
+  }, [anchor, html]);
 
   return createPortal(
     <span
       ref={ref}
       className="agent-tooltip"
-      style={{ top: anchor.top + 32, left }}
+      style={box}
       dangerouslySetInnerHTML={{ __html: html }}
     />,
     document.body,
