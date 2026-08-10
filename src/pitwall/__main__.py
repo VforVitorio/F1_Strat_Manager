@@ -15,9 +15,17 @@ from __future__ import annotations
 import logging
 import sys
 
-from src.pitwall.config import STREAM_HOST, STREAM_PORT, WINDOWS, build_hint, ui_is_built
+from src.pitwall.config import (
+    STREAM_HOST,
+    STREAM_PORT,
+    WINDOWS,
+    build_hint,
+    ui_dist,
+    ui_is_built,
+)
 from src.pitwall.host import PitwallHost
 from src.pitwall.stream_client import ArcadeStreamClient
+from src.pitwall.webserver import BrowserServer
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +40,17 @@ def main() -> int:
 
     host = PitwallHost(ArcadeStreamClient(STREAM_HOST, STREAM_PORT), window_count=len(WINDOWS))
     host.start()
+
+    # The same two pages, additionally on loopback. The windows are still the
+    # product; this exists so the surface can also be opened in a browser -
+    # for devtools, for a second screen, or simply because a page is easier to
+    # arrange than an OS window. It reads through the same `get_tick`, so
+    # there is still ONE TCP client and one sequence however many consumers
+    # attach.
+    browser = BrowserServer(ui_dist(), host)
+    url = browser.start()
+    if url:
+        logger.info("Also serving the same windows at %sdata.html and %sagents.html", url, url)
 
     # The geometry in `WINDOWS` is what the layout wants; the screen decides
     # what it gets. A window taller than the desktop is not scrolled, it is
@@ -74,6 +93,7 @@ def main() -> int:
         # `webview.start()` returns when the last window closes, but it also
         # returns on an exception, and a leaked reader thread would hold the
         # socket open against the next run.
+        browser.stop()
         host.shutdown()
     return 0
 
