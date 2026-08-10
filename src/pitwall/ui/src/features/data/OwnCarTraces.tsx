@@ -36,8 +36,18 @@ import { TraceAccumulator, deltaSeries, type SortedTrace } from "./traceBuffer";
 
 /** `_SPEED_Y_RANGE`: Monza's straight tops out around 357 km/h. */
 const SPEED_Y: [number, number] = [0, 360];
-/** `_BRAKE_Y_RANGE` / `_THROTTLE_Y_RANGE`: padded so 0 and 100 do not kiss the frame. */
-const PEDAL_Y: [number, number] = [-5, 105];
+/**
+ * `_BRAKE_Y_RANGE`: padded so a trace at 0 or 100 does not kiss the frame.
+ *
+ * Separate from the throttle range even though the two hold the same pair.
+ * `telemetry_panel.py` declares them as two constants, and merging rules that
+ * agree by coincidence is a defect class this repo has already paid for: a
+ * compound-suitability floor and a minimum-stint bound shared a 12, so
+ * recalibrating one silently rewrote the other.
+ */
+const BRAKE_Y: [number, number] = [-5, 105];
+/** `_THROTTLE_Y_RANGE`. Equal to the brake range today, and its own rule. */
+const THROTTLE_Y: [number, number] = [-5, 105];
 /** `_DELTA_Y_RANGE`: generous for one lap, and it clips when the series wanders. */
 const DELTA_Y: [number, number] = [-3, 3];
 /** `_DEFAULT_X_RANGE`, used until a broadcast carries a real circuit length. */
@@ -144,7 +154,7 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           subtitle="%"
           mainColour={TRACE_COLOURS.brake_main}
           rivalColour={TRACE_COLOURS.rival}
-          yRange={PEDAL_Y}
+          yRange={BRAKE_Y}
           xMax={xMax}
           mainCode={arcade.driver_main}
           rivalCode={rivalCode}
@@ -157,7 +167,7 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           subtitle="%"
           mainColour={TRACE_COLOURS.throttle_main}
           rivalColour={TRACE_COLOURS.rival}
-          yRange={PEDAL_Y}
+          yRange={THROTTLE_Y}
           xMax={xMax}
           mainCode={arcade.driver_main}
           rivalCode={rivalCode}

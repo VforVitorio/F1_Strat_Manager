@@ -280,7 +280,20 @@
 }
 
 .ring-dot.is-out {
-  opacity: 0.45;
+  opacity: 0.7;
+}
+
+/* A NEUTRAL ring, not the driver's own colour. Hollow at 45 % opacity, a dark
+ * team colour (VER's #0600ef) came out all but invisible on this panel - the
+ * state that most needs to read at a glance was the one that did not.
+ * Identity is carried by position and by the two code labels; legibility is
+ * what "out" needs.
+ *
+ * On the CIRCLE, not on the group. `stroke` is set as a presentation
+ * attribute on the circle itself, and an inherited value loses to that -
+ * a rule on the `<g>` would have changed nothing at all. */
+.ring-dot.is-out circle {
+  stroke: var(--qt-fg-3);
 }
 
 .ring-legend {

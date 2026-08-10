@@ -25,7 +25,7 @@
  * `tests/surfaces/test_pitwall_tokens.py`.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as echarts from "echarts";
 
 /** `palette.TEXT_SECONDARY` - axis names and tick labels. */
@@ -43,37 +43,51 @@ export const SPLIT_LINE = "rgba(255,255,255,0.06)";
  */
 export const CURSOR_LINE = "#9ca3af";
 
+/**
+ * Mount an ECharts instance on a div and push options into it imperatively.
+ *
+ * **The host is tracked as STATE behind a callback ref, not as a plain ref
+ * with an empty dependency list.** A ref does not re-render, so a mount
+ * effect keyed on `[]` runs exactly once for the life of the component - and
+ * band 4's delta chart swaps its plot for a "single-driver mode" placeholder
+ * and back, which unmounts and remounts the div underneath. After one such
+ * swap the effect never re-ran, the instance pointed at a detached node, and
+ * the chart was dead for the rest of the session with no error anywhere.
+ */
 export function useEChart(option: echarts.EChartsOption | null) {
-  const host = useRef<HTMLDivElement | null>(null);
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
   const chart = useRef<echarts.ECharts | null>(null);
+  const ref = useCallback((node: HTMLDivElement | null) => setHost(node), []);
 
   useEffect(() => {
-    if (!host.current) return;
-    chart.current = echarts.init(host.current, undefined, { renderer: "canvas" });
+    if (!host) return;
+    const instance = echarts.init(host, undefined, { renderer: "canvas" });
+    chart.current = instance;
     // The headless smoke reads the COMPUTED axis extent and converts data
     // coordinates to pixels through this handle. Without it the only thing
     // a test can inspect is the option object it already knows we passed -
     // the mechanism - and the sprint-3 exit gate's whole lesson was that a
     // check written against the mechanism passes over a broken effect. An
     // ECharts instance is not reachable from outside the module otherwise.
-    (host.current as HTMLDivElement & { __pitwallChart?: echarts.ECharts }).__pitwallChart =
-      chart.current;
-    const resize = () => chart.current?.resize();
-    const observer = new ResizeObserver(resize);
-    observer.observe(host.current);
+    (host as HTMLDivElement & { __pitwallChart?: echarts.ECharts }).__pitwallChart = instance;
+    const observer = new ResizeObserver(() => instance.resize());
+    observer.observe(host);
     return () => {
       observer.disconnect();
-      chart.current?.dispose();
-      chart.current = null;
+      instance.dispose();
+      if (chart.current === instance) chart.current = null;
     };
-  }, []);
+  }, [host]);
 
+  // `host` is a dependency so the option is re-applied to a chart that was
+  // just re-created. Without it a remounted plot came back blank until the
+  // next tick happened to produce a new option object.
   useEffect(() => {
     if (!chart.current || !option) return;
     chart.current.setOption({ ...option, animationDurationUpdate: 0 }, { notMerge: true });
-  }, [option]);
+  }, [option, host]);
 
-  return host;
+  return ref;
 }
 
 export interface AxisSpec {

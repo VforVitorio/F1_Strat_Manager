@@ -40,7 +40,8 @@ interface Dot {
   y: number;
   colour: string;
   status: DriverStatus;
-  featured: boolean;
+  /** null for the eighteen unlabelled cars; otherwise which side its code goes. */
+  label: "above" | "below" | null;
 }
 
 /**
@@ -63,7 +64,17 @@ function rgb(colour: [number, number, number] | undefined): string {
 }
 
 export function TrackRing({ arcade }: { arcade: ArcadeState }) {
-  const featured = new Set([arcade.driver_main, arcade.driver_rival].filter(Boolean));
+  // The two labelled cars go on OPPOSITE sides of their dots. They are the
+  // main driver and the car chosen to compare against, so they are routinely
+  // seconds apart - on the session this was built against, NOR and PIA sit
+  // 0.006 of a lap apart and both codes rendered above their dots, on top of
+  // each other and of the dots. Fixed sides beat a collision test: it is
+  // deterministic, so the same car is always in the same place.
+  const labelSide = (code: string): "above" | "below" | null => {
+    if (code === arcade.driver_main) return "above";
+    if (code === arcade.driver_rival) return "below";
+    return null;
+  };
 
   // `race_order` rather than the drivers map, so the DOM order is the running
   // order and the leader's dot paints last - on top of whoever it is lapping.
@@ -87,7 +98,7 @@ export function TrackRing({ arcade }: { arcade: ArcadeState }) {
       ...place(car.rel_dist),
       colour: rgb(arcade.driver_colors[code]),
       status: driverStatus(car),
-      featured: featured.has(code),
+      label: labelSide(code),
     });
   }
 
@@ -120,7 +131,7 @@ export function TrackRing({ arcade }: { arcade: ArcadeState }) {
             <circle
               cx={dot.x}
               cy={dot.y}
-              r={dot.featured ? MAIN_DOT_R : DOT_R}
+              r={dot.label ? MAIN_DOT_R : DOT_R}
               // `out` is the only state drawn hollow, so the fill is the one
               // that has to change with it rather than an opacity on the group.
               fill={dot.status === "out" ? "none" : dot.colour}
@@ -128,8 +139,13 @@ export function TrackRing({ arcade }: { arcade: ArcadeState }) {
               data-code={dot.code}
               data-status={dot.status}
             />
-            {dot.featured ? (
-              <text className="ring-code" x={dot.x} y={dot.y - 11} textAnchor="middle">
+            {dot.label ? (
+              <text
+                className="ring-code"
+                x={dot.x}
+                y={dot.label === "above" ? dot.y - 11 : dot.y + 17}
+                textAnchor="middle"
+              >
                 {dot.code}
               </text>
             ) : null}
