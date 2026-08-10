@@ -216,6 +216,47 @@ check(clip.onScreen, "the tooltip stays inside the viewport");
 
 // Qt's `showMessage(text, 1500)` clears itself. The port typed a
 // `transient` flag and read it nowhere until #871.
+// The scrollbars are HIDDEN, not deleted. Víctor asked for the bars inside
+// the cards to go; the tempting wrong fix is `overflow: hidden`, which puts
+// back the clipping the migration README records as a defect of the Qt window
+// being replaced ("the right column clipped mid-card"). So this asserts the
+// content is still REACHABLE, which is the part that can regress silently -
+// the chrome being gone is visible to anyone who looks.
+//
+// With a REAL WHEEL, not `el.scrollTop = 999`. An `overflow: hidden` element
+// is still scrollable from script - only the USER is blocked - so the
+// scripted version passed against the exact mutation it was written to
+// catch. Same mechanism-instead-of-effect trap the sprint-3 gate found in
+// this file's tooltip check.
+const overflowing = await page.evaluate(() =>
+  [...document.querySelectorAll(".agent-card-body, .reasoning-body")]
+    .map((el, i) => ({ i, over: el.scrollHeight - el.clientHeight }))
+    .filter((e) => e.over > 0)
+    .map((e) => e.i),
+);
+check(overflowing.length > 0, `something overflows, or this checks nothing`);
+
+const wheeled = [];
+for (const index of overflowing) {
+  const box = await page
+    .locator(".agent-card-body, .reasoning-body")
+    .nth(index)
+    .boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(120);
+  wheeled.push(
+    await page.evaluate(
+      (i) => document.querySelectorAll(".agent-card-body, .reasoning-body")[i].scrollTop,
+      index,
+    ),
+  );
+}
+check(
+  wheeled.every((top) => top > 0),
+  `a wheel over an overflowing body still reaches its content (${JSON.stringify(wheeled)})`,
+);
+
 check(
   (await page.locator(".status-bar").innerText()).includes("lap 23"),
   "the status bar starts with the lap",

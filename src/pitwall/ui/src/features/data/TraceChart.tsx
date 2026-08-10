@@ -69,7 +69,14 @@ export function TraceChart(props: TraceChartProps) {
       marks.push({ yAxis: 0, lineStyle: { color: mainColour, width: 2, type: "solid" } });
     }
     if (cursorX !== null) {
-      marks.push({ xAxis: cursorX, lineStyle: { color: CURSOR_LINE, width: 1, type: "dashed" } });
+      // SOLID, not dashed. The car covers about 6 m per 100 ms tick, which on
+      // a ~700 px plot spanning 5220 m is under one pixel - so a dashed
+      // cursor never moves a whole dash, it shifts its pattern by a fraction
+      // of a pixel ten times a second and shimmers. Measured while chasing
+      // it: the line is never actually absent (328 cursor pixels on all 40
+      // samples over 3 s), so it was not blinking, it was crawling. A solid
+      // line at the same width slides instead.
+      marks.push({ xAxis: cursorX, lineStyle: { color: CURSOR_LINE, width: 1, type: "solid" } });
     }
 
     return {
