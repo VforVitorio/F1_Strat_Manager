@@ -15,6 +15,7 @@ chart histories accumulate across ticks because `history_tail` strips
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from src.pitwall.agents_view.charts import build_pace_series, build_tire_series
@@ -27,6 +28,8 @@ from src.pitwall.agents_view.reasoning import build_reasoning
 # misread. Separate from the wire's `schema_version`, which describes the
 # producer: this describes what the host hands the window.
 AGENTS_VIEW_VERSION: int = 1
+
+logger = logging.getLogger(__name__)
 
 
 class AgentsViewBuilder:
@@ -42,12 +45,15 @@ class AgentsViewBuilder:
 
     def __init__(self) -> None:
         self._history = LapHistory()
+        self._run: dict[str, Any] | None = None
+        self._seq: int | None = None
 
     def build(self, payload: dict[str, Any], connection: str = "Connected") -> dict[str, Any]:
         """The whole view for one tick."""
         strategy = payload.get("strategy") or {}
         latest = strategy.get("latest") or {}
 
+        self._reset_if_the_producer_restarted(strategy.get("start"), payload.get("seq"))
         self._accumulate(strategy, latest)
 
         return {
@@ -75,6 +81,46 @@ class AgentsViewBuilder:
             },
             "status_bar": build_status_bar(payload),
         }
+
+    def _reset_if_the_producer_restarted(
+        self, start: dict[str, Any] | None, seq: int | None
+    ) -> None:
+        """Throw the history away when the tick stops being about the same run.
+
+        **This is the twin of the DATA window's eviction, and it never got
+        the signal.** `host.get_tick` deliberately follows a restarted
+        producer - relaunch the arcade with the windows open and they must
+        not freeze on the dead race - and band 4 evicts client-side, because
+        `FrameClock` sees the new run's frame index jump backwards. This
+        accumulator lives in the HOST process, which does not restart with
+        the arcade, so nothing here ever heard about it.
+
+        Measured before the fix: a Melbourne run to lap 23 followed by a
+        Suzuka payload at lap 3 rendered a `Suzuka · 2025` header over
+        Melbourne's laps 14-23, with lap 20 reading 81.20 s against Suzuka's
+        ~92 s. Worse, it did not simply correct itself: `seed_from_tail` uses
+        `setdefault` on purpose, so any lap whose only carrier in the new run
+        is the history tail keeps the DEAD run's number permanently.
+
+        Two signals, because one is not enough:
+
+        - **the `start` block changing** catches a different race or driver;
+        - **`seq` going backwards** catches the same race relaunched, where
+          `start` is identical. It cannot be confused with a rewind: the
+          sequence counts messages a producer SENT, so within one run it only
+          ever rises. A rewind must NOT evict, and does not - the frame index
+          moves, the sequence does not.
+        """
+        restarted = (start is not None and self._run is not None and start != self._run) or (
+            seq is not None and self._seq is not None and seq < self._seq
+        )
+        if restarted:
+            logger.info("Producer restarted - dropping the AGENTS lap history")
+            self._history = LapHistory()
+        if start is not None:
+            self._run = start
+        if seq is not None:
+            self._seq = seq
 
     def _accumulate(self, strategy: dict[str, Any], latest: dict[str, Any]) -> None:
         """Fold this tick into the chart history. A rewind evicts nothing.

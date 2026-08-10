@@ -192,3 +192,160 @@ def test_the_sanitiser_walks_tuples_like_the_blame_function_does():
     assert not any(
         isinstance(v, float) and not math.isfinite(v) for v in cleaned["quantiles"] if v is not None
     )
+
+
+# --- What happens to a subscriber the server gives up on --------------------
+#
+# Pruning used to mean "forget", not "close". A subscriber pruned for a send
+# timeout still has a perfectly healthy TCP connection - it simply stopped
+# reading - so it went on believing it was connected while no byte would ever
+# arrive and no EOF would ever come. Measured before the fix: a 1.24-second
+# stall was enough to be pruned, after which the socket drained its buffered
+# 219 KB and then sat ESTABLISHED-frozen, with the window showing a green
+# "Connected" chip over a dead feed until the arcade process itself exited.
+
+
+def _real_server() -> TelemetryStreamServer:
+    server = TelemetryStreamServer("127.0.0.1", 0)
+    server.start()
+    # Port 0 lets the OS choose; read back what it chose.
+    server.port = server._server_socket.getsockname()[1]
+    return server
+
+
+def _wait_for_clients(server: TelemetryStreamServer, count: int, timeout: float = 5.0) -> None:
+    """Block until the server has actually registered the connection.
+
+    `create_connection` returns as soon as the handshake completes, which is
+    BEFORE `_accept_loop` appends the socket. Without this the "wait until
+    pruned" loop below could exit on the first iteration having never seen a
+    client at all - measured, 1 run in 6 - and then assert about an empty set,
+    which is this repo's bug class 5 committed inside a test written to catch
+    bug class 5.
+    """
+    deadline = time.time() + timeout
+    while server.client_count() != count and time.time() < deadline:
+        time.sleep(0.02)
+    assert server.client_count() == count, (
+        f"server has {server.client_count()} clients, expected {count}"
+    )
+
+
+def test_a_pruned_subscriber_is_closed_so_it_can_notice_and_reconnect():
+    """The EFFECT: the peer reaches EOF. Asserting that the socket left the
+    server's list would have been green throughout the whole defect."""
+    import socket as socket_module
+
+    server = _real_server()
+    peer = socket_module.create_connection(("127.0.0.1", server.port), timeout=5)
+    try:
+        _wait_for_clients(server, 1)
+        # Never read. A 20 KB payload fills the socket buffers in a handful of
+        # broadcasts, which is what the real span-sized message does.
+        payload = {"filler": "x" * 20000}
+        deadline = time.time() + 15
+        while server.client_count() > 0 and time.time() < deadline:
+            server.broadcast(payload)
+            time.sleep(0.02)
+        assert server.client_count() == 0, "the server never pruned the stalled subscriber"
+
+        # Drain whatever was buffered, then require an actual end of stream.
+        #
+        # **A timeout is NOT an ending, and the first version of this check
+        # counted it as one.** `socket.timeout` is a `TimeoutError` and so an
+        # `OSError`, so a blanket `except OSError: reached_eof = True` marked
+        # "nothing arrived for five seconds" as success - which is precisely
+        # the frozen-forever state this test exists to forbid. It passed
+        # against the unfixed server. Only EOF or a reset is an ending.
+        peer.settimeout(2.0)
+        reached_eof = False
+        end = time.time() + 10
+        while time.time() < end:
+            try:
+                if peer.recv(65536) == b"":
+                    reached_eof = True
+                    break
+            except TimeoutError:
+                continue  # still frozen; keep waiting for a real ending
+            except OSError:
+                reached_eof = True  # a reset is an ending too
+                break
+        assert reached_eof, "the pruned socket never ended - the consumer would wait forever"
+    finally:
+        peer.close()
+        server.stop()
+
+
+def test_a_subscriber_that_leaves_takes_its_thread_with_it():
+    """One leaked thread per connection, held until the server stopped.
+
+    Measured before the fix: five connect/disconnect cycles took the watcher
+    count from 2 to 7, exactly +1 each, never reclaimed. The watcher slept
+    instead of reading, so it could not see the peer close.
+    """
+    import socket as socket_module
+
+    def watchers() -> int:
+        return sum(1 for t in threading.enumerate() if t.name == "TelemetryStreamClient")
+
+    server = _real_server()
+    try:
+        baseline = watchers()
+        for _ in range(5):
+            peer = socket_module.create_connection(("127.0.0.1", server.port), timeout=5)
+            _wait_for_clients(server, 1)
+            peer.close()
+            time.sleep(0.3)
+        deadline = time.time() + 5
+        while watchers() > baseline and time.time() < deadline:
+            time.sleep(0.1)
+        assert watchers() == baseline, f"{watchers() - baseline} watcher threads leaked"
+    finally:
+        server.stop()
+
+
+def test_a_transient_accept_error_does_not_shut_the_door_forever():
+    """One `OSError` used to end the accept loop for the whole session, with
+    a DEBUG line the arcade's INFO level never prints. After that no window
+    could attach again, and nothing said why."""
+    import socket as socket_module
+
+    server = TelemetryStreamServer("127.0.0.1", 0)
+
+    class _FlakyOnce:
+        """The real listening socket, with one transient failure in it."""
+
+        def __init__(self, inner: socket_module.socket) -> None:
+            self._inner = inner
+            self.raised = False
+
+        def accept(self):
+            if not self.raised:
+                self.raised = True
+                raise OSError("transient winsock hiccup")
+            return self._inner.accept()
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    listening = socket_module.socket(socket_module.AF_INET, socket_module.SOCK_STREAM)
+    listening.setsockopt(socket_module.SOL_SOCKET, socket_module.SO_REUSEADDR, 1)
+    listening.bind(("127.0.0.1", 0))
+    listening.listen(5)
+    port = listening.getsockname()[1]
+
+    server._server_socket = _FlakyOnce(listening)  # type: ignore[assignment]
+    server._running = True
+    threading.Thread(target=server._accept_loop, daemon=True).start()
+
+    try:
+        time.sleep(0.3)  # let the first accept fail and the retry arm
+        peer = socket_module.create_connection(("127.0.0.1", port), timeout=5)
+        deadline = time.time() + 5
+        while server.client_count() == 0 and time.time() < deadline:
+            time.sleep(0.05)
+        assert server.client_count() == 1, "the accept loop died on a transient error"
+        peer.close()
+    finally:
+        server.stop()
+        listening.close()
