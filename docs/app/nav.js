@@ -205,15 +205,6 @@ window.PAGES = [
     eyebrow: "Timeline",
     tags: ["overview", "release"],
   },
-  {
-    slug: "changelog",
-    title: "Changelog",
-    section: "Development",
-    file: "pages/changelog.md",
-    description: "Mirrored release history from the repo root CHANGELOG.md.",
-    eyebrow: "Releases",
-    tags: ["release"],
-  },
 ];
 
 // Tag colour map (used as a soft white-ish neutral with subtle hue hints).

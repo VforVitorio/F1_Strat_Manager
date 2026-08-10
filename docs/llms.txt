@@ -29,7 +29,6 @@
 
 ## Optional
 - [Meet the author](https://docs.f1stratlab.com/pages/meet-the-author.md): About Víctor Vega Sobral and how to reach him.
-- [Changelog](https://docs.f1stratlab.com/pages/changelog.md): Release history mirrored from the repo CHANGELOG.
 - [Source code (GitHub)](https://github.com/VforVitorio/F1-StratLab): Apache-2.0 repository, releases, and issues.
 - [DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab): Auto-generated per-file technical wiki.
 - [Hugging Face dataset](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset): Data and models.
