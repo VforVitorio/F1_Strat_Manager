@@ -7,32 +7,11 @@
  * (`theme.apply_dark_palette`'s `QFrame[card="true"]` rule), and the
  * font sizes on each widget.
  *
- * The COLOURS are the arcade palette, not `tokens.css`. The two
- * deliberately differ and `test_pitwall_tokens.py` freezes the
- * difference; adopting the web palette here would be the redesign
- * sprint 8 owns, not a port. `tokens.css` is still loaded for its type
- * scale and for the DATA window.
+ * The `--qt-*` tokens and the `body` rule moved to `qt-base.css` when the
+ * DATA window needed the same palette in sprint 4. Pasting them into a
+ * second stylesheet would have been copy number six of a palette this repo
+ * has already found five copies of.
  */
-
-:root {
-  --qt-bg: #121127;
-  --qt-panel: #181633;
-  --qt-elevated: #1e1b4b;
-  --qt-border: #2d2d3a;
-  --qt-fg-1: #ffffff;
-  --qt-fg-2: #d1d5db;
-  --qt-fg-3: #9ca3af;
-  --qt-accent: #a78bfa;
-  --qt-mono: "FiraCode Nerd Font Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
-}
-
-body {
-  margin: 0;
-  background: var(--qt-bg);
-  color: var(--qt-fg-1);
-  font-family: var(--font-body, system-ui, sans-serif);
-  font-size: 13px;
-}
 
 .agents-window {
   display: flex;
@@ -121,11 +100,6 @@ body {
 
 /* --- Cards -------------------------------------------------------------- */
 
-.card {
-  background: var(--qt-panel);
-  border: 1px solid var(--qt-border);
-  border-radius: 6px;
-}
 .agent-card {
   position: relative;
   /* The scroll is on `.agent-card-body`, not here: a positioned ancestor
@@ -224,14 +198,6 @@ body {
 }
 
 /* --- Status bar --------------------------------------------------------- */
-
-.status-bar {
-  flex: 0 0 auto;
-  padding: 4px 10px;
-  background: var(--qt-panel);
-  color: var(--qt-fg-3);
-  font-size: 11px;
-}
 
 /* --- Orchestrator card (orchestrator_card.py) ---------------------------- */
 

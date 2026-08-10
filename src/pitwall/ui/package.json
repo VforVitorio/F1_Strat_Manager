@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
-    "smoke": "node scripts/smoke-agents.mjs"
+    "smoke": "node scripts/smoke-agents.mjs && node scripts/smoke-data.mjs"
   },
   "dependencies": {
     "echarts": "^6.1.0",

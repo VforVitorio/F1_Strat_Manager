@@ -14,7 +14,8 @@
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { PaceSeries } from "../../lib/agents";
-import { CHART_BASE, useEChart } from "./useEChart";
+import { useEChart } from "../../lib/chart";
+import { CHART_BASE } from "./useEChart";
 
 export function PaceChart({ series }: { series: PaceSeries }) {
   const option = useMemo<EChartsOption>(

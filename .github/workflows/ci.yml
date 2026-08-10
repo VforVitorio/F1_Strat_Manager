@@ -239,10 +239,12 @@ jobs:
         if: steps.changes.outputs.ui == 'true'
         run: npx playwright install --with-deps chromium
 
-      # Structural, not visual: the elements exist, the split computes to the
-      # 540 px Qt pins, and the status bar's 1.5 s auto-clear actually fires.
-      # Pixels stay a human's job, with `scripts/shot-agents.mjs`.
-      - name: Smoke the AGENTS window
+      # Structural, not visual, and BOTH windows: the elements exist, the
+      # AGENTS split computes to the 540 px Qt pins, the status bar's 1.5 s
+      # auto-clear actually fires, and DATA's four axes report the locked
+      # extents Qt pins them to. Pixels stay a human's job, with
+      # `scripts/shot-agents.mjs`.
+      - name: Smoke both windows
         if: steps.changes.outputs.ui == 'true'
         run: npm run smoke
 

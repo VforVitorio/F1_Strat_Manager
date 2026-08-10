@@ -20,7 +20,7 @@
  * lasts milliseconds and is not a state anybody sees.
  */
 
-import { useEffect, useState } from "react";
+import { useStatusText } from "../../lib/useStatusText";
 
 import { AgentCard } from "./AgentCard";
 import { OrchestratorCard } from "./OrchestratorCard";
@@ -131,39 +131,6 @@ const IDLE_VIEW: AgentsView = {
   history: { pace: [], tire: [] },
   status_bar: { text: "Waiting for arcade stream…", transient: false },
 };
-
-/**
- * The status bar, with Qt's 1.5 s timeout.
- *
- * `showMessage(text, 1500)` clears itself, so a Qt window whose producer
- * dies goes quiet within a second and a half. The port typed a
- * `transient` flag, documented it, and read it nowhere — so a dead
- * producer kept saying "lap N · streaming" forever under a red
- * Disconnected chip.
- *
- * **The timer is keyed on `seq`, not on the text.** Qt re-arms
- * `showMessage` on EVERY broadcast, ten times a second, so the message
- * stays visible while streaming and clears 1.5 s after the last tick.
- * Keyed on the text it re-arms once per LAP, because the string does not
- * change in between — so the bar went blank 1.5 s into every lap and
- * stayed blank for the other eighty-odd seconds of it. That is the same
- * bug inverted, and the first version of this hook shipped it.
- *
- * An error message is NOT transient: Qt gives that one no timeout,
- * because it is the one you must still be able to read.
- */
-function useStatusText(status: { text: string; transient: boolean }, seq: number | null): string {
-  const [shown, setShown] = useState(status.text);
-
-  useEffect(() => {
-    setShown(status.text);
-    if (!status.transient) return;
-    const timer = window.setTimeout(() => setShown(""), 1500);
-    return () => window.clearTimeout(timer);
-  }, [seq, status.text, status.transient]);
-
-  return shown;
-}
 
 export function AgentsWindow() {
   const { view } = useAgentsView();

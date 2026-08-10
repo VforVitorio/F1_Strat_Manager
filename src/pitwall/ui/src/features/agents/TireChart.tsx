@@ -17,7 +17,8 @@
 import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { TireSeries } from "../../lib/agents";
-import { CHART_BASE, useEChart } from "./useEChart";
+import { useEChart } from "../../lib/chart";
+import { CHART_BASE } from "./useEChart";
 
 export function TireChart({ series }: { series: TireSeries }) {
   const option = useMemo<EChartsOption>(() => {
