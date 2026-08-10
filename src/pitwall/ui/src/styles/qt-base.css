@@ -50,3 +50,28 @@ body {
   color: var(--qt-fg-3);
   font-size: 11px;
 }
+
+/* --- Scrollbars: reachable, invisible ------------------------------------
+ *
+ * Víctor, on seeing the AGENTS window: get rid of the bars that appear for
+ * scrolling inside the cards. They are visual noise on a surface whose whole
+ * job is to be read at a glance, and the overflow that summons them is
+ * usually trivial - measured, four of the six card bodies overflow by
+ * FOURTEEN pixels and each was drawing a full-height scrollbar for it.
+ *
+ * Hidden, not removed. The bodies stay `overflow: auto`, so a wheel, a
+ * trackpad, a touch drag and the keyboard all still reach the content. What
+ * goes is the chrome. Deleting the scroll instead would go back to CLIPPING,
+ * which is what Qt did and what the migration README records as a defect of
+ * the window being replaced ("the right column clipped mid-card").
+ *
+ * The one thing this does not give back is the AFFORDANCE - nothing now hints
+ * that a card has more below. That is a design question, not a CSS one, and
+ * it belongs to the elevate pass along with the hover treatment.
+ */
+* {
+  scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chromium, which is what WebView2 is */
+}
