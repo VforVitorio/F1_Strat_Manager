@@ -90,16 +90,53 @@ declare global {
 }
 
 /**
+ * Is this page inside a PITWALL window, or in a browser tab?
+ *
+ * The same bundle serves both. In a window the host injects
+ * `window.pywebview.api`; over http there is no such object and the same
+ * payload arrives from `/api/tick` on the loopback server the host runs
+ * alongside the windows. Everything above this module is unaware of which.
+ *
+ * `file:` is the giveaway a window ALWAYS has and a browser never does, but
+ * it is not sufficient on its own: pywebview announces its API
+ * asynchronously, so a page that has finished loading may not have it yet.
+ * Hence the wait below rather than a single check here.
+ */
+const IN_A_WINDOW = window.location.protocol === "file:";
+
+/**
  * pywebview injects `window.pywebview.api` asynchronously and announces it
  * with a `pywebviewready` event. Code that reads the API at module scope
  * therefore sees `undefined` and fails silently, which renders an empty
  * window with nothing in any log.
+ *
+ * Over http there is nothing to wait for, and waiting for an event that will
+ * never fire is how the browser path would render an empty page with nothing
+ * in any log - the same failure, one transport over.
  */
 export function whenBridgeReady(): Promise<void> {
-  if (window.pywebview?.api) return Promise.resolve();
+  if (window.pywebview?.api || !IN_A_WINDOW) return Promise.resolve();
   return new Promise((resolve) => {
     window.addEventListener("pywebviewready", () => resolve(), { once: true });
   });
+}
+
+/**
+ * One tick, from whichever transport this page has.
+ *
+ * A network error resolves to null rather than throwing: null already means
+ * "nothing new, keep what you have", which is exactly the right behaviour
+ * while a server restarts, and it is what the poll loop above already
+ * handles. Throwing would kill the loop on the first hiccup.
+ */
+async function fetchJson<T>(route: string, sinceSeq: number): Promise<T | null> {
+  try {
+    const response = await fetch(`${route}?since=${sinceSeq}`, { cache: "no-store" });
+    if (!response.ok) return null;
+    return (await response.json()) as T | null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -111,6 +148,22 @@ export function whenBridgeReady(): Promise<void> {
  */
 export async function getTick(sinceSeq: number): Promise<Tick | null> {
   const api = window.pywebview?.api;
-  if (!api) return null;
-  return api.get_tick(sinceSeq);
+  if (api) return api.get_tick(sinceSeq);
+  if (IN_A_WINDOW) return null;
+  return fetchJson<Tick>("/api/tick", sinceSeq);
+}
+
+/**
+ * The whole AGENTS view, from whichever transport this page has.
+ *
+ * It lives here rather than in `agents.ts` for the same reason `getTick`
+ * does: this module is the ONE place that knows how a payload arrives, and
+ * the browser fallback would otherwise have to be written twice - which is
+ * this repo's dominant defect, one copy fixed and its twin not.
+ */
+export async function getAgentsView<T>(sinceSeq: number): Promise<T | null> {
+  const api = window.pywebview?.api as { get_agents_view?: (s: number) => Promise<T | null> };
+  if (api?.get_agents_view) return api.get_agents_view(sinceSeq);
+  if (IN_A_WINDOW) return null;
+  return fetchJson<T>("/api/agents", sinceSeq);
 }

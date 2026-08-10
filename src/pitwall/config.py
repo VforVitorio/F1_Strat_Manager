@@ -15,7 +15,15 @@ from typing import Final
 # the client would just retry forever against a closed port.
 from src.arcade.config import STREAM_HOST, STREAM_PORT
 
-__all__ = ["STREAM_HOST", "STREAM_PORT", "WINDOWS", "WindowSpec", "ui_asset", "ui_is_built"]
+__all__ = [
+    "STREAM_HOST",
+    "STREAM_PORT",
+    "WINDOWS",
+    "WindowSpec",
+    "ui_asset",
+    "ui_dist",
+    "ui_is_built",
+]
 
 _UI_DIR: Final[Path] = Path(__file__).resolve().parent / "ui"
 _UI_DIST: Final[Path] = _UI_DIR / "dist"
@@ -110,6 +118,11 @@ def ui_asset(name: str) -> Path:
     a setup mistake with a one-line fix, not a crash to decode.
     """
     return _UI_DIST / name
+
+
+def ui_dist() -> Path:
+    """The built bundle's directory, for anything that serves the whole tree."""
+    return _UI_DIST
 
 
 def ui_is_built() -> bool:

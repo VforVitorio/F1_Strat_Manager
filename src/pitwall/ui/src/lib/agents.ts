@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { whenBridgeReady } from "./bridge";
+import { getAgentsView, whenBridgeReady } from "./bridge";
 
 /** Matches the producer's own ~10 Hz. Polling faster only returns null more often. */
 const POLL_INTERVAL_MS = 100;
@@ -146,10 +146,6 @@ export interface AgentsView {
   status_bar: { text: string; transient: boolean };
 }
 
-interface AgentsApi {
-  get_agents_view: (sinceSeq: number) => Promise<AgentsView | null>;
-}
-
 export interface AgentsState {
   view: AgentsView | null;
   /** False until the first view lands, so the window can say "waiting" honestly. */
@@ -175,8 +171,7 @@ export function useAgentsView(): AgentsState {
     let timer: number | undefined;
 
     const poll = async () => {
-      const api = (window.pywebview?.api ?? null) as AgentsApi | null;
-      const view = api ? await api.get_agents_view(lastSeq.current) : null;
+      const view = await getAgentsView<AgentsView>(lastSeq.current);
       if (cancelled) return;
       if (view) {
         if (view.seq !== null) lastSeq.current = view.seq;
