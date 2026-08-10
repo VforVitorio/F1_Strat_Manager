@@ -86,7 +86,20 @@ const VIEW = {
       {
         headline: `${key} headline`,
         headline_colour: "#ffffff",
-        lines: [{ text: "a body line", colour: "#d1d5db" }],
+        // The PIT card is deliberately overfull. The scroll-reachability
+        // check below needs a body that overflows, and on CI nothing did:
+        // the runner's font metrics are shorter than a Windows desktop's, so
+        // the four cards that overflow by 14 px locally overflow by nothing
+        // there and the check failed its own precondition. A fixture that
+        // guarantees the condition beats one that happens to meet it on the
+        // machine you wrote it on.
+        lines:
+          key === "pit"
+            ? Array.from({ length: 40 }, (_, i) => ({
+                text: `body line ${i} - long enough that this card must scroll anywhere`,
+                colour: "#d1d5db",
+              }))
+            : [{ text: "a body line", colour: "#d1d5db" }],
         status: "OK",
         glyph: "●",
         glyph_colour: "#10b981",
