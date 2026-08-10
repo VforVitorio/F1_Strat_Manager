@@ -43,6 +43,7 @@ import json
 import logging
 import math
 import queue
+import select
 import socket
 import threading
 import time
@@ -57,6 +58,11 @@ logger = logging.getLogger(__name__)
 # about 130 s to 0.7 s. A real dashboard on localhost accepts a 30 KB message
 # in microseconds, so anything past 50 ms is not slow, it is gone.
 CLIENT_SEND_TIMEOUT_S = 0.05
+# A transient `accept()` error is retried rather than treated as shutdown, but
+# a listening socket that keeps failing is not going to recover, and a hot
+# retry loop is worse than an honest surrender.
+ACCEPT_RETRY_DELAY_S = 0.1
+ACCEPT_ERROR_LIMIT = 20
 
 
 def _json_safe(value):
@@ -271,7 +277,11 @@ class TelemetryStreamServer:
                 except OSError:
                     # socket.timeout is an OSError subclass, so a subscriber
                     # that stopped reading is pruned by the same path as one
-                    # that closed. The Qt client already reconnects.
+                    # that closed. `_prune_clients` CLOSES it, which is what
+                    # lets the peer reconnect: a stalled subscriber's socket
+                    # is still perfectly healthy at the TCP level, so merely
+                    # forgetting it left the consumer reading a connection
+                    # that would never carry another byte and never end.
                     dead.append(client)
             if dead:
                 self._prune_clients(dead)
@@ -283,13 +293,32 @@ class TelemetryStreamServer:
     # --- internals --------------------------------------------------------
 
     def _accept_loop(self) -> None:
+        # A transient accept error is not the same event as `stop()` closing
+        # the listening socket, and the two used to share one unconditional
+        # `return`. Any winsock hiccup while running therefore ended the only
+        # thread that admits subscribers, for the rest of the session, leaving
+        # one DEBUG line the arcade's INFO level never shows: no PITWALL or Qt
+        # window could ever attach again and nothing said why.
+        consecutive_errors = 0
         while self._running and self._server_socket is not None:
             try:
                 client_socket, addr = self._server_socket.accept()
-            except OSError:
-                if self._running:
-                    logger.debug("Accept interrupted")
-                return
+            except OSError as err:
+                if not self._running:
+                    return  # `stop()` closed the socket; this is the exit path
+                consecutive_errors += 1
+                if consecutive_errors >= ACCEPT_ERROR_LIMIT:
+                    logger.error(
+                        "Stream server giving up on accept after %d consecutive errors; "
+                        "no further subscribers can attach: %s",
+                        consecutive_errors,
+                        err,
+                    )
+                    return
+                logger.warning("Stream server accept failed (%s); retrying", err)
+                time.sleep(ACCEPT_RETRY_DELAY_S)
+                continue
+            consecutive_errors = 0
             logger.info("Stream client connected from %s", addr)
             # Bounded so one stalled subscriber cannot freeze the replay's
             # own frame loop; a timeout is then treated as death, below.
@@ -304,27 +333,46 @@ class TelemetryStreamServer:
             ).start()
 
     def _keepalive_loop(self, client_socket: socket.socket) -> None:
-        """Hold a reference to the socket until the server stops.
+        """Watch one subscriber for its disconnect, and end when it does.
 
-        It never reads, so it CANNOT see the remote end close - measured: a
-        client that disconnects is still counted three seconds later, and
-        only disappears once a broadcast fails to send. A dead client is
-        detected by `_send_loop`, never here, so `client_count()` may
-        include ghosts until the next broadcast. The docstring used to
-        promise the prune this loop does not do.
+        It used to `time.sleep(1.0)` in a loop, which meant it could not see
+        the remote end close: a client that disconnected was still counted
+        until a LATER broadcast failed (the first send after a close lands in
+        the kernel buffer and succeeds), and the thread itself slept on until
+        the server stopped - measured at exactly one leaked thread per
+        connection, five cycles taking the count from 2 to 7.
+
+        `select` on the same cadence costs the same and answers the question.
+        Subscribers never send, so readable means the peer sent FIN or a
+        reset; either way this connection is over.
         """
         try:
             while self._running:
-                time.sleep(1.0)
+                readable, _, errored = select.select([client_socket], [], [client_socket], 1.0)
+                if errored:
+                    return
+                if not readable:
+                    continue
+                try:
+                    if client_socket.recv(1) == b"":
+                        return  # clean FIN from the peer
+                except OSError:
+                    return
         finally:
-            try:
-                client_socket.close()
-            except OSError:
-                # Remote end may have already dropped the connection.
-                pass
             self._prune_clients([client_socket])
 
     def _prune_clients(self, dead: list[socket.socket]) -> None:
+        """Forget these subscribers AND close their sockets.
+
+        The close is the load-bearing half. A subscriber pruned for a send
+        timeout has a perfectly healthy TCP connection - it simply stopped
+        reading - so dropping it from the list left the consumer holding a
+        socket that would never carry another byte and never reach EOF.
+        Measured: a 1.24-second stall was enough to be pruned, after which
+        that window sat on a dead feed showing a green "Connected" chip until
+        the arcade process itself exited. Closing here makes the peer's next
+        `recv` fail, which is the signal its reconnect loop already waits for.
+        """
         with self._clients_lock:
             for client in dead:
                 try:
@@ -332,3 +380,11 @@ class TelemetryStreamServer:
                 except ValueError:
                     # Another thread already pruned this socket first — fine.
                     pass
+        # Outside the lock: `close()` can block briefly and nothing else needs
+        # the list to stay held while it does.
+        for client in dead:
+            try:
+                client.close()
+            except OSError:
+                # Remote end may have already dropped the connection.
+                pass

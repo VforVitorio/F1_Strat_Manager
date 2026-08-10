@@ -821,3 +821,101 @@ def test_a_rule_cannot_paint_across_a_line_break():
     on_one_line = {seg["text"] for seg in highlight("lap 22 and +0.42 s") if seg["bold"] is False}
     assert "lap 22" in on_one_line
     assert "+0.42 s" in on_one_line
+
+
+# --- A restarted producer must not leave the last race on the charts --------
+#
+# `host.get_tick` deliberately follows a restarted producer: relaunching the
+# arcade with the windows open must not leave them frozen on a dead race. Band
+# 4 evicts client-side because `FrameClock` sees the frame index jump
+# backwards. This accumulator lives in the HOST process, which does not
+# restart with the arcade, so nothing here ever heard about it - the twin that
+# never got the signal, and the fix for the frozen window is what armed it.
+
+
+def _other_race_payload(seq: int, lap: int) -> dict:
+    """A DIFFERENT race, as a relaunched arcade would send it."""
+    payload = _payload(seq=seq, lap=lap, latest=_latest(lap))
+    payload["arcade"]["gp_name"] = "Suzuka"
+    payload["strategy"]["start"] = {"gp": "Suzuka", "year": 2025, "driver": "NOR"}
+    return payload
+
+
+def test_a_different_race_does_not_inherit_the_last_ones_laps():
+    """Measured before the fix: a `Suzuka · 2025` header over Melbourne's
+    laps 14-23, with lap 20 reading Melbourne's pace."""
+    from src.pitwall.agents_view import AgentsViewBuilder
+
+    builder = AgentsViewBuilder()
+    for lap in range(14, 24):
+        builder.build(_payload(seq=lap, lap=lap))
+    melbourne = builder.build(_payload(seq=30, lap=23))
+    assert len(melbourne["history"]["pace"]) >= 9, "the fixture never accumulated anything"
+
+    suzuka = builder.build(_other_race_payload(seq=1, lap=3))
+    laps = [row["lap"] for row in suzuka["history"]["pace"]]
+    assert laps == [3], f"the new race inherited {laps}"
+
+
+def test_the_same_race_relaunched_is_a_restart_too():
+    """`start` is identical, so only the sequence can tell.
+
+    It cannot be confused with a rewind: `seq` counts messages the producer
+    SENT, so within one run it only rises. A rewind moves the frame index and
+    must evict nothing - the case the test below pins.
+    """
+    from src.pitwall.agents_view import AgentsViewBuilder
+
+    builder = AgentsViewBuilder()
+    for lap in range(14, 24):
+        builder.build(_payload(seq=lap, lap=lap))
+
+    relaunched = builder.build(_payload(seq=1, lap=2))
+    laps = [row["lap"] for row in relaunched["history"]["pace"]]
+    assert laps == [2], f"the relaunched run inherited {laps}"
+
+
+def test_a_rewind_inside_one_run_still_evicts_nothing():
+    """The deliberate behaviour this fix must not break.
+
+    The laps ahead of a backwards seek are real, deterministic observations,
+    and the predictions among them are broadcast exactly once. A rewind moves
+    `frame_index`; the sequence keeps rising, which is what makes the two
+    events distinguishable at all.
+    """
+    from src.pitwall.agents_view import AgentsViewBuilder
+
+    builder = AgentsViewBuilder()
+    for lap in range(14, 24):
+        builder.build(_payload(seq=lap, lap=lap))
+
+    rewound = _payload(seq=99, lap=15)
+    rewound["playback"]["frame_index"] = 10
+    view = builder.build(rewound)
+    laps = [row["lap"] for row in view["history"]["pace"]]
+    assert max(laps) == 23, f"a rewind evicted the future: {laps}"
+
+
+def test_the_stale_lap_that_setdefault_would_have_made_permanent():
+    """The half of the defect that never self-corrected.
+
+    `seed_from_tail` uses `setdefault` on purpose, so a lap whose only carrier
+    in the NEW run is the history tail keeps whatever the DEAD run left there.
+    Asserting the VALUE, not the lap count: a store that still holds lap 18
+    at Melbourne's 81.18 under a Suzuka header is the actual damage.
+    """
+    from src.pitwall.agents_view import AgentsViewBuilder
+
+    builder = AgentsViewBuilder()
+    for lap in range(14, 24):
+        builder.build(_payload(seq=lap, lap=lap))
+
+    fresh = _other_race_payload(seq=1, lap=3)
+    fresh["strategy"]["history_tail"] = [
+        {"lap_number": 18, "lap_time_s": 92.18, "tyre_life": 4, "compound": "MEDIUM"}
+    ]
+    view = builder.build(fresh)
+    lap18 = next((row for row in view["history"]["pace"] if row["lap"] == 18), None)
+    assert lap18 is not None and lap18["actual"] == 92.18, (
+        f"lap 18 kept the dead race's number: {lap18}"
+    )
