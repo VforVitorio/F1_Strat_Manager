@@ -83,7 +83,20 @@ function driver(overrides = {}) {
   };
 }
 
-function tick(seq, { rival = "PIA", main = MAIN_SPAN, rivalSpan = RIVAL_SPAN, rewound = false, mainDriver = {} } = {}) {
+function tick(
+  seq,
+  {
+    rival = "PIA",
+    main = MAIN_SPAN,
+    rivalSpan = RIVAL_SPAN,
+    rewound = false,
+    mainDriver = {},
+    drivers = null,
+    order = null,
+    colors = null,
+  } = {},
+) {
+  const field = drivers ?? { NOR: driver(mainDriver), PIA: driver() };
   return {
     schema_version: 2,
     seq,
@@ -98,9 +111,10 @@ function tick(seq, { rival = "PIA", main = MAIN_SPAN, rivalSpan = RIVAL_SPAN, re
       circuit_length_m: CIRCUIT_M,
       driver_main: "NOR",
       driver_rival: rival,
-      drivers: { NOR: driver(mainDriver), PIA: driver() },
-      race_order: ["NOR", "PIA"],
-      driver_colors: { NOR: [255, 128, 0], PIA: [255, 128, 0] },
+      drivers: field,
+      race_order: order ?? Object.keys(field),
+      driver_colors:
+        colors ?? Object.fromEntries(Object.keys(field).map((code) => [code, [255, 128, 0]])),
       track_status: "1",
       telemetry: { main, rival: rivalSpan, rewound, dropped: 0 },
     },
@@ -276,6 +290,38 @@ const cursor = await page.evaluate(
 check(cursor.at > 10, `the cursor is drawn at ${CURSOR_DIST} m (${cursor.at} px)`);
 check(cursor.away === 0, `and nowhere else (${cursor.away} px at 3000 m)`);
 
+// The delta chart's BASELINE has to cross the whole plot, because every value
+// on that chart is read against it and Qt draws it with `pg.InfiniteLine`.
+// Measured on a real payload, the `{yAxis: 0}` shorthand stopped at 1679 m of
+// a 5220 m axis - and 36 green checks, four of which were about this very
+// chart, all passed over it. Only a pixel scan along the zero row sees it.
+const baseline = await page.evaluate(() => {
+  const el = document.querySelectorAll(".trace-plot")[0];
+  const chart = el.__pitwallChart;
+  const canvas = el.querySelector("canvas");
+  const context = canvas.getContext("2d");
+  const ratio = canvas.width / canvas.getBoundingClientRect().width;
+  const row = context.getImageData(
+    0,
+    Math.round(chart.convertToPixel({ yAxisIndex: 0 }, 0) * ratio),
+    canvas.width,
+    1,
+  ).data;
+  const blue = [];
+  for (let x = 0; x < canvas.width; x += 1) {
+    const i = x * 4;
+    // palette.INFO #3b82f6 = (59, 130, 246), with room for antialiasing.
+    if (row[i] < 110 && row[i + 1] > 90 && row[i + 2] > 180) blue.push(x);
+  }
+  if (!blue.length) return null;
+  const metres = (px) => chart.convertFromPixel({ xAxisIndex: 0 }, px / ratio);
+  return { from: metres(blue[0]), to: metres(blue[blue.length - 1]) };
+});
+check(
+  baseline !== null && baseline.from < 60 && baseline.to > CIRCUIT_M - 60,
+  `the zero reference line crosses the whole plot (${JSON.stringify(baseline)})`,
+);
+
 // A rewind must EMPTY the buffer. The producer sends the flag with an empty
 // span, and a distance-keyed store holds samples for track the car has not
 // re-driven - nothing else would ever evict them.
@@ -356,6 +402,86 @@ const blindCursor = await soloPage.evaluate(() => {
 check(!blindCursor, "and draws no cursor for a car with no position");
 
 await solo.close();
+
+// --- Scenario C: the ring's three states, and the one that reads backwards --
+
+// The trap this exists for, measured on the real session: on the final frame
+// `!active` alone reads 19 of the 20 cars as retired, the WINNER included,
+// because a car that took the flag stops broadcasting exactly like a car that
+// crashed. VER below is that car.
+const FIELD = {
+  NOR: driver({ rel_dist: 0 }), //           running, main, at the line
+  PIA: driver({ rel_dist: 0.25 }), //        running, rival, a quarter round
+  VER: driver({ active: false, has_finished: true, rel_dist: 0.5 }), // finished
+  HUL: driver({ active: false, has_finished: false, rel_dist: 0.75 }), // out
+  HAD: driver({ rel_dist: null, has_position: false }), // never placed
+};
+
+const ring = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+const ringPage = await ring.newPage();
+ringPage.on("pageerror", (error) => failures.push(`pageerror(ring): ${error.message}`));
+
+await ringPage.addInitScript((payload) => {
+  window.pywebview = {
+    api: { get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload) },
+  };
+}, tick(1, { drivers: FIELD, order: ["NOR", "PIA", "VER", "HUL", "HAD"] }));
+
+await ringPage.goto(url, { waitUntil: "domcontentloaded" });
+await ringPage.waitForSelector(".ring-dot", { timeout: 5000 });
+await ringPage.waitForTimeout(300);
+
+const placed = await ringPage.evaluate(() =>
+  [...document.querySelectorAll(".ring-dot circle")].map((el) => ({
+    code: el.dataset.code,
+    status: el.dataset.status,
+    cx: Number(el.getAttribute("cx")),
+    cy: Number(el.getAttribute("cy")),
+    hollow: el.getAttribute("fill") === "none",
+  })),
+);
+const of = (code) => placed.find((dot) => dot.code === code);
+
+check(placed.length === 4, `four dots for five cars, one of them unplaced (${placed.length})`);
+check(of("NOR")?.status === "running", "a car on track is running");
+check(of("HUL")?.status === "out" && of("HUL")?.hollow, "a retirement is out, and hollow");
+// The whole reason `has_finished` is on the wire.
+check(
+  of("VER")?.status === "finished" && !of("VER")?.hollow,
+  `a chequered flag is finished, not out (${of("VER")?.status})`,
+);
+
+// The angle: fraction 0 is twelve o'clock and the lap runs clockwise, so a
+// quarter of the way round is three o'clock. Asserted on the rendered
+// coordinates, which is the only place the rotation can be wrong.
+const CENTRE = 100;
+const RADIUS = 78;
+check(
+  Math.abs(of("NOR").cx - CENTRE) < 0.5 && Math.abs(of("NOR").cy - (CENTRE - RADIUS)) < 0.5,
+  `fraction 0 sits at the start line, top centre (${of("NOR").cx}, ${of("NOR").cy})`,
+);
+check(
+  Math.abs(of("PIA").cx - (CENTRE + RADIUS)) < 0.5 && Math.abs(of("PIA").cy - CENTRE) < 0.5,
+  `fraction 0.25 is a quarter clockwise (${of("PIA").cx}, ${of("PIA").cy})`,
+);
+
+// A car the telemetry never placed is NAMED, never drawn at fraction 0 -
+// which is the start line, a position a real car can hold.
+check(!of("HAD"), "the unplaced car has no dot");
+check(
+  (await ringPage.locator(".ring-blind").innerText()).includes("HAD"),
+  "and the ring says which car it is",
+);
+check(
+  (await ringPage.locator(".ring-code").count()) === 2,
+  "only the two featured cars are labelled",
+);
+// `textContent`, not `innerText`: these are SVG <text> nodes, which are not
+// HTMLElements and have no `innerText` at all.
+const lapText = await ringPage.locator(".ring-lap").textContent();
+check(lapText?.trim() === "24", `the ring carries the lap counter (${lapText})`);
+
+await ring.close();
 await browser.close();
 server.close();
 

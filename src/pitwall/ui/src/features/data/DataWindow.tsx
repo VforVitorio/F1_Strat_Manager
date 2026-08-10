@@ -19,6 +19,7 @@
  */
 
 import { OwnCarTraces } from "./OwnCarTraces";
+import { TrackRing } from "./TrackRing";
 import { useStatusText } from "../../lib/useStatusText";
 import { useTick } from "../../lib/useTick";
 
@@ -36,7 +37,10 @@ export function DataWindow() {
     <main className="data-window">
       <div className="data-body">
         {live && tick ? (
-          <OwnCarTraces tick={tick} discontinuity={discontinuity} />
+          <div className="band4">
+            <OwnCarTraces tick={tick} discontinuity={discontinuity} />
+            <TrackRing arcade={tick.arcade} />
+          </div>
         ) : (
           <p className="data-waiting">
             Waiting for the arcade broadcast. Start a replay with <code>--strategy</code>.

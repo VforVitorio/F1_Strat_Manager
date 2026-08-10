@@ -192,7 +192,13 @@ view = SimpleNamespace(
     _driver_rival="PIA",
     _year=2025,
     _gaps=RaceGapCalculator(session),
-    _color_for=lambda code: (255, 255, 255),
+    # The real `F1ArcadeView._color_for` (app.py:915) reads the session's own
+    # palette. A stub returning white made every driver on the wire white,
+    # which is invisible in the AGENTS window (it does not use the colours)
+    # and wrong the moment a consumer draws twenty cars: PITWALL's track ring
+    # colours its dots from `driver_colors` precisely so nothing hardcodes a
+    # palette, and this harness was quietly feeding it a flat one.
+    _color_for=lambda code: session.driver_colors.get(code, (255, 255, 255)),
     _stream_server=server,
     _strategy_state=state,
     _broadcast_tick=0,

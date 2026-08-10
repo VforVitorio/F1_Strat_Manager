@@ -43,6 +43,18 @@
   color: var(--qt-fg-2);
 }
 
+/* Band 4 is the traces plus the ring in its corner. The ring is a fixed
+ * column because it is a circle: giving it a fraction of the width makes it
+ * shrink as the traces grow, which is backwards - the traces are the thing
+ * that wants the room. */
+.band4 {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 10px;
+}
+
 /* --- Band 4: the traces panel (TelemetryPanel) --------------------------- */
 
 /* `QFrame` with `card=true` (so it carries `.card` from `qt-base.css`),
@@ -179,4 +191,124 @@
   color: var(--qt-fg-3);
   font-style: italic;
   font-size: 12px;
+}
+
+/* --- Band 4 corner: the track ring --------------------------------------- */
+
+/* Same 10 px padding and 8 px stack as the traces panel, so the two cards
+ * sitting side by side share an internal rhythm. */
+.ring {
+  /* Sized to its content, not stretched down the column. The card holds a
+   * circle, a legend and at most one line of text; a full-height card leaves
+   * two thirds of itself empty and reads as a panel that failed to load. */
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  min-height: 0;
+}
+
+.ring-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+/* Matches `.trace-title` / `.trace-subtitle`: this is a panel heading of the
+ * same rank as a chart's. */
+.ring-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.ring-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+.ring-svg {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--qt-border);
+  stroke-width: 1.5;
+}
+
+/* Start/finish, at twelve o'clock. */
+.ring-line {
+  stroke: var(--qt-fg-2);
+  stroke-width: 2;
+}
+
+.ring-lap {
+  fill: var(--qt-fg-1);
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.ring-lap-total {
+  fill: var(--qt-fg-3);
+  font-size: 11px;
+}
+
+.ring-code {
+  fill: var(--qt-fg-2);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ring-dot circle {
+  stroke-width: 1.5;
+}
+
+/* The three states, and they have to be told apart at a glance on a 200 px
+ * circle. Running is a solid dot in the driver's own colour; finished keeps
+ * the fill and gains a white collar (the flag); out is hollow and dimmed,
+ * which is the only state that reads as "not on track" without a legend. */
+.ring-dot.is-finished circle {
+  stroke: var(--qt-fg-1);
+  stroke-width: 2;
+}
+
+.ring-dot.is-out {
+  opacity: 0.45;
+}
+
+.ring-legend {
+  display: flex;
+  gap: 8px;
+  padding: 0 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ring-key.is-running {
+  color: var(--qt-fg-2);
+}
+.ring-key.is-finished {
+  color: var(--qt-fg-1);
+}
+.ring-key.is-out {
+  color: var(--qt-fg-3);
+}
+
+/* A car the telemetry never placed has no angle at all, so it is named here
+ * rather than drawn at fraction 0 - which is the start line, a place a real
+ * car can be. */
+.ring-blind {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  letter-spacing: 0.5px;
 }
