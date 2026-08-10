@@ -6,6 +6,12 @@ on:
     paths:
       - "docs/**"
       - "scripts/prerender_docs.mjs"
+      - "scripts/sync_docs_changelog.mjs"
+      # A release only edits CHANGELOG.md, and the changelog PAGE is generated
+      # from it. Without this path the site keeps whatever version it was last
+      # deployed with - which is how it came to advertise 1.10.5 while the repo
+      # had shipped 2.5.1.
+      - "CHANGELOG.md"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -25,6 +31,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      # Before staging, so the copy that ships is generated from the file
+      # release-please owns rather than from whenever someone last refreshed
+      # it by hand. Also rewrites the release dates to day-month-year, which
+      # is done HERE and not in a renderer because the site renders the same
+      # markdown twice - prerendered in Node and hydrated in the browser - and
+      # a render-time rule would be two implementations of one decision.
+      - name: Generate the changelog page from CHANGELOG.md
+        run: node scripts/sync_docs_changelog.mjs
+
       - name: Stage docs/ for deployment
         run: |
           mkdir -p _site
@@ -32,11 +52,6 @@ jobs:
           # Add a .nojekyll marker so GitHub Pages does not run Jekyll on the
           # output (we ship raw HTML + JSX + CSS that should be served as-is).
           touch _site/.nojekyll
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: "20"
 
       - name: Prerender doc pages (crawlable HTML + real-URL sitemap + llms-full)
         # Renders each docs/pages/*.md to a real /<slug>/index.html with per-page
