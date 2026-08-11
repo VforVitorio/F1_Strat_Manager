@@ -130,6 +130,15 @@ window.PAGES = [
     tags: ["arcade", "pyside6", "ui", "telemetry", "threading"],
   },
   {
+    slug: "pitwall",
+    title: "PITWALL windows",
+    section: "Arcade",
+    file: "pages/pitwall.md",
+    description: "The React strategy surfaces: two pywebview windows, one shared client, and the same pages on loopback.",
+    eyebrow: "React",
+    tags: ["arcade", "ui", "telemetry", "frontend"],
+  },
+  {
     slug: "arcade-strategy-pipeline",
     title: "Strategy pipeline",
     section: "Arcade",

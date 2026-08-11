@@ -13,7 +13,7 @@ There is no `auth` router. Authentication is a single ASGI middleware wrapping e
 | Router | Prefix | Tags | Source |
 |---|---|---|---|
 | telemetry | `/api/v1/telemetry` | telemetry | `api/v1/endpoints/telemetry.py` |
-| circuit_domination | `/api/v1` | circuit_domination | `api/v1/endpoints/circuit_domination.py` |
+| circuit_domination | `/api/v1/circuit-domination` | telemetry | `api/v1/endpoints/circuit_domination.py` |
 | comparison | `/api/v1/comparison` | comparison | `api/v1/endpoints/comparison.py` |
 | chat | `/api/v1/chat` | chat | `api/v1/endpoints/chat.py` |
 | strategy | `/api/v1/strategy` | strategy | `api/v1/endpoints/strategy.py` |
@@ -36,7 +36,7 @@ This means `F1_API_KEY` and `F1_HOST` (see [Setup and deployment](#/setup)) are 
 
 ## Rate limiting
 
-Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`, Security C2 / S-7) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket.
+Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`, Security C2 / S-7) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket. The four chat routes carry buckets too (capacity 10, 20/min), so the chat surface is metered as well.
 
 | Route | Burst capacity | Refill rate |
 |---|---|---|
@@ -56,6 +56,7 @@ An exhausted bucket returns `429` with a `Retry-After` hint. Set `F1_RATE_LIMIT_
 | GET | `/api/v1/telemetry/sessions` | List sessions for a GP |
 | GET | `/api/v1/telemetry/drivers` | List drivers for a session |
 | GET | `/api/v1/telemetry/race-data` | Full-field featured-parquet frame for a GP (positions, lap times, inter-driver gaps), optionally filtered to driver codes |
+| POST | `/api/v1/telemetry/prewarm` | Warm the session cache in the background; returns 202 immediately |
 
 **Query parameters** vary by endpoint. `year` (int) and `gp` (str) are common to all of them; `session` (str) applies to the lap-time and telemetry endpoints; `drivers` (comma-separated) to the comparison ones. `/race-data` takes `driver`, **singular**, and treats it as an optional filter over the full-field frame.
 

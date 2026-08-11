@@ -23,7 +23,7 @@ After install you have five console entry points:
 ```bash
 f1-strat       # interactive launcher (recommended starting point)
 f1-sim         # headless CLI simulation against a saved race
-f1-arcade      # three-window PySide6 + pyglet experience
+f1-arcade      # pyglet 2D replay plus the live strategy surfaces
 f1-webapp      # post-race web app (wraps `docker compose up`)
 f1-eval        # regenerate the evaluation reports (registry, calibration, hygiene, projection, ...)
 ```
@@ -42,7 +42,7 @@ cd F1-StratLab
 uv sync --all-extras
 ```
 
-`uv sync` reads `pyproject.toml`, resolves the lockfile and pulls the CUDA-routed PyTorch wheel automatically on Windows and Linux (CPU build on macOS).
+`uv sync` reads `pyproject.toml`, resolves the lockfile and pulls the CUDA-routed PyTorch wheel automatically **on Windows**. Everything else, Linux and macOS included, resolves to the CPU wheel: CI runners and CPU-only Linux boxes were downloading about 5 GB of unused CUDA libraries, so the markers were narrowed deliberately (`pyproject.toml`, #251). A Linux GPU box opts back in by editing those markers.
 
 Run the simulation against a saved race:
 
@@ -67,7 +67,7 @@ For a reproducible all-in-one setup, see [Setup and deployment](#/setup) for the
 
 ### Do I need a GPU?
 
-No, but it helps. `uv sync` pulls the CUDA-routed PyTorch wheel on Windows and Linux (a CPU build on macOS), so the stack runs on CPU. A GPU mainly accelerates Whisper radio transcription and the TCN tire model, the benchmark latencies on the [thesis results](#/thesis) page (Whisper 233.9 ms, NLP pipeline 42.1 ms) are GPU figures; on CPU it is slower but fully functional.
+No, but it helps. `uv sync` pulls the CUDA-routed wheel **on Windows only**; Linux and macOS get the CPU build, so out of the box the stack runs on CPU almost everywhere. A GPU mainly accelerates Whisper radio transcription and the TCN tire model, the benchmark latencies on the [thesis results](#/thesis) page (Whisper 233.9 ms, NLP pipeline 42.1 ms) are GPU figures; on CPU it is slower but fully functional.
 
 ### Why is the first run slow?
 

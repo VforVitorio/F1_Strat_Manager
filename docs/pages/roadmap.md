@@ -451,6 +451,19 @@
   </div>
 </li>
 
+<li class="rl-item">
+  <div class="rl-dot done"></div>
+  <div class="rl-card">
+    <div class="rl-header">
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.1.0 to v2.5.1</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-07-28</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
+    </div>
+    <p class="rl-title">Decision memory, and a round of correctness hardening</p>
+    <p class="rl-summary">The orchestrator gained a per-race <strong>decision memory</strong>: a caller-owned accumulator rendered into the Layer 3 prompt, wired through the CLI, the arcade and the backend, so a recommendation can say what changed since the last lap and why. Alongside it, a run of correctness work on the Monte Carlo and the agents, including banding <code>threat_level</code> on the served calibrated scale rather than on raw-scale operating points, pricing the lap-number neutralisation union in all three places it lives, and breaking an exact scenario tie by a stated rule instead of by dictionary insertion order. Full detail in the <a href="https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">changelog</a>.</p>
+  </div>
+</li>
+
 </ul>
 
 <p class="rl-section-label">Planned milestones</p>
@@ -465,7 +478,7 @@
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
     <p class="rl-title">Arcade, modernized: a web-native trackside frontend</p>
-    <p class="rl-summary">Bring the web app's modern frontend to part of the live Arcade experience, running alongside the PySide6 / pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to a web-native view; the <code>lap_state</code> contract and the agents stay unchanged.</p>
+    <p class="rl-summary">Bring the web app's modern frontend to part of the live Arcade experience, running alongside the pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to a web-native view; the <code>lap_state</code> contract and the agents stay unchanged.</p>
   </div>
 </li>
 

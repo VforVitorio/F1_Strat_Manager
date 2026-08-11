@@ -43,12 +43,15 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 
 | Field | Type | Description |
 |---|---|---|
-| `compound` | str | Current compound name (SOFT, MEDIUM, HARD) |
+| `compound` | str \| None | The **Pirelli compound ID**, e.g. `C2`, `C3` — not the SOFT/MEDIUM/HARD name. `None` when the compound is not in the slick map (a wet or intermediate lap). Verified on a served run: Melbourne lap 35 on HARD returns `'C3'` |
 | `current_tyre_life` | int | Current tire age in laps |
 | `deg_rate` | float | Degradation rate (seconds lost per lap) |
 | `laps_to_cliff_p10` | float | 10th percentile laps until cliff |
 | `laps_to_cliff_p50` | float | 50th percentile laps until cliff |
 | `laps_to_cliff_p90` | float | 90th percentile laps until cliff |
+| `gp_name` | str | The race the prediction was made for |
+| `cumulative_deg_s` | float | Seconds lost to degradation so far this stint |
+| `deg_cost_s` | float | **The field the scorers consume** — the degradation cost the Monte Carlo prices a stay-out against |
 | `warning_level` | str | OK, MONITOR, or PIT_SOON (derived from `laps_to_cliff_p10` against circuit-cluster-aware thresholds; there is no CRITICAL value) |
 | `reasoning` | str | LLM-generated reasoning text |
 
@@ -94,6 +97,7 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 
 | Field | Type | Description |
 |---|---|---|
+| `question` | str | The question that was asked of the retriever |
 | `answer` | str | Synthesized answer from regulation passages |
 | `articles` | list[str] | Referenced FIA article numbers |
 | `chunks` | list | Raw retrieved text chunks |

@@ -1,13 +1,15 @@
 # Arcade Quick Start
 
-> End-user guide for running the F1 StratLab arcade replay with the live strategy dashboard. Aimed at someone who has cloned the repository and wants to see three synchronised windows on screen inside ten minutes.
+> End-user guide for running the F1 StratLab arcade replay with the live strategy surfaces. Aimed at someone who has cloned the repository and wants everything on screen inside ten minutes.
 
-One command launches everything: the arcade replay window (pyglet), the strategy dashboard (PySide6), and the telemetry window (PySide6). The arcade process owns the simulation loop and broadcasts merged state on a local TCP port; the dashboard subprocess subscribes and renders.
+One command launches everything. The arcade process owns the simulation loop and broadcasts merged state on a local TCP port; the follower surfaces subscribe and render.
+
+**Two follower stacks run side by side right now, on purpose.** PITWALL is the web-technology replacement — two pywebview windows rendering React — and the original PySide6 pair is kept alive beside it through the migration so every PITWALL panel can be compared against the window it replaces while that window still exists (`_spawn_pitwall`, `src/arcade/app.py`). The Qt pair retires at the end of the migration; the pyglet replay stays either way.
 
 <p align="center">
   <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab arcade replay in action"></video>
   <br/>
-  <sub>The three-window arcade: 2D replay, strategy dashboard and live telemetry, all in sync.</sub>
+  <sub>The arcade: 2D replay, strategy dashboard and live telemetry, all in sync. Recorded before PITWALL joined; the pyglet replay on the left is unchanged.</sub>
 </p>
 
 ## Prerequisites
@@ -33,8 +35,9 @@ What happens:
 3. The view loads the 2025 Round 3 (Suzuka) parquet for Verstappen.
 4. With `--strategy` set, the view starts a `TelemetryStreamServer` on `127.0.0.1:9998`, owns a `StrategyState`, and spawns the dashboard subprocess with `python -m src.arcade.dashboard`.
 5. The dashboard opens two PySide6 windows that both connect back to the stream.
+6. It also spawns `python -m src.pitwall`, which opens **PITWALL · DATA** and **PITWALL · AGENTS** — two pywebview windows rendering React against the same broadcast, through a single shared TCP client.
 
-Three windows are now on screen. The arcade window drives playback; the two Qt windows react to broadcasts.
+The arcade window drives playback; every other window reacts to broadcasts. PITWALL additionally serves the same two pages over loopback, and prints the URL on startup, so you can open them in a browser (and get devtools) instead of, or as well as, the windows.
 
 ## What each window shows
 
@@ -78,11 +81,20 @@ Pass `--driver2 LEC` and:
 
 Hotkeys handled by `F1ArcadeView.on_key_press`:
 
-- `Space`, pause / resume
-- `Right Arrow`, step one lap forward
-- `Left Arrow`, step one lap backward
-- `+` / `-`, increase / decrease playback speed
-- `Escape`, return to the menu (or exit if launched with `--viewer`)
+| Key | What it does |
+|---|---|
+| `Space` | pause / resume |
+| `Left` / `Right` | **hold** to scrub backwards or forwards. Holding pauses playback; releasing restores whatever state you were in before. Not a one-lap step |
+| `Up` / `Down` | next / previous playback speed |
+| `1` `2` `3` `4` | jump straight to 0.5x, 1x, 2x, 4x |
+| `R` | restart: back to frame zero, default speed, playing |
+| `D` | show / hide the DRS zones on the track |
+| `B` | show / hide the progress bar |
+| `A` | show / hide the eighteen non-featured cars |
+| `Escape` | close the window |
+
+`Escape` quits rather than returning to the menu, and it does so whether or not
+you launched with `--viewer`.
 
 ## Known limitations
 
@@ -95,7 +107,7 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `FileNotFoundError: data/raw/.../laps.parquet` | FastF1 cache not built | Run once without `--strategy`, or `python -m src.simulation.builder 2025 3` |
+| `FileNotFoundError: data/raw/.../laps.parquet` | the race is not in the local cache | `uv run python -c "from src.f1_strat_manager.data_cache import ensure_race; ensure_race(2025, 'Melbourne')"`, or just pick the race from the `f1-strat` menu, which calls the same function |
 | "Backend offline" / "Connection refused" | Arcade did not start the stream server | Restart the arcade with `--strategy` |
 | "No module named pyqtgraph" | `uv sync` did not complete | Re-run `uv sync` from the repo root |
 | "OpenAI api_key missing" | `.env` missing or `OPENAI_API_KEY` unset | Add the key to `.env`, or `F1_LLM_PROVIDER=lmstudio` |
@@ -104,5 +116,5 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 ## Related reading
 
 - [Arcade dashboard](#/arcade-dashboard), developer-level architecture deep dive on the dashboard package.
-- [Arcade strategy pipeline](#/arcade-strategy-pipeline), why the arcade keeps its own copy of the orchestrator body.
+- [Arcade strategy pipeline](#/arcade-strategy-pipeline), why the arcade delegates to the shared engine instead of keeping its own copy of the orchestrator.
 - [Multi-agent system](#/multi-agent): N25–N31 multi-agent pipeline reference.
