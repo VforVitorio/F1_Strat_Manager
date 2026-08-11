@@ -64,6 +64,15 @@ class TickSource(Protocol):
 
     def get_agents_view(self, since_seq: int = -1) -> dict[str, Any] | None: ...
 
+    def get_bulk(self, since_rev: int = -1) -> dict[str, Any] | None: ...
+
+
+_READERS = {
+    "/api/tick": "get_tick",
+    "/api/agents": "get_agents_view",
+    "/api/bulk": "get_bulk",
+}
+
 
 def _read_bundle(root: Path) -> dict[str, tuple[bytes, str]]:
     """The whole built bundle, URL path -> (bytes, content type)."""
@@ -103,9 +112,16 @@ def _handler(bundle: dict[str, tuple[bytes, str]], source: TickSource):
             parsed = urlparse(self.path)
             route = parsed.path
 
-            if route in ("/api/tick", "/api/agents"):
-                reader = source.get_tick if route == "/api/tick" else source.get_agents_view
-                self._send_json(reader(_since(parsed.query)))
+            # `since` means "the revision I hold" on all three: a sequence on
+            # the two tick-driven routes, a bulk revision on the third. Same
+            # word because it is the same contract - null means nothing new.
+            #
+            # Names, then one `getattr`, rather than a dict of bound methods:
+            # binding all three on every request makes a source that is
+            # missing ONE of them fail on the routes it does implement.
+            reader = _READERS.get(route)
+            if reader is not None:
+                self._send_json(getattr(source, reader)(_since(parsed.query)))
                 return
 
             if route in ("/", ""):

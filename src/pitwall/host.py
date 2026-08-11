@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import logging
 
+from src.f1_strat_manager.data_cache import get_data_root
 from src.pitwall.agents_view import AgentsViewBuilder
+from src.pitwall.session_data import SessionLaps, unavailable
 from src.pitwall.stream_client import ArcadeStreamClient
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,14 @@ class PitwallHost:
         self._windows_open = window_count
         self._agents = AgentsViewBuilder()
         self._agents_connection: str | None = None
+        # The BULK channel's state. `_bulk_reveal` is the last map served, so
+        # the revision can advance on a rewind as readily as on a completed
+        # lap; `_session_key` is what makes pointing the arcade at another
+        # race replace the loaded laps instead of serving the previous one's.
+        self._bulk_rev = 0
+        self._bulk_reveal: dict[str, int] = {}
+        self._session: SessionLaps | None = None
+        self._session_key: tuple[int, str] | None = None
 
     def start(self) -> None:
         self._client.start()
@@ -112,6 +122,68 @@ class PitwallHost:
                 return None
         self._agents_connection = connection
         return self._agents.build(payload, connection)
+
+    def get_bulk(self, since_rev: int = -1) -> dict | None:
+        """The race's lap table, masked to what the clock has revealed.
+
+        The second data channel. The tick carries the instant; this carries
+        everything the timing table and the bests panel show, which is static
+        parquet known before lap 1 and therefore a progressive reveal rather
+        than a stream to accumulate.
+
+        **The comparison is inequality, exactly as `get_tick`'s is, and for a
+        sharper reason.** A rewind LOWERS the revealed set, so `rev >
+        since_rev` would withhold precisely the un-reveal - the client would
+        keep rows the clock has taken back, which is the leak host-side
+        masking exists to prevent, reintroduced one level up. A test that
+        never rewinds stays green through it.
+
+        The revision advances when the reveal map changes in EITHER
+        direction, so a caller holding `rev` is holding "the view I have is
+        current", not "I have seen this many laps".
+
+        Returns None when the caller is up to date, matching `get_tick`: the
+        UI keeps what it has. The race being absent from disk is NOT that
+        case - it returns an explicit unavailable payload, because a tower
+        rendering zero rows silently is the same pixel as a tower whose
+        reveal is broken.
+        """
+        payload = self._client.latest
+        if payload is None:
+            return None
+        arcade = payload.get("arcade") or {}
+        reveal = {
+            code: int(state.get("laps_completed") or 0)
+            for code, state in (arcade.get("drivers") or {}).items()
+        }
+        if reveal != self._bulk_reveal:
+            self._bulk_reveal = reveal
+            self._bulk_rev += 1
+        if self._bulk_rev == since_rev:
+            return None
+
+        view = self._masked_view(arcade, reveal)
+        view["rev"] = self._bulk_rev
+        return view
+
+    def _masked_view(self, arcade: dict, reveal: dict[str, int]) -> dict:
+        """Load the race once, then slice it; or say it is not on disk.
+
+        The load is cached on (year, location) rather than repeated, and the
+        cache is keyed so that pointing the arcade at another race replaces
+        it instead of serving the previous one's laps - the stale-state class
+        #904 already paid for once on the AGENTS history.
+        """
+        year, location = arcade.get("year"), arcade.get("location")
+        if not isinstance(year, int) or not isinstance(location, str):
+            return unavailable(year if isinstance(year, int) else None, None)
+
+        if self._session_key != (year, location):
+            self._session_key = (year, location)
+            self._session = SessionLaps.load(get_data_root(), year, location)
+        if self._session is None:
+            return unavailable(year, location)
+        return self._session.masked_view(reveal, float(arcade.get("global_t_min") or 0.0))
 
     def release_window(self) -> int:
         """Record that one window has closed; stop the client at the last one.
