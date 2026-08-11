@@ -183,6 +183,11 @@ window*, with the two rendered side by side.
 > **⇄ ORDER CHANGED 2026-08-09 (Víctor).** Band 4 goes FIRST, then bands 1-2, then band 3. The
 > sections below keep their original band numbering; only the sprint each lands in moved.
 >
+> **The sprint labels below were renumbered on 2026-08-11 to match** — they had been left at the
+> pre-reorder values, so the same file said *"Sprint 4, bands 1-2"* two screens under a note saying
+> the BULK reader arrives with *"the sprint-5 selector"*. **The band is the stable identifier and
+> the sprint number is not**; cite bands when the two could be confused.
+>
 > **Why.** Band 4 is the one band with an EXISTING ORIGINAL to port: the Qt telemetry window
 > (`src/arcade/dashboard/telemetry_window.py` + `telemetry_panel.py`, whose docstring carries the
 > 2x2 layout — Delta Time / Speed over Brake / Throttle, locked axes, a per-trace legend). That is
@@ -227,7 +232,7 @@ window*, with the two rendered side by side.
 
 Built band by band so each sprint ends with something on screen.
 
-**Sprint 4, bands 1-2.** Status strip, timing table, bests. Introduces the BULK reader over
+**Sprint 5, bands 1-2.** Status strip, timing table, bests. Introduces the BULK reader over
 `laps.parquet`, which is (927, 35) on the race checked and carries everything the tower and the
 bests need.
 
@@ -257,23 +262,23 @@ Two rules that must be written into the code, not assumed:
   removed it). The lap-quantised intent survives both.
   A precise-looking wrong number on a fidelity surface is the P3 A2 defect class.
 
-**Sprint 5, band 3.** The Run Timeline heat grid (drivers as columns, laps as rows, purple / green /
+**Sprint 6, band 3.** The Run Timeline heat grid (drivers as columns, laps as rows, purple / green /
 yellow / red, `IN PIT` and `OUT` cells) with Race Trace as a tab of the same panel. The bests panel
 should recompute from the revealed subset rather than trust `IsPersonalBest`: the column is safe
 under masking (Gate A checked, it is a running flag with 18-24 flagged laps per driver, not a
 session-final one) but the two sequences are not identical.
 
-**Sprint 6, band 4.** Own-car traces stacked on one x axis with a shared vertical cursor, pinned
-rival overlaid and labelled broadcast tier, and the ring. **Depends on sprint 1**: the traces need
-the span (#841) and the ring needs `rel_dist` (#842). Retired cars must render as retired, not as
-pending, which needs `active` (#842).
+**Sprint 4, band 4 — SHIPPED 2026-08-10** (#897, #898). Own-car traces stacked on one x axis with
+a shared vertical cursor, pinned rival overlaid and labelled broadcast tier, and the ring.
+**Depended on sprint 1**: the traces need the span (#841) and the ring needs `rel_dist` (#842).
+Retired cars must render as retired, not as pending, which needs `active` (#842).
 
 ✅ **#857 is DONE** (the prerequisite below is cleared). The wire now publishes `race_order`,
 and `laps_completed` / `progress` / `has_finished` per driver, plus `track_status`, all from the
 producer's own `_rank_drivers` so the wire and the arcade panel cannot drift apart. The original
 statement of the problem follows, for the record.
 
-⛔ **Sprint 4 had a prerequisite: #857.** The wire publishes only `lap`, `dist` and `rel_dist` per
+⛔ **Bands 1-2 had a prerequisite: #857.** The wire publishes only `lap`, `dist` and `rel_dist` per
 driver — the two coordinates #844 spent a sprint refuting, plus a fraction. It publishes no race
 order, no `progress` and no interval, and a consumer that attaches mid-race cannot rebuild the
 crossing map from a 10 Hz snapshot stream. Decide what the timing band actually needs and publish
