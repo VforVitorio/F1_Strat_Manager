@@ -79,6 +79,69 @@ export interface Tick {
   strategy: unknown;
 }
 
+/** One row of the lap table, as the BULK channel serves it. Every unknown is null, never 0. */
+export interface LapRow {
+  lap: number;
+  /** Line-crossing time on the tick's clock. The gap column subtracts these. */
+  t: number | null;
+  lap_time: number | null;
+  s1: number | null;
+  s2: number | null;
+  s3: number | null;
+  v1: number | null;
+  v2: number | null;
+  vfl: number | null;
+  vst: number | null;
+  position: number | null;
+  compound: string | null;
+  tyre_life: number | null;
+  stint: number | null;
+  track_status: string | null;
+  pit_in: boolean;
+  pit_out: boolean;
+  /** A deleted time. Render struck; it never counts towards a best. */
+  deleted: boolean;
+  /**
+   * A row FastF1 synthesised for a car that did not finish the lap. Render
+   * the row, count it in NOTHING: their `Time` stamps sort before the whole
+   * field, so a naive ranking puts the lap-1 crashers P1-P3.
+   */
+  generated: boolean;
+  pb: boolean;
+}
+
+export interface DriverLaps {
+  number: string | null;
+  /** The mask actually applied, so a panel can assert rather than assume. */
+  laps_revealed: number;
+  stops: number;
+  laps: LapRow[];
+  /** lap -> crossing time, real rows only. The lap-quantised gap clock. */
+  crossings: Record<number, number>;
+  best: {
+    lap: number | null;
+    lap_time: number | null;
+    s1: number | null;
+    s2: number | null;
+    s3: number | null;
+    v1: number | null;
+    v2: number | null;
+    vfl: number | null;
+    vst: number | null;
+    compound: string | null;
+  };
+  theoretical: number | null;
+}
+
+export interface Bulk {
+  /** Advances whenever the reveal changes IN EITHER DIRECTION. A rewind bumps it too. */
+  rev: number;
+  /** False when the race has no parquet on disk - the common case on a curated install. */
+  available: boolean;
+  race: { year: number | null; location: string | null; total_laps: number };
+  drivers: Record<string, DriverLaps>;
+}
+
 interface PitwallApi {
   get_tick: (sinceSeq: number) => Promise<Tick | null>;
 }
@@ -161,6 +224,22 @@ export async function getTick(sinceSeq: number): Promise<Tick | null> {
  * the browser fallback would otherwise have to be written twice - which is
  * this repo's dominant defect, one copy fixed and its twin not.
  */
+/**
+ * The revealed lap table, or null when this caller's revision is current.
+ *
+ * `sinceRev` is the `rev` of the last view rendered. **Compare on inequality,
+ * not on "greater than", everywhere this value is used** - a rewind takes
+ * laps BACK, and treating a lower revision as stale would keep rows the
+ * clock has un-revealed. The host applies the same rule on its side; this
+ * note is here because the client is where the tempting `>` lives.
+ */
+export async function getBulk(sinceRev: number): Promise<Bulk | null> {
+  const api = window.pywebview?.api as { get_bulk?: (r: number) => Promise<Bulk | null> };
+  if (api?.get_bulk) return api.get_bulk(sinceRev);
+  if (IN_A_WINDOW) return null;
+  return fetchJson<Bulk>("/api/bulk", sinceRev);
+}
+
 export async function getAgentsView<T>(sinceSeq: number): Promise<T | null> {
   const api = window.pywebview?.api as { get_agents_view?: (s: number) => Promise<T | null> };
   if (api?.get_agents_view) return api.get_agents_view(sinceSeq);

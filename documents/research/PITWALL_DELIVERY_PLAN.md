@@ -236,6 +236,20 @@ Built band by band so each sprint ends with something on screen.
 `laps.parquet`, which is (927, 35) on the race checked and carries everything the tower and the
 bests need.
 
+> ✅ **THE BULK READER IS BUILT** (2026-08-11, ahead of the sprint): `src/pitwall/session_data.py`
+> + `PitwallHost.get_bulk` + `/api/bulk` + `bridge.ts::getBulk`. **Band 1 needs nothing from it** —
+> its four items are all on the tick already; only the connection label is missing and that is
+> five lines when the strip is drawn.
+>
+> A Fable design gate measured the contract first, on the real race and the real
+> `_gap_label` chain. **Do not re-derive it**: `~/.claude/plans/pitwall-sprint5/bulk-reader-design.md`.
+> Its load-bearing answers: the HOST masks (not the client) · resolve on `location`, never
+> `gp_name` (2025's folder is `Miami_Gardens`, its calendar key is `Miami`) · `FastF1Generated`
+> rows are rendered but counted in NOTHING (their `Time` sorts before the field: a naive ranking
+> puts the lap-1 crashers P1-P3 for 172 s) · the gap SECONDS come from the parquet, which is the
+> official clock, while ORDER, status and laps-down keep coming from the wire · `_gap_label`'s
+> four branches must be ported as ONE helper or the 22-minute-stale interval returns.
+
 Two rules that must be written into the code, not assumed:
 
 - **The reveal is per driver and strict**: reveal driver *d*'s lap *L* iff
@@ -256,6 +270,18 @@ Two rules that must be written into the code, not assumed:
 - **A rewind UN-reveals.** `laps_completed` falls when the clock goes back, so a lap that was
   open must close again; a reveal cache keyed only on "seen once" leaks the whole future after
   one seek to the end.
+- **The bests panel RECOMPUTES from the revealed subset; it does not trust `IsPersonalBest`.**
+  **This rule used to sit in the sprint-6 paragraph below**, which owns band 3 — but the bests
+  panel is band 2, so sprint 5 either applies it or ships trusting the flag and sprint 6
+  "corrects" a panel it does not build. The column is safe under masking (Gate A: a running flag,
+  18-24 flagged laps per driver, not a session-final one) but the two sequences are **not**
+  identical: measured on Melbourne 2025, they differ on **47 lap-flags across all 20 drivers**,
+  in both directions, concentrated on the wet-start laps {1, 5, 6, 7}. They converge only at the
+  final frame — the last flagged lap is the session best for all 20 — and mid-race is the only
+  state a masked panel ever renders. Recompute over `lap_time is not None and not deleted and not
+  generated`: a deleted time does not count, and a generated row has no time at all. The column
+  also holds a literal `None` alongside True/False, so it never crosses the bridge as a third
+  state.
 - **The gap column is lap-quantised and says so on screen.** Take it from the BULK reader over `laps.parquet`, labelled
   as at-the-line. **Two API names this line used to give are dead ends**: `get_rival_states` is a
   simulation-layer method PITWALL cannot reach, and `overlays._gap_value` no longer exists (#844
@@ -263,10 +289,7 @@ Two rules that must be written into the code, not assumed:
   A precise-looking wrong number on a fidelity surface is the P3 A2 defect class.
 
 **Sprint 6, band 3.** The Run Timeline heat grid (drivers as columns, laps as rows, purple / green /
-yellow / red, `IN PIT` and `OUT` cells) with Race Trace as a tab of the same panel. The bests panel
-should recompute from the revealed subset rather than trust `IsPersonalBest`: the column is safe
-under masking (Gate A checked, it is a running flag with 18-24 flagged laps per driver, not a
-session-final one) but the two sequences are not identical.
+yellow / red, `IN PIT` and `OUT` cells) with Race Trace as a tab of the same panel.
 
 **Sprint 4, band 4 — SHIPPED 2026-08-10** (#897, #898). Own-car traces stacked on one x axis with
 a shared vertical cursor, pinned rival overlaid and labelled broadcast tier, and the ring.
