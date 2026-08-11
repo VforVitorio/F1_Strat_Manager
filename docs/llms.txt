@@ -18,6 +18,7 @@
 - [Streamlit frontend (legacy)](https://docs.f1stratlab.com/pages/streamlit.md): Retired Streamlit app, kept for historical reference; the React web app replaced it.
 - [Arcade quick start](https://docs.f1stratlab.com/pages/arcade-quick-start.md): One-command launch of the three-window arcade.
 - [Dashboard architecture](https://docs.f1stratlab.com/pages/arcade-dashboard.md): PySide6 package layout, wire protocol, thread model.
+- [PITWALL windows](https://docs.f1stratlab.com/pages/pitwall.md): The React strategy surfaces, two pywebview windows sharing one broadcast client.
 - [Arcade strategy pipeline](https://docs.f1stratlab.com/pages/arcade-strategy-pipeline.md): Why the arcade duplicates the N31 orchestrator body.
 - [Driver colors](https://docs.f1stratlab.com/pages/driver-colors.md): Year-aware color palette covering 2023–2025 seasons.
 

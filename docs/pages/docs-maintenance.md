@@ -114,7 +114,7 @@ flowchart LR
 ```
 ````
 
-For more complex diagrams (draw.io sources in `docs/diagrams/`), export as SVG or PNG from [diagrams.net](https://app.diagrams.net/) and embed the image in the markdown.
+For more complex diagrams (Mermaid fenced blocks inside the page markdown (there is no `docs/diagrams/`; the draw.io sources live in `documents/dev_docs/diagrams/` in the repo, not on the site)), export as SVG or PNG from [diagrams.net](https://app.diagrams.net/) and embed the image in the markdown.
 
 ## Where to change if X
 

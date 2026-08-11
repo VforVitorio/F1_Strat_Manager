@@ -63,7 +63,7 @@ graph TD
 
 ## Three-window arcade
 
-Since Phase 3.5 Proceso B (April 2026), the `python -m src.arcade.main ... --strategy` launcher runs three windows driven by one shared telemetry stream. The layout is:
+Since Phase 3.5 Proceso B (April 2026), the `python -m src.arcade.main ... --strategy` launcher runs several windows driven by one shared telemetry stream. The three below are the original set; the launcher additionally spawns the two PITWALL windows, which read the same broadcast and are documented in [Arcade dashboard](#/arcade-dashboard). The layout is:
 
 ```mermaid
 graph LR

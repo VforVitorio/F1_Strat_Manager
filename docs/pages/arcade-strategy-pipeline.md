@@ -37,7 +37,7 @@ Every surface needs the same six sub-agents, the same MoE routing, the same Mont
 ```
 src/strategy/inference/engine.py
     run_lap(race_state, laps_df, lap_state=None, *, profile="rich",
-            return_agent_outputs=True)
+            return_agent_outputs=True, memory=None)
         -> tuple[StrategyRecommendation, dict | None, dict[str, float]]
 ```
 
@@ -61,9 +61,16 @@ The sub-agents are imported through their public `*_from_state` entry points; th
 `src/arcade/strategy_pipeline.py::run_strategy_pipeline` keeps its old public signature so `src/arcade/strategy.py` and the dashboard formatters are untouched. Its body is one call:
 
 ```python
-rec, agent_outputs, _timings = run_lap(race_state, laps_df, lap_state, profile="rich")
+rec, agent_outputs, _timings = run_lap(
+    race_state, laps_df, lap_state, profile="rich", memory=memory
+)
 return rec, agent_outputs
 ```
+
+`memory` is the `DecisionMemory` the surface owns. It arrived after this page
+was first written and both snippets above used to omit it, which made the
+delegate look thinner than it is.
+
 
 The arcade needs the raw outputs and the CLI does not, but that is a difference in **consumption**, not in pipeline. `run_lap` returns both and each surface takes what it renders.
 
@@ -80,7 +87,7 @@ So: **before writing a second path that shapes race data, check whether a clean 
 The arcade strategy driver is `src/arcade/strategy.py::SimConnector`. It is a plain Python class, not a Qt object, spawned as a `threading.Thread` from `F1ArcadeView._init_strategy_layer`.
 
 - Owns a `StrategyState` dataclass caching the latest `LapDecision`, the per-agent outputs and playback metadata, behind a `threading.Lock`.
-- Owns the background thread that iterates `RaceReplayEngine.replay()` and calls `run_strategy_pipeline(race_state, laps_df, lap_state=None)` per lap.
+- Owns the background thread that iterates `RaceReplayEngine.replay()` and calls `run_strategy_pipeline(race_state, laps_df, lap_state, memory=self._memory)` per lap. Passing `lap_state` is not optional: with it `None` the Monte Carlo falls back to the legacy seconds path and the projection layer is silently amputated, which is the one call shape these pages used to show.
 - Emits `StartEventDTO` once on the first frame, then `LapDecisionDTO` per lap.
 
 ## Why not SSE from the backend

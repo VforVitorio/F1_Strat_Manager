@@ -2,81 +2,89 @@
 
 ## Location
 
-`src/telemetry/frontend/components/common/driver_colors.py`
+`src/telemetry/webapp/src/lib/drivers.ts`
 
-**This is not shared with the backend.** `src/telemetry/backend/core/driver_colors.py` is a separate, older implementation, a single flat `DRIVER_COLORS` dict labelled "F1 2024 Driver Colors" with its own (different) hex values and no `year` parameter at all: `get_driver_color(driver_code, default='#A259F7')`. It predates the 2025 driver-swap handling described below (it still maps `HAM` to a Mercedes-silver hex and has no entry for `ANT`, `BOR`, `HAD`, or the 2025 `SAI`-to-Williams move). Used only by `backend/api/v1/endpoints/comparison.py` and `backend/services/telemetry_service.py`. Treat the two files as independent palettes to keep in sync by hand, not one shared module, a known piece of tech debt, not a design intent.
+> **This page used to document a Python module that no longer exists.** The
+> year-aware palette was born in the Streamlit frontend at
+> `frontend/components/common/driver_colors.py`, and that whole tree was
+> deleted when the React web app replaced Streamlit in v2.0.0 (#551). The
+> *design* survived the move intact — it was ported one for one — so this page
+> now describes the TypeScript implementation that is actually running.
+
+**It is still not shared with the backend.** `src/telemetry/backend/core/driver_colors.py`
+is a separate, older implementation: a single flat `DRIVER_COLORS` dict labelled
+"F1 2024 Driver Colors", with its own (different) hex values and no `year`
+parameter at all. It predates the 2025 driver-swap handling described below — it
+still maps `HAM` to a Mercedes-silver hex and has no entry for `ANT`, `BOR`,
+`HAD`, or the 2025 `SAI`-to-Williams move. Used by
+`backend/api/v1/endpoints/comparison.py` and `backend/services/telemetry_service.py`.
+Treat the two as independent palettes kept in sync by hand: known tech debt, not
+design intent.
 
 ## Purpose
 
-F1 driver lineups change every season. A driver may switch teams between years, so the color associated with a driver abbreviation must be season-specific. This module provides a year-aware color palette covering 2023–2025 seasons.
+F1 driver lineups change every season. A driver may switch teams between years,
+so the colour associated with a driver abbreviation must be season-specific.
+This module provides a year-aware palette covering the 2023–2025 seasons.
 
 ## Design
 
-### Team base colors
+### Team base colours
 
-Each team has two hex constants, one for the primary driver, one for the secondary. For example:
+Each team has two hex constants, one for the primary driver and one for the
+secondary:
 
-```python
-_RED_BULL   = '#3671C6'   # Primary (e.g., VER)
-_RED_BULL_2 = '#1B3D8E'   # Secondary (e.g., LAW in 2025, PER in 2024)
+```ts
+const RED_BULL = '#3671C6'     // primary (e.g. VER)
+const RED_BULL_2 = '#1B3D8E'   // secondary
 ```
 
-All ten teams follow this pattern: Ferrari, Mercedes, McLaren, Aston Martin, Alpine, Williams, Racing Bulls (RB), Sauber, Haas.
+### Per-year lineups
 
-### Per-year mapping
-
-`DRIVER_COLORS_BY_YEAR` is a dict keyed by year (2023, 2024, 2025), each containing a driver-code-to-hex mapping. Mid-season replacements are included (e.g., COL and LAW in 2024).
-
-Notable changes across seasons:
-
-- **Alpine** switched from pink (`#FF87BC`) in 2023–2024 to blue (`#0093CC`) in 2025.
-- **HAM** moved from Mercedes (teal) to Ferrari (red) in 2025.
-- **SAI** moved from Ferrari to Williams in 2025.
+`DRIVER_COLORS_BY_YEAR` maps a season to a `{ driverCode: hex }` record, so the
+same code can resolve to different teams in different years.
 
 ### Flat fallback
 
-`DRIVER_COLORS = DRIVER_COLORS_BY_YEAR[2025]` provides backward compatibility for code that does not pass a year.
+`DRIVER_COLORS_FLAT = DRIVER_COLORS_BY_YEAR[2025]` serves any caller that does
+not pass a year, and `DEFAULT_DRIVER_COLOR` (`#A259F7`) is returned for a code
+the palette does not know.
 
-## Public API (frontend module)
+## Public API
 
-### `get_driver_color(driver_code, default='#A259F7', year=None) -> str`
+### `getDriverColor(code: string, year?: number): string`
 
-Returns the hex color for a driver in a given season. Falls back to the 2025 flat dict when `year` is None. Returns `default` if the driver code is not found.
+Team colour for a driver in a given season. The code is case-insensitive. With
+no `year`, or with a year the palette has no lineup for, it falls back to the
+flat 2025 record; an unknown code returns `DEFAULT_DRIVER_COLOR`.
 
-### `get_driver_colors_for_list(driver_codes, year=None) -> list`
+### `DEFAULT_DRIVER_COLOR`
 
-Batch version, returns a list of hex colors matching the input list of driver codes.
-
-The backend's `core/driver_colors.py` exposes the same two function names but without the `year` parameter (`get_driver_color(driver_code, default='#A259F7')`), always reading its own static 2024-era `DRIVER_COLORS` dict.
+The purple used for anything unrecognised, exported so callers can compare
+against it rather than hardcoding the hex a second time.
 
 ## Usage
 
-```python
-from components.common.driver_colors import get_driver_color
+```ts
+import { getDriverColor } from '@/lib/drivers'
 
-# Year-aware lookup
-color = get_driver_color("HAM", year=2024)  # '#27F4D2' (Mercedes teal)
-color = get_driver_color("HAM", year=2025)  # '#A30000' (Ferrari dark red)
-
-# Fallback (uses 2025)
-color = get_driver_color("VER")  # '#3671C6'
+getDriverColor('HAM', 2024)  // Mercedes teal
+getDriverColor('HAM', 2025)  // Ferrari red — same driver, different team
+getDriverColor('VER')        // flat 2025 fallback
 ```
 
 ## Where it is used
 
-Frontend (year-aware module, `components/common/driver_colors.py`):
+It lives in `src/lib/` rather than a feature folder because several features
+consume it, so shared code stays app-level and the features stay decoupled
+siblings:
 
-- `pages/race_analysis.py`, tire and gap chart color assignment
-- `pages/strategy.py`, strategy tab driver color assignment
-- `components/race_analysis/tire_charts.py`, per-driver tire degradation plots
-- `components/race_analysis/gap_charts.py`, gap evolution charts
-- `components/chatbot/chart_builders.py`, chat tool-result chart colors
-- `components/common/data_selectors.py` and `components/dashboard/data_selectors.py`, driver selectors
-- `components/dashboard/css_styles.py`, dashboard CSS color injection
-- `utils/race_viz.py`, general race visualization helpers
-- `utils/chat_navigation.py`, chat navigation color tagging
+- `features/dashboard/components/`, lap and channel chart line colours
+- `features/comparison/`, toolbar and replay channel colours
+- `features/chat/charts/`, colours for chat tool-result charts
+- `components/radio/RadioBrowser.tsx`, per-driver radio tagging
 
 Backend (static module, `backend/core/driver_colors.py`):
 
-- `backend/api/v1/endpoints/comparison.py`, comparison endpoint color assignment
-- `backend/services/telemetry_service.py`, telemetry data color tagging
+- `backend/api/v1/endpoints/comparison.py`, comparison endpoint colour assignment
+- `backend/services/telemetry_service.py`, telemetry data colour tagging

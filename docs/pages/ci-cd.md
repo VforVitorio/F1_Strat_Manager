@@ -2,7 +2,7 @@
 
 Single source of truth for how F1 StratLab is built, tested, released and deployed. Read this once and you will know how a commit becomes a published release and the live docs site.
 
-The pipeline is split across three GitHub Actions workflows, a release-please bot for versioning, Dependabot for dependency hygiene, and a few repository-level toggles that quietly make everything work.
+The pipeline is split across eight GitHub Actions workflows, a release-please bot for versioning, Dependabot for dependency hygiene, and a few repository-level toggles that quietly make everything work. Three of them carry the weight and get a section each below; the other five are the security scanners and the automation.
 
 ## Branching strategy
 
@@ -31,13 +31,24 @@ The default flow is `feature branch → dev → main`. Hotfixes go via a `chore/
 
 ## CI workflows
 
-Three workflows live under `.github/workflows/`. They run independently, on different triggers, and have different blast radii.
+Eight workflows live under `.github/workflows/`. They run independently, on different triggers, and have different blast radii. The three below do the heavy lifting; the rest are listed after them.
+
+| Workflow | What it is for |
+|---|---|
+| `ci.yml` | test / lint / typecheck / pip-audit, plus the PITWALL UI job |
+| `release-please.yml` | version bumps, the CHANGELOG and the release PR |
+| `docs.yml` | builds and publishes this site |
+| `codeql.yml` | SAST over our own code |
+| `osv-scanner.yml` | cross-ecosystem vulnerability scan |
+| `gitleaks.yml` | secret scanning over the repo and its diffs |
+| `labeler.yml` | applies `area:` labels from the changed paths |
+| `auto-update-prs.yml` | rebases low-touch PRs when `dev` moves |
 
 ### `.github/workflows/ci.yml`
 
 Triggered on push to `main`, `dev`, `test`, `feat/**`, `fix/**`, `docs/**`, and on pull request targeting `main` or `dev`. Four jobs run in parallel on `ubuntu-latest`:
 
-- `test`, path-filter gated on `src/**`, `tests/**`, `pyproject.toml`, `uv.lock` (via `dorny/paths-filter@v3`; skips entirely on a docs-only or unrelated diff). When triggered: `uv sync --all-extras --frozen` (Python 3.12), a "collected-count floor" check (`pytest --co -q` must collect at least 40 nodes, guarding against a refactor silently gutting the suite), then `uv run pytest -v --cov=src --cov-report=term-missing`.
+- `test`, path-filter gated on `src/**`, `tests/**`, `pyproject.toml`, `uv.lock` (via `dorny/paths-filter@v4`; skips entirely on a docs-only or unrelated diff). When triggered: `uv sync --all-extras --frozen` (Python 3.12), a "collected-count floor" check (`pytest --co -q` must collect at least 40 nodes, guarding against a refactor silently gutting the suite), then `uv run pytest -v --cov=src --cov-report=term-missing`.
 - `lint`, always runs, no `uv sync` needed. `uvx ruff check .` and `uvx ruff format --check .` as ephemeral tools, so it skips installing the whole ML/torch stack just to lint style.
 - `typecheck`, same path-filter gate as `test`. `uv sync --extra dev --frozen` then `uv run mypy src/rag/`. Narrow scope: only production-ready typed modules are checked. Caches `.mypy_cache/` keyed on `pyproject.toml` + `src/rag/**`.
 - `pip-audit`, always runs, no path filter. Exports the locked dependency set (`uv export --frozen --all-extras`) and runs `pip-audit` against it for same-day CVE alerts, independent of whether the diff touches `uv.lock`. Advisory (`continue-on-error: true`) while baselining.

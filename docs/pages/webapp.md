@@ -16,13 +16,16 @@ You need a `.env` with `OPENAI_API_KEY`, or `F1_LLM_PROVIDER=lmstudio` if you ar
 
 ## What is in it
 
-| Tab | What it answers |
-|---|---|
-| Telemetry | What the car did, lap by lap: speed traces, sector times, tyre life |
-| Comparison | Two drivers at 60 fps over the same lap, synchronised |
-| Lab | The ML models themselves, with their calibration and thresholds |
-| Race | The multi-agent pit-wall call for any lap, with each agent's reasoning |
-| Chat | Natural language over the finished race, streaming, rendering tool results inline |
+Six tabs, grouped into three sections by the nav rail (`webapp/src/app/Rail.tsx`):
+
+| Section | Tab | What it answers |
+|---|---|---|
+| Telemetry | Dashboard | What the car did, lap by lap: speed traces, sector times, tyre life |
+| Telemetry | Comparison | Two drivers at 60 fps over the same lap, synchronised |
+| Telemetry | Lab | The ML models themselves, with their calibration and thresholds |
+| Pit wall | Strategy | The strategy surface: scenarios, projections and the decision trail |
+| Pit wall | Race | The multi-agent pit-wall call for any lap, with each agent's reasoning |
+| Assist | Chat | Natural language over the finished race, streaming, rendering tool results inline |
 
 The Chat tab is an MCP client: it reaches the same fourteen tools the agents expose, so an answer about lap 32 runs the same code path the Race tab does rather than a parallel implementation.
 
