@@ -17,6 +17,7 @@
  *
  *   npm run build && node scripts/smoke-agents.mjs
  */
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -308,7 +309,16 @@ await livePage.addInitScript((view) => {
     api: {
       // A new sequence every poll, with the SAME status text, which is
       // what a real producer does for the ~85 s a lap lasts.
-      get_agents_view: async () => ({ ...view, seq: ++seq }),
+      //
+      // **A DEEP copy, and that is not fussiness.** `AgentsViewBuilder.build`
+      // constructs a fresh dict per tick, so every nested object reaching
+      // React has a new identity and the charts' `useMemo([series])`
+      // recomputes - which is what makes them call `setOption` ten times a
+      // second. A shallow spread keeps `charts` identical, the memo never
+      // fires, and the stub renders a chart that redraws once and sits still:
+      // the animation check below passed against BOTH the defect and its fix
+      // until this line changed.
+      get_agents_view: async () => ({ ...structuredClone(view), seq: ++seq }),
       get_tick: async () => null,
     },
   };
@@ -322,6 +332,23 @@ check(
   (await livePage.locator(".status-bar").innerText()).includes("lap 23"),
   "the status bar stays visible while the producer streams",
 );
+
+// A chart under a streaming producer must be STILL. The data behind it is
+// identical on every poll here - only `seq` moves - so any pixel that changes
+// between two captures is the chart redrawing itself, not new information.
+//
+// This is the check that was missing when Víctor reported the dashed cliff
+// marker flickering. `notMerge: true` makes each `setOption` look like a
+// fresh series, so ECharts runs the ENTRANCE animation, which measured
+// ~1200 ms to settle against a ~100 ms push cadence: it never once finished.
+// Band 4 had the identical defect and was fixed a sprint earlier - one copy
+// fixed, its twin left, which is this repo's dominant defect.
+const tireCard = livePage.locator(".agent-card", { hasText: "TIRE" }).first();
+const firstFrame = createHash("sha1").update(await tireCard.screenshot()).digest("hex");
+await livePage.waitForTimeout(450);
+const secondFrame = createHash("sha1").update(await tireCard.screenshot()).digest("hex");
+check(firstFrame === secondFrame, "the TIRE chart is still while the producer streams");
+
 await live.close();
 
 await browser.close();
