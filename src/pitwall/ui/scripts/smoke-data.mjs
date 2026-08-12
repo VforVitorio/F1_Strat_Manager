@@ -27,6 +27,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { serveDist } from "./serve-dist.mjs";
+import { staysStill } from "./settle.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = resolve(process.argv[2] ?? resolve(UI_DIR, "dist"));
@@ -561,6 +562,39 @@ const lapText = await ringPage.locator(".ring-lap").textContent();
 check(lapText?.trim() === "24", `the ring carries the lap counter (${lapText})`);
 
 await ring.close();
+
+// Band 4's charts must be STILL under a streaming producer. The payload here
+// is re-served unchanged except for `seq`, so the traces carry no new data
+// and every pixel that moves between two captures is the chart redrawing.
+//
+// This exists because the fix it guards had NO guard. `animation: false` in
+// `TraceChart` is what stopped the delta baseline reaching 1328 m of a 5220 m
+// axis and restarting forever, and 42 checks stayed green either way - so
+// deleting that line would have been invisible. Its twin in the AGENTS charts
+// shipped the same defect a sprint later and Víctor is the one who saw it.
+const stillCtx = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+const stillPage = await stillCtx.newPage();
+await stillPage.addInitScript((payload) => {
+  let seq = payload.seq;
+  window.pywebview = {
+    api: {
+      // Deep copy per poll, because the host builds a fresh payload every
+      // tick: a shallow one keeps the nested identities and React's memos
+      // never recompute, so the chart sits still whether or not it animates
+      // and the check below would pass against the defect it exists for.
+      get_tick: async () => ({ ...structuredClone(payload), seq: ++seq }),
+    },
+  };
+}, tick(1));
+await stillPage.goto(url, { waitUntil: "domcontentloaded" });
+await stillPage.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+
+check(
+  await staysStill(stillPage, ".trace-plot"),
+  "the delta trace schedules no animation while the producer streams",
+);
+
+await stillCtx.close();
 await browser.close();
 server.close();
 

@@ -12,25 +12,31 @@ import type { EChartsOption } from "echarts";
 import { valueAxis } from "../../lib/chart";
 
 /**
- * These two charts still ANIMATE, unlike band 4's, and the reason recorded
- * for that was wrong.
+ * No animation, for the same measured reason band 4 has none.
  *
- * The claim was "they update once a lap, so the entrance completes". Measured:
- * **40 `setOption` calls in 4 seconds** - the host returns a fresh view on
- * every tick, so these redraw at the same ~10 Hz band 4 does, and their
- * entrance animation is restarted just as often. The effect is nonetheless
- * correct, by accident: their axis extent is constant across 97.7 % of ticks,
- * so a restarted grow-from-the-left animation lands pixel-identical and
- * nothing flickers. Band 4's is not - its X axis is a locked 0-5220 that the
- * data does not fill, so the same restart left the delta baseline a stub.
+ * `notMerge: true` makes every `setOption` look like a fresh series, so
+ * ECharts uses the ENTRANCE duration rather than the update one, and
+ * `animationDurationUpdate: 0` does not reach it. The host returns a new view
+ * on every tick - **40 `setOption` calls in 4 seconds** - so the entrance is
+ * restarted about ten times a second.
  *
- * Written down because the next person to touch this will reach for the same
- * false reason. If these charts ever gain a moving extent, they need
- * `animation: false` too.
+ * Measured on the TIRE card, capturing the same element at increasing delays
+ * after one view lands: it differs at 80, 150, 300 and 600 ms and only
+ * settles at ~1200 ms. **At a 100 ms push cadence it therefore never finishes
+ * once**, and the dashed cliff marker and compound boundaries redraw
+ * permanently - which is what a viewer sees as a flicker.
+ *
+ * ⚠️ This block previously argued the opposite, that the two AGENTS charts
+ * were "correct by accident" because their axis extent is constant across
+ * 97.7 % of ticks. That reasoning is refuted: a constant extent decides where
+ * the animation ENDS, not whether it gets there, and it never gets there.
+ * Víctor reported the flicker; the measurement above is what settled it.
+ * `animation: false` is also the 1:1 answer, since pyqtgraph does not animate.
  */
 /** Axis and grid styling shared by both cards, from the Qt charts' own look. */
 export const CHART_BASE: EChartsOption = {
   backgroundColor: "transparent",
+  animation: false,
   animationDurationUpdate: 0,
   grid: { left: 44, right: 10, top: 10, bottom: 28, containLabel: false },
   xAxis: valueAxis({ name: "Lap", nameGap: 18, scale: true }),
