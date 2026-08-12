@@ -23,11 +23,11 @@
  *
  *   npm run build && node scripts/smoke-data.mjs
  */
-import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { serveDist } from "./serve-dist.mjs";
+import { staysStill } from "./settle.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = resolve(process.argv[2] ?? resolve(UI_DIR, "dist"));
@@ -588,13 +588,12 @@ await stillPage.addInitScript((payload) => {
 }, tick(1));
 await stillPage.goto(url, { waitUntil: "domcontentloaded" });
 await stillPage.waitForSelector(".trace-plot canvas", { timeout: 5000 });
-await stillPage.waitForTimeout(1500);
 
 const firstCell = stillPage.locator(".trace-cell").first();
-const beforeWait = createHash("sha1").update(await firstCell.screenshot()).digest("hex");
-await stillPage.waitForTimeout(450);
-const afterWait = createHash("sha1").update(await firstCell.screenshot()).digest("hex");
-check(beforeWait === afterWait, "the delta trace is still while the producer streams");
+check(
+  await staysStill(stillPage, firstCell),
+  "the delta trace is still while the producer streams",
+);
 
 await stillCtx.close();
 await browser.close();

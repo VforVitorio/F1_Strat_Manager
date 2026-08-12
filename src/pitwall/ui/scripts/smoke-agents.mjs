@@ -17,11 +17,11 @@
  *
  *   npm run build && node scripts/smoke-agents.mjs
  */
-import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { serveDist } from "./serve-dist.mjs";
+import { staysStill } from "./settle.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // An alternate bundle directory, so a negative check can run against a
@@ -344,10 +344,10 @@ check(
 // Band 4 had the identical defect and was fixed a sprint earlier - one copy
 // fixed, its twin left, which is this repo's dominant defect.
 const tireCard = livePage.locator(".agent-card", { hasText: "TIRE" }).first();
-const firstFrame = createHash("sha1").update(await tireCard.screenshot()).digest("hex");
-await livePage.waitForTimeout(450);
-const secondFrame = createHash("sha1").update(await tireCard.screenshot()).digest("hex");
-check(firstFrame === secondFrame, "the TIRE chart is still while the producer streams");
+check(
+  await staysStill(livePage, tireCard),
+  "the TIRE chart is still while the producer streams",
+);
 
 await live.close();
 
