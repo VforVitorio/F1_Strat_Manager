@@ -343,10 +343,11 @@ check(
 // ~1200 ms to settle against a ~100 ms push cadence: it never once finished.
 // Band 4 had the identical defect and was fixed a sprint earlier - one copy
 // fixed, its twin left, which is this repo's dominant defect.
-const tireCard = livePage.locator(".agent-card", { hasText: "TIRE" }).first();
+// BOTH cards, not just the one Víctor saw flicker: they share `CHART_BASE`,
+// so a guard on one leaves the other free to regress.
 check(
-  await staysStill(livePage, tireCard),
-  "the TIRE chart is still while the producer streams",
+  await staysStill(livePage, ".agent-chart .chart"),
+  "the AGENTS charts schedule no animation while the producer streams",
 );
 
 await live.close();

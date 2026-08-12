@@ -589,10 +589,9 @@ await stillPage.addInitScript((payload) => {
 await stillPage.goto(url, { waitUntil: "domcontentloaded" });
 await stillPage.waitForSelector(".trace-plot canvas", { timeout: 5000 });
 
-const firstCell = stillPage.locator(".trace-cell").first();
 check(
-  await staysStill(stillPage, firstCell),
-  "the delta trace is still while the producer streams",
+  await staysStill(stillPage, ".trace-plot"),
+  "the delta trace schedules no animation while the producer streams",
 );
 
 await stillCtx.close();
