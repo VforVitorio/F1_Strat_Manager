@@ -28,7 +28,6 @@ export interface TraceChartProps {
   yRange: [number, number];
   /** Locked X maximum: the circuit length, or the fallback until one arrives. */
   xMax: number;
-  mainCode: string;
   rivalCode: string | null;
   main: [number, number][];
   rival: [number, number][];
@@ -52,7 +51,6 @@ export function TraceChart(props: TraceChartProps) {
     rivalColour,
     yRange,
     xMax,
-    mainCode,
     rivalCode,
     main,
     rival,
@@ -127,18 +125,22 @@ export function TraceChart(props: TraceChartProps) {
 
   return (
     <div className="trace-cell">
+      {/* Title and subtitle only.
+       *
+       * Qt puts a `MAIN · VER` / `RIVAL · PIA` legend chip in every cell, and
+       * band 4 kept them while it spanned the window. In the right column a
+       * cell is 277 px wide and the row wraps - "Δ Time (s)" onto three lines -
+       * which costs about 35 px of plot per wrapped line and leaves the 2x2
+       * grid ragged. The identity moves to the card header, where both codes
+       * were already shown and where saying it once for four charts of the
+       * same two cars is the honest amount. The BROADCAST tier tag goes with
+       * it: that label is a deliberate addition over the Qt window, not
+       * decoration, so it had to keep a home rather than be dropped. */}
       <div className="trace-title-row">
-        <span className="trace-title">{title}</span>
-        <span className="trace-subtitle">{subtitle}</span>
-        <span className="trace-spacer" />
-        <span className="trace-legend" style={{ color: mainColour }}>
-          MAIN · {mainCode || "—"}
+        <span className="trace-title" style={{ color: mainColour }}>
+          {title}
         </span>
-        {rivalCode ? (
-          <span className="trace-legend" style={{ color: rivalColour }} title="broadcast tier">
-            RIVAL · {rivalCode} <span className="trace-tier">BROADCAST</span>
-          </span>
-        ) : null}
+        <span className="trace-subtitle">{subtitle}</span>
       </div>
       {placeholder ? (
         <div className="trace-placeholder">{placeholder}</div>

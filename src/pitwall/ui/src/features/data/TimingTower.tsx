@@ -1,0 +1,195 @@
+/**
+ * Band 2, left: the timing tower.
+ *
+ * `P | # | DRV | GAP | INT | S1 t+v | S2 t+v | S3 t+v | LAST | ST | TYRE | STOPS`,
+ * which is the SBG/Catapult RaceX client's row read off the pit-wall
+ * photographs in this project's research - including the detail that each
+ * sector cell carries two numbers, a time and a trap speed, and that `ST` is
+ * the speed trap rather than the stint.
+ *
+ * **Rows and order come from the TICK; the numbers come from the BULK.** The
+ * split is not stylistic. Order changes mid-lap on ticks that change no
+ * `laps_completed`, so only the wire can answer it; the seconds are quantised
+ * to the line and the parquet is the official clock, which the arcade's own
+ * `gaps.py` concedes its interpolated crossings sit a median 22 ms away from.
+ *
+ * **Iterate `race_order`, never the bulk's keys.** SAI, DOO and HAD have only
+ * `FastF1Generated` rows on Melbourne 2025, so they reveal nothing at all -
+ * measured, `bulk.drivers.SAI` is present with zero rows for the whole race.
+ * A tower keyed on what the bulk contains renders them as blanks it cannot
+ * place; `race_order` always carries twenty codes and puts them where the
+ * producer's own ranking does.
+ *
+ * The GAP and INT columns are quantised to the line and the HEADER says so,
+ * once, rather than each of the forty cells repeating it.
+ */
+
+import type { ArcadeState, Bulk, DriverLaps, LapRow } from "../../lib/bridge";
+import { driverStatus, type DriverStatus } from "../../lib/driverStatus";
+import { formatGapCell, gapCell } from "../../lib/gapCell";
+
+interface TimingTowerProps {
+  arcade: ArcadeState;
+  bulk: Bulk | null;
+}
+
+export function TimingTower({ arcade, bulk }: TimingTowerProps) {
+  const order = arcade.race_order;
+  const leader = order[0];
+
+  return (
+    <section className="tower card">
+      <table className="tower-table">
+        <thead>
+          <tr>
+            <th className="col-pos">P</th>
+            <th className="col-num">#</th>
+            <th className="col-drv">DRV</th>
+            {/* The (L) that the arcade suffixes onto every label lives here
+             * instead: it is the same claim, made once, on a surface that has
+             * a header to make it on. */}
+            <th className="col-gap">
+              GAP <span className="col-note">(L)</span>
+            </th>
+            <th className="col-gap">
+              INT <span className="col-note">(L)</span>
+            </th>
+            <th className="col-sector">S1</th>
+            <th className="col-sector">S2</th>
+            <th className="col-sector">S3</th>
+            <th className="col-last">LAST</th>
+            <th className="col-st">ST</th>
+            <th className="col-tyre">TYRE</th>
+            <th className="col-stops">STOPS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {order.map((code, index) => (
+            <TowerRow
+              key={code}
+              code={code}
+              position={index + 1}
+              front={index === 0 ? null : order[index - 1]}
+              leader={leader}
+              arcade={arcade}
+              bulk={bulk}
+            />
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+interface TowerRowProps {
+  code: string;
+  position: number;
+  /** The car directly ahead in the published order, or null for the leader. */
+  front: string | null;
+  leader: string;
+  arcade: ArcadeState;
+  bulk: Bulk | null;
+}
+
+function TowerRow({ code, position, front, leader, arcade, bulk }: TowerRowProps) {
+  const car = arcade.drivers[code];
+  const status: DriverStatus = car ? driverStatus(car) : "out";
+  const laps: DriverLaps | undefined = bulk?.drivers[code];
+  // The last lap this driver has actually completed. It can be a generated
+  // row - a car that never finished one - and then every number on it is
+  // null, which is the honest rendering rather than an absent row.
+  const last: LapRow | null = laps?.laps.length ? laps.laps[laps.laps.length - 1] : null;
+
+  const gap = front === null ? { kind: "leader" as const } : gapCell(leader, code, arcade, bulk);
+  const interval = front === null ? null : gapCell(front, code, arcade, bulk);
+
+  return (
+    <tr className={`tower-row is-${status}`}>
+      <td className="col-pos">{position}</td>
+      <td className="col-num">{laps?.number ?? "—"}</td>
+      <td className="col-drv" style={{ color: driverColour(arcade, code) }}>
+        {code}
+      </td>
+      <td className="col-gap">{formatGapCell(gap)}</td>
+      <td className="col-gap">{interval === null ? "—" : formatGapCell(interval)}</td>
+      <SectorCell time={last?.s1 ?? null} speed={last?.v1 ?? null} />
+      <SectorCell time={last?.s2 ?? null} speed={last?.v2 ?? null} />
+      <SectorCell time={last?.s3 ?? null} speed={last?.vfl ?? null} />
+      <td className={`col-last ${last?.deleted ? "is-deleted" : ""}`}>{lastCell(status, last)}</td>
+      <td className="col-st">{last?.vst === null || last?.vst === undefined ? "—" : last.vst}</td>
+      <td className="col-tyre">{tyreCell(last)}</td>
+      <td className="col-stops">{laps?.stops ?? "—"}</td>
+    </tr>
+  );
+}
+
+/**
+ * A sector's time with its trap speed beside it, dimmer and smaller.
+ *
+ * Inline rather than stacked. Stacking the pair costs six pixels a row, which
+ * over twenty rows is 120 px of a window that has none to give, and buys back
+ * 62 px of width the column does not need.
+ */
+function SectorCell({ time, speed }: { time: number | null; speed: number | null }) {
+  return (
+    <td className="col-sector">
+      {time === null ? "—" : time.toFixed(3)}
+      {/* A real space, not only the margin: the cell is read by a screen
+       * reader and copied by a mouse, and "29.412301" is a different number. */}
+      {speed === null ? null : <span className="cell-speed"> {speed}</span>}
+    </td>
+  );
+}
+
+/**
+ * What the LAST column shows, in the order a timing screen decides it.
+ *
+ * A broadcast screen puts `IN PIT` or `OUT` **in place of the lap time**, and
+ * that is what happens here - except that "OUT" is used for a car that has
+ * stopped, matching the arcade leaderboard on screen beside this one, so an
+ * out-lap says `PIT EXIT` rather than borrowing the same word for a car that
+ * is very much still racing.
+ */
+function lastCell(status: DriverStatus, last: LapRow | null): string {
+  if (status === "out") return "OUT";
+  if (last === null) return "—";
+  if (last.pit_in) return "IN PIT";
+  if (last.pit_out) return "PIT EXIT";
+  return last.lap_time === null ? "—" : formatLapTime(last.lap_time);
+}
+
+/**
+ * The compound's letter and the set's age.
+ *
+ * The letter is the compound's own first character, which is correct for all
+ * five (SOFT, MEDIUM, HARD, INTERMEDIATE, WET) and is therefore not a second
+ * copy of the arcade's letter table. The compound arrives from the BULK,
+ * which is the repaired frame: the live-timing feed drops stint records and
+ * restarts the stint at the recovery lap, so the unrepaired value reads
+ * `TyreLife 1` on a set that has done twenty-four racing laps.
+ */
+function tyreCell(last: LapRow | null): string {
+  if (!last?.compound) return "—";
+  const age = last.tyre_life === null ? "" : ` ${Math.round(last.tyre_life)}`;
+  return `${last.compound[0]}${age}`;
+}
+
+/** `1:25.744` past the minute, `58.220` under it, as a timing screen prints them. */
+function formatLapTime(seconds: number): string {
+  if (seconds < 60) return seconds.toFixed(3);
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds - minutes * 60;
+  return `${minutes}:${rest.toFixed(3).padStart(6, "0")}`;
+}
+
+/**
+ * The driver's own colour, from the arcade's palette on the wire.
+ *
+ * Never a table here: `driver_colors` rides on every tick precisely so no
+ * consumer keeps a second copy of a palette this repo has already found five
+ * copies of.
+ */
+function driverColour(arcade: ArcadeState, code: string): string {
+  const rgb = arcade.driver_colors[code];
+  return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "var(--qt-fg-1)";
+}
