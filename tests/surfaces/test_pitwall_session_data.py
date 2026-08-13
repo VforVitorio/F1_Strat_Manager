@@ -418,3 +418,59 @@ def test_no_tick_means_no_bulk():
     host = PitwallHost(_FakeClient(None), window_count=1)
 
     assert host.get_bulk(-1) is None
+
+
+def test_a_best_speed_is_the_fastest_and_not_the_slowest():
+    """The two tuples are two KINDS of quantity, and one loop treated them as one.
+
+    A best lap time is the smallest value in the column; a best trap speed is
+    the largest. Minimising both served, on the real race, NOR's best
+    speed-trap as 180 km/h against a real maximum of 289 - his slowest crawl
+    through the trap, presented as his best of the session, on all four speed
+    columns at once (#923).
+
+    Asserted against the maximum RECOMPUTED from the rows the same view
+    served, so this cannot pass by agreeing with a constant somebody typed.
+    """
+    session = _session_or_skip()
+    view = session.masked_view(_all_revealed(session), 0.0)
+
+    checked = 0
+    for code, driver in view["drivers"].items():
+        countable = [row for row in driver["laps"] if not row["deleted"] and not row["generated"]]
+        for field in ("v1", "v2", "vfl", "vst"):
+            values = [row[field] for row in countable if row[field] is not None]
+            if not values:
+                continue
+            assert driver["best"][field] == max(values), (
+                f"{code}'s best {field} is {driver['best'][field]} but its rows reach "
+                f"{max(values)} (min is {min(values)})"
+            )
+            checked += 1
+
+    assert checked >= 60, f"only {checked} speed bests compared; the fixture proves nothing"
+
+
+def test_a_best_lap_time_is_still_the_smallest():
+    """The twin of the case above, so the fix cannot swing the other way.
+
+    Separating the two loops is exactly the kind of change that fixes one
+    direction and breaks the other, and a test that only pinned the speeds
+    would be green through it.
+    """
+    session = _session_or_skip()
+    view = session.masked_view(_all_revealed(session), 0.0)
+
+    checked = 0
+    for code, driver in view["drivers"].items():
+        countable = [row for row in driver["laps"] if not row["deleted"] and not row["generated"]]
+        for field in ("lap_time", "s1", "s2", "s3"):
+            values = [row[field] for row in countable if row[field] is not None]
+            if not values:
+                continue
+            assert driver["best"][field] == min(values), (
+                f"{code}'s best {field} is {driver['best'][field]} but its rows reach {min(values)}"
+            )
+            checked += 1
+
+    assert checked >= 60, f"only {checked} time bests compared; the fixture proves nothing"
