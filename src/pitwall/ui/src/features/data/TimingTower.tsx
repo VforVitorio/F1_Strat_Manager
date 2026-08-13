@@ -24,7 +24,7 @@
  * once, rather than each of the forty cells repeating it.
  */
 
-import type { ArcadeState, Bulk, DriverLaps, LapRow } from "../../lib/bridge";
+import type { ArcadeState, Bulk, DriverLaps, LapRow, LiveLap } from "../../lib/bridge";
 import { driverStatus, type DriverStatus } from "../../lib/driverStatus";
 import { formatGapCell, gapCell } from "../../lib/gapCell";
 import { sessionBests, type BestField, type SessionBests } from "../../lib/sessionBests";
@@ -32,9 +32,10 @@ import { sessionBests, type BestField, type SessionBests } from "../../lib/sessi
 interface TimingTowerProps {
   arcade: ArcadeState;
   bulk: Bulk | null;
+  live: LiveLap | null;
 }
 
-export function TimingTower({ arcade, bulk }: TimingTowerProps) {
+export function TimingTower({ arcade, bulk, live }: TimingTowerProps) {
   const order = arcade.race_order;
   const leader = order[0];
   // The same reduction the bests panel ranks, from the same module. Two
@@ -78,6 +79,7 @@ export function TimingTower({ arcade, bulk }: TimingTowerProps) {
               leader={leader}
               arcade={arcade}
               bulk={bulk}
+              live={live}
               bests={bests}
             />
           ))}
@@ -95,10 +97,11 @@ interface TowerRowProps {
   leader: string;
   arcade: ArcadeState;
   bulk: Bulk | null;
+  live: LiveLap | null;
   bests: SessionBests;
 }
 
-function TowerRow({ code, position, front, leader, arcade, bulk, bests }: TowerRowProps) {
+function TowerRow({ code, position, front, leader, arcade, bulk, live, bests }: TowerRowProps) {
   const car = arcade.drivers[code];
   const status: DriverStatus = car ? driverStatus(car) : "out";
   const laps: DriverLaps | undefined = bulk?.drivers[code];
@@ -106,6 +109,10 @@ function TowerRow({ code, position, front, leader, arcade, bulk, bests }: TowerR
   // row - a car that never finished one - and then every number on it is
   // null, which is the honest rendering rather than an absent row.
   const last: LapRow | null = laps?.laps.length ? laps.laps[laps.laps.length - 1] : null;
+  // Absent for a car that has retired or taken the flag: it has no lap in
+  // progress, so its sector columns are dashes rather than the last lap it
+  // happened to drive.
+  const sectors = live?.drivers[code];
 
   const gap = front === null ? { kind: "leader" as const } : gapCell(leader, code, arcade, bulk);
   const interval = front === null ? null : gapCell(front, code, arcade, bulk);
@@ -119,20 +126,23 @@ function TowerRow({ code, position, front, leader, arcade, bulk, bests }: TowerR
       </td>
       <td className="col-gap">{formatGapCell(gap)}</td>
       <td className="col-gap">{interval === null ? "—" : formatGapCell(interval)}</td>
+      {/* The sectors are the lap IN PROGRESS - blank at the line, filling as
+       * the car crosses each. Every other column on this row is about the
+       * last COMPLETED lap, which is what LAST, ST, TYRE and STOPS mean. */}
       <SectorCell
-        time={last?.s1 ?? null}
-        speed={last?.v1 ?? null}
-        tone={sectorTone(last?.s1 ?? null, laps?.best.s1 ?? null, bests, "s1")}
+        time={sectors?.s1 ?? null}
+        speed={sectors?.v1 ?? null}
+        tone={sectorTone(sectors?.s1 ?? null, laps?.best.s1 ?? null, bests, "s1")}
       />
       <SectorCell
-        time={last?.s2 ?? null}
-        speed={last?.v2 ?? null}
-        tone={sectorTone(last?.s2 ?? null, laps?.best.s2 ?? null, bests, "s2")}
+        time={sectors?.s2 ?? null}
+        speed={sectors?.v2 ?? null}
+        tone={sectorTone(sectors?.s2 ?? null, laps?.best.s2 ?? null, bests, "s2")}
       />
       <SectorCell
-        time={last?.s3 ?? null}
-        speed={last?.vfl ?? null}
-        tone={sectorTone(last?.s3 ?? null, laps?.best.s3 ?? null, bests, "s3")}
+        time={sectors?.s3 ?? null}
+        speed={sectors?.vfl ?? null}
+        tone={sectorTone(sectors?.s3 ?? null, laps?.best.s3 ?? null, bests, "s3")}
       />
       <td className={`col-last ${last?.deleted ? "is-deleted" : ""}`}>{lastCell(status, last)}</td>
       <td className="col-st">{last?.vst === null || last?.vst === undefined ? "—" : last.vst}</td>

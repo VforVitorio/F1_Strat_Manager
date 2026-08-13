@@ -66,6 +66,8 @@ class TickSource(Protocol):
 
     def get_bulk(self, since_rev: int = -1) -> dict[str, Any] | None: ...
 
+    def get_live_lap(self, since_rev: int = -1) -> dict[str, Any] | None: ...
+
     def get_connection(self) -> str: ...
 
 
@@ -74,6 +76,7 @@ _READERS = {
     "/api/tick": "get_tick",
     "/api/agents": "get_agents_view",
     "/api/bulk": "get_bulk",
+    "/api/live": "get_live_lap",
 }
 
 # Readers with no revision at all. The connection label is a property of the

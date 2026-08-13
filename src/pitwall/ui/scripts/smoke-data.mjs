@@ -180,6 +180,7 @@ await page.addInitScript((payload) => {
         return window.__ticks[window.__cursor];
       },
       get_bulk: async () => null,
+      get_live_lap: async () => null,
       get_connection: async () => "Connected",
     },
   };
@@ -469,6 +470,7 @@ await soloPage.addInitScript((payload) => {
     api: {
       get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
       get_bulk: async () => null,
+      get_live_lap: async () => null,
       get_connection: async () => "Connected",
     },
   };
@@ -626,6 +628,7 @@ await stillPage.addInitScript((payload) => {
       // and the check below would pass against the defect it exists for.
       get_tick: async () => ({ ...structuredClone(payload), seq: ++seq }),
       get_bulk: async () => null,
+      get_live_lap: async () => null,
       get_connection: async () => "Connected",
     },
   };
@@ -660,6 +663,8 @@ async function provisionalChips(field) {
       api: {
         get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
         get_bulk: async () => null,
+        get_live_lap: async () => null,
+      get_live_lap: async () => null,
         get_connection: async () => "Connected",
       },
     };
@@ -808,20 +813,46 @@ function towerBulk() {
   return { rev: 1, available: true, race: { year: 2025, location: "Melbourne", total_laps: 57 }, drivers };
 }
 
+/**
+ * The lap in progress: S1 crossed, S2 and S3 not yet.
+ *
+ * The bulk's completed row carries an S2 and an S3 for every driver, so a
+ * tower still reading the last COMPLETED lap would print them - which is the
+ * defect this channel exists to fix, and the reason the checks below look for
+ * dashes in columns the bulk could happily fill.
+ */
+function towerLive() {
+  const drivers = {};
+  TOWER_ORDER.filter((code) => !RETIRED_CODES.includes(code)).forEach((code, index) => {
+    const crafted = TOWER_BESTS[code];
+    drivers[code] = {
+      lap: code === "LAW" ? 23 : 24,
+      s1: crafted ? crafted.lastS1 : 31 + index * 0.1,
+      s2: null,
+      s3: null,
+      v1: 301,
+      v2: null,
+      vfl: null,
+    };
+  });
+  return { rev: 1, drivers };
+}
+
 const towerCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
 const towerPage = await towerCtx.newPage();
 towerPage.on("pageerror", (error) => failures.push(`pageerror(tower): ${error.message}`));
 await towerPage.addInitScript(
-  ([payload, bulk]) => {
+  ([payload, bulk, live]) => {
     window.pywebview = {
       api: {
         get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
         get_bulk: async (sinceRev) => (sinceRev === bulk.rev ? null : bulk),
+        get_live_lap: async (sinceRev) => (sinceRev === live.rev ? null : live),
         get_connection: async () => "Connected",
       },
     };
   },
-  [tick(1, { drivers: towerField(), order: TOWER_ORDER }), towerBulk()],
+  [tick(1, { drivers: towerField(), order: TOWER_ORDER }), towerBulk(), towerLive()],
 );
 await towerPage.goto(url, { waitUntil: "domcontentloaded" });
 await towerPage.waitForSelector(".tower-row", { timeout: 5000 });
@@ -919,6 +950,22 @@ check((await tone(1)).includes("is-purple"), "the session's fastest sector is pu
 check((await tone(2)).includes("is-green"), "a driver's own best is green");
 check((await tone(3)).includes("is-yellow"), "slower than his own best is yellow");
 check((await tone(18)).includes("is-plain"), "a sector nobody has set is not coloured at all");
+
+// --- The sectors are the lap IN PROGRESS, not the last completed one ---------
+//
+// The bulk's completed row carries an S2 and an S3 for every driver here, so a
+// tower reading it would print them. The live channel has only S1 open, which
+// is what a car that has crossed one sector of the current lap actually knows.
+check((await cell(1, 7)) === "—", "S2 is blank until the car crosses it");
+check((await cell(1, 8)) === "—", "and so is S3");
+check(
+  (await cell(1, 9)) === "1:25.744",
+  "while LAST still shows the lap the car completed, which is what that column means",
+);
+check(
+  (await cell(18, 6)) === "—",
+  "a retired car has no lap in progress, so its sectors are dashes and not its final ones",
+);
 
 // --- Band 2 right: the bests panel -------------------------------------------
 

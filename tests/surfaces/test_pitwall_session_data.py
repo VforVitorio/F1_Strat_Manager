@@ -418,3 +418,78 @@ def test_no_tick_means_no_bulk():
     host = PitwallHost(_FakeClient(None), window_count=1)
 
     assert host.get_bulk(-1) is None
+
+
+# --- The lap in progress: sectors revealed at the moment they were crossed ----
+
+
+def test_a_sector_is_closed_until_the_clock_reaches_its_crossing():
+    """The reveal rule at a finer coordinate, on the real race.
+
+    `masked_view`'s `L <= laps_completed` is the rule for lap ROWS, which only
+    exist once the lap is over. A sector carries its own `SectorNSessionTime`,
+    so it has its own moment - and revealing it then is not look-ahead, it is
+    the present.
+
+    NOR's lap 23 at Melbourne crossed S1 at SessionTime 6689.966. One second
+    before that the cell must be empty; a tenth of a second after it must hold
+    31.865 and the 266 km/h measured at that trap.
+    """
+    session = _session_or_skip()
+    global_t_min = 4260.355
+    row = next(r for r in session._by_driver["NOR"] if r["lap"] == 23)
+
+    before = session.live_lap({"NOR": 22}, row["s1_at"] - 1 - global_t_min, global_t_min)["NOR"]
+    after = session.live_lap({"NOR": 22}, row["s1_at"] + 0.1 - global_t_min, global_t_min)["NOR"]
+
+    assert before["lap"] == 23 and after["lap"] == 23, "both probes are on the lap in progress"
+    assert before["s1"] is None and before["v1"] is None, "nothing before the car got there"
+    assert after["s1"] == row["s1"], "and the real sector time the instant it did"
+    assert after["v1"] == row["v1"], "with the speed measured at that trap"
+    assert after["s2"] is None, "the sectors after it stay shut"
+
+
+def test_a_rewind_shuts_the_sectors_again():
+    """The clock going back must CLOSE a cell, not leave it filled.
+
+    A cache that only ever fills would leave a time on screen for track the
+    car has yet to re-drive - the same leak as a lap-row reveal that never
+    un-reveals, one coordinate down.
+    """
+    session = _session_or_skip()
+    global_t_min = 4260.355
+    row = next(r for r in session._by_driver["NOR"] if r["lap"] == 23)
+
+    late = session.live_lap({"NOR": 22}, row["s3_at"] + 1 - global_t_min, global_t_min)["NOR"]
+    rewound = session.live_lap({"NOR": 22}, row["s1_at"] - 1 - global_t_min, global_t_min)["NOR"]
+
+    assert [late["s1"], late["s2"], late["s3"]] == [row["s1"], row["s2"], row["s3"]]
+    assert [rewound["s1"], rewound["s2"], rewound["s3"]] == [None, None, None]
+
+
+def test_a_car_with_no_lap_in_progress_is_absent_rather_than_empty():
+    """Retired, finished, or never completed one - all three mean the same here.
+
+    SAI's only rows on this race are `FastF1Generated`, which carry no times
+    at all, so serving one as "the lap in progress" would put a row of nulls
+    on screen that looks like a car waiting to cross a sector it never will.
+    """
+    session = _session_or_skip()
+    live = session.live_lap({"SAI": 0, "NOR": 22}, 3000.0, 4260.355)
+
+    assert "SAI" not in live, "a generated-only driver has no lap in progress"
+    assert "NOR" in live, "and the fixture is not simply empty"
+
+
+def test_the_sector_crossing_instants_stay_off_the_bulk_payload():
+    """They exist for `live_lap`; the tower never reads them from a lap row.
+
+    Three more floats on each of 927 rows is a field nobody consumes riding on
+    the channel that already carries the whole race.
+    """
+    session = _session_or_skip()
+    view = session.masked_view(_all_revealed(session), 0.0)
+    row = view["drivers"]["NOR"]["laps"][0]
+
+    for key in ("s1_at", "s2_at", "s3_at"):
+        assert key not in row, f"{key} leaked onto the bulk payload"
