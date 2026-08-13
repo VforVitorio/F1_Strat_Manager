@@ -52,6 +52,20 @@ logger = logging.getLogger(__name__)
 # the finish line and ST is the longest straight.
 _SPEED_COLUMNS = {"SpeedI1": "v1", "SpeedI2": "v2", "SpeedFL": "vfl", "SpeedST": "vst"}
 _SECTOR_COLUMNS = {"Sector1Time": "s1", "Sector2Time": "s2", "Sector3Time": "s3"}
+# When each sector was CROSSED, on FastF1's SessionTime. This is what lets a
+# sector be revealed at the instant it happened rather than a whole lap later,
+# which is the difference between a timing tower and a table of the previous
+# lap. Same clock as the tick's `t + global_t_min`.
+_SECTOR_AT_COLUMNS = {
+    "Sector1SessionTime": "s1_at",
+    "Sector2SessionTime": "s2_at",
+    "Sector3SessionTime": "s3_at",
+}
+
+# The sector, its time, its trap speed, and the moment it opened. The speed is
+# measured AT the trap, so it becomes known with its sector and not before.
+_LIVE_SECTORS = (("s1", "v1", "s1_at"), ("s2", "v2", "s2_at"), ("s3", "vfl", "s3_at"))
+_SECTOR_AT_KEYS = frozenset(_SECTOR_AT_COLUMNS.values())
 
 # Fields the bests panel ranks. `s1` is in here even though lap 1 never has
 # one: the min simply ignores the Nones, which is why they must be None and
@@ -128,6 +142,7 @@ def _lap_row(record: dict[str, Any]) -> dict[str, Any]:
         "pb": record.get("IsPersonalBest") is True,
     }
     row.update({key: _seconds(record.get(column)) for column, key in _SECTOR_COLUMNS.items()})
+    row.update({key: _seconds(record.get(column)) for column, key in _SECTOR_AT_COLUMNS.items()})
     row.update({key: _none_if_nan(record.get(column)) for column, key in _SPEED_COLUMNS.items()})
     if row["position"] is not None:
         row["position"] = int(row["position"])
@@ -295,6 +310,71 @@ class SessionLaps:
         }
         return result
 
+    def live_lap(
+        self, laps_completed: dict[str, int], clock_s: float, global_t_min: float = 0.0
+    ) -> dict[str, Any]:
+        """The lap each driver is ON, with only the sectors he has already crossed.
+
+        The tower's three sector columns show the lap IN PROGRESS, blank at
+        the line and filling as the car crosses each sector - which is what a
+        timing tower does and what showing the last COMPLETED lap for a whole
+        lap afterwards does not.
+
+        **This does not weaken the reveal rule; it applies it at a finer
+        coordinate.** `masked_view`'s `L <= laps_completed` is the rule for
+        lap ROWS, which only exist once the lap is over. A sector has its own
+        timestamp, so its own moment: reveal it iff the replay clock has
+        passed `SectorNSessionTime`. Nothing here is visible before it
+        happened, and a rewind closes the sectors again because the clock
+        goes back with it.
+
+        It is a separate reader rather than part of `masked_view` because the
+        two are masked by different things at different rates. A sector opens
+        somewhere in the field every 2.22 s (measured: 2,744 crossings over
+        6,103 s of Melbourne 2025), and re-sending the whole revealed race at
+        that cadence is ~154 KB/s against the tick's own ~58. This block is
+        2 KB for twenty drivers.
+        """
+        session_clock = clock_s + global_t_min
+        drivers: dict[str, Any] = {}
+        for code, rows in self._by_driver.items():
+            in_progress = self._row_for_lap(rows, laps_completed.get(code, 0) + 1)
+            if in_progress is None:
+                continue
+            drivers[code] = self._revealed_sectors(in_progress, session_clock)
+        return drivers
+
+    @staticmethod
+    def _row_for_lap(rows: list[dict[str, Any]], lap: int) -> dict[str, Any] | None:
+        """The driver's row for one lap, or None when he has no such lap.
+
+        None covers three real cases and they all mean the same thing to the
+        caller: a car that retired has no further row, a finisher has no lap
+        past the flag, and a car whose only rows are `FastF1Generated` has
+        nothing with times in it.
+        """
+        for row in rows:
+            if row["lap"] == lap:
+                return None if row["generated"] else row
+        return None
+
+    @staticmethod
+    def _revealed_sectors(row: dict[str, Any], session_clock: float) -> dict[str, Any]:
+        """One in-progress lap, with the sectors the clock has not reached left out.
+
+        `None` for a sector that has not happened yet, exactly as for one that
+        has no data - the renderer draws a dash either way, and inventing a
+        distinction the tower cannot use would only be a third state for every
+        consumer to carry.
+        """
+        live: dict[str, Any] = {"lap": row["lap"]}
+        for sector, speed, crossed_at in _LIVE_SECTORS:
+            moment = row[crossed_at]
+            open_now = moment is not None and moment <= session_clock
+            live[sector] = row[sector] if open_now else None
+            live[speed] = row[speed] if open_now else None
+        return live
+
     @staticmethod
     def _driver_view(
         revealed: list[dict[str, Any]], revealed_to: int, global_t_min: float
@@ -311,7 +391,17 @@ class SessionLaps:
         holds real rows only - a generated row's `Time` stamp sorts before
         the entire field and would invert the interval it takes part in.
         """
-        laps = [{**row, "t": SessionLaps._on_wire_clock(row, global_t_min)} for row in revealed]
+        # The sector crossing instants stay OFF this payload. They exist for
+        # `live_lap`, which reveals the lap in progress, and putting three
+        # more floats on each of 927 rows would grow the whole-race worst case
+        # for a field the tower never reads here.
+        laps = [
+            {
+                **{key: value for key, value in row.items() if key not in _SECTOR_AT_KEYS},
+                "t": SessionLaps._on_wire_clock(row, global_t_min),
+            }
+            for row in revealed
+        ]
         crossings = {
             row["lap"]: row["t"] for row in laps if not row["generated"] and row["t"] is not None
         }

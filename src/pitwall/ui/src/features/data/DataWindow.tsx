@@ -28,6 +28,7 @@ import { TimingTower } from "./TimingTower";
 import { TrackRing } from "./TrackRing";
 import { useBulk } from "../../lib/useBulk";
 import { useConnection } from "../../lib/useConnection";
+import { useLiveLap } from "../../lib/useLiveLap";
 import { useStatusText } from "../../lib/useStatusText";
 import { useTick } from "../../lib/useTick";
 
@@ -37,6 +38,7 @@ export function DataWindow() {
   const { tick, discontinuity, live } = useTick();
   const connection = useConnection();
   const bulk = useBulk();
+  const liveLap = useLiveLap();
   // Qt re-arms `showMessage(f"lap {lap} · live", 1500)` on every broadcast,
   // so the line stays up while streaming and clears 1.5 s after the producer
   // stops. `useStatusText` is keyed on the sequence for that reason.
@@ -50,7 +52,7 @@ export function DataWindow() {
         {live && tick ? (
           <div className="data-main">
             <div className="left-column">
-              <TimingTower arcade={tick.arcade} bulk={bulk} />
+              <TimingTower arcade={tick.arcade} bulk={bulk} live={liveLap} />
               <BestsPanel bulk={bulk} />
             </div>
             <div className="band4">

@@ -154,6 +154,31 @@ export interface Bulk {
   drivers: Record<string, DriverLaps>;
 }
 
+/**
+ * The lap a driver is ON, with only the sectors he has already crossed.
+ *
+ * Every field is null until the replay clock passes that sector's own
+ * crossing time, so the tower's columns blank at the line and fill as the car
+ * goes round - the way a timing tower does, rather than holding the previous
+ * lap for the whole of the next one.
+ */
+export interface LiveSectors {
+  lap: number;
+  s1: number | null;
+  s2: number | null;
+  s3: number | null;
+  v1: number | null;
+  v2: number | null;
+  vfl: number | null;
+}
+
+export interface LiveLap {
+  /** Advances when a sector OPENS or CLOSES. A rewind closes them, and bumps it. */
+  rev: number;
+  /** Drivers with a lap in progress. A retired or finished car is absent, not empty. */
+  drivers: Record<string, LiveSectors>;
+}
+
 interface PitwallApi {
   get_tick: (sinceSeq: number) => Promise<Tick | null>;
 }
@@ -250,6 +275,20 @@ export async function getBulk(sinceRev: number): Promise<Bulk | null> {
   if (api?.get_bulk) return api.get_bulk(sinceRev);
   if (IN_A_WINDOW) return null;
   return fetchJson<Bulk>("/api/bulk", sinceRev);
+}
+
+/**
+ * The lap in progress, or null when this caller's revision is current.
+ *
+ * Same inequality rule as `getBulk`, and here it is what makes a rewind
+ * CLOSE a sector again: `>` would keep a cell filled with a time the car has
+ * not re-driven yet.
+ */
+export async function getLiveLap(sinceRev: number): Promise<LiveLap | null> {
+  const api = window.pywebview?.api as { get_live_lap?: (r: number) => Promise<LiveLap | null> };
+  if (api?.get_live_lap) return api.get_live_lap(sinceRev);
+  if (IN_A_WINDOW) return null;
+  return fetchJson<LiveLap>("/api/live", sinceRev);
 }
 
 /**

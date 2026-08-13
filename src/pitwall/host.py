@@ -62,6 +62,11 @@ class PitwallHost:
         self._bulk_reveal: dict[str, int] = {}
         self._session: SessionLaps | None = None
         self._session_key: tuple[int, str] | None = None
+        # The LIVE channel's state, masked by the clock rather than by
+        # completed laps. Its signature is which sectors are open, so the
+        # revision moves when the screen changes and not ten times a second.
+        self._live_rev = 0
+        self._live_signature: dict[str, tuple[bool, ...]] = {}
 
     def start(self) -> None:
         self._client.start()
@@ -174,10 +179,7 @@ class PitwallHost:
         if payload is None:
             return None
         arcade = payload.get("arcade") or {}
-        reveal = {
-            code: int(state.get("laps_completed") or 0)
-            for code, state in (arcade.get("drivers") or {}).items()
-        }
+        reveal = self._reveal_map(arcade)
         if reveal != self._bulk_reveal:
             self._bulk_reveal = reveal
             self._bulk_rev += 1
@@ -188,6 +190,74 @@ class PitwallHost:
         view["rev"] = self._bulk_rev
         return view
 
+    def get_live_lap(self, since_rev: int = -1) -> dict | None:
+        """The lap each driver is ON, with only the sectors he has crossed.
+
+        The tower's sector columns show the lap in progress, blank at the line
+        and filling as each sector goes by. That needs a mask driven by the
+        CLOCK rather than by completed laps, and the two cannot share one
+        payload: a sector opens somewhere in the field every 2.22 s, and
+        re-sending the whole revealed race at that cadence is about 154 KB/s
+        against the tick's own 58. This block is 2 KB for twenty drivers.
+
+        The host still applies the mask, which is the window's load-bearing
+        invariant. What changes is which clock it reads.
+
+        The revision compares on inequality for the same reason `get_bulk`'s
+        does: a rewind CLOSES sectors, and `rev > since_rev` would withhold
+        exactly that - leaving a sector on screen that the car has not yet
+        reached this time round.
+        """
+        payload = self._client.latest
+        if payload is None:
+            return None
+        arcade = payload.get("arcade") or {}
+        session = self._session_for(arcade)
+        if session is None:
+            return None
+
+        reveal = self._reveal_map(arcade)
+        clock = float(arcade.get("t") or 0.0)
+        global_t_min = float(arcade.get("global_t_min") or 0.0)
+        drivers = session.live_lap(reveal, clock, global_t_min)
+
+        # The signature is what the SCREEN shows, so the revision advances
+        # when a sector opens or closes and stays put through the hundreds of
+        # ticks in between. Keying it on the clock instead would bump ten
+        # times a second and re-send an identical payload.
+        signature = {
+            code: tuple(v is not None for v in row.values()) for code, row in drivers.items()
+        }
+        if signature != self._live_signature:
+            self._live_signature = signature
+            self._live_rev += 1
+        if self._live_rev == since_rev:
+            return None
+        return {"rev": self._live_rev, "drivers": drivers}
+
+    @staticmethod
+    def _reveal_map(arcade: dict) -> dict[str, int]:
+        """Laps completed per driver, which is what both readers mask on."""
+        return {
+            code: int(state.get("laps_completed") or 0)
+            for code, state in (arcade.get("drivers") or {}).items()
+        }
+
+    def _session_for(self, arcade: dict) -> SessionLaps | None:
+        """The loaded race for this tick, or None when it is not on disk.
+
+        Cached on (year, location) so pointing the arcade at another race
+        replaces the laps instead of serving the previous one's - the
+        stale-state class #904 already paid for once on the AGENTS history.
+        """
+        year, location = arcade.get("year"), arcade.get("location")
+        if not isinstance(year, int) or not isinstance(location, str):
+            return None
+        if self._session_key != (year, location):
+            self._session_key = (year, location)
+            self._session = SessionLaps.load(get_data_root(), year, location)
+        return self._session
+
     def _masked_view(self, arcade: dict, reveal: dict[str, int]) -> dict:
         """Load the race once, then slice it; or say it is not on disk.
 
@@ -197,15 +267,13 @@ class PitwallHost:
         #904 already paid for once on the AGENTS history.
         """
         year, location = arcade.get("year"), arcade.get("location")
-        if not isinstance(year, int) or not isinstance(location, str):
-            return unavailable(year if isinstance(year, int) else None, None)
-
-        if self._session_key != (year, location):
-            self._session_key = (year, location)
-            self._session = SessionLaps.load(get_data_root(), year, location)
-        if self._session is None:
-            return unavailable(year, location)
-        return self._session.masked_view(reveal, float(arcade.get("global_t_min") or 0.0))
+        session = self._session_for(arcade)
+        if session is None:
+            return unavailable(
+                year if isinstance(year, int) else None,
+                location if isinstance(location, str) else None,
+            )
+        return session.masked_view(reveal, float(arcade.get("global_t_min") or 0.0))
 
     def release_window(self) -> int:
         """Record that one window has closed; stop the client at the last one.
