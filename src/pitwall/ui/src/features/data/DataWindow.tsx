@@ -23,7 +23,9 @@
 
 import { OwnCarTraces } from "./OwnCarTraces";
 import { StatusStrip } from "./StatusStrip";
+import { TimingTower } from "./TimingTower";
 import { TrackRing } from "./TrackRing";
+import { useBulk } from "../../lib/useBulk";
 import { useConnection } from "../../lib/useConnection";
 import { useStatusText } from "../../lib/useStatusText";
 import { useTick } from "../../lib/useTick";
@@ -33,6 +35,7 @@ const WAITING = { text: "Waiting for arcade stream…", transient: false } as co
 export function DataWindow() {
   const { tick, discontinuity, live } = useTick();
   const connection = useConnection();
+  const bulk = useBulk();
   // Qt re-arms `showMessage(f"lap {lap} · live", 1500)` on every broadcast,
   // so the line stays up while streaming and clears 1.5 s after the producer
   // stops. `useStatusText` is keyed on the sequence for that reason.
@@ -44,14 +47,14 @@ export function DataWindow() {
       <div className="data-body">
         <StatusStrip tick={live ? tick : null} connection={connection} />
         {live && tick ? (
-          // Band 4 still spans the body. The 620 px left column arrives in the
-          // same change as the tower that fills it: an empty column of that
-          // width does not read as "reserved", it reads as a panel that failed
-          // to load - which is the note the gate wrote about the run of empty
-          // space under the ring.
-          <div className="band4">
-            <OwnCarTraces tick={tick} discontinuity={discontinuity} />
-            <TrackRing arcade={tick.arcade} />
+          <div className="data-main">
+            <div className="left-column">
+              <TimingTower arcade={tick.arcade} bulk={bulk} />
+            </div>
+            <div className="band4">
+              <OwnCarTraces tick={tick} discontinuity={discontinuity} />
+              <TrackRing arcade={tick.arcade} />
+            </div>
           </div>
         ) : (
           <p className="data-waiting">

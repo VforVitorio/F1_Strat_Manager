@@ -130,6 +130,130 @@
   color: var(--qt-fg-2);
 }
 
+/* --- The two columns ------------------------------------------------------
+ *
+ * The all-cars world on the left and the own-car world on the right, which is
+ * how a real wall splits them across physical surfaces - and, separately, the
+ * only arrangement that fits: four stacked bands need 908 px of the 790 this
+ * window has, with band 3 still at zero.
+ *
+ * 630 px for the left column, and the number is measured on THIS table rather
+ * than inherited: its natural width is 597 px at 11 px mono, so the card needs
+ * 619 before any column is compressed. The design gate's prototype measured
+ * 597.6 and recommended 620, which happens to land one pixel clear - close
+ * enough that a font fallback would eat it. 630 leaves eleven pixels of air.
+ */
+.data-main {
+  display: grid;
+  grid-template-columns: 630px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+/* `auto` for the tower and the remainder for what sits under it. The tower
+ * must NEVER be squeezed: scrollbars are hidden globally (`qt-base.css`), so
+ * a squeezed tower does not gain a scrollbar, it silently stops drawing its
+ * last rows - a timing tower with no P15 to P20 and nothing saying so. */
+.left-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+/* --- Band 2 left: the timing tower ---------------------------------------- */
+
+.tower {
+  padding: 10px;
+  min-width: 0;
+}
+
+/* 11 px mono and 20 px rows: the floor at which the twelve columns stay
+ * legible at 150 % scaling, measured on the real screen. 12 px fits THIS
+ * machine and costs the bests panel its room on a 1080p laptop at 125 %. */
+.tower-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--qt-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tower-table th {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: right;
+  padding: 0 4px 3px;
+  border-bottom: 1px solid var(--qt-border);
+  white-space: nowrap;
+}
+
+.tower-table td {
+  height: 20px;
+  padding: 0 4px;
+  text-align: right;
+  color: var(--qt-fg-2);
+  white-space: nowrap;
+}
+
+.col-pos,
+.col-num,
+.col-drv,
+.col-tyre {
+  text-align: left;
+}
+
+.col-pos {
+  color: var(--qt-fg-3);
+  width: 20px;
+}
+.col-num {
+  color: var(--qt-fg-3);
+  width: 22px;
+}
+.col-drv {
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  width: 34px;
+}
+.col-last {
+  color: var(--qt-fg-1);
+  font-weight: 700;
+}
+.col-note {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+/* The trap speed rides beside its sector time, dimmer and smaller, so the
+ * cell reads as one value with an annotation rather than as two columns. */
+.cell-speed {
+  margin-left: 5px;
+  font-size: 0.82em;
+  color: var(--qt-fg-3);
+}
+
+/* A deleted lap time is struck, not hidden: it happened, and it does not
+ * count. The bests recompute already excludes it. */
+.col-last.is-deleted {
+  text-decoration: line-through;
+  color: var(--qt-fg-3);
+}
+
+/* A stopped car stays in the tower at the place its laps earned, dimmed. It
+ * is not removed: a timing screen classifies retirements, it does not pretend
+ * they were never entered. */
+.tower-row.is-out td {
+  color: var(--qt-fg-3);
+  opacity: 0.65;
+}
+
+.tower-row.is-finished .col-last {
+  color: var(--qt-fg-2);
+}
+
 /* Band 4 is the traces plus the ring in its corner. The ring is a fixed
  * column because it is a circle: giving it a fraction of the width makes it
  * shrink as the traces grow, which is backwards - the traces are the thing

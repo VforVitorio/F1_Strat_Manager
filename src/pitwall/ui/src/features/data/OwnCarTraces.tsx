@@ -124,7 +124,6 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           rivalColour={TRACE_COLOURS.rival}
           yRange={DELTA_Y}
           xMax={xMax}
-          mainCode={arcade.driver_main}
           rivalCode={rivalCode}
           main={[]}
           rival={frame.delta}
@@ -143,7 +142,6 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           rivalColour={TRACE_COLOURS.rival}
           yRange={SPEED_Y}
           xMax={xMax}
-          mainCode={arcade.driver_main}
           rivalCode={rivalCode}
           main={channel(frame.main, "speed")}
           rival={channel(frame.rival, "speed")}
@@ -156,7 +154,6 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           rivalColour={TRACE_COLOURS.rival}
           yRange={BRAKE_Y}
           xMax={xMax}
-          mainCode={arcade.driver_main}
           rivalCode={rivalCode}
           main={channel(frame.main, "brake")}
           rival={channel(frame.rival, "brake")}
@@ -169,7 +166,6 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           rivalColour={TRACE_COLOURS.rival}
           yRange={THROTTLE_Y}
           xMax={xMax}
-          mainCode={arcade.driver_main}
           rivalCode={rivalCode}
           main={channel(frame.main, "throttle")}
           rival={channel(frame.rival, "throttle")}
@@ -201,7 +197,13 @@ function TracesHeader({ tick }: { tick: Tick }) {
       {rivalCode ? (
         <>
           <span className="traces-vs">vs</span>
-          <span className="driver-chip driver-chip-rival">{rivalCode}</span>
+          {/* The BROADCAST tag rides on the rival's chip now that the per-cell
+           * legends are gone. Rival car data is real and public, but it is the
+           * coarse low-rate channel every team sees rather than pit-wall-grade
+           * telemetry, and the Qt window rendered it unlabelled. */}
+          <span className="driver-chip driver-chip-rival" title="broadcast tier">
+            {rivalCode} <span className="trace-tier">BROADCAST</span>
+          </span>
         </>
       ) : null}
     </header>

@@ -179,6 +179,7 @@ await page.addInitScript((payload) => {
         }
         return window.__ticks[window.__cursor];
       },
+      get_bulk: async () => null,
       get_connection: async () => "Connected",
     },
   };
@@ -197,7 +198,7 @@ check(
 check((await page.locator(".driver-chip").count()) === 2, "main and rival chips");
 check(
   (await page.locator(".trace-tier").first().innerText()).trim() === "BROADCAST",
-  "the rival legend is labelled broadcast tier",
+  "the rival chip is labelled broadcast tier",
 );
 
 // --- Band 1: the status strip -----------------------------------------------
@@ -376,9 +377,12 @@ check(
   (await page.locator(".trace-placeholder").count()) === 0,
   "an empty buffer is not single-driver mode",
 );
+// One tag on the card header, not one per cell: the per-cell legends were
+// dropped when band 4 moved into the narrower right column, where the title
+// row wrapped onto three lines and ate the plot.
 check(
-  (await page.locator(".trace-tier").count()) === 4,
-  "the rival legend survives an empty buffer on all four charts",
+  (await page.locator(".trace-tier").count()) === 1,
+  "the broadcast-tier tag survives an empty buffer, on the header chip",
 );
 
 // The eviction ORDER, which the accumulator's own docstring calls
@@ -461,7 +465,13 @@ const soloPage = await solo.newPage();
 soloPage.on("pageerror", (error) => failures.push(`pageerror(solo): ${error.message}`));
 
 await soloPage.addInitScript((payload) => {
-  window.pywebview = { api: { get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload) } };
+  window.pywebview = {
+    api: {
+      get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
+      get_bulk: async () => null,
+      get_connection: async () => "Connected",
+    },
+  };
 }, tick(1, { rival: null, rivalSpan: [], mainDriver: { has_position: false, rel_dist: null } }));
 
 await soloPage.goto(url, { waitUntil: "domcontentloaded" });
@@ -615,6 +625,8 @@ await stillPage.addInitScript((payload) => {
       // never recompute, so the chart sits still whether or not it animates
       // and the check below would pass against the defect it exists for.
       get_tick: async () => ({ ...structuredClone(payload), seq: ++seq }),
+      get_bulk: async () => null,
+      get_connection: async () => "Connected",
     },
   };
 }, tick(1));
@@ -647,6 +659,7 @@ async function provisionalChips(field) {
     window.pywebview = {
       api: {
         get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
+        get_bulk: async () => null,
         get_connection: async () => "Connected",
       },
     };
@@ -676,6 +689,197 @@ check(
   })) === 1,
   "and the opening lap, which the chip exists for, still marks itself",
 );
+
+// --- Scenario F: the timing tower --------------------------------------------
+//
+// Twenty rows, and the numbers hand-worked so a wrong branch cannot look
+// plausible. The bulk deliberately omits the three retired cars: SAI, DOO and
+// HAD have only `FastF1Generated` rows on the real race and reveal nothing, so
+// a tower keyed on what the BULK contains renders seventeen. It has to iterate
+// `race_order`, which always carries twenty.
+
+const TOWER_ORDER = [
+  "NOR", "PIA", "VER", "RUS", "LEC", "TSU", "ALB", "HAM", "GAS", "ALO",
+  "ANT", "STR", "HUL", "BOR", "LAW", "OCO", "BEA", "SAI", "DOO", "HAD",
+];
+const RETIRED_CODES = ["SAI", "DOO", "HAD"];
+/** Crossing times at lap 23, chosen so every interval is exact at 2 dp. */
+const CROSSING_AT_23 = { NOR: 2070.0, PIA: 2071.24, VER: 2073.07 };
+
+function towerField() {
+  const field = {};
+  TOWER_ORDER.forEach((code, index) => {
+    if (RETIRED_CODES.includes(code)) {
+      field[code] = driver({
+        laps_completed: 0,
+        progress: 0.4,
+        active: false,
+        has_finished: false,
+      });
+      return;
+    }
+    // LAW is a full lap down: the positional laps-down branch must fire for
+    // him instead of rendering tens of seconds as if he were racing.
+    const progress = code === "LAW" ? 22.3 : 23.9 - index * 0.01;
+    field[code] = driver({ laps_completed: code === "LAW" ? 22 : 23, progress });
+  });
+  return field;
+}
+
+function towerBulk() {
+  const drivers = {};
+  TOWER_ORDER.filter((code) => !RETIRED_CODES.includes(code)).forEach((code, index) => {
+    const revealed = code === "LAW" ? 22 : 23;
+    const crossings = {};
+    for (let lap = 1; lap <= revealed; lap += 1) {
+      crossings[lap] = CROSSING_AT_23[code] ?? 2070 + 5 * index - (23 - lap) * 90;
+    }
+    if (CROSSING_AT_23[code] !== undefined) crossings[revealed] = CROSSING_AT_23[code];
+    drivers[code] = {
+      number: String(index + 1),
+      laps_revealed: revealed,
+      stops: 2,
+      crossings,
+      laps: [
+        {
+          lap: revealed,
+          t: crossings[revealed],
+          lap_time: 85.744,
+          s1: 29.412,
+          s2: 30.128,
+          s3: 26.204,
+          v1: 301,
+          v2: 289,
+          vfl: 280,
+          vst: 321,
+          position: index + 1,
+          compound: "MEDIUM",
+          tyre_life: 12,
+          stint: 2,
+          track_status: "1",
+          pit_in: false,
+          pit_out: false,
+          deleted: false,
+          generated: false,
+          pb: false,
+        },
+      ],
+      best: {
+        lap: revealed,
+        lap_time: 85.744,
+        s1: 29.412,
+        s2: 30.128,
+        s3: 26.204,
+        v1: 301,
+        v2: 289,
+        vfl: 280,
+        vst: 321,
+        compound: "MEDIUM",
+      },
+      theoretical: 85.744,
+    };
+  });
+  return { rev: 1, available: true, race: { year: 2025, location: "Melbourne", total_laps: 57 }, drivers };
+}
+
+const towerCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+const towerPage = await towerCtx.newPage();
+towerPage.on("pageerror", (error) => failures.push(`pageerror(tower): ${error.message}`));
+await towerPage.addInitScript(
+  ([payload, bulk]) => {
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
+        get_bulk: async (sinceRev) => (sinceRev === bulk.rev ? null : bulk),
+        get_connection: async () => "Connected",
+      },
+    };
+  },
+  [tick(1, { drivers: towerField(), order: TOWER_ORDER }), towerBulk()],
+);
+await towerPage.goto(url, { waitUntil: "domcontentloaded" });
+await towerPage.waitForSelector(".tower-row", { timeout: 5000 });
+await towerPage.waitForTimeout(700);
+
+// Tolerant on purpose. A defect that DROPS rows makes every later selector
+// miss, and a throwing helper kills the harness with a stack instead of
+// reporting the failures by name - so the one check that explains the cause
+// never gets printed. A missing cell is a named failure, not an exception.
+const cell = async (row, column) => {
+  try {
+    const text = await towerPage
+      .locator(`.tower-row:nth-child(${row}) td:nth-child(${column})`)
+      .innerText({ timeout: 1000 });
+    return text.trim();
+  } catch {
+    return "<no such cell>";
+  }
+};
+
+check((await towerPage.locator(".tower-row").count()) === 20, "twenty rows, not the bulk's seventeen");
+check((await cell(18, 3)) === "SAI", "a car with no revealed lap still holds its place in the order");
+
+// The four branches of the gap cell, each on the row that exercises it.
+check((await cell(1, 4)) === "LEADER", "the leader's GAP says so");
+check((await cell(1, 5)) === "—", "and the leader has no interval to anything");
+check((await cell(2, 4)) === "+1.24s", "GAP is measured to the LEADER");
+check((await cell(3, 4)) === "+3.07s", "and it accumulates down the order");
+check((await cell(3, 5)) === "+1.83s", "INT is measured to the car directly ahead");
+check((await cell(15, 4)) === "+1 LAP", "a lapped car reads in laps, not in tens of seconds");
+check((await cell(18, 4)) === "OUT", "a stopped car never shows a frozen interval");
+check((await cell(18, 9)) === "OUT", "and its LAST column says so in place of a lap time");
+
+// The row itself, on the leader.
+check((await cell(1, 3)) === "NOR", "the code column");
+check((await cell(1, 6)).replace(/\s+/g, " ") === "29.412 301", "the sector time and its trap speed, inline");
+check((await cell(1, 9)) === "1:25.744", "a lap time past the minute reads as m:ss.mmm");
+check((await cell(1, 10)) === "321", "ST is the speed trap");
+check((await cell(1, 11)) === "M 12", "the compound letter and the set's age");
+check((await cell(1, 12)) === "2", "the stop count");
+check((await cell(18, 11)) === "—", "a driver the bulk never revealed shows dashes, not zeros");
+
+// EFFECT, not a CSS property: all twenty rows are inside the card. Scrollbars
+// are hidden globally, so an overflowing tower does not announce itself - it
+// silently stops drawing P15 to P20 and looks complete.
+const towerFits = await towerPage.evaluate(() => {
+  const cardEl = document.querySelector(".tower");
+  const card = cardEl.getBoundingClientRect();
+  const rows = [...document.querySelectorAll(".tower-row")];
+  const last = rows[rows.length - 1].getBoundingClientRect();
+  // The table's NATURAL width against the card's content box. A rect assert
+  // on the rendered table is a mechanism check wearing an effect check's
+  // clothes: `width: 100%` pins the table to the card, so when the columns
+  // no longer fit they compress and their `nowrap` text spills into the
+  // padding while every rectangle still says "inside". Measured at a 600 px
+  // column: natural 597 against 578 of content box, and the text ends 5 px
+  // past the padding edge - a tower touching its own border.
+  const table = document.querySelector(".tower-table");
+  const applied = table.style.width;
+  table.style.width = "max-content";
+  const naturalWidth = table.getBoundingClientRect().width;
+  table.style.width = applied;
+  const style = getComputedStyle(cardEl);
+  const contentWidth =
+    cardEl.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  return {
+    lastBottom: last.bottom,
+    cardBottom: card.bottom,
+    naturalWidth,
+    contentWidth,
+    visible: rows.filter((row) => row.getBoundingClientRect().height > 0).length,
+  };
+});
+check(
+  towerFits.lastBottom <= towerFits.cardBottom + 1,
+  `the last row is inside the card (${towerFits.lastBottom} vs ${towerFits.cardBottom})`,
+);
+check(
+  towerFits.naturalWidth <= towerFits.contentWidth,
+  `no column is compressed: the table wants ${towerFits.naturalWidth} and the card gives ${towerFits.contentWidth}`,
+);
+check(towerFits.visible === 20, `all twenty rows have height (${towerFits.visible})`);
+
+await towerCtx.close();
 
 await browser.close();
 server.close();
