@@ -44,7 +44,16 @@ class PitwallHost:
         self._client = client
         self._windows_open = window_count
         self._agents = AgentsViewBuilder()
+        # The last label AGENTS was served, so that view can return on a
+        # connection change with no new tick. NOT the memory the label itself
+        # needs - see `_ever_connected`.
         self._agents_connection: str | None = None
+        # Has the socket EVER been up? This is what separates "Connecting..."
+        # from "Disconnected", and it belongs to the host because both windows
+        # ask. It used to be inferred from `_agents_connection`, which made the
+        # answer depend on whether the AGENTS window had polled: with only the
+        # DATA window open, a producer that died read "Connecting..." forever.
+        self._ever_connected = False
         # The BULK channel's state. `_bulk_reveal` is the last map served, so
         # the revision can advance on a rewind as readily as on a completed
         # lap; `_session_key` is what makes pointing the arcade at another
@@ -86,16 +95,29 @@ class PitwallHost:
             return payload
         return None
 
-    def _connection_label(self) -> str:
-        """The three states `HeaderBar.set_connection` paints.
+    def get_connection(self) -> str:
+        """The three states both windows paint: Connected / Connecting... / Disconnected.
 
-        "Disconnected" needs a memory: before the first tick the socket is
-        retrying and the honest word is "Connecting...", while after one
-        the same state means the arcade went away.
+        "Disconnected" needs a memory, because the socket looks identical
+        before the arcade has ever spoken and after it has gone away. The
+        honest word for the first is "Connecting...".
+
+        The memory is `_ever_connected` and it is read from the CLIENT, not
+        from what some window was last served: DATA's band-1 strip is the
+        second caller, and a per-window memory would have told it
+        "Connecting..." about a producer that had been up for an hour and
+        died, whenever the AGENTS window was closed.
+
+        Public because the strip polls it directly. It cannot be derived on
+        the client side from tick freshness: a PAUSED replay stops sending
+        ticks while the socket stays perfectly up, and the strip renders the
+        pause right next to this - so the freshness heuristic would put
+        "Disconnected" beside "PAUSED" and be wrong.
         """
         if self._client.connected:
+            self._ever_connected = True
             return "Connected"
-        return "Disconnected" if self._agents_connection else "Connecting..."
+        return "Disconnected" if self._ever_connected else "Connecting..."
 
     def get_agents_view(self, since_seq: int = -1) -> dict | None:
         """The whole AGENTS window, already formatted, or None when nothing changed.
@@ -112,7 +134,7 @@ class PitwallHost:
         advancing and a purely sequence-driven view would keep rendering
         the last frame of a dead race with a green "Connected" chip.
         """
-        connection = self._connection_label()
+        connection = self.get_connection()
         payload = self.get_tick(since_seq)
         if payload is None:
             if connection == self._agents_connection:

@@ -118,6 +118,11 @@ function tick(
       driver_colors:
         colors ?? Object.fromEntries(Object.keys(field).map((code) => [code, [255, 128, 0]])),
       track_status: "1",
+      // Decoded by the producer, never by the renderer. The pair is null
+      // together when the loader has no entry for the lap, which band 1 must
+      // render as unknown rather than as a green track.
+      track_status_label: "GREEN",
+      track_status_color: [16, 185, 129],
       telemetry: { main, rival: rivalSpan, rewound, dropped },
     },
     playback: { speed: 1, paused: false, frame_index: 1000 + seq, total_frames: 154173 },
@@ -174,6 +179,7 @@ await page.addInitScript((payload) => {
         }
         return window.__ticks[window.__cursor];
       },
+      get_connection: async () => "Connected",
     },
   };
 }, tick(1));
@@ -192,6 +198,32 @@ check((await page.locator(".driver-chip").count()) === 2, "main and rival chips"
 check(
   (await page.locator(".trace-tier").first().innerText()).trim() === "BROADCAST",
   "the rival legend is labelled broadcast tier",
+);
+
+// --- Band 1: the status strip -----------------------------------------------
+
+check(
+  (await page.locator(".strip-lap").innerText()).replace(/\s+/g, "") === "L24/57",
+  "band 1 carries the lap out of the total",
+);
+check(
+  (await page.locator(".strip-chip").first().innerText()).trim() === "GREEN",
+  "the track status is the label the PRODUCER decoded, not one re-derived here",
+);
+// The clock is `t + global_t_min` - the FastF1 SessionTime the parquets are
+// keyed on. `t` alone is `frame_index * DT`, which means nothing off this
+// process. The stub sets t=1400 and global_t_min=0.
+check(
+  (await page.locator(".strip-field-value").first().innerText()).trim() === "0:23:20",
+  "the session clock is SessionTime and not replay seconds",
+);
+check(
+  (await page.locator(".strip-chip.is-connected").innerText()).trim() === "Connected",
+  "the connection comes from the host's socket, not from tick freshness",
+);
+check(
+  (await page.locator(".strip-chip.is-provisional").count()) === 0,
+  "no PROVISIONAL chip once the running field has completed a lap",
 );
 
 // Qt stretches both columns and both rows equally (`setColumnStretch(_, 1)`).
@@ -595,6 +627,56 @@ check(
 );
 
 await stillCtx.close();
+
+// --- Scenario E: PROVISIONAL is about the opening lap, not about retirements -
+//
+// The delivery plan words the rule as "until `laps_completed >= 1` for every
+// driver", and read literally it never switches off on the race this window
+// is developed against: SAI, DOO and HAD crashed on lap 1, so their
+// `laps_completed` is 0 for the whole race. Measured on the live wire at lap
+// 23, three of twenty drivers were under one lap and all three were OUT - the
+// chip built to mark the opening lap was still lit an hour in, which says
+// nothing at all. So the test is over the cars still IN the race.
+const RETIRED = { laps_completed: 0, progress: 0.4, active: false, has_finished: false };
+
+async function provisionalChips(field) {
+  const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+  const scenarioPage = await context.newPage();
+  scenarioPage.on("pageerror", (error) => failures.push(`pageerror(provisional): ${error.message}`));
+  await scenarioPage.addInitScript((payload) => {
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
+        get_connection: async () => "Connected",
+      },
+    };
+  }, tick(1, { drivers: field }));
+  await scenarioPage.goto(url, { waitUntil: "domcontentloaded" });
+  await scenarioPage.waitForSelector(".status-strip", { timeout: 5000 });
+  await scenarioPage.waitForTimeout(300);
+  const count = await scenarioPage.locator(".strip-chip.is-provisional").count();
+  await context.close();
+  return count;
+}
+
+check(
+  (await provisionalChips({
+    NOR: driver({ laps_completed: 23 }),
+    PIA: driver({ laps_completed: 23 }),
+    SAI: driver(RETIRED),
+    DOO: driver(RETIRED),
+    HAD: driver(RETIRED),
+  })) === 0,
+  "three lap-1 retirements do NOT keep the tower provisional for the whole race",
+);
+check(
+  (await provisionalChips({
+    NOR: driver({ laps_completed: 0, progress: 0.6 }),
+    PIA: driver({ laps_completed: 0, progress: 0.5 }),
+  })) === 1,
+  "and the opening lap, which the chip exists for, still marks itself",
+);
+
 await browser.close();
 server.close();
 

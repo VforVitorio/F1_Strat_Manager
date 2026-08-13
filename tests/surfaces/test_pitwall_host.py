@@ -330,3 +330,59 @@ def test_the_second_window_is_still_grabbable():
 
     origins = [spec.place(index, 1707, 960)[0] for index, spec in enumerate(WINDOWS)]
     assert len(set(origins)) == len(origins), f"two windows share an origin: {origins}"
+
+
+# --- The connection label, which band 1 renders ------------------------------
+
+
+class _ConnectableClient(_FakeClient):
+    """A fake that can also be up or down, which the base one cannot."""
+
+    def __init__(self, payload=None, connected: bool = True):
+        super().__init__(payload)
+        self.connected = connected
+
+
+def test_the_data_window_alone_still_learns_that_the_producer_died():
+    """The memory behind "Disconnected" belongs to the host, not to a window.
+
+    It used to be inferred from the last label the AGENTS view had been
+    served, so with only the DATA window open - the case band 1 exists for -
+    a producer that had been up for an hour and then died read
+    "Connecting..." forever, which is a lie about which direction the
+    session is going in.
+    """
+    client = _ConnectableClient(_tick(3), connected=True)
+    host = PitwallHost(client, window_count=1)
+
+    assert host.get_connection() == "Connected"
+
+    client.connected = False
+
+    assert host.get_connection() == "Disconnected", (
+        "the socket has been up once, so this is a loss and not a first attempt"
+    )
+
+
+def test_before_the_socket_has_ever_been_up_the_word_is_connecting():
+    """Retrying is not the same as having been dropped."""
+    host = PitwallHost(_ConnectableClient(None, connected=False), window_count=1)
+
+    assert host.get_connection() == "Connecting..."
+
+
+def test_both_windows_read_the_same_label_from_the_same_memory():
+    """One socket, one answer.
+
+    The AGENTS header and the DATA strip are on screen together, so two
+    labels disagreeing about whether the arcade is alive is the visible form
+    of the twin defect this repo keeps paying for.
+    """
+    client = _ConnectableClient(_tick(1), connected=True)
+    host = PitwallHost(client, window_count=2)
+    host.get_agents_view(-1)
+
+    client.connected = False
+
+    assert host.get_connection() == "Disconnected"
+    assert host.get_agents_view(1)["header"]["connection"] == "Disconnected"

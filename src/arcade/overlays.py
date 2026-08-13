@@ -32,6 +32,7 @@ from src.arcade.config import (
     LEGEND_X,
     PROGRESS_BAR_BOTTOM,
     PROGRESS_BAR_HEIGHT,
+    SUCCESS,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TEXT_TERTIARY,
@@ -617,6 +618,53 @@ class LeaderboardPanel:
         return ranked + unknown
 
 
+def track_status_banner(code: str) -> tuple[str, tuple[int, int, int]] | None:
+    """Map a FastF1 multi-digit ``TrackStatus`` to (label, RGB), or None if clear.
+
+    Priority red > SC > VSC > yellow > clear, matching how race control
+    announces concurrent events: a red flag wins even if a yellow was
+    already out in another sector.
+
+    Module level rather than a method because two surfaces read it. It used
+    to be ``RaceEventsPanel._status_for``, and a second consumer arriving in
+    TypeScript would have forked the priority order and the four labels
+    across two languages - the defect ``driver_colors`` rides on the wire to
+    prevent.
+
+    --- WHERE TO CHANGE IF THE STATUS CODES CHANGE ---
+    ``src/arcade/app.py`` publishes the decoded form on the broadcast, so
+    PITWALL's status strip renders whatever this returns.
+    """
+    if not code:
+        return None
+    digits = set(code)
+    if "5" in digits:
+        return ("RED FLAG", (239, 68, 68))
+    if "4" in digits:
+        return ("SAFETY CAR", (255, 140, 0))
+    if "6" in digits or "7" in digits:
+        return ("VSC", (245, 158, 11))
+    if "2" in digits:
+        return ("YELLOW FLAG", (250, 204, 21))
+    return None
+
+
+def track_status_label(code: str) -> tuple[str, tuple[int, int, int]] | None:
+    """The banner, but with the clear case named instead of hidden.
+
+    The arcade's pill HIDES itself on a clear track, so it never had to tell
+    "clear" apart from "the loader has no entry for this lap" - both are the
+    absence of a pill. A timing strip always shows a track status, so the
+    two have to separate: ``""`` is unknown and returns None, ``"1"`` is
+    green and says so. Conflating them would put a confident GREEN on a lap
+    whose status nobody knows, which is the sentinel class this repo keeps
+    paying for.
+    """
+    if not code:
+        return None
+    return track_status_banner(code) or ("GREEN", SUCCESS)
+
+
 class RaceEventsPanel:
     """Coloured pill that announces non-clear track status under the leaderboard.
 
@@ -672,7 +720,7 @@ class RaceEventsPanel:
         the same value it already passes to ``F1ArcadeView.on_update``.
         Pass an empty string / ``None`` for clear.
         """
-        status = self._status_for(track_status or "")
+        status = track_status_banner(track_status or "")
         if status is None:
             self._target_alpha = 0.0
         else:
@@ -694,26 +742,6 @@ class RaceEventsPanel:
         self._text.text = self._label
         self._text.color = (255, 255, 255, alpha)
         self._text.draw()
-
-    @staticmethod
-    def _status_for(code: str) -> tuple[str, tuple[int, int, int]] | None:
-        """Map a FastF1 multi-digit ``TrackStatus`` to (label, RGB).
-
-        Priority red > SC > VSC > yellow > clear.  Returns ``None`` when the
-        status is empty / unknown / pure clear so the panel hides itself.
-        """
-        if not code:
-            return None
-        digits = set(code)
-        if "5" in digits:
-            return ("RED FLAG", (239, 68, 68))
-        if "4" in digits:
-            return ("SAFETY CAR", (255, 140, 0))
-        if "6" in digits or "7" in digits:
-            return ("VSC", (245, 158, 11))
-        if "2" in digits:
-            return ("YELLOW FLAG", (250, 204, 21))
-        return None
 
     def _tick_alpha(self, dt: float) -> None:
         delta = self.FADE_PER_SECOND * max(dt, 0.0)

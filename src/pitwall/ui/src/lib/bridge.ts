@@ -59,6 +59,18 @@ export interface ArcadeState {
   driver_colors: Record<string, [number, number, number]>;
   /** FastF1 TrackStatus digits for the lap on screen; "" when the loader has no entry, rendered as clear. */
   track_status: string;
+  /**
+   * The same digits decoded by the arcade's own rule: GREEN / YELLOW FLAG /
+   * VSC / SAFETY CAR / RED FLAG. **Null means the loader has no entry for
+   * that lap, which is NOT a green track** and must not render as one.
+   *
+   * Decoded by the producer for the same reason `driver_colors` is: the
+   * priority order and the four labels are a project rule, and decoding the
+   * digits here would be a second copy of it in another language.
+   */
+  track_status_label: string | null;
+  /** The label's RGB, from the arcade's own palette. Null exactly when the label is. */
+  track_status_color: [number, number, number] | null;
   telemetry: {
     /** Every sample the replay clock crossed since the previous tick, oldest first. */
     main: TelemetrySample[];
@@ -238,6 +250,27 @@ export async function getBulk(sinceRev: number): Promise<Bulk | null> {
   if (api?.get_bulk) return api.get_bulk(sinceRev);
   if (IN_A_WINDOW) return null;
   return fetchJson<Bulk>("/api/bulk", sinceRev);
+}
+
+/**
+ * The socket's state as a word: Connected / Connecting... / Disconnected.
+ *
+ * No revision, because there is nothing to be current with: when the arcade
+ * dies the ticks stop and this is the only thing left that changes. Null only
+ * when the transport itself failed, which the caller renders as unknown
+ * rather than inventing a state.
+ */
+export async function getConnection(): Promise<string | null> {
+  const api = window.pywebview?.api as { get_connection?: () => Promise<string> };
+  if (api?.get_connection) return api.get_connection();
+  if (IN_A_WINDOW) return null;
+  try {
+    const response = await fetch("/api/connection", { cache: "no-store" });
+    if (!response.ok) return null;
+    return (await response.json()) as string;
+  } catch {
+    return null;
+  }
 }
 
 export async function getAgentsView<T>(sinceSeq: number): Promise<T | null> {

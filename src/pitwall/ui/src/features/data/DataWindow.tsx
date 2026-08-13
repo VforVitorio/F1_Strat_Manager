@@ -1,25 +1,30 @@
 /**
- * PITWALL · DATA - the four-band shell.
+ * PITWALL · DATA - band 1 over two columns.
  *
- * Band 4 (the own-car traces, and the ring beside them) lands first: it is
- * the only band with an existing original to port, so its fidelity is
- * checkable field by field against `telemetry_panel.py` instead of being a
- * matter of taste. Bands 1 and 2 (status strip, timing table, bests) follow
- * in sprint 5 and band 3 (race pace) in sprint 6; the order changed on
- * 2026-08-09 and this docstring used to teach the old one.
+ * **The four bands are not four stacked rows, and the arithmetic is why.**
+ * This window's real client area is 1485 x 833 logical px, not the 1500 x 950
+ * `WindowSpec` asks for: `place()` clamps the height to the screen and the
+ * title bar takes 37 more. Minus the status bar and the body padding, 790 px
+ * are left. A full 20-row timing tower is 439 and band 4 stops being a chart
+ * below about 420 - stacked with band 1 and the gaps that is 908, over budget
+ * by 118 px with band 3 still at zero, on the largest screen in the fleet.
+ * Rendered at the 303 px actually left, band 4's axis labels collide and its
+ * traces are ribbons.
  *
- * **The status bar knows two states, not Qt's four.** `TelemetryWindow` also
- * paints "Stream connected" and "Disconnected — retrying…", which it gets
- * from its own client's signals. PITWALL's client is shared and owned by the
- * host, which surfaces its connection label only through `get_agents_view`.
- * Rather than grow a host method for one string, connection state waits for
- * the band-1 STATUS STRIP in sprint 5, where it belongs next to the flag and
- * the track status. What is here is honest about what this window can know:
- * it is waiting, or the producer spoke within the last second and a half.
+ * So band 1 stays full width and the rest becomes two columns: the all-cars
+ * world on the left (tower over bests, sprints 5) and the own-car world on
+ * the right (band 4, and band 3 as a tab of it in sprint 6). That split is
+ * not a compromise imposed by the pixels - it is the zoning a real wall
+ * uses, where the two worlds sit on physically different surfaces.
+ *
+ * The measured budget is in `~/.claude/plans/pitwall-sprint5/
+ * band-height-budget.md`; the drawn layout is in the project's memory.
  */
 
 import { OwnCarTraces } from "./OwnCarTraces";
+import { StatusStrip } from "./StatusStrip";
 import { TrackRing } from "./TrackRing";
+import { useConnection } from "../../lib/useConnection";
 import { useStatusText } from "../../lib/useStatusText";
 import { useTick } from "../../lib/useTick";
 
@@ -27,6 +32,7 @@ const WAITING = { text: "Waiting for arcade stream…", transient: false } as co
 
 export function DataWindow() {
   const { tick, discontinuity, live } = useTick();
+  const connection = useConnection();
   // Qt re-arms `showMessage(f"lap {lap} · live", 1500)` on every broadcast,
   // so the line stays up while streaming and clears 1.5 s after the producer
   // stops. `useStatusText` is keyed on the sequence for that reason.
@@ -36,7 +42,13 @@ export function DataWindow() {
   return (
     <main className="data-window">
       <div className="data-body">
+        <StatusStrip tick={live ? tick : null} connection={connection} />
         {live && tick ? (
+          // Band 4 still spans the body. The 620 px left column arrives in the
+          // same change as the tower that fills it: an empty column of that
+          // width does not read as "reserved", it reads as a panel that failed
+          // to load - which is the note the gate wrote about the run of empty
+          // space under the ring.
           <div className="band4">
             <OwnCarTraces tick={tick} discontinuity={discontinuity} />
             <TrackRing arcade={tick.arcade} />

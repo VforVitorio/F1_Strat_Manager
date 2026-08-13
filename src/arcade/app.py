@@ -60,6 +60,7 @@ from src.arcade.overlays import (
     ProgressBar,
     RaceEventsPanel,
     WeatherPanel,
+    track_status_label,
 )
 from src.arcade.track import Track
 
@@ -743,6 +744,10 @@ class F1ArcadeView(arcade.View):
             # two unrelated parts of the race into one trace.
             "dropped": dropped,
         }
+        track_status = (
+            self._session.track_status_by_lap.get(int(main_frame.lap), "") if main_frame else ""
+        )
+        status_label = track_status_label(track_status)
         return {
             "gp_name": self._session.gp_name,
             # FastF1's authoritative Location. `gp_name` is whatever the
@@ -775,9 +780,15 @@ class F1ArcadeView(arcade.View):
             # the arcade's own pill reads. "" when the loader has no entry for
             # that lap, which a consumer renders as clear - the same collapse
             # the arcade already makes.
-            "track_status": (
-                self._session.track_status_by_lap.get(int(main_frame.lap), "") if main_frame else ""
-            ),
+            "track_status": track_status,
+            # And the same digits DECODED, for the same reason `driver_colors`
+            # is here: the priority order (red > SC > VSC > yellow) and the
+            # four labels are a project rule, and a consumer decoding the
+            # digits itself would be a second copy of it in another language.
+            # `None` when the loader has no entry, which is NOT the same as a
+            # green track and must not render as one.
+            "track_status_label": status_label[0] if status_label else None,
+            "track_status_color": list(status_label[1]) if status_label else None,
             # Circuit length lets the telemetry window anchor the X axis
             # once and forget — without it the charts would autorange to
             # the current sample's max and shift every broadcast.
