@@ -267,6 +267,12 @@ Two rules that must be written into the code, not assumed:
   lap, where no classification exists yet" - and the wire publishes it anyway. **Band 1 must
   render the tower as provisional until `laps_completed >= 1` for every driver**, exactly as a
   broadcast timing tower does.
+  ⚠️ **"Every driver" had to become "every driver still IN the race", and the real race is what
+  said so.** Read literally the rule never switches off on Melbourne 2025: SAI, DOO and HAD
+  crashed on lap 1, so their `laps_completed` stays 0 for the whole afternoon. Measured against
+  the live wire at lap 23 - three of twenty drivers under one lap, and all three OUT. A chip that
+  is permanently lit marks nothing. The test is over the cars that can still contribute a
+  classification, which a stopped one never will (#922).
 - **A rewind UN-reveals.** `laps_completed` falls when the clock goes back, so a lap that was
   open must close again; a reveal cache keyed only on "seen once" leaks the whole future after
   one seek to the end.
@@ -288,8 +294,56 @@ Two rules that must be written into the code, not assumed:
   removed it). The lap-quantised intent survives both.
   A precise-looking wrong number on a fidelity surface is the P3 A2 defect class.
 
-**Sprint 6, band 3.** The Run Timeline heat grid (drivers as columns, laps as rows, purple / green /
-yellow / red, `IN PIT` and `OUT` cells) with Race Trace as a tab of the same panel.
+> ✅ **SPRINT 5 SHIPPED 2026-08-13** (#922, #924, #926, #928, #930), and three things about it are
+> worth carrying rather than rediscovering.
+>
+> **The four bands are two COLUMNS, not four rows.** The window's real client area is 1485 x 833
+> logical (measured DPI-aware on the open window, not the 1500 x 950 `WindowSpec` asks for), which
+> leaves 790 px for bands. Band 1 (29) + a full 20-row tower (439) + band 4's floor (420) + gaps is
+> **908**, over by 118 with band 3 still at zero, on the largest screen in the fleet. So: band 1
+> full width on top, then a 630 px left column (tower over bests) and a right column holding band
+> 4. That is also the zoning a real wall uses - the all-cars world and the own-car world sit on
+> physically different surfaces. Budget: `~/.claude/plans/pitwall-sprint5/band-height-budget.md`.
+>
+> **The SECTOR columns are the lap IN PROGRESS, and that is a second reveal coordinate.**
+> `laps.parquet` carries `Sector{1,2,3}SessionTime`, so a sector is revealed at the instant it was
+> crossed and the columns blank at the line and fill as the car goes round. It does not weaken the
+> rule above: `L <= laps_completed` is the rule for lap ROWS, which only exist once the lap is
+> over. It is a separate reader because a sector opens somewhere in the field every **2.22 s**, and
+> a clock-driven mask over the whole bulk would re-send up to 342 KB at that cadence (#930).
+>
+> **The wire's order and the parquet's clock disagree at about 0.7 % of crossings, by one place.**
+> Seen live on the tower: P11 read `+45.83s` above P12's `+42.79s`, and P12's INT rendered a dash
+> because the sign guard refused a negative interval. The tower renders the WIRE order because
+> only the wire can order mid-lap; the seconds come from the parquet because it is the official
+> clock. Both are right, they are just different measurements. **Do not file it as a bug.**
+
+**Sprint 6, band 3.** The Run Timeline heat grid (purple / green / yellow / red, `IN PIT` and `OUT`
+cells) with Race Trace as a tab of the same panel.
+
+> ⚠️ **ITS ORIENTATION IS DELIBERATELY UNDECIDED, and sprint 6 measures before it draws.**
+> The RaceX client puts one COLUMN per driver and one ROW per lap, and the research notes it
+> "occupies more screen area than anything else in the photographs". The band-height gate
+> recommended TRANSPOSING it - drivers as rows, laps as columns - but that recommendation was
+> derived against the STACKED band model and may not survive the column one: the right column is
+> 751 px tall, and the real orientation needs `24 (tabs) + 18 (header) + 57 x 12 = 726`.
+>
+> The trade, so sprint 6 starts from it rather than from a preference:
+>
+> | | real orientation (drivers as columns) | transposed (the gate's proposal) |
+> |---|---|---|
+> | height | 57 lap-rows x 12 px = 684 + chrome | 20 driver-rows x 20 px = 440 |
+> | width per cell | 835 / 20 = **41.7 px** - a lap time FITS at 9 px | 835 / 57 = **14.6 px** - colour only, no number |
+> | cost | the ring is hidden while this tab is open | the cell loses the number the real client writes in it |
+>
+> The 12 px row is arithmetic on the height gate's own constants and is **NOT measured** - what it
+> measured was 19-20 px for the TOWER's twelve-column row. Measure it first.
+
+**Sprint 5's own deferred item, filed rather than improvised:** #931, sub-lap gaps from
+`intervals.parquet`, whose per-driver sample cadence is a measured **4.27 s median**. It is blocked
+on a time anchor (its `date` is UTC; every clock here is SessionTime, so it needs FastF1's
+`t0_date` - the same shape as #842) and on the decision that it would put a THIRD clock on one
+column, covering 19 drivers of 20.
 
 **Sprint 4, band 4 — SHIPPED 2026-08-10** (#897, #898). Own-car traces stacked on one x axis with
 a shared vertical cursor, pinned rival overlaid and labelled broadcast tier, and the ring.
