@@ -151,6 +151,22 @@ def _lap_row(record: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _extremes(
+    rows: list[dict[str, Any]], fields: tuple[str, ...], pick: Any
+) -> dict[str, float | None]:
+    """`pick` over each field's known values, or None when a field has none.
+
+    None because the value is genuinely unknown, never a number: a zero would
+    win every speed ranking outright and lose every time ranking, which is the
+    sentinel collision this repo has a scar from.
+    """
+    chosen: dict[str, float | None] = {}
+    for field in fields:
+        values = [row[field] for row in rows if row[field] is not None]
+        chosen[field] = pick(values) if values else None
+    return chosen
+
+
 def _best_of(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """The per-field minima the bests panel ranks, over countable rows only.
 
@@ -162,9 +178,13 @@ def _best_of(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """
     countable = [row for row in rows if not row["deleted"] and not row["generated"]]
     best: dict[str, Any] = {"lap": None}
-    for field in (*_BEST_FIELDS, *_BEST_SPEED_FIELDS):
-        values = [row[field] for row in countable if row[field] is not None]
-        best[field] = min(values) if values else None
+    # A best TIME is the smallest and a best SPEED is the largest, and the two
+    # tuples exist to say so. They were once walked by one loop that minimised
+    # both, which served NOR's best speed-trap as 180 km/h against a real
+    # maximum of 289 - his slowest crawl through the trap, presented as his
+    # best of the session, on all four speed columns.
+    best.update(_extremes(countable, _BEST_FIELDS, min))
+    best.update(_extremes(countable, _BEST_SPEED_FIELDS, max))
     fastest = [row for row in countable if row["lap_time"] is not None]
     if fastest:
         quickest = min(fastest, key=lambda row: row["lap_time"])

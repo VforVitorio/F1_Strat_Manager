@@ -54,14 +54,36 @@ so rather than opening blank.
 
 ### PITWALL · DATA
 
-Four bands, delivered one per sprint. Band 4 is the one that exists today: the
-own car's lap as **four locked-axis traces against distance** — Δ Time, Speed,
-Brake, Throttle — ported field by field from the Qt telemetry panel, plus a
-shared vertical cursor marking where the car is on the lap, and a schematic
-**track ring** placing the whole field by lap fraction.
+A status strip across the top, then two columns: the **all-cars world** on the
+left and the **own-car world** on the right. That is the zoning a real pit wall
+uses — the two live on physically different surfaces there — and it is also the
+only arrangement that fits, because four stacked bands need 908 px of a window
+that has 790.
 
-Two details that are not cosmetic:
+**Left: the timing tower**, twenty rows of
+`P · # · DRV · GAP · INT · S1 · S2 · S3 · LAST · ST · TYRE · STOPS`, with the
+sector colour code every timing screen uses — purple for fastest of the session,
+green for a driver's own best, amber for slower than his own. Under it, the
+**bests**: S1, S2, S3 and Lap ranked across the field with their percentage off
+the leader, and the theoretical lap those three sectors recombine into.
 
+**Right: the own car's lap** as four locked-axis traces against distance — Δ
+Time, Speed, Brake, Throttle — ported field by field from the Qt telemetry
+panel, plus a shared vertical cursor marking where the car is on the lap, and a
+schematic **track ring** placing the whole field by lap fraction.
+
+Four details that are not cosmetic:
+
+- **The sector columns are the lap in progress.** They blank at the line and
+  fill as the car crosses each sector, because `laps.parquet` records the
+  instant of every crossing. A sector faster than the session's best paints
+  purple immediately and joins the bests ranking only when the lap completes,
+  which is what a broadcast does.
+- **The GAP and INT columns are quantised to the line**, and the header says so
+  with an `(L)`. They are the difference of two crossings, taken from the
+  official timing table rather than from the replay's own interpolation — which
+  means they can differ from the arcade's leaderboard beside them by a few
+  hundredths, and PITWALL is the one that matches official timing.
 - The rival's traces carry a **BROADCAST** tag. Rival car data is real and
   public, but it is the coarse low-rate channel every team sees, not
   pit-wall-grade telemetry. The Qt window rendered it unlabelled.
@@ -70,6 +92,12 @@ Two details that are not cosmetic:
   median 1.3° and up to 24° (on a pit lap) from its true circuit position. It
   answers *where is everyone* — the pyglet window next to it answers *where
   exactly*.
+
+One consequence of taking the order from the replay and the seconds from the
+timing table: they disagree by one place at about 0.7 % of line crossings, both
+times within a tenth of a second of each other. When they do, the interval cell
+shows a dash rather than a negative number. It is two measurements of the same
+moment, not an error in either.
 
 ### PITWALL · AGENTS
 
