@@ -27,6 +27,7 @@
 import type { ArcadeState, Bulk, DriverLaps, LapRow } from "../../lib/bridge";
 import { driverStatus, type DriverStatus } from "../../lib/driverStatus";
 import { formatGapCell, gapCell } from "../../lib/gapCell";
+import { sessionBests, type BestField, type SessionBests } from "../../lib/sessionBests";
 
 interface TimingTowerProps {
   arcade: ArcadeState;
@@ -36,6 +37,10 @@ interface TimingTowerProps {
 export function TimingTower({ arcade, bulk }: TimingTowerProps) {
   const order = arcade.race_order;
   const leader = order[0];
+  // The same reduction the bests panel ranks, from the same module. Two
+  // components each reducing over `bulk.drivers` is how the tower ends up
+  // painting a purple the panel does not list.
+  const bests = sessionBests(bulk);
 
   return (
     <section className="tower card">
@@ -73,6 +78,7 @@ export function TimingTower({ arcade, bulk }: TimingTowerProps) {
               leader={leader}
               arcade={arcade}
               bulk={bulk}
+              bests={bests}
             />
           ))}
         </tbody>
@@ -89,9 +95,10 @@ interface TowerRowProps {
   leader: string;
   arcade: ArcadeState;
   bulk: Bulk | null;
+  bests: SessionBests;
 }
 
-function TowerRow({ code, position, front, leader, arcade, bulk }: TowerRowProps) {
+function TowerRow({ code, position, front, leader, arcade, bulk, bests }: TowerRowProps) {
   const car = arcade.drivers[code];
   const status: DriverStatus = car ? driverStatus(car) : "out";
   const laps: DriverLaps | undefined = bulk?.drivers[code];
@@ -112,9 +119,21 @@ function TowerRow({ code, position, front, leader, arcade, bulk }: TowerRowProps
       </td>
       <td className="col-gap">{formatGapCell(gap)}</td>
       <td className="col-gap">{interval === null ? "—" : formatGapCell(interval)}</td>
-      <SectorCell time={last?.s1 ?? null} speed={last?.v1 ?? null} />
-      <SectorCell time={last?.s2 ?? null} speed={last?.v2 ?? null} />
-      <SectorCell time={last?.s3 ?? null} speed={last?.vfl ?? null} />
+      <SectorCell
+        time={last?.s1 ?? null}
+        speed={last?.v1 ?? null}
+        tone={sectorTone(last?.s1 ?? null, laps?.best.s1 ?? null, bests, "s1")}
+      />
+      <SectorCell
+        time={last?.s2 ?? null}
+        speed={last?.v2 ?? null}
+        tone={sectorTone(last?.s2 ?? null, laps?.best.s2 ?? null, bests, "s2")}
+      />
+      <SectorCell
+        time={last?.s3 ?? null}
+        speed={last?.vfl ?? null}
+        tone={sectorTone(last?.s3 ?? null, laps?.best.s3 ?? null, bests, "s3")}
+      />
       <td className={`col-last ${last?.deleted ? "is-deleted" : ""}`}>{lastCell(status, last)}</td>
       <td className="col-st">{last?.vst === null || last?.vst === undefined ? "—" : last.vst}</td>
       <td className="col-tyre">{tyreCell(last)}</td>
@@ -130,15 +149,52 @@ function TowerRow({ code, position, front, leader, arcade, bulk }: TowerRowProps
  * over twenty rows is 120 px of a window that has none to give, and buys back
  * 62 px of width the column does not need.
  */
-function SectorCell({ time, speed }: { time: number | null; speed: number | null }) {
+function SectorCell({
+  time,
+  speed,
+  tone,
+}: {
+  time: number | null;
+  speed: number | null;
+  tone: SectorTone;
+}) {
   return (
-    <td className="col-sector">
+    <td className={`col-sector is-${tone}`}>
       {time === null ? "—" : time.toFixed(3)}
       {/* A real space, not only the margin: the cell is read by a screen
        * reader and copied by a mouse, and "29.412301" is a different number. */}
       {speed === null ? null : <span className="cell-speed"> {speed}</span>}
     </td>
   );
+}
+
+/** Purple, green, yellow or nothing - the timing screen's four states. */
+type SectorTone = "purple" | "green" | "yellow" | "plain";
+
+/**
+ * The sector colour code every timing screen uses.
+ *
+ * Purple is fastest of the session outright, green is the driver's own best,
+ * yellow is slower than his own best, and plain is a time with nothing to
+ * compare against yet. The comparisons are made on the values the reader
+ * served, which already exclude deleted laps and generated rows, so a struck
+ * time cannot paint the tower purple.
+ *
+ * Both bests are recomputed over the REVEALED subset, so a rewind takes the
+ * colours back with the laps: the purple that only exists at lap 44 must not
+ * survive onto a screen whose clock says lap 10.
+ */
+function sectorTone(
+  value: number | null,
+  personalBest: number | null,
+  bests: SessionBests,
+  field: BestField,
+): SectorTone {
+  if (value === null) return "plain";
+  const sessionBest = bests[field][0];
+  if (sessionBest !== undefined && value <= sessionBest.value) return "purple";
+  if (personalBest === null) return "plain";
+  return value <= personalBest ? "green" : "yellow";
 }
 
 /**

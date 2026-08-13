@@ -726,6 +726,24 @@ function towerField() {
   return field;
 }
 
+/**
+ * Per-driver bests, arranged so the three sector tones and the field ranking
+ * are all decidable by hand.
+ *
+ * - NOR owns S1 outright and his last lap MATCHES it       -> purple
+ * - PIA owns S2, and his last S1 equals his own best S1     -> green
+ * - VER owns S3, and his last S1 is slower than his own     -> yellow
+ *
+ * Theoretical = NOR's S1 + PIA's S2 + VER's S3 = 29.000 + 18.500 + 25.900.
+ * Every other driver is deliberately slower in all four fields, so the
+ * podium of each section is fixed.
+ */
+const TOWER_BESTS = {
+  NOR: { s1: 29.0, s2: 19.0, s3: 26.5, lap_time: 85.0, lastS1: 29.0 },
+  PIA: { s1: 29.5, s2: 18.5, s3: 26.4, lap_time: 85.4, lastS1: 29.5 },
+  VER: { s1: 29.8, s2: 19.2, s3: 25.9, lap_time: 85.9, lastS1: 30.2 },
+};
+
 function towerBulk() {
   const drivers = {};
   TOWER_ORDER.filter((code) => !RETIRED_CODES.includes(code)).forEach((code, index) => {
@@ -735,6 +753,14 @@ function towerBulk() {
       crossings[lap] = CROSSING_AT_23[code] ?? 2070 + 5 * index - (23 - lap) * 90;
     }
     if (CROSSING_AT_23[code] !== undefined) crossings[revealed] = CROSSING_AT_23[code];
+    const crafted = TOWER_BESTS[code];
+    const best = crafted ?? {
+      s1: 31 + index * 0.1,
+      s2: 21 + index * 0.1,
+      s3: 28 + index * 0.1,
+      lap_time: 90 + index * 0.1,
+      lastS1: 31 + index * 0.1,
+    };
     drivers[code] = {
       number: String(index + 1),
       laps_revealed: revealed,
@@ -745,7 +771,7 @@ function towerBulk() {
           lap: revealed,
           t: crossings[revealed],
           lap_time: 85.744,
-          s1: 29.412,
+          s1: best.lastS1,
           s2: 30.128,
           s3: 26.204,
           v1: 301,
@@ -766,17 +792,17 @@ function towerBulk() {
       ],
       best: {
         lap: revealed,
-        lap_time: 85.744,
-        s1: 29.412,
-        s2: 30.128,
-        s3: 26.204,
+        lap_time: best.lap_time,
+        s1: best.s1,
+        s2: best.s2,
+        s3: best.s3,
         v1: 301,
         v2: 289,
         vfl: 280,
         vst: 321,
         compound: "MEDIUM",
       },
-      theoretical: 85.744,
+      theoretical: best.s1 + best.s2 + best.s3,
     };
   });
   return { rev: 1, available: true, race: { year: 2025, location: "Melbourne", total_laps: 57 }, drivers };
@@ -831,7 +857,10 @@ check((await cell(18, 9)) === "OUT", "and its LAST column says so in place of a 
 
 // The row itself, on the leader.
 check((await cell(1, 3)) === "NOR", "the code column");
-check((await cell(1, 6)).replace(/\s+/g, " ") === "29.412 301", "the sector time and its trap speed, inline");
+check(
+  (await cell(1, 6)).replace(/\s+/g, " ") === "29.000 301",
+  "the sector time and its trap speed, inline",
+);
 check((await cell(1, 9)) === "1:25.744", "a lap time past the minute reads as m:ss.mmm");
 check((await cell(1, 10)) === "321", "ST is the speed trap");
 check((await cell(1, 11)) === "M 12", "the compound letter and the set's age");
@@ -878,6 +907,58 @@ check(
   `no column is compressed: the table wants ${towerFits.naturalWidth} and the card gives ${towerFits.contentWidth}`,
 );
 check(towerFits.visible === 20, `all twenty rows have height (${towerFits.visible})`);
+
+// --- The sector colour code, on the tower ------------------------------------
+//
+// Purple is fastest of the session outright, green is the driver's own best,
+// yellow is slower than his own. The fixture arranges all three on the S1
+// column: NOR owns it and matched it, PIA matched his own, VER did not.
+const tone = async (row) =>
+  towerPage.locator(`.tower-row:nth-child(${row}) td:nth-child(6)`).getAttribute("class");
+check((await tone(1)).includes("is-purple"), "the session's fastest sector is purple");
+check((await tone(2)).includes("is-green"), "a driver's own best is green");
+check((await tone(3)).includes("is-yellow"), "slower than his own best is yellow");
+check((await tone(18)).includes("is-plain"), "a sector nobody has set is not coloured at all");
+
+// --- Band 2 right: the bests panel -------------------------------------------
+
+const bestsRow = async (section, row) =>
+  (
+    await towerPage
+      .locator(`.bests-section:nth-child(${section}) .bests-row:nth-child(${row})`)
+      .innerText()
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+
+check((await towerPage.locator(".bests-section").count()) === 4, "four ranked sections");
+check(
+  (await towerPage.locator(".bests-section:nth-child(1) .bests-row").count()) === 3,
+  "top three per section, because twenty would be 1,668 px of a 790 px body",
+);
+// S1 is NOR 29.000, PIA 29.500, VER 29.800 - ranked across the FIELD, not per
+// driver, and the delta is a percentage off the section's leader.
+check((await bestsRow(1, 2)).startsWith("1 NOR 29.000"), "the section leader, with no delta");
+check((await bestsRow(1, 3)) === "2 PIA 29.500 +1.72%", "second, with its percentage off the top");
+check((await bestsRow(1, 4)) === "3 VER 29.800 +2.76%", "and third");
+// S2 and S3 are owned by different drivers, so a panel reading one field for
+// all four sections would show NOR three times.
+check((await bestsRow(2, 2)).startsWith("1 PIA 18.500"), "S2 belongs to whoever set it");
+check((await bestsRow(3, 2)).startsWith("1 VER 25.900"), "and so does S3");
+check(
+  (await bestsRow(4, 2)).replace(/\s+$/, "") === "1 NOR 1:25.000 M",
+  "the LAP section carries the compound; the sector sections cannot and do not",
+);
+
+// 29.000 + 18.500 + 25.900 = 73.400, from three DIFFERENT drivers. A panel
+// summing one driver's own sectors would read 1:14.500 for NOR.
+const theoretical = (await towerPage.locator(".bests-theoretical").innerText())
+  .replace(/\s+/g, " ")
+  .trim();
+check(
+  theoretical === "THEORETICAL 1:13.400 NOR · PIA · VER",
+  `the ideal lap recombines the FIELD's best sectors (${theoretical})`,
+);
 
 await towerCtx.close();
 
