@@ -23,13 +23,100 @@
 }
 
 /* `QVBoxLayout(host).setContentsMargins(10, 10, 10, 10)` on the window's
- * central widget. */
+ * central widget.
+ *
+ * A grid of `auto` over `minmax(0, 1fr)`, not two flex children: band 1 must
+ * take exactly its content height and everything else must take the rest,
+ * and `minmax(0, ...)` is what stops the second row growing past the window
+ * on a client shorter than this one. Scrollbars are hidden globally
+ * (`qt-base.css`), so a row that overflows does not announce itself - it just
+ * silently stops showing its bottom. */
 .data-body {
   flex: 1 1 auto;
   min-height: 0;
   padding: 10px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+/* --- Band 1: the status strip -------------------------------------------- */
+
+/* One row, 29 px of content at this type scale. The cheapest band there is,
+ * and no reason to make it taller: everything on it is a single value. */
+.status-strip {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  min-width: 0;
+}
+
+.strip-lap {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.strip-lap-total {
+  color: var(--qt-fg-3);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Same chip language as `.driver-chip` in band 4: 1 px border in the chip's
+ * own colour, so the strip and the traces panel read as one system. */
+.strip-chip {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.strip-chip.is-connected {
+  color: #10b981;
+}
+.strip-chip.is-lost {
+  color: #ef4444;
+}
+/* Unknown is DIM, never a colour that means something. "Connecting..." and a
+ * missing track status are both absences, and an absence that borrows the
+ * green or the amber is a made-up answer. */
+.strip-chip.is-unknown {
+  color: var(--qt-fg-3);
+}
+.strip-chip.is-provisional {
+  color: #f59e0b;
+}
+
+.strip-spacer {
+  flex: 1 1 auto;
+}
+
+.strip-field {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.strip-field-label {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.strip-field-value {
+  color: var(--qt-fg-2);
+  font-family: var(--qt-mono);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .data-waiting {
@@ -48,7 +135,6 @@
  * shrink as the traces grow, which is backwards - the traces are the thing
  * that wants the room. */
 .band4 {
-  flex: 1 1 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 260px;

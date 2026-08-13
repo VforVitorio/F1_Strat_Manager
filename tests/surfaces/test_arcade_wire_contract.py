@@ -283,6 +283,12 @@ GOLDEN_SHAPE = {
         },
         "total_laps": "int",
         "track_status": "str",
+        # The decoded form travels beside the digits so no consumer forks the
+        # priority order into a second language. Both are NoneType in the
+        # golden payload because its fixture lap has no TrackStatus entry -
+        # which is the case that must NOT render as a green track.
+        "track_status_color": "NoneType",
+        "track_status_label": "NoneType",
         "year": "int",
     },
     "playback": {
@@ -818,3 +824,42 @@ def test_the_reveal_carrier_is_per_driver_and_not_the_main_driver_lap():
     assert fast["laps_completed"] > slow["laps_completed"], (
         "one shared lap number cannot express this, which is why the rule is per driver"
     )
+
+
+# --- The track status, decoded once and published -------------------------
+
+
+def test_the_track_status_is_decoded_by_the_producer_and_not_by_each_consumer():
+    """The digits and their meaning travel together.
+
+    Two surfaces now render this status: the arcade's own pill and PITWALL's
+    band-1 strip. The priority order (red > SC > VSC > yellow) and the four
+    labels are a project rule, so a TypeScript consumer decoding the digits
+    itself would be that rule's second copy - which is precisely what
+    `driver_colors` rides on the wire to prevent.
+    """
+    from src.arcade.overlays import track_status_label
+
+    assert track_status_label("1") == ("GREEN", (16, 185, 129))
+    assert track_status_label("2") == ("YELLOW FLAG", (250, 204, 21))
+    assert track_status_label("4") == ("SAFETY CAR", (255, 140, 0))
+    assert track_status_label("6") == ("VSC", (245, 158, 11))
+    assert track_status_label("5") == ("RED FLAG", (239, 68, 68))
+    # Concurrent events: a red flag wins even with a yellow already out.
+    assert track_status_label("25")[0] == "RED FLAG"
+    assert track_status_label("24")[0] == "SAFETY CAR"
+
+
+def test_a_lap_with_no_track_status_entry_is_unknown_and_not_green():
+    """The one case the arcade's pill never had to tell apart.
+
+    The pill HIDES on a clear track, so "clear" and "the loader has no entry
+    for this lap" are the same absence to it. A strip always shows a status,
+    so conflating them would put a confident GREEN on a lap whose status
+    nobody knows - the sentinel class this repo keeps paying for, where a
+    default is a value the code can also legitimately find.
+    """
+    from src.arcade.overlays import track_status_label
+
+    assert track_status_label("") is None, "unknown is None, never GREEN"
+    assert track_status_label("1") is not None, "a real clear IS green and says so"

@@ -66,11 +66,23 @@ class TickSource(Protocol):
 
     def get_bulk(self, since_rev: int = -1) -> dict[str, Any] | None: ...
 
+    def get_connection(self) -> str: ...
 
+
+# Readers that take "the revision I hold" and answer null when it is current.
 _READERS = {
     "/api/tick": "get_tick",
     "/api/agents": "get_agents_view",
     "/api/bulk": "get_bulk",
+}
+
+# Readers with no revision at all. The connection label is a property of the
+# socket rather than of the stream, so there is no sequence to be current
+# with: when the producer dies the ticks stop and this is the only thing that
+# still changes. Its own dict rather than a sentinel in the one above, so the
+# two contracts cannot be confused at the call site.
+_PLAIN_READERS = {
+    "/api/connection": "get_connection",
 }
 
 
@@ -122,6 +134,11 @@ def _handler(bundle: dict[str, tuple[bytes, str]], source: TickSource):
             reader = _READERS.get(route)
             if reader is not None:
                 self._send_json(getattr(source, reader)(_since(parsed.query)))
+                return
+
+            plain = _PLAIN_READERS.get(route)
+            if plain is not None:
+                self._send_json(getattr(source, plain)())
                 return
 
             if route in ("/", ""):
