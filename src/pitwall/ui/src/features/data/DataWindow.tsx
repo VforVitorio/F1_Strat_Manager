@@ -21,6 +21,7 @@
  * band-height-budget.md`; the drawn layout is in the project's memory.
  */
 
+import { BestsPanel } from "./BestsPanel";
 import { OwnCarTraces } from "./OwnCarTraces";
 import { StatusStrip } from "./StatusStrip";
 import { TimingTower } from "./TimingTower";
@@ -50,6 +51,7 @@ export function DataWindow() {
           <div className="data-main">
             <div className="left-column">
               <TimingTower arcade={tick.arcade} bulk={bulk} />
+              <BestsPanel bulk={bulk} />
             </div>
             <div className="band4">
               <OwnCarTraces tick={tick} discontinuity={discontinuity} />

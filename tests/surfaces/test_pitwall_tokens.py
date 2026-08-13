@@ -371,15 +371,20 @@ def test_the_data_stylesheets_raw_hexes_are_guarded_too():
         }
     )
 
-    assert raw == ["#10b981", "#3b82f6", "#ef4444", "#f59e0b"], (
+    assert raw == ["#10b981", "#3b82f6", "#a78bfa", "#ef4444", "#f59e0b"], (
         f"a new raw hex entered the DATA stylesheet: {raw}. Either use a --qt-* token or add it "
         "here with the palette name it copies."
     )
-    assert raw[0] == _rgb_to_hex(palette.SUCCESS), "band 1's Connected chip copies SUCCESS"
+    assert raw[0] == _rgb_to_hex(palette.SUCCESS), (
+        "band 1's Connected chip and the tower's personal-best sector copy SUCCESS"
+    )
     assert raw[1] == _rgb_to_hex(palette.INFO), "the main driver chip copies INFO"
-    assert raw[2] == _rgb_to_hex(palette.DANGER), "band 1's Disconnected chip copies DANGER"
-    assert raw[3] == _rgb_to_hex(palette.WARNING), (
-        "the rival driver chip and band 1's PROVISIONAL chip both copy WARNING"
+    assert raw[2] == _rgb_to_hex(palette.ACCENT), (
+        "a session-best sector is purple, and purple here is the arcade's ACCENT"
+    )
+    assert raw[3] == _rgb_to_hex(palette.DANGER), "band 1's Disconnected chip copies DANGER"
+    assert raw[4] == _rgb_to_hex(palette.WARNING), (
+        "the rival chip, band 1's PROVISIONAL chip and a slower-than-own-best sector copy WARNING"
     )
 
 

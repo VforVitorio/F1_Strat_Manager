@@ -242,6 +242,145 @@
   color: var(--qt-fg-3);
 }
 
+/* The sector colour code every timing screen uses: purple is fastest of the
+ * session outright, green is the driver's own best, yellow is slower than his
+ * own best. Plain is a time with nothing to compare against yet, and it stays
+ * the body colour rather than borrowing one of the three - a colour that means
+ * something is not free to spend on "no comparison". */
+.col-sector.is-purple {
+  color: #a78bfa;
+  font-weight: 700;
+}
+.col-sector.is-green {
+  color: #10b981;
+}
+/* WARNING, not the broadcast's own yellow. Every colour in these stylesheets
+ * has to trace back to a name in `palette.py`, and #facc15 - the yellow the
+ * arcade's flag banner uses - is not one of them. Amber reads as "slower"
+ * just as well and stays inside the guard. */
+.col-sector.is-yellow {
+  color: #f59e0b;
+}
+
+/* --- Band 2 right: the bests panel ---------------------------------------- */
+
+.bests {
+  padding: 10px;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: start;
+}
+
+.bests-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.bests-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.bests-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+/* Four sections side by side. They spend WIDTH, which the left column has,
+ * rather than height, which it does not: stacked they would be four times as
+ * tall for the same twelve rows. */
+.bests-sections {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.bests-section {
+  min-width: 0;
+}
+
+.bests-field-label {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--qt-border);
+  margin-bottom: 3px;
+}
+
+.bests-row {
+  display: grid;
+  grid-template-columns: 10px 30px 1fr auto 10px;
+  gap: 4px;
+  align-items: baseline;
+  font-family: var(--qt-mono);
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--qt-fg-2);
+}
+
+.bests-row.is-purple .bests-value {
+  color: #a78bfa;
+  font-weight: 700;
+}
+
+.bests-rank,
+.bests-compound {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+}
+
+.bests-code {
+  color: var(--qt-fg-1);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.bests-value {
+  text-align: right;
+}
+
+.bests-delta {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+}
+
+.bests-empty {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.bests-theoretical {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--qt-border);
+}
+
+.bests-theoretical-value {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bests-theoretical-note {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+}
+
 /* A stopped car stays in the tower at the place its laps earned, dimmed. It
  * is not removed: a timing screen classifies retirements, it does not pretend
  * they were never entered. */
