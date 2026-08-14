@@ -54,12 +54,14 @@ class PitwallHost:
         # answer depend on whether the AGENTS window had polled: with only the
         # DATA window open, a producer that died read "Connecting..." forever.
         self._ever_connected = False
-        # The BULK channel's state. `_bulk_reveal` is the last map served, so
-        # the revision can advance on a rewind as readily as on a completed
-        # lap; `_session_key` is what makes pointing the arcade at another
-        # race replace the loaded laps instead of serving the previous one's.
+        # The BULK channel's state. `_bulk_signature` is (year, location,
+        # reveal map) - everything the payload is a function of - so the
+        # revision advances on a rewind as readily as on a completed lap, and
+        # cannot miss a race switch. `_session_key` is what makes pointing the
+        # arcade at another race replace the loaded laps rather than serve the
+        # previous one's.
         self._bulk_rev = 0
-        self._bulk_reveal: dict[str, int] = {}
+        self._bulk_signature: tuple | None = None
         self._session: SessionLaps | None = None
         self._session_key: tuple[int, str] | None = None
         # The LIVE channel's state, masked by the clock rather than by
@@ -182,8 +184,16 @@ class PitwallHost:
             return None
         arcade = payload.get("arcade") or {}
         reveal = self._reveal_map(arcade)
-        if reveal != self._bulk_reveal:
-            self._bulk_reveal = reveal
+        # The RACE is part of the signature, not only the reveal map. The map
+        # alone does not determine this payload: a race switch whose first
+        # observed tick carried the previous race's per-driver counters would
+        # serve the old table as current. Unreachable in practice - a new
+        # replay's first tick is an all-zero map - but it is the structural
+        # rule #934 just cost, one channel over: a signature that does not
+        # determine the payload is not a signature.
+        signature = (arcade.get("year"), arcade.get("location"), reveal)
+        if signature != self._bulk_signature:
+            self._bulk_signature = signature
             self._bulk_rev += 1
         if self._bulk_rev == since_rev:
             return None
@@ -216,7 +226,15 @@ class PitwallHost:
         arcade = payload.get("arcade") or {}
         session = self._session_for(arcade)
         if session is None:
-            return None
+            # The twin `get_bulk` has always had this branch and this one did
+            # not. Plain None means "keep what you have", so pointing the
+            # arcade at a race with no parquet left the PREVIOUS race's sector
+            # times, flags and colours on the new race's rows indefinitely,
+            # beside a table that had correctly gone to `available=False`.
+            # An empty block once is the honest render: the cells fall to
+            # dashes and stay there. `since_rev` goes through so it is served
+            # ONCE and not re-sent on every poll of a race that has no laps.
+            return self._serve_live({}, since_rev)
 
         reveal = self._reveal_map(arcade)
         clock = float(arcade.get("t") or 0.0)
@@ -241,6 +259,10 @@ class PitwallHost:
         # Comparing the dict itself still leaves the revision still through
         # the hundreds of ticks between two crossings, which is the whole
         # point of having one.
+        return self._serve_live(drivers, since_rev)
+
+    def _serve_live(self, drivers: dict, since_rev: int = -1) -> dict | None:
+        """Advance the revision when the block changed, then answer the caller."""
         if drivers != self._live_view:
             self._live_view = drivers
             self._live_rev += 1

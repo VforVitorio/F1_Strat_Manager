@@ -322,7 +322,7 @@ class SessionLaps:
 
         **The first version of this served only the lap in progress, and it
         made the S3 column permanently empty.** S3's crossing IS the end of
-        the lap: measured over all 920 real rows of Melbourne 2025,
+        the lap: measured over the 920 real rows of Melbourne 2025 carrying both stamps,
         `Sector3SessionTime` lands a median 55 ms AFTER the lap's own crossing
         `Time` and after it on 94.1 % of laps. So S1 was visible for 60.3 s of
         its lap, S2 for 40.8 s, and S3 for -0.055 s. One of three columns
@@ -376,15 +376,35 @@ class SessionLaps:
         is what the renderer dims. It is not a third state for a missing
         value: a null sector is simply null and its flag is False.
 
-        The previous lap is only consulted for a sector this lap has not
-        reached yet. Nothing is served before its own crossing, in either lap.
+        **Both branches are gated on the clock, and the second one had to be
+        told so.** It first checked only that the previous lap HAD a stamp,
+        which made the sentence below false on the wire the window serves: the
+        arcade's crossing map increments before that lap's own
+        `Sector3SessionTime` on 837 of 921 laps (median 39 ms, max 0.463 s),
+        so the just-ended S3 went out before its own official moment. It leaked
+        nothing the bulk was not already revealing at the same tick, but a
+        guard that looks like the reveal rule and checks something else is
+        this repo's most expensive shape.
+
+        So: nothing is served before its own crossing, in either lap. The cost
+        is a cell that dashes for a median 39 ms after a line crossing, about
+        one replay frame.
+
+        A sector whose value exists but whose stamp does not - one driver-lap
+        on Melbourne 2025 - dashes rather than being carried, because there is
+        no moment to compare the clock against and the rule above is the one
+        that matters.
         """
         live: dict[str, Any] = {"lap": row["lap"]}
         for sector, speed, crossed_at in _LIVE_SECTORS:
             moment = row[crossed_at]
             if moment is not None and moment <= session_clock:
                 live[sector], live[speed], fresh = row[sector], row[speed], True
-            elif previous is not None and previous[crossed_at] is not None:
+            elif (
+                previous is not None
+                and previous[crossed_at] is not None
+                and previous[crossed_at] <= session_clock
+            ):
                 live[sector], live[speed], fresh = previous[sector], previous[speed], False
             else:
                 live[sector], live[speed], fresh = None, None, False

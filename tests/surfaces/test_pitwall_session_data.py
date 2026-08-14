@@ -449,6 +449,10 @@ def test_a_sector_of_this_lap_is_not_served_before_its_crossing():
     assert before["s1"] == earlier["s1"] and before["s1_fresh"] is False, (
         "what it shows is the previous lap's, and it says so"
     )
+    assert before["v1"] == earlier["v1"], (
+        "and the trap speed comes from the SAME row as the time it sits beside"
+    )
+    assert before["v1"] != row["v1"], "never this lap's speed under the previous lap's time"
     assert after["s1"] == row["s1"] and after["s1_fresh"] is True
     assert after["v1"] == row["v1"], "with the speed measured at that trap"
     assert after["s2"] != row["s2"], "the sectors after it are still the previous lap's"
@@ -727,3 +731,113 @@ def test_a_rewind_onto_the_same_open_sector_pattern_is_still_served():
         "answered None - the window would keep the FUTURE lap's sector times on screen"
     )
     assert rewound["drivers"] != forward["drivers"], "and it must serve the earlier numbers"
+
+
+def test_no_sector_is_served_before_its_own_crossing_even_on_an_early_wire():
+    """The invariant measured on the clock the WINDOW serves, not the tests' one.
+
+    The carried-over branch first checked only that the previous lap HAD a
+    stamp, with no clock gate - and the docstring claimed nothing is served
+    before its own crossing. On the parquet-derived clock the tests use, that
+    was true. On the wire it was not: the arcade's crossing map increments
+    before that lap's own `Sector3SessionTime` on 837 of 921 laps (median
+    39 ms, max 0.463 s), so the just-ended S3 went out before its official
+    moment (#933 gate finding F6).
+
+    The wire's lead is reproduced here by advancing `laps_completed` EARLY -
+    by more than the measured worst case - which is exactly the shape of the
+    real skew and needs no 382 MB pickle to exercise. A guard that looks like
+    the reveal rule and checks something else is this repo's most expensive
+    shape, so this one checks the rule itself: every value on screen has a
+    stamp the clock has already passed.
+    """
+    session = _session_or_skip()
+    global_t_min = 4260.355
+    wire_lead = 0.6  # comfortably beyond the measured 0.463 s worst case
+
+    stamps = {
+        code: {row["lap"]: row for row in rows if not row["generated"]}
+        for code, rows in session._by_driver.items()
+    }
+    crossings = {
+        code: {lap: row["time_s"] for lap, row in laps.items() if row["time_s"] is not None}
+        for code, laps in stamps.items()
+    }
+    moments = sorted({t for laps in crossings.values() for t in laps.values()})
+
+    checked = 0
+    for probe in range(0, len(moments), 7):
+        session_clock = moments[probe]
+        # The wire is EARLY: a lap counts as completed before the parquet says so.
+        early_reveal = {
+            code: sum(1 for t in laps.values() if t <= session_clock + wire_lead)
+            for code, laps in crossings.items()
+        }
+        live = session.live_lap(early_reveal, session_clock - global_t_min, global_t_min)
+        for code, row in live.items():
+            lap_rows = stamps[code]
+            for sector, _speed, crossed_at in (
+                ("s1", "v1", "s1_at"),
+                ("s2", "v2", "s2_at"),
+                ("s3", "vfl", "s3_at"),
+            ):
+                if row[sector] is None:
+                    continue
+                source = row["lap"] if row[f"{sector}_fresh"] else row["lap"] - 1
+                moment = lap_rows.get(source, {}).get(crossed_at)
+                assert moment is not None and moment <= session_clock, (
+                    f"{code} shows {sector}={row[sector]} from lap {source} at clock "
+                    f"{session_clock:.3f}, but that sector was crossed at {moment}"
+                )
+                checked += 1
+
+    assert checked > 2000, f"only {checked} served sectors examined; this proves nothing"
+
+
+def test_pointing_the_arcade_at_a_race_with_no_laps_clears_the_sectors():
+    """The twin: `get_bulk` had this branch and `get_live_lap` did not.
+
+    A missing parquet makes the table say `available=False`, which is
+    deliberate - "a tower rendering zero rows silently is the same pixel as a
+    tower whose reveal is broken". Its sibling answered plain `None`, and
+    `None` means "keep what you have" to the client, so switching races left
+    the PREVIOUS race's sector times, dimming flags and colours on the new
+    race's rows indefinitely, beside a table that had correctly gone blank.
+
+    Reachable exactly the way `_session_for`'s own docstring says race
+    switches are - the stale-state class #904 already paid for once.
+    """
+
+    def tick_for(location: str, laps_completed: int) -> dict:
+        return {
+            "seq": 1,
+            "arcade": {
+                "year": 2025,
+                "location": location,
+                "t": 3000.0,
+                "global_t_min": 0.0,
+                "drivers": {"NOR": {"laps_completed": laps_completed}},
+            },
+        }
+
+    client = _FakeClient(tick_for("Melbourne", 20))
+    host = PitwallHost(client, window_count=1)
+
+    melbourne = host.get_live_lap(-1)
+    if melbourne is None or not melbourne["drivers"]:
+        pytest.skip("2025/Melbourne is not in this install's curated data set")
+    assert melbourne["drivers"]["NOR"]["lap"] == 21
+
+    client.latest = tick_for("Shanghai", 20)
+    switched = host.get_live_lap(melbourne["rev"])
+
+    assert switched is not None, (
+        "a race with no laps must be SAID, not answered with 'keep what you have' - "
+        "the tower would hold the previous race's sectors on the new race's rows"
+    )
+    assert switched["drivers"] == {}, "and what it says is: nothing to show"
+    assert switched["rev"] != melbourne["rev"], "with a revision the client will accept"
+
+    assert host.get_live_lap(switched["rev"]) is None, (
+        "served once, not re-sent on every poll of a race that has no laps"
+    )
