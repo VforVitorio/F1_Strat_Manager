@@ -679,10 +679,14 @@ class F1ArcadeView(arcade.View):
         #   crossing map, so it is monotone while playing forward - swept
         #   over 20 drivers x 154,173 frames, no counter-example. It is NOT
         #   exact against the parquet: 76 of 921 crossings (8.3 %) open
-        #   before the parquet's `Time`, worst case 0.463 s, because the
-        #   `lap` field these crossings are detected from is an interpolation
-        #   rather than a line detector. Monotone and per driver, not
-        #   frame-accurate.
+        #   before the parquet's `Time` by more than HALF A FRAME (0.02 s),
+        #   worst case 0.463 s, because the `lap` field these crossings are
+        #   detected from is an interpolation rather than a line detector.
+        #   The half-frame threshold is the convention, and stating it is the
+        #   point: strictly greater than zero the count is 110 (11.9 %) and
+        #   beyond a full 40 ms frame it is 49 (5.3 %). Sub-half-frame is
+        #   rounding noise, but a reader cannot know that from the number.
+        #   Monotone and per driver, not frame-accurate.
         # - `progress` is the ordering coordinate, laps plus fraction of the
         #   current lap; a consumer derives laps-down positionally from it.
         #   None when the telemetry never places the car (#886).

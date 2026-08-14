@@ -339,6 +339,25 @@ cells) with Race Trace as a tab of the same panel.
 > The 12 px row is arithmetic on the height gate's own constants and is **NOT measured** - what it
 > measured was 19-20 px for the TOWER's twelve-column row. Measure it first.
 
+**What sprint 5 finished, and the one piece of its own scope it did not.** Bands 1 and 2 are on
+`dev`: the status strip, the twenty-row tower with the sector colour code, the bests panel, and a
+live sector reveal the band list never asked for (#930, because the columns were showing the
+previous lap for the whole of the next one).
+
+**The band-2 spec's SELECTOR is not built** - *"pinning a row overlays its traces in band 4"* -
+and the reason is a decision rather than an omission. The tick carries a telemetry span for **2 of
+20** drivers, and which car is the rival is the arcade's choice. Measured on the real socket: the
+whole tick is 17,278 bytes and the telemetry block 1,161 of them, so all twenty carrying a span is
+**1.6x the tick, 271 KB/s at 10 Hz** - affordable. What is NOT affordable is the alternative: a
+control channel would end PITWALL's read-only-follower posture, which section 3.4 of the realism
+doc parks as a v2 question. Víctor's call (2026-08-14): take the option that breaks nothing, so
+the producer publishes all twenty spans - **and it lands with #199 phase D.3, never before it**,
+because `snapshot_dict` still re-runs a recursive `asdict` behind a blocking `sendall` ten times a
+second and 1.6x makes that worse inside the render loop. Filed as **#936**.
+
+There is no route through disk: **there is no telemetry on disk** (gate A). The 25 Hz frames live
+in one monolithic pickle, which is why #841 put the span on the wire at all.
+
 **Sprint 5's own deferred item, filed rather than improvised:** #931, sub-lap gaps from
 `intervals.parquet`, whose per-driver sample cadence is a measured **4.27 s median**. It is blocked
 on a time anchor (its `date` is UTC; every clock here is SessionTime, so it needs FastF1's
