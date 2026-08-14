@@ -423,7 +423,7 @@ def test_no_tick_means_no_bulk():
 # --- The lap in progress: sectors revealed at the moment they were crossed ----
 
 
-def test_a_sector_is_closed_until_the_clock_reaches_its_crossing():
+def test_a_sector_of_this_lap_is_not_served_before_its_crossing():
     """The reveal rule at a finer coordinate, on the real race.
 
     `masked_view`'s `L <= laps_completed` is the rule for lap ROWS, which only
@@ -431,40 +431,55 @@ def test_a_sector_is_closed_until_the_clock_reaches_its_crossing():
     so it has its own moment - and revealing it then is not look-ahead, it is
     the present.
 
-    NOR's lap 23 at Melbourne crossed S1 at SessionTime 6689.966. One second
-    before that the cell must be empty; a tenth of a second after it must hold
-    31.865 and the 266 km/h measured at that trap.
+    NOR's lap 23 at Melbourne crossed S1 at SessionTime 6689.966. Before that
+    the cell must NOT hold lap 23's S1; the freshest thing it can honestly
+    show is lap 22's, flagged as not-this-lap. A tenth of a second later it
+    holds 31.865 and the 266 km/h measured at that trap, flagged as fresh.
     """
     session = _session_or_skip()
     global_t_min = 4260.355
     row = next(r for r in session._by_driver["NOR"] if r["lap"] == 23)
+    earlier = next(r for r in session._by_driver["NOR"] if r["lap"] == 22)
 
     before = session.live_lap({"NOR": 22}, row["s1_at"] - 1 - global_t_min, global_t_min)["NOR"]
     after = session.live_lap({"NOR": 22}, row["s1_at"] + 0.1 - global_t_min, global_t_min)["NOR"]
 
     assert before["lap"] == 23 and after["lap"] == 23, "both probes are on the lap in progress"
-    assert before["s1"] is None and before["v1"] is None, "nothing before the car got there"
-    assert after["s1"] == row["s1"], "and the real sector time the instant it did"
+    assert before["s1"] != row["s1"], "lap 23's S1 cannot be on screen before it was set"
+    assert before["s1"] == earlier["s1"] and before["s1_fresh"] is False, (
+        "what it shows is the previous lap's, and it says so"
+    )
+    assert after["s1"] == row["s1"] and after["s1_fresh"] is True
     assert after["v1"] == row["v1"], "with the speed measured at that trap"
-    assert after["s2"] is None, "the sectors after it stay shut"
+    assert after["s2"] != row["s2"], "the sectors after it are still the previous lap's"
 
 
-def test_a_rewind_shuts_the_sectors_again():
-    """The clock going back must CLOSE a cell, not leave it filled.
+def test_a_rewind_takes_this_laps_sectors_back():
+    """The clock going back must UNDO a cell, not leave this lap's time in it.
 
-    A cache that only ever fills would leave a time on screen for track the
+    A cache that only ever filled would leave a number on screen for track the
     car has yet to re-drive - the same leak as a lap-row reveal that never
-    un-reveals, one coordinate down.
+    un-reveals, one coordinate down. What the cell falls back to is the
+    PREVIOUS lap's value, which the car really did set before this clock, and
+    the flag says it is not from the lap in progress.
     """
     session = _session_or_skip()
     global_t_min = 4260.355
     row = next(r for r in session._by_driver["NOR"] if r["lap"] == 23)
+    earlier = next(r for r in session._by_driver["NOR"] if r["lap"] == 22)
 
     late = session.live_lap({"NOR": 22}, row["s3_at"] + 1 - global_t_min, global_t_min)["NOR"]
     rewound = session.live_lap({"NOR": 22}, row["s1_at"] - 1 - global_t_min, global_t_min)["NOR"]
 
     assert [late["s1"], late["s2"], late["s3"]] == [row["s1"], row["s2"], row["s3"]]
-    assert [rewound["s1"], rewound["s2"], rewound["s3"]] == [None, None, None]
+    assert all(late[f"{s}_fresh"] for s in ("s1", "s2", "s3")), "all three were set on this lap"
+
+    assert [rewound["s1"], rewound["s2"], rewound["s3"]] == [
+        earlier["s1"],
+        earlier["s2"],
+        earlier["s3"],
+    ], "every cell falls back to a lap the car had really finished by then"
+    assert not any(rewound[f"{s}_fresh"] for s in ("s1", "s2", "s3"))
 
 
 def test_a_car_with_no_lap_in_progress_is_absent_rather_than_empty():
@@ -549,3 +564,166 @@ def test_a_best_lap_time_is_still_the_smallest():
             checked += 1
 
     assert checked >= 60, f"only {checked} time bests compared; the fixture proves nothing"
+
+
+def test_every_sector_column_actually_shows_numbers_over_the_race():
+    """The check that would have caught the S3 column being permanently empty.
+
+    The first version of `live_lap` served only the lap in progress, which is
+    right for S1 and S2 and impossible for S3: S3's crossing IS the end of the
+    lap. Measured over all 920 real rows, `Sector3SessionTime` lands a median
+    55 ms AFTER the lap's own crossing `Time`, and after it on 94.1 % of laps -
+    so S1 was visible for 60.3 s of its lap, S2 for 40.8 s and S3 for
+    -0.055 s. One of three columns was a dash for the entire race.
+
+    The guards that missed it were fixture-shaped: the smoke harness hand-set
+    `s3: null` and asserted a dash, so the test and the code agreed with each
+    other and neither agreed with the race. This one samples the REAL clock
+    across the REAL race and asks what a strategist would actually see.
+    """
+    session = _session_or_skip()
+    global_t_min = 4260.355
+    crossings = {
+        code: {row["lap"]: row["time_s"] for row in rows if row["time_s"] is not None}
+        for code, rows in session._by_driver.items()
+    }
+    starts = [t for laps in crossings.values() for t in laps.values()]
+    first, last = min(starts), max(starts)
+
+    filled = {"s1": 0, "s2": 0, "s3": 0}
+    samples = 0
+    for step in range(60):
+        session_clock = first + (last - first) * step / 59
+        laps_completed = {
+            code: sum(1 for t in laps.values() if t <= session_clock)
+            for code, laps in crossings.items()
+        }
+        live = session.live_lap(laps_completed, session_clock - global_t_min, global_t_min)
+        for row in live.values():
+            samples += 1
+            for sector in filled:
+                if row[sector] is not None:
+                    filled[sector] += 1
+
+    assert samples > 500, f"only {samples} driver-instants sampled; this proves nothing"
+    for sector, count in filled.items():
+        share = count / samples
+        assert share > 0.75, (
+            f"{sector} is filled on only {share:.1%} of {samples} driver-instants across the "
+            f"race - a column a strategist never sees a number in"
+        )
+
+
+def test_a_carried_over_sector_says_it_is_not_from_this_lap():
+    """Rolling the value is honest; passing it off as the current lap is not.
+
+    Right after the line the freshest S3 a car has is the one that ENDED the
+    lap it just finished, so the cell shows it - and `s3_fresh` is False, which
+    is what the renderer dims. A cell that lied about which lap it belonged to
+    would be a stale number wearing a live one's clothes, on a fidelity
+    surface.
+    """
+    session = _session_or_skip()
+    global_t_min = 4260.355
+    lap23 = next(r for r in session._by_driver["NOR"] if r["lap"] == 23)
+    lap24 = next(r for r in session._by_driver["NOR"] if r["lap"] == 24)
+
+    # Just after lap 23 ended: lap 24 is in progress and has reached nothing.
+    just_after = session.live_lap({"NOR": 23}, lap23["time_s"] + 1 - global_t_min, global_t_min)
+    row = just_after["NOR"]
+
+    assert row["lap"] == 24, "the lap in progress is the new one"
+    assert row["s3"] == lap23["s3"], "and its S3 cell carries the sector that just ended lap 23"
+    assert row["s3_fresh"] is False, "flagged as belonging to the previous lap"
+
+    # Once lap 24's own S1 is crossed, THAT one is fresh and S3 still is not.
+    later = session.live_lap({"NOR": 23}, lap24["s1_at"] + 0.1 - global_t_min, global_t_min)["NOR"]
+    assert later["s1"] == lap24["s1"] and later["s1_fresh"] is True
+    assert later["s3"] == lap23["s3"] and later["s3_fresh"] is False
+
+
+def test_a_rewind_onto_the_same_open_sector_pattern_is_still_served():
+    """The collision the old revision signature could not see (#934).
+
+    `get_live_lap` used to key its revision on WHICH cells were filled. A
+    (driver, lap) pair determines the values, but the lap entered that
+    signature only as a constant True - so a rewind landing the whole field on
+    the same open-sector pattern, with every number different, bumped nothing,
+    answered None, and the client kept the FUTURE lap's sector times on a
+    screen whose clock had gone back. The gate that found it measured 3,667
+    such pairs at least ten seconds apart, the worst a 28-minute rewind across
+    the wet start.
+
+    This drives the REAL `get_live_lap` across a collision found by SEARCHING
+    the real race, so it asserts the effect - what the second call returns -
+    rather than re-implementing the comparison and checking its own arithmetic.
+    """
+    session = _session_or_skip()
+    global_t_min = 4260.355
+    crossings = {
+        code: {row["lap"]: row["time_s"] for row in rows if row["time_s"] is not None}
+        for code, rows in session._by_driver.items()
+    }
+    moments = sorted({t for laps in crossings.values() for t in laps.values()})
+
+    def reveal_at(session_clock: float) -> dict[str, int]:
+        return {
+            code: sum(1 for t in laps.values() if t <= session_clock)
+            for code, laps in crossings.items()
+        }
+
+    def pattern(session_clock: float) -> tuple:
+        view = session.live_lap(
+            reveal_at(session_clock), session_clock - global_t_min, global_t_min
+        )
+        return tuple(
+            (code, tuple(value is not None for value in row.values()))
+            for code, row in sorted(view.items())
+        )
+
+    late = moments[len(moments) * 3 // 4]
+    late_pattern = pattern(late)
+    early = next(
+        (
+            t
+            for t in moments
+            if late - t > 60
+            and pattern(t) == late_pattern
+            and session.live_lap(reveal_at(t), t - global_t_min, global_t_min)
+            != session.live_lap(reveal_at(late), late - global_t_min, global_t_min)
+        ),
+        None,
+    )
+    assert early is not None, (
+        "no same-pattern pair found on this race, so this guard would assert nothing"
+    )
+
+    client = _FakeClient()
+    host = PitwallHost(client, window_count=1)
+
+    def serve(session_clock: float, since_rev: int):
+        client.latest = {
+            "seq": 1,
+            "arcade": {
+                "year": 2025,
+                "location": "Melbourne",
+                "t": session_clock - global_t_min,
+                "global_t_min": global_t_min,
+                "drivers": {
+                    code: {"laps_completed": laps}
+                    for code, laps in reveal_at(session_clock).items()
+                },
+            },
+        }
+        return host.get_live_lap(since_rev)
+
+    forward = serve(late, -1)
+    assert forward is not None, "the first read must serve something"
+
+    rewound = serve(early, forward["rev"])
+
+    assert rewound is not None, (
+        f"the clock went back {late - early:.0f} s onto the same open-sector pattern and the host "
+        "answered None - the window would keep the FUTURE lap's sector times on screen"
+    )
+    assert rewound["drivers"] != forward["drivers"], "and it must serve the earlier numbers"

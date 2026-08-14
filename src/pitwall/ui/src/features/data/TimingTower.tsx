@@ -126,22 +126,27 @@ function TowerRow({ code, position, front, leader, arcade, bulk, live, bests }: 
       </td>
       <td className="col-gap">{formatGapCell(gap)}</td>
       <td className="col-gap">{interval === null ? "—" : formatGapCell(interval)}</td>
-      {/* The sectors are the lap IN PROGRESS - blank at the line, filling as
-       * the car crosses each. Every other column on this row is about the
-       * last COMPLETED lap, which is what LAST, ST, TYRE and STOPS mean. */}
+      {/* The sector cells ROLL, they do not blank. Each shows the freshest
+       * value it has - this lap's once the car has crossed that sector, the
+       * previous lap's until then - and `stale` dims the carried-over ones.
+       * Every other column on this row is about the last COMPLETED lap, which
+       * is what LAST, ST, TYRE and STOPS mean. */}
       <SectorCell
         time={sectors?.s1 ?? null}
         speed={sectors?.v1 ?? null}
+        stale={!sectors?.s1_fresh}
         tone={sectorTone(sectors?.s1 ?? null, laps?.best.s1 ?? null, bests, "s1")}
       />
       <SectorCell
         time={sectors?.s2 ?? null}
         speed={sectors?.v2 ?? null}
+        stale={!sectors?.s2_fresh}
         tone={sectorTone(sectors?.s2 ?? null, laps?.best.s2 ?? null, bests, "s2")}
       />
       <SectorCell
         time={sectors?.s3 ?? null}
         speed={sectors?.vfl ?? null}
+        stale={!sectors?.s3_fresh}
         tone={sectorTone(sectors?.s3 ?? null, laps?.best.s3 ?? null, bests, "s3")}
       />
       <td className={`col-last ${last?.deleted ? "is-deleted" : ""}`}>{lastCell(status, last)}</td>
@@ -163,13 +168,16 @@ function SectorCell({
   time,
   speed,
   tone,
+  stale,
 }: {
   time: number | null;
   speed: number | null;
   tone: SectorTone;
+  /** Carried over from the previous lap rather than set on this one. */
+  stale: boolean;
 }) {
   return (
-    <td className={`col-sector is-${tone}`}>
+    <td className={`col-sector is-${tone}${stale ? " is-stale" : ""}`}>
       {time === null ? "—" : time.toFixed(3)}
       {/* A real space, not only the margin: the cell is read by a screen
        * reader and copied by a mouse, and "29.412301" is a different number. */}

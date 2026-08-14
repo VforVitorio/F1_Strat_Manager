@@ -63,10 +63,12 @@ class PitwallHost:
         self._session: SessionLaps | None = None
         self._session_key: tuple[int, str] | None = None
         # The LIVE channel's state, masked by the clock rather than by
-        # completed laps. Its signature is which sectors are open, so the
-        # revision moves when the screen changes and not ten times a second.
+        # completed laps. `_live_view` is the last block SERVED, so the
+        # revision moves exactly when the screen would change and not ten
+        # times a second - and it cannot miss a change, which a hash of the
+        # block's shape could and did (#934).
         self._live_rev = 0
-        self._live_signature: dict[str, tuple[bool, ...]] = {}
+        self._live_view: dict[str, dict] = {}
 
     def start(self) -> None:
         self._client.start()
@@ -221,15 +223,26 @@ class PitwallHost:
         global_t_min = float(arcade.get("global_t_min") or 0.0)
         drivers = session.live_lap(reveal, clock, global_t_min)
 
-        # The signature is what the SCREEN shows, so the revision advances
-        # when a sector opens or closes and stays put through the hundreds of
-        # ticks in between. Keying it on the clock instead would bump ten
-        # times a second and re-send an identical payload.
-        signature = {
-            code: tuple(v is not None for v in row.values()) for code, row in drivers.items()
-        }
-        if signature != self._live_signature:
-            self._live_signature = signature
+        # **The signature IS the payload, not a hash of its shape.** It used
+        # to be `tuple(v is not None for v in row.values())` - which cells are
+        # filled - and that is lossy in exactly the direction that leaks: a
+        # (driver, lap) pair determines the values, but the lap entered the
+        # signature only as a constant True. Measured on the real race, 3,667
+        # sampled pairs at least ten seconds apart share a presence pattern
+        # with completely different numbers, the worst of them a 28-minute
+        # rewind across the wet start - and across it `get_live_lap` answered
+        # None, so the client kept a dry-lap sector time on a screen whose
+        # clock said lap 2 (#934).
+        #
+        # `get_bulk` was immune because its signature is the reveal MAP, which
+        # is its full input state. A signature that does not determine the
+        # payload is not a signature.
+        #
+        # Comparing the dict itself still leaves the revision still through
+        # the hundreds of ticks between two crossings, which is the whole
+        # point of having one.
+        if drivers != self._live_view:
+            self._live_view = drivers
             self._live_rev += 1
         if self._live_rev == since_rev:
             return None

@@ -814,12 +814,14 @@ function towerBulk() {
 }
 
 /**
- * The lap in progress: S1 crossed, S2 and S3 not yet.
+ * The lap in progress: S1 crossed on THIS lap, S2 and S3 carried over.
  *
- * The bulk's completed row carries an S2 and an S3 for every driver, so a
- * tower still reading the last COMPLETED lap would print them - which is the
- * defect this channel exists to fix, and the reason the checks below look for
- * dashes in columns the bulk could happily fill.
+ * The cells roll rather than blank, so the fixture carries a value in all
+ * three and the flags say which lap each belongs to. **The first version of
+ * this fixture set `s2` and `s3` to null and the checks asserted dashes** -
+ * which is how the S3 column came to be permanently empty on the real race
+ * and no guard noticed: the test and the code agreed with each other and
+ * neither agreed with the parquet (#933).
  */
 function towerLive() {
   const drivers = {};
@@ -828,11 +830,14 @@ function towerLive() {
     drivers[code] = {
       lap: code === "LAW" ? 23 : 24,
       s1: crafted ? crafted.lastS1 : 31 + index * 0.1,
-      s2: null,
-      s3: null,
+      s2: 19.5,
+      s3: 26.75,
       v1: 301,
-      v2: null,
-      vfl: null,
+      v2: 288,
+      vfl: 279,
+      s1_fresh: true,
+      s2_fresh: false,
+      s3_fresh: false,
     };
   });
   return { rev: 1, drivers };
@@ -956,8 +961,18 @@ check((await tone(18)).includes("is-plain"), "a sector nobody has set is not col
 // The bulk's completed row carries an S2 and an S3 for every driver here, so a
 // tower reading it would print them. The live channel has only S1 open, which
 // is what a car that has crossed one sector of the current lap actually knows.
-check((await cell(1, 7)) === "—", "S2 is blank until the car crosses it");
-check((await cell(1, 8)) === "—", "and so is S3");
+// S2 and S3 carry the PREVIOUS lap's values, dimmed. They are not blank, and
+// that is the whole of #933: a cell that blanked until this lap's crossing
+// left S3 empty for the entire race, because a third sector's crossing IS the
+// end of its lap.
+check((await cell(1, 7)).startsWith("19.500"), "S2 shows the previous lap's value, not a dash");
+check((await cell(1, 8)).startsWith("26.750"), "and so does S3, which otherwise NEVER fills");
+const staleness = async (column) =>
+  (await towerPage.locator(`.tower-row:nth-child(1) td:nth-child(${column})`).getAttribute("class"))
+    .includes("is-stale");
+check((await staleness(6)) === false, "this lap's own sector is not dimmed");
+check((await staleness(7)) === true, "a carried-over sector says so by being dimmed");
+check((await staleness(8)) === true, "and S3 is carried over essentially always");
 check(
   (await cell(1, 9)) === "1:25.744",
   "while LAST still shows the lap the car completed, which is what that column means",

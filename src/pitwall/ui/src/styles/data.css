@@ -262,6 +262,14 @@
   color: #f59e0b;
 }
 
+/* A sector carried over from the previous lap. Dimmed, never hidden: it is a
+ * real time the car really set, and it is the freshest thing that cell can
+ * honestly hold - the third sector's crossing IS the end of its lap, so the S3
+ * on screen mid-lap is always the previous one's. */
+.col-sector.is-stale {
+  opacity: 0.5;
+}
+
 /* --- Band 2 right: the bests panel ---------------------------------------- */
 
 .bests {
