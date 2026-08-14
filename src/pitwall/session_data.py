@@ -313,35 +313,42 @@ class SessionLaps:
     def live_lap(
         self, laps_completed: dict[str, int], clock_s: float, global_t_min: float = 0.0
     ) -> dict[str, Any]:
-        """The lap each driver is ON, with only the sectors he has already crossed.
+        """Each sector's most recent value, and whether it belongs to this lap.
 
-        The tower's three sector columns show the lap IN PROGRESS, blank at
-        the line and filling as the car crosses each sector - which is what a
-        timing tower does and what showing the last COMPLETED lap for a whole
-        lap afterwards does not.
+        A timing screen's sector cells do not go blank at the line - they
+        **roll**. Each one shows the freshest number it has: this lap's if the
+        car has crossed that sector, otherwise the lap before's, with the
+        difference shown by dimming rather than by hiding.
 
-        **This does not weaken the reveal rule; it applies it at a finer
-        coordinate.** `masked_view`'s `L <= laps_completed` is the rule for
-        lap ROWS, which only exist once the lap is over. A sector has its own
-        timestamp, so its own moment: reveal it iff the replay clock has
-        passed `SectorNSessionTime`. Nothing here is visible before it
-        happened, and a rewind closes the sectors again because the clock
-        goes back with it.
+        **The first version of this served only the lap in progress, and it
+        made the S3 column permanently empty.** S3's crossing IS the end of
+        the lap: measured over the 920 real rows of Melbourne 2025 carrying both stamps,
+        `Sector3SessionTime` lands a median 55 ms AFTER the lap's own crossing
+        `Time` and after it on 94.1 % of laps. So S1 was visible for 60.3 s of
+        its lap, S2 for 40.8 s, and S3 for -0.055 s. One of three columns
+        showed nothing for the entire race.
+
+        **The reveal rule still holds at the finer coordinate.** A sector is
+        served only once the clock has passed its own crossing - this lap's or
+        the previous one's - so nothing is visible before it happened, and a
+        rewind takes it back because the clock goes back with it.
 
         It is a separate reader rather than part of `masked_view` because the
         two are masked by different things at different rates. A sector opens
         somewhere in the field every 2.22 s (measured: 2,744 crossings over
-        6,103 s of Melbourne 2025), and re-sending the whole revealed race at
-        that cadence is ~154 KB/s against the tick's own ~58. This block is
-        2 KB for twenty drivers.
+        6,103 s), and re-sending the whole revealed race at that cadence is
+        ~154 KB/s against the tick's own ~58. This block is 2 KB for twenty
+        drivers.
         """
         session_clock = clock_s + global_t_min
         drivers: dict[str, Any] = {}
         for code, rows in self._by_driver.items():
-            in_progress = self._row_for_lap(rows, laps_completed.get(code, 0) + 1)
+            lap = laps_completed.get(code, 0) + 1
+            in_progress = self._row_for_lap(rows, lap)
             if in_progress is None:
                 continue
-            drivers[code] = self._revealed_sectors(in_progress, session_clock)
+            previous = self._row_for_lap(rows, lap - 1)
+            drivers[code] = self._rolling_sectors(in_progress, previous, session_clock)
         return drivers
 
     @staticmethod
@@ -359,20 +366,49 @@ class SessionLaps:
         return None
 
     @staticmethod
-    def _revealed_sectors(row: dict[str, Any], session_clock: float) -> dict[str, Any]:
-        """One in-progress lap, with the sectors the clock has not reached left out.
+    def _rolling_sectors(
+        row: dict[str, Any], previous: dict[str, Any] | None, session_clock: float
+    ) -> dict[str, Any]:
+        """Each sector's freshest crossed value, flagged with whose lap it is.
 
-        `None` for a sector that has not happened yet, exactly as for one that
-        has no data - the renderer draws a dash either way, and inventing a
-        distinction the tower cannot use would only be a third state for every
-        consumer to carry.
+        `<sector>_fresh` is True when the value belongs to the lap in
+        progress and False when it is carried over from the lap before, which
+        is what the renderer dims. It is not a third state for a missing
+        value: a null sector is simply null and its flag is False.
+
+        **Both branches are gated on the clock, and the second one had to be
+        told so.** It first checked only that the previous lap HAD a stamp,
+        which made the sentence below false on the wire the window serves: the
+        arcade's crossing map increments before that lap's own
+        `Sector3SessionTime` on 837 of 921 laps (median 39 ms, max 0.463 s),
+        so the just-ended S3 went out before its own official moment. It leaked
+        nothing the bulk was not already revealing at the same tick, but a
+        guard that looks like the reveal rule and checks something else is
+        this repo's most expensive shape.
+
+        So: nothing is served before its own crossing, in either lap. The cost
+        is a cell that dashes for a median 39 ms after a line crossing, about
+        one replay frame.
+
+        A sector whose value exists but whose stamp does not - one driver-lap
+        on Melbourne 2025 - dashes rather than being carried, because there is
+        no moment to compare the clock against and the rule above is the one
+        that matters.
         """
         live: dict[str, Any] = {"lap": row["lap"]}
         for sector, speed, crossed_at in _LIVE_SECTORS:
             moment = row[crossed_at]
-            open_now = moment is not None and moment <= session_clock
-            live[sector] = row[sector] if open_now else None
-            live[speed] = row[speed] if open_now else None
+            if moment is not None and moment <= session_clock:
+                live[sector], live[speed], fresh = row[sector], row[speed], True
+            elif (
+                previous is not None
+                and previous[crossed_at] is not None
+                and previous[crossed_at] <= session_clock
+            ):
+                live[sector], live[speed], fresh = previous[sector], previous[speed], False
+            else:
+                live[sector], live[speed], fresh = None, None, False
+            live[f"{sector}_fresh"] = fresh and live[sector] is not None
         return live
 
     @staticmethod

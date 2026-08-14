@@ -170,6 +170,20 @@ export interface LiveSectors {
   v1: number | null;
   v2: number | null;
   vfl: number | null;
+  /**
+   * Whether each value belongs to the lap IN PROGRESS or was carried over
+   * from the one before, which the tower dims.
+   *
+   * **`s3_fresh` is false essentially always, and that is the data, not a
+   * bug.** A third sector's crossing IS the end of its lap - measured over
+   * the whole race, `Sector3SessionTime` lands a median 55 ms AFTER the lap's
+   * own line crossing - so the S3 a strategist sees mid-lap is always the
+   * previous lap's. Serving only the current lap made the column permanently
+   * empty (#933).
+   */
+  s1_fresh: boolean;
+  s2_fresh: boolean;
+  s3_fresh: boolean;
 }
 
 export interface LiveLap {
