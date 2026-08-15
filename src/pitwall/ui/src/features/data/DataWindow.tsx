@@ -23,6 +23,7 @@
 
 import { BestsPanel } from "./BestsPanel";
 import { OwnCarTraces } from "./OwnCarTraces";
+import { RadioFeed } from "./RadioFeed";
 import { StatusStrip } from "./StatusStrip";
 import { TimingTower } from "./TimingTower";
 import { TrackRing } from "./TrackRing";
@@ -57,7 +58,10 @@ export function DataWindow() {
             </div>
             <div className="band4">
               <OwnCarTraces tick={tick} discontinuity={discontinuity} />
-              <TrackRing arcade={tick.arcade} />
+              <div className="side-column">
+                <TrackRing arcade={tick.arcade} />
+                <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />
+              </div>
             </div>
           </div>
         ) : (

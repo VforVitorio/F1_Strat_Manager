@@ -682,3 +682,126 @@
   font-size: 9px;
   letter-spacing: 0.5px;
 }
+
+/* --- The radio / RCM feed, in the column under the ring ------------------ */
+
+/* The ring self-sizes (`align-self: start`) and leaves the rest of its 260 px
+ * column empty - about 416 px on this machine. This is what goes there, so
+ * the column becomes ring-then-feed rather than ring-then-nothing. */
+.side-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+.radio-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  min-height: 0;
+  /* Scrollbars are hidden globally (`qt-base.css`), so an overflow here has no
+   * affordance at all. The list is newest-first for that reason: what falls
+   * off the bottom is the OLDEST, which is what a ticker is expected to lose,
+   * and the header's count says how many there are so the cut is never
+   * silent. */
+  overflow: hidden;
+}
+
+/* Same rank and rhythm as `.ring-header`, so the two cards in this column
+ * read as one surface. */
+.radio-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.radio-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.radio-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+.radio-count {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.radio-empty {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+  margin: 0;
+  padding: 0 2px;
+}
+
+.radio-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.radio-row {
+  display: grid;
+  grid-template-columns: 22px auto 1fr;
+  align-items: baseline;
+  column-gap: 5px;
+  padding: 3px 2px;
+  border-top: 1px solid var(--qt-border);
+  font-size: 10px;
+  line-height: 13px;
+}
+
+.radio-row:first-child {
+  border-top: none;
+}
+
+.radio-lap {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+}
+
+.radio-who {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-weight: 700;
+}
+
+/* Race control is the field's own voice rather than a driver's, so it reads
+ * one step back from a code. */
+.radio-row.is-rcm .radio-who {
+  color: var(--qt-fg-3);
+  font-weight: 400;
+}
+
+/* The public feed, tagged exactly as band 4 tags a pinned rival's trace: the
+ * same WARNING the rival chip uses, so one colour means one tier across the
+ * whole window. */
+.radio-tier {
+  color: #f59e0b;
+  font-family: var(--qt-mono);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+}
+
+.radio-text {
+  color: var(--qt-fg-2);
+  /* Two lines, then the `title` attribute carries the rest - the same
+   * treatment the AGENTS radio card gives a transcript, so a long race
+   * control message cannot push nine events off the panel on its own. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
