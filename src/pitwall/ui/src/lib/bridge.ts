@@ -145,6 +145,26 @@ export interface DriverLaps {
   theoretical: number | null;
 }
 
+/**
+ * One thing that was said during the race - a team radio or a race-control message.
+ *
+ * `driver` is the speaker's code on a radio and always `null` on an RCM, whose
+ * message already names the car it concerns.
+ *
+ * **The TIER is not on this object.** Which car is ours lives on the tick, and
+ * this rides in the bulk, so the renderer pairs the two: a radio from anyone
+ * but `arcade.driver_main` is broadcast-tier and says so on screen.
+ */
+export interface RadioEvent {
+  kind: "radio" | "rcm";
+  lap: number;
+  driver: string | null;
+  /** The transcript, or "" when the audio was never transcribed - which is the common case. */
+  text: string;
+  category: string | null;
+  flag: string | null;
+}
+
 export interface Bulk {
   /** Advances whenever the reveal changes IN EITHER DIRECTION. A rewind bumps it too. */
   rev: number;
@@ -152,6 +172,13 @@ export interface Bulk {
   available: boolean;
   race: { year: number | null; location: string | null; total_laps: number };
   drivers: Record<string, DriverLaps>;
+  /**
+   * The radio/RCM feed of the same race, oldest first, masked by the same
+   * reveal. It rides in this payload rather than on a channel of its own
+   * because it is a function of exactly what signs this one, and a second
+   * signature that does not determine its payload is what #934 cost.
+   */
+  radio: { available: boolean; events: RadioEvent[] };
 }
 
 /**

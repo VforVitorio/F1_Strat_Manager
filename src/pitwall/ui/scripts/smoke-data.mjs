@@ -1024,6 +1024,144 @@ check(
 
 await towerCtx.close();
 
+// --- The radio / RCM feed, in the column under the ring ----------------------
+
+/**
+ * Six events chosen so every branch of the panel is decidable by eye.
+ *
+ * Oldest first, exactly as the host serves them: the panel reverses, and a
+ * fixture already in display order would let a renderer that forgot to reverse
+ * pass. LAW's radio is longer than two lines at 260 px, so it also exercises
+ * the clamp; HAM's has no transcript, which is what 23 of the 24 published
+ * races look like.
+ */
+const RADIO_EVENTS = [
+  { kind: "rcm", lap: 2, driver: null, text: "DOUBLE YELLOW IN TRACK SECTOR 20", category: "Flag", flag: "DOUBLE YELLOW" },
+  { kind: "radio", lap: 6, driver: "NOR", text: "Weather update, no significant rain expected.", category: null, flag: null },
+  { kind: "radio", lap: 14, driver: "HAM", text: "", category: null, flag: null },
+  { kind: "rcm", lap: 20, driver: null, text: "FIA STEWARDS: INCIDENT INVOLVING CAR 22 (TSU) NO FURTHER ACTION - SAFETY CAR INFRINGEMENT", category: "Other", flag: null },
+  { kind: "radio", lap: 21, driver: "NOR", text: "Lando, a bit of an update on the safety car window.", category: null, flag: null },
+  { kind: "radio", lap: 23, driver: "VER", text: "If there is heavy rain we might need to fit inters, bear in mind.", category: null, flag: null },
+];
+
+async function radioPage(radio) {
+  const context = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+  const rPage = await context.newPage();
+  rPage.on("pageerror", (error) => failures.push(`pageerror(radio): ${error.message}`));
+  await rPage.addInitScript(
+    ([payload, bulk, live]) => {
+      window.pywebview = {
+        api: {
+          get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
+          get_bulk: async (sinceRev) => (sinceRev === bulk.rev ? null : bulk),
+          get_live_lap: async (sinceRev) => (sinceRev === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
+    },
+    [
+      tick(1, { drivers: towerField(), order: TOWER_ORDER }),
+      { ...towerBulk(), radio },
+      towerLive(),
+    ],
+  );
+  await rPage.goto(url, { waitUntil: "domcontentloaded" });
+  await rPage.waitForSelector(".radio-feed", { timeout: 5000 });
+  await rPage.waitForTimeout(500);
+  return [context, rPage];
+}
+
+const [radioCtx, feedPage] = await radioPage({ available: true, events: RADIO_EVENTS });
+
+// Tolerant for the same reason `cell` is: a defect that DROPS rows makes every
+// later selector miss, and a throwing helper kills the harness with a stack
+// instead of naming the failures - so the one check that explains the cause is
+// never printed. Measured: a mutation that filtered out transcript-less rows
+// took the whole run down with a TimeoutError before this was tolerant.
+const rowText = async (n) => {
+  try {
+    const text = await feedPage
+      .locator(`.radio-row:nth-child(${n})`)
+      .innerText({ timeout: 1000 });
+    return text.replace(/\s+/g, " ").trim();
+  } catch {
+    return "<no such row>";
+  }
+};
+
+// Six events, six rows. The panel drops nothing of its own accord: the only
+// thing allowed to remove an event is the reveal, upstream of here. Measured
+// on a mutated copy that filtered out transcript-less radios - the count in the
+// header still read 6, because it counts the PAYLOAD, so without this check the
+// six-into-five silently passed.
+check(
+  (await feedPage.locator(".radio-row").count()) === RADIO_EVENTS.length,
+  "every revealed event gets a row when they all fit",
+);
+
+// Newest FIRST. A pit wall reads the top line; a feed rendered in arrival order
+// puts lap 2 there and the freshest message off the bottom of a 416 px card.
+check((await rowText(1)).startsWith("L23 VER"), "the newest event is the top row");
+check((await rowText(6)).startsWith("L2 RCM"), "and the oldest is the last one");
+
+// The tier claim, on screen rather than in a PDF. NOR is `driver_main`.
+const tiers = await feedPage.evaluate(() =>
+  [...document.querySelectorAll(".radio-row")].map((row) => ({
+    who: row.querySelector(".radio-who")?.textContent ?? "",
+    broadcast: row.querySelector(".radio-tier") !== null,
+  })),
+);
+check(
+  tiers.filter((row) => row.who === "VER" || row.who === "HAM").every((row) => row.broadcast),
+  "a rival's radio is tagged BROADCAST, exactly as band 4 tags a pinned rival's trace",
+);
+check(
+  tiers.filter((row) => row.who === "NOR").every((row) => !row.broadcast),
+  "our own car's radio is not - it is team tier and carries no tag",
+);
+check(
+  tiers.filter((row) => row.who === "RCM").every((row) => !row.broadcast),
+  "and race control is neither: it is public by definition, not a rival's channel",
+);
+
+// A radio whose audio was never transcribed still occupies a row. Dropping it
+// would present a race as quieter than it was, and that is the COMMON case:
+// 23 of the 24 published races have no transcript at all.
+check((await rowText(4)).includes("no transcript"), "a radio with no words still shows itself");
+
+// The count is what stops an overflow being silent. Scrollbars are hidden
+// globally, so a panel that shows nine of forty-two and says nothing looks
+// exactly like a panel showing all there is.
+check(
+  (await feedPage.locator(".radio-count").innerText()).trim() === String(RADIO_EVENTS.length),
+  "the header counts every revealed event, not the ones that happen to fit",
+);
+
+// EFFECT, not mechanism: the card must not spill past the column it lives in.
+const fits = await feedPage.evaluate(() => {
+  const card = document.querySelector(".radio-feed");
+  const column = document.querySelector(".side-column");
+  return {
+    overflow: card.getBoundingClientRect().bottom - column.getBoundingClientRect().bottom,
+    ringVisible: document.querySelector(".ring").getBoundingClientRect().height > 0,
+  };
+});
+check(fits.overflow <= 1, `the feed stays inside its column (spills ${fits.overflow.toFixed(1)}px)`);
+check(fits.ringVisible, "and the ring above it is still there");
+
+await radioCtx.close();
+
+// A race with no corpus SAYS so. An empty list and a missing corpus are the
+// same pixel otherwise, which is the twin F7 caught one sprint ago between
+// get_bulk and get_live_lap.
+const [emptyCtx, emptyPage] = await radioPage({ available: false, events: [] });
+check((await emptyPage.locator(".radio-row").count()) === 0, "no rows for a race with no corpus");
+check(
+  (await emptyPage.locator(".radio-subtitle").innerText()).includes("no corpus"),
+  "and the panel says so instead of going quietly blank",
+);
+await emptyCtx.close();
+
 await browser.close();
 server.close();
 

@@ -23,6 +23,8 @@ import logging
 
 from src.f1_strat_manager.data_cache import get_data_root
 from src.pitwall.agents_view import AgentsViewBuilder
+from src.pitwall.radio_feed import RadioCorpus
+from src.pitwall.radio_feed import unavailable as radio_unavailable
 from src.pitwall.session_data import SessionLaps, unavailable
 from src.pitwall.stream_client import ArcadeStreamClient
 
@@ -64,6 +66,10 @@ class PitwallHost:
         self._bulk_signature: tuple | None = None
         self._session: SessionLaps | None = None
         self._session_key: tuple[int, str] | None = None
+        # The radio/RCM feed of the SAME race, loaded under the SAME key in
+        # `_session_for`. It has no revision of its own: it rides in the bulk
+        # payload because it is a function of the bulk's signature exactly.
+        self._radio: RadioCorpus | None = None
         # The LIVE channel's state, masked by the clock rather than by
         # completed laps. `_live_view` is the last block SERVED, so the
         # revision moves exactly when the screen would change and not ten
@@ -284,6 +290,12 @@ class PitwallHost:
         Cached on (year, location) so pointing the arcade at another race
         replaces the laps instead of serving the previous one's - the
         stale-state class #904 already paid for once on the AGENTS history.
+
+        **The radio corpus loads HERE, under the same key, not beside it.** Two
+        caches on the same race with two invalidation points is how one of them
+        comes to serve the previous race - which is the twin this repo pays for
+        most often, and which F7 caught between these very two channels one
+        sprint ago.
         """
         year, location = arcade.get("year"), arcade.get("location")
         if not isinstance(year, int) or not isinstance(location, str):
@@ -291,6 +303,7 @@ class PitwallHost:
         if self._session_key != (year, location):
             self._session_key = (year, location)
             self._session = SessionLaps.load(get_data_root(), year, location)
+            self._radio = RadioCorpus.load(get_data_root(), year, location)
         return self._session
 
     def _masked_view(self, arcade: dict, reveal: dict[str, int]) -> dict:
@@ -304,11 +317,24 @@ class PitwallHost:
         year, location = arcade.get("year"), arcade.get("location")
         session = self._session_for(arcade)
         if session is None:
-            return unavailable(
+            view = unavailable(
                 year if isinstance(year, int) else None,
                 location if isinstance(location, str) else None,
             )
-        return session.masked_view(reveal, float(arcade.get("global_t_min") or 0.0))
+        else:
+            view = session.masked_view(reveal, float(arcade.get("global_t_min") or 0.0))
+        # The radio feed rides IN this payload rather than on a channel of its
+        # own, because it is a pure function of exactly what already signs this
+        # one: (year, location, reveal map). A second channel would need a
+        # second signature, and a signature that does not determine its payload
+        # is the defect #934 cost a sprint. Measured cost of carrying it: the
+        # bulk is 66,991 / 152,657 / 337,289 bytes at reveal L10 / L24 / L57 on
+        # the real Melbourne payload, and the largest feed in the whole corpus
+        # (Monaco, 210 events) is about 31 KB - 9 %.
+        view["radio"] = (
+            radio_unavailable() if self._radio is None else self._radio.masked_view(reveal)
+        )
+        return view
 
     def release_window(self) -> int:
         """Record that one window has closed; stop the client at the last one.
