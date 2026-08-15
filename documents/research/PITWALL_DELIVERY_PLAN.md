@@ -318,26 +318,42 @@ Two rules that must be written into the code, not assumed:
 > only the wire can order mid-lap; the seconds come from the parquet because it is the official
 > clock. Both are right, they are just different measurements. **Do not file it as a bug.**
 
-**Sprint 6, band 3.** The Run Timeline heat grid (purple / green / yellow / red, `IN PIT` and `OUT`
-cells) with Race Trace as a tab of the same panel.
+> ✅ **SPRINT 6 SHIPPED 2026-08-15** (#939 the radio/RCM feed, #941 band 3, #942 the exit gate's
+> findings). Four things about it are worth carrying rather than rediscovering.
+>
+> **The radio data is on the wire for ONE LAP, not for the race.** `strategy.per_agent.radio` does
+> carry the transcripts, but `StrategyState.snapshot_dict` strips `per_agent` from every entry of
+> `history_tail`. A chronological FEED built from the wire has to accumulate client-side, which
+> keeps events across a rewind, starts empty on a mid-race attach, holes at 8x and dies without
+> `--strategy`. It is read from disk and masked by the same reveal instead - the shape
+> `session_data.py` already argued for - and rides IN the bulk payload, because it is a pure
+> function of that channel's own signature. Measured: +9 % on a payload of 337 KB at full reveal.
+>
+> **Band 3 kept the real client's orientation, and the measurement is why.** Transposed gives cells
+> 13.5 px wide against 19-22 px of text; with the ring still mounted the grid gets 555 px and 1,101
+> of 1,140 cells clip. The lap time is `m:ss.d`, because the seconds form clips 205 of 1,140 on the
+> real payload the moment a cell carries a pixel of padding. The ring and the radio feed hide on
+> that tab.
+>
+> **The heat colour ranks each lap AGAINST ITSELF.** On the real payload the median lap is +13.79 %
+> off the session best and 82.4 % of the race sits past +10 %, because Melbourne 2025 was wet and
+> ran safety cars - any fixed percentage band paints four fifths of the grid one colour.
+>
+> **The screenshot found two defects that "0 cells clipped" could not:** at 10 px nothing clips and
+> the grid is still unreadable because adjacent cells touch, and the columns re-sorted themselves
+> every time two cars swapped position. WHICH drivers comes from `race_order`; the ORDER is by car
+> number.
+>
+> Design record: `~/.claude/plans/pitwall-sprint6/`. **Note for whoever reads that folder:** the
+> band-3 design gate died twice mid-run and its deliverables 3-7 were completed by the orchestrator,
+> marked as such inside the report rather than passed off as an independent verdict.
 
-> ⚠️ **ITS ORIENTATION IS DELIBERATELY UNDECIDED, and sprint 6 measures before it draws.**
-> The RaceX client puts one COLUMN per driver and one ROW per lap, and the research notes it
-> "occupies more screen area than anything else in the photographs". The band-height gate
-> recommended TRANSPOSING it - drivers as rows, laps as columns - but that recommendation was
-> derived against the STACKED band model and may not survive the column one: the right column is
-> 751 px tall, and the real orientation needs `24 (tabs) + 18 (header) + 57 x 12 = 726`.
->
-> The trade, so sprint 6 starts from it rather than from a preference:
->
-> | | real orientation (drivers as columns) | transposed (the gate's proposal) |
-> |---|---|---|
-> | height | 57 lap-rows x 12 px = 684 + chrome | 20 driver-rows x 20 px = 440 |
-> | width per cell | 835 / 20 = **41.7 px** - a lap time FITS at 9 px | 835 / 57 = **14.6 px** - colour only, no number |
-> | cost | the ring is hidden while this tab is open | the cell loses the number the real client writes in it |
->
-> The 12 px row is arithmetic on the height gate's own constants and is **NOT measured** - what it
-> measured was 19-20 px for the TOWER's twelve-column row. Measure it first.
+**Gate at the end of sprint 6 — RUN.** Eleven findings, one HIGH: a deleted lap was painted the
+FASTEST tone, because the ranking excludes deleted times and `indexOf`'s `-1` shared a branch with
+"top third". On the real race the slowest car on the lap wore the green the legend means as
+quickest. Two of its findings against the fixes were artefacts of it reading the working tree during
+a red-check window - **never run a mutation while a gate reads the tree.** Report:
+`~/.claude/plans/pitwall-sprint6/correctness-gate.md`.
 
 **What sprint 5 finished, and the one piece of its own scope it did not.** Bands 1 and 2 are on
 `dev`: the status strip, the twenty-row tower with the sector colour code, the bests panel, and a
