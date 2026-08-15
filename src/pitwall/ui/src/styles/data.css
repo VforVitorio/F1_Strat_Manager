@@ -984,3 +984,54 @@
 .pace-table td.is-none {
   color: var(--qt-fg-3);
 }
+
+/* --- Band 3's second panel: the race trace ------------------------------- */
+
+.trace-band {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  min-height: 0;
+}
+
+/* The plot takes whatever the header leaves, and `min-height: 0` is what makes
+ * that true inside a flex column: without it the div takes its content height,
+ * ECharts measures zero and renders a canvas nothing ever appears on. */
+.trace-band-plot {
+  flex: 1;
+  min-height: 0;
+}
+
+.trace-band-empty {
+  color: var(--qt-fg-3);
+  font-size: 11px;
+  margin: auto;
+}
+
+/* The reference selector. It is the panel's ONLY control, so it sits in the
+ * header on the right where the pace grid puts its lap range - the same slot
+ * doing the same job, telling the reader what they are looking at. */
+.ref-strip {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.ref {
+  background: none;
+  border: 1px solid var(--qt-border);
+  border-radius: 3px;
+  color: var(--qt-fg-3);
+  cursor: pointer;
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+}
+
+.ref.is-active {
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+}

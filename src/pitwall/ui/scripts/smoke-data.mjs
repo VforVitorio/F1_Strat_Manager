@@ -1175,6 +1175,18 @@ await emptyCtx.close();
  */
 const PACE_LAPS = 57;
 const PACE_FASTEST = { code: TOWER_ORDER[3], lap: 30, time: 84.111 };
+/**
+ * One classified car has completed FEWER laps than the rest, which is what a
+ * lapped car looks like and what bounds the race trace.
+ *
+ * LAW is already the lapped car in the tower fixture (`progress: 22.3` against
+ * everyone else's 23.9), so the two fixtures agree about who is a lap down.
+ * Without him every driver would reveal all 57 and the trace's cap - the last
+ * lap the WHOLE classified field has completed - would be indistinguishable
+ * from "the last lap anybody has", which is the ragged edge it exists to
+ * refuse.
+ */
+const PACE_LAPPED = { code: "LAW", laps: 55 };
 
 function paceBulk() {
   const drivers = {};
@@ -1202,8 +1214,11 @@ function paceBulk() {
       return;
     }
     const laps = [];
+    const crossings = {};
+    let elapsed = 0;
     let best = null;
-    for (let lap = 1; lap <= PACE_LAPS; lap += 1) {
+    const revealed = code === PACE_LAPPED.code ? PACE_LAPPED.laps : PACE_LAPS;
+    for (let lap = 1; lap <= revealed; lap += 1) {
       const pitIn = lap === 20 && index % 5 === 0;
       const pitOut = lap === 21 && index % 5 === 0;
       const isFastest = code === PACE_FASTEST.code && lap === PACE_FASTEST.lap;
@@ -1220,13 +1235,22 @@ function paceBulk() {
       // paints them was never entered by any check.
       const deleted = lap === 44 && index % 3 === 0;
       if (!pitIn && !pitOut && !deleted && (best === null || time < best)) best = time;
-      laps.push({ lap, t: lap * 90, lap_time: pitIn || pitOut ? time + 22 : time,
+      const lapTime = pitIn || pitOut ? time + 22 : time;
+      // The crossing clock is the CUMULATIVE lap time, which is what it is on
+      // the real wire and what makes the race trace mean anything: a pit stop
+      // is +22 s here, so the trace has to render it as a step of about that.
+      // Every driver used to carry `crossings: {}` and `t: lap * 90` - the same
+      // number for all twenty - so a trace built on this fixture would have
+      // been twenty flat lines at zero and every check would have passed.
+      elapsed += lapTime;
+      crossings[lap] = elapsed;
+      laps.push({ lap, t: elapsed, lap_time: lapTime,
         s1: 29, s2: 30, s3: 26, v1: 301, v2: 289, vfl: 280, vst: 321,
         position: index + 1, compound: "MEDIUM", tyre_life: lap, stint: 1,
         track_status: "1", pit_in: pitIn, pit_out: pitOut, deleted,
         generated: false, pb: false });
     }
-    drivers[code] = { number, laps_revealed: PACE_LAPS, stops: 1, crossings: {}, laps,
+    drivers[code] = { number, laps_revealed: revealed, stops: 1, crossings, laps,
       best: { lap: PACE_FASTEST.lap, lap_time: best, s1: 29, s2: 30, s3: 26,
         v1: 301, v2: 289, vfl: 280, vst: 321, compound: "MEDIUM" },
       theoretical: 85 };
@@ -1392,6 +1416,186 @@ const scSpread = ["is-t1", "is-t2", "is-t3"].map((k) => scLaps[k] ?? 0);
 check(
   scSpread.every((count) => count > 0),
   `under the safety car the grid still ranks the field instead of painting it one colour (${scSpread.join(" / ")})`,
+);
+
+// --- Band 3, second panel: the race trace ---------------------------------
+
+await pacePage.getByRole("tab", { name: "RACE TRACE" }).click();
+// Waited for and then CHECKED, rather than only waited for. The panel's empty
+// state is a real render, so a defect that collapses the trace - a reference
+// population bounded by a car the bulk has no laps for is one, and it caps the
+// whole chart at lap zero - takes the plot off the page entirely. A bare
+// `waitForSelector` turns that into a timeout and a stack trace, which names
+// nothing and reads like a flaky harness; this names it.
+const tracePlotted = await pacePage
+  .waitForSelector(".trace-band-plot", { timeout: 5000 })
+  .then(() => true)
+  .catch(() => false);
+check(tracePlotted, "the race trace draws a plot rather than its empty state");
+await pacePage.waitForTimeout(400);
+
+check((await pacePage.locator(".pace-table").count()) === 0, "the pace grid unmounts on the trace tab");
+check((await pacePage.locator(".ring").count()) === 0, "and the ring stays hidden here too");
+
+/** The trace's series and axes, read off the live ECharts instance. */
+const traceState = () =>
+  pacePage.evaluate(() => {
+    const el = document.querySelector(".trace-band-plot");
+    const chart = el && el.__pitwallChart;
+    if (!chart) return null;
+    const series = chart.getOption().series;
+    const axis = (type) => chart.getModel().getComponent(type, 0).axis.scale.getExtent();
+    return {
+      x: axis("xAxis"),
+      names: series.map((s) => s.name),
+      points: Object.fromEntries(series.map((s) => [s.name, s.data])),
+      labelled: series.filter((s) => s.endLabel?.show).map((s) => s.name),
+      zero: document.querySelector(".pace-subtitle")?.textContent ?? "",
+    };
+  });
+
+const traceLeader = await traceState();
+check(traceLeader !== null, "the race trace mounts a chart");
+
+// **The check the whole design turns on.** The reveal is per driver, so the
+// newest laps are ragged: LAW has 55 and everyone else 57. A trace plotted to
+// the last lap ANYBODY has would compute its reference at laps 56 and 57 over
+// a population of nineteen and then eighteen, and every line would swing on
+// the next reveal. It stops at the last lap ALL of them have.
+check(
+  traceLeader?.x?.[1] === PACE_LAPPED.laps,
+  `the trace stops at the last lap the whole field has completed (${traceLeader?.x?.[1]}, expected ${PACE_LAPPED.laps})`,
+);
+// And the three lap-1 retirements do NOT bound it, which is the other half:
+// they completed zero laps, so a population that included them would cap the
+// whole trace at lap 0 and render the empty state on every real race with a
+// first-lap incident. Melbourne 2025 has three.
+check(
+  (traceLeader?.x?.[1] ?? 0) > 1,
+  "a lap-1 retirement does not collapse the trace to nothing",
+);
+
+// A retired car keeps the laps he drove and gets NO point for the ones he did
+// not. These three have no crossings at all, so their series must be EMPTY -
+// never a flat line at zero, which is what a missing crossing read as a
+// default would draw, and which reads as a car circulating on the leader's
+// pace. That is the sentinel-collision class this repo has paid for twice.
+const retiredPoints = RETIRED_CODES.map((code) => traceLeader?.points[code]?.length ?? -1);
+check(
+  retiredPoints.every((count) => count === 0),
+  `a car with no crossings draws nothing rather than a flat line at zero (${retiredPoints.join(",")})`,
+);
+check(
+  RETIRED_CODES.every((code) => !(traceLeader?.labelled ?? []).includes(code)),
+  "and it is not labelled at the right-hand edge either",
+);
+
+// A pit stop is a STEP, and this is measured rather than asserted about the
+// mechanism. NOR is the fastest car in the fixture and pits on lap 20-21, each
+// of those laps carrying the stop's +22 s. Against the leader he therefore
+// falls about 44 s in two laps.
+const norLine = Object.fromEntries((traceLeader?.points.NOR ?? []).map(([lap, y]) => [lap, y]));
+const step = norLine[21] - norLine[19];
+check(
+  step <= -30,
+  `a pit stop reads as a step down of the stop's own length (${step?.toFixed(1)} s over laps 19-21)`,
+);
+
+// **The labels must not land on each other, and this is measured on the
+// RENDERED boxes.** An ECharts label is canvas text, so no selector and no
+// axis extent can see it - which is why a real overlap (ALB over HAM by 4.5 px
+// of a 9 px label) survived every other check on this page and was found by
+// looking at a screenshot. This fixture is harsher than the real race: four
+// pairs of drivers carry byte-identical cumulative times, so without the
+// de-collision their codes render exactly on top of one another.
+const labelBoxes = await pacePage.evaluate(() => {
+  const chart = document.querySelector(".trace-band-plot")?.__pitwallChart;
+  if (!chart) return { count: 0, overlaps: ["no chart"] };
+  const boxes = chart
+    .getZr()
+    .storage.getDisplayList()
+    .filter((el) => /^[A-Z]{3}$/.test(el.style?.text ?? ""))
+    .map((el) => {
+      const rect = el.getBoundingRect().clone();
+      rect.applyTransform(el.transform);
+      return { code: el.style.text, x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+    });
+  const overlaps = [];
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      const a = boxes[i];
+      const b = boxes[j];
+      const dx = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+      const dy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      if (dx > 0 && dy > 0) overlaps.push(`${a.code}/${b.code} ${dx.toFixed(1)}x${dy.toFixed(1)}`);
+    }
+  }
+  return { count: boxes.length, overlaps, right: Math.max(...boxes.map((z) => z.x + z.w)),
+           canvas: chart.getWidth() };
+});
+check(
+  labelBoxes.overlaps.length === 0,
+  `no two driver codes are drawn on top of each other (${labelBoxes.overlaps.join(", ")})`,
+);
+// And the right-hand margin actually holds them. Measured once at 52 px of
+// grid: a label's right edge landed at 804 px on an 803 px canvas.
+check(
+  labelBoxes.right <= labelBoxes.canvas,
+  `no label is clipped by the canvas edge (${labelBoxes.right?.toFixed(1)} of ${labelBoxes.canvas})`,
+);
+
+// Twenty lines need twenty identities and a legend for twenty codes eats the
+// plot. Each line says its own name at its right-hand end.
+// Sixteen, not seventeen: three cars retired on lap 1 and a fourth is in
+// `race_order` while the bulk never names him. That fourth is the case that
+// used to DELETE the panel - a minimum bounded by a car with no lap data reads
+// his lap count as zero and caps the whole trace at lap zero - and the check
+// above (x max = 55) is what catches it. This one pins the count itself.
+check(
+  traceLeader?.labelled?.length === 16,
+  `every car the bulk has laps for is labelled at its end (${traceLeader?.labelled?.length}, expected 16)`,
+);
+check(
+  (traceLeader?.points[TOWER_ORDER[9]] ?? []).length === 0,
+  "a driver the bulk does not name draws no line, and does not bound the trace either",
+);
+
+// The reference switches, and the switch is the panel's whole control surface.
+// With OUR car as the zero line every one of its own points is exactly zero -
+// which is what "flat at zero" has to mean, and what a reference computed off
+// a different clock would miss by milliseconds.
+if (tracePlotted) await pacePage.getByRole("tab", { name: "NOR" }).click();
+await pacePage.waitForTimeout(300);
+const traceOwn = await traceState();
+check(
+  (traceOwn?.points.NOR ?? []).every(([, y]) => y === 0),
+  "with OWN as the reference our own line is flat at exactly zero",
+);
+check(
+  (traceOwn?.zero ?? "").includes("NOR"),
+  `and the header says what the zero line is (${traceOwn?.zero})`,
+);
+// The other lines are NOT all zero, which is the guard that separates a real
+// reference switch from a chart that quietly zeroed everything.
+check(
+  (traceOwn?.points.VER ?? []).some(([, y]) => y !== 0),
+  "while the rest of the field is measured against it",
+);
+
+// FIELD is a third distinct answer, not a relabelled LEADER. Against the mean
+// the leaders sit ABOVE the axis; against the leader nothing can.
+if (tracePlotted) await pacePage.getByRole("tab", { name: "FIELD" }).click();
+await pacePage.waitForTimeout(300);
+const traceField = await traceState();
+const aboveField = Object.values(traceField?.points ?? {}).flat().filter(([, y]) => y > 0).length;
+const aboveLeader = Object.values(traceLeader?.points ?? {}).flat().filter(([, y]) => y > 0).length;
+check(
+  aboveLeader === 0,
+  `nothing is ahead of the car leading the lap (${aboveLeader} points above zero)`,
+);
+check(
+  aboveField > 0,
+  `against the field average the quick cars sit above the axis (${aboveField} points)`,
 );
 
 await paceCtx.close();

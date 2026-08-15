@@ -26,6 +26,7 @@ import { useState } from "react";
 import { BestsPanel } from "./BestsPanel";
 import { OwnCarTraces } from "./OwnCarTraces";
 import { RacePaceGrid } from "./RacePaceGrid";
+import { RaceTraceChart } from "./RaceTraceChart";
 import { RadioFeed } from "./RadioFeed";
 import { StatusStrip } from "./StatusStrip";
 import { TimingTower } from "./TimingTower";
@@ -38,6 +39,19 @@ import { useTick } from "../../lib/useTick";
 
 const WAITING = { text: "Waiting for arcade stream…", transient: false } as const;
 
+/**
+ * The right column's tabs, in the order a strategist reaches for them.
+ *
+ * A list rather than three literals in the JSX, so the id a button carries and
+ * the id the panel below switches on cannot drift apart - which is exactly how
+ * a fourth tab would arrive rendering the third one's panel.
+ */
+const TABS = [
+  ["traces", "TRACES"],
+  ["pace", "RACE PACE"],
+  ["trace", "RACE TRACE"],
+] as const;
+
 export function DataWindow() {
   const { tick, discontinuity, live } = useTick();
   const connection = useConnection();
@@ -48,7 +62,7 @@ export function DataWindow() {
   // stops. `useStatusText` is keyed on the sequence for that reason.
   const status = tick ? { text: `lap ${tick.arcade.lap} · live`, transient: true } : WAITING;
   const statusText = useStatusText(status, tick?.seq ?? null);
-  const [tab, setTab] = useState<"traces" | "pace">("traces");
+  const [tab, setTab] = useState<"traces" | "pace" | "trace">("traces");
 
   return (
     <main className="data-window">
@@ -64,9 +78,17 @@ export function DataWindow() {
               {/* The tab strip the delivery plan put here. Band 3 needs the
                   full 825 px of this column - measured: with the ring still
                   mounted its cells clip 1,101 of 1,140 - so the two worlds
-                  take turns rather than share. */}
+                  take turns rather than share.
+
+                  Band 3 is TWO panels, not one, and they answer questions the
+                  other cannot: the grid says how quick each lap was, the trace
+                  says where everyone is. Splitting them across two tabs rather
+                  than stacking them is the same column arithmetic again - a
+                  grid squeezed to half this height stops showing enough laps to
+                  be a history, and a trace at 300 px stops resolving the gaps
+                  it exists to show. */}
               <nav className="tab-strip" role="tablist">
-                {(["traces", "pace"] as const).map((id) => (
+                {TABS.map(([id, label]) => (
                   <button
                     key={id}
                     role="tab"
@@ -74,11 +96,11 @@ export function DataWindow() {
                     className={tab === id ? "tab is-active" : "tab"}
                     onClick={() => setTab(id)}
                   >
-                    {id === "traces" ? "TRACES" : "RACE PACE"}
+                    {label}
                   </button>
                 ))}
               </nav>
-              {tab === "traces" ? (
+              {tab === "traces" && (
                 <div className="band4">
                   <OwnCarTraces tick={tick} discontinuity={discontinuity} />
                   <div className="side-column">
@@ -86,9 +108,9 @@ export function DataWindow() {
                     <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />
                   </div>
                 </div>
-              ) : (
-                <RacePaceGrid bulk={bulk} order={tick.arcade.race_order} />
               )}
+              {tab === "pace" && <RacePaceGrid bulk={bulk} order={tick.arcade.race_order} />}
+              {tab === "trace" && <RaceTraceChart bulk={bulk} arcade={tick.arcade} />}
             </div>
           </div>
         ) : (
