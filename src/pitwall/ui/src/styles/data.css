@@ -959,6 +959,15 @@
   color: #f59e0b;
 }
 
+/* A time the stewards took away. Struck through and stepped back, which is
+ * what the tower already does to a deleted LAST - the two panels showing the
+ * same lap differently is the twin this repo pays for. It carries no rank
+ * because the ranking excludes it; it used to carry the FASTEST one. */
+.pace-table td.is-deleted {
+  color: var(--qt-fg-3);
+  text-decoration: line-through;
+}
+
 /* The in-lap and the out-lap, red in place of the time, as a timing screen
  * shows them. */
 .pace-table td.is-pit,
