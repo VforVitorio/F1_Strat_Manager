@@ -1,0 +1,201 @@
+/**
+ * Band 3's second half: the race trace, a tab of the right column.
+ *
+ * The panel is read with a ruler held VERTICALLY. One cut down the chart at a
+ * lap gives every gap in the race at that lap at once, which is the question
+ * the race-pace grid beside it cannot answer - a grid of lap times says who
+ * was quick and never says who is where.
+ *
+ * **The three references are the panel's only control, and each one answers a
+ * different question.** LEADER draws the race the way a broadcast graphic
+ * does. FIELD spreads the leaders above the axis so a midfield battle is not
+ * squashed against the top of the plot. OWN puts our car flat on zero, which
+ * is the pit wall's own question: a line climbing towards zero is a car coming
+ * for us, and the lap it reaches zero is the lap it arrives.
+ *
+ * Twenty lines need twenty identities, and a legend for twenty codes eats a
+ * third of the plot. ECharts labels each line at its right-hand END instead,
+ * which is where a race trace has always been read and where the lines are
+ * furthest apart - by the end of a race the field is strung out, so the labels
+ * separate exactly where the data does.
+ *
+ * The colours are the wire's `driver_colors`, as the tower and the ring
+ * already take them. A driver the wire has no colour for draws in the axis
+ * grey rather than in an invented hue - this repo has already found five
+ * copies of the arcade palette and none of them is going to be the sixth.
+ *
+ * ⚠️ **Those colours are TEAM colours, so the end label is the only thing that
+ * tells two team-mates apart.** Measured on the real Melbourne payload: ten
+ * colours across twenty cars, every one of them shared by exactly two drivers
+ * (VER/LAW both `rgb(6,0,239)`, LEC/HAM both `rgb(232,0,32)`, and so on). The
+ * tower has the same property and answers it with a code per row; here the
+ * answer is the code at the end of the line, which is why the de-collision
+ * below is load-bearing rather than polish. Dashing the second car of each
+ * team is the broadcast solution and is deliberately NOT taken: a dashed line
+ * already means BROADCAST-TIER data on band 4, one tab away, and two meanings
+ * for one stroke on one window is worse than two lines of one colour.
+ */
+
+import { useMemo, useState } from "react";
+import type { EChartsOption } from "echarts";
+
+import { AXIS_TEXT, CURSOR_LINE, useEChart, valueAxis } from "../../lib/chart";
+import { driverStatus } from "../../lib/driverStatus";
+import { raceTrace } from "../../lib/raceTrace";
+import type { TraceReference } from "../../lib/raceTrace";
+import type { ArcadeState, Bulk } from "../../lib/bridge";
+
+/** The own car is drawn heavier than the nineteen it has to be picked out of. */
+const OWN_WIDTH = 2;
+const FIELD_WIDTH = 1;
+
+function colourOf(arcade: ArcadeState, code: string): string {
+  const rgb = arcade.driver_colors[code];
+  // Never a CSS custom property here, unlike the tower's version of this: an
+  // ECharts canvas cannot resolve `var(--qt-fg-1)` and would draw the series
+  // in its own default palette, which is the one colour set on this window
+  // that answers to nothing.
+  return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : AXIS_TEXT;
+}
+
+/** `+12.3` / `-4.5` - the sign is the whole reading, so it is always printed. */
+function signedSeconds(value: number): string {
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}`;
+}
+
+export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: ArcadeState }) {
+  const [reference, setReference] = useState<TraceReference>("leader");
+  const own = arcade.driver_main;
+
+  // **The signature, not the objects, and this is the plan's directive rather
+  // than a micro-optimisation.** `arcade` is a fresh object ten times a
+  // second, so memoising on it would rebuild twenty series and call
+  // `setOption({notMerge: true})` at 10 Hz for content that changes once every
+  // four and a half seconds - P3 finding A6, which is on this window's list of
+  // things to prevent rather than repeat. What the trace actually depends on
+  // is the reveal, the reference, who is racing and who has stopped.
+  const stopped = arcade.race_order
+    .filter((code) => {
+      const car = arcade.drivers[code];
+      return car === undefined || driverStatus(car) === "out";
+    })
+    .join(",");
+  const signature = `${bulk?.rev ?? -1}|${reference}|${own}|${arcade.race_order.join(",")}|${stopped}`;
+
+  const trace = useMemo(
+    () => raceTrace(bulk, arcade, reference),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [signature],
+  );
+
+  const option = useMemo<EChartsOption>(() => {
+    const first = trace.laps[0] ?? 1;
+    const last = trace.laps[trace.laps.length - 1] ?? 1;
+    return {
+      backgroundColor: "transparent",
+      // Same answer as band 4's traces and for a weaker version of the same
+      // reason: `useEChart` passes `notMerge: true`, so every reveal looks to
+      // ECharts like a brand-new series and it plays the ENTRANCE sweep, not
+      // the zeroed update duration. Twenty lines growing in from the left
+      // every four and a half seconds is not an entrance, it is a flicker.
+      animation: false,
+      animationDurationUpdate: 0,
+      // The right margin is the end labels' room. Measured on the real payload:
+      // the rightmost label's edge lands at 776 px on an 803 px canvas, so 52
+      // clears it. Without the margin the codes are cut by the plot edge and the
+      // panel loses the only identification it has.
+      grid: { left: 52, right: 52, top: 10, bottom: 34, containLabel: false },
+      xAxis: valueAxis({ name: "Lap", nameGap: 20, min: first, max: last }),
+      yAxis: {
+        ...valueAxis({ name: "Δ (s)", nameGap: 38, scale: true }),
+        axisLabel: {
+          color: AXIS_TEXT,
+          fontSize: 10,
+          formatter: (value: number) => signedSeconds(value),
+        },
+      },
+      series: trace.lines.map((line) => {
+        const colour = colourOf(arcade, line.code);
+        const isOwn = line.code === own;
+        return {
+          type: "line" as const,
+          name: line.code,
+          data: line.points,
+          symbol: "none" as const,
+          lineStyle: { color: colour, width: isOwn ? OWN_WIDTH : FIELD_WIDTH },
+          itemStyle: { color: colour },
+          // The zero line hangs off the first series, as band 4's cursor does.
+          markLine: line.code === trace.lines[0]?.code
+            ? {
+                silent: true,
+                symbol: "none" as const,
+                label: { show: false },
+                data: [{ yAxis: 0, lineStyle: { color: CURSOR_LINE, width: 1, type: "solid" } }],
+              }
+            : undefined,
+          endLabel: {
+            show: line.points.length > 0,
+            formatter: line.code,
+            color: colour,
+            fontSize: 9,
+            fontWeight: isOwn ? ("bold" as const) : ("normal" as const),
+            distance: 3,
+          },
+          // **Two labels land on the same pixels, and only the screenshot said
+          // so.** Measured on the real Melbourne payload in the real bundle:
+          // ALB's and HAM's codes overlapped by 4.5 px of their 9 px height,
+          // because the midfield is where cars run a second apart and a second
+          // is four pixels on a 676 px plot spanning 77 s. Nothing else could
+          // see it - not the axis extents, not any of the smoke's checks -
+          // because an ECharts label is canvas text and not a DOM node.
+          //
+          // `shiftY` nudges the colliding label down instead of dropping it.
+          // `hideOverlap` is the other option ECharts offers and it is the
+          // wrong one here: the label IS the identification, so hiding it
+          // leaves an anonymous line, and it would hide exactly the labels a
+          // strategist is most likely to be reading - two cars a second apart
+          // are two cars racing each other.
+          labelLayout: { moveOverlap: "shiftY" as const, hideOverlap: false },
+        };
+      }),
+    };
+    // `arcade` is read only for its colours and the own code, both of which
+    // are already in the signature; see the note above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trace, own]);
+
+  const host = useEChart(trace.lines.length ? option : null);
+
+  return (
+    <section className="card trace-band">
+      <header className="pace-header">
+        <span className="pace-title">RACE TRACE</span>
+        <span className="pace-subtitle">{trace.zero}</span>
+        <nav className="ref-strip" role="tablist" aria-label="reference">
+          {(["leader", "field", "own"] as const).map((id) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={reference === id}
+              className={reference === id ? "ref is-active" : "ref"}
+              onClick={() => setReference(id)}
+            >
+              {id === "own" ? own : id.toUpperCase()}
+            </button>
+          ))}
+        </nav>
+      </header>
+      {trace.lines.length ? (
+        <div className="trace-band-plot" ref={host} />
+      ) : (
+        // A trace with nothing to draw SAYS so. An empty plot and a race whose
+        // field has not yet completed a common lap are the same pixels
+        // otherwise, which is the twin the radio feed's own empty state
+        // already had to grow.
+        <p className="trace-band-empty">
+          No lap the whole classified field has completed yet.
+        </p>
+      )}
+    </section>
+  );
+}

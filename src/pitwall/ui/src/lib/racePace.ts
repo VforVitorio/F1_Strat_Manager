@@ -79,8 +79,13 @@ const EMPTY: PaceCell = { text: "", tone: "none" };
  * one unknown at wire index 1, car 44 rendered FIRST, ahead of car 1. Sorting
  * on a pair - the number, then the wire index - is a total order by
  * construction and cannot do that.
+ *
+ * Exported because the race trace orders its series the same way and for the
+ * same reason. A second copy of this comparator is the twin defect this repo
+ * pays for more than any other - and it would be the third copy of the sort,
+ * not the second, since the version that shipped here was already wrong once.
  */
-function stableColumns(bulk: Bulk, order: string[]): string[] {
+export function stableColumns(bulk: Bulk, order: string[]): string[] {
   const keyed = order.map((code, index) => {
     const raw = bulk.drivers[code]?.number;
     const number = raw === null || raw === undefined ? null : Number.parseInt(raw, 10);
