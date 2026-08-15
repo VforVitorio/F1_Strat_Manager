@@ -21,8 +21,11 @@
  * band-height-budget.md`; the drawn layout is in the project's memory.
  */
 
+import { useState } from "react";
+
 import { BestsPanel } from "./BestsPanel";
 import { OwnCarTraces } from "./OwnCarTraces";
+import { RacePaceGrid } from "./RacePaceGrid";
 import { RadioFeed } from "./RadioFeed";
 import { StatusStrip } from "./StatusStrip";
 import { TimingTower } from "./TimingTower";
@@ -45,6 +48,7 @@ export function DataWindow() {
   // stops. `useStatusText` is keyed on the sequence for that reason.
   const status = tick ? { text: `lap ${tick.arcade.lap} · live`, transient: true } : WAITING;
   const statusText = useStatusText(status, tick?.seq ?? null);
+  const [tab, setTab] = useState<"traces" | "pace">("traces");
 
   return (
     <main className="data-window">
@@ -56,12 +60,35 @@ export function DataWindow() {
               <TimingTower arcade={tick.arcade} bulk={bulk} live={liveLap} />
               <BestsPanel bulk={bulk} />
             </div>
-            <div className="band4">
-              <OwnCarTraces tick={tick} discontinuity={discontinuity} />
-              <div className="side-column">
-                <TrackRing arcade={tick.arcade} />
-                <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />
-              </div>
+            <div className="right-column">
+              {/* The tab strip the delivery plan put here. Band 3 needs the
+                  full 825 px of this column - measured: with the ring still
+                  mounted its cells clip 1,101 of 1,140 - so the two worlds
+                  take turns rather than share. */}
+              <nav className="tab-strip" role="tablist">
+                {(["traces", "pace"] as const).map((id) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    aria-selected={tab === id}
+                    className={tab === id ? "tab is-active" : "tab"}
+                    onClick={() => setTab(id)}
+                  >
+                    {id === "traces" ? "TRACES" : "RACE PACE"}
+                  </button>
+                ))}
+              </nav>
+              {tab === "traces" ? (
+                <div className="band4">
+                  <OwnCarTraces tick={tick} discontinuity={discontinuity} />
+                  <div className="side-column">
+                    <TrackRing arcade={tick.arcade} />
+                    <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />
+                  </div>
+                </div>
+              ) : (
+                <RacePaceGrid bulk={bulk} order={tick.arcade.race_order} />
+              )}
             </div>
           </div>
         ) : (
