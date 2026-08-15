@@ -805,3 +805,167 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
+
+/* --- The right column's tab strip, and band 3 --------------------------- */
+
+/* The two worlds take turns in this column rather than sharing it. Measured:
+ * band 3 with the ring still mounted gets 555 px, its columns fall to 25.25 px
+ * against 25 px of text, and 1,101 of 1,140 cells clip. There is no
+ * arrangement that keeps both. */
+.right-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px;
+  min-height: 0;
+}
+
+.tab-strip {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  background: none;
+  border: 1px solid var(--qt-border);
+  border-radius: 3px;
+  color: var(--qt-fg-3);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+}
+
+.tab.is-active {
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+}
+
+.pace {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  min-height: 0;
+}
+
+.pace-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.pace-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.pace-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+/* The lap axis scrolls because it must - Monaco's 78 laps overflow this column
+ * on every machine at every legible size - and scrollbars are hidden globally,
+ * so this range is the affordance. It says which laps are on screen; a hidden
+ * scrollbar says nothing at all. */
+.pace-range {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.pace-scroll {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pace-table {
+  border-collapse: collapse;
+  font-family: var(--qt-mono);
+  /* 9 px, not the 10 the height gate blessed for the TOWER, and the screenshot
+   * is why. At 10 px `1:29.4` measures 39 px inside a 38.75 px column: nothing
+   * clips - `scrollWidth > clientWidth` counted zero of 760 cells on the live
+   * page - and the grid is still unreadable, because adjacent cells touch and
+   * twenty lap times run together into one string. At 9 px the same text is
+   * 33.2 px and leaves 5.5 px of gutter. A cell with a visible edge at 9 px
+   * reads better than a legible glyph with none. */
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* One row-height token, one place. The tower's 20 px is a literal in this
+ * stylesheet and the sprint-5 gate asked for a token instead; band 3 does not
+ * get to add a second literal, and nothing in TSX may copy this number - a
+ * consumer that needs it reads it with `getComputedStyle`. */
+.pace-table th,
+.pace-table td {
+  height: var(--pace-row-h, 12px);
+  line-height: var(--pace-row-h, 12px);
+  overflow: hidden;
+  padding: 0 1px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pace-table thead th {
+  background: var(--qt-panel);
+  color: var(--qt-fg-3);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+}
+
+/* The columns are separated by SHADE rather than by a rule, because a 1 px
+ * border costs a pixel the cell does not have: twenty of them take 20 px off
+ * an 803 px row and put every lap time back over its column's width. Banding
+ * costs nothing and does the same job. */
+.pace-table tbody td:nth-child(even) {
+  background: var(--qt-elevated);
+}
+
+.pace-lapcol {
+  color: var(--qt-fg-3);
+  font-weight: 400;
+  width: 26px;
+}
+
+/* Purple is the session's outright fastest lap, the same rule and the same
+ * colour the tower's sector cells use. */
+.pace-table td.is-best {
+  color: #a78bfa;
+  font-weight: 700;
+}
+
+/* The thirds of each lap's own ranking. Ranked rather than banded because a
+ * fixed percentage off the session best puts 82.4 % of a wet, safety-car race
+ * in one colour - measured on the real Melbourne payload. */
+.pace-table td.is-t1 {
+  color: #10b981;
+}
+
+.pace-table td.is-t2 {
+  color: var(--qt-fg-2);
+}
+
+.pace-table td.is-t3 {
+  color: #f59e0b;
+}
+
+/* The in-lap and the out-lap, red in place of the time, as a timing screen
+ * shows them. */
+.pace-table td.is-pit,
+.pace-table td.is-out {
+  color: #ef4444;
+}
+
+.pace-table td.is-none {
+  color: var(--qt-fg-3);
+}

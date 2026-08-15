@@ -1162,6 +1162,172 @@ check(
 );
 await emptyCtx.close();
 
+// --- Band 3: the race-pace grid -------------------------------------------
+
+/**
+ * Twenty drivers over fifty-seven laps, with the three lap-1 crashers carrying
+ * ONLY generated rows - which is what Melbourne really looks like, and what a
+ * grid keyed on the bulk's own keys silently renders as seventeen columns.
+ *
+ * `TOWER_ORDER` is ranked by POSITION; the numbers below are deliberately not
+ * in that order, so a grid that renders its columns in wire order and one that
+ * sorts them stably by car number cannot both pass.
+ */
+const PACE_LAPS = 57;
+const PACE_FASTEST = { code: TOWER_ORDER[3], lap: 30, time: 84.111 };
+
+function paceBulk() {
+  const drivers = {};
+  TOWER_ORDER.forEach((code, index) => {
+    const number = String((index * 7 + 1) % 88);
+    if (RETIRED_CODES.includes(code)) {
+      // Generated-only: rendered, counted in nothing.
+      drivers[code] = {
+        number, laps_revealed: 0, stops: 0, crossings: {},
+        laps: [{ lap: 1, t: null, lap_time: null, s1: null, s2: null, s3: null,
+          v1: null, v2: null, vfl: null, vst: null, position: null, compound: null,
+          tyre_life: null, stint: null, track_status: "1", pit_in: false, pit_out: false,
+          deleted: false, generated: true, pb: false }],
+        best: { lap: null, lap_time: null, s1: null, s2: null, s3: null,
+          v1: null, v2: null, vfl: null, vst: null, compound: null },
+        theoretical: null,
+      };
+      return;
+    }
+    const laps = [];
+    let best = null;
+    for (let lap = 1; lap <= PACE_LAPS; lap += 1) {
+      const pitIn = lap === 20 && index % 5 === 0;
+      const pitOut = lap === 21 && index % 5 === 0;
+      const isFastest = code === PACE_FASTEST.code && lap === PACE_FASTEST.lap;
+      // Laps 2-6 are the safety car, and they are in this fixture because the
+      // REAL race has them: measured on Melbourne 2025, 82.4 % of laps sit
+      // past +10 % of the session best, so a heat scale anchored on that best
+      // paints four fifths of the grid one colour. A tidy fixture cannot tell
+      // the two scales apart - this one can.
+      const neutralised = lap >= 2 && lap <= 6;
+      const green = 85 + (index % 9) * 0.4 + ((lap * 3) % 11) * 0.2;
+      const time = isFastest ? PACE_FASTEST.time : neutralised ? green * 2.4 : green;
+      if (!pitIn && !pitOut && (best === null || time < best)) best = time;
+      laps.push({ lap, t: lap * 90, lap_time: pitIn || pitOut ? time + 22 : time,
+        s1: 29, s2: 30, s3: 26, v1: 301, v2: 289, vfl: 280, vst: 321,
+        position: index + 1, compound: "MEDIUM", tyre_life: lap, stint: 1,
+        track_status: "1", pit_in: pitIn, pit_out: pitOut, deleted: false,
+        generated: false, pb: false });
+    }
+    drivers[code] = { number, laps_revealed: PACE_LAPS, stops: 1, crossings: {}, laps,
+      best: { lap: PACE_FASTEST.lap, lap_time: best, s1: 29, s2: 30, s3: 26,
+        v1: 301, v2: 289, vfl: 280, vst: 321, compound: "MEDIUM" },
+      theoretical: 85 };
+  });
+  return { rev: 1, available: true, race: { year: 2025, location: "Melbourne", total_laps: PACE_LAPS },
+    drivers, radio: { available: true, events: [] } };
+}
+
+const paceCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+const pacePage = await paceCtx.newPage();
+pacePage.on("pageerror", (error) => failures.push(`pageerror(pace): ${error.message}`));
+await pacePage.addInitScript(
+  ([payload, bulk, live]) => {
+    window.pywebview = { api: {
+      get_tick: async (s) => (s === payload.seq ? null : payload),
+      get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+      get_live_lap: async (r) => (r === live.rev ? null : live),
+      get_connection: async () => "Connected",
+    } };
+  },
+  [tick(1, { drivers: towerField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+);
+await pacePage.goto(url, { waitUntil: "domcontentloaded" });
+await pacePage.waitForSelector(".tab-strip", { timeout: 5000 });
+
+// The ring and the traces own the column until the reader asks for the grid.
+check((await pacePage.locator(".ring").count()) === 1, "the TRACES tab opens with the ring on it");
+check((await pacePage.locator(".pace-table").count()) === 0, "and the grid is not mounted yet");
+
+await pacePage.getByRole("tab", { name: "RACE PACE" }).click();
+await pacePage.waitForSelector(".pace-table", { timeout: 5000 });
+await pacePage.waitForTimeout(400);
+
+// Measured, not assumed: with the 260 px ring column still mounted the grid
+// gets 555 px, its columns fall to 25.25 px against 25 px of text and 1,101 of
+// 1,140 cells clip. There is no arrangement that keeps both.
+check((await pacePage.locator(".ring").count()) === 0, "the ring hides on the RACE PACE tab");
+check((await pacePage.locator(".radio-feed").count()) === 0, "and the radio feed hides with it");
+
+const paceHead = await pacePage.evaluate(() =>
+  [...document.querySelectorAll(".pace-table thead th")].slice(1).map((h) => h.textContent),
+);
+check(paceHead.length === 20, `twenty columns, including the three with only generated rows (${paceHead.length})`);
+check(
+  new Set(paceHead).size === 20 && paceHead.every((code) => TOWER_ORDER.includes(code)),
+  "every driver the wire names gets a column, exactly once",
+);
+// Stable across the race: `race_order` re-sorts every time two cars swap, and
+// a history grid whose columns move is a history nobody can read back.
+check(
+  JSON.stringify(paceHead) !== JSON.stringify(TOWER_ORDER),
+  "the columns are NOT in position order, which changes under the reader",
+);
+
+const paceCells = await pacePage.evaluate(() => {
+  const cells = [...document.querySelectorAll(".pace-table td")];
+  const tone = (name) => cells.filter((c) => c.className === `is-${name}`).length;
+  return {
+    total: cells.length,
+    clipped: cells.filter((c) => c.scrollWidth > c.clientWidth).length,
+    best: tone("best"), t1: tone("t1"), t2: tone("t2"), t3: tone("t3"),
+    pit: tone("pit"), out: tone("out"), none: tone("none"),
+    pitText: cells.find((c) => c.className === "is-pit")?.textContent,
+    outText: cells.find((c) => c.className === "is-out")?.textContent,
+    rows: document.querySelectorAll(".pace-table tbody tr").length,
+  };
+});
+
+// EFFECT, not mechanism. `overflow-x` on the container reports zero for every
+// variant that clips - only the cell's own scrollWidth sees the digits cut,
+// which is how a 0.27 px "fit" measured as a pass right up to the screenshot.
+check(paceCells.clipped === 0, `no lap time is cut (${paceCells.clipped}/${paceCells.total} clipped)`);
+check(paceCells.rows === PACE_LAPS, `one row per lap of the race (${paceCells.rows})`);
+check(paceCells.pitText === "IN PIT" && paceCells.outText === "OUT",
+  "the in-lap and the out-lap replace the time, as a timing screen shows them");
+check(paceCells.best === 1, `exactly one purple cell - the session's fastest lap (${paceCells.best})`);
+
+// The reason the colour ranks each lap against ITSELF. Anchored on the session
+// best with fixed percentage bands, 82.4 % of the real Melbourne payload lands
+// in one colour, because the race was wet and ran safety cars.
+const spread = [paceCells.t1, paceCells.t2, paceCells.t3];
+check(
+  spread.every((count) => count > 0) && Math.max(...spread) < paceCells.total * 0.75,
+  `the heat scale uses all three tones rather than painting one (${spread.join(" / ")})`,
+);
+
+// The check that actually separates the two scales, and the ONLY one that
+// does - the tidy laps look the same under both. Under a neutralisation the
+// whole field is bunched, so any fixed percentage band collapses it into one
+// or two tones and stops discriminating at exactly the moment a strategist is
+// reading the grid. Measured on a mutated copy that banded at 1.5 % / 4 %:
+// 40 / 45 / 0, the slowest tone empty across all five laps. Ranking inside the
+// lap splits the field whatever the spread.
+const scLaps = await pacePage.evaluate(() => {
+  const rows = [...document.querySelectorAll(".pace-table tbody tr")].slice(1, 6);
+  const tones = {};
+  for (const row of rows) {
+    for (const cell of row.querySelectorAll("td")) {
+      if (cell.textContent === "") continue;
+      tones[cell.className] = (tones[cell.className] ?? 0) + 1;
+    }
+  }
+  return tones;
+});
+const scSpread = ["is-t1", "is-t2", "is-t3"].map((k) => scLaps[k] ?? 0);
+check(
+  scSpread.every((count) => count > 0),
+  `under the safety car the grid still ranks the field instead of painting it one colour (${scSpread.join(" / ")})`,
+);
+
+await paceCtx.close();
+
 await browser.close();
 server.close();
 
