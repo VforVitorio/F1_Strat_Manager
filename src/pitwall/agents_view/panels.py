@@ -1,9 +1,13 @@
 """Header, agent cards and status bar, as JSON the AGENTS window renders.
 
-Every string and every colour here is produced by the code that paints
-the Qt window: `src/arcade/dashboard/agent_formatters.py` for the six
-cards, and the header/status logic transcribed from
-`src/arcade/dashboard/window.py`. Nothing reformats or re-decides.
+Every string and every colour here is produced by the code that painted
+the Qt window: `src/pitwall/agent_formatters.py` for the six cards, and the
+header/status logic transcribed from that window. Nothing reformats or
+re-decides.
+
+The formatters MOVED rather than died: PITWALL renders by calling them, which
+is what makes the port 1:1 by construction instead of by inspection.
+**`src/arcade/dashboard/` no longer exists** - sprint 7 retired it. It is readable in git history, and what it RENDERED is committed as screenshots under `documents/dev_docs/migration/pitwall/`, which is the baseline this port was checked against.
 
 Colours leave as `#rrggbb` because that is what both a Qt stylesheet and
 a CSS declaration take, and because the AGENTS window renders in the QT
@@ -16,7 +20,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.arcade.dashboard.agent_formatters import (
+from src.arcade.palette import (
+    DANGER,
+    SUCCESS,
+    TEXT_SECONDARY,
+    TEXT_TERTIARY,
+    WARNING,
+    hex_str,
+)
+from src.pitwall.agent_formatters import (
     format_pace,
     format_pit,
     format_radio,
@@ -25,14 +37,6 @@ from src.arcade.dashboard.agent_formatters import (
     format_tire,
     radio_tooltip_html,
     rag_tooltip_html,
-)
-from src.arcade.palette import (
-    DANGER,
-    SUCCESS,
-    TEXT_SECONDARY,
-    TEXT_TERTIARY,
-    WARNING,
-    hex_str,
 )
 
 # window.py's HeaderBar.set_connection, with its three states and their

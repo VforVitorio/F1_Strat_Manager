@@ -1,6 +1,6 @@
 /* PITWALL · AGENTS — the Qt window's geometry, in CSS.
  *
- * Every number here comes from a Qt call in `src/arcade/dashboard/`:
+ * Every number here comes from a Qt call in the retired `src/arcade/dashboard/`:
  * the 44 px header (`HeaderBar.setFixedHeight`), the 540 / 740 split
  * (`splitter.setSizes`), the 10 px panel margins and 8 px spacing
  * (`setContentsMargins` / `setSpacing`), the card border and radius

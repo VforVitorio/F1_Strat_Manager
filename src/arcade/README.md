@@ -39,7 +39,6 @@ src/arcade/
 ├── overlays.py          # WeatherPanel, LeaderboardPanel, DriverInfoPanel, …
 ├── track.py             # Track polyline renderer (DRS zones, cars)
 ├── views.py             # MenuView (interactive configurator)
-└── dashboard/           # PySide6 subprocess (see docs/arcade/dashboard.md)
 ```
 
 The arcade **does not depend on the FastAPI backend at runtime**. The

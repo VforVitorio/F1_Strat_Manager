@@ -38,10 +38,10 @@
         <mxCell id="act-sim" value="SimConnector&#10;thread" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#E6E8EF;fontStyle=1;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="1100" y="160" width="200" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="act-dash" value="Dashboard&#10;(Qt proc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#F59E0B;fontColor=#E6E8EF;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="act-dash" value="PITWALL &#183; AGENTS&#10;(webview proc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#F59E0B;fontColor=#E6E8EF;fontStyle=1;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="1360" y="160" width="200" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="act-tel" value="Telemetry&#10;(Qt proc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#06B6D4;fontColor=#E6E8EF;fontStyle=1;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="act-tel" value="PITWALL &#183; DATA&#10;(same proc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#06B6D4;fontColor=#E6E8EF;fontStyle=1;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="1620" y="160" width="200" height="60" as="geometry"/>
         </mxCell>
 
@@ -144,7 +144,7 @@
         </mxCell>
 
         <!-- Step 6: subprocess.Popen dashboard -->
-        <mxCell id="m6a" value="6a. subprocess.Popen([sys.executable, &quot;-m&quot;, &quot;src.arcade.dashboard&quot;])" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
+        <mxCell id="m6a" value="6a. subprocess.Popen([sys.executable, &quot;-m&quot;, &quot;src.pitwall&quot;])" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="940" y="595" as="sourcePoint"/>
             <mxPoint x="1460" y="595" as="targetPoint"/>
@@ -170,7 +170,7 @@
           <mxGeometry x="300" y="740" width="1200" height="160" as="geometry"/>
         </mxCell>
 
-        <mxCell id="m8" value="8. state.error = &quot;Warming up strategy models&#8230;&quot; &#183; shown in Dashboard status bar" style="endArrow=classic;html=1;strokeColor=#A855F7;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m8" value="8. state.error = &quot;Warming up strategy models&#8230;&quot; &#183; shown in the AGENTS status bar" style="endArrow=classic;html=1;strokeColor=#A855F7;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1200" y="785" as="sourcePoint"/>
             <mxPoint x="940" y="785" as="targetPoint"/>
@@ -218,7 +218,7 @@
           <mxGeometry x="960" y="1058" width="280" height="30" as="geometry"/>
         </mxCell>
 
-        <mxCell id="m13" value="13. TCP send &#8594; Dashboard (~10 Hz)" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
+        <mxCell id="m13" value="13. TCP send &#8594; PITWALL host (~10 Hz)" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="940" y="1125" as="sourcePoint"/>
             <mxPoint x="1460" y="1125" as="targetPoint"/>
@@ -231,7 +231,7 @@
           </mxGeometry>
         </mxCell>
 
-        <mxCell id="m15" value="15. Dashboard parses newline-JSON &#8594; fan out to Orchestrator card, MC bars, 6 sub-agent cards, tabs" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m15" value="15. Host parses newline-JSON &#8594; both windows poll it by seq &#8594; Orchestrator card, MC bars, 6 sub-agent cards, tabs" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1460" y="1200" as="sourcePoint"/>
             <mxPoint x="1460" y="1225" as="targetPoint"/>

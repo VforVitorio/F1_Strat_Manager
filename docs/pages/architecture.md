@@ -28,7 +28,7 @@ sequenceDiagram
     Orch-->>UI: StrategyRecommendation payload
 ```
 
-The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in a PySide6 dashboard, and the web app surfaces it in its strategy and chat tabs.
+The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in the two PITWALL windows, and the web app surfaces it in its strategy and chat tabs.
 
 ## Where to go next
 

@@ -1,8 +1,12 @@
-# Arcade Dashboard Architecture
+# Arcade Dashboard Architecture (legacy)
 
-Developer-level reference for the PySide6 dashboard that ships alongside the arcade replay. Written for someone who plans to extend or modify either window (add a new sub-agent card, a new telemetry chart, retheme the palette, change the wire protocol).
+> **Retired surface.** The PySide6 dashboard was replaced by [PITWALL](#/pitwall) and `src/arcade/dashboard/` was removed from the repo, along with the `PySide6` and `pyqtgraph` dependencies. It survives in git history, and the window's rendered output survives as committed screenshots under `documents/dev_docs/migration/pitwall/`, which is the baseline the port was checked against. This page is kept as historical reference; **the paths below no longer exist on `dev`**.
+>
+> Two modules did NOT die with it. `agent_formatters.py` and `reasoning_lines.py` moved to `src/pitwall/`, because PITWALL's AGENTS window renders by calling them - which is what makes the port 1:1 by construction rather than by inspection.
 
-Phase 3.5 Proceso B shipped the `src/arcade/dashboard/` package (fifteen modules today, `reasoning_lines.py` among them) plus a new `src/arcade/strategy_pipeline.py` and the rewritten `src/arcade/strategy.py::SimConnector`. The arcade autolaunches the dashboard subprocess when the user enables strategy mode; the user never runs a second command.
+Developer-level reference for the PySide6 dashboard that shipped alongside the arcade replay, written for someone extending either window.
+
+Phase 3.5 Proceso B shipped the `src/arcade/dashboard/` package (fifteen modules, `reasoning_lines.py` among them) plus a new `src/arcade/strategy_pipeline.py` and the rewritten `src/arcade/strategy.py::SimConnector`. The arcade autolaunched the dashboard subprocess when the user enabled strategy mode; the user never ran a second command.
 
 ## The window split
 

@@ -14,12 +14,12 @@ All of these were last edited on 2026-05-13, before two releases landed: v2.0.0 
 | `docker_deployment` | updated: `f1_webapp` on nginx, host 8501 to container 80 |
 | `webapp_structure` | **new**: the React app's feature folders and how they reach the backend |
 | `frontend_pages_streamlit_legacy` | **renamed and marked retired**: it is the Streamlit page tree, kept as a record of a surface that no longer exists |
-| `arcade_3window_architecture` | current |
+| `arcade_3window_architecture_qt_legacy` | **renamed and marked retired**: it is the PySide6 pair PITWALL replaced in sprint 7. Not relabelled into the new topology, because that is not a relabel - the DATA window is not shaped like the Qt telemetry window. The live picture is the Mermaid graph in `docs/pages/multi-agent.md` |
 | `multi_agent_architecture` | updated 2026-08-02: N25's box no longer says "LangGraph ReAct" — pace's scaffold was formally retired in #781, N25 is now shown as a direct XGBoost call, same as the sub-agents header line |
 | `multi_agent_flow` | current, but predates the projection redesign |
 | `strategy_pipeline_flow` | predates the shared inference engine |
-| `subprocess_launch_sequence` | current |
-| `tcp_broadcast_dataflow` | current |
+| `subprocess_launch_sequence` | updated sprint 7: the sequence is unchanged, the follower it launches is `python -m src.pitwall` and the two windows share one reader |
+| `tcp_broadcast_dataflow` | updated sprint 7: the subscriber is PITWALL, and the 2x2 grid is ECharts |
 | `data_pipeline` | current on the surfaces; note the FastF1 cache is one directory now, not two |
 | `agents/` | one per sub-agent (N25 to N30) plus the `StrategyRecommendation` schema; `N25_pace_agent` updated 2026-08-02 to drop the ReAct-tool boxes it never actually used (#781) |
 

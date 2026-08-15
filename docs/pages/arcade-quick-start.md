@@ -4,7 +4,7 @@
 
 One command launches everything. The arcade process owns the simulation loop and broadcasts merged state on a local TCP port; the follower surfaces subscribe and render.
 
-**Two follower stacks run side by side right now, on purpose.** PITWALL is the web-technology replacement — two pywebview windows rendering React — and the original PySide6 pair is kept alive beside it through the migration so every PITWALL panel can be compared against the window it replaces while that window still exists (`_spawn_pitwall`, `src/arcade/app.py`). The Qt pair retires at the end of the migration; the pyglet replay stays either way.
+**One follower stack, as of sprint 7.** PITWALL — two pywebview windows rendering React — is the whole strategy surface. The original PySide6 pair ran beside it through the migration so every PITWALL panel could be compared against the window it replaced while that window still existed; it has now been retired, along with the `PySide6` and `pyqtgraph` dependencies. The comparison baseline is not lost with it: the Qt windows' rendered output is committed as screenshots under `documents/dev_docs/migration/pitwall/`. The pyglet replay is unchanged either way.
 
 <p align="center">
   <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab arcade replay in action"></video>
@@ -15,7 +15,7 @@ One command launches everything. The arcade process owns the simulation loop and
 ## Prerequisites
 
 - **Python**: 3.10 or newer. The project pins dependencies with `uv`.
-- **Dependencies**: run `uv sync` from the repo root. The lockfile pulls `arcade`, `PySide6`, `pyqtgraph`, `fastf1`, `langchain-openai`, the model stack (`xgboost`, `lightgbm`, `torch`), and the NLP stack (`transformers`, `sentence-transformers`, `setfit`). No manual install steps required beyond `uv sync`.
+- **Dependencies**: run `uv sync` from the repo root. The lockfile pulls `arcade`, `pywebview`, `fastf1`, `langchain-openai`, the model stack (`xgboost`, `lightgbm`, `torch`), and the NLP stack (`transformers`, `sentence-transformers`, `setfit`). No manual install steps required beyond `uv sync`.
 - **LLM credentials**: either set `OPENAI_API_KEY` in a repo-root `.env` (the canonical TFG setup) or run LM Studio locally on `http://localhost:1234/v1` and pass `--provider lmstudio` on the command line (the arcade's own flag; its default is `openai`, independent of the `F1_LLM_PROVIDER` env var the backend and CLI read). Only the wording of the orchestrator's reasoning changes.
 - **Race data cache**: the replay reads `data/raw/{year}/{Location}/laps.parquet` and optionally `weather.parquet`. The parquet files are produced by FastF1 on first run. Expect a 20–40 second delay on the first launch of a round.
 - **Vector store (optional)**: the N30 RAG agent reads a local Qdrant index under `data/rag/`. If missing, the orchestrator degrades gracefully, regulation lookups return an empty context. Run `python scripts/build_rag_index.py` once to build it.
@@ -33,9 +33,8 @@ What happens:
 1. `src.arcade.main` parses the CLI and opens the arcade `Window`.
 2. The `--viewer` flag skips the menu and goes straight to `F1ArcadeView`.
 3. The view loads the 2025 Round 3 (Suzuka) parquet for Verstappen.
-4. With `--strategy` set, the view starts a `TelemetryStreamServer` on `127.0.0.1:9998`, owns a `StrategyState`, and spawns the dashboard subprocess with `python -m src.arcade.dashboard`.
-5. The dashboard opens two PySide6 windows that both connect back to the stream.
-6. It also spawns `python -m src.pitwall`, which opens **PITWALL · DATA** and **PITWALL · AGENTS** — two pywebview windows rendering React against the same broadcast, through a single shared TCP client.
+4. With `--strategy` set, the view starts a `TelemetryStreamServer` on `127.0.0.1:9998`, owns a `StrategyState`, and spawns `python -m src.pitwall`.
+5. PITWALL opens **PITWALL · DATA** and **PITWALL · AGENTS** — two pywebview windows rendering React against the same broadcast, through a single shared TCP client.
 
 The arcade window drives playback; every other window reacts to broadcasts. PITWALL additionally serves the same two pages over loopback, and prints the URL on startup, so you can open them in a browser (and get devtools) instead of, or as well as, the windows.
 
@@ -45,16 +44,13 @@ The arcade window drives playback; every other window reacts to broadcasts. PITW
 
 Track outline with the DRS zones drawn in green, two driver icons (our driver in team colour, rival in rival-team colour), a leaderboard on the right with compound pills and gaps, a weather panel, a driver-info strip, and a progress bar with the current lap.
 
-### Strategy dashboard (PySide6)
+### PITWALL · AGENTS
 
-A `QSplitter` divides the window into two halves.
+Orchestrator card on the left (action badge, confidence bar, pace/risk chips, plan strip with compound pill, and a guardrail line that shows when the no-LLM hard guard overrode the LLM pick), scenario bars beneath it (four bars for STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT) and reasoning tabs below that. On the right, a 3x2 grid of sub-agent cards: Pace (N25), Tire (N26), Situation (N27), Radio (N29), Pit (N28, dimmed when inactive), RAG (N30, dimmed when inactive). Pace and Tire carry embedded ECharts plots.
 
-- **Left panel (540 px wide)**: orchestrator card on top (action badge, confidence bar, pace/risk chips, plan strip with compound pill, and a guardrail line that shows when the no-LLM hard guard overrode the LLM pick), scenario bars in the middle (four bars for STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT), reasoning tabs on the bottom (six tabs with syntax highlighting).
-- **Right panel (740 px wide)**: a 3x2 grid of sub-agent cards. Pace (N25), Tire (N26), Situation (N27), Radio (N29), Pit (N28, dimmed when inactive), RAG (N30, dimmed when inactive). Each card has a headline, a short body, and a reserved chart slot: Pace and Tire host embedded `pyqtgraph` plots.
+### PITWALL · DATA
 
-### Telemetry window (PySide6)
-
-Standalone `QMainWindow` with a 2x2 grid of `pyqtgraph` plots: **Delta** (our driver vs rival), **Speed**, **Brake**, **Throttle**. The window owns its own `TelemetryStreamClient` so it can be closed or moved across monitors without interfering with the strategy dashboard.
+A full-width status strip over two columns. Left: the twenty-row timing tower and the session bests. Right: a tab strip over **TRACES** (the own-car 2x2 telemetry grid, the track ring and the radio / RCM feed), **RACE PACE** (a lap-by-lap grid coloured by each lap's own ranking) and **RACE TRACE** (accumulated time against the leader, the field average or our own car).
 
 ## Menu mode vs `--viewer`
 
@@ -109,12 +105,13 @@ you launched with `--viewer`.
 |---|---|---|
 | `FileNotFoundError: data/raw/.../laps.parquet` | the race is not in the local cache | `uv run python -c "from src.f1_strat_manager.data_cache import ensure_race; ensure_race(2025, 'Melbourne')"`, or just pick the race from the `f1-strat` menu, which calls the same function |
 | "Backend offline" / "Connection refused" | Arcade did not start the stream server | Restart the arcade with `--strategy` |
-| "No module named pyqtgraph" | `uv sync` did not complete | Re-run `uv sync` from the repo root |
 | "OpenAI api_key missing" | `.env` missing or `OPENAI_API_KEY` unset | Add the key to `.env`, or `F1_LLM_PROVIDER=lmstudio` |
-| Dashboard renders but charts stay empty | First broadcast carries only the arcade frame | Per-agent outputs arrive on the second broadcast |
+| PITWALL renders but charts stay empty | First broadcast carries only the arcade frame | Per-agent outputs arrive on the second broadcast |
+| `PITWALL needs its UI bundle` on startup | the React bundle was never built | `npm ci && npm run build` in `src/pitwall/ui` |
 
 ## Related reading
 
-- [Arcade dashboard](#/arcade-dashboard), developer-level architecture deep dive on the dashboard package.
+- [PITWALL windows](#/pitwall), the two React surfaces and the client they share.
+- [Arcade dashboard (legacy)](#/arcade-dashboard), the retired PySide6 package PITWALL replaced.
 - [Arcade strategy pipeline](#/arcade-strategy-pipeline), why the arcade delegates to the shared engine instead of keeping its own copy of the orchestrator.
 - [Multi-agent system](#/multi-agent): N25–N31 multi-agent pipeline reference.

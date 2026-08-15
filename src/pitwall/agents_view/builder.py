@@ -3,7 +3,7 @@
 The object that makes the 1:1 port true by construction: it calls the
 same formatters and runs the same accumulators as the Qt window, so the
 React side is a renderer and never a second implementation of anything.
-`src/arcade/dashboard/window.py::_on_data` is the function this mirrors,
+The Qt window's `window.py::_on_data` is the function this mirrors,
 in the same order, because the order is load-bearing - the history is
 seeded before `latest` is folded in, and the status bar is set last so it
 reflects whatever the pipeline reported for THIS tick.

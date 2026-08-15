@@ -230,13 +230,12 @@ class F1ArcadeView(arcade.View):
         self._strategy_connector = None  # set by __init__ if strategy_enabled
         self._strategy_state = None
         self._stream_server = None
-        self._dashboard_proc: subprocess.Popen | None = None
         self._pitwall_proc: subprocess.Popen | None = None
         self._broadcast_tick: int = 0
         # Highest frame index already put on the wire. -1 means "nothing sent
         # yet", so the first broadcast emits a single sample rather than the
         # whole race. Advanced on every due tick even when no client is
-        # attached, so a dashboard that connects on lap 40 gets the current
+        # attached, so a consumer that connects on lap 40 gets the current
         # tick's span and not 40 laps of backlog.
         self._last_broadcast_idx: int = -1
         # Counts payloads actually put on the wire, so a consumer can tell a
@@ -385,15 +384,14 @@ class F1ArcadeView(arcade.View):
 
     def _init_strategy_layer(self) -> None:
         """Start the local strategy driver, the TCP broadcast server and
-        the PySide6 dashboard subprocess.
+        the PITWALL subprocess.
 
-        The strategy UI lives entirely in the dashboard subprocess: the
-        arcade replay keeps the track, leaderboard and car animations
-        (the replay-first concerns) and broadcasts merged
-        arcade+strategy state over TCP so the dashboard can render the
-        orchestrator card, the six sub-agent cards and the charts. The
-        dashboard is spawned last so a slow Qt boot never delays the
-        replay window."""
+        The strategy UI lives entirely in that subprocess: the arcade replay
+        keeps the track, leaderboard and car animations (the replay-first
+        concerns) and broadcasts merged arcade+strategy state over TCP so
+        PITWALL can render the orchestrator card, the six sub-agent cards,
+        the charts and the DATA window. It is spawned last so a slow UI boot
+        never delays the replay window."""
         from src.arcade.strategy import SimConnector, SimulateRequestDTO, StrategyState
         from src.arcade.stream import TelemetryStreamServer
 
@@ -434,47 +432,23 @@ class F1ArcadeView(arcade.View):
             logger.warning("Stream server failed to bind %s:%d (%s)", STREAM_HOST, STREAM_PORT, exc)
             self._stream_server = None
 
-        self._spawn_dashboard()
         self._spawn_pitwall()
-
-    def _spawn_dashboard(self) -> None:
-        """Launch the PySide6 strategy dashboard as a child process.
-
-        Spawned lazily so pyglet (arcade) and Qt (dashboard) never share
-        an event loop. ``CREATE_NEW_CONSOLE`` on Windows gives the
-        subprocess its own log stream so the arcade's stdout stays clean.
-        A failed spawn is logged at WARNING and swallowed: the arcade
-        replay keeps playing, just without the companion window."""
-        try:
-            creationflags = subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
-            self._dashboard_proc = subprocess.Popen(
-                [sys.executable, "-m", "src.arcade.dashboard"],
-                creationflags=creationflags,
-            )
-            logger.info("Dashboard subprocess spawned (pid=%s)", self._dashboard_proc.pid)
-        except (OSError, ValueError) as exc:
-            # subprocess.Popen documents OSError (e.g. the interpreter path
-            # cannot be executed) and ValueError (bad argument combination)
-            # as its failure modes; nothing else escapes a plain Popen() call.
-            logger.warning(
-                "Dashboard spawn failed (%s) — arcade continues without it",
-                exc,
-            )
-            self._dashboard_proc = None
 
     def _spawn_pitwall(self) -> None:
         """Launch the PITWALL windows as a child process.
 
-        Runs ALONGSIDE the Qt dashboard for now. The two surfaces read the
-        same broadcast and neither knows about the other, so keeping both
-        alive through sprints 2-6 means every PITWALL panel can be compared
-        against the window it replaces while that window still exists. The
-        Qt spawn is what disappears in sprint 7, not this one.
+        The only companion window there is. It ran alongside the Qt dashboard
+        through sprints 2-6 so every PITWALL panel could be compared against
+        the window it replaces while that window still existed; sprint 7
+        retired the Qt one, and the captures that baseline stands on are
+        committed under `documents/dev_docs/migration/pitwall/` rather than
+        living in a session scratchpad, precisely so retiring it destroys
+        nothing.
 
-        A failed spawn is logged and swallowed for the same reason the
-        dashboard's is: the replay keeps playing without its companion. The
-        commonest failure is simply that the UI bundle has not been built,
-        which `src.pitwall.__main__` reports with the exact command."""
+        A failed spawn is logged and swallowed: the replay keeps playing
+        without its companion. The commonest failure is simply that the UI
+        bundle has not been built, which `src.pitwall.__main__` reports with
+        the exact command."""
         try:
             creationflags = subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
             self._pitwall_proc = subprocess.Popen(
@@ -508,11 +482,11 @@ class F1ArcadeView(arcade.View):
         if self._stream_server is not None:
             self._stream_server.stop()
             self._stream_server = None
-        # Both subprocesses go through the same helper. `_terminate`'s own
-        # docstring says a second copy of its block would be the twin that
-        # stops getting fixed, and this inline copy was that twin from the
-        # moment the helper was extracted.
-        self._dashboard_proc = self._terminate(self._dashboard_proc, "Dashboard")
+        # Through the helper rather than inline. `_terminate`'s own docstring
+        # says a second copy of its block would be the twin that stops getting
+        # fixed, and an inline copy WAS that twin until the helper existed.
+        # One companion window survives sprint 7; the helper stays because the
+        # reason it exists is about the block, not about the count.
         self._pitwall_proc = self._terminate(self._pitwall_proc, "Pitwall")
 
     @staticmethod
@@ -522,8 +496,9 @@ class F1ArcadeView(arcade.View):
         Three outcomes: it exits, it does not and gets killed, or it was
         already gone. Every companion window goes through here, which is
         the point: a second copy of this block would be the twin that stops
-        getting fixed, and for one release the dashboard's teardown was
-        exactly that copy.
+        getting fixed, and for one release the Qt dashboard's teardown was
+        exactly that copy. One window is left and the helper stays anyway -
+        the reason it exists is about the block, not about the count.
         """
         if proc is None:
             return None
@@ -618,7 +593,7 @@ class F1ArcadeView(arcade.View):
     def _build_arcade_snapshot(
         self, frame_idx: int, span_start: int, rewound: bool, dropped: int = 0
     ) -> dict:
-        """Compact version of the per-frame dict the dashboard needs.
+        """Compact version of the per-frame dict a stream consumer needs.
 
         Lighter than the internal `_build_frame_dict` consumed by the
         panels: `throttle` and `brake` stay out of the 20-car block
