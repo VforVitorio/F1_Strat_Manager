@@ -14,6 +14,14 @@
  * 555 px, columns fall to 25.25 px against 25 px of text, and 1,101 of 1,140
  * cells clip. There is no arrangement that keeps both.
  *
+ * Both of those counts come from the PROTOTYPE that chose the orientation
+ * (`b3_measure.mjs`), not from this component: they describe layouts the tree
+ * deliberately no longer contains, so they cannot be re-measured here and are
+ * named as prototype figures rather than as measurements of what ships. The
+ * numbers that DO describe what ships were taken on the real payload in the
+ * real bundle: 20 columns of 38.75 px, 0 of 1,140 cells clipped, at all three
+ * client heights the fleet produces.
+ *
  * The lap axis scrolls, because it must: Monaco's 78 laps overflow the column
  * on every machine in the fleet at every legible font size. It is pinned to
  * the newest lap so the panel follows the race, and the header states the

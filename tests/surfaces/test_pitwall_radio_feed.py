@@ -86,8 +86,11 @@ def test_the_feed_carries_driver_radio_under_real_driver_codes():
     radios = _of_kind(everything, "radio")
     assert radios, "the race's driver radio never reaches the feed"
     speakers = {event["driver"] for event in radios}
+    # Membership in the grid is the whole assertion. A length check was here
+    # too and it was decoration: the degradation this file exists to pin
+    # produced `D12`, which is three characters long, so it satisfied the very
+    # rule it was written to break.
     assert speakers <= set(codes), f"radio attributed to non-drivers: {speakers - set(codes)}"
-    assert all(len(code) == 3 for code in speakers), f"synthetic codes in the feed: {speakers}"
 
 
 def test_a_radio_waits_for_its_own_driver_and_an_rcm_waits_for_the_leader():
@@ -199,4 +202,37 @@ def test_the_feed_rides_in_the_bulk_and_a_race_switch_empties_it():
     assert switched["available"] is False, "the table did not follow the race switch"
     assert switched["radio"] == {"available": False, "events": []}, (
         "the previous race's radio stayed on screen beside a table that had gone empty"
+    )
+
+
+def test_a_tick_that_names_no_race_takes_the_feed_down_with_the_table():
+    """The malformed-tick return has to clear the corpus, and it did not.
+
+    `_session_for` returns early when the tick's year or location is not the
+    type it expects - above the block that reloads both the laps and the radio.
+    So the table fell to its unavailable payload while `_masked_view` went on
+    serving the PREVIOUS race's messages out of a corpus the early return had
+    skipped: 46 of them, beside a table that had already given up.
+
+    Not reachable from today's producer, which always publishes an int year and
+    a str location. It is guarded because the branch exists to be defensive and
+    was not, and because this is the exact twin shape the sprint before paid
+    for between these same two channels.
+    """
+    codes = _codes_or_skip()
+    _corpus_or_skip()
+    client = _FakeClient(_tick(dict.fromkeys(codes, 24)))
+    host = PitwallHost(client, window_count=1)
+
+    served = host.get_bulk(-1)
+    assert served["radio"]["events"], "the feed never loaded, so the case cannot be exercised"
+
+    malformed = _tick(dict.fromkeys(codes, 24))
+    malformed["arcade"].pop("location")
+    client.latest = malformed
+    answered = host.get_bulk(served["rev"])
+
+    assert answered["available"] is False, "the table did not go to its unavailable payload"
+    assert answered["radio"] == {"available": False, "events": []}, (
+        "the table went empty and the previous race's radio stayed on screen beside it"
     )

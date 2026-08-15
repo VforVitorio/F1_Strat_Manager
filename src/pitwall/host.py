@@ -296,9 +296,21 @@ class PitwallHost:
         comes to serve the previous race - which is the twin this repo pays for
         most often, and which F7 caught between these very two channels one
         sprint ago.
+
+        **And the malformed-tick return clears them, which it did not.** One
+        invalidation point is not enough if there is an early return above it:
+        a tick naming no race sent the TABLE to its unavailable payload while
+        `_masked_view` went on serving the previous race's radio out of a
+        corpus this method had skipped over - 46 messages of a race the panel
+        beside it had already given up on. Not reachable from today's producer,
+        which always publishes an int year and a str location, and fixed anyway
+        because the branch exists to be defensive and was not.
         """
         year, location = arcade.get("year"), arcade.get("location")
         if not isinstance(year, int) or not isinstance(location, str):
+            self._session_key = None
+            self._session = None
+            self._radio = None
             return None
         if self._session_key != (year, location):
             self._session_key = (year, location)

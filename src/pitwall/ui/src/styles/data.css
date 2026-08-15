@@ -899,6 +899,12 @@
   font-variant-numeric: tabular-nums;
   table-layout: fixed;
   width: 100%;
+  /* Defined HERE, once. It used to exist only as a `var(--pace-row-h, 12px)`
+   * fallback in the two declarations below - a token nothing ever set, so the
+   * fallback always applied and the literal was written TWICE, one more copy
+   * than the tower's single `height: 20px`, under a comment claiming the
+   * opposite. */
+  --pace-row-h: 12px;
 }
 
 /* One row-height token, one place. The tower's 20 px is a literal in this
@@ -907,8 +913,8 @@
  * consumer that needs it reads it with `getComputedStyle`. */
 .pace-table th,
 .pace-table td {
-  height: var(--pace-row-h, 12px);
-  line-height: var(--pace-row-h, 12px);
+  height: var(--pace-row-h);
+  line-height: var(--pace-row-h);
   overflow: hidden;
   padding: 0 1px;
   text-align: center;
@@ -957,6 +963,15 @@
 
 .pace-table td.is-t3 {
   color: #f59e0b;
+}
+
+/* A time the stewards took away. Struck through and stepped back, which is
+ * what the tower already does to a deleted LAST - the two panels showing the
+ * same lap differently is the twin this repo pays for. It carries no rank
+ * because the ranking excludes it; it used to carry the FASTEST one. */
+.pace-table td.is-deleted {
+  color: var(--qt-fg-3);
+  text-decoration: line-through;
 }
 
 /* The in-lap and the out-lap, red in place of the time, as a timing screen

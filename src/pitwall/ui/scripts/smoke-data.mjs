@@ -1178,8 +1178,15 @@ const PACE_FASTEST = { code: TOWER_ORDER[3], lap: 30, time: 84.111 };
 
 function paceBulk() {
   const drivers = {};
+  // One driver has no car number and one is missing from the bulk entirely.
+  // Both are typed as possible (`DriverLaps.number` is `string | null`) and
+  // neither appeared in any fixture, so the guards below could not see an
+  // intransitive sort or a column keyed on the bulk.
+  const NO_NUMBER = TOWER_ORDER[6];
+  const ABSENT_FROM_BULK = TOWER_ORDER[9];
   TOWER_ORDER.forEach((code, index) => {
-    const number = String((index * 7 + 1) % 88);
+    if (code === ABSENT_FROM_BULK) return;
+    const number = code === NO_NUMBER ? null : String((index * 7 + 1) % 88);
     if (RETIRED_CODES.includes(code)) {
       // Generated-only: rendered, counted in nothing.
       drivers[code] = {
@@ -1208,11 +1215,15 @@ function paceBulk() {
       const neutralised = lap >= 2 && lap <= 6;
       const green = 85 + (index % 9) * 0.4 + ((lap * 3) % 11) * 0.2;
       const time = isFastest ? PACE_FASTEST.time : neutralised ? green * 2.4 : green;
-      if (!pitIn && !pitOut && (best === null || time < best)) best = time;
+      // Melbourne really carries deleted racing laps - six of them - and every
+      // row of this fixture used to say `deleted: false`, so the branch that
+      // paints them was never entered by any check.
+      const deleted = lap === 44 && index % 3 === 0;
+      if (!pitIn && !pitOut && !deleted && (best === null || time < best)) best = time;
       laps.push({ lap, t: lap * 90, lap_time: pitIn || pitOut ? time + 22 : time,
         s1: 29, s2: 30, s3: 26, v1: 301, v2: 289, vfl: 280, vst: 321,
         position: index + 1, compound: "MEDIUM", tyre_life: lap, stint: 1,
-        track_status: "1", pit_in: pitIn, pit_out: pitOut, deleted: false,
+        track_status: "1", pit_in: pitIn, pit_out: pitOut, deleted,
         generated: false, pb: false });
     }
     drivers[code] = { number, laps_revealed: PACE_LAPS, stops: 1, crossings: {}, laps,
@@ -1258,7 +1269,38 @@ check((await pacePage.locator(".radio-feed").count()) === 0, "and the radio feed
 const paceHead = await pacePage.evaluate(() =>
   [...document.querySelectorAll(".pace-table thead th")].slice(1).map((h) => h.textContent),
 );
-check(paceHead.length === 20, `twenty columns, including the three with only generated rows (${paceHead.length})`);
+check(paceHead.length === 20, `every driver the wire names gets a column (${paceHead.length})`);
+// One of them is absent from `bulk.drivers` altogether. The design says the
+// wire decides WHO races; a grid that reduced over the bulk instead would be
+// one column short and nothing would say so. (The reason once given for this -
+// "the bulk renders seventeen" - was false: `masked_view` iterates every driver
+// it loaded, so the bulk carries all twenty at every reveal. The rule stands;
+// its old justification did not, and this check replaces it.)
+check(
+  paceHead.includes(TOWER_ORDER[9]),
+  "a driver the bulk does not name still gets his column from the wire",
+);
+// Ascending by car number, with the unknown at the END rather than acting as a
+// barrier. Two orderings in one comparator is intransitive: measured on the
+// real bundle with one unknown at wire index 1, car 44 rendered ahead of car 1.
+const paceNumbers = await pacePage.evaluate(
+  ([head, bulkNumbers]) => head.map((code) => bulkNumbers[code] ?? null),
+  [paceHead, Object.fromEntries(Object.entries(paceBulk().drivers).map(([c, d]) => [c, d.number === null ? null : Number(d.number)]))],
+);
+const knownNumbers = paceNumbers.filter((n) => n !== null);
+check(
+  knownNumbers.every((n, i) => i === 0 || knownNumbers[i - 1] <= n),
+  `columns ascend by car number (${knownNumbers.join(",")})`,
+);
+// Every unknown at the END, as a suffix. There are two of them here - the
+// driver with a null number and the one the bulk never names - and the
+// assertion is that no numbered car sits behind either, which is exactly what
+// the intransitive comparator did: it stranded the cars before the unknown.
+const firstNull = paceNumbers.indexOf(null);
+check(
+  firstNull === -1 || paceNumbers.slice(firstNull).every((n) => n === null),
+  `unknown numbers sort to the end instead of stranding the cars before them (${paceNumbers.join(",")})`,
+);
 check(
   new Set(paceHead).size === 20 && paceHead.every((code) => TOWER_ORDER.includes(code)),
   "every driver the wire names gets a column, exactly once",
@@ -1292,6 +1334,32 @@ check(paceCells.rows === PACE_LAPS, `one row per lap of the race (${paceCells.ro
 check(paceCells.pitText === "IN PIT" && paceCells.outText === "OUT",
   "the in-lap and the out-lap replace the time, as a timing screen shows them");
 check(paceCells.best === 1, `exactly one purple cell - the session's fastest lap (${paceCells.best})`);
+
+// A deleted time is struck through and carries NO rank. It used to carry the
+// FASTEST one: the ranking excludes it, so `indexOf` answered -1, and -1 and
+// "top third" shared a branch. Measured on the real race, GAS's lap 54 was
+// last of fourteen and rendered the same green as the quickest.
+const deletedCells = await pacePage.evaluate(() => {
+  const rows = [...document.querySelectorAll(".pace-table tbody tr")];
+  const row = rows.find((r) => r.querySelector("th")?.textContent === "44");
+  const cells = [...(row?.querySelectorAll("td") ?? [])];
+  const struck = cells.filter((c) => c.className === "is-deleted");
+  return {
+    struck: struck.length,
+    line: struck[0] ? getComputedStyle(struck[0]).textDecorationLine : null,
+    text: struck[0]?.textContent ?? "",
+    fastestToned: cells.filter((c) => c.className === "is-t1").length,
+  };
+});
+check(deletedCells.struck > 0, `the deleted laps reach the grid (${deletedCells.struck})`);
+check(
+  deletedCells.line === "line-through",
+  `a deleted time is struck through, as the tower already shows it (${deletedCells.line})`,
+);
+check(
+  /^\d:\d\d\.\d$/.test(deletedCells.text),
+  `and it still shows its time rather than vanishing (${deletedCells.text})`,
+);
 
 // The reason the colour ranks each lap against ITSELF. Anchored on the session
 // best with fixed percentage bands, 82.4 % of the real Melbourne payload lands
