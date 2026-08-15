@@ -899,6 +899,12 @@
   font-variant-numeric: tabular-nums;
   table-layout: fixed;
   width: 100%;
+  /* Defined HERE, once. It used to exist only as a `var(--pace-row-h, 12px)`
+   * fallback in the two declarations below - a token nothing ever set, so the
+   * fallback always applied and the literal was written TWICE, one more copy
+   * than the tower's single `height: 20px`, under a comment claiming the
+   * opposite. */
+  --pace-row-h: 12px;
 }
 
 /* One row-height token, one place. The tower's 20 px is a literal in this
@@ -907,8 +913,8 @@
  * consumer that needs it reads it with `getComputedStyle`. */
 .pace-table th,
 .pace-table td {
-  height: var(--pace-row-h, 12px);
-  line-height: var(--pace-row-h, 12px);
+  height: var(--pace-row-h);
+  line-height: var(--pace-row-h);
   overflow: hidden;
   padding: 0 1px;
   text-align: center;

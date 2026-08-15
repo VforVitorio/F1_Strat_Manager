@@ -99,9 +99,21 @@ function stableColumns(bulk: Bulk, order: string[]): string[] {
  * **The truncation is what makes the grid fit at all.** Measured against the
  * real built stylesheet at the right column's real width: twenty columns of
  * 38.75 px hold this form with room to spare, while the same cell in seconds
- * (`149.413`) clips 793 of 1140 cells the moment a cell carries one pixel of
- * padding. Tenths is also the resolution the grid needs, because the ranking
- * colour carries the ordering and the number carries the magnitude.
+ * (`149.413`) clips **205 of 1,140 cells on the real Melbourne payload**, at
+ * all three client heights the fleet produces. (An earlier version of this
+ * sentence said 793, which was measured on a prototype whose synthetic times
+ * were spread across the race's whole range rather than on the payload the
+ * window serves - the wrong-distribution class, in a comment. The smoke's own
+ * fixture clips 85, so it is about 2.4x less sensitive than the real race:
+ * worth knowing before trusting an "it fits" from it.)
+ *
+ * Tenths is also the resolution the grid needs, because the ranking colour
+ * carries the ordering and the number carries the magnitude.
+ *
+ * **It runs to seven characters from ten minutes upward** (`600 -> "10:00.0"`).
+ * No lap on disk approaches it - Melbourne's slowest is 149.413 s and nothing
+ * reaches 300 - but a red-flagged race would, and no race with a red flag is
+ * downloadable here to test it.
  */
 export function paceLabel(seconds: number): string {
   const minutes = Math.floor(seconds / 60);

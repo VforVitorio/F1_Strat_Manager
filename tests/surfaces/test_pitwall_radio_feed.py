@@ -86,8 +86,11 @@ def test_the_feed_carries_driver_radio_under_real_driver_codes():
     radios = _of_kind(everything, "radio")
     assert radios, "the race's driver radio never reaches the feed"
     speakers = {event["driver"] for event in radios}
+    # Membership in the grid is the whole assertion. A length check was here
+    # too and it was decoration: the degradation this file exists to pin
+    # produced `D12`, which is three characters long, so it satisfied the very
+    # rule it was written to break.
     assert speakers <= set(codes), f"radio attributed to non-drivers: {speakers - set(codes)}"
-    assert all(len(code) == 3 for code in speakers), f"synthetic codes in the feed: {speakers}"
 
 
 def test_a_radio_waits_for_its_own_driver_and_an_rcm_waits_for_the_leader():
