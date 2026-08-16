@@ -231,6 +231,9 @@ class F1ArcadeView(arcade.View):
         self._strategy_state = None
         self._stream_server = None
         self._pitwall_proc: subprocess.Popen | None = None
+        # Pushed onto the WINDOW (not the view) when the strategy layer starts,
+        # popped in `on_hide_view`. See `_on_window_close`.
+        self._close_handler: dict[str, object] | None = None
         self._broadcast_tick: int = 0
         # Highest frame index already put on the wire. -1 means "nothing sent
         # yet", so the first broadcast emits a single sample rather than the
@@ -433,6 +436,32 @@ class F1ArcadeView(arcade.View):
             self._stream_server = None
 
         self._spawn_pitwall()
+        # **A window CLOSE never reaches `on_hide_view`, and that is a fact about
+        # the toolkit rather than about this class.** In the installed arcade,
+        # `on_hide_view` is invoked from exactly two places: `Window.show_view`,
+        # which hides the previous view before showing the next, and the explicit
+        # `Window.hide_view`. `Window.close` calls neither - it sets `closed`,
+        # delegates to pyglet and unschedules the clock. So the teardown ran when
+        # the user navigated back to the MENU and never when they closed the
+        # window, which is the ordinary way to end a session, and PITWALL was
+        # left running against a broadcast that had stopped (#947).
+        #
+        # Registered here rather than in `__init__` because there is nothing to
+        # tear down without `--strategy`, and kept as an attribute so it can be
+        # POPPED again: a handler pushed onto the window outlives the view, and
+        # a stale one would fire this view's teardown after the user had moved on.
+        self._close_handler = {"on_close": self._on_window_close}
+        self.window.push_handlers(**self._close_handler)
+
+    def _on_window_close(self) -> None:
+        """Route a window close through the one teardown, then let pyglet close.
+
+        Returning None (rather than `True`) leaves the default handler in place,
+        so the window still closes. `on_hide_view` is idempotent by construction -
+        `_terminate` takes `None` and every field it clears is set to `None` - so
+        the menu -> viewer -> menu -> close path running it twice is harmless.
+        """
+        self.on_hide_view()
 
     def _spawn_pitwall(self) -> None:
         """Launch the PITWALL windows as a child process.
@@ -488,6 +517,12 @@ class F1ArcadeView(arcade.View):
         # One companion window survives sprint 7; the helper stays because the
         # reason it exists is about the block, not about the count.
         self._pitwall_proc = self._terminate(self._pitwall_proc, "Pitwall")
+        # Pop the close handler with the rest. Leaving it pushed is how the NEXT
+        # view's close would run THIS view's teardown - the same class of defect
+        # as the one this method exists to fix, one level up.
+        if self._close_handler is not None:
+            self.window.remove_handlers(**self._close_handler)
+            self._close_handler = None
 
     @staticmethod
     def _terminate(proc: subprocess.Popen | None, name: str) -> None:
