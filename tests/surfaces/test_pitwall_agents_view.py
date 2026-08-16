@@ -14,8 +14,12 @@ import textwrap
 
 import pytest
 
+# The AGENTS window's content layer, which moved OUT of the Qt package in
+# sprint 7 rather than dying with it: PITWALL renders by calling these, which
+# is what made the port 1:1 by construction instead of by inspection.
 REUSED_BY_PITWALL = (
-    "src.arcade.dashboard.agent_formatters",
+    "src.pitwall.agent_formatters",
+    "src.pitwall.reasoning_lines",
     "src.arcade.palette",
 )
 
@@ -368,32 +372,6 @@ def test_nothing_to_render_is_none_rather_than_an_empty_view():
     assert _host(None, connected=False).get_agents_view(-1) is None
 
 
-def test_the_status_glyphs_match_the_qt_cards():
-    """The twin-detector for the one map that had to be repeated.
-
-    `agent_card.py::_GLYPH_FOR` lives inside a QFrame subclass and cannot
-    be imported from a process with no Qt, so `panels.STATUS_GLYPHS`
-    repeats it. Repeating a map without a guard is how this repo's most
-    frequent defect starts, so the two are compared for as long as both
-    exist. It skips where Qt does not import; the port's own copy is
-    still exercised by every card test above.
-    """
-    agent_card = pytest.importorskip(
-        "src.arcade.dashboard.agent_card",
-        reason="the Qt dashboard is an optional surface and needs a display stack",
-        exc_type=ImportError,
-    )
-    from src.arcade.palette import hex_str
-    from src.pitwall.agents_view.panels import STATUS_GLYPHS
-
-    qt_map = {
-        status: (glyph, hex_str(colour))
-        for status, (glyph, colour) in agent_card._GLYPH_FOR.items()
-    }
-
-    assert STATUS_GLYPHS == qt_map
-
-
 # --- The decision panel -----------------------------------------------------
 
 
@@ -632,23 +610,6 @@ def test_a_tab_with_no_reasoning_still_shows_the_agents_numbers():
         "radio",
         "pit",
     ]
-
-
-def test_the_qt_tabs_and_pitwall_read_the_same_line_builders():
-    """The metrics layer is shared, not repeated.
-
-    `reasoning_tabs.py` is the Qt widget and this is the port; if the two
-    ever hold separate copies of these five functions, they will describe
-    the same lap differently within a sprint.
-    """
-    qt_tabs = pytest.importorskip(
-        "src.arcade.dashboard.reasoning_tabs",
-        reason="the Qt dashboard is an optional surface and needs a display stack",
-        exc_type=ImportError,
-    )
-    from src.arcade.dashboard import reasoning_lines
-
-    assert qt_tabs.LINE_BUILDERS is reasoning_lines.LINE_BUILDERS
 
 
 # --- The two embedded charts ------------------------------------------------

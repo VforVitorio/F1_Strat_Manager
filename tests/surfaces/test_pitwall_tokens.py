@@ -114,29 +114,6 @@ def test_the_two_python_palettes_still_mirror_each_other():
         assert getattr(palette, name) == getattr(config, name), f"{name} drifted between the copies"
 
 
-def test_the_qt_theme_still_serves_the_same_tuples_it_re_exports():
-    """`dashboard/theme.py` keeps every name its widgets import.
-
-    The split moved the values out and left re-exports behind, so a widget
-    doing `from ...theme import ACCENT` must still get the same object. If
-    Qt is unavailable this skips — but the pair above is guarded either
-    way now, which is the point of the split.
-    """
-    theme = pytest.importorskip(
-        "src.arcade.dashboard.theme",
-        reason="the Qt dashboard is an optional surface and needs a display stack",
-        exc_type=ImportError,
-    )
-    from src.arcade import palette
-
-    for name in ("ACCENT", "SUCCESS", "WARNING", "DANGER", "TEXT_PRIMARY", "MONO_FONT_STACK"):
-        assert getattr(theme, name) is getattr(palette, name), (
-            f"{name} is no longer the same object"
-        )
-    assert theme.compound_pill_html is palette.compound_pill_html
-    assert theme.flag_chip_html is palette.flag_chip_html
-
-
 # The Python palette predates the webapp's current tokens and has NOT been
 # migrated: doing so would restyle the pyglet track and HUD, which is a visual
 # decision and not this sprint's. Freezing the divergence is what makes it

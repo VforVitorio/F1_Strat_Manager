@@ -13,8 +13,10 @@ pandas, against 0.025 s for `src.arcade.config`. A module that answers
 "what colour is a MEDIUM tyre" should cost neither that nor a display
 stack.
 
-It lives outside `src/arcade/dashboard/` deliberately. That whole package
-is deleted when the Qt windows are retired, and this must survive it.
+It lived outside `src/arcade/dashboard/` deliberately, so that retiring
+the Qt windows would not take it with them. That happened in sprint 7:
+the package is gone and this is still here, read by the pyglet HUD and by
+PITWALL's own formatters.
 
 **These values are still a deliberate copy of `src/arcade/config.py`'s**,
 kept separate because the two run in different processes and importing

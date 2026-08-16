@@ -34,8 +34,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from src.arcade.dashboard.reasoning_lines import LINE_BUILDERS, clean, compose
 from src.arcade.palette import TEXT_PRIMARY, hex_str
+from src.pitwall.reasoning_lines import LINE_BUILDERS, clean, compose
 
 # reasoning_tabs.py's five colours, in its order. The order matters: the
 # action keywords are last, so `PIT_NOW` inside a percentage-bearing

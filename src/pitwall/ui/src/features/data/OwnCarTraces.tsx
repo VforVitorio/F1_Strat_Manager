@@ -1,7 +1,7 @@
 /**
  * Band 4: the own car's lap, as four locked-axis traces against distance.
  *
- * A 1:1 port of `src/arcade/dashboard/telemetry_panel.py`. Every number in
+ * A 1:1 port of the retired Qt dashboard's `telemetry_panel.py`. Every number in
  * this file - the four Y ranges, the fallback X range, the colour each
  * metric draws in - is read out of that module rather than chosen here, and
  * the acceptance reference is the capture at

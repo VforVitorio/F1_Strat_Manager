@@ -1,6 +1,6 @@
 """The two rolling per-lap stores the AGENTS charts read from.
 
-Ported from `src/arcade/dashboard/window.py:239-293`, near-verbatim and
+Ported from the Qt window's `window.py:239-293`, near-verbatim and
 on purpose: the Qt window is the acceptance reference for this port, and
 an accumulator rewritten from its description is exactly how the two
 surfaces start disagreeing about the same race.

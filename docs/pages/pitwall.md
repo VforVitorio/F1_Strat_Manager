@@ -1,10 +1,12 @@
 # PITWALL: the strategy surfaces, in web technology
 
 Two windows — **PITWALL · DATA** and **PITWALL · AGENTS** — rendering React
-against the arcade's live broadcast. They are the replacement for the two
-PySide6 windows the [arcade dashboard](#/arcade-dashboard) page describes, and
-during the migration both stacks run side by side so every ported panel can be
-compared against the window it replaces while that window still exists.
+against the arcade's live broadcast. They replaced the two PySide6 windows the
+[arcade dashboard (legacy)](#/arcade-dashboard) page describes. Both stacks ran
+side by side through the migration so every ported panel could be compared
+against the window it replaced while that window still existed; sprint 7
+retired the Qt pair, and the comparison baseline survives as committed
+screenshots under `documents/dev_docs/migration/pitwall/`.
 
 ## Desktop surface, web technology
 
@@ -38,8 +40,7 @@ desktop.
 ## Launching
 
 Nothing extra to run. `f1-arcade --strategy` (or `python -m src.arcade.main …
---strategy`) spawns it, exactly the way it spawns the Qt dashboard. To develop
-against an already-running arcade:
+--strategy`) spawns it. To develop against an already-running arcade:
 
 ```bash
 python -m src.pitwall
@@ -132,7 +133,7 @@ one out tears the client down.
 
 ## Related reading
 
-- [Arcade dashboard](#/arcade-dashboard), the Qt windows PITWALL replaces, and
+- [Arcade dashboard (legacy)](#/arcade-dashboard), the Qt windows PITWALL replaced, and
   the wire protocol both stacks read.
 - [Arcade quick start](#/arcade-quick-start), running the whole thing.
 - [Roadmap](#/roadmap), the v2.6.0 milestone this belongs to.

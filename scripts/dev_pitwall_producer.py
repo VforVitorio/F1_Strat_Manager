@@ -10,7 +10,7 @@ compare against the window being replaced.
     python scripts/dev_pitwall_producer.py 180      # seconds to broadcast
 
 Then, in another terminal, `python -m src.pitwall` or
-`python -m src.arcade.dashboard`.
+`python -m src.pitwall`.
 
 Not part of the product: it fabricates the decisions it publishes.
 

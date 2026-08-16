@@ -334,8 +334,8 @@ _TIER2_IMPORTS = [
     "plotly",
     "matplotlib",
     "seaborn",
-    # Arcade (heavy import — PySide6 / pyqtgraph already covered by
-    # tests/test_arcade_dashboard_imports.py, do not re-import here)
+    # Arcade (heavy import). The Qt dashboard it used to share this note
+    # with was retired in sprint 7 along with PySide6 and pyqtgraph.
     "arcade",
     # Agents
     # experta now imports cleanly: [tool.uv] override-dependencies bumps

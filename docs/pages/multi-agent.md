@@ -63,7 +63,7 @@ graph TD
 
 ## Three-window arcade
 
-Since Phase 3.5 Proceso B (April 2026), the `python -m src.arcade.main ... --strategy` launcher runs several windows driven by one shared telemetry stream. The three below are the original set; the launcher additionally spawns the two PITWALL windows, which read the same broadcast and are documented in [Arcade dashboard](#/arcade-dashboard). The layout is:
+Since Phase 3.5 Proceso B (April 2026), the `python -m src.arcade.main ... --strategy` launcher runs several windows driven by one shared telemetry stream. The two follower windows were a PySide6 pair until sprint 7 retired it; they are the PITWALL pair now, documented in [PITWALL windows](#/pitwall). The layout is:
 
 ```mermaid
 graph LR
@@ -73,26 +73,26 @@ graph LR
         STREAM[TelemetryStreamServer<br/>TCP 127.0.0.1:9998]
     end
 
-    subgraph qt["Dashboard subprocess (single QApplication)"]
-        DASH[Strategy Dashboard<br/>QMainWindow]
-        TELE[Live Telemetry<br/>QMainWindow 2x2 pyqtgraph]
+    subgraph pw["PITWALL subprocess (one TCP client, two webviews)"]
+        AGENTS[PITWALL - AGENTS<br/>orchestrator + 6 cards]
+        DATA[PITWALL - DATA<br/>tower, bests, traces, race pace]
     end
 
     REPLAY --> PIPE
     PIPE --> STREAM
     REPLAY --> STREAM
-    STREAM -->|TCP broadcast ~10 Hz| DASH
-    STREAM -->|TCP broadcast ~10 Hz| TELE
+    STREAM -->|TCP broadcast ~10 Hz| AGENTS
+    STREAM -->|TCP broadcast ~10 Hz| DATA
 ```
 
 Four properties are load-bearing:
 
 1. **The arcade owns the `TelemetryStreamServer`.** `src/arcade/stream.py` exposes the merged arcade + strategy snapshot; every other window is a subscriber, never the source of truth.
-2. **One subprocess hosts both Qt windows.** The arcade spawns a single `subprocess.Popen` that boots one `QApplication`. Two windows inside one event loop is cheaper than two OS processes and avoids duplicated imports of PySide6 + pyqtgraph.
-3. **Each window has its own `TelemetryStreamClient(QThread)`.** Subscribers do not share sockets; each window reconnects independently when the arcade restarts.
+2. **One subprocess hosts both windows.** The arcade spawns a single `subprocess.Popen`. Two windows in one process is cheaper than two, and it is what lets them share a single stream reader.
+3. **The two windows share ONE stream reader.** `PitwallHost` owns a single `ArcadeStreamClient` and both windows poll it by sequence number, so they cannot disagree about which frame they are showing - a blind latest-payload slot had them differing on 58 % of polls. Closing one window only decrements a count; it does not blind the other.
 4. **Arcade runs the strategy pipeline in-process.** `src/arcade/strategy_pipeline.py` delegates to the shared engine (`src/strategy/inference/engine.py::run_lap`), so the arcade does not depend on the FastAPI backend at runtime and does not carry its own copy of the orchestrator. It used to; that copy drifted and crashed (#166), which is why the engine exists.
 
-See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the shared engine and its profiles, and [Arcade dashboard](#/arcade-dashboard) for the Qt-side architecture.
+See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the shared engine and its profiles, and [PITWALL windows](#/pitwall) for the follower architecture.
 
 ## Agent details
 

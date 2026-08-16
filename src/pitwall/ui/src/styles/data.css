@@ -1,7 +1,7 @@
 /* PITWALL · DATA — band 4's geometry, in CSS.
  *
- * Every number here comes from a Qt call in
- * `src/arcade/dashboard/telemetry_panel.py` or `telemetry_window.py`:
+ * Every number here comes from a Qt call in the retired dashboard's
+ * `telemetry_panel.py` or `telemetry_window.py`:
  * the 10 px window and panel margins and the 8 px root spacing
  * (`setContentsMargins` / `setSpacing`), the 10 px grid spacing and equal
  * row/column stretch (`grid.setSpacing(10)`,

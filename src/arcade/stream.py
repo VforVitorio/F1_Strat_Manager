@@ -1,16 +1,17 @@
-"""TCP broadcast server for the arcade → dashboard link.
+"""TCP broadcast server for the arcade → PITWALL link.
 
 The race replay hosts this server (when strategy mode is on) and publishes
 a merged arcade+strategy state as newline-delimited JSON on each arcade
-frame. The PySide6 dashboard subprocess subscribes via
-`src.arcade.dashboard.stream_client.TelemetryStreamClient` and reacts to
-updates on its Qt event loop.
+frame. The PITWALL subprocess subscribes via
+`src.pitwall.stream_client.ArcadeStreamClient` and pushes what it reads to
+two webview windows.
 
 Pattern ported from Tom Shaw's `f1_replay/f1-race-replay/src/services/stream.py`
-and trimmed to stdlib-only: the arcade process must not import PySide6 so
-we can launch the dashboard as a subprocess without pulling Qt into the
-replay window. The client class lives in the dashboard package (Qt-aware),
-kept separate so this module never needs to import PySide6.
+and trimmed to stdlib-only. The reason survives the toolkit it was written
+for: the replay process must not import the consumer's UI stack, so the
+consumer is a subprocess and the client class lives with it. That was Qt
+until sprint 7 retired it; it is pywebview now, and the constraint is the
+same one.
 
 The payload contract
 --------------------
