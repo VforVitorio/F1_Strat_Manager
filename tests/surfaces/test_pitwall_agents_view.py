@@ -349,15 +349,18 @@ def test_the_window_learns_the_arcade_died_even_though_no_tick_arrives():
     client = _FakeClient(_payload(seq=5), connected=True)
     host = PitwallHost(client, window_count=1)
     assert host.get_agents_view(-1)["header"]["connection"] == "Connected"
-    assert host.get_agents_view(5) is None, "nothing new, nothing changed"
+    # The caller says what it holds, on BOTH axes. `since_connection` joined
+    # `since_seq` in #950: a host field could not answer "changed since YOU
+    # looked" for two consumers, so the question is asked instead of remembered.
+    assert host.get_agents_view(5, "Connected") is None, "nothing new, nothing changed"
 
     client.connected = False
-    view = host.get_agents_view(5)
+    view = host.get_agents_view(5, "Connected")
 
     assert view is not None, "the state changed, so the window must hear about it"
     assert view["header"]["connection"] == "Disconnected"
     assert view["header"]["connection_colour"] == "#ef4444"
-    assert host.get_agents_view(5) is None, "and only once"
+    assert host.get_agents_view(5, "Disconnected") is None, "and only once"
 
 
 def test_before_the_first_connection_the_chip_says_connecting():

@@ -165,16 +165,26 @@ export function useAgentsView(): AgentsState {
   // A ref, not state: the loop must read the newest sequence without
   // re-subscribing, and a stale closure would ask for the same view forever.
   const lastSeq = useRef(-1);
+  // The connection label this caller last RENDERED, for the same reason and by
+  // the same mechanism as the sequence beside it. The host cannot hold it: with
+  // two consumers of this view - and the loopback server is always one of them -
+  // whichever polled first would consume the transition and the other would
+  // keep a green chip on a dead race (#950).
+  const lastConnection = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
 
     const poll = async () => {
-      const view = await getAgentsView<AgentsView>(lastSeq.current);
+      const view = await getAgentsView<AgentsView>(lastSeq.current, lastConnection.current);
       if (cancelled) return;
       if (view) {
         if (view.seq !== null) lastSeq.current = view.seq;
+        // The header's label is the RAW one the host passed in, not a
+        // rendering of it (`build_header` stores `connection` verbatim and
+        // derives only the colour), so it is the right thing to hand back.
+        lastConnection.current = view.header?.connection ?? null;
         setState({ view, live: true });
       }
       timer = window.setTimeout(poll, POLL_INTERVAL_MS);

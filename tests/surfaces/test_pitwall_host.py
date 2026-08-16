@@ -385,4 +385,52 @@ def test_both_windows_read_the_same_label_from_the_same_memory():
     client.connected = False
 
     assert host.get_connection() == "Disconnected"
-    assert host.get_agents_view(1)["header"]["connection"] == "Disconnected"
+    assert host.get_agents_view(1, "Connected")["header"]["connection"] == "Disconnected"
+
+
+def test_a_second_agents_consumer_also_learns_the_producer_died():
+    """The one consumer above cannot see #950, and that is why it existed.
+
+    There are TWO consumers of this view in a shipped run: the AGENTS webview
+    and `/agents.html` on the loopback server `__main__` starts unconditionally.
+    The transition used to be remembered in ONE host field, so whichever polled
+    first consumed it and the second was answered `None` forever - a green
+    "Connected" chip on a race that had stopped, measured over 50 polls.
+
+    Both callers here hold "Connected" and neither has a newer tick, which is
+    exactly the state a dead producer leaves. Both must be served.
+    """
+    client = _ConnectableClient(_tick(1), connected=True)
+    host = PitwallHost(client, window_count=2)
+    first = host.get_agents_view(-1)
+    second = host.get_agents_view(-1)
+    held = first["header"]["connection"]
+    assert held == second["header"]["connection"] == "Connected"
+
+    client.connected = False
+
+    # The window notices...
+    window = host.get_agents_view(first["seq"], held)
+    # ...and so does the browser, which polled second and holds the same label.
+    browser = host.get_agents_view(second["seq"], held)
+
+    assert window is not None, "the first consumer was not told the producer died"
+    assert browser is not None, "the SECOND consumer was not told - #950"
+    assert window["header"]["connection"] == "Disconnected"
+    assert browser["header"]["connection"] == "Disconnected"
+
+
+def test_a_caller_that_already_rendered_the_state_is_told_nothing_changed():
+    """The other half: `since_connection` must still SUPPRESS a repeat.
+
+    Without this the view would be rebuilt on every poll of a dead race, which
+    is the cost the single host field was buying and the reason it existed.
+    """
+    client = _ConnectableClient(_tick(1), connected=True)
+    host = PitwallHost(client, window_count=2)
+    view = host.get_agents_view(-1)
+
+    client.connected = False
+    host.get_agents_view(view["seq"], "Connected")
+
+    assert host.get_agents_view(view["seq"], "Disconnected") is None

@@ -47,9 +47,6 @@ class PitwallHost:
         self._windows_open = window_count
         self._agents = AgentsViewBuilder()
         # The last label AGENTS was served, so that view can return on a
-        # connection change with no new tick. NOT the memory the label itself
-        # needs - see `_ever_connected`.
-        self._agents_connection: str | None = None
         # Has the socket EVER been up? This is what separates "Connecting..."
         # from "Disconnected", and it belongs to the host because both windows
         # ask. It used to be inferred from `_agents_connection`, which made the
@@ -134,7 +131,9 @@ class PitwallHost:
             return "Connected"
         return "Disconnected" if self._ever_connected else "Connecting..."
 
-    def get_agents_view(self, since_seq: int = -1) -> dict | None:
+    def get_agents_view(
+        self, since_seq: int = -1, since_connection: str | None = None
+    ) -> dict | None:
         """The whole AGENTS window, already formatted, or None when nothing changed.
 
         The window is a renderer. Every headline, body line, colour and
@@ -148,16 +147,33 @@ class PitwallHost:
         learns the arcade died: once the producer stops, `seq` stops
         advancing and a purely sequence-driven view would keep rendering
         the last frame of a dead race with a green "Connected" chip.
+
+        **`since_connection` is what the CALLER last rendered, and that is the
+        whole point (#950).** It used to be a single host field, so with two
+        consumers the first to notice the producer had died consumed the
+        transition and the second never learned about it: measured over 50
+        polls, a browser on `/agents.html` kept a green chip on a dead race
+        forever while the window beside it had already gone red. The loopback
+        server is not hypothetical - `__main__` starts it unconditionally.
+
+        A host field cannot answer "has this changed since YOU looked"; only
+        the caller knows. So it joins `since_seq` and `since_rev`, which solved
+        the identical problem for the tick and the bulk by asking rather than
+        remembering. Adding a second host field instead would have been the
+        third copy of one mistake - and the fix for its sibling is three lines
+        above, where `_ever_connected` was lifted OUT of exactly this slot.
+
+        `None` means "I have rendered nothing", so a first poll always gets a
+        view.
         """
         connection = self.get_connection()
         payload = self.get_tick(since_seq)
         if payload is None:
-            if connection == self._agents_connection:
+            if connection == since_connection:
                 return None
             payload = self._client.latest
             if payload is None:
                 return None
-        self._agents_connection = connection
         return self._agents.build(payload, connection)
 
     def get_bulk(self, since_rev: int = -1) -> dict | None:

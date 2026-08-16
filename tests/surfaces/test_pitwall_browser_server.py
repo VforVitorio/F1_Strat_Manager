@@ -32,12 +32,20 @@ class _FakeHost:
 
     def __init__(self) -> None:
         self.tick = {"seq": 7, "arcade": {"lap": 23}}
-        self.view = {"seq": 7, "header": {"session": "Melbourne · 2025"}}
+        # The real view's header ALWAYS carries the connection label - it is
+        # what the caller hands back as `since_connection` - so a stub without
+        # it could not exercise the route's second parameter at all.
+        self.view = {"seq": 7, "header": {"session": "Melbourne · 2025", "connection": "Connected"}}
 
     def get_tick(self, since_seq: int = -1):
         return None if since_seq == self.tick["seq"] else self.tick
 
-    def get_agents_view(self, since_seq: int = -1):
+    def get_agents_view(self, since_seq: int = -1, since_connection: str | None = None):
+        # Both halves of what the caller holds, as the real host takes them.
+        # The route passes `connection` through, so a stub that ignored it
+        # would let the query string rot without anything noticing (#950).
+        if since_connection is not None and since_connection != self.view["header"]["connection"]:
+            return self.view
         return None if since_seq == self.view["seq"] else self.view
 
 
@@ -83,6 +91,32 @@ def test_a_browser_gets_the_same_sequenced_payload_a_window_gets(served: str):
     assert json.loads(_get(served + "/api/tick?since=7")[2]) is None, "a seen tick must be null"
     assert json.loads(_get(served + "/api/agents?since=-1")[2])["header"]["session"].startswith(
         "Melbourne"
+    )
+
+
+def test_the_agents_route_carries_the_connection_the_caller_holds(served: str):
+    """The browser is the SECOND consumer, so the query string is load-bearing.
+
+    `/api/agents` takes two things the caller holds, not one: the sequence and
+    the connection label it last rendered. The second is what lets a browser on
+    `/agents.html` learn the producer died after the window beside it already
+    has - with the state kept host-side instead, whichever polled first consumed
+    the transition and the other kept a green chip on a dead race forever (#950).
+
+    Dropping `&connection=` from the route would leave the parameter always
+    `None`, which reads as "I hold nothing" and is silently generous rather than
+    visibly broken. This is what fails then.
+    """
+    seen = json.loads(_get(served + "/api/agents?since=-1")[2])
+    seq = seen["seq"]
+    held = seen["header"]["connection"]
+
+    # Same sequence, same label: nothing to say.
+    assert json.loads(_get(served + f"/api/agents?since={seq}&connection={held}")[2]) is None
+
+    # Same sequence, a label this caller has NOT rendered: it must be told.
+    assert (
+        json.loads(_get(served + f"/api/agents?since={seq}&connection=Disconnected")[2]) is not None
     )
 
 

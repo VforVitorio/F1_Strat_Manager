@@ -29,7 +29,7 @@
  * hides them globally.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { racePaceGrid } from "../../lib/racePace";
 import type { Bulk } from "../../lib/bridge";
@@ -37,6 +37,34 @@ import type { Bulk } from "../../lib/bridge";
 export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string[] }) {
   const grid = racePaceGrid(bulk, order);
   const scroller = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState<[number, number] | null>(null);
+
+  /**
+   * The laps ACTUALLY on screen, from the scroller's own geometry.
+   *
+   * **Not `grid.laps[0]`, which is the defect this replaces (#949).** That is
+   * always 1, so the header read `LAPS 1-57` while the panel - pinned to the
+   * bottom - was showing 8 to 57. This window hides scrollbars globally and
+   * the stylesheet says in as many words that this range is the affordance
+   * standing in for one, so it was wrong in exactly the case it exists for and
+   * right only when the grid fits, which is when nobody needs it.
+   *
+   * Measured off each row's own box rather than derived from a row-height
+   * constant: the height is a CSS token and a second copy of it here is the
+   * twin this repo pays for most often.
+   */
+  const measure = useCallback(() => {
+    const box = scroller.current;
+    if (!box) return;
+    const rows = [...box.querySelectorAll<HTMLElement>("tbody tr")];
+    if (rows.length === 0) return setVisible(null);
+    const top = box.scrollTop;
+    const bottom = top + box.clientHeight;
+    const shown = rows.filter((row) => row.offsetTop + row.offsetHeight > top && row.offsetTop < bottom);
+    const edges = shown.length ? shown : rows;
+    const lapOf = (row: HTMLElement) => Number(row.querySelector("th")?.textContent ?? 0);
+    setVisible([lapOf(edges[0]), lapOf(edges[edges.length - 1])]);
+  }, []);
 
   // Pinned to the newest lap. A race-pace grid that opens at lap 1 shows the
   // formation lap of a race that is on lap 40, and the laps a strategist is
@@ -45,10 +73,11 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
   useEffect(() => {
     const box = scroller.current;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [grid.laps.length]);
+    measure();
+  }, [grid.laps.length, measure]);
 
-  const first = grid.laps[0];
-  const last = grid.laps[grid.laps.length - 1];
+  const total = bulk?.race.total_laps ?? grid.laps.length;
+  const [first, last] = visible ?? [grid.laps[0], grid.laps[grid.laps.length - 1]];
 
   return (
     <section className="card pace">
@@ -56,10 +85,10 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
         <span className="pace-title">RACE PACE</span>
         <span className="pace-subtitle">colour ranks each lap against itself</span>
         <span className="pace-range">
-          {grid.laps.length ? `LAPS ${first}-${last}` : "no laps revealed"}
+          {grid.laps.length ? `LAPS ${first}-${last} of ${total}` : "no laps revealed"}
         </span>
       </header>
-      <div className="pace-scroll" ref={scroller}>
+      <div className="pace-scroll" ref={scroller} onScroll={measure}>
         <table className="pace-table">
           <thead>
             <tr>

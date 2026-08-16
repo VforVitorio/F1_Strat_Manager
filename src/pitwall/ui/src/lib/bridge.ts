@@ -270,9 +270,13 @@ export function whenBridgeReady(): Promise<void> {
  * while a server restarts, and it is what the poll loop above already
  * handles. Throwing would kill the loop on the first hiccup.
  */
-async function fetchJson<T>(route: string, sinceSeq: number): Promise<T | null> {
+async function fetchJson<T>(
+  route: string,
+  sinceSeq: number,
+  extraQuery = "",
+): Promise<T | null> {
   try {
-    const response = await fetch(`${route}?since=${sinceSeq}`, { cache: "no-store" });
+    const response = await fetch(`${route}?since=${sinceSeq}${extraQuery}`, { cache: "no-store" });
     if (!response.ok) return null;
     return (await response.json()) as T | null;
   } catch {
@@ -353,9 +357,26 @@ export async function getConnection(): Promise<string | null> {
   }
 }
 
-export async function getAgentsView<T>(sinceSeq: number): Promise<T | null> {
-  const api = window.pywebview?.api as { get_agents_view?: (s: number) => Promise<T | null> };
-  if (api?.get_agents_view) return api.get_agents_view(sinceSeq);
+/**
+ * The AGENTS view, or null when this caller's view is current.
+ *
+ * **Two things the caller holds, not one.** The sequence says which tick it
+ * rendered; `sinceConnection` says which connection LABEL it rendered. The
+ * second exists because when the producer dies the sequence stops advancing,
+ * so a purely sequence-driven view would keep painting the last frame of a
+ * dead race behind a green chip - and the host cannot answer "changed since
+ * YOU looked" from one field it keeps for everybody. It tried, and with two
+ * consumers the second never learned (#950).
+ */
+export async function getAgentsView<T>(
+  sinceSeq: number,
+  sinceConnection: string | null,
+): Promise<T | null> {
+  const api = window.pywebview?.api as {
+    get_agents_view?: (s: number, c: string | null) => Promise<T | null>;
+  };
+  if (api?.get_agents_view) return api.get_agents_view(sinceSeq, sinceConnection);
   if (IN_A_WINDOW) return null;
-  return fetchJson<T>("/api/agents", sinceSeq);
+  const held = sinceConnection === null ? "" : `&connection=${encodeURIComponent(sinceConnection)}`;
+  return fetchJson<T>("/api/agents", sinceSeq, held);
 }
