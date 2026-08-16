@@ -21,6 +21,33 @@ it can be scheduled into the sprint that owns that code.
 where live inference lands and the architecture stops moving underneath
 everything else; after it, this section goes away.
 
+## Building a release wheel
+
+**`npm run build` FIRST, then `uv build`. The order is the whole procedure.**
+
+PITWALL's two windows ARE the Vite bundle. `src/pitwall/ui/dist/` is gitignored
+build output, so a clean checkout does not have it — and a wheel built in that
+state installs an `f1-pitwall` that starts, finds no bundle, prints its build
+hint and exits 1. Measured on 2.5.1: the wheel carried three build-tool JSONs
+from the UI folder and **zero** files of the bundle.
+
+```bash
+cd src/pitwall/ui && npm ci && npm run build && cd -
+rm -rf build                     # setuptools reuses build/lib and will re-copy stale files
+uv build --wheel
+```
+
+Then verify it rather than trusting it, in a venv **outside** the repo (inside,
+`import src.pitwall` resolves to the source tree and proves nothing):
+
+```bash
+uv venv /tmp/wheeltest && VIRTUAL_ENV=/tmp/wheeltest uv pip install dist/*.whl
+cd /tmp && F1_STRAT_DATA_ROOT=<repo>/data /tmp/wheeltest/Scripts/f1-pitwall
+```
+
+Both windows must open and render real data. `pip install` without an error is
+not the check.
+
 ## Branching model
 
 Three long-lived branches, in increasing order of stability:
