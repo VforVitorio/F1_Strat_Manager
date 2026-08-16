@@ -1,5 +1,11 @@
-"""Pure formatters that turn per-agent output dicts into the tuple the
-``AgentCard`` widget renders.
+"""Pure formatters that turn per-agent output dicts into the tuple an agent
+card renders.
+
+**They outlived the widget they were written for.** These built the Qt
+``AgentCard``; PITWALL's AGENTS window now renders by calling exactly the same
+functions, which is what makes that port 1:1 by construction rather than by
+inspection - so sprint 7 MOVED this module out of ``src/arcade/dashboard/``
+instead of deleting it with the rest of the package.
 
 One function per sub-agent (Pace N25, Tire N26, Situation N27, Radio N29,
 Pit N28, RAG N30). The logic mirrors the CLI's six-row inference panel

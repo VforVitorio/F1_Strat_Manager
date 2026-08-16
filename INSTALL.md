@@ -70,11 +70,16 @@ f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" -
 Three windows spawn from that one command:
 
 1. Arcade replay (pyglet), track · leaderboard · weather · driver info
-2. Strategy Dashboard (PySide6), orchestrator + 6 agent cards + charts
-3. Live Telemetry (PySide6), 2×2 grid Delta / Speed / Brake / Throttle
+2. **PITWALL · AGENTS**, orchestrator + 6 agent cards + charts
+3. **PITWALL · DATA**, status strip, timing tower, bests, own-car traces,
+   race pace and race trace
 
-**Docker is NOT recommended for Arcade**: pyglet + Qt need a host OpenGL
-context and a native display. Cross-platform X forwarding from a
+The two PITWALL windows are React built to static files and hosted in the
+platform webview, in one subprocess sharing a single stream client. They
+replaced a PySide6 pair in sprint 7.
+
+**Docker is NOT recommended for Arcade**: pyglet and the platform webview need a
+host OpenGL context and a native display. Cross-platform X forwarding from a
 container is fragile on Windows / Mac and has no benefit over a local
 install. Use `uv tool install` and run on the host.
 

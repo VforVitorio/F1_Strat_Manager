@@ -73,16 +73,18 @@ graph LR
         STREAM[TelemetryStreamServer<br/>TCP 127.0.0.1:9998]
     end
 
-    subgraph pw["PITWALL subprocess (one TCP client, two webviews)"]
+    subgraph pw["PITWALL subprocess"]
+        HOST[PitwallHost<br/>ONE ArcadeStreamClient]
         AGENTS[PITWALL - AGENTS<br/>orchestrator + 6 cards]
         DATA[PITWALL - DATA<br/>tower, bests, traces, race pace]
+        HOST -->|poll by seq| AGENTS
+        HOST -->|poll by seq| DATA
     end
 
     REPLAY --> PIPE
     PIPE --> STREAM
     REPLAY --> STREAM
-    STREAM -->|TCP broadcast ~10 Hz| AGENTS
-    STREAM -->|TCP broadcast ~10 Hz| DATA
+    STREAM -->|TCP broadcast ~10 Hz| HOST
 ```
 
 Four properties are load-bearing:

@@ -460,7 +460,8 @@ Wire the multi-agent system into the FastAPI backend, expose strategy tools via 
 **Step 12: Arcade simulation UI:** ✅ COMPLETE (Phase 3.5 Proceso B, 2026-04-18)
 
 - [X] Three windows from one command: pyglet race replay, PySide6 strategy dashboard,
-      PySide6 live telemetry (2x2 pyqtgraph grid). Single launcher:
+      PySide6 live telemetry (2x2 pyqtgraph grid) — the Qt pair was retired in sprint 7
+      and replaced by the two PITWALL windows. Single launcher:
       `python -m src.arcade.main --viewer --strategy ...`
 - [X] Local strategy pipeline: `src/arcade/strategy_pipeline.py` duplicates the N31
       orchestrator body with verbose outputs. The arcade no longer calls the FastAPI
@@ -644,7 +645,7 @@ letting the roadmap contradict the CHANGELOG.
 
 | Version | Milestone | What it adds |
 |---|---|---|
-| **v2.6.0** | Arcade, modernized | A web-native trackside frontend for part of the live Arcade experience, running **alongside** the pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to a web-native view, reusing the React app's tab and URL-contract machinery from v2.0.0. The `lap_state` contract and the agents stay unchanged. |
+| **v2.6.0** | Arcade, modernized | A trackside frontend built in **web technology** for part of the live Arcade experience, running **alongside** the pyglet 2D replay rather than replacing it. **Desktop windows, not a web app**: the strategy and telemetry surfaces move to React hosted in the platform webview, reusing the React app's tab and URL-contract machinery from v2.0.0 — they open as OS windows and need no browser and no server. The `lap_state` contract and the agents stay unchanged. |
 | **v2.8.0** | Rival Agent | A new, additive LangGraph node that predicts each nearby rival's next strategic move (pit window, compound, undercut/overcut) and feeds it to the orchestrator. Recommendations move from reactive to anticipatory. The six existing agents are untouched. |
 | **v3.0.0** | Live race inference | Real-time ingestion over the OpenF1 WebSocket (the `lap_state` contract is unchanged, so agents and orchestrator don't change), plus adaptation to the 2026 technical/sporting regulation (re-cluster, re-label compounds, drift monitoring). |
 

@@ -1,10 +1,12 @@
-# `src/arcade/`, race replay + strategy dashboard
+# `src/arcade/`, race replay + the broadcast its followers read
 
-2D race replay (pyglet via the `arcade` library) plus the PySide6
-dashboard subprocess spawned from the same command. One invocation of
-`f1-arcade` opens three top-level windows: the arcade replay, the
-strategy dashboard (orchestrator card + six sub-agent cards + reasoning
-tabs), and the live telemetry window (2×2 circuit-comparison grid).
+2D race replay (pyglet via the `arcade` library) plus the PITWALL
+subprocess spawned from the same command. One invocation of `f1-arcade`
+opens three top-level windows: the arcade replay, **PITWALL · AGENTS**
+(orchestrator card + six sub-agent cards + reasoning tabs) and
+**PITWALL · DATA** (status strip, timing tower, bests, own-car traces,
+race pace and race trace). The PySide6 pair those two replaced was
+retired in sprint 7; `src/pitwall/` is where the followers live now.
 
 ## Run
 
