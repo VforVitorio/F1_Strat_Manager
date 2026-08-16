@@ -62,7 +62,9 @@ class TickSource(Protocol):
 
     def get_tick(self, since_seq: int = -1) -> dict[str, Any] | None: ...
 
-    def get_agents_view(self, since_seq: int = -1) -> dict[str, Any] | None: ...
+    def get_agents_view(
+        self, since_seq: int = -1, since_connection: str | None = None
+    ) -> dict[str, Any] | None: ...
 
     def get_bulk(self, since_rev: int = -1) -> dict[str, Any] | None: ...
 
@@ -116,6 +118,18 @@ def _since(query: str) -> int:
         return -1
 
 
+def _since_connection(query: str) -> str | None:
+    """`?connection=Connected`, or None for a caller that has rendered nothing.
+
+    A string rather than a revision because that is what the label IS - there is
+    no sequence for the socket's own state to be current with. `None` is the
+    honest "I hold nothing", and it can never equal a real label, so a first
+    poll always gets a view.
+    """
+    values = parse_qs(query).get("connection")
+    return values[0] if values else None
+
+
 def _handler(bundle: dict[str, tuple[bytes, str]], source: TickSource):
     class PitwallHTTPHandler(BaseHTTPRequestHandler):
         # `BaseHTTPRequestHandler` logs every request to stderr, which at
@@ -136,7 +150,16 @@ def _handler(bundle: dict[str, tuple[bytes, str]], source: TickSource):
             # missing ONE of them fail on the routes it does implement.
             reader = _READERS.get(route)
             if reader is not None:
-                self._send_json(getattr(source, reader)(_since(parsed.query)))
+                # AGENTS carries a SECOND thing the caller holds: the connection
+                # label it last rendered. Without it the host would have to
+                # remember on the caller's behalf, and with two consumers only
+                # one of them would ever learn the producer died (#950).
+                extra = (
+                    {"since_connection": _since_connection(parsed.query)}
+                    if reader == "get_agents_view"
+                    else {}
+                )
+                self._send_json(getattr(source, reader)(_since(parsed.query), **extra))
                 return
 
             plain = _PLAIN_READERS.get(route)

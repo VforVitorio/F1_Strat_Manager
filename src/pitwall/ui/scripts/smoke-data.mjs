@@ -1405,6 +1405,40 @@ check(paceCells.pitText === "IN PIT" && paceCells.outText === "OUT",
   "the in-lap and the out-lap replace the time, as a timing screen shows them");
 check(paceCells.best === 1, `exactly one purple cell - the session's fastest lap (${paceCells.best})`);
 
+// **The range says what is ON SCREEN, and the only way to check that is to
+// SCROLL.** It used to render `grid.laps[0]`, which is always 1, so the header
+// claimed `LAPS 1-57` over a panel pinned to the bottom showing 8-57. An
+// assertion that the string matches the data passes straight over that; this
+// one moves the panel and requires the header to move with it. The panel is
+// also the one affordance replacing a scrollbar this window hides globally.
+const rangeAtBottom = await pacePage.locator(".pace-range").innerText();
+const scrolled = await pacePage.evaluate(() => {
+  const box = document.querySelector(".pace-scroll");
+  box.scrollTop = 0;
+  box.dispatchEvent(new Event("scroll"));
+  return new Promise((done) => setTimeout(() => done(document.querySelector(".pace-range").textContent), 150));
+});
+check(
+  rangeAtBottom !== scrolled,
+  `the lap range follows the scroll (bottom "${rangeAtBottom}", top "${scrolled}")`,
+);
+check(
+  /^LAPS 1-\d+ of \d+$/.test(scrolled ?? ""),
+  `scrolled to the top it starts at lap 1 (${scrolled})`,
+);
+check(
+  rangeAtBottom.endsWith(`-${PACE_LAPS} of ${PACE_LAPS}`),
+  `pinned to the bottom it ends at the newest lap, and says the race length (${rangeAtBottom})`,
+);
+// Put it back where the panel pins itself, so the checks below see the state
+// the window actually opens in.
+await pacePage.evaluate(() => {
+  const box = document.querySelector(".pace-scroll");
+  box.scrollTop = box.scrollHeight;
+  box.dispatchEvent(new Event("scroll"));
+});
+await pacePage.waitForTimeout(150);
+
 // A lap 40 ms under a minute boundary. Splitting the minutes off BEFORE
 // rounding the tenths renders "1:60.0" - a time that does not exist, and one
 // the cell regex above accepts without complaint.
