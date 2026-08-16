@@ -171,6 +171,15 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
       <header className="pace-header">
         <span className="pace-title">RACE TRACE</span>
         <span className="pace-subtitle">{trace.zero}</span>
+        {/* How far the bound is behind the race, said out loud. A trace that
+            stops is indistinguishable from a race that stopped, and one car
+            with a mid-race telemetry dropout pins it silently - see
+            `RaceTrace.total`. */}
+        {trace.laps.length ? (
+          <span className="pace-range">
+            LAPS {trace.laps[0]}-{trace.laps[trace.laps.length - 1]} of {trace.total}
+          </span>
+        ) : null}
         <nav className="ref-strip" role="tablist" aria-label="reference">
           {(["leader", "field", "own"] as const).map((id) => (
             <button

@@ -12,12 +12,23 @@
  * crossing; a stint going off is a line bending away from its neighbours.
  * None of those are drawn - they fall out of the arithmetic.
  *
- * **The seconds come from `crossings`, which is the tower's clock and not a
- * second one.** `gapCell` already subtracts exactly these values to print the
- * GAP and INT columns, and two panels on the same screen disagreeing about the
- * same gap is the twin defect this repo pays for most often. The alternative
- * source - summing `lap_time` - drifts, because a lap time is rounded to the
- * millisecond and a race is 57 of them.
+ * **The seconds come from `crossings`, the same clock `gapCell` subtracts to
+ * print the tower's GAP and INT columns.** The alternative - summing
+ * `lap_time` - drifts, because a lap time is rounded to the millisecond and a
+ * race is 57 of them.
+ *
+ * ⚠️ **That does NOT mean the two panels always print the same number, and the
+ * claim that they cannot disagree was FALSE.** What holds, and what was
+ * measured over all 7,018 at-line pairs of Melbourne 2025 under all three
+ * references, is that the VERTICAL DISTANCE between two lines equals the
+ * difference of their crossings - the thing the panel is read with. What does
+ * not hold is agreement with the tower's GAP column, because the two answer to
+ * different leaders: the tower measures against `race_order[0]`, the wire's
+ * classified P1, and this measures against the car that crossed THAT LAP's
+ * line first. Melbourne has three at-line lead changes (laps 44, 46, 47), and
+ * in the window after VER first crosses line 44 every driver's tower GAP sits
+ * a uniform 3.737 s from the trace's end value - VER's lap-43 advantage over
+ * NOR, applied to the whole field. Both are right about their own question.
  *
  * ⚠️ **The reveal is per driver and strict, so the newest laps are ragged**,
  * and a reference averaged over a ragged edge moves under the reader: at the
@@ -58,12 +69,39 @@ export interface RaceTrace {
   lines: TraceLine[];
   /** What the zero line is, for the header to say out loud. */
   zero: string;
+  /**
+   * The race's own length, so the header can say how far behind the bound sits.
+   *
+   * **This is what stops a frozen cap being silent.** A car that took the
+   * chequered flag but lost telemetry mid-race keeps `laps_completed` stuck at
+   * the dropout - the plan carries it as OBS-4 - and being classified, he stays
+   * in the cap population and pins the whole trace there. Measured shape: a
+   * lap-20 dropout freezes the panel at 20 of 57 and nothing on screen says so,
+   * because a trace that ends is indistinguishable from a race that ended.
+   * Printing the total turns a frozen panel into a visible one.
+   */
+  total: number;
 }
 
-const EMPTY: RaceTrace = { laps: [], lines: [], zero: "" };
+const EMPTY: RaceTrace = { laps: [], lines: [], zero: "", total: 0 };
 
 /**
- * The cars the reference is computed over, and the cars that bound it.
+ * The cars that BOUND the lap axis. Not the cars the reference averages over -
+ * see `referenceTimes`, and see the defect below for why they are two lists.
+ *
+ * ⚠️ **They used to be one list, and it moved the drawn history under the
+ * reader.** This filter reads CURRENT status, so the moment a car retires it
+ * leaves the set - and if the reference were averaged over the same set, every
+ * point of every line, all the way back to lap 1, would be recomputed without
+ * him. Executed on the real payload: at LAW's retirement all 45 of NOR's
+ * historical points shift, by up to 7.612 s, in FIELD mode. Melbourne alone
+ * does that three times.
+ *
+ * It is the twin of the bound this very module introduced. `lastCommonLap`
+ * exists because a reference computed over a population that changes with the
+ * REVEAL swings every line; the identical failure on the STATUS axis went
+ * unfixed in the same file. The smoke could not see it: its retirees carry no
+ * crossings at all, so removing them from an average changes nothing.
  *
  * Two filters, and each one deletes the panel if it is missing.
  *
@@ -91,7 +129,7 @@ const EMPTY: RaceTrace = { laps: [], lines: [], zero: "" };
  * measured identical at every reveal - so this is a guard against a shape the
  * types allow, not a rate.
  */
-function population(bulk: Bulk, arcade: ArcadeState, codes: string[]): string[] {
+function capPopulation(bulk: Bulk, arcade: ArcadeState, codes: string[]): string[] {
   return codes.filter((code) => {
     const car = arcade.drivers[code];
     if (car === undefined || driverStatus(car) === "out") return false;
@@ -157,7 +195,7 @@ function lastCommonLap(bulk: Bulk, codes: string[]): number {
 function referenceTimes(
   bulk: Bulk,
   laps: number[],
-  population: string[],
+  codes: string[],
   reference: TraceReference,
   own: string,
 ): Map<number, number> {
@@ -169,7 +207,7 @@ function referenceTimes(
       continue;
     }
     const atLap: number[] = [];
-    for (const code of population) {
+    for (const code of codes) {
       const value = bulk.drivers[code]?.crossings[lap];
       if (value !== undefined) atLap.push(value);
     }
@@ -215,12 +253,17 @@ export function raceTrace(
 
   const own = arcade.driver_main;
   const ordered = stableColumns(bulk, arcade.race_order);
-  const racing = population(bulk, arcade, ordered);
-  const last = lastCommonLap(bulk, racing);
-  if (last < 1) return { ...EMPTY, zero: zeroLabel(reference, own) };
+  const last = lastCommonLap(bulk, capPopulation(bulk, arcade, ordered));
+  const total = bulk.race.total_laps;
+  if (last < 1) return { ...EMPTY, total, zero: zeroLabel(reference, own) };
 
   const laps = Array.from({ length: last }, (_, index) => index + 1);
-  const times = referenceTimes(bulk, laps, racing, reference, own);
+  // EVERY driver the wire names, not the ones still running: a car that
+  // retired on lap 30 was part of the race on laps 1-30 and belongs in those
+  // laps' reference. `referenceTimes` skips whoever has no crossing at a lap,
+  // so the set is exactly "who completed this lap" - which only ever GROWS as
+  // the reveal advances, and therefore cannot move a point already drawn.
+  const times = referenceTimes(bulk, laps, ordered, reference, own);
   const plotted = laps.filter((lap) => times.has(lap));
 
   const drawLast = ordered.filter((code) => code !== own);
@@ -237,5 +280,5 @@ export function raceTrace(
     return { code, points };
   });
 
-  return { laps: plotted, lines, zero: zeroLabel(reference, own) };
+  return { laps: plotted, lines, total, zero: zeroLabel(reference, own) };
 }
