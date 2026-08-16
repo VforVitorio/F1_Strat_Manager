@@ -22,11 +22,21 @@ Same shape every time, because the value is in the repetition:
    optional: `gh` puts the PR title in the merge-commit body and release-please parses it, which is
    how the CHANGELOG got duplicated twice before.
 5. **CI green on every PR**, not just at the end of the sprint.
-6. **NOTHING reaches `main` until PITWALL is finished** (Víctor, 2026-08-07). Every sprint lands on
-   `dev` and stops there; the single `dev -> main` promotion happens once, after sprint 7's exit
-   gate. Consequence, accepted deliberately: because issues stay open until the work is on `main`,
-   **#841-#844 and the rewritten #281/#284/#285 all stay open for the whole programme.** The open
-   list will not shrink for seven sprints. That is the rule working, not a backlog leak.
+6. **NOTHING reaches `main` until PITWALL is finished** (Víctor, 2026-08-07), and **"finished" now
+   means after sprint 9, not sprint 7** (Víctor, 2026-08-16: *"seguimos dev hasta acabar todos los
+   sprints"*). Every sprint lands on `dev` and stops there; there is exactly one `dev -> main`
+   promotion and it comes after the LAST sprint's exit gate.
+
+   Consequence, accepted deliberately and now larger than it was: because issues stay open until the
+   work is on `main`, **#841-#844, the rewritten #281/#284/#285, #921-#940, #944, #949, #950 and
+   #951 all stay open for the whole programme**, and sprints 8 and 9 will add to that list rather
+   than shrink it. The open list will not go down for nine sprints. That is the rule working, not a
+   backlog leak — and the reason to say so twice is that a growing open list is exactly what
+   pressure to promote early looks like.
+
+   Sprint 7's exit gate ran anyway, on Fable, and found that sprint's worst defect. **Deferring the
+   promotion did not defer the gate**, and it should not in 8 or 9 either: the gate is what makes
+   "all the sub-issues merged" not the closing argument.
 7. **Close the sprint**: update `MEMORY.md` plus the sprint's topic file, then write the next
    handoff prompt (task, compact, memory pointers).
 
@@ -47,7 +57,7 @@ Commands handed over are PowerShell, one command per physical line, starting wit
 | 6 | DATA band 3: race pace grid | rewritten #284 (b) | adversarial: tier discipline and fidelity claims |
 | 7 | **DATA band 3: race trace** (#944, the half sprint 6 did not build) · retire Qt · package · fix the prose | rewritten #285, #944, new | **exit gate** (the `dev -> main` promotion is deferred: Víctor, 2026-08-15) |
 | **8** | **AGENTS: the elevate pass** | new | Fable as senior dashboard designer, P0-P3 with file:line |
-| **9** | **DATA: the elevate pass** | new | same |
+| **9** | **DATA: the elevate pass** | new | same, **then the ONE `dev -> main` of the whole programme** |
 
 ### Sprints 8 and 9: where the 1:1 constraint is LIFTED
 
@@ -489,9 +499,11 @@ Note that this promotion is also what un-gates release PR #712 (`chore(main): re
 has been held open waiting for PITWALL to exist. Do not merge it before this point.
 
 > **What happened instead:** the exit gate ran, on Fable, and found the sprint's worst defect. The
-> promotion did not — Víctor deferred it on 2026-08-15, so the whole programme is still on `dev`.
-> Nothing technical is holding it: the gate is done and CI is green on every PR. The temptation this
-> paragraph warns about was avoided in the other direction, by the gate rather than by the merge.
+> promotion did not. Víctor deferred it on 2026-08-15 and then settled it on 2026-08-16 — **the
+> single promotion moves to the end of sprint 9**, so this is no longer "the promotion of the whole
+> programme" and §0.6 is where that rule now lives. Nothing technical was holding it: the gate was
+> done and CI green on every PR. The temptation this paragraph warns about was avoided in the other
+> direction, by the gate rather than by the merge.
 
 ---
 
