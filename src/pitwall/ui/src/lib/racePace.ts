@@ -7,10 +7,16 @@
  *
  * **The colour is a RANK within the lap, not a percentage off a session best,
  * and the difference is the whole design.** Measured on the real Melbourne
- * 2025 payload: against the session's fastest lap the median lap is +13.79 %
- * and 82.4 % of the race falls past +10 %, because the race was wet and ran
- * safety cars - so any fixed percentage band paints four fifths of the grid in
- * one colour and says nothing. Ranked inside its own lap instead, the field
+ * 2025 payload, over the 776 rows this grid actually RANKS: against the
+ * session's fastest lap the median lap is +13.03 % and 80.7 % of the race falls
+ * past +10 %, because the race was wet and ran safety cars - so any fixed
+ * percentage band paints four fifths of the grid in one colour and says
+ * nothing. (This pair used to read +13.79 % / 82.4 %, which is the same
+ * arithmetic over 858 rows including the 82 pit laps and 6 deleted times the
+ * ranking EXCLUDES and the grid never colours - a figure describing a
+ * population the sentence is not about. An earlier gate certified it as "exact"
+ * by reproducing the same wrong population: replicating arithmetic is not
+ * confirming a claim.) Ranked inside its own lap instead, the field
  * splits into thirds by construction on every lap of every race, wet or dry,
  * green or neutralised, with no threshold tuned on the one race that happens
  * to be on this disk. It is also what "race pace" means to a strategist: who
@@ -99,7 +105,14 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
 }
 
 /**
- * `m:ss.d` - the broadcast form, truncated to tenths.
+ * `m:ss.d` - the broadcast form, rounded to tenths.
+ *
+ * **Rounded, and the minutes are split off AFTERWARDS, which is not a detail.**
+ * Splitting first and rounding the remainder renders a non-time in the 50 ms
+ * under every minute boundary: 119.96 s came out as `1:60.0`, and the smoke's
+ * `^\d:\d\d\.\d$` accepts that happily. No lap of the one race on disk
+ * reaches such a value; a season will. (This docstring also used to say
+ * "truncated", which it never did.)
  *
  * **The truncation is what makes the grid fit at all.** Measured against the
  * real built stylesheet at the right column's real width: twenty columns of
@@ -109,8 +122,11 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
  * sentence said 793, which was measured on a prototype whose synthetic times
  * were spread across the race's whole range rather than on the payload the
  * window serves - the wrong-distribution class, in a comment. The smoke's own
- * fixture clips 85, so it is about 2.4x less sensitive than the real race:
- * worth knowing before trusting an "it fits" from it.)
+ * smoke's own fixture clips materially fewer than the real race, so an "it
+ * fits" measured on the fixture is weaker evidence than one measured on the
+ * payload. No count is quoted here on purpose: the last one was written four
+ * minutes after a commit changed the fixture underneath it and was stale on
+ * arrival.)
  *
  * Tenths is also the resolution the grid needs, because the ranking colour
  * carries the ordering and the number carries the magnitude.
@@ -121,8 +137,9 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
  * downloadable here to test it.
  */
 export function paceLabel(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds - minutes * 60;
+  const tenths = Math.round(seconds * 10);
+  const minutes = Math.floor(tenths / 600);
+  const rest = (tenths - minutes * 600) / 10;
   return `${minutes}:${rest.toFixed(1).padStart(4, "0")}`;
 }
 

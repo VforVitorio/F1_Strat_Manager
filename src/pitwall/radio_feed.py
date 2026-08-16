@@ -193,7 +193,16 @@ class RadioCorpus:
         SessionTime clock, which is what blocks a finer reveal - but it orders
         two events of the same lap perfectly well, and that is all it is asked
         to do here. (No row is missing one: 0 of 2,126 across the 24 races on
-        disk. A future null would sort first within its lap, never crash.)
+        disk.
+
+        ⚠️ **A future null would NOT "sort first within its lap, never crash",
+        which is what this said.** Executed: a `NaT` compares False against
+        everything, so it does not sink to one end - it lands where it happens
+        to and takes its neighbours' order with it, rendering 05:01 before
+        05:00. A plain `None` does not sort at all: `'<' not supported between
+        instances of 'NoneType' and 'Timestamp'`. The corpus has no such row
+        today, so this is a latent shape rather than a rate - but the sentence
+        that said it was harmless was wrong twice over.)
         """
         ordered: list[tuple[tuple[int, Any], str | None, dict[str, Any]]] = []
         for row in runner.radios_df.itertuples():

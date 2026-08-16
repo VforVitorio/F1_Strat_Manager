@@ -1187,6 +1187,15 @@ const PACE_FASTEST = { code: TOWER_ORDER[3], lap: 30, time: 84.111 };
  * refuse.
  */
 const PACE_LAPPED = { code: "LAW", laps: 55 };
+/**
+ * A car that RACED and then stopped, unlike `RETIRED_CODES` who never started.
+ *
+ * The existing retirees carry zero crossings, so removing them from a reference
+ * average changes nothing - which is exactly why the fixture was 100 % blind to
+ * a reference computed over CURRENT status moving the drawn history under the
+ * reader. This one has 30 real laps behind him and then nothing.
+ */
+const PACE_RETIRED_MIDRACE = { code: TOWER_ORDER[8], laps: 30 };
 
 function paceBulk() {
   const drivers = {};
@@ -1217,11 +1226,19 @@ function paceBulk() {
     const crossings = {};
     let elapsed = 0;
     let best = null;
-    const revealed = code === PACE_LAPPED.code ? PACE_LAPPED.laps : PACE_LAPS;
+    const revealed =
+      code === PACE_LAPPED.code
+        ? PACE_LAPPED.laps
+        : code === PACE_RETIRED_MIDRACE.code
+          ? PACE_RETIRED_MIDRACE.laps
+          : PACE_LAPS;
     for (let lap = 1; lap <= revealed; lap += 1) {
       const pitIn = lap === 20 && index % 5 === 0;
       const pitOut = lap === 21 && index % 5 === 0;
       const isFastest = code === PACE_FASTEST.code && lap === PACE_FASTEST.lap;
+      // 119.96 s renders "1:60.0" if the minutes are split off BEFORE the
+      // tenths are rounded - a non-time that the cell regex below accepts.
+      const onBoundary = code === TOWER_ORDER[2] && lap === 50;
       // Laps 2-6 are the safety car, and they are in this fixture because the
       // REAL race has them: measured on Melbourne 2025, 82.4 % of laps sit
       // past +10 % of the session best, so a heat scale anchored on that best
@@ -1229,7 +1246,13 @@ function paceBulk() {
       // the two scales apart - this one can.
       const neutralised = lap >= 2 && lap <= 6;
       const green = 85 + (index % 9) * 0.4 + ((lap * 3) % 11) * 0.2;
-      const time = isFastest ? PACE_FASTEST.time : neutralised ? green * 2.4 : green;
+      const time = onBoundary
+        ? 119.96
+        : isFastest
+          ? PACE_FASTEST.time
+          : neutralised
+            ? green * 2.4
+            : green;
       // Melbourne really carries deleted racing laps - six of them - and every
       // row of this fixture used to say `deleted: false`, so the branch that
       // paints them was never entered by any check.
@@ -1259,6 +1282,29 @@ function paceBulk() {
     drivers, radio: { available: true, events: [] } };
 }
 
+/**
+ * The tower's field, with the mid-race retirement actually marked as retired.
+ *
+ * `towerField()` cannot carry it: the tower's own checks assert LEC's gaps, and
+ * a car that is OUT renders `OUT` instead. The trace reads status from the tick
+ * and laps from the bulk, so this is the only fixture where the two have to
+ * disagree - a car with 30 laps of real history who is no longer running.
+ *
+ * Left RUNNING he would pin the cap at 30 of 57, which is the OBS-4 shape the
+ * plan documents (a classified car whose telemetry stopped) and a real state -
+ * but not the one this scenario is built to test.
+ */
+function paceField() {
+  const field = towerField();
+  field[PACE_RETIRED_MIDRACE.code] = driver({
+    laps_completed: PACE_RETIRED_MIDRACE.laps,
+    progress: PACE_RETIRED_MIDRACE.laps + 0.4,
+    active: false,
+    has_finished: false,
+  });
+  return field;
+}
+
 const paceCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
 const pacePage = await paceCtx.newPage();
 pacePage.on("pageerror", (error) => failures.push(`pageerror(pace): ${error.message}`));
@@ -1271,7 +1317,7 @@ await pacePage.addInitScript(
       get_connection: async () => "Connected",
     } };
   },
-  [tick(1, { drivers: towerField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+  [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
 );
 await pacePage.goto(url, { waitUntil: "domcontentloaded" });
 await pacePage.waitForSelector(".tab-strip", { timeout: 5000 });
@@ -1358,6 +1404,19 @@ check(paceCells.rows === PACE_LAPS, `one row per lap of the race (${paceCells.ro
 check(paceCells.pitText === "IN PIT" && paceCells.outText === "OUT",
   "the in-lap and the out-lap replace the time, as a timing screen shows them");
 check(paceCells.best === 1, `exactly one purple cell - the session's fastest lap (${paceCells.best})`);
+
+// A lap 40 ms under a minute boundary. Splitting the minutes off BEFORE
+// rounding the tenths renders "1:60.0" - a time that does not exist, and one
+// the cell regex above accepts without complaint.
+const boundaryCell = await pacePage.evaluate(() => {
+  const rows = [...document.querySelectorAll(".pace-table tbody tr")];
+  const row = rows.find((r) => r.querySelector("th")?.textContent === "50");
+  return [...(row?.querySelectorAll("td") ?? [])].map((c) => c.textContent);
+});
+check(
+  boundaryCell.includes("2:00.0") && !boundaryCell.some((t) => /:60\./.test(t ?? "")),
+  `a lap just under a minute boundary rounds up to the next minute, never :60 (${boundaryCell.filter((t) => t && t.startsWith("1:5") === false && t.includes(":")).slice(0, 3).join(",")})`,
+);
 
 // A deleted time is struck through and carries NO rank. It used to carry the
 // FASTEST one: the ranking excludes it, so `indexOf` answered -1, and -1 and
@@ -1596,6 +1655,62 @@ check(
 check(
   aboveField > 0,
   `against the field average the quick cars sit above the axis (${aboveField} points)`,
+);
+
+// A trace that stops and a race that ended are the same pixels, so the bound
+// says how far behind the race it sits. One car with a mid-race telemetry
+// dropout pins it silently otherwise (OBS-4).
+const traceRange = await pacePage.locator(".trace-band .pace-range").innerText();
+check(
+  traceRange.includes(`of ${PACE_LAPS}`),
+  `the trace says how far behind the race its bound sits (${traceRange})`,
+);
+
+// **A car that RACED and then stopped stays in the reference for the laps he
+// drove.** The reference used to be averaged over the CURRENT population, so
+// the moment a car retired he left it and every point of every line - back to
+// lap 1 - was recomputed without him: measured on the real payload, all 45 of
+// NOR's historical points moved by up to 7.6 s at one retirement. It is the
+// twin of the lap-axis bound this module already had. Computed here from the
+// fixture's own bulk rather than asserted about the mechanism.
+const historyStable = await pacePage.evaluate(
+  ([bulk, probeLap, code, retired]) => {
+    const chart = document.querySelector(".trace-band-plot")?.__pitwallChart;
+    if (!chart) return null;
+    const mean = (entries) =>
+      entries.reduce((sum, v) => sum + v, 0) / entries.length;
+    const withCrossing = (codes) =>
+      codes
+        .map((c) => bulk.drivers[c]?.crossings[probeLap])
+        .filter((v) => v !== undefined);
+    const all = Object.keys(bulk.drivers);
+    const own = bulk.drivers[code].crossings[probeLap];
+    const series = chart.getOption().series.find((x) => x.name === code);
+    const point = series?.data.find(([lap]) => lap === probeLap);
+    return {
+      cars: withCrossing(all).length,
+      // Everyone who completed this lap, retired-since or not.
+      everyone: mean(withCrossing(all)) - own,
+      // The refuted alternative: only the cars still classified NOW.
+      stillRacing: mean(withCrossing(all.filter((c) => c !== retired))) - own,
+      actual: point ? point[1] : null,
+    };
+  },
+  [paceBulk(), 10, TOWER_ORDER[0], PACE_RETIRED_MIDRACE.code],
+);
+
+// The two hypotheses must be TELLABLE APART on this fixture, or the assertion
+// below is decoration. The first version of this check chose a probe driver
+// sitting exactly on the field mean, so removing him moved nothing and the
+// guard stayed green against the very defect it names.
+check(
+  historyStable !== null &&
+    Math.abs(historyStable.everyone - historyStable.stillRacing) > 0.5,
+  `the fixture can tell the two reference populations apart (${(historyStable?.everyone - historyStable?.stillRacing)?.toFixed(3)} s)`,
+);
+check(
+  historyStable !== null && Math.abs(historyStable.everyone - historyStable.actual) < 1e-9,
+  `a retired car still counts in the laps he drove (everyone ${historyStable?.everyone?.toFixed(3)}, still-racing ${historyStable?.stillRacing?.toFixed(3)}, rendered ${historyStable?.actual?.toFixed(3)}, over ${historyStable?.cars} cars)`,
 );
 
 await paceCtx.close();
