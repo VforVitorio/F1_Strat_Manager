@@ -318,6 +318,13 @@ class F1ArcadeView(arcade.View):
 
         self._spawn_dashboard()
 
+        if self.window is not None and hasattr(self.window, "push_handlers"):
+            self.window.push_handlers(on_close=self._on_window_close)
+
+    def _on_window_close(self) -> None:
+        """Handle window close event to ensure companion subprocesses and streams are terminated."""
+        self.on_hide_view()
+
     def _spawn_dashboard(self) -> None:
         """Launch the PySide6 strategy dashboard as a child process.
 
