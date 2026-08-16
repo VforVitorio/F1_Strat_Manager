@@ -173,12 +173,6 @@ CACHE_VERSION: Final[str] = "v12"  # + official classification (SessionData.offi
 # workers has hung in cold-cache runs. Flip to >1 once FastF1 is warm.
 POOL_SIZE: Final[int] = 1
 
-# --- Backend (strategy SSE) ----------------------------------------------
-BACKEND_URL: Final[str] = os.environ.get("F1_BACKEND_URL", "http://localhost:8000")
-STRATEGY_ENDPOINT: Final[str] = "/api/v1/strategy/simulate"
-SSE_RECONNECT_DELAY_S: Final[float] = 2.0
-SSE_MAX_CONSECUTIVE_FAILURES: Final[int] = 3
-SSE_BACKOFF_AFTER_FAILURES_S: Final[float] = 10.0
 
 # --- Telemetry stream (arcade -> dashboard process) ----------------------
 # Version of the broadcast payload's shape. Bump it whenever a key is

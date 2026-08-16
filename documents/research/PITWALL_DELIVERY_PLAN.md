@@ -44,8 +44,8 @@ Commands handed over are PowerShell, one command per physical line, starting wit
 | 3 | AGENTS window, 1:1 | rewritten #285 | adversarial: is it ACTUALLY 1:1, field by field |
 | 4 | **DATA band 4: own-car traces + the ring** (REORDERED 2026-08-09, see §5) | rewritten #284 (c) | none |
 | 5 | DATA bands 1-2: status, timing table, bests | rewritten #284 (a) | none |
-| 6 | DATA band 3: race pace grid + race trace | rewritten #284 (b) | adversarial: tier discipline and fidelity claims |
-| 7 | Retire Qt, package, fix the prose | rewritten #285, new | **exit gate, then the ONE `dev -> main`** |
+| 6 | DATA band 3: race pace grid | rewritten #284 (b) | adversarial: tier discipline and fidelity claims |
+| 7 | **DATA band 3: race trace** (#944, the half sprint 6 did not build) · retire Qt · package · fix the prose | rewritten #285, #944, new | **exit gate** (the `dev -> main` promotion is deferred: Víctor, 2026-08-15) |
 | **8** | **AGENTS: the elevate pass** | new | Fable as senior dashboard designer, P0-P3 with file:line |
 | **9** | **DATA: the elevate pass** | new | same |
 

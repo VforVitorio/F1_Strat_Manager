@@ -64,7 +64,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the one-page topology and [`docs/`]
 | Surface                            | Command                                                                                                     | When to use                                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **CLI**                      | `f1-strat` (interactive wizard) · `f1-sim Melbourne VER "Red Bull Racing" --year 2025` (headless)                                                      | Headless Rich-based live inference panel for a single race. `f1-strat` opens an arrow-key menu (GP, driver, provider, head-to-head); `f1-sim` is the scripted form. |
-| **Arcade** (primary live UI) | `f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --driver2 LEC --strategy` | Three-window 2D race replay + PySide6 strategy dashboard + live telemetry grid. No backend required. |
+| **Arcade** (primary live UI) | `f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --driver2 LEC --strategy` | Three-window 2D race replay + the two PITWALL windows (AGENTS and DATA). No backend required. |
 | **Web app** (post-race)    | `f1-webapp` (wraps `docker compose up`)                                                               | React SPA (Vite + TypeScript + Tailwind + ECharts): telemetry dashboard, 60fps driver comparison, ML model lab, multi-agent pit-wall strategy, race analysis, and a streaming AI chat that renders tool results inline. Backed by FastAPI. |
 
 The Arcade is in the hero above. Here are the other two:
@@ -118,7 +118,8 @@ Requires Python 3.10-3.12 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudio`
 
 ## Project layout
 
-- [`src/arcade/`](src/arcade/): 2D race replay (pyglet) + PySide6 strategy dashboard
+- [`src/arcade/`](src/arcade/): 2D race replay (pyglet) + the TCP broadcast the followers read
+- [`src/pitwall/`](src/pitwall/): the two desktop windows (React in a webview, one stream client)
 - [`src/agents/`](src/agents/): multi-agent orchestrator (N25 → N31)
 - [`src/simulation/`](src/simulation/): `RaceReplayEngine` + `RaceStateManager`
 - [`src/telemetry/`](src/telemetry/): FastAPI backend + React web app (post-race UI, git submodule)

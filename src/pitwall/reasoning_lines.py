@@ -1,5 +1,9 @@
 """The reasoning tabs' second formatting layer, with no toolkit attached.
 
+Written for the Qt reasoning tabs and moved here in sprint 7 when that package
+was retired: PITWALL renders the same tabs by calling these, so the layer had a
+consumer that outlived the widget.
+
 Five per-agent `key = value` metric dumps, plus the helpers that compose a
 tab body out of an agent's reasoning and its numbers. Split out of
 `reasoning_tabs.py` for the same reason `palette.py` was split out of

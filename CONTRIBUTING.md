@@ -3,6 +3,24 @@
 Short guide for anyone cloning the TFG to experiment, fix a bug, or
 propose a change.
 
+## Contributions are paused until v3.0.0
+
+**This is temporary, and it is about timing rather than about the work.**
+
+The repository is in the middle of heavy development: surfaces are being
+migrated (the PySide6 dashboard was retired in favour of PITWALL), the data
+plane is being rewired, and the sprints run against a sequenced plan where each
+one depends on the shape the previous one left. An incoming pull request, however
+good, lands in the middle of that and reorders it.
+
+So **pull requests are not being accepted for now**. Issues are welcome and
+genuinely useful — a well-described bug is worth more here than a patch, because
+it can be scheduled into the sprint that owns that code.
+
+**Once v3.0.0 is operational, contributions open up.** That is the milestone
+where live inference lands and the architecture stops moving underneath
+everything else; after it, this section goes away.
+
 ## Branching model
 
 Three long-lived branches, in increasing order of stability:

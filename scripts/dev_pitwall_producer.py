@@ -1,11 +1,11 @@
 """Dev-only broadcast producer with a POPULATED strategy block.
 
 Drives the real `TelemetryStreamServer` from the real Melbourne 2025 session
-so PITWALL and the Qt dashboard can be developed against a full payload
-without launching the arcade, running the agent pipeline, or spending a
-single LLM call. Built for the sprint-3 AGENTS port, where an empty
-strategy block leaves every card in its idle state and there is nothing to
-compare against the window being replaced.
+so PITWALL can be developed against a full payload without launching the
+arcade, running the agent pipeline, or spending a single LLM call. Built for
+the sprint-3 AGENTS port, where an empty strategy block leaves every card in
+its idle state and there was nothing to compare against the Qt window it was
+replacing.
 
     python scripts/dev_pitwall_producer.py 180      # seconds to broadcast
 

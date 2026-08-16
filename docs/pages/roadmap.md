@@ -477,8 +477,8 @@
       <span class="rl-version"><span class="sr-only">Version: </span>v2.6.0</span>
       <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
     </div>
-    <p class="rl-title">Arcade, modernized: a web-native trackside frontend</p>
-    <p class="rl-summary">Bring the web app's modern frontend to part of the live Arcade experience, running alongside the pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to a web-native view; the <code>lap_state</code> contract and the agents stay unchanged.</p>
+    <p class="rl-title">Arcade, modernized: a trackside frontend in web technology</p>
+    <p class="rl-summary">Bring the web app's modern frontend to part of the live Arcade experience, running alongside the pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to React hosted in the platform webview - desktop windows, not a web app; the <code>lap_state</code> contract and the agents stay unchanged.</p>
   </div>
 </li>
 
