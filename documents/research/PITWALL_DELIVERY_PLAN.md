@@ -403,7 +403,51 @@ makes about what it is showing.
 
 ---
 
-## 6. Sprint 7 — retire Qt, package, fix the prose
+## 6. Sprint 7 — the race trace, retire Qt, package, fix the prose
+
+> ### ✅ DONE, 2026-08-15/16 — on `dev`, and the promotion was DEFERRED
+>
+> Everything below was executed. What follows is what actually happened, so the section stops
+> reading as a plan for work that has shipped.
+>
+> | PR | What |
+> |---|---|
+> | #945 | **The race trace** (#944) — the half of band 3 sprint 6 was scoped for and did not build. Víctor's call: build it now rather than promote a half-built band. |
+> | #946 | Qt retired: 13 modules, the two live formatters moved to `src/pitwall/`, `pyside6` + `pyqtgraph` out of `pyproject.toml` and `uv.lock`. |
+> | #952 | The five the Fable gates found in band 3. |
+> | #953 | Contributions paused until v3.0.0, and the Qt prose sweep this one's first pass missed. |
+> | #954 | The Vite bundle ships in the wheel; `f1-pitwall` did not exist and now does. |
+> | #955 | Closing the replay window tears the companion down (#947). |
+> | #956 | The connection a caller holds (#950) and the laps it can actually see (#949). |
+>
+> **⛔ The single `dev -> main` promotion did NOT happen.** Víctor, 2026-08-15: everything lands on
+> `dev` with green CI and stops. So #841-#844, #281, #284, #285, #921-#940 and #944 all stay OPEN,
+> and release PR #712 stays held. **When to promote is now a scheduling decision, not a technical
+> one** — nothing blocks it.
+>
+> **The exit gate ran on Fable, and so did four re-runs**, which settled the standing debt that
+> every gate run while Fable was out of quota was provisional. **None of them differed on a
+> verdict**: ARCH-A 11 confirmed / 4 partial / 0 refuted with both P0s intact and every scope
+> deletion justified, ARCH-B 9/9, sprint-6 correctness 9/11 (the other two were its own author's
+> recanted artefacts), the band-3 orientation upheld. What they bought was the **11 findings nobody
+> had looked for**. Reports: `~/.claude/plans/pitwall-sprint7/fable-gates/`.
+>
+> **Three things this sprint learned that outlive it:**
+>
+> 1. `src/pitwall/__main__`'s loopback server **snapshots `dist/` at startup** — confirming a build
+>    landed is not confirming the server serves it, and four measurements in a row once described a
+>    bundle no longer in the tree.
+> 2. Node's `fs.rmSync` **returns normally and deletes nothing** on this tree, so the build's own
+>    cleaning step was a silent no-op and every stale chunk shipped. `scripts/clean-dist.mjs` now
+>    verifies its own work and stops the build loudly.
+> 3. **A guard whose probe sits on the mean cannot see the defect it names.** One shipped green
+>    against its own bug until it was made to prove the two hypotheses are distinguishable first.
+>
+> Still open: **#951** (the arcade skips `repair_tyre_stints`, so its tyre age disagrees with the
+> tower) is **blocked on data** — the repair changes 0 of Melbourne's 927 rows, and Melbourne is the
+> only race a curated install carries. Sprint 9 keeps the width axis (863 of 1,140 cells clip on a
+> 1080p laptop at 150 %) and the safety-car ranking semantics.
+
 
 ⛔ **Two modules under `src/arcade/dashboard/` MOVE, they do not get deleted.** Sprint 3 made
 PITWALL render the AGENTS window by calling the Qt window's own formatters, which is what makes
@@ -443,6 +487,11 @@ once. Only after that promotion do #841-#844, #281, #284 and #285 close.
 
 Note that this promotion is also what un-gates release PR #712 (`chore(main): release 2.6.0`), which
 has been held open waiting for PITWALL to exist. Do not merge it before this point.
+
+> **What happened instead:** the exit gate ran, on Fable, and found the sprint's worst defect. The
+> promotion did not — Víctor deferred it on 2026-08-15, so the whole programme is still on `dev`.
+> Nothing technical is holding it: the gate is done and CI is green on every PR. The temptation this
+> paragraph warns about was avoided in the other direction, by the gate rather than by the merge.
 
 ---
 
