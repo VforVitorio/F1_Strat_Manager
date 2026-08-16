@@ -129,6 +129,7 @@ f1-sim       = "scripts.run_simulation_cli:main"
 f1-arcade    = "src.arcade.main:main"
 f1-webapp    = "scripts.run_webapp:main"
 f1-eval      = "src.strategy.eval.cli:main"
+f1-pitwall   = "src.pitwall.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -190,11 +191,21 @@ torchvision = [
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml", "*.json"]
+# PITWALL's two windows ARE this bundle: without it `f1-pitwall` starts, finds
+# no `dist/`, prints the build hint and exits 1. `dist/` is gitignored build
+# output, so it exists only after `npm run build` - which makes the ORDER part
+# of the release procedure, not a detail. `tests/infra/test_wheel_ships_the_ui.py`
+# is what stops a wheel shipping without it.
+"src.pitwall" = ["ui/dist/**"]
 
 [tool.setuptools.exclude-package-data]
 # Source maps never belong in a wheel; a dev-box npm build can leave them
 # under src/ and the "*" json/yaml glob above would otherwise rake them in.
 "*" = ["**/*.map"]
+# The UI's build-tool manifests are not runtime data. They were the ONLY thing
+# from `src/pitwall/ui/` that ever reached a wheel: measured on 2.5.1, three
+# JSONs in and zero bundle files, the exact inversion of what is wanted.
+"src.pitwall.ui" = ["*.json"]
 
 [tool.black]
 line-length = 100
