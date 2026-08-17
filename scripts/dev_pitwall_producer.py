@@ -62,7 +62,13 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
         compound_next="HARD",
         undercut_target="RUS",
         agent_alerts=["tyre cliff in 2 laps", "DRS window opens on the main straight"],
-        guardrail_reason="none",
+        # `None`, not the STRING "none". A non-empty string is truthy, so the
+        # window rendered `⚠ Guardrail: none` in the alarm colour on every lap
+        # of every dev run - a red warning whose content is that there is
+        # nothing to warn about. The real path sends `None`
+        # (`src/arcade/strategy.py:796`), so this only ever misled whoever was
+        # developing against it, which is the whole point of the file.
+        guardrail_reason=None,
         per_agent=PerAgentOutputsDTO(
             # Every key below is a real field of the agent's own output
             # dataclass, and `active` carries the real routing tokens. An
