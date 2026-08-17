@@ -90,6 +90,10 @@ docs/_external_images/
 .spyderproject
 .spyproject
 .claude/
+# Agent skills installed per machine, the same way `.claude/` already is:
+# `npx skills add` writes the skill sources here and records them in the lock.
+.agents/
+skills-lock.json
 
 # ===========================
 # Environment
