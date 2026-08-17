@@ -208,7 +208,7 @@ def build_tire_series(
         "cliff_colour": CLIFF_COLOUR,
         "boundary_opacity": BOUNDARY_OPACITY,
         "x_range": _x_range(flat, current_lap, cliff),
-        "y_range": _y_range(trend or flat),
+        "y_range": _y_range(flat + trend),
         "current_lap": None if current_lap is None else float(current_lap),
         "cursor_colour": CURSOR_COLOUR,
     }
@@ -254,6 +254,19 @@ def _y_range(points: list[list[float]]) -> list[float] | None:
     occupied FOUR PIXELS of a 150 px plot, so the 0.031 s/lap degradation
     the panel exists to show was sub-pixel. Any real in-lap - about +20 s,
     and inside the 30-200 s sanity window - reproduces it.
+
+    **Bound over everything DRAWN, which is the stint points and the trend
+    together.** It used to read `trend or flat`, two mistakes in three
+    words: the `or` is dead, since the trend is non-empty exactly when the
+    points are, and the trend is the SMOOTHED series - a 22 s in-lap
+    averages down inside it, so the raw point the stints really plot fell
+    outside the bound and clipped off the top of its own chart.
+
+    A genuine pit lap does widen the axis to about 25 s, and the trend then
+    reads flat again. That is honest - the plotted data really does span
+    that - and it is a different question from the one this fixes, which
+    was an axis derived from a cliff band the chart never draws on it. Whether
+    an in-lap belongs in a degradation trace at all is filed separately.
 
     Returns `None` when there is nothing to bound, which leaves the axis
     autoranged rather than inventing a window around no data.

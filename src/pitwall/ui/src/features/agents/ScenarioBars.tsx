@@ -33,7 +33,11 @@ export function ScenarioBars({ rows }: { rows: ScenarioRow[] }) {
               style={{ width: `${row.fill_pct}%`, background: row.bar_colour }}
             />
           </span>
-          {row.note ? <span className="scenario-note">{row.note}</span> : null}
+          {/* ALWAYS rendered, empty or not. Conditionally inserting it stole
+              width from the marked row's track alone, so the bars stopped
+              being comparable in exactly the state that asks the reader to
+              compare them. */}
+          <span className="scenario-note">{row.note}</span>
           <span className="scenario-score" style={{ color: row.score_colour }}>
             {row.score}
           </span>

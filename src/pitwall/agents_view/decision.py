@@ -244,32 +244,51 @@ def build_scenarios(
         except (TypeError, ValueError):
             continue
 
-    winner = max(raw, key=raw.get) if raw else None
+    # A TIE HAS NO WINNER. `max` picks whichever key it met first, which
+    # invented a leader out of two equal scores and then marked the loser of
+    # that coin toss `NOT TAKEN` - a claim about a decision nobody made.
+    top = max(raw.values()) if raw else None
+    leaders = [key for key, value in raw.items() if value == top]
+    winner = leaders[0] if len(leaders) == 1 else None
+
     enacted = str(enacted_action or "").upper() or None
-    # With no action published - the idle branch, and any producer that has
-    # not sent one - the winner keeps the highlight, which is exactly the
-    # behaviour every state but the vetoed one already had.
-    highlighted = enacted if enacted in raw else winner
-    vetoed_key = winner if (highlighted != winner and winner is not None) else None
+    if enacted is None:
+        # Nothing published - the idle branch, and any producer that has not
+        # sent an action. The simulation's preference stands in, which is
+        # what every state but the overruled one already did.
+        highlighted = winner
+    elif enacted in raw:
+        highlighted = enacted
+    else:
+        # **Published something these four rows do not describe.** `ALERT`
+        # is the fifth member of the orchestrator's own action Literal and
+        # it is not a scenario, so nothing here was enacted. Crowning the
+        # Monte Carlo winner anyway is exactly the misread #962 fixed,
+        # walking back in through the door left open for the idle case.
+        highlighted = None
+    unenacted = winner if (winner is not None and highlighted != winner) else None
 
     if raw:
         lo, hi = min(raw.values()), max(raw.values())
-        span = (hi - lo) or 1.0
+        span = hi - lo
     else:
-        lo, span = 0.0, 1.0
+        lo, span = 0.0, 0.0
 
     rows: list[dict[str, Any]] = []
     for key in SCENARIO_KEYS:
         present = key in raw
         value = raw.get(key, lo)
-        scaled = min(1.0, max(0.0, (value - lo) / span))
+        # Every scored candidate FULL when they are all equal: min-max has
+        # nothing to spread and flooring them all to 6 % said the opposite of
+        # what a tie means.
+        scaled = 1.0 if span == 0 else min(1.0, max(0.0, (value - lo) / span))
         fill = max(scaled, _SCORED_FLOOR) if present else 0.0
         is_highlighted = present and key == highlighted
-        is_vetoed = key == vetoed_key
+        is_unenacted = key == unenacted
         if is_highlighted:
             accent = ACCENT
             score_colour = TEXT_PRIMARY
-        elif is_vetoed:
+        elif is_unenacted:
             accent = TEXT_TERTIARY
             score_colour = TEXT_TERTIARY
         else:
@@ -294,7 +313,13 @@ def build_scenarios(
                 "is_winner": present and key == winner,
                 "is_enacted": is_highlighted,
                 "is_scored": present,
-                "note": "VETOED" if is_vetoed else "",
+                # `NOT TAKEN`, not `VETOED`. A veto names a MECHANISM, and
+                # this code cannot see one: `guardrail_reason` never reaches
+                # the window from any producer (#974), and the enacted action
+                # can differ from the winner because the LLM synthesis chose
+                # otherwise. What is certainly true is that the simulation
+                # preferred this and it is not what the car is doing.
+                "note": "NOT TAKEN" if is_unenacted else "",
                 "bar_colour": hex_str(accent),
                 "label_colour": hex_str(accent),
                 "score_colour": hex_str(score_colour),

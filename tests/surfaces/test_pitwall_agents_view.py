@@ -201,6 +201,45 @@ def test_the_tooltips_return_data_and_never_markup():
         assert "<" not in repr(value), f"markup reached the view: {value!r}"
 
 
+def test_the_two_charts_bound_their_axes_to_what_they_actually_draw():
+    """The headline chart fix of sprint 8, which shipped with no guard (#966).
+
+    `y_range` could go back to `None`, the two lap axes could drift apart
+    again and the current-lap mark could vanish, and 218 tests would stay
+    green - the exit gate's own finding about this sprint.
+
+    Three properties, each the one that broke:
+
+    - **every plotted point sits INSIDE the y bound.** The first version
+      bounded on the SMOOTHED trend, so a 22 s in-lap averaged down inside
+      it and the raw point the stints really draw clipped off the top.
+    - **both charts get the same lap axis**, because they sit side by side
+      measuring laps and used to autorange independently.
+    - **both mark the current lap**, which neither did.
+    """
+    from src.pitwall.agents_view.charts import build_pace_series, build_tire_series
+
+    rows = [{"lap": lap, "lap_time_s": 81.2, "compound": "MEDIUM"} for lap in range(14, 23)]
+    # A real in-lap: about +22 s, and inside the 30-200 s sanity window.
+    rows.append({"lap": 23, "lap_time_s": 103.4, "compound": "MEDIUM"})
+    tire = build_tire_series(rows, 23, {"laps_to_cliff_p50": 6.0, "laps_to_cliff_p90": 9.0})
+
+    low, high = tire["y_range"]
+    plotted = [point[1] for stint in tire["stints"] for point in stint["points"]]
+    plotted += [point[1] for point in tire["trend"]]
+    assert all(low <= value <= high for value in plotted), (
+        f"a plotted point falls outside the axis it is drawn on: {tire['y_range']} vs "
+        f"{min(plotted)}..{max(plotted)}"
+    )
+
+    pace = build_pace_series({23: {"actual": 81.2, "pred": 81.0}}, tire["x_range"], 23)
+    assert pace["x_range"] == tire["x_range"], "the two lap axes are one axis"
+    assert pace["current_lap"] == tire["current_lap"] == 23.0
+
+    # Nothing to bound is `None`, not an invented window around no data.
+    assert build_tire_series([], None, None)["y_range"] is None
+
+
 # --- The view the host hands the window -------------------------------------
 
 
@@ -725,7 +764,7 @@ def test_a_scored_last_place_is_distinguishable_from_a_scenario_nobody_scored():
     assert scored_last["score"] == "+0.29" and never_scored["score"] == "  --"
 
 
-def test_a_guardrail_veto_moves_the_crown_to_the_plan_that_was_ENACTED():
+def test_an_unenacted_winner_loses_the_crown_and_says_so():
     """The sprint-8 gate's P0 (#962).
 
     A guardrail can overrule the Monte Carlo winner, and the panel that
@@ -745,11 +784,57 @@ def test_a_guardrail_veto_moves_the_crown_to_the_plan_that_was_ENACTED():
 
     assert rows["PIT_NOW"]["is_winner"], "the simulation's preference is still reported honestly"
     assert rows["PIT_NOW"]["fill_pct"] == 100.0, "and it keeps the width it earned"
-    assert rows["PIT_NOW"]["note"] == "VETOED"
+    # `NOT TAKEN`, not `VETOED`: a veto names a mechanism this code cannot
+    # see. `guardrail_reason` reaches the window from no producer (#974) and
+    # the enacted action can differ because the synthesis chose otherwise.
+    assert rows["PIT_NOW"]["note"] == "NOT TAKEN"
     assert not rows["PIT_NOW"]["is_enacted"]
     assert rows["STAY_OUT"]["is_enacted"], "the call the orchestrator published takes the highlight"
     assert rows["STAY_OUT"]["label_colour"] == "#a78bfa"
     assert rows["PIT_NOW"]["label_colour"] != "#a78bfa", "the vetoed plan loses the regalia"
+
+
+def test_an_action_outside_the_four_scenarios_crowns_none_of_them():
+    """The exit gate's P1, and the #962 misread walking back in.
+
+    `ALERT` is the fifth member of the orchestrator's own action Literal
+    and it is not a scenario. The highlight fell back to the Monte Carlo
+    winner through the door left open for the IDLE case, so the panel
+    announced `PIT` as the enacted call on a lap the car was doing
+    something else entirely.
+    """
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    rows = {
+        row["key"]: row
+        for row in build_scenarios({"PIT_NOW": 0.71, "STAY_OUT": 0.29}, enacted_action="ALERT")
+    }
+    assert not any(row["is_enacted"] for row in rows.values()), (
+        "no scenario was enacted, so no row may wear the crown"
+    )
+    assert rows["PIT_NOW"]["is_winner"] and rows["PIT_NOW"]["note"] == "NOT TAKEN"
+
+
+def test_a_tie_has_no_winner_and_invents_no_veto():
+    """The exit gate's P2: `max` picked whichever key it met first.
+
+    Two equal scores are not a leader and a loser. The arbitrary winner
+    then marked the other `NOT TAKEN` - a claim about a decision nobody
+    made - and min-max, with nothing to spread, floored BOTH of the joint
+    best to 6 %, which says the opposite of what a tie means.
+    """
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    rows = {
+        row["key"]: row
+        for row in build_scenarios({"PIT_NOW": 0.5, "STAY_OUT": 0.5}, enacted_action="STAY_OUT")
+    }
+    assert not any(row["is_winner"] for row in rows.values()), "a tie has no winner"
+    assert all(row["note"] == "" for row in rows.values()), "and nothing to mark as not taken"
+    assert rows["PIT_NOW"]["fill_pct"] == rows["STAY_OUT"]["fill_pct"] == 100.0, (
+        "joint best draws joint full, not joint floor"
+    )
+    assert rows["STAY_OUT"]["is_enacted"], "the published action still takes the highlight"
 
 
 def test_with_no_veto_the_winner_keeps_the_crown_and_nothing_is_marked():
