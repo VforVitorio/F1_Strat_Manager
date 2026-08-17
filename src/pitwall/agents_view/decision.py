@@ -32,19 +32,35 @@ from src.arcade.palette import (
 )
 from src.arcade.strategy import classify_action
 
+# The two posture chips are FACTS, not warnings, so they wear text colour and
+# the word carries the meaning (#964).
+#
+# They used to be a severity scale, and it put `Risk: AGGRESSIVE` - a setting
+# somebody chose - in the same DANGER red as `⚠ Guardrail: minimum stint
+# length not met`, a constraint violation, one line below it. Counting the
+# window's reds found six different meanings on one colour: imperative action,
+# posture, low confidence, radio alert, dead link, rule violation. The whole
+# point of an alarm colour is pre-attentive triage, and six semantics deny the
+# reader exactly that at the moment they need it.
+#
+# DANGER now belongs to alarm-class facts: the ALERT glyph, the guardrail
+# line, and a dead connection. The dicts stay rather than collapsing into a
+# constant, because a posture the producer has never sent must still fall to
+# TEXT_TERTIARY - which is what says "not reported" as against "reported and
+# unremarkable".
 _PACE_COLOURS: dict[str, tuple[int, int, int]] = {
-    "PUSH": DANGER,
+    "PUSH": TEXT_SECONDARY,
     "NEUTRAL": TEXT_SECONDARY,
-    "MANAGE": WARNING,
-    "LIFT_AND_COAST": WARNING,
+    "MANAGE": TEXT_SECONDARY,
+    "LIFT_AND_COAST": TEXT_SECONDARY,
 }
 
 _RISK_COLOURS: dict[str, tuple[int, int, int]] = {
-    "AGGRESSIVE": DANGER,
+    "AGGRESSIVE": TEXT_SECONDARY,
     "BALANCED": TEXT_SECONDARY,
     "NEUTRAL": TEXT_SECONDARY,
-    "CONSERVATIVE": WARNING,
-    "DEFENSIVE": WARNING,
+    "CONSERVATIVE": TEXT_SECONDARY,
+    "DEFENSIVE": TEXT_SECONDARY,
 }
 
 SCENARIO_KEYS: tuple[str, ...] = ("STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT")

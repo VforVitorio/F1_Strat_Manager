@@ -445,11 +445,43 @@ def test_the_orchestrator_card_is_the_qt_one_field_for_field():
     assert view["confidence_label"] == "Confidence: 71%"
     assert view["confidence_colour"] == "#10b981", "0.71 is over the 0.66 green tier"
     assert view["pace"] == "Pace: PUSH"
-    assert view["pace_colour"] == "#ef4444"
+    # Text colour, not DANGER: a posture is a setting somebody chose, and
+    # wearing the alarm colour put `Risk: AGGRESSIVE` in the same red as the
+    # guardrail violation one line below it (#964).
+    assert view["pace_colour"] == "#d1d5db"
     assert view["risk"] == "Risk: AGGRESSIVE"
+    assert view["risk_colour"] == "#d1d5db"
     assert view["plan"].startswith("Pit: L24 · Next: <span")
     assert view["plan"].endswith("· UCUT: RUS")
     assert view["guardrail"] == ""
+
+
+def test_no_posture_wears_the_alarm_colour():
+    """DANGER means an alarm, and a posture is a setting somebody chose (#964).
+
+    The sprint-8 gate counted six meanings on one red - imperative action,
+    posture, low confidence, radio alert, dead link, rule violation - and
+    the sharpest instance was `Risk: AGGRESSIVE` sitting one line above
+    `⚠ Guardrail: minimum stint length not met` in the same colour. An
+    alarm colour exists for pre-attentive triage; six semantics deny the
+    reader exactly that.
+
+    Every posture the two maps know plus an unknown one, because a table
+    half-migrated is this repo's most expensive defect shape.
+    """
+    from src.pitwall.agents_view.decision import _PACE_COLOURS, _RISK_COLOURS, build_orchestrator
+
+    danger = "#ef4444"
+    for mode in (*_PACE_COLOURS, "SOMETHING_NEW"):
+        built = build_orchestrator({"action": "STAY_OUT", "pace_mode": mode})
+        assert built["pace_colour"] != danger, f"pace {mode} wears the alarm colour"
+    for posture in (*_RISK_COLOURS, "SOMETHING_NEW"):
+        built = build_orchestrator({"action": "STAY_OUT", "risk_posture": posture})
+        assert built["risk_colour"] != danger, f"risk {posture} wears the alarm colour"
+
+    # And the one field that still may: a guardrail is a constraint violation.
+    vetoed = build_orchestrator({"action": "STAY_OUT", "guardrail_reason": "min stint"})
+    assert vetoed["guardrail"].startswith("⚠ Guardrail:")
 
 
 def test_the_confidence_tiers_are_the_three_qt_paints():
