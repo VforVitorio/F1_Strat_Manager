@@ -87,13 +87,20 @@ const IDLE_VIEW: AgentsView = {
     ["PIT_NOW", "PIT"],
     ["UNDERCUT", "UCUT"],
     ["OVERCUT", "OCUT"],
+    // `--`, not the `0%` this used to claim. Before the first tick nothing
+    // has been simulated, and "0 %" is a measurement — in a unit the live
+    // view never uses, since a live absent scenario prints `--`. The same
+    // window rendered "no data" three different ways.
   ].map(([key, label]) => ({
     key,
     label,
     fill: 0,
     fill_pct: 0,
-    score: "  0%",
+    score: "  --",
     is_winner: false,
+    is_enacted: false,
+    is_scored: false,
+    note: "",
     bar_colour: "#d1d5db",
     label_colour: "#d1d5db",
     score_colour: "#d1d5db",

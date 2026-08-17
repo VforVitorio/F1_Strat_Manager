@@ -133,13 +133,40 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def build_scenarios(scores: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Four rows: label, bar fill in [0, 1], signed score, winner flag.
+# The narrowest bar a SCORED candidate may draw. It exists so that "was
+# scored and came last" cannot render as "was never scored" (#963): min-max
+# sends the worst candidate to zero by construction, and an absent one draws
+# zero too, so the two were the same pixels - an executed diff over the two
+# bar strips found nought differing pixels.
+_SCORED_FLOOR = 0.06
+
+
+def build_scenarios(
+    scores: dict[str, Any] | None,
+    enacted_action: str | None = None,
+) -> list[dict[str, Any]]:
+    """Four rows: label, bar fill in [0, 1], signed score, and who owns the call.
 
     The fill is min-max normalised across whichever of the four keys are
-    present, so the winner always reaches full width and the worst draws
-    an empty bar whatever the signs. An absent key draws nothing and
-    prints `--`, which is not the same as a score of zero.
+    present, floored at `_SCORED_FLOOR` so a scored candidate always draws
+    ink. An absent key draws NO TRACK AT ALL and prints `--`; that is what
+    keeps "nobody scored this" distinguishable from "this one came last",
+    which the sentence used to claim while the pixels said otherwise.
+
+    **The bar encodes RANK, not margin.** Min-max over signed gains is the
+    only scale-free comparison available here, so `+0.70` against `+0.69`
+    still draws the same widths as `+0.70` against `+0.10`; the number
+    beside the bar is what carries the margin. Changing that is a decision
+    about what the bar MEANS and needs its own argument.
+
+    `enacted_action` is the action the orchestrator actually published, and
+    it is not always the Monte Carlo winner - a guardrail can veto the top
+    scenario (#962). When they diverge the panel used to crown the vetoed
+    plan in full ACCENT while the badge one card up said the opposite, so
+    the "why" panel read as the opposite of the call. The enacted row now
+    takes the highlight; the vetoed winner KEEPS ITS FILL, because the
+    Monte Carlo really did score it highest and that is true, and loses
+    only the regalia, gaining a `VETOED` mark instead.
     """
     raw: dict[str, float] = {}
     for key, value in (scores or {}).items():
@@ -149,6 +176,13 @@ def build_scenarios(scores: dict[str, Any] | None) -> list[dict[str, Any]]:
             continue
 
     winner = max(raw, key=raw.get) if raw else None
+    enacted = str(enacted_action or "").upper() or None
+    # With no action published - the idle branch, and any producer that has
+    # not sent one - the winner keeps the highlight, which is exactly the
+    # behaviour every state but the vetoed one already had.
+    highlighted = enacted if enacted in raw else winner
+    vetoed_key = winner if (highlighted != winner and winner is not None) else None
+
     if raw:
         lo, hi = min(raw.values()), max(raw.values())
         span = (hi - lo) or 1.0
@@ -159,8 +193,19 @@ def build_scenarios(scores: dict[str, Any] | None) -> list[dict[str, Any]]:
     for key in SCENARIO_KEYS:
         present = key in raw
         value = raw.get(key, lo)
-        fill = min(1.0, max(0.0, (value - lo) / span)) if present else 0.0
-        is_winner = present and key == winner
+        scaled = min(1.0, max(0.0, (value - lo) / span))
+        fill = max(scaled, _SCORED_FLOOR) if present else 0.0
+        is_highlighted = present and key == highlighted
+        is_vetoed = key == vetoed_key
+        if is_highlighted:
+            accent = ACCENT
+            score_colour = TEXT_PRIMARY
+        elif is_vetoed:
+            accent = TEXT_TERTIARY
+            score_colour = TEXT_TERTIARY
+        else:
+            accent = TEXT_SECONDARY
+            score_colour = TEXT_SECONDARY
         rows.append(
             {
                 "key": key,
@@ -173,10 +218,17 @@ def build_scenarios(scores: dict[str, Any] | None) -> list[dict[str, Any]]:
                 # keep out of it.
                 "fill_pct": round(fill * 100, 1),
                 "score": f"{value:+.2f}" if present else "  --",
-                "is_winner": is_winner,
-                "bar_colour": hex_str(ACCENT if is_winner else TEXT_SECONDARY),
-                "label_colour": hex_str(ACCENT if is_winner else TEXT_SECONDARY),
-                "score_colour": hex_str(TEXT_PRIMARY if is_winner else TEXT_SECONDARY),
+                # `is_winner` still means what it always meant - the top
+                # Monte Carlo score - so a consumer asking "what did the
+                # simulation prefer" still gets an honest answer. Whether
+                # that plan was ENACTED is the separate flag beside it.
+                "is_winner": present and key == winner,
+                "is_enacted": is_highlighted,
+                "is_scored": present,
+                "note": "VETOED" if is_vetoed else "",
+                "bar_colour": hex_str(accent),
+                "label_colour": hex_str(accent),
+                "score_colour": hex_str(score_colour),
             }
         )
     return rows

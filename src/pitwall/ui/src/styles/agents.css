@@ -315,9 +315,25 @@
   overflow: hidden;
   display: block;
 }
+/* A scenario nobody scored keeps its lane but loses its track, so the row
+ * reads as "not on the table" rather than as "scored last". Both drew an
+ * identical empty track before (#963). */
+.scenario-bar.is-unscored {
+  border-color: transparent;
+  background: transparent;
+}
 .scenario-bar-fill {
   display: block;
   height: 100%;
+}
+/* `VETOED`, on a Monte Carlo winner the orchestrator overruled (#962). It
+ * sits between the bar and the score because that is where the eye already
+ * is when it asks why the widest bar is not the call. */
+.scenario-note {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 .scenario-score {
   width: 46px;

@@ -451,7 +451,9 @@ def test_the_scenario_bars_normalise_across_scores_that_are_all_negative():
     }
 
     assert rows["PIT_NOW"]["fill"] == 1.0 and rows["PIT_NOW"]["is_winner"]
-    assert rows["OVERCUT"]["fill"] == 0.0
+    # The worst SCORED candidate keeps a floor rather than vanishing (#963);
+    # what it may not do is draw the same bar as a scenario nobody scored.
+    assert rows["OVERCUT"]["fill"] == 0.06
     assert rows["UNDERCUT"]["fill"] == pytest.approx((-0.50 + 1.30) / 1.20)
     assert rows["STAY_OUT"]["score"] == "-0.90"
     assert rows["PIT_NOW"]["bar_colour"] == "#a78bfa", "the winner is the accent"
@@ -477,7 +479,7 @@ def test_the_percentage_the_bar_actually_renders_is_on_the_0_to_100_scale():
     }
 
     assert rows["PIT_NOW"]["fill_pct"] == 100.0, "the winner fills the bar, in percent"
-    assert rows["OVERCUT"]["fill_pct"] == 0.0
+    assert rows["OVERCUT"]["fill_pct"] == 6.0
     assert rows["UNDERCUT"]["fill_pct"] == pytest.approx(66.7, abs=0.05)
     for row in rows.values():
         assert row["fill_pct"] == pytest.approx(row["fill"] * 100, abs=0.05), (
@@ -500,6 +502,70 @@ def test_a_scenario_the_orchestrator_did_not_score_draws_nothing_and_prints_dash
         "UNDERCUT",
         "OVERCUT",
     ], "all four rows exist even with no scores at all"
+
+
+def test_a_scored_last_place_is_distinguishable_from_a_scenario_nobody_scored():
+    """The claim the docstring above made and the pixels denied (#963).
+
+    Min-max sends the worst scored candidate to zero BY CONSTRUCTION, and
+    an absent one drew zero too, so `--` and `+0.29` rendered the same
+    empty track - a pixel diff over the two bar strips of the live window
+    found nought differing pixels. Asserting each row's own fill in
+    isolation cannot see that: the defect is that TWO rows agree, so the
+    assertion has to be about the pair.
+
+    The worst case is n = 2, where min-max collapses the whole scale.
+    """
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    rows = {row["key"]: row for row in build_scenarios({"PIT_NOW": 0.71, "STAY_OUT": 0.29})}
+    scored_last, never_scored = rows["STAY_OUT"], rows["UNDERCUT"]
+
+    assert scored_last["is_scored"] and not never_scored["is_scored"]
+    assert scored_last["fill_pct"] > never_scored["fill_pct"], (
+        "a candidate the simulation scored must draw ink a candidate it never considered does not"
+    )
+    assert scored_last["score"] == "+0.29" and never_scored["score"] == "  --"
+
+
+def test_a_guardrail_veto_moves_the_crown_to_the_plan_that_was_ENACTED():
+    """The sprint-8 gate's P0 (#962).
+
+    A guardrail can overrule the Monte Carlo winner, and the panel that
+    explains the call used to keep crowning the overruled plan in full
+    ACCENT while the badge one card up said the opposite. The two panels
+    disagreed about which strategy the system was executing.
+
+    What must NOT change is the winner's fill: the simulation really did
+    score it highest, and hiding that would replace one lie with another.
+    """
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    rows = {
+        row["key"]: row
+        for row in build_scenarios({"PIT_NOW": 0.71, "STAY_OUT": 0.29}, enacted_action="STAY_OUT")
+    }
+
+    assert rows["PIT_NOW"]["is_winner"], "the simulation's preference is still reported honestly"
+    assert rows["PIT_NOW"]["fill_pct"] == 100.0, "and it keeps the width it earned"
+    assert rows["PIT_NOW"]["note"] == "VETOED"
+    assert not rows["PIT_NOW"]["is_enacted"]
+    assert rows["STAY_OUT"]["is_enacted"], "the call the orchestrator published takes the highlight"
+    assert rows["STAY_OUT"]["label_colour"] == "#a78bfa"
+    assert rows["PIT_NOW"]["label_colour"] != "#a78bfa", "the vetoed plan loses the regalia"
+
+
+def test_with_no_veto_the_winner_keeps_the_crown_and_nothing_is_marked():
+    """The unvetoed path is the common one and must be untouched by #962."""
+    from src.pitwall.agents_view.decision import build_scenarios
+
+    scores = {"PIT_NOW": 0.71, "STAY_OUT": 0.29}
+    for action in ("PIT_NOW", None):
+        rows = {row["key"]: row for row in build_scenarios(scores, enacted_action=action)}
+        assert rows["PIT_NOW"]["is_enacted"] and rows["PIT_NOW"]["label_colour"] == "#a78bfa"
+        assert all(row["note"] == "" for row in rows.values()), (
+            f"nothing is vetoed when the enacted action is {action!r}"
+        )
 
 
 def test_the_action_badge_comes_from_classify_action_and_is_not_a_second_table():
