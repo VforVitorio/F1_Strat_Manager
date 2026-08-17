@@ -61,7 +61,13 @@ class AgentsViewBuilder:
             "seq": payload.get("seq"),
             "header": build_header(payload, connection),
             "orchestrator": build_orchestrator(latest or None),
-            "scenarios": build_scenarios(latest.get("scenario_scores") if latest else None),
+            # The action goes in with the scores: a guardrail can veto the
+            # Monte Carlo winner, and a panel that does not know which plan
+            # was ENACTED crowns the one that was overruled (#962).
+            "scenarios": build_scenarios(
+                latest.get("scenario_scores") if latest else None,
+                latest.get("action") if latest else None,
+            ),
             "reasoning": build_reasoning(latest or None),
             "cards": build_cards(latest or None),
             "charts": {

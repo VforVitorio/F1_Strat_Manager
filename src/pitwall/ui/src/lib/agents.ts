@@ -82,7 +82,14 @@ export interface ScenarioRow {
   /** The same value as a percentage, rounded host side; this is the width. */
   fill_pct: number;
   score: string;
+  /** The top Monte Carlo score. NOT necessarily the plan that was enacted. */
   is_winner: boolean;
+  /** The plan the orchestrator actually published, which a guardrail can move. */
+  is_enacted: boolean;
+  /** Whether this scenario was scored at all. An unscored row draws no track. */
+  is_scored: boolean;
+  /** `VETOED` on a winner the enacted action overruled, empty otherwise. */
+  note: string;
   bar_colour: string;
   label_colour: string;
   score_colour: string;
