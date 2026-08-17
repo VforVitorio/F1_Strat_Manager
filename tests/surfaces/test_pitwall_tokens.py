@@ -380,11 +380,15 @@ def test_the_two_raw_hexes_in_the_stylesheet_are_guarded_too():
     declared = set(re.findall(r"--[\w-]+:\s*(#[0-9a-fA-F]{6})", css))
     raw = sorted({hex_.lower() for hex_ in re.findall(r"(#[0-9a-fA-F]{6})", css)} - declared)
 
-    assert raw == ["#282834", "#ef4444"], (
+    assert raw == ["#282834", "#ef4444", "#f59e0b"], (
         f"a new raw hex entered the stylesheet: {raw}. Either use a --qt-* token or add it here "
         "with the palette name it copies."
     )
     assert "#ef4444" == _rgb_to_hex(palette.DANGER), "the guardrail rule copies DANGER"
+    assert "#f59e0b" == _rgb_to_hex(palette.WARNING), (
+        "the `was <call>` dot copies WARNING - a CHANGE worth noticing, deliberately not the "
+        "DANGER one line below it, which means a fault"
+    )
     # #282834 is the empty half of the confidence/scenario bar. It is NOT in
     # palette.py: `orchestrator_card.py` writes it straight into its Qt
     # stylesheet too, so freezing it here is what makes the pair monitored.
