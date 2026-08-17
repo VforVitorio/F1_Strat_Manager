@@ -163,8 +163,18 @@ export function AgentsWindow() {
         <div className="agents-right">
           {CARDS.map(([key, title]) => (
             <AgentCard key={key} title={title} card={shown.cards[key] ?? IDLE_CARD}>
-              {key === "pace" ? <PaceChart series={shown.charts.pace} /> : null}
-              {key === "tire" ? <TireChart series={shown.charts.tire} /> : null}
+              {/* ONE expression, not two conditionals. Two of them make
+                  `children` an ARRAY OF NULLS for the other four cards, and an
+                  array is truthy, so every text card rendered an empty
+                  `.agent-chart` — a 140 px min-height box holding nothing.
+                  That phantom box, not the grid, is what put 89-112 px of
+                  dead strip under four cards and pushed their bodies into a
+                  scroll with no scrollbar to show for it. */}
+              {key === "pace" ? (
+                <PaceChart series={shown.charts.pace} />
+              ) : key === "tire" ? (
+                <TireChart series={shown.charts.tire} />
+              ) : null}
             </AgentCard>
           ))}
         </div>
