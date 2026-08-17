@@ -35,8 +35,8 @@ from src.pitwall.agent_formatters import (
     format_rag,
     format_situation,
     format_tire,
-    radio_tooltip_html,
-    rag_tooltip_html,
+    radio_tooltip,
+    rag_tooltip,
 )
 
 # window.py's HeaderBar.set_connection, with its three states and their
@@ -85,7 +85,7 @@ def build_header(payload: dict[str, Any], connection: str) -> dict[str, Any]:
     }
 
 
-def _card(formatted: tuple, tooltip: str = "") -> dict[str, Any]:
+def _card(formatted: tuple, tooltip: dict[str, Any] | None = None) -> dict[str, Any]:
     """One formatter tuple as JSON: `(headline, colour, lines, status)`."""
     headline, headline_colour, lines, status = formatted
     glyph, glyph_colour = STATUS_GLYPHS.get(status, STATUS_GLYPHS["IDLE"])
@@ -135,10 +135,10 @@ def build_cards(latest: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
         "tire": _card(format_tire(per.get("tire"))),
         "situation": _card(format_situation(per.get("situation"))),
         "pit": _card(format_pit(per.get("pit"), active="N28" in active)),
-        "radio": _card(format_radio(radio_block), radio_tooltip_html(radio_block)),
+        "radio": _card(format_radio(radio_block), radio_tooltip(radio_block)),
         "rag": _card(
             format_rag(rag_block, active=rag_active),
-            rag_tooltip_html(rag_block) if rag_active else "",
+            rag_tooltip(rag_block) if rag_active else None,
         ),
     }
 

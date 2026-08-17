@@ -5,18 +5,19 @@
  * which agent it shows. Title and content arrive from the host, which
  * produced them with the Qt window's own formatters.
  *
- * `dangerouslySetInnerHTML` is deliberate and bounded. The headline and
- * the body lines can carry the compound pill and the flag chips, which
- * are HTML spans built in `src/arcade/palette.py`, and every free-text
- * field inside them is escaped there. It is Qt's restricted rich-text
- * dialect (`<b>`, `<br>`, `&nbsp;` and those spans), which is debt sprint
- * 8 unpicks - not a licence to inject arbitrary markup here.
+ * `dangerouslySetInnerHTML` survives on the headline and the body lines,
+ * which can carry the compound pill and the flag chips - HTML spans built
+ * in `src/arcade/palette.py` with every free-text field escaped there.
+ * **The tooltip no longer does**: sprint 8 turned the two tooltip
+ * formatters into structured data, so the popup below is built from
+ * fields rather than parsed out of a dead toolkit's dialect. The pills
+ * are the same debt one layer down and are filed separately.
  */
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { AgentCardView } from "../../lib/agents";
+import type { AgentCardView, TooltipView } from "../../lib/agents";
 
 /**
  * The popup, rendered OUTSIDE the window tree.
@@ -38,7 +39,7 @@ import type { AgentCardView } from "../../lib/agents";
 /** Breathing room between the card and the popup, and from the viewport edge. */
 const TOOLTIP_GAP = 10;
 
-function Tooltip({ html, anchor }: { html: string; anchor: DOMRect }) {
+function Tooltip({ view, anchor }: { view: TooltipView; anchor: DOMRect }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [box, setBox] = useState({ left: anchor.left, top: anchor.top + 32 });
 
@@ -71,15 +72,29 @@ function Tooltip({ html, anchor }: { html: string; anchor: DOMRect }) {
       Math.min(anchor.top, window.innerHeight - height - TOOLTIP_GAP),
     );
     setBox({ left, top });
-  }, [anchor, html]);
+  }, [anchor, view]);
 
+  // The markup is decided HERE, from data the host produced. It used to be a
+  // string of Qt's restricted rich-text dialect pushed through
+  // `dangerouslySetInnerHTML` - a dead toolkit's parser constraints shaping a
+  // webview popup. The content still comes from one place, so only the
+  // presentation below can drift from the Qt window's; the structure the host
+  // returns is pinned by a test.
   return createPortal(
-    <span
-      ref={ref}
-      className="agent-tooltip"
-      style={box}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />,
+    <span ref={ref} className="agent-tooltip" style={box}>
+      {view.sections.map((section, index) => (
+        <span className="tip-section" key={index}>
+          <span className="tip-title">{section.title}</span>
+          {section.rows.map((row, rowIndex) => (
+            <span className="tip-row" key={rowIndex}>
+              {row.lead ? <span className="tip-lead">{row.lead}</span> : null}
+              <span className="tip-text">{row.text}</span>
+            </span>
+          ))}
+        </span>
+      ))}
+      {view.footer ? <span className="tip-footer">{view.footer}</span> : null}
+    </span>,
     document.body,
   );
 }
@@ -94,8 +109,9 @@ export function AgentCard({
   children?: React.ReactNode;
 }) {
   const idle = card.status === "IDLE";
-  // The whole card is the hover target, as in Qt, and an empty tooltip
-  // string is Qt's own convention for suppressing the popup.
+  // The whole card is the hover target, as in Qt. `null` suppresses the
+  // popup - not the empty string Qt used, because a falsy value that is also
+  // a legitimate rendering is the sentinel shape this repo keeps paying for.
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
 
   return (
@@ -111,7 +127,7 @@ export function AgentCard({
         <span className="agent-title">{title}</span>
       </header>
 
-      {card.tooltip && anchor ? <Tooltip html={card.tooltip} anchor={anchor} /> : null}
+      {card.tooltip && anchor ? <Tooltip view={card.tooltip} anchor={anchor} /> : null}
 
       {/* The card scrolls here, not on the card itself, so the card is not
           a scrolling ancestor of anything. Qt clips a card that overflows

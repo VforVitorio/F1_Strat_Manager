@@ -31,7 +31,6 @@ PySide6 and, through ``classify_action``, pandas.
 
 from __future__ import annotations
 
-import html
 from typing import Any
 
 from src.arcade.palette import (
@@ -283,51 +282,69 @@ def _radio_intent(event: dict[str, Any]) -> str:
     return str((event.get("analysis") or {}).get("intent") or "INFO")
 
 
-def radio_tooltip_html(r: dict[str, Any] | None) -> str:
-    """Build the Qt rich-text tooltip listing every radio and RCM in the lap.
+def radio_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Every radio and RCM of the lap, as DATA the window renders itself.
 
-    The tooltip exists because the body ticker only shows the most recent
+    The tooltip exists because the body ticker shows only the most recent
     radio and the most recent RCM, and the strategist sometimes needs the
-    full transcript of the lap (e.g. several PROBLEM radios in a row, or
-    a chain of yellow flags clearing) and the body labels do not have the
-    vertical budget for that. Returning the empty string is the documented
-    Qt convention to suppress the tooltip popup, so callers can always
-    invoke ``setToolTip(radio_tooltip_html(r))`` without an explicit
-    "clear" branch.
+    whole lap - several PROBLEM radios in a row, a chain of yellows
+    clearing - which the body has no vertical budget for.
 
-    HTML primitives are limited to ``<b>``, ``<br>`` and ``&nbsp;``
-    because Qt's tooltip rich-text subset rejects CSS and most layout
-    tags. Free-text fields (driver, intent, message, RCM label) are
-    HTML-escaped so a stray ``<`` or ``&`` in a transcript cannot break
-    the tooltip's rich-text parser.
+    **It used to return Qt rich text** (`<b>`, `<br>`, `&nbsp;`, and
+    nothing else, because that is the subset `QToolTip` parses) and the
+    React side rendered it through `dangerouslySetInnerHTML`. Qt was
+    retired in sprint 7; the dialect outlived the toolkit that required
+    it. Under the hybrid this decides WHAT is said and the TSX decides how
+    it looks, so there is no markup here and no escaping either - a React
+    text node is not a parser.
+
+    **The 70-character cap is gone, and that is the point of the change.**
+    It was the BODY's width budget - `_truncate`'s docstring says so, in
+    terms of a 280-340 px QLabel at 11 px - applied to a popup that is not
+    a card and is clipped by nothing. The tooltip truncated each message
+    to exactly what the card already showed, so its only added value was
+    more messages, never more of a message. The body ticker keeps the cap;
+    it really is that narrow.
+
+    `None`, not `""`, for "no tooltip". The empty string was Qt's own
+    convention for suppressing a popup, and a falsy value that is also a
+    legitimate rendering is the sentinel shape this repo keeps paying for.
     """
     if r is None:
-        return ""
+        return None
     radio_events = r.get("radio_events") or []
     rcm_events = r.get("rcm_events") or []
     if not radio_events and not rcm_events:
-        return ""
+        return None
 
-    sections: list[str] = []
+    sections: list[dict[str, Any]] = []
     if rcm_events:
-        rcm_lines = ["<b>RCM</b>"]
-        for ev in rcm_events:
-            lap = ev.get("lap", "?")
-            label = html.escape(_rcm_label(ev))
-            msg = html.escape(_truncate(ev.get("message"), 70))
-            rcm_lines.append(f"L{lap}&nbsp;{label}: {msg}")
-        sections.append("<br>".join(rcm_lines))
-
+        sections.append(
+            {
+                "title": "RCM",
+                "rows": [
+                    {
+                        "lead": f"L{ev.get('lap', '?')} {_rcm_label(ev)}",
+                        "text": str(ev.get("message") or ""),
+                    }
+                    for ev in rcm_events
+                ],
+            }
+        )
     if radio_events:
-        radio_lines = ["<b>Radio</b>"]
-        for ev in radio_events:
-            driver = html.escape(_radio_driver(ev))
-            intent = html.escape(_radio_intent(ev))
-            msg = html.escape(_truncate(ev.get("message"), 70))
-            radio_lines.append(f'{driver}&nbsp;{intent}: "{msg}"')
-        sections.append("<br>".join(radio_lines))
-
-    return "<br><br>".join(sections)
+        sections.append(
+            {
+                "title": "Radio",
+                "rows": [
+                    {
+                        "lead": f"{_radio_driver(ev)} {_radio_intent(ev)}",
+                        "text": str(ev.get("message") or ""),
+                    }
+                    for ev in radio_events
+                ],
+            }
+        )
+    return {"sections": sections, "footer": None}
 
 
 def format_radio(r: dict[str, Any] | None) -> Formatted:
@@ -488,57 +505,46 @@ def _format_article_refs(articles: list[Any] | None) -> str:
     return "Art. " + ", ".join(head) + tail
 
 
-def rag_tooltip_html(r: dict[str, Any] | None) -> str:
-    """Build the Qt rich-text tooltip listing every regulation chunk for the lap.
+def rag_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Every regulation chunk behind the lap's answer, as DATA.
 
-    The tooltip exists because the body shows only a 70-character snippet
-    of the LLM answer plus a compact article-refs line; the strategist
-    sometimes needs to read the verbatim regulation passages the answer
-    is grounded on (especially during a contested SC restart or a pit
-    sequence near a procedural article). Returning the empty string is
-    the documented Qt convention to suppress the tooltip popup, so
-    callers can always invoke ``setToolTip(rag_tooltip_html(r))`` without
-    an explicit "clear" branch.
+    The body shows a 70-character snippet of the LLM answer and a compact
+    article-refs line; the strategist sometimes needs the verbatim passages
+    the answer is grounded on, especially around a contested restart or a
+    procedural article. The question leads, so the engineer can see what
+    the orchestrator actually asked.
 
-    The original question is shown above the chunks so the engineer sees
-    what the orchestrator actually asked. Up to four chunks are rendered
-    in full (truncated at ~280 chars each); any extra retrieval results
-    collapse to a ``+N more`` footer to keep the tooltip box tight. HTML
-    primitives are limited to ``<b>``, ``<br>`` and ``&nbsp;``; free-text
-    fields (question, chunk text, article id) are HTML-escaped so a
-    stray ``<`` or ``&`` in the regulation cannot break the parser.
+    Four chunks, then a `+N more` footer, which is a bound on how much a
+    popup should carry rather than a layout constant. The per-chunk 280
+    character cap is gone with the markup: clamping is the renderer's job
+    now, and the whole reason to open this is to read the passage.
     """
     if r is None:
-        return ""
+        return None
     chunks = r.get("chunks") or []
-    question = (r.get("question") or "").strip()
     if not chunks:
-        return ""
+        return None
 
-    parts: list[str] = []
+    sections: list[dict[str, Any]] = []
+    question = (r.get("question") or "").strip()
     if question:
-        parts.append(f"<b>Question:</b><br>{html.escape(question)}")
+        sections.append({"title": "Question", "rows": [{"lead": "", "text": question}]})
 
     head = chunks[:4]
-    extra = len(chunks) - len(head)
-    for c in head:
-        article = str(c.get("article") or "").strip()
-        doc_type = str(c.get("doc_type") or "").strip()
-        year = c.get("year")
-        header_bits: list[str] = []
-        if doc_type:
-            header_bits.append(html.escape(doc_type))
-        if year is not None:
-            header_bits.append(str(year))
+    for chunk in head:
+        article = str(chunk.get("article") or "").strip()
+        doc_type = str(chunk.get("doc_type") or "").strip()
+        year = chunk.get("year")
+        bits = [bit for bit in (doc_type, None if year is None else str(year)) if bit]
         if article:
-            header_bits.append("— " + html.escape(article))
-        header = "<b>" + " ".join(header_bits) + "</b>" if header_bits else "<b>Chunk</b>"
-        body_html = html.escape(_truncate(c.get("text"), 280))
-        parts.append(f"{header}<br>{body_html}")
-    if extra > 0:
-        parts.append(f"+{extra} more")
+            bits.append(f"— {article}")
+        title = " ".join(bits) if bits else "Chunk"
+        sections.append(
+            {"title": title, "rows": [{"lead": "", "text": str(chunk.get("text") or "")}]}
+        )
 
-    return "<br><br>".join(parts)
+    extra = len(chunks) - len(head)
+    return {"sections": sections, "footer": f"+{extra} more" if extra > 0 else None}
 
 
 def format_rag(rag: dict[str, Any] | str | None, active: bool) -> Formatted:

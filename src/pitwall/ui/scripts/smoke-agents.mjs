@@ -110,7 +110,26 @@ const VIEW = {
         status: "OK",
         glyph: "●",
         glyph_colour: "#10b981",
-        tooltip: key === "radio" ? "<b>Radio</b><br>NOR: rear grip" : "",
+        // Structured, not markup. Sprint 8 turned the two tooltip formatters
+        // into data, so a string here would be the stale-stub shape this file
+        // already carries one scar from.
+        tooltip:
+          key === "radio"
+            ? {
+                sections: [
+                  {
+                    title: "Radio",
+                    rows: [
+                      {
+                        lead: "NOR PROBLEM",
+                        text: "Rear grip is going away, especially through the last sector, and the balance moves every lap.",
+                      },
+                    ],
+                  },
+                ],
+                footer: null,
+              }
+            : null,
       },
     ]),
   ),

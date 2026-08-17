@@ -27,8 +27,26 @@ export interface AgentCardView {
   status: "OK" | "WATCH" | "ALERT" | "IDLE";
   glyph: string;
   glyph_colour: string;
-  /** Empty string means no tooltip, which is Qt's own convention. */
-  tooltip: string;
+  /** `null` means no tooltip. Structured, never markup — see `agent_formatters.py`. */
+  tooltip: TooltipView | null;
+}
+
+/** A titled group of rows in a tooltip. `lead` is an optional label before the text. */
+export interface TooltipSection {
+  title: string;
+  rows: { lead: string; text: string }[];
+}
+
+/**
+ * What a card's tooltip SAYS. How it looks is decided here, in the TSX.
+ *
+ * Python used to return Qt's restricted rich-text dialect and this side
+ * rendered it with `dangerouslySetInnerHTML`. Qt is gone; the content still
+ * comes from one place, so only presentation can drift.
+ */
+export interface TooltipView {
+  sections: TooltipSection[];
+  footer: string | null;
 }
 
 export interface HeaderView {

@@ -131,6 +131,72 @@ def test_every_pill_and_badge_is_legible_against_its_own_fill():
     assert contrast_ratio(rgb(idle["action_colour"]), rgb(idle["action_text_colour"])) >= 4.5, (
         "the idle badge too"
     )
+def test_the_tooltips_return_data_and_never_markup():
+    """What replaces the guarantee the hybrid gives up (#960).
+
+    PITWALL renders the AGENTS window by CALLING the Qt window's own
+    formatters, which is what made the port 1:1 by construction. Two of
+    them returned Qt's restricted rich-text dialect - `<b>`, `<br>`,
+    `&nbsp;`, the subset `QToolTip` parses - and the React side rendered
+    it through `dangerouslySetInnerHTML`. Qt was retired in sprint 7; the
+    dialect outlived the toolkit that required it.
+
+    The hybrid keeps Python deciding WHAT is said and hands the TSX HOW it
+    looks. Content still comes from one place, **so only presentation can
+    drift** - and this is what keeps that true: the structure is pinned
+    here, so a sentence moving into the renderer fails a test rather than
+    quietly becoming a second source of truth.
+
+    It also pins the cap that went away. `radio_tooltip_html` truncated
+    every message to 70 characters, the same 70 the card's body ticker
+    uses, for a reason `_truncate` states in terms of a 280-340 px QLabel.
+    A webview popup is clipped by nothing; the tooltip's only added value
+    was more messages, never more of a message.
+    """
+    from src.pitwall.agent_formatters import radio_tooltip, rag_tooltip
+
+    long_message = "Rear grip is going away, especially through the last sector, " + "x" * 90
+    built = radio_tooltip(
+        {
+            "radio_events": [
+                {"driver": "NOR", "message": long_message, "analysis": {"intent": "PROBLEM"}}
+            ],
+            "rcm_events": [{"lap": 23, "flag": "YELLOW", "message": "Debris in sector 2"}],
+        }
+    )
+    assert built == {
+        "sections": [
+            {"title": "RCM", "rows": [{"lead": "L23 YELLOW", "text": "Debris in sector 2"}]},
+            {"title": "Radio", "rows": [{"lead": "NOR PROBLEM", "text": long_message}]},
+        ],
+        "footer": None,
+    }
+    assert "..." not in built["sections"][1]["rows"][0]["text"], (
+        "the popup carries the whole message; clamping is the renderer's job"
+    )
+
+    assert radio_tooltip(None) is None
+    assert radio_tooltip({"radio_events": [], "rcm_events": []}) is None, (
+        "`None` rather than an empty string: a falsy value that is also a legitimate "
+        "rendering is the sentinel shape this repo keeps paying for"
+    )
+
+    chunks = [
+        {"article": f"Article {n}", "doc_type": "Sporting Regulations", "year": 2025, "text": "t"}
+        for n in range(6)
+    ]
+    rag = rag_tooltip({"question": "how many compounds?", "chunks": chunks})
+    assert rag["sections"][0] == {
+        "title": "Question",
+        "rows": [{"lead": "", "text": "how many compounds?"}],
+    }
+    assert rag["sections"][1]["title"] == "Sporting Regulations 2025 — Article 0"
+    assert len(rag["sections"]) == 5, "the question plus four chunks"
+    assert rag["footer"] == "+2 more"
+    assert rag_tooltip({"question": "q", "chunks": []}) is None
+
+    for value in (*built["sections"], built["footer"], *rag["sections"], rag["footer"]):
+        assert "<" not in repr(value), f"markup reached the view: {value!r}"
 
 
 # --- The view the host hands the window -------------------------------------
