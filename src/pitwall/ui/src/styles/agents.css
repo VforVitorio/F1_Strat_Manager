@@ -226,6 +226,44 @@
   line-height: 1.5;
 }
 
+/* The popup's own layout, which used to be `<br>` tags in a string Qt's
+ * tooltip parser could digest. Truncation lives here too: the host stopped
+ * cutting messages at 70 characters, which was the CARD's width budget
+ * applied to a popup clipped by nothing. */
+.tip-section {
+  display: block;
+  margin-bottom: 8px;
+}
+.tip-section:last-of-type {
+  margin-bottom: 0;
+}
+.tip-title {
+  display: block;
+  color: var(--qt-fg-1);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.tip-row {
+  display: block;
+  margin-top: 2px;
+}
+.tip-lead {
+  color: var(--qt-fg-3);
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.tip-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tip-footer {
+  display: block;
+  margin-top: 6px;
+  color: var(--qt-fg-3);
+}
+
 /* --- Status bar --------------------------------------------------------- */
 
 /* --- Orchestrator card (orchestrator_card.py) ---------------------------- */

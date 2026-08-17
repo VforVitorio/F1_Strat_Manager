@@ -51,7 +51,7 @@ const IDLE_CARD: AgentCardView = {
   status: "IDLE",
   glyph: "○",
   glyph_colour: "#9ca3af",
-  tooltip: "",
+  tooltip: null,
 };
 
 const IDLE_VIEW: AgentsView = {
