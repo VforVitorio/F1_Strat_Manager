@@ -407,6 +407,12 @@
  * sits between the bar and the score because that is where the eye already
  * is when it asks why the widest bar is not the call. */
 .scenario-note {
+  /* A fixed lane, so every row's track is the same length whether or not it
+   * carries a mark - the bars are a comparison and a shortened track is a
+   * different number. */
+  width: 56px;
+  flex: 0 0 56px;
+  text-align: right;
   color: var(--qt-fg-3);
   font-size: 9px;
   font-weight: 700;

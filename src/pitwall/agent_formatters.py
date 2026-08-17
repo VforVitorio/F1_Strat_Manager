@@ -31,6 +31,7 @@ PySide6 and, through ``classify_action``, pandas.
 
 from __future__ import annotations
 
+import html
 from typing import Any
 
 from src.arcade.palette import (
@@ -59,6 +60,27 @@ def _signed(x: float, decimals: int = 3) -> str:
     """Return a +/- signed string so ``+0.123`` vs ``-0.123`` pops visually."""
     sign = "+" if x >= 0 else ""
     return f"{sign}{x:.{decimals}f}"
+
+
+def _escaped(text: str | None, limit: int = 70) -> str:
+    """A wire string, cut to the body's width budget and made safe as MARKUP.
+
+    The card body lines still reach the window through
+    `dangerouslySetInnerHTML`, because they can carry the compound pill and
+    the flag chips - HTML spans the palette builds. That means every OTHER
+    field on those lines is markup too, and the radio and RCM messages are
+    free text straight off the NLP pipeline: a `<` in a transcript stopped
+    being a character and became a tag.
+
+    Escaping was never here. Sprint 8's tooltip change made that visible by
+    removing the module's last `html.escape` and then claiming in a comment
+    that every free-text field was escaped somewhere - a false sentence
+    about a real hole, which is this repo's favourite disguise.
+
+    The tooltips do NOT use this: they return data now, and a React text
+    node is not a parser.
+    """
+    return html.escape(_truncate(text, limit))
 
 
 def _truncate(text: str | None, limit: int = 70) -> str:
@@ -407,7 +429,7 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
         body.append(
             (
                 f"RCM L{last_rcm.get('lap', '?')} "
-                f"{_rcm_label(last_rcm)}: {_truncate(last_rcm.get('message'), 70)}",
+                f"{html.escape(_rcm_label(last_rcm))}: {_escaped(last_rcm.get('message'))}",
                 TEXT_SECONDARY,
             )
         )
@@ -415,9 +437,9 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
         last_radio = radio_events[-1]
         body.append(
             (
-                f"{_radio_driver(last_radio)} "
-                f"{_radio_intent(last_radio)}: "
-                f'"{_truncate(last_radio.get("message"), 70)}"',
+                f"{html.escape(_radio_driver(last_radio))} "
+                f"{html.escape(_radio_intent(last_radio))}: "
+                f'"{_escaped(last_radio.get("message"))}"',
                 TEXT_TERTIARY,
             )
         )
@@ -582,7 +604,7 @@ def format_rag(rag: dict[str, Any] | str | None, active: bool) -> Formatted:
             [("(empty context)", TEXT_TERTIARY)],
             STATUS_OK,
         )
-    body: list[Line] = [(_truncate(text, 70), TEXT_SECONDARY)]
+    body: list[Line] = [(_escaped(text), TEXT_SECONDARY)]
     refs = _format_article_refs(rag.get("articles"))
     if refs:
         body.append((refs, TEXT_TERTIARY))

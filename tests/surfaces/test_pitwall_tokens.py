@@ -227,6 +227,12 @@ BOOT_SLOTS = {
     "trend_colour": "TEXT_PRIMARY",
     "cliff_colour": "WARNING",
     "boundary_colour": "TEXT_TERTIARY",
+    # Sprint 8's two additions. The map is a SUBSET assertion, so a new boot
+    # colour it does not name is invisible to it: flipping the badge's text
+    # back to white - 2.72:1 on the accent fill, the failure #965 fixed -
+    # left every check green until these two lines existed.
+    "action_text_colour": "BG_COLOR",
+    "cursor_colour": "TEXT_TERTIARY",
 }
 
 # Copy number five, which had no detector at all: the ECharts axis styling
