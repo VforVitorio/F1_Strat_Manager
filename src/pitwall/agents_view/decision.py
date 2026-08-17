@@ -32,19 +32,35 @@ from src.arcade.palette import (
 )
 from src.arcade.strategy import classify_action
 
+# The two posture chips are FACTS, not warnings, so they wear text colour and
+# the word carries the meaning (#964).
+#
+# They used to be a severity scale, and it put `Risk: AGGRESSIVE` - a setting
+# somebody chose - in the same DANGER red as `⚠ Guardrail: minimum stint
+# length not met`, a constraint violation, one line below it. Counting the
+# window's reds found six different meanings on one colour: imperative action,
+# posture, low confidence, radio alert, dead link, rule violation. The whole
+# point of an alarm colour is pre-attentive triage, and six semantics deny the
+# reader exactly that at the moment they need it.
+#
+# DANGER now belongs to alarm-class facts: the ALERT glyph, the guardrail
+# line, and a dead connection. The dicts stay rather than collapsing into a
+# constant, because a posture the producer has never sent must still fall to
+# TEXT_TERTIARY - which is what says "not reported" as against "reported and
+# unremarkable".
 _PACE_COLOURS: dict[str, tuple[int, int, int]] = {
-    "PUSH": DANGER,
+    "PUSH": TEXT_SECONDARY,
     "NEUTRAL": TEXT_SECONDARY,
-    "MANAGE": WARNING,
-    "LIFT_AND_COAST": WARNING,
+    "MANAGE": TEXT_SECONDARY,
+    "LIFT_AND_COAST": TEXT_SECONDARY,
 }
 
 _RISK_COLOURS: dict[str, tuple[int, int, int]] = {
-    "AGGRESSIVE": DANGER,
+    "AGGRESSIVE": TEXT_SECONDARY,
     "BALANCED": TEXT_SECONDARY,
     "NEUTRAL": TEXT_SECONDARY,
-    "CONSERVATIVE": WARNING,
-    "DEFENSIVE": WARNING,
+    "CONSERVATIVE": TEXT_SECONDARY,
+    "DEFENSIVE": TEXT_SECONDARY,
 }
 
 SCENARIO_KEYS: tuple[str, ...] = ("STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT")
@@ -88,7 +104,50 @@ def _plan_line(latest: dict[str, Any], action: str) -> str:
     return " · ".join(bits)
 
 
-def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
+def _previous_call(latest: dict[str, Any], tail: list[dict[str, Any]] | None) -> str:
+    """`was STAY OUT (0.58) · L22`, when this lap's call is not last lap's.
+
+    A pit wall reads deltas, and this window had no first-class answer to
+    "what changed since the last lap" (#968): the badge, the confidence,
+    the four bars and all six cards overwrite in place ten times a second,
+    and the only trace that anything moved was a monospace heading inside
+    a tab panel, below the fold of attention.
+
+    Read off `history_tail`, whose entries are real `LapDecision` fields.
+    **Not parsed out of `memory_block`**, which the gate's proposal assumed
+    was `lap 22: STAY_OUT (0.58)` and which is really a multi-line LLM
+    prompt block ("DECISION MEMORY (your own previous calls this race):").
+
+    `plan_changed` is the producer's own answer and it counts the ACTION
+    only - measured over 40 lap pairs of a real race, the action moved on
+    none of them while `pit_lap_target` moved on 25, so counting the target
+    would open this on two laps in three and turn a signal into wallpaper.
+
+    The tail's last entry is the CURRENT decision, because the producer
+    appends to `history` and sets `latest` in the same breath
+    (`src/arcade/strategy.py:439-440`), so the search is for the newest
+    entry from an EARLIER lap rather than for `tail[-2]`.
+    """
+    if not latest.get("plan_changed") or not tail:
+        return ""
+    lap = latest.get("lap_number")
+    earlier = [row for row in tail if isinstance(row.get("lap_number"), int)]
+    if isinstance(lap, int):
+        earlier = [row for row in earlier if row["lap_number"] < lap]
+    if not earlier:
+        return ""
+    previous = max(earlier, key=lambda row: row["lap_number"])
+    _, label = classify_action(str(previous.get("action") or "--"))
+    try:
+        confidence = f" ({float(previous.get('confidence') or 0.0):.2f})"
+    except (TypeError, ValueError):
+        confidence = ""
+    return f"was {label}{confidence} · L{previous['lap_number']}"
+
+
+def build_orchestrator(
+    latest: dict[str, Any] | None, history_tail: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """The action badge, the confidence bar, the two chips and the plan."""
     if not latest:
         return {
@@ -105,6 +164,7 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
             "risk_colour": hex_str(TEXT_TERTIARY),
             "plan": "Pit: -- · Next: -- · UCUT: --",
             "guardrail": "",
+            "changed": "",
         }
 
     action = str(latest.get("action") or "--")
@@ -138,6 +198,7 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
         "risk_colour": hex_str(_RISK_COLOURS.get(str(risk_posture or "").upper(), TEXT_TERTIARY)),
         "plan": _plan_line(latest, action),
         "guardrail": f"⚠ Guardrail: {guardrail}" if guardrail else "",
+        "changed": _previous_call(latest, history_tail),
     }
 
 

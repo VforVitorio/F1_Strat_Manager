@@ -56,11 +56,27 @@ class AgentsViewBuilder:
         self._reset_if_the_producer_restarted(strategy.get("start"), payload.get("seq"))
         self._accumulate(strategy, latest)
 
+        # The tyre chart owns the lap axis, because only it knows how far
+        # ahead the cliff band reaches, and the pace chart borrows it. Two
+        # charts of the same quantity side by side with different scales is
+        # a comparison a reader cannot make, and neither of them said which
+        # column was the current lap.
+        current_lap = latest.get("lap_number") if latest else None
+        tire = build_tire_series(
+            self._history.tire_rows(),
+            current_lap,
+            (latest.get("per_agent") or {}).get("tire") if latest else None,
+        )
+        charts = {
+            "pace": build_pace_series(self._history.pace, tire["x_range"], current_lap),
+            "tire": tire,
+        }
+
         return {
             "view_version": AGENTS_VIEW_VERSION,
             "seq": payload.get("seq"),
             "header": build_header(payload, connection),
-            "orchestrator": build_orchestrator(latest or None),
+            "orchestrator": build_orchestrator(latest or None, strategy.get("history_tail")),
             # The action goes in with the scores: a guardrail can veto the
             # Monte Carlo winner, and a panel that does not know which plan
             # was ENACTED crowns the one that was overruled (#962).
@@ -70,14 +86,7 @@ class AgentsViewBuilder:
             ),
             "reasoning": build_reasoning(latest or None),
             "cards": build_cards(latest or None),
-            "charts": {
-                "pace": build_pace_series(self._history.pace),
-                "tire": build_tire_series(
-                    self._history.tire_rows(),
-                    latest.get("lap_number") if latest else None,
-                    (latest.get("per_agent") or {}).get("tire") if latest else None,
-                ),
-            },
+            "charts": charts,
             # The raw stores stay on the view as well: the charts are a
             # rendering of them, and a test that could only see the drawn
             # series could not tell an accumulator bug from a plotting one.

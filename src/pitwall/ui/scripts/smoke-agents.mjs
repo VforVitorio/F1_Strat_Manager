@@ -72,6 +72,12 @@ const VIEW = {
     fill_pct: index === 1 ? 100 : 40,
     score: "+0.71",
     is_winner: index === 1,
+    // Migrated with the fields, not left to default. `is_scored` undefined is
+    // falsy, so every bar would have rendered trackless - the same
+    // never-migrated-stub shape the comment above already records once.
+    is_enacted: index === 1,
+    is_scored: true,
+    note: "",
     bar_colour: index === 1 ? "#a78bfa" : "#d1d5db",
     label_colour: "#d1d5db",
     score_colour: "#ffffff",
@@ -119,6 +125,11 @@ const VIEW = {
       actual_colour: "#3b82f6",
       pred_colour: "#a78bfa",
       band_colour: "#a78bfa",
+      // The tyre chart's axis, borrowed, and the same current-lap mark: the
+      // two cards measure one quantity side by side.
+      x_range: [20.5, 34],
+      current_lap: 23,
+      cursor_colour: "#9ca3af",
     },
     tire: {
       stints: [
@@ -142,6 +153,9 @@ const VIEW = {
       boundary_colour: "#9ca3af",
       boundary_opacity: 0.31,
       x_range: [20.5, 34],
+      y_range: [78.8, 83.8],
+      current_lap: 23,
+      cursor_colour: "#9ca3af",
     },
   },
   status_bar: { text: "lap 23 · streaming", transient: true },
@@ -183,6 +197,17 @@ await page.waitForSelector(".agent-card", { timeout: 5000 });
 
 check((await page.locator(".agent-card").count()) === 6, "six agent cards");
 check((await page.locator(".agent-chart canvas").count()) === 2, "two chart canvases");
+// The BOXES, not just the canvases inside them. Counting canvases answered
+// 2 for years while all six cards carried an `.agent-chart` - the renderer
+// passed two conditionals as children, so the four cards without a chart
+// received an ARRAY OF NULLS, which is truthy. Each of those four then
+// reserved the box's 140 px `min-height` for nothing, which is where the
+// dead strip the sprint-8 gate measured actually came from. A check on the
+// contents cannot see an empty container.
+check(
+  (await page.locator(".agent-chart").count()) === 2,
+  `only the two cards with a chart have a chart box (${await page.locator(".agent-chart").count()})`,
+);
 check((await page.locator(".reasoning-tab").count()) === 6, "six reasoning tabs");
 check((await page.locator(".scenario-row").count()) === 4, "four scenario rows");
 

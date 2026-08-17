@@ -87,6 +87,7 @@ const IDLE_VIEW: AgentsView = {
     risk_colour: "#9ca3af",
     plan: "Pit: — · Next: — · UCUT: —",
     guardrail: "",
+    changed: "",
   },
   scenarios: [
     ["STAY_OUT", "STAY"],
@@ -128,6 +129,9 @@ const IDLE_VIEW: AgentsView = {
       actual_colour: "#3b82f6",
       pred_colour: "#a78bfa",
       band_colour: "#a78bfa",
+      x_range: null,
+      current_lap: null,
+      cursor_colour: "#9ca3af",
     },
     tire: {
       stints: [],
@@ -139,6 +143,9 @@ const IDLE_VIEW: AgentsView = {
       boundary_colour: "#9ca3af",
       boundary_opacity: 0.31,
       x_range: [0, 1],
+      y_range: null,
+      current_lap: null,
+      cursor_colour: "#9ca3af",
     },
   },
   history: { pace: [], tire: [] },
@@ -163,8 +170,18 @@ export function AgentsWindow() {
         <div className="agents-right">
           {CARDS.map(([key, title]) => (
             <AgentCard key={key} title={title} card={shown.cards[key] ?? IDLE_CARD}>
-              {key === "pace" ? <PaceChart series={shown.charts.pace} /> : null}
-              {key === "tire" ? <TireChart series={shown.charts.tire} /> : null}
+              {/* ONE expression, not two conditionals. Two of them make
+                  `children` an ARRAY OF NULLS for the other four cards, and an
+                  array is truthy, so every text card rendered an empty
+                  `.agent-chart` — a 140 px min-height box holding nothing.
+                  That phantom box, not the grid, is what put 89-112 px of
+                  dead strip under four cards and pushed their bodies into a
+                  scroll with no scrollbar to show for it. */}
+              {key === "pace" ? (
+                <PaceChart series={shown.charts.pace} />
+              ) : key === "tire" ? (
+                <TireChart series={shown.charts.tire} />
+              ) : null}
             </AgentCard>
           ))}
         </div>

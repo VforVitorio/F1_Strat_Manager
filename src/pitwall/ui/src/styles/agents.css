@@ -82,20 +82,29 @@
 }
 .agents-left {
   /* Orchestrator and scenarios size to content; the reasoning tabs take
-   * the rest. In Qt that left them ~268 px and the decision-memory block
-   * fell below the fold. */
-  grid-template-rows: auto auto 1fr;
+   * what their text needs and no more. In Qt they took the rest, which
+   * left ~268 px and dropped the decision-memory block below the fold;
+   * here the opposite happened - the largest bordered surface in the
+   * window carried five short lines at 1.9 % ink, 318 px of it empty.
+   * An empty bordered panel reads as content missing; the leftover is
+   * honest window background instead. */
+  grid-template-rows: auto auto minmax(180px, max-content);
   align-content: start;
 }
 .agents-right {
   grid-template-columns: 1fr 1fr;
-  /* Qt's own caps: `agent_card.py:70-72` gives a text card 140-260 and
-   * `attach_chart` bumps the two with charts to 260-420. The grid is a
+  /* Qt's own caps were `agent_card.py:70-72`: a text card 140-260, and
+   * `attach_chart` bumping the two with charts to 260-420. The grid is a
    * fixed 3x2, so the three rows are written out rather than inferred.
-   * Equal auto rows put the dead space INSIDE the text cards instead of
-   * between the rows, which measured 264/246/256 against Qt's 416/174/197
-   * on the first payload anyone renders. */
-  grid-template-rows: minmax(260px, 420px) minmax(140px, 260px) minmax(140px, 260px);
+   *
+   * The two text rows size to CONTENT rather than toward a 260 px cap.
+   * Handing height out by grid position left four cards 44-57 % dead
+   * strip - a reader scanning past ~100 px of panel-coloured nothing to
+   * reach the next headline - while the two charts, the densest surfaces
+   * here, sat at 319 px in a row that could go to 420. Density is
+   * hierarchy on a glance surface, so the surplus goes to row 1, which
+   * is also where the tyre chart needs it. */
+  grid-template-rows: minmax(260px, 1fr) minmax(140px, max-content) minmax(140px, max-content);
 }
 
 /* --- Cards -------------------------------------------------------------- */
@@ -282,6 +291,24 @@
   margin: 0;
   color: var(--qt-fg-2);
   font-size: 12px;
+}
+/* The previous call, on the lap this one replaced it. Tertiary text with a
+ * WARNING dot: it is a CHANGE, which is worth noticing, and not a fault,
+ * which is what the alarm colour one line below means. */
+.orch-changed {
+  margin: 0;
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}
+.orch-changed::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  vertical-align: middle;
 }
 .orch-guardrail {
   margin: 0;

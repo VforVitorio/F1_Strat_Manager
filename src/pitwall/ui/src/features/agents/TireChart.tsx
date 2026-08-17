@@ -18,7 +18,7 @@ import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { TireSeries } from "../../lib/agents";
 import { useEChart } from "../../lib/chart";
-import { CHART_BASE } from "./useEChart";
+import { CHART_BASE, lapAxis, secondsAxis } from "./useEChart";
 
 export function TireChart({ series }: { series: TireSeries }) {
   const option = useMemo<EChartsOption>(() => {
@@ -65,6 +65,16 @@ export function TireChart({ series }: { series: TireSeries }) {
           type: "dashed" as const,
         },
       })),
+      // Where the car is now. Solid, because dashed is already taken twice
+      // over on this chart - the cliff median and the compound boundaries.
+      ...(series.current_lap == null
+        ? []
+        : [
+            {
+              xAxis: series.current_lap,
+              lineStyle: { color: series.cursor_colour, width: 1, type: "solid" as const },
+            },
+          ]),
     ];
     const markLine = marks.length
       ? { silent: true, symbol: "none" as const, label: { show: false }, data: marks }
@@ -82,7 +92,14 @@ export function TireChart({ series }: { series: TireSeries }) {
 
     return {
       ...CHART_BASE,
-      xAxis: { ...CHART_BASE.xAxis, min: series.x_range[0], max: series.x_range[1] },
+      // Through `lapAxis`, not spread onto the autoranged base. Spreading
+      // `min`/`max` locks the axis but leaves the base's own bound-label
+      // suppression switched off, which is how a lap axis running to a
+      // computed 12.5 printed "12.5" as though half a lap were a tick.
+      xAxis: lapAxis(series.x_range),
+      // Bounded to the laps plotted. Autoranged against a cliff band that
+      // reaches 140 s, the trace at 81.2 s had four pixels of a 150 px plot.
+      yAxis: series.y_range ? secondsAxis(series.y_range) : CHART_BASE.yAxis,
       series: [trend, ...stints],
     };
   }, [series]);
