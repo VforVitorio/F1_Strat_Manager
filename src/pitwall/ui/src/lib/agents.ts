@@ -58,6 +58,8 @@ export interface TireHistoryRow {
 export interface OrchestratorView {
   action: string;
   action_colour: string;
+  /** The badge's TEXT colour, chosen host side against the fill (WCAG). */
+  action_text_colour: string;
   /** null before the first decision; the bar then draws empty. */
   confidence: number | null;
   /** The bar's width in per cent, already clamped and rounded host side. */

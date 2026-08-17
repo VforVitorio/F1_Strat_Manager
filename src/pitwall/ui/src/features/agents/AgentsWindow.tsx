@@ -12,9 +12,12 @@
  *
  * Before the first view arrives the window renders what the Qt window
  * shows at startup, rather than a spinner. That is not the same as
- * `update_from(None)`: the badge is ACCENT purple, the plan line uses
- * em-dashes and the scenario scores read "0%" — `_render_idle` is what Qt
- * paints once a tick with no decision has arrived, a different moment.
+ * `update_from(None)`: the badge is ACCENT purple and the plan line uses
+ * em-dashes — `_render_idle` is what Qt paints once a tick with no
+ * decision has arrived, a different moment. The scenario scores are the
+ * one place that no longer follows Qt: they read `--` rather than the
+ * "0%" it painted, because before the first tick nothing has been
+ * simulated and 0 % is a measurement.
  * The connection chip is the one field taken from Qt's FIRST PAINTED
  * FRAME rather than from its constructor, because the constructor's grey
  * lasts milliseconds and is not a state anybody sees.
@@ -71,6 +74,9 @@ const IDLE_VIEW: AgentsView = {
     action: "--",
     // ACCENT: `orchestrator_card.py:100` styles the badge at construction.
     action_colour: "#a78bfa",
+    // Dark on the accent fill, as `readable_on` picks for the live badge:
+    // white measured 2.72:1 here.
+    action_text_colour: "#121127",
     confidence: null,
     confidence_fill: 0,
     confidence_label: "Confidence: --",

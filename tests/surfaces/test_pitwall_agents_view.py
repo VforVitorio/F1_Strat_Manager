@@ -74,6 +74,65 @@ def test_the_badge_builders_escape_what_comes_off_the_wire():
     assert "&lt;" in flag_chip_html("A<B")
 
 
+def _rendered_pair(span: str) -> tuple[str, str]:
+    """The `(background, foreground)` a pill span actually carries."""
+    import re
+
+    background = re.search(r"background-color: (#[0-9a-f]{6})", span)
+    foreground = re.search(r"color: (#[0-9a-f]{6})", span.split("background-color:", 1)[1])
+    assert background and foreground, span
+    return background.group(1), foreground.group(1)
+
+
+def test_every_pill_and_badge_is_legible_against_its_own_fill():
+    """The sprint-8 gate's contrast finding, asserted as a RATIO (#965).
+
+    A test that pinned the hexes would have passed happily on the defect:
+    white on the alert chip's grey is 2.54:1, white on the STAY OUT badge
+    is 2.54:1, and both hexes were exactly the ones the palette intended.
+    **The alarm and the decision were the two least legible things on the
+    screen**, and the only assertion that can see that is the one about
+    the pair.
+
+    Every intent and every compound, not a sample: the defect class this
+    repo pays for most is the twin that never got the fix, and a chip
+    enumeration with one member checked is that shape waiting to happen.
+    """
+    from src.arcade.palette import (
+        _COMPOUND_COLOUR_BY_LABEL,
+        _FLAG_BG_BY_INTENT,
+        compound_pill_html,
+        contrast_ratio,
+        flag_chip_html,
+    )
+
+    def rgb(value: str) -> tuple[int, int, int]:
+        return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16))
+
+    subjects = [(intent, flag_chip_html(intent)) for intent in (*_FLAG_BG_BY_INTENT, "UNKNOWN")]
+    subjects += [
+        (compound, compound_pill_html(compound))
+        for compound in (*_COMPOUND_COLOUR_BY_LABEL, "UNKNOWN")
+    ]
+    for name, span in subjects:
+        background, foreground = _rendered_pair(span)
+        ratio = contrast_ratio(rgb(background), rgb(foreground))
+        assert ratio >= 4.5, f"{name}: {foreground} on {background} is {ratio:.2f}:1"
+
+    # The badge takes the same treatment through the view, for every action
+    # `classify_action` knows plus the fallback.
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    for action in ("PIT_NOW", "STAY_OUT", "UNDERCUT", "OVERCUT", "SOMETHING_ELSE"):
+        built = build_orchestrator({"action": action, "confidence": 0.5})
+        ratio = contrast_ratio(rgb(built["action_colour"]), rgb(built["action_text_colour"]))
+        assert ratio >= 4.5, f"{action}: {ratio:.2f}:1"
+    idle = build_orchestrator(None)
+    assert contrast_ratio(rgb(idle["action_colour"]), rgb(idle["action_text_colour"])) >= 4.5, (
+        "the idle badge too"
+    )
+
+
 # --- The view the host hands the window -------------------------------------
 
 

@@ -28,6 +28,7 @@ from src.arcade.palette import (
     WARNING,
     compound_pill_html,
     hex_str,
+    readable_on,
 )
 from src.arcade.strategy import classify_action
 
@@ -93,6 +94,7 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
         return {
             "action": "--",
             "action_colour": hex_str(TEXT_TERTIARY),
+            "action_text_colour": hex_str(readable_on(TEXT_TERTIARY)),
             "confidence": None,
             "confidence_fill": 0.0,
             "confidence_label": "Confidence: --",
@@ -115,6 +117,12 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "action": badge_label,
         "action_colour": hex_str(badge_colour),
+        # The badge's own text colour, decided here rather than fixed to
+        # white in the renderer. White on SUCCESS measures 2.54:1, so the
+        # single most important element on the screen failed AA in the one
+        # state - a guardrail veto - where a strategist most needs to read
+        # it. `readable_on` picks whichever ground actually contrasts.
+        "action_text_colour": hex_str(readable_on(badge_colour)),
         "confidence": confidence,
         # The bar's width, to the 0.1 % Qt's gradient stop resolves to
         # (`orchestrator_card.py::_bar_style` rounds the stop to 3 dp).

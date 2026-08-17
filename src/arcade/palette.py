@@ -68,6 +68,86 @@ def hex_str(rgb: tuple[int, int, int]) -> str:
     return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
 
+def _relative_luminance(rgb: tuple[int, int, int]) -> float:
+    """WCAG 2.x relative luminance, which is not the same as perceived brightness."""
+    channels = []
+    for raw in rgb:
+        c = raw / 255
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(first: tuple[int, int, int], second: tuple[int, int, int]) -> float:
+    """The WCAG contrast ratio between two colours, from 1.0 to 21.0."""
+    high, low = sorted((_relative_luminance(first), _relative_luminance(second)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+# WCAG AA for body-sized text. The pills render at 10 px bold, which is
+# nowhere near the 18.66 px bold that would let 3.0 count.
+_AA_SMALL_TEXT: Final[float] = 4.5
+
+
+def readable_on(background: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Whichever of the dark ground or white reads better ON ``background``.
+
+    **Chosen by the actual criterion, not by a stand-in for it.** The pill
+    builders used to pick white below a hand-set brightness threshold of
+    180, and the threshold does not answer the question contrast asks: at
+    the alert chip's own grey (#9ca3af) it scores 162 and takes white, and
+    white on that grey measures **2.54:1** against the 4.5 the 10 px label
+    needs. The sprint-8 gate found the same 2.54 on the STAY OUT badge -
+    the two least legible things on the screen were the alarm and the
+    decision.
+
+    Comparing the two candidates directly cannot be wrong by a threshold,
+    and it lands on dark text for every saturated fill in this palette:
+    SUCCESS 7.29, ACCENT 6.80, WARNING 8.61, DANGER 4.92, all passing.
+    """
+    dark = contrast_ratio(BG_COLOR, background)
+    light = contrast_ratio(TEXT_PRIMARY, background)
+    return BG_COLOR if dark >= light else TEXT_PRIMARY
+
+
+def _blend(
+    colour: tuple[int, int, int], towards: tuple[int, int, int], amount: float
+) -> tuple[int, int, int]:
+    """`colour` moved `amount` of the way to `towards`, channel by channel."""
+    red, green, blue = (round(c + (t - c) * amount) for c, t in zip(colour, towards))
+    return (red, green, blue)
+
+
+def legible_fill(
+    background: tuple[int, int, int],
+) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """A `(fill, text)` pair for a small-text pill that reaches AA.
+
+    Some brand colours sit in the middle of the range where NEITHER
+    ground is legible: the SOFT compound's #e63232 gives 4.31:1 against
+    white and less against the dark ground, so picking the better of the
+    two still lands under the 4.5 a 10 px label needs. The fill is then
+    deepened away from its own text - darkened under white, lightened
+    under dark - by the smallest step that clears AA, which keeps the hue
+    a strategist recognises while making the label readable.
+
+    Only the PILL is adjusted. `compound_color` itself is untouched,
+    because the tyre chart's stint bands are painted from it and their
+    contrast question is a different one (a band carries no text).
+    """
+    fill = background
+    text = readable_on(fill)
+    away = TEXT_PRIMARY if text == BG_COLOR else BG_COLOR
+    # Twelve 8 % steps reach either ground; the loop exits on the first
+    # that clears, so a colour already passing is returned unchanged.
+    for _ in range(12):
+        if contrast_ratio(text, fill) >= _AA_SMALL_TEXT:
+            break
+        fill = _blend(fill, away, 0.08)
+        text = readable_on(fill)
+    return fill, text
+
+
 # --- Monospace font chain ------------------------------------------------
 # Fira Code (+ its Nerd Font variant) ships with programming ligatures and
 # a lot of monospace glyphs that align neatly for metric tables. Users
@@ -128,10 +208,7 @@ def compound_pill_html(compound: str | None) -> str:
     strings reach a webview.
     """
     label = (compound or "—").strip() or "—"
-    colour = compound_color(label)
-    # Dark text on light/saturated backgrounds, white on dim ones.
-    lum = 0.299 * colour[0] + 0.587 * colour[1] + 0.114 * colour[2]
-    fg = BG_COLOR if lum > 180 else TEXT_PRIMARY
+    colour, fg = legible_fill(compound_color(label))
     # Single quotes in the font stack are fine since the style attribute
     # uses double quotes.
     font_stack = MONO_FONT_STACK
@@ -177,14 +254,18 @@ def flag_chip_html(intent: str | None) -> str:
 
     The label is HTML-escaped for the same reason as the compound pill:
     it originates in agent output, not in this file.
+
+    The foreground comes from `readable_on` rather than being fixed to
+    white, which is what made this chip the least legible text in the
+    AGENTS window at 2.54:1 - an alarm nobody can read is not an alarm.
     """
     key = (intent or "—").upper().strip() or "—"
-    bg = _FLAG_BG_BY_INTENT.get(key, TEXT_TERTIARY)
+    bg, fg = legible_fill(_FLAG_BG_BY_INTENT.get(key, TEXT_TERTIARY))
     label = key.replace("_", " ")
     return (
         '<span style="'
         f"background-color: {hex_str(bg)}; "
-        f"color: {hex_str(TEXT_PRIMARY)}; "
+        f"color: {hex_str(fg)}; "
         "padding: 1px 6px; border-radius: 6px; "
         "font-weight: 700; font-size: 10px; letter-spacing: 0.3px;"
         f'">{html.escape(label)}</span>'
