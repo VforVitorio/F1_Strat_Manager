@@ -14,7 +14,13 @@ export function OrchestratorCard({ view }: { view: OrchestratorView }) {
   return (
     <section className="card orchestrator">
       <div className="orch-top">
-        <div className="orch-badge" style={{ background: view.action_colour }}>
+        {/* The text colour comes from the host too. Fixed to white here it
+            measured 2.54:1 on the SUCCESS fill — the primary decision, below
+            AA, in the state where a guardrail has just overruled the plan. */}
+        <div
+          className="orch-badge"
+          style={{ background: view.action_colour, color: view.action_text_colour }}
+        >
           {view.action}
         </div>
         <div className="orch-conf">

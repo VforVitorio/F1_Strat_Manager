@@ -121,6 +121,16 @@
  * renders the intent the Qt author wrote and the toolkit dropped.
  * Deleting it would mean reproducing a toolkit limitation on purpose. */
 .agent-card.is-idle {
+  /* Scoped to the CHROME, not the text. At 0.45 the trigger hint explaining
+   * why a card is dark measured 2.38:1 in rendered pixels, and the dim
+   * cannot be tuned into compliance - 0.75 still fails at 4.39:1 and 0.85
+   * no longer reads as dimmed. The producer already sends idle text in
+   * TEXT_TERTIARY, which measures 6.88:1 on this ground, so the colour
+   * system carries the state and the opacity only softens the frame. */
+  border-color: color-mix(in srgb, var(--qt-border) 45%, transparent);
+}
+.agent-card.is-idle .agent-glyph,
+.agent-card.is-idle .agent-chart {
   opacity: 0.45;
 }
 .agent-card-body {
@@ -230,6 +240,8 @@
   justify-content: center;
   border-radius: 10px;
   padding: 14px 18px;
+  /* Fallback only. The live colour is inline, decided against the fill by
+   * `readable_on`, because a fixed white measured 2.54:1 on SUCCESS. */
   color: var(--qt-fg-1);
   font-size: 26px;
   font-weight: 800;
