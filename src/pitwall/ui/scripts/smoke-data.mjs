@@ -1411,6 +1411,38 @@ check(paceCells.best === 1, `exactly one purple cell - the session's fastest lap
 // assertion that the string matches the data passes straight over that; this
 // one moves the panel and requires the header to move with it. The panel is
 // also the one affordance replacing a scrollbar this window hides globally.
+//
+// The overflow is FORCED rather than borrowed (#958). This block used to lean
+// on Melbourne's 57 rows overflowing the box on their own, and here they do -
+// by 18 px, one and a half rows of 12. On CI's font metrics the same 57 rows
+// fit, `scrollTop` never leaves 0, both reads return the same correct string,
+// and the check went red on `dev` the day it shipped. A guard whose probe sits
+// a row from the boundary cannot see the defect it names, so this one squeezes
+// the panel to a height that guarantees an overflow and PROVES the two
+// hypotheses are distinguishable before asserting which one ships.
+const squeeze = await pacePage.addStyleTag({
+  content: ".pace-scroll { height: 200px !important; flex: none !important; }",
+});
+const repin = () =>
+  pacePage.evaluate(() => {
+    const box = document.querySelector(".pace-scroll");
+    box.scrollTop = box.scrollHeight;
+    box.dispatchEvent(new Event("scroll"));
+  });
+await repin();
+await pacePage.waitForTimeout(150);
+const overflow = await pacePage.evaluate(() => {
+  const box = document.querySelector(".pace-scroll");
+  return {
+    hidden: box.scrollHeight - box.clientHeight,
+    row: box.querySelector("tbody tr")?.offsetHeight ?? 0,
+  };
+});
+check(
+  overflow.hidden > overflow.row,
+  `the panel really overflows before the range is asked to follow it (${overflow.hidden} px hidden, ${overflow.row} px per row)`,
+);
+
 const rangeAtBottom = await pacePage.locator(".pace-range").innerText();
 const scrolled = await pacePage.evaluate(() => {
   const box = document.querySelector(".pace-scroll");
@@ -1430,13 +1462,11 @@ check(
   rangeAtBottom.endsWith(`-${PACE_LAPS} of ${PACE_LAPS}`),
   `pinned to the bottom it ends at the newest lap, and says the race length (${rangeAtBottom})`,
 );
-// Put it back where the panel pins itself, so the checks below see the state
-// the window actually opens in.
-await pacePage.evaluate(() => {
-  const box = document.querySelector(".pace-scroll");
-  box.scrollTop = box.scrollHeight;
-  box.dispatchEvent(new Event("scroll"));
-});
+// Drop the squeeze and put the panel back where it pins itself, so the checks
+// below see the state the window actually opens in rather than a 200 px box
+// this guard invented.
+await squeeze.evaluate((tag) => tag.remove());
+await repin();
 await pacePage.waitForTimeout(150);
 
 // A lap 40 ms under a minute boundary. Splitting the minutes off BEFORE
