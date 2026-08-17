@@ -42,6 +42,11 @@ TREND_COLOUR = hex_str(TEXT_PRIMARY)
 CLIFF_COLOUR = hex_str(WARNING)
 # TEXT_TERTIARY at the alpha 80/255 the Qt pen uses.
 BOUNDARY_COLOUR = hex_str(TEXT_TERTIARY)
+# The current lap, on both charts. The same TEXT_TERTIARY band 4 uses for its
+# shared cursor and for the same reason: it marks where the car is NOW, and
+# anything brighter competes with the series it annotates. SOLID, because a
+# dashed vertical already means a compound boundary on the tyre chart.
+CURSOR_COLOUR = hex_str(TEXT_TERTIARY)
 BOUNDARY_OPACITY = 80 / 255
 
 
@@ -79,7 +84,11 @@ def _sane_cliff(value: Any) -> float | None:
     return laps if 0.0 < laps <= CLIFF_MAX_SANE_LAPS else None
 
 
-def build_pace_series(history: dict[int, dict[str, Any]]) -> dict[str, Any]:
+def build_pace_series(
+    history: dict[int, dict[str, Any]],
+    x_range: list[float] | None = None,
+    current_lap: int | None = None,
+) -> dict[str, Any]:
     """Actual, predicted and the P10-P90 band, each skipping what it lacks.
 
     Three independent series rather than one table with holes: laps before
@@ -109,6 +118,14 @@ def build_pace_series(history: dict[int, dict[str, Any]]) -> dict[str, Any]:
         "actual_colour": ACTUAL_COLOUR,
         "pred_colour": PRED_COLOUR,
         "band_colour": BAND_COLOUR,
+        # The SAME lap axis the tyre chart draws, and the same current-lap
+        # mark. They sit side by side measuring the same quantity, and they
+        # used to disagree: this one autoranged to 12-24 while its neighbour
+        # locked 12.5-35, so "now" sat at 95 % of one plot and 47 % of the
+        # other and neither said which column it was.
+        "x_range": x_range,
+        "current_lap": None if current_lap is None else float(current_lap),
+        "cursor_colour": CURSOR_COLOUR,
     }
 
 
@@ -191,6 +208,9 @@ def build_tire_series(
         "cliff_colour": CLIFF_COLOUR,
         "boundary_opacity": BOUNDARY_OPACITY,
         "x_range": _x_range(flat, current_lap, cliff),
+        "y_range": _y_range(trend or flat),
+        "current_lap": None if current_lap is None else float(current_lap),
+        "cursor_colour": CURSOR_COLOUR,
     }
 
 
@@ -215,6 +235,35 @@ def _build_cliff(current_lap: int | None, tire_out: dict[str, Any] | None) -> di
         "hi": None if p90 is None else lap + p90,
         "p50": None if p50 is None else lap + p50,
     }
+
+
+# How much air to leave above and below a bounded lap-time axis, in seconds.
+# Wide enough that a flat stint does not read as a ruler, narrow enough that
+# a real 0.3 s/lap degradation still has slope.
+_Y_PAD_S = 2.5
+
+
+def _y_range(points: list[list[float]]) -> list[float] | None:
+    """Bound the lap-time axis to the laps actually plotted.
+
+    **The twin of `_x_range`, which has existed all along.** That one
+    clamps the lap axis so "a bad p90 cannot flatten the series to a
+    hairline"; nothing did the same for the value axis, and the value
+    axis is where the flattening was actually happening. Autoranged
+    against a stint band that reaches 140 s, the tyre trace at 81.2 s
+    occupied FOUR PIXELS of a 150 px plot, so the 0.031 s/lap degradation
+    the panel exists to show was sub-pixel. Any real in-lap - about +20 s,
+    and inside the 30-200 s sanity window - reproduces it.
+
+    Returns `None` when there is nothing to bound, which leaves the axis
+    autoranged rather than inventing a window around no data.
+    """
+    values = [point[1] for point in points if point[1] is not None]
+    if not values:
+        return None
+    low, high = min(values), max(values)
+    pad = max(_Y_PAD_S, (high - low) * 0.15)
+    return [round(low - pad, 2), round(high + pad, 2)]
 
 
 def _x_range(

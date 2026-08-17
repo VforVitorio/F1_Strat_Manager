@@ -119,6 +119,11 @@ export interface PaceSeries {
   actual_colour: string;
   pred_colour: string;
   band_colour: string;
+  /** The tyre chart's lap axis, borrowed so the two agree about where a lap is. */
+  x_range: [number, number] | null;
+  /** Where the car is NOW, marked on both charts. */
+  current_lap: number | null;
+  cursor_colour: string;
 }
 
 export interface TireStint {
@@ -140,6 +145,10 @@ export interface TireSeries {
   boundary_colour: string;
   boundary_opacity: number;
   x_range: [number, number];
+  /** The lap-time axis, bounded to the laps plotted. Null leaves it autoranged. */
+  y_range: [number, number] | null;
+  current_lap: number | null;
+  cursor_colour: string;
 }
 
 export interface AgentsView {

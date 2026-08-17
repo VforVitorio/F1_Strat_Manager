@@ -42,3 +42,43 @@ export const CHART_BASE: EChartsOption = {
   xAxis: valueAxis({ name: "Lap", nameGap: 18, scale: true }),
   yAxis: valueAxis({ name: "Lap time (s)", nameGap: 34, scale: true }),
 };
+
+/**
+ * The lap axis, locked to a range the host computed.
+ *
+ * Built through `valueAxis` rather than spread onto `CHART_BASE.xAxis`,
+ * because the bound-label suppression is decided INSIDE that helper from the
+ * spec it is handed. Spreading `min`/`max` in afterwards locks the axis and
+ * leaves the suppression off, which printed a computed bound of `12.5` as if
+ * half a lap were a tick on an integer quantity.
+ */
+export function lapAxis(range: readonly [number, number] | null) {
+  if (!range) return CHART_BASE.xAxis;
+  return valueAxis({ name: "Lap", nameGap: 18, min: range[0], max: range[1] });
+}
+
+/** The lap-time axis, bounded to the values plotted rather than autoranged. */
+export function secondsAxis(range: readonly [number, number]) {
+  return valueAxis({ name: "Lap time (s)", nameGap: 34, min: range[0], max: range[1] });
+}
+
+/**
+ * A thin vertical at the current lap, for both cards.
+ *
+ * SOLID and in the dimmest text colour. A dashed vertical already means a
+ * compound boundary on the tyre chart, and the two charts previously shared
+ * a quantity without sharing a landmark: "now" sat at 95 % of one plot and
+ * 47 % of the other with nothing naming it on either.
+ */
+export function currentLapMark(lap: number | null | undefined, colour: string) {
+  // `== null` on purpose, covering undefined too. A view built before this
+  // field existed carries neither, and `undefined !== null` slipped a mark
+  // with no axis position into ECharts, which throws where it renders.
+  if (lap == null) return undefined;
+  return {
+    silent: true,
+    symbol: "none" as const,
+    label: { show: false },
+    data: [{ xAxis: lap, lineStyle: { color: colour, width: 1, type: "solid" as const } }],
+  };
+}

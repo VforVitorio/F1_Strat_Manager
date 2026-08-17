@@ -15,12 +15,17 @@ import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { PaceSeries } from "../../lib/agents";
 import { useEChart } from "../../lib/chart";
-import { CHART_BASE } from "./useEChart";
+import { CHART_BASE, currentLapMark, lapAxis } from "./useEChart";
 
 export function PaceChart({ series }: { series: PaceSeries }) {
   const option = useMemo<EChartsOption>(
     () => ({
       ...CHART_BASE,
+      // The tyre chart's lap axis, borrowed. Two charts of the same quantity
+      // side by side used to autorange independently, so lap 23 sat at 95 %
+      // of this plot and 47 % of its neighbour — a comparison a reader
+      // cannot make, on the one screen where they are meant to make it.
+      xAxis: lapAxis(series.x_range),
       series: [
         {
           type: "line",
@@ -57,6 +62,7 @@ export function PaceChart({ series }: { series: PaceSeries }) {
           lineStyle: { color: series.actual_colour, width: 2 },
           itemStyle: { color: series.actual_colour },
           symbol: "none",
+          markLine: currentLapMark(series.current_lap, series.cursor_colour),
         },
       ],
     }),
