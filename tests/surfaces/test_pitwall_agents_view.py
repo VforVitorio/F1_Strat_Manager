@@ -456,6 +456,44 @@ def test_the_orchestrator_card_is_the_qt_one_field_for_field():
     assert view["guardrail"] == ""
 
 
+def test_the_lap_the_call_moves_says_what_it_moved_from():
+    """The window's only first-class answer to "what changed" (#968).
+
+    Everything else on the surface overwrites in place ten times a
+    second, so a call flipping from STAY OUT to PIT NOW left no trace
+    outside a heading in a tab panel.
+
+    Read off `history_tail`, whose entries carry real `LapDecision`
+    fields. **Not parsed out of `memory_block`**: that is a multi-line LLM
+    prompt block, not the `lap 22: STAY_OUT (0.58)` line the design
+    proposal assumed, and building a rendered string out of free text is
+    how a surface starts lying the first time the text changes.
+
+    The tail's newest entry is the CURRENT lap - the producer appends to
+    history and sets `latest` in the same breath - so the search is for
+    the newest EARLIER lap, not for `tail[-2]`.
+    """
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    tail = [
+        {"lap_number": 21, "action": "STAY_OUT", "confidence": 0.61},
+        {"lap_number": 22, "action": "STAY_OUT", "confidence": 0.58},
+        {"lap_number": 23, "action": "PIT_NOW", "confidence": 0.71},
+    ]
+    moved = {"action": "PIT_NOW", "confidence": 0.71, "lap_number": 23, "plan_changed": True}
+    assert build_orchestrator(moved, tail)["changed"] == "was STAY OUT (0.58) · L22"
+
+    held = dict(moved, plan_changed=False)
+    assert build_orchestrator(held, tail)["changed"] == "", (
+        "a held call is not a change, and a chip on every lap is wallpaper"
+    )
+    assert build_orchestrator(moved, None)["changed"] == "", "no history, no claim about one"
+    first = {"action": "STAY_OUT", "lap_number": 1, "plan_changed": True}
+    assert build_orchestrator(first, [{"lap_number": 1, "action": "STAY_OUT"}])["changed"] == "", (
+        "the tail's newest entry is THIS lap; the first lap of a race has no previous call"
+    )
+
+
 def test_no_posture_wears_the_alarm_colour():
     """DANGER means an alarm, and a posture is a setting somebody chose (#964).
 

@@ -39,6 +39,24 @@ SECONDS = float(sys.argv[1]) if len(sys.argv) > 1 else 180.0
 ON_UPDATE_HZ = 60.0
 
 
+def fixture_call(lap: int) -> tuple[str, float]:
+    """The call this fixture makes on a lap, decided in ONE place.
+
+    The memory block QUOTES the previous lap, and it used to quote a
+    hardcoded `STAY_OUT (0.58)` while `history` generated something else
+    from a formula further down the file. Nothing noticed until sprint 8
+    surfaced the previous call as a first-class chip: the window then
+    rendered `was STAY OUT (0.62) - L22` beside a reasoning tab saying
+    `lap 22: STAY_OUT (0.58)`, two panels disagreeing about one lap.
+
+    A fixture that contradicts itself teaches the reader a bug that is
+    not there, which is worse than no fixture.
+    """
+    action = "STAY_OUT" if lap % 4 else "EXTEND"
+    confidence = 0.5 + (lap % 5) * 0.06
+    return action, confidence
+
+
 def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
     return LapDecisionDTO(
         lap_number=lap,
@@ -164,7 +182,10 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
             # cards gate on exactly these two tokens.
             active=["N28", "N30"],
         ),
-        memory_block=f"lap {lap - 1}: STAY_OUT (0.58) - undercut window not yet open",
+        memory_block=(
+            f"lap {lap - 1}: {fixture_call(lap - 1)[0]} "
+            f"({fixture_call(lap - 1)[1]:.2f}) - undercut window not yet open"
+        ),
         plan_changed=True,
     )
 
@@ -187,10 +208,7 @@ state.start = StartEventDTO(
     provider="openai",
 )
 state.latest = decision(23, "PIT_NOW", 0.71)
-state.history = [
-    decision(lap, "STAY_OUT" if lap % 4 else "EXTEND", 0.5 + (lap % 5) * 0.06)
-    for lap in range(14, 23)
-] + [state.latest]
+state.history = [decision(lap, *fixture_call(lap)) for lap in range(14, 23)] + [state.latest]
 
 view = SimpleNamespace(
     _session=session,

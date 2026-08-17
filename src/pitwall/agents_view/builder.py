@@ -76,7 +76,7 @@ class AgentsViewBuilder:
             "view_version": AGENTS_VIEW_VERSION,
             "seq": payload.get("seq"),
             "header": build_header(payload, connection),
-            "orchestrator": build_orchestrator(latest or None),
+            "orchestrator": build_orchestrator(latest or None, strategy.get("history_tail")),
             # The action goes in with the scores: a guardrail can veto the
             # Monte Carlo winner, and a panel that does not know which plan
             # was ENACTED crowns the one that was overruled (#962).

@@ -87,6 +87,7 @@ const IDLE_VIEW: AgentsView = {
     risk_colour: "#9ca3af",
     plan: "Pit: — · Next: — · UCUT: —",
     guardrail: "",
+    changed: "",
   },
   scenarios: [
     ["STAY_OUT", "STAY"],

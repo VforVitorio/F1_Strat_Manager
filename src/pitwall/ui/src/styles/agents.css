@@ -292,6 +292,24 @@
   color: var(--qt-fg-2);
   font-size: 12px;
 }
+/* The previous call, on the lap this one replaced it. Tertiary text with a
+ * WARNING dot: it is a CHANGE, which is worth noticing, and not a fault,
+ * which is what the alarm colour one line below means. */
+.orch-changed {
+  margin: 0;
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}
+.orch-changed::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  vertical-align: middle;
+}
 .orch-guardrail {
   margin: 0;
   color: #ef4444;

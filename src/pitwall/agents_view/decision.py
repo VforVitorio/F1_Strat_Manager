@@ -104,7 +104,50 @@ def _plan_line(latest: dict[str, Any], action: str) -> str:
     return " · ".join(bits)
 
 
-def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
+def _previous_call(latest: dict[str, Any], tail: list[dict[str, Any]] | None) -> str:
+    """`was STAY OUT (0.58) · L22`, when this lap's call is not last lap's.
+
+    A pit wall reads deltas, and this window had no first-class answer to
+    "what changed since the last lap" (#968): the badge, the confidence,
+    the four bars and all six cards overwrite in place ten times a second,
+    and the only trace that anything moved was a monospace heading inside
+    a tab panel, below the fold of attention.
+
+    Read off `history_tail`, whose entries are real `LapDecision` fields.
+    **Not parsed out of `memory_block`**, which the gate's proposal assumed
+    was `lap 22: STAY_OUT (0.58)` and which is really a multi-line LLM
+    prompt block ("DECISION MEMORY (your own previous calls this race):").
+
+    `plan_changed` is the producer's own answer and it counts the ACTION
+    only - measured over 40 lap pairs of a real race, the action moved on
+    none of them while `pit_lap_target` moved on 25, so counting the target
+    would open this on two laps in three and turn a signal into wallpaper.
+
+    The tail's last entry is the CURRENT decision, because the producer
+    appends to `history` and sets `latest` in the same breath
+    (`src/arcade/strategy.py:439-440`), so the search is for the newest
+    entry from an EARLIER lap rather than for `tail[-2]`.
+    """
+    if not latest.get("plan_changed") or not tail:
+        return ""
+    lap = latest.get("lap_number")
+    earlier = [row for row in tail if isinstance(row.get("lap_number"), int)]
+    if isinstance(lap, int):
+        earlier = [row for row in earlier if row["lap_number"] < lap]
+    if not earlier:
+        return ""
+    previous = max(earlier, key=lambda row: row["lap_number"])
+    _, label = classify_action(str(previous.get("action") or "--"))
+    try:
+        confidence = f" ({float(previous.get('confidence') or 0.0):.2f})"
+    except (TypeError, ValueError):
+        confidence = ""
+    return f"was {label}{confidence} · L{previous['lap_number']}"
+
+
+def build_orchestrator(
+    latest: dict[str, Any] | None, history_tail: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """The action badge, the confidence bar, the two chips and the plan."""
     if not latest:
         return {
@@ -121,6 +164,7 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
             "risk_colour": hex_str(TEXT_TERTIARY),
             "plan": "Pit: -- · Next: -- · UCUT: --",
             "guardrail": "",
+            "changed": "",
         }
 
     action = str(latest.get("action") or "--")
@@ -154,6 +198,7 @@ def build_orchestrator(latest: dict[str, Any] | None) -> dict[str, Any]:
         "risk_colour": hex_str(_RISK_COLOURS.get(str(risk_posture or "").upper(), TEXT_TERTIARY)),
         "plan": _plan_line(latest, action),
         "guardrail": f"⚠ Guardrail: {guardrail}" if guardrail else "",
+        "changed": _previous_call(latest, history_tail),
     }
 
 

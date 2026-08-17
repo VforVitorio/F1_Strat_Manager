@@ -49,6 +49,12 @@ export function OrchestratorCard({ view }: { view: OrchestratorView }) {
           built and escaped in src/arcade/palette.py. */}
       <p className="orch-plan" dangerouslySetInnerHTML={{ __html: view.plan }} />
 
+      {/* What changed since the last lap, which this window had no
+          first-class answer to: everything else overwrites in place ten times
+          a second, and the only trace of a moved call was a heading inside a
+          tab panel. Only rendered on the lap the ACTION moved, which is rare
+          enough to stay a signal. */}
+      {view.changed ? <p className="orch-changed">{view.changed}</p> : null}
       {view.guardrail ? <p className="orch-guardrail">{view.guardrail}</p> : null}
     </section>
   );
