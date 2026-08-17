@@ -131,6 +131,8 @@ def test_every_pill_and_badge_is_legible_against_its_own_fill():
     assert contrast_ratio(rgb(idle["action_colour"]), rgb(idle["action_text_colour"])) >= 4.5, (
         "the idle badge too"
     )
+
+
 def test_the_tooltips_return_data_and_never_markup():
     """What replaces the guarantee the hybrid gives up (#960).
 
