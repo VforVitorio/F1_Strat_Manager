@@ -79,8 +79,32 @@ function TrackStatusChip({
 }) {
   if (!label || !colour) return <span className="strip-chip is-unknown">NO STATUS</span>;
   const rgb = `rgb(${colour[0]}, ${colour[1]}, ${colour[2]})`;
+  // **A non-green status is FILLED, and that is the whole of the window's
+  // reaction to a safety car.** Before this it was an outline chip swapping its
+  // text - `GREEN` measured 54.3 x 18 px, `SAFETY CAR` about 86 x 18 - inside a
+  // 1465 x 28 strip, and nothing else on the window changed at all. Two captures
+  // of the same window, one green and one under the safety car, differed in no
+  // element but that one; glanced at from the arcade beside it, the race's most
+  // decision-dense state and its calmest looked the same.
+  //
+  // The colour is the wire's own (`track_status_color`, decoded by the producer
+  // out of `palette.py`), so this spends no new constant, and it degrades
+  // honestly: `NO STATUS` above stays the dim unknown chip rather than borrowing
+  // the weight, because an absence is not an alarm.
+  //
+  // It is a DIFFERENT amber from the one the pace grid's rail and the race trace's
+  // band use for the same state - the wire sends `SAFETY CAR` as rgb(255,140,0)
+  // while those two use `palette.WARNING` #f59e0b. Both names live in `palette.py`
+  // so neither is a stray literal, and at a glance the two are indistinguishable;
+  // it is recorded here so the next reader finds a decision rather than a bug. The
+  // wire's colour is the right one to fill with, because it is the one the arcade
+  // paints its own banner in on the screen beside this window.
+  const green = label === "GREEN";
   return (
-    <span className="strip-chip" style={{ color: rgb, borderColor: rgb }}>
+    <span
+      className={green ? "strip-chip" : "strip-chip is-filled"}
+      style={green ? { color: rgb, borderColor: rgb } : { background: rgb, borderColor: rgb }}
+    >
       {label}
     </span>
   );

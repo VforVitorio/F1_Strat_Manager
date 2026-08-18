@@ -39,8 +39,9 @@
 import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 
-import { AXIS_TEXT, CURSOR_LINE, useEChart, valueAxis } from "../../lib/chart";
+import { AXIS_TEXT, CURSOR_LINE, NEUTRALISED_BAND, useEChart, valueAxis } from "../../lib/chart";
 import { driverStatus } from "../../lib/driverStatus";
+import { neutralisedLaps, neutralisedRanges } from "../../lib/neutralised";
 import { raceTrace } from "../../lib/raceTrace";
 import type { TraceReference } from "../../lib/raceTrace";
 import type { ArcadeState, Bulk } from "../../lib/bridge";
@@ -88,6 +89,11 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
     [signature],
   );
 
+  // Same source as the pace grid's rail, one tab away, so the two panels cannot
+  // disagree about which laps were neutralised. Memoised on the reveal, not on
+  // `arcade`, for the reason the trace itself is.
+  const neutral = useMemo(() => neutralisedRanges(neutralisedLaps(bulk)), [bulk?.rev]);
+
   const option = useMemo<EChartsOption>(() => {
     const first = trace.laps[0] ?? 1;
     const last = trace.laps[trace.laps.length - 1] ?? 1;
@@ -131,6 +137,44 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
                 symbol: "none" as const,
                 label: { show: false },
                 data: [{ yAxis: 0, lineStyle: { color: CURSOR_LINE, width: 1, type: "solid" } }],
+              }
+            : undefined,
+          // **The neutralised lap ranges, shaded, and they explain the shape the
+          // panel already draws.** Melbourne's trace has a V across laps 5-8 and
+          // a long convergence from 33 that are the field bunching behind a
+          // safety car, not anybody's pace; unlabelled they read as racing. Hung
+          // off the same first series as the zero line, for the same reason.
+          //
+          // A translucent fill, never a stroke: a dashed line means
+          // BROADCAST-TIER one tab away and a solid thin vertical is the current
+          // lap. The band is a fifth channel rather than a second meaning for a
+          // taken one.
+          markArea: line.code === trace.lines[0]?.code && neutral.length
+            ? {
+                silent: true,
+                itemStyle: { color: NEUTRALISED_BAND },
+                label: {
+                  show: true,
+                  // At the band's LEFT edge, not its top centre: a band that ends
+                  // at the plot's right - which is what a LIVE neutralisation looks
+                  // like - put its label straight on top of the NOR/PIA end labels,
+                  // and those labels are the chart's only identification.
+                  position: "insideTopLeft" as const,
+                  color: AXIS_TEXT,
+                  fontSize: 8,
+                  formatter: (params: { name?: string }) => params.name ?? "",
+                },
+                // **Padded to the lap's own cell, because a lap is a POINT on this
+                // axis.** Unpadded, a one-lap range is `from == to` and ECharts
+                // paints a zero-width area: a safety car that has just come out -
+                // the moment the band exists for - rendered NOTHING while its label
+                // floated over the driver codes. Measured live at lap 35 with only
+                // lap 33 revealed as neutralised. The half-lap also puts a boundary
+                // lap's data point INSIDE its band rather than on the edge.
+                data: neutral.map((band) => [
+                  { name: band.label, xAxis: band.from - 0.5 },
+                  { xAxis: band.to + 0.5 },
+                ]),
               }
             : undefined,
           endLabel: {

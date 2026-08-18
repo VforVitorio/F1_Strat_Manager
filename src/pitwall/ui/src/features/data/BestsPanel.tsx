@@ -90,10 +90,19 @@ export function BestsPanel({ bulk }: { bulk: Bulk | null }) {
   return (
     <section className="bests card" ref={setCard}>
       {/* The compact form drops the header ROW too, not just the ranks: it puts
-       * the title on the same line as the values. Keeping a separate 16 px header
-       * plus its 8 px gap left the card 65 px tall in a 63 px slot - fighting for
-       * two pixels, which a font fallback would take straight back. One line has
-       * 24 px of air. */}
+       * the title into the same flex run as the values. Keeping a separate 16 px
+       * header plus its 8 px gap left the card 65 px tall in a 63 px slot -
+       * fighting for two pixels, which a font fallback would take straight back.
+       *
+       * **It is not literally one line, and the version of this comment that said
+       * "one line has 24 px of air" was wrong.** Measured at the 1265 x 593 client:
+       * `.bests-leaders` is 40 px, two wrapped flex lines, with THEO on the second
+       * one - where its `margin-left: auto` happens to read as a deliberate footer.
+       * The card comes to 62 px in a 63 px slot, so it FITS, but the margin is one
+       * wrap: a slightly narrower client or a wider fallback font puts a second
+       * entry on line two and pushes THEO under an unannounced fold, which is the
+       * failure this whole degradation exists to remove. The next step down the
+       * ladder, if that ever bites, is to drop the VALUES and keep the codes. */}
       {ranked ? (
         <>
           <header className="bests-header">

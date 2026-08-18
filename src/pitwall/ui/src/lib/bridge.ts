@@ -109,6 +109,21 @@ export interface LapRow {
   tyre_life: number | null;
   stint: number | null;
   track_status: string | null;
+  /**
+   * The digits decoded to the label for "the field was NOT racing freely on this
+   * lap" - SAFETY CAR, VSC or RED FLAG - and `null` for green, for a lone yellow
+   * (sector-local: the cars away from it are racing) and for an unknown status.
+   *
+   * Decoded by the producer, from `src/arcade/track_status.py`, for the same
+   * reason `driver_colors` and the tick's own `track_status_label` are: the
+   * priority order and the four labels are a project rule, and a client testing
+   * for a `4` would be the second copy of it in another language.
+   *
+   * Non-null means a per-lap pace ranking over this lap ranks the safety car's
+   * queue and not pace. Measured on Melbourne 2025: 22 of 57 laps, and 213 of
+   * the 776 cells the grid ranks.
+   */
+  neutralised: string | null;
   pit_in: boolean;
   pit_out: boolean;
   /** A deleted time. Render struck; it never counts towards a best. */

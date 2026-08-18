@@ -160,6 +160,14 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
           {/* Said out loud, because a coarser number that nobody was told about
               is the same silence the truncation was. */}
           {coarse ? " · times to the second at this width" : ""}
+          {/* And the rail needs a key, or it is a decoration. Only shown when
+              there is a marked lap on the panel at all. */}
+          {grid.neutralised.some(Boolean) ? (
+            <>
+              {" · "}
+              <span className="pace-legend-rail" /> neutralised
+            </>
+          ) : null}
         </span>
         <span className="pace-range">
           {grid.laps.length ? `LAPS ${first}-${last} of ${total}` : "no laps revealed"}
@@ -178,7 +186,20 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
           <tbody>
             {grid.rows.map((row, index) => (
               <tr key={grid.laps[index]}>
-                <th className="pace-lapcol">{grid.laps[index]}</th>
+                {/* The rail on the lap number is the whole marker: on a
+                 * neutralised lap the colour thirds rank the safety car's queue,
+                 * not pace, and 213 of the 776 cells this grid ranks on the real
+                 * race sit on one. It is a BORDER rather than a text colour
+                 * because amber text one column right already means "slowest
+                 * third" - one hue, but a different channel, so the two cannot be
+                 * confused. The label rides in the title for the reader who
+                 * wonders which neutralisation it was. */}
+                <th
+                  className={`pace-lapcol${grid.neutralised[index] ? " is-neutralised" : ""}`}
+                  title={grid.neutralised[index] ?? undefined}
+                >
+                  {grid.laps[index]}
+                </th>
                 {row.map((cell, column) => (
                   <td key={grid.columns[column]} className={`is-${cell.tone}`}>
                     {cell.text}
