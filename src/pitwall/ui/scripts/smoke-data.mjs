@@ -1541,6 +1541,72 @@ check(
   `under the safety car the grid still ranks the field instead of painting it one colour (${scSpread.join(" / ")})`,
 );
 
+// --- The WIDTH axis, which the check above cannot see ---------------------
+//
+// `paceCells.clipped === 0` is asserted at 1485 x 833, the largest client in the
+// fleet, where the columns are 38.75 px and nothing clips. It passed all the way
+// through the P0: on a 1080p laptop at 150 % scaling - Windows' own recommended
+// scaling for a 13-14" screen - the client is 1265 x 593, the columns fall to
+// 27.75 px, and 495 of 514 populated cells lost their last glyph in silence.
+//
+// A guard whose probe sits at the one size where the defect does not exist is
+// the shape this file's own header warns about, so this block PROVES the two
+// widths are distinguishable - the column really is narrower - before asserting
+// that nothing clips at either.
+{
+  const narrowCtx = await browser.newContext({ viewport: { width: 1265, height: 593 } });
+  const narrow = await narrowCtx.newPage();
+  narrow.on("pageerror", (error) => failures.push(`pageerror(pace-narrow): ${error.message}`));
+  await narrow.addInitScript(
+    ([payload, bulk, live]) => {
+      window.pywebview = { api: {
+        get_tick: async (s) => (s === payload.seq ? null : payload),
+        get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+        get_live_lap: async (r) => (r === live.rev ? null : live),
+        get_connection: async () => "Connected",
+      } };
+    },
+    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+  );
+  await narrow.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await narrow.getByRole("tab", { name: "RACE PACE" }).click();
+  await narrow.waitForSelector(".pace-table", { timeout: 5000 });
+  await narrow.waitForTimeout(400);
+
+  const narrowCells = await narrow.evaluate(() => {
+    const cells = [...document.querySelectorAll(".pace-table td")];
+    const populated = cells.filter((c) => c.textContent.trim().length > 0);
+    return {
+      column: document.querySelector(".pace-table thead th + th")?.clientWidth ?? 0,
+      populated: populated.length,
+      clipped: populated.filter((c) => c.scrollWidth > c.clientWidth).length,
+      sample: populated.find((c) => c.className === "is-t1")?.textContent ?? "",
+      pit: cells.find((c) => c.className === "is-pit")?.textContent ?? "",
+      subtitle: document.querySelector(".pace-subtitle")?.textContent ?? "",
+    };
+  });
+
+  check(
+    narrowCells.column < 32 && narrowCells.populated > 400,
+    `the narrow client really is narrower than the one above (${narrowCells.column} px per column, ${narrowCells.populated} populated cells)`,
+  );
+  check(
+    narrowCells.clipped === 0,
+    `and nothing clips there either (${narrowCells.clipped}/${narrowCells.populated} clipped)`,
+  );
+  check(
+    /^\d:\d\d$/.test(narrowCells.sample) && narrowCells.pit === "PIT",
+    `the cell coarsens instead of truncating ("${narrowCells.sample}", "${narrowCells.pit}")`,
+  );
+  check(
+    narrowCells.subtitle.includes("to the second"),
+    `and the header says the resolution changed ("${narrowCells.subtitle}")`,
+  );
+  await narrowCtx.close();
+}
+
 // --- Band 3, second panel: the race trace ---------------------------------
 
 await pacePage.getByRole("tab", { name: "RACE TRACE" }).click();

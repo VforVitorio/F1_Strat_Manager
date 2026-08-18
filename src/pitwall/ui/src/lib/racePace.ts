@@ -135,8 +135,31 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
  * No lap on disk approaches it - Melbourne's slowest is 149.413 s and nothing
  * reaches 300 - but a red-flagged race would, and no race with a red flag is
  * downloadable here to test it.
+ *
+ * **`coarse` drops the tenths, and it exists because the column does not always
+ * have room for them.** On a 1080p laptop at 150 % scaling - Windows' own
+ * recommended scaling for a 13-14" screen - this window's client area is
+ * 1265 x 593, the grid's twenty columns fall to 27.75 px, and the six-glyph form
+ * measures 35: `1:59.4` rendered `1:59.`, `IN PIT` rendered `IN PI`, on 495 of
+ * 514 populated cells, with `overflow: hidden` and globally hidden scrollbars so
+ * nothing said so. A trailing dot was the only tell.
+ *
+ * Four glyphs fit, so the choice was which four. `ss.d` keeps the tenths and
+ * drops the minute, which is more information for the panel's own question - the
+ * field is normally inside one minute of itself, so the tenths is the whole
+ * comparison. It is rejected anyway: on this race the safety-car laps run 2:19
+ * against a green 1:29, so `19.7` beside `59.4` reads as forty seconds apart
+ * when it is twenty, and a cell that can be MISREAD is worse than one that is
+ * openly coarser. `m:ss` loses precision the header states out loud; it never
+ * lies about magnitude. The tone still carries the ranking, which is where this
+ * panel puts the ordering anyway.
  */
-export function paceLabel(seconds: number): string {
+export function paceLabel(seconds: number, coarse = false): string {
+  if (coarse) {
+    const whole = Math.round(seconds);
+    const minutes = Math.floor(whole / 60);
+    return `${minutes}:${String(whole - minutes * 60).padStart(2, "0")}`;
+  }
   const tenths = Math.round(seconds * 10);
   const minutes = Math.floor(tenths / 600);
   const rest = (tenths - minutes * 600) / 10;
@@ -219,7 +242,7 @@ function tone(times: number[], value: number): PaceTone {
  * The bottom edge is RAGGED on purpose: the reveal is per driver and strict,
  * and at most instants the field spans two or three different laps.
  */
-export function racePaceGrid(bulk: Bulk | null, order: string[]): PaceGrid {
+export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false): PaceGrid {
   if (!bulk?.available) return { laps: [], columns: [...order], rows: [] };
   const columns = stableColumns(bulk, order);
 
@@ -242,10 +265,14 @@ export function racePaceGrid(bulk: Bulk | null, order: string[]): PaceGrid {
     columns.map((code) => {
       const row = timedRow(byDriver.get(code)?.get(lap));
       if (row === null) return EMPTY;
-      if (row.pit_in) return { text: "IN PIT", tone: "pit" as PaceTone };
+      // The two word cells shorten with the numbers. `IN PIT` is six glyphs, the
+      // same six the times could not fit, so leaving it alone would have kept
+      // the P0 alive in the one place the reader most needs the whole word -
+      // `IN PI` ran straight into its neighbour as `IN PIIN PI`.
+      if (row.pit_in) return { text: coarse ? "PIT" : "IN PIT", tone: "pit" as PaceTone };
       if (row.pit_out) return { text: "OUT", tone: "out" as PaceTone };
       if (row.lap_time === null) return EMPTY;
-      const text = paceLabel(row.lap_time);
+      const text = paceLabel(row.lap_time, coarse);
       // A deleted time is shown and struck through, as the tower already shows
       // it, and it is excluded from the ranking - which is why it cannot be
       // given a rank here. Before this branch existed it fell through to
