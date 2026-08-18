@@ -250,33 +250,170 @@ def test_lap_one_has_no_first_sector_and_that_is_not_a_zero():
 # --- Stops, and the race nobody has locally ---------------------------------
 
 
-def test_stops_are_counted_from_the_pit_lane_not_from_the_stint_column():
-    """Both derivations agree on a healthy race, which is how the wrong one gets
-    chosen. Miami 2025's raw frame carries a 446-row NaN `Stint` block, and a
-    stint-based count reads zero stops for most of the field late in the race.
+def _stint_frame(
+    compounds: list[str],
+    tyre_life: list[float | None],
+    pit_in: list[float | None],
+    pit_out: list[float | None],
+    stint: list[float] | None = None,
+) -> dict[str, list[dict]]:
+    """One driver's rows with the tyre columns a stop count reads.
 
-    The frame below is that shape: stint metadata absent, pit stops real.
+    Separate from `_frame` because that one hardcodes a single compound and no
+    age at all, which is precisely why the fixture it feeds could not tell a
+    stop from a pit-lane transit.
     """
+    count = len(compounds)
     laps = pd.DataFrame(
         {
-            "Driver": ["NOR"] * 6,
-            "DriverNumber": ["4"] * 6,
-            "LapNumber": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            "Time": pd.to_timedelta([90, 180, 270, 365, 455, 545], unit="s"),
-            "LapTime": pd.to_timedelta([90, 90, 90, 95, 90, 90], unit="s"),
-            "Stint": [float("nan")] * 6,
-            "PitInTime": pd.to_timedelta([None, None, 270, None, None, None], unit="s"),
-            "PitOutTime": pd.to_timedelta([None, None, None, 300, None, None], unit="s"),
-            "Compound": ["MEDIUM"] * 6,
-            "Position": [1.0] * 6,
+            "Driver": ["NOR"] * count,
+            "DriverNumber": ["4"] * count,
+            "LapNumber": [float(index + 1) for index in range(count)],
+            "Time": pd.to_timedelta([90 * (index + 1) for index in range(count)], unit="s"),
+            "LapTime": pd.to_timedelta([90.0] * count, unit="s"),
+            "Stint": stint if stint is not None else [float("nan")] * count,
+            "TyreLife": tyre_life,
+            "PitInTime": pd.to_timedelta(pit_in, unit="s"),
+            "PitOutTime": pd.to_timedelta(pit_out, unit="s"),
+            "Compound": compounds,
+            "Position": [1.0] * count,
         }
     )
-    session = SessionLaps(2025, "Nowhere", {"NOR": [_row(laps, i) for i in range(6)]}, {"NOR": "4"})
+    return {"NOR": [_row(laps, index) for index in range(count)]}
+
+
+def test_a_stop_is_a_tyre_change_and_the_stint_column_is_not_asked():
+    """Miami 2025's shape: the `Stint` metadata is a NaN block, the stop is real.
+
+    **The fixture now carries the EVIDENCE a stop leaves**, which the version
+    before this one did not: it held one compound for all six laps and no
+    `TyreLife` column at all, so it could not distinguish a tyre change from a
+    car driving down the pit lane and out again. It passed only because the
+    count it pinned looked at `PitInTime` alone - the defect. The stop is on lap
+    3 and the out-lap is 4, so the set that appears on lap 4 is a new one.
+    """
+    session = SessionLaps(
+        2025,
+        "Nowhere",
+        _stint_frame(
+            compounds=["MEDIUM"] * 3 + ["HARD"] * 3,
+            tyre_life=[1.0, 2.0, 3.0, 1.0, 2.0, 3.0],
+            pit_in=[None, None, 270, None, None, None],
+            pit_out=[None, None, None, 300, None, None],
+        ),
+        {"NOR": "4"},
+    )
 
     view = session.masked_view({"NOR": 6}, 0.0)
 
     assert view["drivers"]["NOR"]["stops"] == 1
     assert all(row["stint"] is None for row in view["drivers"]["NOR"]["laps"])
+
+
+def test_a_pit_lane_transit_that_changed_nothing_is_not_a_stop():
+    """The safety-car parade, and the drive-through penalty `tyre_stint_repair`
+    names: the car goes down the pit lane, no work is done, the set carries on.
+
+    Three consecutive in-laps, compound unchanged, age counting up through all
+    of them - the exact shape all seventeen Melbourne runners have on laps 2-4.
+    Counting in-laps answers 3 here, which is what shipped.
+    """
+    session = SessionLaps(
+        2025,
+        "Nowhere",
+        _stint_frame(
+            compounds=["INTERMEDIATE"] * 6,
+            tyre_life=[1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            pit_in=[None, 180, 270, 360, None, None],
+            pit_out=[None, None, 300, 390, 480, None],
+            # FastF1 opens a new stint on each pass even though nothing changed,
+            # which is the other derivation this must not be talked into.
+            stint=[1.0, 1.0, 2.0, 3.0, 4.0, 4.0],
+        ),
+        {"NOR": "4"},
+    )
+
+    view = session.masked_view({"NOR": 6}, 0.0)
+
+    assert view["drivers"]["NOR"]["stops"] == 0
+
+
+def test_the_same_compound_refitted_is_still_a_stop():
+    """A stop is not always a compound change: the age reset carries this one.
+
+    Without the age half of the rule this would read zero, and 743 of the 2594
+    stint transitions across the shipped races fit the same compound again
+    (`tyre_stint_repair`'s own census).
+    """
+    session = SessionLaps(
+        2025,
+        "Nowhere",
+        _stint_frame(
+            compounds=["HARD"] * 6,
+            tyre_life=[18.0, 19.0, 20.0, 1.0, 2.0, 3.0],
+            pit_in=[None, None, 270, None, None, None],
+            pit_out=[None, None, None, 300, None, None],
+        ),
+        {"NOR": "4"},
+    )
+
+    assert session.masked_view({"NOR": 6}, 0.0)["drivers"]["NOR"]["stops"] == 1
+
+
+def test_a_stringified_missing_compound_is_not_evidence_of_a_tyre_change():
+    """`tyre_stint_repair`'s sentinel rule, imported rather than copied.
+
+    The extractor stringifies an absent compound, so "MEDIUM" -> "nan" -> "MEDIUM"
+    is data loss and must not read as two stops.
+    """
+    session = SessionLaps(
+        2025,
+        "Nowhere",
+        _stint_frame(
+            compounds=["MEDIUM", "MEDIUM", "nan", "unknown", "MEDIUM", "MEDIUM"],
+            tyre_life=[1.0, 2.0, None, None, 5.0, 6.0],
+            pit_in=[None] * 6,
+            pit_out=[None] * 6,
+        ),
+        {"NOR": "4"},
+    )
+
+    assert session.masked_view({"NOR": 6}, 0.0)["drivers"]["NOR"]["stops"] == 0
+
+
+def test_the_real_race_never_reports_a_stop_nobody_made():
+    """The effect on the race that ships, not the mechanism.
+
+    Melbourne 2025: the safety car led the field through the pit lane on laps 2,
+    3 and 4, so `PitInTime` is set for all seventeen runners on each. At lap 24
+    not one car has changed tyres; NOR's real stops are laps 35 and 45.
+
+    Five cars read one stop high and it is #988's artefact, not this rule's: the
+    feed republishes their `TyreLife` as 1 on one of the transits. They are named
+    below rather than absorbed into a tolerance, so the day #988 lands this test
+    fails and says which line to change. Everyone else is exact.
+    """
+    session = _session_or_skip()
+    reveal = _all_revealed(session)
+    # The exact five, with the transit that corrupts each: ALB and STR on lap 3,
+    # LAW on lap 4, BEA and OCO on lap 5. See #988.
+    republished = {"ALB", "BEA", "LAW", "OCO", "STR"}
+
+    early = session.masked_view({code: 24 for code in reveal}, 0.0)["drivers"]
+    for code, driver in early.items():
+        expected = 1 if code in republished else 0
+        assert driver["stops"] == expected, f"{code} at lap 24"
+    # Counting in-laps gave the field 51 here, on a lap where nobody has stopped.
+    assert sum(driver["stops"] for driver in early.values()) == len(republished)
+
+    final = session.masked_view(reveal, 0.0)["drivers"]
+    # Melbourne 2025 was wet-dry-wet, so every real stop is a compound change.
+    assert final["NOR"]["stops"] == 2
+    # ALO retired on lap 32, before his first real stop, having transited three times.
+    assert final["ALO"]["stops"] == 0
+    # SAI, DOO and HAD have only generated rows: no laps, no transits, no stops.
+    assert [final[code]["stops"] for code in ("SAI", "DOO", "HAD")] == [0, 0, 0]
+    assert sum(driver["stops"] for driver in final.values()) == 36, "31 real + #988's five"
 
 
 def _row(frame: pd.DataFrame, index: int) -> dict:

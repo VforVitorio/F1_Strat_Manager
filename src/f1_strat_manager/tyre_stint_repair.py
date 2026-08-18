@@ -113,8 +113,14 @@ class RepairReport:
         )
 
 
-def _is_real_compound(value: object) -> bool:
-    """True when the value names an actual compound rather than absent data."""
+def is_real_compound(value: object) -> bool:
+    """True when the value names an actual compound rather than absent data.
+
+    Public because it carries the sentinel rule above, and PITWALL's stop count
+    needs the same rule: a stringified missing compound must never read as
+    evidence of a tyre change. A second copy of `_COMPOUND_SENTINELS` in another
+    module is the twin this repo pays for more often than any other defect.
+    """
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return False
     return str(value).strip().lower() not in _COMPOUND_SENTINELS
@@ -140,11 +146,11 @@ def _first_compound_change_after(driver_laps: pd.DataFrame, lap: int) -> Optiona
     up writing a data-loss marker over a real compound.
     """
     current = driver_laps.loc[driver_laps["LapNumber"] == lap, "Compound"]
-    if current.empty or not _is_real_compound(current.iloc[0]):
+    if current.empty or not is_real_compound(current.iloc[0]):
         return None
     later = driver_laps[driver_laps["LapNumber"] > lap]
     for _, row in later.iterrows():
-        if _is_real_compound(row["Compound"]) and row["Compound"] != current.iloc[0]:
+        if is_real_compound(row["Compound"]) and row["Compound"] != current.iloc[0]:
             return int(row["LapNumber"])
     return None
 
@@ -247,7 +253,7 @@ def _rebuild_driver(driver_laps: pd.DataFrame, report: RepairReport) -> pd.DataF
         mislabelled = in_new_stint & (lap_numbers < boundary)
 
         new_compound = at_boundary["Compound"].iloc[0]
-        if _is_real_compound(new_compound):
+        if is_real_compound(new_compound):
             repaired.loc[mislabelled, "Compound"] = new_compound
         repaired.loc[mislabelled, "Stint"] = stint_id
 
