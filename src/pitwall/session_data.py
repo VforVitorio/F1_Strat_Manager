@@ -82,6 +82,14 @@ def _none_if_nan(value: Any) -> Any:
     return value
 
 
+def _compound_or_none(value: Any) -> str | None:
+    """The compound, or None when the value is a stringified absence."""
+    cleaned = _none_if_nan(value)
+    if cleaned is None or not is_real_compound(cleaned):
+        return None
+    return cleaned
+
+
 def _seconds(value: Any) -> float | None:
     """A pandas timedelta as float seconds, or None when the cell is empty."""
     if value is None or pd.isna(value):
@@ -128,7 +136,16 @@ def _lap_row(record: dict[str, Any]) -> dict[str, Any]:
         "time_s": _seconds(record.get("Time")),
         "lap_time": _seconds(record.get("LapTime")),
         "position": _none_if_nan(record.get("Position")),
-        "compound": _none_if_nan(record.get("Compound")),
+        # **Filtered through the same sentinel rule the stop count uses.** The
+        # extractor stringifies a missing compound, so `_none_if_nan` - which only
+        # catches a float NaN - passes `"nan"` or `"unknown"` straight through, and
+        # the tower's `tyreCell` prints `compound[0]`: an `n` or a `u` in the TYRE
+        # column, wearing the shape of a compound letter. No instance exists on the
+        # one race a curated install carries, so there is no wrong pixel to show;
+        # what there is, is `tyre_stint_repair` making that rule public and the
+        # consumer NEXT to the one that got it not getting it. Doing it here means
+        # no TypeScript consumer has to know the rule at all.
+        "compound": _compound_or_none(record.get("Compound")),
         "tyre_life": _none_if_nan(record.get("TyreLife")),
         "stint": _none_if_nan(record.get("Stint")),
         "track_status": _none_if_nan(record.get("TrackStatus")),

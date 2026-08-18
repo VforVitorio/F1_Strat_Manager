@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from src.pitwall.config import WINDOWS, window_target
 from src.pitwall.webserver import BROWSER_HOST, BrowserServer
 
 
@@ -156,3 +157,44 @@ def test_no_bundle_means_no_server_rather_than_a_crash(tmp_path: Path):
     empty = tmp_path / "empty"
     empty.mkdir()
     assert BrowserServer(empty, _FakeHost()).start() is None
+
+
+# --- Where the OS windows point (#995) ---------------------------------------
+
+
+def test_a_window_points_at_the_server_that_is_running_and_not_at_a_file(served: str):
+    """Every window's URL is a route THIS server answers, not a filesystem path.
+
+    **The defect this closes was pywebview's, and it was invisible from here.**
+    Given a file path, pywebview 6.2.1 serves the window through its own bottle
+    server rooted at `os.path.commonpath` of the window URLs, and with two windows
+    it gets that wrong racily: the same build produced a 404 for
+    `…/6754/dist/data.html` on one run and for `…/52646/data.html` on another, each
+    of them bottle's own page. Reproduced against the installed bottle - rooted at
+    `ui/dist`, `data.html` is 200 and `dist/data.html` is 404 "File does not exist.";
+    rooted at `ui` it is the other way round.
+
+    So the assertion is not "the URL contains http". It is that the exact URL a
+    window is handed is **fetchable from the server the host actually started**,
+    which is the only property that makes the window and a browser tab the same
+    surface. `window_target` is pure so this needs no system webview.
+    """
+    for spec in WINDOWS:
+        target = window_target(spec, served)
+        assert target.startswith(served), f"{spec.key} does not point at the running server: {target}"
+        assert "file:" not in target and "\\" not in target, target
+        # The route ANSWERS. A window handed an unfetchable URL is the whole bug,
+        # and it is the only assertion here that could have caught it.
+        status, content_type, body = _get(target)
+        assert status == 200, f"{spec.key} -> {status} at {target}"
+        assert content_type.startswith("text/html"), f"{spec.key} -> {content_type}"
+        assert spec.key in body, f"{spec.key} served the wrong document: {body!r}"
+        assert spec.entry in target
+
+
+def test_a_window_falls_back_to_the_file_when_there_is_no_server():
+    """No bundle to serve means no URL, and a window through pywebview's own
+    server beats no window at all - which is what `__main__` logs a warning for."""
+    for spec in WINDOWS:
+        assert window_target(spec, None) == spec.url
+        assert spec.url.endswith(spec.entry)

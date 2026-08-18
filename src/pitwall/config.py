@@ -23,6 +23,7 @@ __all__ = [
     "ui_asset",
     "ui_dist",
     "ui_is_built",
+    "window_target",
 ]
 
 _UI_DIR: Final[Path] = Path(__file__).resolve().parent / "ui"
@@ -107,6 +108,39 @@ WINDOWS: Final[tuple[WindowSpec, ...]] = (
     WindowSpec("data", "PITWALL · DATA", "data.html", 1500, 950),
     WindowSpec("agents", "PITWALL · AGENTS", "agents.html", 1320, 900),
 )
+
+
+def window_target(spec: WindowSpec, base: str | None) -> str:
+    """Where a PITWALL window should point: the loopback server, or the file.
+
+    **The loopback URL whenever there is one, and that is a bug fix (#995).** Given
+    a filesystem path, pywebview 6.2.1 serves the window through an internal bottle
+    server rooted at `os.path.commonpath` of the window URLs - and with TWO windows
+    it gets that wrong, racily. Both halves were reproduced against the installed
+    bottle: rooted at `ui/dist`, a request for `data.html` is 200 and one for
+    `dist/data.html` is 404 "File does not exist."; rooted at `ui` it is the other
+    way round, and both 404s were seen on different runs of the same build.
+
+    `BrowserServer` has none of that - one root, read into memory at startup - and
+    it is the transport this window's whole test suite already goes through, so
+    using it also makes the OS windows and a browser tab the same surface.
+
+    `base` is None when the bundle could not be served at all; then the file path is
+    still better than no window, so the old behaviour is the fallback rather than an
+    error.
+
+    Pure, and takes the base rather than starting anything, so the rule is testable
+    without a system webview.
+
+    The separator is normalised rather than assumed. `BrowserServer.start` returns
+    its address WITH a trailing slash, and a plain `base + entry` was silently
+    correct only because of that - the test that pins this rule hands the address
+    without one and produced `…:56787data.html`, a URL whose port no longer parses.
+    A join that depends on a caller's punctuation is not a join.
+    """
+    if not base:
+        return spec.url
+    return f"{base.rstrip('/')}/{spec.entry}"
 
 
 def ui_asset(name: str) -> Path:

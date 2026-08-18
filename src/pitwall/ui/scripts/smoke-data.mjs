@@ -1897,6 +1897,84 @@ check(
   await narrowCtx.close();
 }
 
+// --- The client heights BETWEEN the two anybody measured ---------------------
+//
+// The two settled sizes cannot see this and neither could the guard above: at
+// 1265x593 the room (63 px) is below even the EMPTY bests panel, so it degrades
+// whatever happens, and at 1485x833 the room (303 px) is above the populated one.
+// The band is room in [~115, ~151) - the empty card measures 114 px and the
+// populated one 151 - and `useFitsRanked` latched the height on MOUNT, when the
+// tick had landed and the BULK had not. So the panel committed to `ranked` against
+// the empty measurement and then clipped, THEORETICAL included, in silence.
+//
+// The bulk is HELD at the stub while the card mounts, so these three sizes are
+// exercised with the panel settling EMPTY first.
+//
+// **This guard asserts the EFFECT at three sizes nobody covered; it is NOT the
+// discriminator for the race that produced the defect.** Driven against the
+// un-fixed latch it still passes: measured, the empty ranked card is 114 px and the
+// room at 1265x650 is 120, yet the stub transport has the panel already compact by
+// the time the first measurement lands, so the mount never commits to `ranked`
+// against the empty height the way it does over HTTP. The race was found and the
+// fix was verified on the LIVE loopback with six fresh mounts per size; that is
+// recorded in the commit rather than pretended here.
+for (const [width, height] of [
+  [1265, 650],
+  [1350, 660],
+  [1350, 673],
+]) {
+  const ctx = await browser.newContext({ viewport: { width, height } });
+  const page = await ctx.newPage();
+  page.on("pageerror", (error) => failures.push(`pageerror(bests ${height}): ${error.message}`));
+  // **Withheld at the STUB, not with `page.route`.** `bridge.ts` uses
+  // `window.pywebview` whenever it exists and only falls back to `fetch`, so the
+  // smoke's injected api is the transport and an HTTP route intercepts nothing -
+  // the first version of this block held `/api/bulk` and the panel got its rows
+  // immediately anyway, which made the guard pass on the defect it was written for.
+  await page.addInitScript(
+    ([payload, bulk, live]) => {
+      window.__holdBulk = true;
+      window.pywebview = { api: {
+        get_tick: async (s) => (s === payload.seq ? null : payload),
+        get_bulk: async (r) => (window.__holdBulk || r === bulk.rev ? null : bulk),
+        get_live_lap: async (r) => (r === live.rev ? null : live),
+        get_connection: async () => "Connected",
+      } };
+    },
+    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+  );
+  await page.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForSelector(".bests", { timeout: 5000 });
+  await page.waitForTimeout(1200);
+  // The card has now mounted and settled with an EMPTY bests panel, which is the
+  // 114 px measurement the latch used to keep. Release the rows.
+  await page.evaluate(() => {
+    window.__holdBulk = false;
+  });
+  await page.waitForTimeout(1200);
+
+  const fit = await page.evaluate(() => {
+    const column = document.querySelector(".left-column").getBoundingClientRect();
+    const card = document.querySelector(".bests");
+    const box = card.getBoundingClientRect();
+    const theo = document.querySelector(".bests-theoretical-value");
+    return {
+      hidden: card.scrollHeight - card.clientHeight,
+      over: +(box.bottom - column.bottom).toFixed(1),
+      // The one value the panel's own docstring calls irreplaceable.
+      theoreticalBelow: theo === null ? null : +(theo.getBoundingClientRect().bottom - column.bottom).toFixed(1),
+      form: document.querySelectorAll(".bests-row").length > 0 ? "ranked" : "leaders",
+    };
+  });
+  check(
+    fit.hidden === 0 && fit.over <= 1 && fit.theoreticalBelow !== null && fit.theoreticalBelow <= 1,
+    `bests fits at ${width}x${height} whichever form it picks (${fit.form}, ${fit.hidden} px hidden, card ${fit.over} px over, THEORETICAL ${fit.theoreticalBelow} px over)`,
+  );
+  await ctx.close();
+}
+
 // --- Band 3, second panel: the race trace ---------------------------------
 
 await pacePage.getByRole("tab", { name: "RACE TRACE" }).click();

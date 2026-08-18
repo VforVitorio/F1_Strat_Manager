@@ -126,7 +126,7 @@ export function DataWindow() {
               </nav>
               {tab === "traces" && (
                 <div className="band4">
-                  <OwnCarTraces tick={tick} discontinuity={discontinuity} />
+                  <OwnCarTraces tick={tick} discontinuity={discontinuity} frozen={frozen} />
                   <div className="side-column">
                     <TrackRing arcade={tick.arcade} />
                     <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />

@@ -53,7 +53,7 @@ const SECTIONS: { field: BestField; label: string }[] = [
  * of whatever is currently rendered is the version that flips forever: 63 < 153
  * chooses compact, compact measures 54, 63 >= 54 chooses full again.
  */
-function useFitsRanked(card: HTMLElement | null): boolean {
+function useFitsRanked(card: HTMLElement | null, content: number): boolean {
   const [compact, setCompact] = useState(false);
   const rankedHeight = useRef<number | null>(null);
 
@@ -67,14 +67,44 @@ function useFitsRanked(card: HTMLElement | null): boolean {
     setCompact(room < needed);
   }, [card, compact]);
 
+  // **`content` is in here because the card mounts EMPTY, and that was a P1.**
+  // The card appears with the first TICK; its rows come from the BULK, which
+  // arrives on its own poll a moment later. Latching the ranked height on mount
+  // therefore latched the height of the EMPTY panel - measured, 114 px against a
+  // populated 151 - so at any room between those two numbers the panel committed
+  // to `ranked` and then clipped, THEORETICAL included, with no tell: the card is
+  // capped by `max-height` and this window hides scrollbars.
+  //
+  // The observer alone could not save it. It watches the COLUMN, and the column's
+  // grid rows do not move when the bests data lands, so it never fired - a forced
+  // 1 px viewport change did not re-decide it either. Measured over six fresh
+  // mounts per size: 0 px hidden at both settled clients, and 33 px hidden at
+  // 1265x650, 23 at 1350x660, 10 at 1350x673. The defect lived exactly between the
+  // two numbers anybody had measured, and `WindowSpec.place` makes the client
+  // height a continuous function of the screen, so ordinary machines land in it.
+  //
+  // `RacePaceGrid`'s sibling `fit` already keys on its own content
+  // (`grid.columns.length`); the asymmetry between the two WAS the bug.
+  // **And the content signature alone is not enough**, which the guard at 1350x660
+  // caught: the row count settles and the card still GROWS afterwards, because
+  // `--qt-mono` is a web font and the rows are shorter until it swaps in. Measured,
+  // 8 px - enough to clip at that client, and invisible to any signature derived
+  // from the data.
+  //
+  // So the observer watches the CARD as well as the COLUMN: one for "the content
+  // changed size", one for "the room changed". It still cannot oscillate, because
+  // the ranked height is only re-measured while the panel IS ranked - going compact
+  // shrinks the card, the observer fires, and `fit` compares the same latched height
+  // against the same room and keeps the same answer.
   useEffect(() => {
     const column = card?.parentElement;
-    if (!column) return;
+    if (!card || !column) return;
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(column);
+    observer.observe(card);
     return () => observer.disconnect();
-  }, [card, fit]);
+  }, [card, fit, content]);
 
   return !compact;
 }
@@ -86,7 +116,13 @@ export function BestsPanel({ bulk }: { bulk: Bulk | null }) {
   // the FIRST time it exists, and a ref's assignment does not re-run an effect.
   // The same lesson `useEChart` learned when a remounted panel left a dead chart.
   const [card, setCard] = useState<HTMLElement | null>(null);
-  const ranked = useFitsRanked(card);
+  // How much this panel HAS to show, which is what its height depends on: the
+  // ranked rows across the four sections plus the theoretical. `bulk.rev` would
+  // also work and would re-measure ten times more often for no gain.
+  const content =
+    SECTIONS.reduce((total, { field }) => total + Math.min(bests[field].length, RANKED), 0) +
+    (theoretical === null ? 0 : 1);
+  const ranked = useFitsRanked(card, content);
 
   return (
     <section className="bests card" ref={setCard}>

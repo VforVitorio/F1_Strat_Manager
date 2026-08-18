@@ -77,9 +77,11 @@ const TRACE_COLOURS = {
 interface OwnCarTracesProps {
   tick: Tick;
   discontinuity: Discontinuity;
+  /** The producer is gone; these buffers will not fill. */
+  frozen?: boolean;
 }
 
-export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
+export function OwnCarTraces({ tick, discontinuity, frozen = false }: OwnCarTracesProps) {
   const accumulator = useRef(new TraceAccumulator());
   const { arcade } = tick;
   const rivalCode = arcade.driver_rival;
@@ -113,6 +115,21 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
   const ownCar = arcade.drivers[arcade.driver_main];
   const cursorX = ownCar?.rel_dist == null ? null : ownCar.rel_dist * xMax;
 
+  /**
+   * A frozen board whose traces never filled says so, instead of showing four
+   * empty plots.
+   *
+   * A window OPENED onto a dead feed is the case: the tower, the bests, the ring
+   * and the radio all populate from the host's last payload, because those are a
+   * per-lap reveal, while these four accumulate PER TICK and only one tick was
+   * ever served. Every other empty panel on this window explains itself -
+   * `data-waiting`, `trace-band-empty`, the radio's `no corpus`, this chart's own
+   * `single-driver mode` - so four silent axes were the odd one out.
+   *
+   * Two samples, not one: one point draws nothing a reader can see either.
+   */
+  const starved = (points: unknown[]) => (frozen && points.length < 2 ? "no telemetry since the feed stopped" : null);
+
   return (
     <section className="traces card">
       <TracesHeader tick={tick} />
@@ -133,7 +150,7 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           // this tick happened to carry a rival sample. Keyed on the buffer
           // instead, the chart collapsed to its placeholder for the whole
           // of a rewind hold and every lap change.
-          placeholder={rivalCode ? null : "single-driver mode"}
+          placeholder={starved(frame.delta) ?? (rivalCode ? null : "single-driver mode")}
         />
         <TraceChart
           title="Speed"
@@ -146,6 +163,7 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           main={channel(frame.main, "speed")}
           rival={channel(frame.rival, "speed")}
           cursorX={cursorX}
+          placeholder={starved(frame.main.xs)}
         />
         <TraceChart
           title="Brake Pressure"
@@ -158,6 +176,7 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           main={channel(frame.main, "brake")}
           rival={channel(frame.rival, "brake")}
           cursorX={cursorX}
+          placeholder={starved(frame.main.xs)}
         />
         <TraceChart
           title="Throttle"
@@ -170,6 +189,7 @@ export function OwnCarTraces({ tick, discontinuity }: OwnCarTracesProps) {
           main={channel(frame.main, "throttle")}
           rival={channel(frame.rival, "throttle")}
           cursorX={cursorX}
+          placeholder={starved(frame.main.xs)}
         />
       </div>
     </section>

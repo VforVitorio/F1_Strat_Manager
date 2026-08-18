@@ -115,14 +115,30 @@
   font-weight: 800;
 }
 
-/* The board while the feed is dead: desaturated and mildly dimmed, NEVER blurred
- * and never faded far. The last known state is the best information a strategist
- * has - the treatment has to say "this is history" while leaving every number
- * readable, so 0.45 saturation and 0.82 brightness rather than an opacity that
- * would make the tower a guess. Band 1 and the status bar stay at full strength:
- * they are the two surfaces that say WHY it looks like this. */
+/* The board while the feed is dead: DIMMED, never desaturated, never blurred and
+ * never faded far. The last known state is the best information a strategist has,
+ * so the treatment has to say "this is history" while leaving the board readable -
+ * and "readable" includes the COLOUR, which on this window is content: the pace
+ * grid's thirds, the tower's sector code, the trace's twenty team lines.
+ *
+ * **`saturate(0.45)` was here and it cost the pace grid two thirds of its ranking.**
+ * Computed on the filter-effects saturation matrix and confirmed by sampling the
+ * same pixels live and frozen: the RGB distance between the quickest third and the
+ * slowest fell 61 %, and between the session best and a deleted lap 66 %. Two of
+ * this sprint's own changes interacting - the frozen filter over the markers added
+ * an hour earlier.
+ *
+ * `brightness()` scales all three channels by the same factor, so it dims the board
+ * without moving any hue relative to any other: a dimmer green is still greener
+ * than a dimmer amber, and every rank the tone channel encodes survives. It costs
+ * the distance the same 28 % it costs the brightness, which is a proportional loss
+ * rather than a collapse.
+ *
+ * Band 1 and the status bar stay at full strength: they carry the four independent
+ * tells that say WHY it looks like this - the DATA FROZEN chip, the neutral track
+ * chip, `PLAYBACK —` and the status line. */
 .data-main.is-frozen {
-  filter: saturate(0.45) brightness(0.82);
+  filter: brightness(0.72);
 }
 
 .strip-spacer {
@@ -247,7 +263,7 @@
 /* The code in the primary foreground, with the team colour beside it rather than
  * inside it. Six of the twenty wire colours fail AA as 11 px text on this card and
  * four fail the 3.0 large-text floor; the code is the row key of this window's main
- * panel. `--qt-fg-1` is 15.8:1.
+ * panel. `--qt-fg-1` on this ground is 17.48:1.
  *
  * **The swatch costs the table NO width**, and it had to: the cell is 34 px by a
  * measurement, the table's natural width was 597.6 of the 608 the card gives, and

@@ -59,6 +59,24 @@
   font-weight: 600;
 }
 
+/* The producer is gone. DANGER filled, the same treatment the DATA window's own
+ * frozen chip carries, so one state looks like one state across both windows. */
+.chip.is-frozen {
+  background: #ef4444;
+  color: var(--qt-bg);
+  font-weight: 800;
+}
+
+/* The cards while the feed is dead: dimmed, NOT desaturated. Same reasoning as the
+ * DATA window's `.data-main.is-frozen` - `saturate()` collapses hue differences and
+ * this window's colour is content too (the alarm red, the WARNING amber on a
+ * changed call, the confidence bar). `brightness()` scales all three channels
+ * together, so nothing moves relative to anything else. The header strip and the
+ * status bar stay at full strength: they carry the tells. */
+.agents-split.is-frozen {
+  filter: brightness(0.72);
+}
+
 /* --- The split ---------------------------------------------------------- */
 
 .agents-split {
