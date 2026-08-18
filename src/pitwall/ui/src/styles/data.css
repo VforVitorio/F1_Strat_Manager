@@ -842,10 +842,29 @@
   color: var(--qt-fg-1);
 }
 
+/* **The card grows UPWARD from the bottom of the column, and that is about where
+ * the reader's eye can rest.** It used to be top-aligned and content-sized, so at
+ * lap 24 of 57 it filled 288 px of a 722 px column and the newest row - the only
+ * one a live wall reads - migrated ~12 px per lap for the whole race, 434 px in
+ * total. The pin in `RacePaceGrid` cannot help: there is nothing to scroll until
+ * the table outgrows the column, which on a 57-lap race is around lap 55.
+ *
+ * Anchoring the TABLE to the bottom of a full-height card was the first attempt
+ * and it is worse: it leaves the 426 px of empty space INSIDE the card, between
+ * the header line and the column codes, which reads as a broken panel rather
+ * than as a race that has not happened yet. Measured on the live page at a
+ * 20-lap reveal before it was reverted. Anchoring the CARD instead puts the same
+ * empty space outside it, where it is ordinary layout air.
+ *
+ * `max-height: 100%` is what keeps this honest once the table is long: without
+ * it the content-sized card would grow past the grid row and spill, and the
+ * scroller - which needs a bounded height to scroll at all - would never bound. */
 .pace {
+  align-self: end;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 100%;
   padding: 10px;
   min-height: 0;
 }
@@ -883,6 +902,13 @@
 .pace-scroll {
   min-height: 0;
   overflow-y: auto;
+}
+
+/* "Now", findable in one saccade. Every other lap number is `--qt-fg-3`; the
+ * newest one is the row every decision is about. */
+.pace-table tbody tr:last-child th.pace-lapcol {
+  color: var(--qt-fg-1);
+  font-weight: 700;
 }
 
 .pace-table {
