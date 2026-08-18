@@ -155,13 +155,36 @@ const IDLE_VIEW: AgentsView = {
 export function AgentsWindow() {
   const { view } = useAgentsView();
   const shown = view ?? IDLE_VIEW;
-  const statusText = useStatusText(shown.status_bar, shown.seq);
+
+  /**
+   * The producer is gone, and every card is holding a call from before.
+   *
+   * **This window was the twin that never got #982.** The DATA window learned to
+   * say so; this one, with a real producer killed, still read `PIT NOW ·
+   * Confidence: 71% · Pace: PUSH · Risk: AGGRESSIVE` beside `2.00× · PLAYING` at
+   * full strength, with a red chip and a blank status bar as the only tells - the
+   * exact pair #982's own comment calls insufficient. And a stale strategy CALL is
+   * worse to mistake for a live one than a stale lap time is.
+   *
+   * The label is host-built and travels WITH the view (#950), so there is nothing
+   * to poll separately here: `view !== null` means a payload has arrived, and the
+   * connection field is what still moves after the ticks stop.
+   */
+  const frozen = view !== null && shown.header.connection === "Disconnected";
+  const statusText = useStatusText(
+    frozen
+      ? { text: `DATA FROZEN · last tick ${shown.header.lap}`, transient: false }
+      : shown.status_bar,
+    shown.seq,
+  );
 
   return (
     <div className="agents-window">
-      <HeaderBar header={shown.header} />
+      <HeaderBar header={shown.header} frozen={frozen} />
 
-      <div className="agents-split">
+      {/* Dimmed, not desaturated: the cards' colour is content here too - the
+          alarm red, the WARNING amber on a changed call, the confidence bar. */}
+      <div className={frozen ? "agents-split is-frozen" : "agents-split"}>
         <div className="agents-left">
           <OrchestratorCard view={shown.orchestrator} />
           <ScenarioBars rows={shown.scenarios} />

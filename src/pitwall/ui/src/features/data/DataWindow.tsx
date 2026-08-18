@@ -89,7 +89,7 @@ export function DataWindow() {
       <div className="data-body">
         <StatusStrip tick={live ? tick : null} connection={connection} frozen={frozen} />
         {live && tick ? (
-          // Desaturated and mildly dimmed, never blurred and never faded much:
+          // Dimmed, never desaturated, never blurred and never faded much:
           // the last known state is still operationally useful and has to stay
           // readable. What the treatment says is "this is history", not "this is
           // unavailable".
@@ -126,7 +126,7 @@ export function DataWindow() {
               </nav>
               {tab === "traces" && (
                 <div className="band4">
-                  <OwnCarTraces tick={tick} discontinuity={discontinuity} />
+                  <OwnCarTraces tick={tick} discontinuity={discontinuity} frozen={frozen} />
                   <div className="side-column">
                     <TrackRing arcade={tick.arcade} />
                     <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />

@@ -54,6 +54,19 @@ export interface PaceGrid {
   /** Lap numbers, ascending. Empty until something is revealed. */
   laps: number[];
   /**
+   * The longest label the FINE form would emit for THIS data, whatever form is
+   * currently rendered.
+   *
+   * The renderer's ruler needs it, and it has to be independent of the current
+   * form or the decision oscillates: measured against the rendered texts, a coarse
+   * grid reports four glyphs, four glyphs fit, the form flips to fine, fine reports
+   * six, six do not fit, and round it goes. A fixed constant is the other option
+   * and it was wrong in both directions - `0:00.0` is blind to the `10:00.0` a
+   * red-flagged race produces, and `10:00.0` never fits the 38.75 px column that
+   * holds Melbourne's `1:29.7` with room to spare.
+   */
+  widestFine: string;
+  /**
    * `laps[i]`'s neutralisation label, or null when the field was racing.
    *
    * Parallel to `laps` rather than folded into the cells: the claim is about the
@@ -244,7 +257,8 @@ function tone(times: number[], value: number): PaceTone {
  * and at most instants the field spans two or three different laps.
  */
 export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false): PaceGrid {
-  if (!bulk?.available) return { laps: [], neutralised: [], columns: [...order], rows: [] };
+  if (!bulk?.available)
+    return { laps: [], neutralised: [], widestFine: "", columns: [...order], rows: [] };
   const columns = stableColumns(bulk, order);
 
   const byDriver = new Map<string, Map<number, LapRow>>();
@@ -267,6 +281,12 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
   const ranked = rankedByLap(byDriver, laps);
   const fastest = sessionBests(bulk).lap_time[0] ?? null;
 
+  // The widest FINE label this data would produce, tracked as the rows are built
+  // and independent of `coarse`. `IN PIT` and `P.EXIT` are six glyphs each, so the
+  // word cells only matter while no time is longer than they are.
+  let slowest: number | null = null;
+  let anyWord = false;
+
   const rows = laps.map((lap) =>
     columns.map((code) => {
       const row = timedRow(byDriver.get(code)?.get(lap));
@@ -275,7 +295,10 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
       // same six the times could not fit, so leaving it alone would have kept
       // the P0 alive in the one place the reader most needs the whole word -
       // `IN PI` ran straight into its neighbour as `IN PIIN PI`.
-      if (row.pit_in) return { text: coarse ? "PIT" : "IN PIT", tone: "pit" as PaceTone };
+      if (row.pit_in) {
+        anyWord = true;
+        return { text: coarse ? "PIT" : "IN PIT", tone: "pit" as PaceTone };
+      }
       // **`P.EXIT`, not `OUT`, and the tower is why.** `TimingTower`'s `lastCell`
       // renders a RETIRED car as `OUT` and says in as many words that an out-lap
       // gets `PIT EXIT` "rather than borrowing the same word for a car that is
@@ -289,8 +312,12 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
       // Abbreviated because the column cannot hold the tower's eight glyphs:
       // `PIT EXIT` measures 43 px against 38.75 at the wide client, so it would
       // have arrived clipped. `P.EXIT` is 34, and `EXIT` fits the coarse column.
-      if (row.pit_out) return { text: coarse ? "EXIT" : "P.EXIT", tone: "out" as PaceTone };
+      if (row.pit_out) {
+        anyWord = true;
+        return { text: coarse ? "EXIT" : "P.EXIT", tone: "out" as PaceTone };
+      }
       if (row.lap_time === null) return EMPTY;
+      if (slowest === null || row.lap_time > slowest) slowest = row.lap_time;
       const text = paceLabel(row.lap_time, coarse);
       // A deleted time is shown and struck through, as the tower already shows
       // it, and it is excluded from the ranking - which is why it cannot be
@@ -309,5 +336,14 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
       return { text, tone: tone(ranked.get(lap) ?? [], row.lap_time) };
     }),
   );
-  return { laps, neutralised: laps.map((lap) => neutral.get(lap) ?? null), columns, rows };
+  const longestTime = slowest === null ? "" : paceLabel(slowest, false);
+  const widestFine =
+    anyWord && "IN PIT".length > longestTime.length ? "IN PIT" : longestTime;
+  return {
+    laps,
+    neutralised: laps.map((lap) => neutral.get(lap) ?? null),
+    widestFine,
+    columns,
+    rows,
+  };
 }

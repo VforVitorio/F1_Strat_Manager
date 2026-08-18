@@ -41,11 +41,17 @@ import { racePaceGrid } from "../../lib/racePace";
 import type { Bulk } from "../../lib/bridge";
 
 /**
- * The widest numeric label the fine form can emit under ten minutes. The table
- * is monospace, so any six glyphs measure the same and this stands in for all
- * of them - including `IN PIT`.
+ * What the ruler measures before the first lap is revealed and there is no data to
+ * ask. Six glyphs, the ordinary case.
+ *
+ * **Once there IS data the ruler measures `grid.widestFine` instead**, because a
+ * constant was wrong in both directions: `0:00.0` is blind to the seven-glyph
+ * `10:00.0` that `paceLabel`'s own docstring says a red-flagged race produces, and
+ * `10:00.0` never fits the 38.75 px column that holds Melbourne's `1:29.7` with
+ * room to spare - so hardcoding the safe one would have coarsened the WIDE client
+ * for every race.
  */
-const WIDEST_FINE_LABEL = "0:00.0";
+const FALLBACK_FINE_LABEL = "0:00.0";
 
 /** One canvas for the page, made on first use. Null when there is no 2d context. */
 let ruler: CanvasRenderingContext2D | null | undefined;
@@ -63,7 +69,7 @@ let ruler: CanvasRenderingContext2D | null | undefined;
  * keeps this from oscillating: asking "does the text in the cell overflow"
  * would answer no as soon as the coarse form landed, and flip back.
  */
-function fineFormFits(cell: HTMLElement): boolean {
+function fineFormFits(cell: HTMLElement, label: string): boolean {
   if (ruler === undefined) ruler = document.createElement("canvas").getContext("2d");
   const style = window.getComputedStyle(cell);
   const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
@@ -72,7 +78,7 @@ function fineFormFits(cell: HTMLElement): boolean {
   // thing to do when the measurement is unavailable rather than negative.
   if (ruler === null) return true;
   ruler.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-  return ruler.measureText(WIDEST_FINE_LABEL).width <= room;
+  return ruler.measureText(label).width <= room;
 }
 
 export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string[] }) {
@@ -80,6 +86,11 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
   const [visible, setVisible] = useState<[number, number] | null>(null);
   const [coarse, setCoarse] = useState(false);
   const grid = racePaceGrid(bulk, order, coarse);
+  // A ref, not a dependency: `fit` must not be rebuilt on every reveal, and the
+  // value it needs is whatever the grid last knew. Independent of `coarse`, which
+  // is what keeps the decision from oscillating.
+  const widest = useRef(FALLBACK_FINE_LABEL);
+  widest.current = grid.widestFine || FALLBACK_FINE_LABEL;
 
   /**
    * The laps ACTUALLY on screen, from the scroller's own geometry.
@@ -117,8 +128,18 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
    * changes width under this panel.
    */
   const fit = useCallback(() => {
-    const cell = scroller.current?.querySelector<HTMLElement>("thead th + th");
-    if (cell && cell.clientWidth > 0) setCoarse(!fineFormFits(cell));
+    // A BODY cell, because those are the cells that have to hold the label. The
+    // header is the fallback for the render before the first reveal, and it is a
+    // proxy rather than the thing: it is `font-weight: 700` where a body cell is
+    // 400. Measured on this machine both give `0:00.0` a width of 33.23 px, so
+    // there is no difference today; with a fallback font whose bold is wider the
+    // header would coarsen slightly EARLY, which is the safe direction, but the
+    // point of `fineFormFits` is to measure the rendered font and not a proxy.
+    const box = scroller.current;
+    const cell =
+      box?.querySelector<HTMLElement>("tbody td") ??
+      box?.querySelector<HTMLElement>("thead th + th");
+    if (cell && cell.clientWidth > 0) setCoarse(!fineFormFits(cell, widest.current));
   }, []);
 
   useEffect(() => {
@@ -128,7 +149,7 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
     const observer = new ResizeObserver(fit);
     observer.observe(box);
     return () => observer.disconnect();
-  }, [fit, grid.columns.length]);
+  }, [fit, grid.columns.length, grid.widestFine]);
 
   // Pinned to the newest lap. A race-pace grid that opens at lap 1 shows the
   // formation lap of a race that is on lap 40, and the laps a strategist is

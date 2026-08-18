@@ -35,6 +35,14 @@
  * change width mid-grid.
  */
 export function formatSeconds(seconds: number, decimals: number, alwaysMinutes = false): string {
+  // **An em dash for anything this arithmetic cannot render, which is now worth a
+  // guard because three surfaces share it.** Unreachable today - every call site
+  // checks for `null` first and the wire cannot emit NaN (`allow_nan=False`) - but
+  // consolidating three formatters into one makes this the function the NEXT
+  // surface calls, and it produced `"NaN:000NaN"` for a NaN and `"-1:55.000"` for
+  // -5. A negative delta is a plausible future argument; a wrapped time is not a
+  // plausible future rendering of one.
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
   const scale = 10 ** decimals;
   const ticks = Math.round(seconds * scale);
   const perMinute = 60 * scale;

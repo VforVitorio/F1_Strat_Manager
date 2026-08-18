@@ -217,15 +217,34 @@ class BrowserServer:
         self._server: ThreadingHTTPServer | None = None
 
     def start(self) -> str | None:
-        """Serve, and return the URL to open. None when there is no bundle."""
+        """Serve, and return the URL to open, or None when it cannot serve.
+
+        None means one of two things and both are handled by the caller falling
+        back: there is no bundle to read, or the socket would not bind. Since the
+        windows now LOAD through this server (#995) rather than merely being
+        mirrored by it, a raise here would take the whole surface down.
+        """
         if not self._dist.is_dir():
             return None
         bundle = _read_bundle(self._dist)
         if "/data.html" not in bundle:
             return None
-        self._server = ThreadingHTTPServer(
-            (BROWSER_HOST, self._port), _handler(bundle, self._source)
-        )
+        try:
+            self._server = ThreadingHTTPServer(
+                (BROWSER_HOST, self._port), _handler(bundle, self._source)
+            )
+        except OSError:
+            # **The failure that can actually happen, and the one the fallback was
+            # documented for without covering.** `None` above only fires when the
+            # bundle is missing, which `ui_is_built()` has already ruled out three
+            # lines earlier in `__main__` - so the advertised file-path fallback was
+            # reachable only by deleting the bundle between two checks. A bind
+            # failure is real (a Windows port-exclusion range, a security product
+            # holding the port) and it used to propagate out of here and kill the
+            # host before a single window opened. Now it degrades to what the
+            # docstring always promised.
+            logger.warning("The PITWALL browser server could not bind %s", BROWSER_HOST)
+            return None
         threading.Thread(
             target=self._server.serve_forever,
             daemon=True,

@@ -20,9 +20,20 @@ import type { Bulk } from "./bridge";
  * **ANY row, not a majority of them**, and the conservative direction is the
  * point: the label is a warning that this lap's ranking is not about pace, and a
  * lap where the safety car was out for part of the field is exactly as unsafe to
- * read as one where it was out for all of it. On the real race the difference is
- * three laps - 33, 34 and 47 carry mixed statuses - and on those the SC digit is
- * on the majority of rows anyway.
+ * read as one where it was out for all of it.
+ *
+ * Measured through this code's own decode path on the real race, exactly two laps
+ * are mixed: **lap 33, marked on 13 of 16 rows, and lap 46, marked on 3 of 15**.
+ * Lap 46 is the case that makes ANY-row the RIGHT rule rather than an incidental
+ * one - a majority vote would drop its rail while three cars queue through the pit
+ * lane.
+ *
+ * (This paragraph used to say the mixed laps were 33, 34 and 47 and that the SC
+ * digit was "on the majority of rows anyway". Both were measured on the RAW
+ * `TrackStatus` STRINGS rather than on the decoded label, and `'124'`, `'24'` and
+ * `'4'` are three different strings that all decode to SAFETY CAR - so the figure
+ * described a population the sentence was not about, and the false clause was the
+ * one justifying the rule.)
  *
  * Generated rows are skipped: FastF1 synthesised them for a car that never
  * finished the lap, and they count towards nothing anywhere else either.

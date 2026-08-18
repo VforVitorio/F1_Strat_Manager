@@ -8,7 +8,7 @@
 
 import type { HeaderView } from "../../lib/agents";
 
-export function HeaderBar({ header }: { header: HeaderView }) {
+export function HeaderBar({ header, frozen = false }: { header: HeaderView; frozen?: boolean }) {
   return (
     <header className="header-bar">
       <span className="header-session">{header.session}</span>
@@ -17,7 +17,13 @@ export function HeaderBar({ header }: { header: HeaderView }) {
       <span className="chip header-conn" style={{ color: header.connection_colour }}>
         {header.connection}
       </span>
-      <span className="chip">{header.playback}</span>
+      {/* Where the chips already are, so a reader who only checks the strip gets
+          it. The status bar says the same thing at the bottom. */}
+      {frozen ? <span className="chip is-frozen">DATA FROZEN</span> : null}
+      {/* A dash, because the last view's speed is not the replay's speed once the
+          views stop arriving - `2.00x · PLAYING` is an assertion that it is still
+          running. */}
+      <span className="chip">{frozen ? "—" : header.playback}</span>
       <span className="chip">{header.lap}</span>
     </header>
   );

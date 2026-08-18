@@ -22,6 +22,7 @@ from src.pitwall.config import (
     build_hint,
     ui_dist,
     ui_is_built,
+    window_arguments,
 )
 from src.pitwall.host import PitwallHost
 from src.pitwall.stream_client import ArcadeStreamClient
@@ -50,7 +51,12 @@ def main() -> int:
     browser = BrowserServer(ui_dist(), host)
     url = browser.start()
     if url:
-        logger.info("Also serving the same windows at %sdata.html and %sagents.html", url, url)
+        logger.info("Serving both windows at %sdata.html and %sagents.html", url, url)
+    else:
+        logger.warning(
+            "The loopback server did not start; the windows fall back to file paths, "
+            "which pywebview serves through its own static server (see #995)."
+        )
 
     # The geometry in `WINDOWS` is what the layout wants; the screen decides
     # what it gets. A window taller than the desktop is not scrolled, it is
@@ -60,7 +66,8 @@ def main() -> int:
     screen = webview.screens[0]
 
     for index, spec in enumerate(WINDOWS):
-        x, y, width, height = spec.place(index, screen.width, screen.height)
+        arguments = window_arguments(spec, index, (screen.width, screen.height), url)
+        width, height = arguments["width"], arguments["height"]
         if (width, height) != (spec.width, spec.height):
             logger.info(
                 "%s opens at %dx%d rather than %dx%d - the %dx%d screen is smaller",
@@ -72,15 +79,33 @@ def main() -> int:
                 screen.width,
                 screen.height,
             )
-        window = webview.create_window(
-            spec.title,
-            spec.url,
-            js_api=host,
-            width=width,
-            height=height,
-            x=x,
-            y=y,
-        )
+        # **The window loads over the host's own loopback server, not off a file
+        # path, and that is a bug fix rather than a preference (#995).**
+        #
+        # Given a filesystem path, pywebview 6.2.1 serves it through an internal
+        # bottle server rooted at `os.path.commonpath` of the window URLs - and with
+        # TWO windows it gets that wrong, racily. Reproduced both halves against the
+        # installed bottle: with the server rooted at `ui/dist`, a request for
+        # `data.html` is 200 and one for `dist/data.html` is 404 "File does not
+        # exist."; rooted at `ui` it is the other way round. Víctor saw both, on
+        # different runs of the same build - `…/6754/dist/data.html` and then
+        # `…/52646/data.html`, each a bottle 404 - which is exactly a window
+        # computing its URL against one base while the server holds another.
+        #
+        # Our own server has none of that: one root, read into memory at startup,
+        # and it is the transport every check in this window's test suite already
+        # goes through. Handing it to `create_window` also means the OS windows and
+        # a browser tab are finally the SAME surface rather than two.
+        #
+        # `js_api` is unaffected: pywebview injects `window.pywebview` per window
+        # whatever the URL, and `bridge.ts` falls back to `fetch` when it is absent.
+        #
+        # The fallback keeps the old behaviour when the server cannot come up at
+        # all - a window through pywebview's own server beats no window. It covers
+        # a bind failure now as well as a missing bundle: `start()` used to let an
+        # OSError out, and since the windows LOAD through that server the raise
+        # took the whole surface down instead of degrading.
+        window = webview.create_window(js_api=host, **arguments)
         # The client belongs to the host, so a window closing only decrements
         # a count. Wiring `client.stop` here instead is the regression this
         # sprint was told to prevent: closing the DATA window would silently

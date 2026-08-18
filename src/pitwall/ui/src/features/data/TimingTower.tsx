@@ -130,7 +130,10 @@ function TowerRow({ code, position, front, leader, arcade, bulk, live, bests }: 
        * key of this window's primary panel, so it was the identification that
        * could not be read.
        *
-       * The code is `--qt-fg-1` now, 15.8:1, and the team colour is a filled bar
+       * The code is `--qt-fg-1` now, **17.48:1** - the tower has no row striping, so
+       * it sits on `--qt-panel`; the 15.8 this comment first claimed is white on
+       * `--qt-elevated`, which is the PACE GRID's banding and not this ground - and
+       * the team colour is a filled bar
        * next to it. A bar is a shape rather than glyphs, so a dim one degrades to
        * "hard to see" instead of "unreadable" - and it is REDUNDANT here, because
        * the code beside it already names the car.
