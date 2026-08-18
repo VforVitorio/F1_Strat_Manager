@@ -272,10 +272,23 @@
 
 /* --- Band 2 right: the bests panel ---------------------------------------- */
 
+/* `max-height: 100%` is the structural half of #979 and `BestsPanel`'s measured
+ * degradation is the other. Without it the card takes its content height and
+ * hangs over the column, where the overflow is clipped by an ancestor with
+ * nothing to reach it by - 90 px of it at the 1265 x 593 client, THEORETICAL
+ * included. Clamped, an overflow that survives the degradation is at least
+ * reachable by the wheel, which is what every other panel in this window does
+ * (`qt-base.css` hides the scrollbar, not the scrolling). */
 .bests {
+  /* Explicit, because `.card`'s padding and border are otherwise ADDED to the
+   * percentage cap and it stops binding: measured, a 63 px slot allowed an 85 px
+   * border box and the card sat 2 px over the column. */
+  box-sizing: border-box;
   padding: 10px;
   min-width: 0;
   min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -303,15 +316,60 @@
 
 /* Four sections side by side. They spend WIDTH, which the left column has,
  * rather than height, which it does not: stacked they would be four times as
- * tall for the same twelve rows. */
+ * tall for the same twelve rows.
+ *
+ * **The LAP column is sized to its content and the three sectors share the
+ * rest**, because four equal columns are 146 px each and the LAP section's
+ * ranked rows need 153: a lap time is `1:29.601` where a sector is `31.717`, two
+ * glyphs wider, and the row also carries a delta and a compound letter. Measured
+ * on the live page, exactly two of the twelve rows overflowed - ranks 2 and 3 of
+ * LAP, the only ones carrying both. (Reported once as a property of
+ * `.bests-row`, which would have sent a fix at all twelve.) */
 .bests-sections {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr)) max-content;
   gap: 8px;
 }
 
 .bests-section {
   min-width: 0;
+}
+
+/* The compact form: one line of purple holders plus the theoretical, for the
+ * client where the ranked panel does not fit at all. Spends width, which this
+ * column has 630 px of, instead of the height it has 63 of. */
+.bests-leaders {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 0 2px;
+  /* The same 17 px a ranked row uses, stated rather than inherited from the
+   * font: at the default line-height this line came to 20 px and the whole card
+   * to 64 in a 63 px slot - a one-pixel overhang, which `max-height` would then
+   * have turned into a one-pixel scroll instead of a fit. */
+  line-height: 17px;
+}
+
+.bests-leader {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* The section label is a column heading in the ranked form and an inline tag
+ * here, so the rule that underlines it has to stop applying. */
+.bests-leaders .bests-field-label {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* The theoretical is not a purple anybody set, so it sits apart from the four
+ * that were. */
+.bests-leader.is-theoretical {
+  margin-left: auto;
 }
 
 .bests-field-label {
