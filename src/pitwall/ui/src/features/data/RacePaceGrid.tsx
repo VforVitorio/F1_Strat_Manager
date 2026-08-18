@@ -137,10 +137,11 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
   //
   // The pin only has work to do once the table outgrows the scroller, which on a
   // 57-lap race is around lap 55. What holds the newest lap still for the other
-  // 54 is the stylesheet: the table is bottom-anchored inside a scroller that
-  // fills the card, so the row a wall reads sits at a fixed height from lap 1
-  // and the empty space - honest, the race has not happened yet - grows above
-  // the history instead of pushing it down the screen.
+  // 54 is the stylesheet: `.pace` is `align-self: end`, so the CARD grows upward
+  // from the bottom of its column and the newest row sits at a fixed height from
+  // lap 1. (Anchoring the TABLE inside a full-height card does the same thing and
+  // leaves the empty space INSIDE the card; that is what this comment described
+  // for one commit, and it is not what ships. See the `.pace` rule.)
   useEffect(() => {
     const box = scroller.current;
     if (box) box.scrollTop = box.scrollHeight;

@@ -1604,6 +1604,56 @@ check(
     narrowCells.subtitle.includes("to the second"),
     `and the header says the resolution changed ("${narrowCells.subtitle}")`,
   );
+
+  // The same client's OTHER silent clip: the tower's twenty rows are fixed at
+  // 437 px, so at a 510 px column the bests card's slot is 63 - and its chrome
+  // alone is 79 before a single ranked row exists. It used to render the full
+  // 153 px panel and lose 90 of them past the column's edge, THEORETICAL
+  // included, with scrollbars hidden globally so nothing said so.
+  //
+  // Asserted as an EFFECT over the whole enumeration - every element of the card
+  // is inside the column - rather than by checking a row count, which would pass
+  // on a panel whose one remaining row still hung over the edge.
+  const bests = await narrow.evaluate(() => {
+    const column = document.querySelector(".left-column").getBoundingClientRect();
+    const card = document.querySelector(".bests");
+    const parts = [card, ...card.querySelectorAll("*")];
+    const outside = parts.filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.height > 0 && r.bottom > column.bottom + 0.5;
+    });
+    return {
+      outside: outside.length,
+      parts: parts.length,
+      worst: outside.length
+        ? +(Math.max(...outside.map((el) => el.getBoundingClientRect().bottom)) - column.bottom).toFixed(1)
+        : 0,
+      // The card is clamped to its slot, so an overflow no longer leaves the
+      // column - it becomes a scroll inside the card. Asserting BOTH is what
+      // keeps "nothing outside the column" from passing on a panel that simply
+      // moved the hiding one level in.
+      hidden: card.scrollHeight - card.clientHeight,
+      subtitle: document.querySelector(".bests-subtitle")?.textContent ?? "",
+      // The theoretical lap is the one value a wall reads off this panel that no
+      // other panel carries, so it is the one that must survive the degradation.
+      theoretical: document.querySelector(".bests-theoretical-value")?.textContent ?? "",
+      ranked: document.querySelectorAll(".bests-row").length,
+      leaders: document.querySelectorAll(".bests-leader").length,
+    };
+  });
+
+  check(
+    bests.outside === 0 && bests.hidden === 0,
+    `the bests card fits its column at the narrow client with nothing scrolled away (${bests.outside}/${bests.parts} elements over by up to ${bests.worst} px, ${bests.hidden} px hidden)`,
+  );
+  check(
+    /^\d:\d\d\.\d\d\d$/.test(bests.theoretical),
+    `and the theoretical lap survives the degradation ("${bests.theoretical}")`,
+  );
+  check(
+    bests.ranked === 0 && bests.leaders === 6 && bests.subtitle === "leaders",
+    `it degrades to the four purple holders plus THEO on one titled line, and says so (${bests.leaders} leaders, ${bests.ranked} ranked rows, "${bests.subtitle}")`,
+  );
   await narrowCtx.close();
 }
 
