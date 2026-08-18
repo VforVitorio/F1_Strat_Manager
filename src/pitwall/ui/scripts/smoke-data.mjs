@@ -1974,6 +1974,97 @@ if (bands === null) {
   await narrowCtx.close();
 }
 
+// --- The producer dies, and the window has to stop looking live -------------
+//
+// `state-dead.png` is why: the board held a full set of confident numbers, the lap
+// counter still said L 28/57, the track chip still asserted GREEN and PLAYBACK
+// still said 2x, with one 77 x 18 chip and a status bar that had quietly gone
+// BLANK as the only tells. The socket label is the only thing that still moves
+// once the ticks stop, so the state is known client-side.
+//
+// Asserted as the EFFECT on the four surfaces that used to lie, and the fixture
+// feeds real ticks first so the board is populated before the feed goes quiet -
+// a window that never had data cannot demonstrate a window whose data went stale.
+{
+  const deadCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+  const dead = await deadCtx.newPage();
+  dead.on("pageerror", (error) => failures.push(`pageerror(dead): ${error.message}`));
+  await dead.addInitScript(
+    ([payload, bulk, live]) => {
+      window.__alive = true;
+      window.pywebview = { api: {
+        get_tick: async (s) => (s === payload.seq ? null : payload),
+        get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+        get_live_lap: async (r) => (r === live.rev ? null : live),
+        get_connection: async () => (window.__alive ? "Connected" : "Disconnected"),
+      } };
+    },
+    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+  );
+  await dead.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await dead.waitForSelector(".tower-row", { timeout: 5000 });
+  await dead.waitForTimeout(600);
+
+  const alive = await dead.evaluate(() => ({
+    playback: [...document.querySelectorAll(".strip-field")]
+      .find((f) => f.textContent.startsWith("PLAYBACK"))
+      ?.querySelector(".strip-field-value")?.textContent,
+    bar: document.querySelector(".status-bar")?.textContent ?? "",
+    frozenChip: document.querySelectorAll(".strip-chip.is-frozen").length,
+    filter: getComputedStyle(document.querySelector(".data-main")).filter,
+    rows: document.querySelectorAll(".tower-row").length,
+  }));
+  check(
+    alive.rows === 20 && /^\d+x$/.test(alive.playback ?? "") && alive.bar.includes("live"),
+    `the board is live and says so before the producer dies (${alive.rows} rows, ${alive.playback}, "${alive.bar}")`,
+  );
+
+  // The producer goes quiet. The connection poll is 1 Hz, so this waits for it.
+  await dead.evaluate(() => {
+    window.__alive = false;
+  });
+  await dead.waitForTimeout(2200);
+
+  const frozen = await dead.evaluate(() => ({
+    playback: [...document.querySelectorAll(".strip-field")]
+      .find((f) => f.textContent.startsWith("PLAYBACK"))
+      ?.querySelector(".strip-field-value")?.textContent,
+    bar: document.querySelector(".status-bar")?.textContent ?? "",
+    frozenChip: document.querySelectorAll(".strip-chip.is-frozen").length,
+    trackFilled: document.querySelectorAll(".strip-chip.is-filled").length,
+    filter: getComputedStyle(document.querySelector(".data-main")).filter,
+    rows: document.querySelectorAll(".tower-row").length,
+    lost: document.querySelectorAll(".strip-chip.is-lost").length,
+  }));
+
+  check(
+    frozen.playback === "—" && !frozen.bar.includes("live") && frozen.bar.includes("FROZEN"),
+    `nothing on the strip claims the replay is advancing (${frozen.playback}, "${frozen.bar}")`,
+  );
+  check(
+    frozen.frozenChip === 1 && frozen.lost === 1 && frozen.trackFilled === 0,
+    `the frozen state is named in the header and the track status gives up its weight (${frozen.frozenChip} frozen, ${frozen.lost} lost, ${frozen.trackFilled} filled)`,
+  );
+  // The board is treated, and STILL THERE. The last known state is the best
+  // information a strategist has; a treatment that hid it would be worse than
+  // the lie it replaces.
+  check(
+    frozen.filter !== "none" && frozen.rows === 20,
+    `the board reads as history without becoming unreadable (${frozen.filter}, ${frozen.rows} rows)`,
+  );
+  // And the bar does not go blank. Its 1.5 s auto-clear is what left the window
+  // with no message at all, which is how a dead feed looked like a quiet one.
+  await dead.waitForTimeout(2000);
+  const later = await dead.evaluate(() => document.querySelector(".status-bar")?.textContent ?? "");
+  check(
+    later.includes("FROZEN"),
+    `and it is still saying so four seconds later, not auto-cleared ("${later}")`,
+  );
+  await deadCtx.close();
+}
+
 // A retired car keeps the laps he drove and gets NO point for the ones he did
 // not. These three have no crossings at all, so their series must be EMPTY -
 // never a flat line at zero, which is what a missing crossing read as a

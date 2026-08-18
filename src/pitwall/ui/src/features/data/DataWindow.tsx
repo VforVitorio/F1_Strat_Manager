@@ -60,16 +60,40 @@ export function DataWindow() {
   // Qt re-arms `showMessage(f"lap {lap} · live", 1500)` on every broadcast,
   // so the line stays up while streaming and clears 1.5 s after the producer
   // stops. `useStatusText` is keyed on the sequence for that reason.
-  const status = tick ? { text: `lap ${tick.arcade.lap} · live`, transient: true } : WAITING;
+  /**
+   * The producer is gone, and every panel below is holding numbers from before.
+   *
+   * The socket's own label is the only thing that still moves once the ticks
+   * stop - `useConnection` polls it at 1 Hz for exactly this - so the state is
+   * known client-side and needs no wire change. Before this, a dead producer left
+   * a full board of confident values, the lap counter still saying `L 28/57`, the
+   * track chip still asserting GREEN and `PLAYBACK 2x` still claiming the replay
+   * was advancing, with a 77 x 18 chip and a blank status bar as the only tells.
+   * A frozen tower that looks live is the one state a pit wall must not mistake,
+   * and this window sits beside a moving arcade.
+   */
+  const frozen = connection === "Disconnected" && tick !== null;
+  // Not transient when frozen: the 1.5 s auto-clear is what a LIVE bar wants, and
+  // it is why the only remaining signal used to be an EMPTY bar. It also has to
+  // stop saying `live`, or the window contradicts its own banner one line down.
+  const status = !tick
+    ? WAITING
+    : frozen
+      ? { text: `DATA FROZEN · last tick lap ${tick.arcade.lap}`, transient: false }
+      : { text: `lap ${tick.arcade.lap} · live`, transient: true };
   const statusText = useStatusText(status, tick?.seq ?? null);
   const [tab, setTab] = useState<"traces" | "pace" | "trace">("traces");
 
   return (
     <main className="data-window">
       <div className="data-body">
-        <StatusStrip tick={live ? tick : null} connection={connection} />
+        <StatusStrip tick={live ? tick : null} connection={connection} frozen={frozen} />
         {live && tick ? (
-          <div className="data-main">
+          // Desaturated and mildly dimmed, never blurred and never faded much:
+          // the last known state is still operationally useful and has to stay
+          // readable. What the treatment says is "this is history", not "this is
+          // unavailable".
+          <div className={frozen ? "data-main is-frozen" : "data-main"}>
             <div className="left-column">
               <TimingTower arcade={tick.arcade} bulk={bulk} live={liveLap} />
               <BestsPanel bulk={bulk} />

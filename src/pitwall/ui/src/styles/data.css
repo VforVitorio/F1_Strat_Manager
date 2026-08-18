@@ -106,6 +106,25 @@
   font-weight: 800;
 }
 
+/* The producer is gone. DANGER, the same red the Disconnected chip carries, and
+ * filled for the same reason the track status is: this is a state, not a label. */
+.strip-chip.is-frozen {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: var(--qt-bg);
+  font-weight: 800;
+}
+
+/* The board while the feed is dead: desaturated and mildly dimmed, NEVER blurred
+ * and never faded far. The last known state is the best information a strategist
+ * has - the treatment has to say "this is history" while leaving every number
+ * readable, so 0.45 saturation and 0.82 brightness rather than an opacity that
+ * would make the tower a guess. Band 1 and the status bar stay at full strength:
+ * they are the two surfaces that say WHY it looks like this. */
+.data-main.is-frozen {
+  filter: saturate(0.45) brightness(0.82);
+}
+
 .strip-spacer {
   flex: 1 1 auto;
 }
