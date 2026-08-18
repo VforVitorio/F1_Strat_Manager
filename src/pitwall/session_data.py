@@ -43,6 +43,7 @@ from typing import Any
 
 import pandas as pd
 
+from src.arcade.track_status import neutralised_label
 from src.f1_strat_manager.tyre_stint_repair import is_real_compound, repair_tyre_stints
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,14 @@ def _lap_row(record: dict[str, Any]) -> dict[str, Any]:
         "tyre_life": _none_if_nan(record.get("TyreLife")),
         "stint": _none_if_nan(record.get("Stint")),
         "track_status": _none_if_nan(record.get("TrackStatus")),
+        # The digits DECODED, by the arcade's own rule, for the one question the
+        # grid needs answered: was the field racing freely on this lap. Decoded
+        # here for the same reason `track_status_label` is decoded for the tick -
+        # the priority order and the labels are a project rule, and a client that
+        # tested for a `4` would be the second copy of it in another language.
+        # Non-null means a per-lap pace ranking over this lap ranks the safety
+        # car's queue rather than pace; see `neutralised_label`.
+        "neutralised": neutralised_label(_none_if_nan(record.get("TrackStatus"))),
         "pit_in": pd.notna(record.get("PitInTime")),
         "pit_out": pd.notna(record.get("PitOutTime")),
         "deleted": bool(record.get("Deleted", False)),

@@ -94,6 +94,18 @@
   color: #f59e0b;
 }
 
+/* A non-green track status is FILLED, not outlined. The background is the wire's
+ * own `track_status_color` and the text is the window's ground, so the chip reads
+ * as a state rather than as a label - the difference between "there is a safety
+ * car" being 18 px of outlined text and being the one loud thing on the strip.
+ * `--qt-bg` rather than black: measured against every label the producer can
+ * emit, the ground clears AA on all of them - YELLOW FLAG 12.08:1, VSC 8.61,
+ * SAFETY CAR 7.93, RED FLAG 4.92, the dimmest of the four and still over 4.5. */
+.strip-chip.is-filled {
+  color: var(--qt-bg);
+  font-weight: 800;
+}
+
 .strip-spacer {
   flex: 1 1 auto;
 }
@@ -759,11 +771,18 @@
   gap: 6px;
   padding: 10px;
   min-height: 0;
-  /* Scrollbars are hidden globally (`qt-base.css`), so an overflow here has no
-   * affordance at all. The list is newest-first for that reason: what falls
-   * off the bottom is the OLDEST, which is what a ticker is expected to lose,
-   * and the header's count says how many there are so the cut is never
-   * silent. */
+  /* The CARD clips; the LIST below scrolls. Both used to be `overflow: hidden`,
+   * which made this the one panel in the window whose content was genuinely
+   * unreachable: measured on the live page, 10 of 46 events visible, 344 px of
+   * clientHeight against 1379 of scrollHeight, and no user input that could
+   * reach the other 36 - setting `scrollTop` from the console worked, so the
+   * content was there and only the reader had no path to it.
+   *
+   * That is not the window's hidden-scrollbar rule. `qt-base.css` hides the
+   * CHROME and keeps bodies scrollable, in as many words: "a wheel, a trackpad,
+   * a touch drag and the keyboard all still reach the content". This panel was
+   * the exception, and the header's count said how many events EXIST, not that
+   * most of them could not be read. */
   overflow: hidden;
 }
 
@@ -806,8 +825,12 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  /* The one declaration that gives the reader the other 36 events back. Newest
+   * first already puts the fold where it belongs, and the scrollbar stays
+   * invisible, so nothing about the panel's pixels changes. */
+  overflow-y: auto;
 }
 
 .radio-row {
@@ -844,8 +867,16 @@
 }
 
 /* The public feed, tagged exactly as band 4 tags a pinned rival's trace: the
- * same WARNING the rival chip uses, so one colour means one tier across the
- * whole window. */
+ * same WARNING the rival chip uses.
+ *
+ * **This used to end "so one colour means one tier across the whole window",
+ * and that clause was false.** `#f59e0b` is five things here: broadcast tier on
+ * this tag and on the rival's chip, the PROVISIONAL warning, the tower's
+ * slower-than-own-best sector, the pace grid's slowest third, and now the
+ * neutralised-lap rail. Each surface disambiguates locally, which is why it costs
+ * little in practice - what it cost was the safety car, which had no loud amber
+ * left to reach for and got a FILLED chip instead (`.strip-chip.is-filled`), so
+ * weight rather than hue separates the state of the race from an annotation. */
 .radio-tier {
   color: #f59e0b;
   font-family: var(--qt-mono);
@@ -882,6 +913,10 @@
   gap: 4px;
 }
 
+/* 5/12 rather than 3/10: these were 22 px tall and the reference strip's buttons
+ * 15, against the ~28-32 px a mouse target wants - and the three reference
+ * buttons change what the whole race trace MEANS, since they move the zero line.
+ * Pure whitespace; both headers have slack at both client sizes. */
 .tab {
   background: none;
   border: 1px solid var(--qt-border);
@@ -892,7 +927,7 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1px;
-  padding: 3px 10px;
+  padding: 5px 12px;
 }
 
 .tab.is-active {
@@ -1027,6 +1062,24 @@
   width: 26px;
 }
 
+/* The lap the field was NOT racing on. A 2 px rail rather than a text colour:
+ * amber TEXT one column right already means "slowest third", and the same hue in
+ * a different channel cannot be mistaken for it. It costs 2 px of a 26 px column
+ * that holds two digits at 9 px, so nothing moves. */
+.pace-table th.pace-lapcol.is-neutralised {
+  border-left: 2px solid #f59e0b;
+}
+
+/* The rail's key, in the subtitle. Without it the rail is a decoration. */
+.pace-legend-rail {
+  display: inline-block;
+  width: 2px;
+  height: 8px;
+  background: #f59e0b;
+  vertical-align: baseline;
+  margin-right: 3px;
+}
+
 /* Purple is the session's outright fastest lap, the same rule and the same
  * colour the tower's sector cells use. */
 .pace-table td.is-best {
@@ -1058,11 +1111,22 @@
   text-decoration: line-through;
 }
 
-/* The in-lap and the out-lap, red in place of the time, as a timing screen
- * shows them. */
-.pace-table td.is-pit,
-.pace-table td.is-out {
+/* The in-lap in place of the time, as a timing screen shows it. DANGER red is
+ * kept for the lap you cannot unwind - the car is in the pit lane - and NOT for
+ * the out-lap, which is a car rejoining a race. Both were red, so laps 2-4 of
+ * Melbourne rendered as three full-field red rows and read as a crisis; and this
+ * red is the same one band 1's Disconnected chip uses. Measured, it is also
+ * 4.25:1 on the banded columns at 9 px, under the 4.5 floor for this size. */
+.pace-table td.is-pit {
   color: #ef4444;
+}
+
+/* The out-lap: WARNING, the same amber the slowest third uses. The hue does not
+ * have to separate them because the TEXT does - `P.EXIT` against `1:33.5` - and
+ * spending a sixth meaning on amber is cheaper than telling a reader that a car
+ * rejoining the race is the same kind of event as one sitting in the box. */
+.pace-table td.is-out {
+  color: #f59e0b;
 }
 
 .pace-table td.is-none {
@@ -1112,7 +1176,12 @@
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  padding: 1px 6px;
+  /* See `.tab`: 15 px was the smallest target on the window and it sits on the
+   * control that decides what the race trace is measured against. 6/9 rather than
+   * 4/8 so the three land on the same 26 px as the tab strip above them - two
+   * control rows of different heights on one panel is its own small wrongness. */
+  padding: 6px 9px;
+  line-height: 12px;
 }
 
 .ref.is-active {

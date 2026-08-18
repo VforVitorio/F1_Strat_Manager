@@ -97,13 +97,28 @@ export function TraceChart(props: TraceChartProps) {
       grid: { left: 44, right: 12, top: 8, bottom: 36, containLabel: false },
       xAxis: valueAxis({ name: "Distance (m)", nameGap: 20, min: 0, max: xMax }),
       yAxis: valueAxis({ min: yRange[0], max: yRange[1] }),
+      // **The RIVAL is declared first, so the own car paints on top of it.**
+      // ECharts paints in declaration order and this was the other way round,
+      // which put the coarse broadcast-tier dashes over the pit-wall-grade trace
+      // on all four charts - and it is the exact inverse of the rule the race
+      // trace builds deliberately one tab away ("our own car moved LAST so it
+      // draws on top of the nineteen it has to be picked out from"). It shows
+      // wherever the two cars run comparable numbers, which is precisely when the
+      // comparison is worth making: measured on a full lap of the real payload,
+      // the Speed and Throttle plots read as one amber dashed line with slivers
+      // of blue under it.
+      //
+      // The reference marks move with the first series, because that is where
+      // they hang. They are `silent` and geometric - a `yAxis: 0` baseline and an
+      // `xAxis` cursor - so they do not care which series carries them, and the
+      // rival series exists on every chart even when it holds no data.
       series: [
         {
           type: "line",
-          name: "main",
-          data: mainAsZeroLine ? [] : main,
-          lineStyle: { color: mainColour, width: 2 },
-          itemStyle: { color: mainColour },
+          name: "rival",
+          data: rivalCode ? rival : [],
+          lineStyle: { color: rivalColour, width: 2, type: "dashed" },
+          itemStyle: { color: rivalColour },
           symbol: "none",
           markLine: marks.length
             ? { silent: true, symbol: "none", label: { show: false }, data: marks }
@@ -111,10 +126,10 @@ export function TraceChart(props: TraceChartProps) {
         },
         {
           type: "line",
-          name: "rival",
-          data: rivalCode ? rival : [],
-          lineStyle: { color: rivalColour, width: 2, type: "dashed" },
-          itemStyle: { color: rivalColour },
+          name: "main",
+          data: mainAsZeroLine ? [] : main,
+          lineStyle: { color: mainColour, width: 2 },
+          itemStyle: { color: mainColour },
           symbol: "none",
         },
       ],

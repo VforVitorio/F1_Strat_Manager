@@ -310,6 +310,17 @@ def test_the_chart_axis_palette_has_not_drifted_either():
     # It is value-paired with pyqtgraph's grid alpha.
     assert source.count("rgba(255,255,255,0.06)") == 1, "the grid alpha moved"
 
+    # Same blind spot, second occupant: the neutralised-lap band the race trace
+    # shades. Its RGB is WARNING and only the alpha is chosen here, so the guard
+    # pins the triplet to the palette and lets the alpha be what it is.
+    bands = re.findall(r"rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)", source)
+    neutralised = [triplet for triplet in bands if triplet[:3] != ("255", "255", "255")]
+    assert len(neutralised) == 1, f"expected one neutralised band colour, found {neutralised}"
+    assert tuple(int(value) for value in neutralised[0][:3]) == palette.WARNING, (
+        "the neutralised-lap band copies palette.WARNING; the pace grid's rail uses the same "
+        "hue in a different channel and the two must not drift apart"
+    )
+
 
 def test_the_trace_colours_are_in_the_right_slots():
     """Copy number six: band 4's four traces, one palette name each.

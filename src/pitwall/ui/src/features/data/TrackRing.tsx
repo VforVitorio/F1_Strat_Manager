@@ -90,7 +90,17 @@ export function TrackRing({ arcade }: { arcade: ArcadeState }) {
     // line - a position a real car can hold, which is the sentinel collision
     // this repo has already paid for once.
     if (car.rel_dist === null) {
-      blind.push(code);
+      // **Only a car that is still RUNNING goes on the blind list.** The line
+      // exists to flag a live car the telemetry lost, which is a real alarm; it
+      // used to collect retirements too, and HAD - who has no telemetry rows at
+      // all on this race - lit it from lap 1 to lap 57. It was in every one of
+      // the nine captures, in every state. A permanently lit alarm is furniture,
+      // and the day a live car goes blind the alarm has already been trained
+      // away - which is the failure `isProvisional` names in as many words one
+      // panel over ("a permanent PROVISIONAL says nothing, which is worse than
+      // not having it"). A retired car is already carried by the tower's OUT and
+      // by the legend's hollow dot.
+      if (driverStatus(car) !== "out") blind.push(code);
       continue;
     }
     dots.push({

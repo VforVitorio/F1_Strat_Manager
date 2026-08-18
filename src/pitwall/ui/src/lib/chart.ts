@@ -42,6 +42,17 @@ export const SPLIT_LINE = "rgba(255,255,255,0.06)";
  * competes with the four traces it is supposed to be annotating.
  */
 export const CURSOR_LINE = "#9ca3af";
+/**
+ * `palette.WARNING` at 12 % - the shaded lap range the field was neutralised on.
+ *
+ * A translucent FILL rather than a stroke, and that is the constraint rather
+ * than a preference: on this window a dashed line already means broadcast-tier
+ * data and a solid thin vertical is the current-lap cursor, so a band needed a
+ * channel of its own. 12 % reads behind twenty lines without competing with any
+ * of them - the alpha is the only number here chosen by eye, and it is a
+ * background rather than a value, which is the one place that is allowed.
+ */
+export const NEUTRALISED_BAND = "rgba(245, 158, 11, 0.12)";
 
 /**
  * Mount an ECharts instance on a div and push options into it imperatively.

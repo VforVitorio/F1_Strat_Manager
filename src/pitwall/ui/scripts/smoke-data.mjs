@@ -266,21 +266,43 @@ for (const [index, [name, range]] of expected.entries()) {
 // The delta the interpolation produced. Three points, not five: the rival's
 // samples stop at 300 m and `lerpSorted` returns null past the end rather
 // than extrapolating a flat tail that would look like real data.
-const delta = await page.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[0];
-  return el.__pitwallChart.getOption().series[1].data;
-});
+// Looked up by NAME, not by index. These two used to read `series[1]` and
+// `series[0]`, and the declaration order is exactly what the z-order fix had to
+// change - an index-keyed probe turns that into two silently wrong assertions
+// about the wrong line.
+const seriesByName = (plot, name) =>
+  page.evaluate(
+    ([which, series]) => {
+      const el = document.querySelectorAll(".trace-plot")[which];
+      return el.__pitwallChart.getOption().series.find((s) => s.name === series) ?? null;
+    },
+    [plot, name],
+  );
+
+const delta = (await seriesByName(0, "rival")).data;
 check(
   delta.length === 3 && delta.every(([, value]) => Math.abs(value - 2) < 1e-9),
   `the delta is +2.0 s over the rival's three samples only (${JSON.stringify(delta)})`,
 );
 
 // The speed trace carries the whole main span.
-const speedPoints = await page.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[1];
-  return el.__pitwallChart.getOption().series[0].data.length;
-});
+const speedPoints = (await seriesByName(1, "main")).data.length;
 check(speedPoints === 5, `the speed trace holds all five samples (${speedPoints})`);
+
+// **The own car paints ON TOP, on every chart.** ECharts paints in declaration
+// order, and the rival's coarse broadcast dashes used to be last: wherever the
+// two cars run comparable numbers - which is when the comparison matters - the
+// solid pit-wall-grade line was underneath. The race trace one tab away builds
+// the opposite rule deliberately, so this is the twin that had it inverted.
+const paintOrder = await page.evaluate(() =>
+  [...document.querySelectorAll(".trace-plot")].map((el) =>
+    el.__pitwallChart.getOption().series.map((s) => s.name).join(">"),
+  ),
+);
+check(
+  paintOrder.length === 4 && paintOrder.every((order) => order === "rival>main"),
+  `the own car is declared last so it paints over the rival on all four charts (${paintOrder.join(" | ")})`,
+);
 
 // The cursor, in PIXELS. It must be at the column ECharts maps 500 m to, and
 // must not be at a column the car has not reached - which is also a column
@@ -363,10 +385,7 @@ check(
 // re-driven - nothing else would ever evict them.
 await page.evaluate((payload) => window.__ticks.push(payload), tick(2, { main: [], rivalSpan: [], rewound: true }));
 await page.waitForTimeout(400);
-const afterRewind = await page.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[1];
-  return el.__pitwallChart.getOption().series[0].data.length;
-});
+const afterRewind = (await seriesByName(1, "main")).data.length;
 check(afterRewind === 0, `a rewind empties the trace (${afterRewind} points left)`);
 
 // ...and the rewind must NOT look like single-driver mode. This is the twin
@@ -409,10 +428,7 @@ await page.evaluate(
   tick(3, { main: JUMPED, rivalSpan: [], dropped: 60 }),
 );
 await page.waitForTimeout(400);
-const afterJump = await page.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[1];
-  return el.__pitwallChart.getOption().series[0].data.map(([x]) => x);
-});
+const afterJump = (await seriesByName(1, "main")).data.map(([x]) => x);
 check(
   afterJump.length === 3 && afterJump[0] === 3100,
   `a forward jump keeps the span it arrived with (${JSON.stringify(afterJump)})`,
@@ -498,9 +514,14 @@ check(
 );
 // A null `rel_dist` is unknown, not zero. Drawing the cursor at 0 m would put
 // the blind car exactly on the start line, a place a real car can be.
+// Across EVERY series, not the one that happens to carry the marks: they hang
+// off whichever series is declared first, and that changed once already.
 const blindCursor = await soloPage.evaluate(() => {
   const el = document.querySelectorAll(".trace-plot")[0];
-  return (el.__pitwallChart.getOption().series[0].markLine?.data ?? []).some((m) => "xAxis" in m);
+  return el.__pitwallChart
+    .getOption()
+    .series.flatMap((s) => s.markLine?.data ?? [])
+    .some((m) => "xAxis" in m);
 });
 check(!blindCursor, "and draws no cursor for a car with no position");
 
@@ -517,7 +538,12 @@ const FIELD = {
   PIA: driver({ rel_dist: 0.25 }), //        running, rival, a quarter round
   VER: driver({ active: false, has_finished: true, rel_dist: 0.5 }), // finished
   HUL: driver({ active: false, has_finished: false, rel_dist: 0.75 }), // out
-  HAD: driver({ rel_dist: null, has_position: false }), // never placed
+  HAD: driver({ rel_dist: null, has_position: false }), // never placed, still RUNNING
+  // Never placed AND retired, which is what HAD really is on Melbourne 2025 and
+  // what no fixture carried: the blind list used to collect him for all 57 laps,
+  // so the ring's only telemetry alarm was lit from the first capture to the
+  // last. A retired car cannot be a car the telemetry lost.
+  SAI: driver({ rel_dist: null, has_position: false, active: false, has_finished: false }),
 };
 
 const ring = await browser.newContext({ viewport: { width: 1500, height: 950 } });
@@ -528,7 +554,7 @@ await ringPage.addInitScript((payload) => {
   window.pywebview = {
     api: { get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload) },
   };
-}, tick(1, { drivers: FIELD, order: ["NOR", "PIA", "VER", "HUL", "HAD"] }));
+}, tick(1, { drivers: FIELD, order: ["NOR", "PIA", "VER", "HUL", "HAD", "SAI"] }));
 
 await ringPage.goto(url, { waitUntil: "domcontentloaded" });
 await ringPage.waitForSelector(".ring-dot", { timeout: 5000 });
@@ -571,14 +597,21 @@ check(
 // A car the telemetry never placed is NAMED, never drawn at fraction 0 -
 // which is the start line, a position a real car can hold.
 check(!of("HAD"), "the unplaced car has no dot");
+const blindLine = await ringPage.locator(".ring-blind").innerText();
+check(blindLine.includes("HAD"), "and the ring says which car it is");
+// **The alarm names only the cars it is ABOUT.** It exists to flag a live car the
+// telemetry lost; a retirement has no telemetry by definition and lighting it for
+// one turns the alarm into furniture - on the real race it was lit from lap 1 to
+// lap 57 by a car that crashed on the first lap.
 check(
-  (await ringPage.locator(".ring-blind").innerText()).includes("HAD"),
-  "and the ring says which car it is",
+  !blindLine.includes("SAI"),
+  `and not the retired one, which has no telemetry by definition ("${blindLine}")`,
 );
 check(
   (await ringPage.locator(".ring-code").count()) === 2,
   "only the two featured cars are labelled",
 );
+
 
 // The two labels go on OPPOSITE sides of their dots. The main driver and the
 // car chosen to compare against are routinely seconds apart - on the real
@@ -788,6 +821,7 @@ function towerBulk() {
           tyre_life: 12,
           stint: 2,
           track_status: "1",
+          neutralised: null,
           pit_in: false,
           pit_out: false,
           deleted: false,
@@ -1104,6 +1138,62 @@ check(
 check((await rowText(1)).startsWith("L23 VER"), "the newest event is the top row");
 check((await rowText(6)).startsWith("L2 RCM"), "and the oldest is the last one");
 
+// --- The history a reader could not reach ---------------------------------
+//
+// `.radio-list` and `.radio-feed` were BOTH `overflow: hidden`, which made this
+// the one panel in the window whose content was genuinely gone rather than merely
+// unadorned: measured on the live page, 10 of 46 events visible and no user input
+// that could reach the other 36 - `scrollTop` from the console worked, so the rows
+// were there and only the reader had no path in. The window's own rule is the
+// opposite: `qt-base.css` hides the scrollBAR and keeps bodies scrollable.
+//
+// Six events fit, so this needs its own fixture: a fold has to EXIST before
+// "can it be reached" is a question, and a guard whose probe sits where the
+// content fits cannot see the defect it names.
+//
+// **`overflowY` is not the mechanism half of this check, it IS the effect.**
+// Driving the mutation proved it: with `overflow: hidden` a scripted
+// `scrollTop = scrollHeight` still moves the list to 1615 and the oldest row is
+// still in view, so the scroll-and-look half passes ON the defect. What
+// `overflow: hidden` blocks is the WHEEL, the trackpad and the keyboard - the
+// reader's only paths - and the computed value is what says whether they work.
+{
+  const many = Array.from({ length: 60 }, (_, index) => ({
+    kind: index % 3 === 0 ? "rcm" : "radio",
+    lap: 40 - Math.floor(index / 2),
+    driver: index % 3 === 0 ? null : "NOR",
+    text: `event ${index} - long enough to occupy a row of its own on the panel`,
+  }));
+  const [longCtx, longPage] = await radioPage({ available: true, events: many });
+  const reach = await longPage.evaluate(async () => {
+    const list = document.querySelector(".radio-list");
+    const rows = [...list.querySelectorAll(".radio-row")];
+    const folded = list.scrollHeight - list.clientHeight;
+    const before = list.scrollTop;
+    list.scrollTop = list.scrollHeight;
+    await new Promise((done) => setTimeout(done, 60));
+    const box = list.getBoundingClientRect();
+    const oldest = rows[rows.length - 1]?.getBoundingClientRect();
+    return {
+      rows: rows.length,
+      folded,
+      before,
+      after: list.scrollTop,
+      overflowY: getComputedStyle(list).overflowY,
+      oldestReached: !!oldest && oldest.bottom <= box.bottom + 1 && oldest.top >= box.top - 1,
+    };
+  });
+  check(
+    reach.folded > 100 && reach.rows === many.length,
+    `the long feed really has a fold (${reach.folded} px hidden over ${reach.rows} rows)`,
+  );
+  check(
+    reach.overflowY === "auto" && reach.after > reach.before && reach.oldestReached,
+    `and the oldest event can be reached (${reach.overflowY}, scrollTop ${reach.before} -> ${reach.after}, oldest in view: ${reach.oldestReached})`,
+  );
+  await longCtx.close();
+}
+
 // The tier claim, on screen rather than in a PDF. NOR is `driver_main`.
 const tiers = await feedPage.evaluate(() =>
   [...document.querySelectorAll(".radio-row")].map((row) => ({
@@ -1214,8 +1304,8 @@ function paceBulk() {
         number, laps_revealed: 0, stops: 0, crossings: {},
         laps: [{ lap: 1, t: null, lap_time: null, s1: null, s2: null, s3: null,
           v1: null, v2: null, vfl: null, vst: null, position: null, compound: null,
-          tyre_life: null, stint: null, track_status: "1", pit_in: false, pit_out: false,
-          deleted: false, generated: true, pb: false }],
+          tyre_life: null, stint: null, track_status: "1", neutralised: null,
+          pit_in: false, pit_out: false, deleted: false, generated: true, pb: false }],
         best: { lap: null, lap_time: null, s1: null, s2: null, s3: null,
           v1: null, v2: null, vfl: null, vst: null, compound: null },
         theoretical: null,
@@ -1267,10 +1357,16 @@ function paceBulk() {
       // been twenty flat lines at zero and every check would have passed.
       elapsed += lapTime;
       crossings[lap] = elapsed;
+      // **The fixture used to say `track_status: "1"` on the very laps it calls
+      // the safety car.** It knew they were neutralised - `neutralised` above
+      // makes their times 2.4x - and told the wire they were green, so the rail
+      // and the trace's shaded band had no fixture that could exercise them.
       laps.push({ lap, t: elapsed, lap_time: lapTime,
         s1: 29, s2: 30, s3: 26, v1: 301, v2: 289, vfl: 280, vst: 321,
         position: index + 1, compound: "MEDIUM", tyre_life: lap, stint: 1,
-        track_status: "1", pit_in: pitIn, pit_out: pitOut, deleted,
+        track_status: neutralised ? "4" : "1",
+        neutralised: neutralised ? "SAFETY CAR" : null,
+        pit_in: pitIn, pit_out: pitOut, deleted,
         generated: false, pb: false });
     }
     drivers[code] = { number, laps_revealed: revealed, stops: 1, crossings, laps,
@@ -1401,8 +1497,25 @@ const paceCells = await pacePage.evaluate(() => {
 // which is how a 0.27 px "fit" measured as a pass right up to the screenshot.
 check(paceCells.clipped === 0, `no lap time is cut (${paceCells.clipped}/${paceCells.total} clipped)`);
 check(paceCells.rows === PACE_LAPS, `one row per lap of the race (${paceCells.rows})`);
-check(paceCells.pitText === "IN PIT" && paceCells.outText === "OUT",
+check(paceCells.pitText === "IN PIT" && paceCells.outText === "P.EXIT",
   "the in-lap and the out-lap replace the time, as a timing screen shows them");
+// **And neither of them says what the tower says about a RETIRED car.** The
+// tower's own docstring refuses to reuse that word for a car that is still
+// racing; this grid used it for the out-lap, in the same window, on the same
+// screen. Asserted over the whole enumeration of cell texts rather than on the
+// one sampled above, so a single tone reverting is still caught.
+const paceWords = await pacePage.evaluate(() => {
+  const cells = [...document.querySelectorAll(".pace-table td")];
+  const tower = [...document.querySelectorAll(".tower-row .col-last")].map((c) => c.textContent);
+  return {
+    collisions: cells.filter((c) => c.textContent.trim() === "OUT").length,
+    towerUsesIt: tower.includes("OUT"),
+  };
+});
+check(
+  paceWords.collisions === 0,
+  `no pace cell says OUT, which the tower reserves for a retirement (${paceWords.collisions} do)`,
+);
 check(paceCells.best === 1, `exactly one purple cell - the session's fastest lap (${paceCells.best})`);
 
 // **The range says what is ON SCREEN, and the only way to check that is to
@@ -1539,6 +1652,50 @@ const scSpread = ["is-t1", "is-t2", "is-t3"].map((k) => scLaps[k] ?? 0);
 check(
   scSpread.every((count) => count > 0),
   `under the safety car the grid still ranks the field instead of painting it one colour (${scSpread.join(" / ")})`,
+);
+
+// **And it SAYS the thirds are the queue on those laps.** The ranking is left
+// alone deliberately - excluding the laps would leave holes in a history panel
+// and re-ranking them would invent a scale - so the rail is what stops a green
+// cell on lap 4 reading as "quick" when it means "at the compressing end of the
+// accordion". Measured on the real race: 22 of 57 laps, 213 of the 776 cells the
+// grid ranks.
+//
+// Over the WHOLE enumeration, both directions: every lap the payload marks has a
+// rail and no other lap does. A count would pass on a rail drawn on the wrong
+// laps.
+const rails = await pacePage.evaluate(() => {
+  const rows = [...document.querySelectorAll(".pace-table tbody tr")];
+  const railed = [];
+  const plain = [];
+  for (const row of rows) {
+    const cell = row.querySelector("th.pace-lapcol");
+    const lap = Number(cell.textContent);
+    (cell.classList.contains("is-neutralised") ? railed : plain).push(lap);
+  }
+  return {
+    railed,
+    plain,
+    // The rail is a border, so a text-colour assertion could not see it.
+    width: railed.length
+      ? getComputedStyle(rows[railed[0] - 1].querySelector("th")).borderLeftWidth
+      : "0px",
+    legend: document.querySelectorAll(".pace-legend-rail").length,
+    title: rows[railed[0] - 1]?.querySelector("th")?.getAttribute("title") ?? "",
+  };
+});
+
+check(
+  JSON.stringify(rails.railed) === JSON.stringify([2, 3, 4, 5, 6]),
+  `the neutralised laps carry a rail and only those (${rails.railed.join(",")})`,
+);
+check(
+  rails.plain.length === PACE_LAPS - 5 && !rails.plain.includes(4),
+  `and the other ${rails.plain.length} laps carry none`,
+);
+check(
+  rails.width === "2px" && rails.legend === 1 && rails.title === "SAFETY CAR",
+  `the rail is drawn, keyed in the header and named on hover (${rails.width}, ${rails.legend} legend, "${rails.title}")`,
 );
 
 // --- The WIDTH axis, which the check above cannot see ---------------------
@@ -1712,6 +1869,20 @@ check(
 check(
   (traceLeader?.x?.[1] ?? 0) > 1,
   "a lap-1 retirement does not collapse the trace to nothing",
+);
+
+// The two control strips, whose targets were 15 px and 22 against the ~28 a mouse
+// wants - and these three buttons decide what the whole panel is measured against.
+const targets = await pacePage.evaluate(() => {
+  const height = (sel) => {
+    const el = document.querySelector(sel);
+    return el ? +el.getBoundingClientRect().height.toFixed(1) : 0;
+  };
+  return { tab: height(".tab"), ref: height(".ref") };
+});
+check(
+  targets.tab >= 26 && targets.ref >= 26,
+  `the tab and reference targets are big enough to hit (${targets.tab} px tab, ${targets.ref} px ref)`,
 );
 
 // A retired car keeps the laps he drove and gets NO point for the ones he did

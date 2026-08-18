@@ -33,6 +33,7 @@
  */
 
 import type { Bulk, LapRow } from "./bridge";
+import { neutralisedLaps } from "./neutralised";
 import { sessionBests } from "./sessionBests";
 
 /**
@@ -51,6 +52,13 @@ export interface PaceCell {
 export interface PaceGrid {
   /** Lap numbers, ascending. Empty until something is revealed. */
   laps: number[];
+  /**
+   * `laps[i]`'s neutralisation label, or null when the field was racing.
+   *
+   * Parallel to `laps` rather than folded into the cells: the claim is about the
+   * LAP, and putting it on each of twenty cells would invite twenty answers.
+   */
+  neutralised: (string | null)[];
   /** Driver codes in WIRE order, which is the only order that holds mid-lap. */
   columns: string[];
   /** `rows[i][j]` is lap `laps[i]` for driver `columns[j]`. */
@@ -243,7 +251,7 @@ function tone(times: number[], value: number): PaceTone {
  * and at most instants the field spans two or three different laps.
  */
 export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false): PaceGrid {
-  if (!bulk?.available) return { laps: [], columns: [...order], rows: [] };
+  if (!bulk?.available) return { laps: [], neutralised: [], columns: [...order], rows: [] };
   const columns = stableColumns(bulk, order);
 
   const byDriver = new Map<string, Map<number, LapRow>>();
@@ -258,6 +266,11 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
   }
 
   const laps = Array.from({ length: lastLap }, (_, index) => index + 1);
+  // **The ranking is unchanged on these laps, and the marker is why that is
+  // honest.** Excluding them would leave holes in a history panel; re-ranking
+  // them against something else would invent a scale. What was wrong was
+  // rendering the thirds with nothing saying the thirds are the queue.
+  const neutral = neutralisedLaps(bulk);
   const ranked = rankedByLap(byDriver, laps);
   const fastest = sessionBests(bulk).lap_time[0] ?? null;
 
@@ -270,7 +283,20 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
       // the P0 alive in the one place the reader most needs the whole word -
       // `IN PI` ran straight into its neighbour as `IN PIIN PI`.
       if (row.pit_in) return { text: coarse ? "PIT" : "IN PIT", tone: "pit" as PaceTone };
-      if (row.pit_out) return { text: "OUT", tone: "out" as PaceTone };
+      // **`P.EXIT`, not `OUT`, and the tower is why.** `TimingTower`'s `lastCell`
+      // renders a RETIRED car as `OUT` and says in as many words that an out-lap
+      // gets `PIT EXIT` "rather than borrowing the same word for a car that is
+      // very much still racing". This grid borrowed it anyway, in the same
+      // window: on the real race BEA's lap-1 cell read `OUT` three rows above the
+      // tower printing `OUT` for SAI, DOO and HAD, and lap 5 was a full-field red
+      // `OUT` row - the safety car's pit-lane pass, which in tower vocabulary is
+      // seventeen simultaneous retirements. The tower fixed this collision; this
+      // was the copy that never got the fix.
+      //
+      // Abbreviated because the column cannot hold the tower's eight glyphs:
+      // `PIT EXIT` measures 43 px against 38.75 at the wide client, so it would
+      // have arrived clipped. `P.EXIT` is 34, and `EXIT` fits the coarse column.
+      if (row.pit_out) return { text: coarse ? "EXIT" : "P.EXIT", tone: "out" as PaceTone };
       if (row.lap_time === null) return EMPTY;
       const text = paceLabel(row.lap_time, coarse);
       // A deleted time is shown and struck through, as the tower already shows
@@ -290,5 +316,5 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
       return { text, tone: tone(ranked.get(lap) ?? [], row.lap_time) };
     }),
   );
-  return { laps, columns, rows };
+  return { laps, neutralised: laps.map((lap) => neutral.get(lap) ?? null), columns, rows };
 }
