@@ -91,6 +91,14 @@ function TrackStatusChip({
   // out of `palette.py`), so this spends no new constant, and it degrades
   // honestly: `NO STATUS` above stays the dim unknown chip rather than borrowing
   // the weight, because an absence is not an alarm.
+  //
+  // It is a DIFFERENT amber from the one the pace grid's rail and the race trace's
+  // band use for the same state - the wire sends `SAFETY CAR` as rgb(255,140,0)
+  // while those two use `palette.WARNING` #f59e0b. Both names live in `palette.py`
+  // so neither is a stray literal, and at a glance the two are indistinguishable;
+  // it is recorded here so the next reader finds a decision rather than a bug. The
+  // wire's colour is the right one to fill with, because it is the one the arcade
+  // paints its own banner in on the screen beside this window.
   const green = label === "GREEN";
   return (
     <span

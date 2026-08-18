@@ -1334,7 +1334,11 @@ function paceBulk() {
       // past +10 % of the session best, so a heat scale anchored on that best
       // paints four fifths of the grid one colour. A tidy fixture cannot tell
       // the two scales apart - this one can.
-      const neutralised = lap >= 2 && lap <= 6;
+      // Laps 2-6 are one range; lap 30 is a SECOND, ONE lap long. A live safety
+      // car looks like that - only the lap just revealed is marked - and an
+      // unpadded one-lap range is `from == to`, which paints a zero-width band.
+      // No fixture had one, so the case could not be seen.
+      const neutralised = (lap >= 2 && lap <= 6) || lap === 30;
       const green = 85 + (index % 9) * 0.4 + ((lap * 3) % 11) * 0.2;
       const time = onBoundary
         ? 119.96
@@ -1686,11 +1690,11 @@ const rails = await pacePage.evaluate(() => {
 });
 
 check(
-  JSON.stringify(rails.railed) === JSON.stringify([2, 3, 4, 5, 6]),
+  JSON.stringify(rails.railed) === JSON.stringify([2, 3, 4, 5, 6, 30]),
   `the neutralised laps carry a rail and only those (${rails.railed.join(",")})`,
 );
 check(
-  rails.plain.length === PACE_LAPS - 5 && !rails.plain.includes(4),
+  rails.plain.length === PACE_LAPS - 6 && !rails.plain.includes(4) && !rails.plain.includes(30),
   `and the other ${rails.plain.length} laps carry none`,
 );
 check(
@@ -1884,6 +1888,91 @@ check(
   targets.tab >= 26 && targets.ref >= 26,
   `the tab and reference targets are big enough to hit (${targets.tab} px tab, ${targets.ref} px ref)`,
 );
+
+// **The neutralised bands, and the one-lap case a live safety car produces.** A
+// lap is a POINT on this axis, so an unpadded one-lap range is `from == to` and
+// ECharts paints a zero-width area: measured live at lap 35 with only lap 33
+// revealed, the band was invisible exactly while the safety car was out, and its
+// label floated over the NOR/PIA end labels - the chart's only identification.
+const bands = await pacePage.evaluate(() => {
+  const el = document.querySelector(".trace-band-plot");
+  const series = el.__pitwallChart.getOption().series;
+  const area = series.map((s) => s.markArea).find(Boolean);
+  if (!area) return null;
+  return {
+    label: area.label?.position ?? "",
+    ranges: area.data.map(([from, to]) => [from.xAxis, to.xAxis, from.name ?? ""]),
+  };
+});
+if (bands === null) {
+  check(false, "the race trace carries the neutralised bands");
+} else {
+  const widths = bands.ranges.map(([from, to]) => +(to - from).toFixed(2));
+  check(
+    bands.ranges.length === 2 && widths.every((width) => width >= 1),
+    `both bands have real width, the one-lap one included (${JSON.stringify(widths)})`,
+  );
+  check(
+    bands.ranges.every(([, , name]) => name === "SAFETY CAR") &&
+      bands.label === "insideTopLeft",
+    `each band is named and labelled at its left edge (${bands.label}, ${JSON.stringify(bands.ranges.map((r) => r[2]))})`,
+  );
+}
+
+// The distance axis' ticks, which the four telemetry charts share. At 1265x593 a
+// plot is 152 px and the `1,000`-style labels are ~150 px of glyphs on ~120 px of
+// axis: they rendered as one unbroken digit string on the tab the window OPENS on.
+// Measured as WIDTH against the axis, in the axis' own font, not as a string
+// comparison - a formatter that shortened the labels and still did not fit would
+// pass a string test.
+{
+  const narrowCtx = await browser.newContext({ viewport: { width: 1265, height: 593 } });
+  const narrow = await narrowCtx.newPage();
+  narrow.on("pageerror", (error) => failures.push(`pageerror(axis): ${error.message}`));
+  await narrow.addInitScript(
+    ([payload, bulk, live]) => {
+      window.pywebview = { api: {
+        get_tick: async (s) => (s === payload.seq ? null : payload),
+        get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+        get_live_lap: async (r) => (r === live.rev ? null : live),
+        get_connection: async () => "Connected",
+      } };
+    },
+    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+  );
+  await narrow.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await narrow.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+  await narrow.waitForTimeout(500);
+
+  const axis = await narrow.evaluate(() => {
+    const el = document.querySelector(".trace-plot");
+    const chart = el.__pitwallChart;
+    const option = chart.getOption();
+    const x = option.xAxis[0];
+    const ticks = chart
+      .getModel()
+      .getComponent("xAxis", 0)
+      .axis.scale.getTicks()
+      .map((entry) => (typeof entry === "object" ? entry.value : entry));
+    const format = x.axisLabel.formatter;
+    // The bounds are not labelled on a locked axis (`valueAxis`), so they are not
+    // glyphs on the axis and must not be counted as if they were.
+    const shown = x.axisLabel.showMinLabel === false ? ticks.slice(1, -1) : ticks;
+    const labels = shown.map((value) => (format ? format(value) : String(value)));
+    const ruler = document.createElement("canvas").getContext("2d");
+    ruler.font = `${x.axisLabel.fontSize}px ${getComputedStyle(document.body).fontFamily}`;
+    const glyphs = labels.reduce((total, text) => total + ruler.measureText(text).width, 0);
+    const span = el.clientWidth - (option.grid[0].left + option.grid[0].right);
+    return { labels, glyphs: +glyphs.toFixed(1), span, plot: el.clientWidth };
+  });
+  check(
+    axis.glyphs < axis.span,
+    `the distance ticks fit their axis at the narrow client (${axis.labels.join(" ")} = ${axis.glyphs} px on ${axis.span} px of a ${axis.plot} px plot)`,
+  );
+  await narrowCtx.close();
+}
 
 // A retired car keeps the laps he drove and gets NO point for the ones he did
 // not. These three have no crossings at all, so their series must be EMPTY -

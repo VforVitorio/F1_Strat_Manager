@@ -48,11 +48,21 @@ export const CURSOR_LINE = "#9ca3af";
  * A translucent FILL rather than a stroke, and that is the constraint rather
  * than a preference: on this window a dashed line already means broadcast-tier
  * data and a solid thin vertical is the current-lap cursor, so a band needed a
- * channel of its own. 12 % reads behind twenty lines without competing with any
- * of them - the alpha is the only number here chosen by eye, and it is a
- * background rather than a value, which is the one place that is allowed.
+ * channel of its own.
+ *
+ * **8 %, and 12 % was measurably too much.** The alpha is the one number in this
+ * file chosen for how it looks, so it is the one that needed arithmetic rather
+ * than an eye. Composited over the panel - rgb(24,22,51) under rgb(245,158,11) -
+ * the red channel overtakes the blue at alpha 0.1034: past that the surface stops
+ * being a tinted navy and becomes a warm brown, so a third of the plot reads as a
+ * different MATERIAL and the band ends up with more visual mass than any of the
+ * twenty lines it is annotating. 0.12 composited to rgb(51,38,46), the wrong side.
+ * 0.08 gives rgb(42,33,48): still plainly a band, still blue.
+ *
+ * The `SAFETY CAR` label and the pace grid's keyed rail carry the meaning, so the
+ * fill does not have to shout to be understood.
  */
-export const NEUTRALISED_BAND = "rgba(245, 158, 11, 0.12)";
+export const NEUTRALISED_BAND = "rgba(245, 158, 11, 0.08)";
 
 /**
  * Mount an ECharts instance on a div and push options into it imperatively.
@@ -114,6 +124,17 @@ export interface AxisSpec {
    * visually noisy and hides where on the lap the car actually is.
    */
   scale?: boolean;
+  /**
+   * Shorten the tick labels. Optional because only the distance axis needs it:
+   * at the 1265 x 593 client a telemetry plot is 152 px wide, its axis about 120,
+   * and five labels of `1,000`-style text at 10 px mono are ~150 px of glyphs -
+   * measured, they rendered as `1,0002,0003,0004,0005,000`, one unreadable run on
+   * all four charts, on the tab the window OPENS on.
+   *
+   * Per call rather than inside `valueAxis`, because the race trace's x axis is
+   * LAPS and a `k` suffix there would be nonsense.
+   */
+  label?: (value: number) => string;
   min?: number;
   max?: number;
 }
@@ -150,6 +171,7 @@ export function valueAxis(spec: AxisSpec = {}) {
       fontSize: 10,
       showMinLabel: locked ? false : undefined,
       showMaxLabel: locked ? false : undefined,
+      formatter: spec.label,
     },
     splitLine: { lineStyle: { color: SPLIT_LINE } },
   };

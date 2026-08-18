@@ -347,9 +347,11 @@
   min-width: 0;
 }
 
-/* The compact form: one line of purple holders plus the theoretical, for the
- * client where the ranked panel does not fit at all. Spends width, which this
- * column has 630 px of, instead of the height it has 63 of. */
+/* The compact form: the purple holders plus the theoretical, for the client where
+ * the ranked panel does not fit at all. Spends width, which this column has 630 px
+ * of, instead of the height it has 63 of. Measured, it wraps to TWO 17 px lines at
+ * 1265 and the card comes to 62 px in a 63 px slot - it fits, with about one wrap
+ * of margin. See `BestsPanel`'s note. */
 .bests-leaders {
   display: flex;
   align-items: baseline;

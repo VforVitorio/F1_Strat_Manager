@@ -155,14 +155,25 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
                 itemStyle: { color: NEUTRALISED_BAND },
                 label: {
                   show: true,
-                  position: "insideTop" as const,
+                  // At the band's LEFT edge, not its top centre: a band that ends
+                  // at the plot's right - which is what a LIVE neutralisation looks
+                  // like - put its label straight on top of the NOR/PIA end labels,
+                  // and those labels are the chart's only identification.
+                  position: "insideTopLeft" as const,
                   color: AXIS_TEXT,
                   fontSize: 8,
                   formatter: (params: { name?: string }) => params.name ?? "",
                 },
+                // **Padded to the lap's own cell, because a lap is a POINT on this
+                // axis.** Unpadded, a one-lap range is `from == to` and ECharts
+                // paints a zero-width area: a safety car that has just come out -
+                // the moment the band exists for - rendered NOTHING while its label
+                // floated over the driver codes. Measured live at lap 35 with only
+                // lap 33 revealed as neutralised. The half-lap also puts a boundary
+                // lap's data point INSIDE its band rather than on the edge.
                 data: neutral.map((band) => [
-                  { name: band.label, xAxis: band.from },
-                  { xAxis: band.to },
+                  { name: band.label, xAxis: band.from - 0.5 },
+                  { xAxis: band.to + 0.5 },
                 ]),
               }
             : undefined,
