@@ -915,10 +915,17 @@
   gap: 4px;
 }
 
-/* 5/12 rather than 3/10: these were 22 px tall and the reference strip's buttons
+/* 6/12 rather than 3/10: these were 22 px tall and the reference strip's buttons
  * 15, against the ~28-32 px a mouse target wants - and the three reference
  * buttons change what the whole race trace MEANS, since they move the zero line.
- * Pure whitespace; both headers have slack at both client sizes. */
+ * Pure whitespace; both headers have slack at both client sizes.
+ *
+ * **`line-height` is pinned because the padding alone is not the height.** With
+ * the line-height left to the font this measured 26 px on the machine it was
+ * written on and 23 in CI, where JetBrains Mono is not installed - the guard
+ * caught it there, which is the guard working, and it is the same
+ * a-fallback-font-eats-the-pixel class the left column's 630 px note worries
+ * about. Both strips now compute to 26 from the stylesheet alone. */
 .tab {
   background: none;
   border: 1px solid var(--qt-border);
@@ -929,7 +936,8 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1px;
-  padding: 5px 12px;
+  line-height: 12px;
+  padding: 6px 12px;
 }
 
 .tab.is-active {
