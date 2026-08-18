@@ -43,7 +43,7 @@ from typing import Any
 
 import pandas as pd
 
-from src.f1_strat_manager.tyre_stint_repair import repair_tyre_stints
+from src.f1_strat_manager.tyre_stint_repair import is_real_compound, repair_tyre_stints
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +201,60 @@ def _theoretical(best: dict[str, Any]) -> float | None:
     if any(value is None for value in sectors):
         return None
     return round(sum(sectors), 3)
+
+
+def _tyre_stops(revealed: list[dict[str, Any]]) -> int:
+    """How many times this driver changed tyres, from the sets themselves.
+
+    **A pit entry is not a stop, and the rule is already written in this repo.**
+    `tyre_stint_repair`'s docstring states it under *"Why a pit entry alone does
+    not mean a new set"*: a stop-and-go or a drive-through sends the car down
+    the pit lane with no work done. Melbourne 2025 is a stronger case than the
+    penalty it names - the safety car led the field through the pit lane on laps
+    2, 3 AND 4, so `PitInTime` is set for all seventeen runners on all three,
+    while `Compound` stays INTERMEDIATE and `TyreLife` counts 2 -> 3 -> 4 -> 5
+    unbroken. Counting in-laps reported THREE stops for the whole field from lap
+    5 to the flag, next to a `TYRE` cell reading `I 23`.
+
+    `Stint` is not the answer either: FastF1 opens a new one on each of those
+    passes, and at Miami 2025 the column is a 446-row NaN block.
+
+    So the evidence is the SET: the compound changed, or the published age
+    dropped. Both ride the bulk already, so this costs one pass and no new field.
+
+    Generated rows are dropped BEFORE pairing rather than skipped inside the
+    loop - a car that did not finish a lap has no compound and no age, and
+    leaving it between two real rows would hide a change that spans it.
+
+    --- WHAT THIS DELIBERATELY DOES NOT CATCH ---
+    * A set refitted with the SAME compound whose published age is HIGHER than
+      the outgoing set's. `tyre_stint_repair` measures used sets starting
+      anywhere from 2 to 16, so a short first stint replaced by a used set is
+      invisible here. It errs toward missing a stop, never toward inventing one.
+    * A feed that republishes `TyreLife` as 1 on a transit, which is #988.
+      Measured over the whole of Melbourne 2025: **five cars** carry that
+      artefact - ALB and STR on lap 3, LAW on lap 4, BEA and OCO on lap 5, all
+      with the compound unchanged - so each reads one stop high. The field's
+      total goes from **82 in-laps to 36 against a true 31**; the residual 5 is
+      that artefact and belongs where it can be repaired, not here.
+
+      (An earlier version of this comment said STR alone. That figure came from
+      comparing two candidate RULES and reporting where they differed, which is
+      not the same population as where the DATA is wrong: on the other four both
+      rules agreed, and agreed wrongly.)
+    """
+    rows = [row for row in revealed if not row["generated"]]
+    changed = 0
+    for previous, current in zip(rows, rows[1:]):
+        compounds = (previous["compound"], current["compound"])
+        both_named = all(is_real_compound(value) for value in compounds)
+        refitted = both_named and compounds[0] != compounds[1]
+        ages = (previous["tyre_life"], current["tyre_life"])
+        both_aged = all(value is not None for value in ages)
+        reset = both_aged and ages[1] < ages[0]
+        if refitted or reset:
+            changed += 1
+    return changed
 
 
 class SessionLaps:
@@ -417,11 +471,11 @@ class SessionLaps:
     ) -> dict[str, Any]:
         """One driver's revealed block: rows on the wire clock, stops, bests.
 
-        `stops` counts in-laps rather than `max(stint) - 1`. The two agree on
-        every driver of a healthy race, which is exactly how the wrong one
-        gets chosen: Miami 2025's raw frame carries a 446-row NaN `Stint`
-        block, and a stint-based count reads zero stops for most of the field
-        late in the race.
+        `stops` counts TYRE-SET TRANSITIONS; see `_tyre_stops`. It used to
+        count in-laps, and the docstring that chose that read *"the two agree
+        on every driver of a healthy race, which is exactly how the wrong one
+        gets chosen"* - a true clause under a false headline, because on the
+        one race a curated install carries NEITHER counts stops.
 
         `crossings` is the lap-quantised clock the gap column subtracts. It
         holds real rows only - a generated row's `Time` stamp sorts before
@@ -444,7 +498,7 @@ class SessionLaps:
         best = _best_of(revealed)
         view = {
             "laps_revealed": revealed_to,
-            "stops": sum(1 for row in revealed if row["pit_in"]),
+            "stops": _tyre_stops(revealed),
             "laps": laps,
             "crossings": crossings,
             "best": best,
