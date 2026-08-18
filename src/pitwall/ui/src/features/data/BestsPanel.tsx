@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Bulk } from "../../lib/bridge";
+import { formatSeconds } from "../../lib/format";
 import {
   sessionBests,
   theoreticalLap,
@@ -213,13 +214,8 @@ function BestsSection({ label, entries }: { label: string; entries: BestEntry[] 
   );
 }
 
-/** `1:25.744` past the minute, `29.412` under it. */
-function formatTime(seconds: number): string {
-  if (seconds < 60) return seconds.toFixed(3);
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds - minutes * 60;
-  return `${minutes}:${rest.toFixed(3).padStart(6, "0")}`;
-}
+/** `1:25.744` past the minute, `29.412` under it. One arithmetic, in `lib/format`. */
+const formatTime = (seconds: number) => formatSeconds(seconds, 3);
 
 /** How far off the section's leader, as the percentage a timing screen shows. */
 function formatDelta(value: number, leader: number): string {
