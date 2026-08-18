@@ -1910,14 +1910,14 @@ check(
 // The bulk is HELD at the stub while the card mounts, so these three sizes are
 // exercised with the panel settling EMPTY first.
 //
-// **This guard asserts the EFFECT at three sizes nobody covered; it is NOT the
-// discriminator for the race that produced the defect.** Driven against the
-// un-fixed latch it still passes: measured, the empty ranked card is 114 px and the
-// room at 1265x650 is 120, yet the stub transport has the panel already compact by
-// the time the first measurement lands, so the mount never commits to `ranked`
-// against the empty height the way it does over HTTP. The race was found and the
-// fix was verified on the LIVE loopback with six fresh mounts per size; that is
-// recorded in the commit rather than pretended here.
+// **This guard IS the discriminator, and the paragraph that used to stand here said
+// it was not.** That sentence was written while a red/green mutation was still sitting
+// in the working tree, so it described a measurement taken against the wrong build;
+// the guard was then driven red four times against the un-fixed latch and green four
+// times with it, and the comment never caught up. A false comment claiming a guard
+// cannot see its own defect is worse than no comment: it invites the next reader to
+// delete a working check. Measured either way: 18 px hidden at 1265x650 and 8 px at
+// 1350x660 without the fix, 0 with it, on this fixture.
 for (const [width, height] of [
   [1265, 650],
   [1350, 660],

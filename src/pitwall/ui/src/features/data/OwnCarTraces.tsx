@@ -150,7 +150,14 @@ export function OwnCarTraces({ tick, discontinuity, frozen = false }: OwnCarTrac
           // this tick happened to carry a rival sample. Keyed on the buffer
           // instead, the chart collapsed to its placeholder for the whole
           // of a rewind hold and every lap change.
-          placeholder={starved(frame.delta) ?? (rivalCode ? null : "single-driver mode")}
+          // **The session property wins here, and the starved caption only applies
+          // when there IS a rival.** `deltaSeries` is empty BY CONSTRUCTION in
+          // single-driver mode, so letting the frozen caption take precedence put
+          // "no telemetry since the feed stopped" beside three charts showing full
+          // traces of exactly the telemetry that sentence denies - a true state
+          // with a false cause. Measured: rival code and rival telemetry stripped,
+          // the caption flipped on the producer's death.
+          placeholder={rivalCode ? starved(frame.delta) : "single-driver mode"}
         />
         <TraceChart
           title="Speed"

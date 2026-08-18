@@ -89,7 +89,7 @@ export function DataWindow() {
       <div className="data-body">
         <StatusStrip tick={live ? tick : null} connection={connection} frozen={frozen} />
         {live && tick ? (
-          // Desaturated and mildly dimmed, never blurred and never faded much:
+          // Dimmed, never desaturated, never blurred and never faded much:
           // the last known state is still operationally useful and has to stay
           // readable. What the treatment says is "this is history", not "this is
           // unavailable".

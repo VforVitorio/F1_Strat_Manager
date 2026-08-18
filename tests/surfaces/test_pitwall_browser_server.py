@@ -17,10 +17,11 @@ import json
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
-from src.pitwall.config import WINDOWS, window_target
+from src.pitwall.config import WINDOWS, window_arguments, window_target
 from src.pitwall.webserver import BROWSER_HOST, BrowserServer
 
 
@@ -181,7 +182,9 @@ def test_a_window_points_at_the_server_that_is_running_and_not_at_a_file(served:
     """
     for spec in WINDOWS:
         target = window_target(spec, served)
-        assert target.startswith(served), f"{spec.key} does not point at the running server: {target}"
+        assert target.startswith(served), (
+            f"{spec.key} does not point at the running server: {target}"
+        )
         assert "file:" not in target and "\\" not in target, target
         # The route ANSWERS. A window handed an unfetchable URL is the whole bug,
         # and it is the only assertion here that could have caught it.
@@ -198,3 +201,70 @@ def test_a_window_falls_back_to_the_file_when_there_is_no_server():
     for spec in WINDOWS:
         assert window_target(spec, None) == spec.url
         assert spec.url.endswith(spec.entry)
+
+
+def test_the_window_arguments_carry_the_served_url_and_the_placed_geometry(served: str):
+    """The SEAM `__main__` unpacks, so the wiring is guarded and not just the rule.
+
+    **`window_target` being right was never the gap.** Reverting `__main__`'s call
+    site to `spec.url` kept 227 surface tests, 176 data-smoke checks and 19
+    agents-smoke checks green, because nothing outside the product loads that module
+    - so the racy pywebview 404 (#995) could walk back in on a fully green board and
+    only opening the OS window would show it. That is the same
+    verified-through-the-page-and-not-the-window gap this sprint had to confess to
+    once already.
+
+    `main()` now unpacks this dict straight into `create_window`, so asserting its
+    `url` key asserts what the window is handed. The geometry is checked in the same
+    breath because it comes from the same call and `place`'s clamp is load-bearing.
+    """
+    screen = (1707, 960)
+    for index, spec in enumerate(WINDOWS):
+        arguments = window_arguments(spec, index, screen, served)
+
+        assert arguments["url"] == window_target(spec, served)
+        assert arguments["url"].startswith(served), arguments["url"]
+        status, _content_type, body = _get(arguments["url"])
+        assert status == 200 and spec.key in body, f"{spec.key} -> {status}"
+
+        x, y, width, height = spec.place(index, *screen)
+        assert (arguments["x"], arguments["y"]) == (x, y)
+        assert (arguments["width"], arguments["height"]) == (width, height)
+        assert arguments["title"] == spec.title
+        # The toolkit's own keyword names, because this dict is splatted into it.
+        assert set(arguments) == {"title", "url", "width", "height", "x", "y"}
+
+
+def test_the_window_arguments_fall_back_to_the_file_with_no_server():
+    for index, spec in enumerate(WINDOWS):
+        assert window_arguments(spec, index, (1707, 960), None)["url"] == spec.url
+
+
+def test_a_port_it_cannot_bind_degrades_to_no_server_rather_than_a_crash(tmp_path: Path):
+    """The failure that actually happens, and the one the fallback was written for.
+
+    `start()` returning None used to mean "no bundle" only - which `ui_is_built()`
+    has already ruled out by the time `__main__` calls it, making the documented
+    file-path fallback reachable only by deleting the bundle between two checks.
+    A bind failure is the realistic one (a Windows port-exclusion range, a security
+    product holding the port) and it propagated out and killed the host before a
+    single window opened.
+
+    **The OSError is injected, and the reason is worth stating.** A second server on
+    an already-bound port was the obvious probe and it does not work: `HTTPServer`
+    sets `allow_reuse_address`, so on Windows the second bind SUCCEEDS and returns a
+    live URL - measured, before this test was rewritten. The failures that do happen
+    are a reserved port range or a security product, neither of which a test can
+    provoke portably, so what is asserted here is the DEGRADATION: whatever the
+    socket raises, the caller gets None and the host lives.
+    """
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "data.html").write_text("<html>data</html>", encoding="utf-8")
+    (dist / "agents.html").write_text("<html>agents</html>", encoding="utf-8")
+
+    def refuse(*_args, **_kwargs):
+        raise OSError(10013, "An attempt was made to access a socket in a forbidden way")
+
+    with mock.patch("src.pitwall.webserver.ThreadingHTTPServer", refuse):
+        assert BrowserServer(dist, _FakeHost()).start() is None

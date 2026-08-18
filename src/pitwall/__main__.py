@@ -22,7 +22,7 @@ from src.pitwall.config import (
     build_hint,
     ui_dist,
     ui_is_built,
-    window_target,
+    window_arguments,
 )
 from src.pitwall.host import PitwallHost
 from src.pitwall.stream_client import ArcadeStreamClient
@@ -66,7 +66,8 @@ def main() -> int:
     screen = webview.screens[0]
 
     for index, spec in enumerate(WINDOWS):
-        x, y, width, height = spec.place(index, screen.width, screen.height)
+        arguments = window_arguments(spec, index, (screen.width, screen.height), url)
+        width, height = arguments["width"], arguments["height"]
         if (width, height) != (spec.width, spec.height):
             logger.info(
                 "%s opens at %dx%d rather than %dx%d - the %dx%d screen is smaller",
@@ -99,18 +100,12 @@ def main() -> int:
         # `js_api` is unaffected: pywebview injects `window.pywebview` per window
         # whatever the URL, and `bridge.ts` falls back to `fetch` when it is absent.
         #
-        # The fallback keeps the old behaviour when the bundle cannot be served -
-        # a window that renders through pywebview's server sometimes beats no
-        # window at all.
-        window = webview.create_window(
-            spec.title,
-            window_target(spec, url),
-            js_api=host,
-            width=width,
-            height=height,
-            x=x,
-            y=y,
-        )
+        # The fallback keeps the old behaviour when the server cannot come up at
+        # all - a window through pywebview's own server beats no window. It covers
+        # a bind failure now as well as a missing bundle: `start()` used to let an
+        # OSError out, and since the windows LOAD through that server the raise
+        # took the whole surface down instead of degrading.
+        window = webview.create_window(js_api=host, **arguments)
         # The client belongs to the host, so a window closing only decrements
         # a count. Wiring `client.stop` here instead is the regression this
         # sprint was told to prevent: closing the DATA window would silently

@@ -8,7 +8,7 @@ with no system webview.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 # One source for the endpoint. Redefining the port here would let the arcade
 # move it and leave PITWALL connecting to nothing, with no error anywhere:
@@ -23,6 +23,7 @@ __all__ = [
     "ui_asset",
     "ui_dist",
     "ui_is_built",
+    "window_arguments",
     "window_target",
 ]
 
@@ -141,6 +142,38 @@ def window_target(spec: WindowSpec, base: str | None) -> str:
     if not base:
         return spec.url
     return f"{base.rstrip('/')}/{spec.entry}"
+
+
+def window_arguments(
+    spec: WindowSpec, index: int, screen: tuple[int, int], base: str | None
+) -> dict[str, Any]:
+    """Every argument `create_window` needs for one window, as a dict.
+
+    **A seam, and it exists because the thing that fixed #995 was guarded by
+    nothing.** `window_target` is pure and well pinned, and no test asserted that
+    `__main__` CALLS it: reverting the call site to `spec.url` kept 227 surface
+    tests, 176 data-smoke checks and 19 agents-smoke checks green, so the racy 404
+    could walk back in on a fully green board. Only opening the OS window would have
+    shown it - the same verified-through-the-page-and-not-the-window gap this sprint
+    had to confess to once already.
+
+    So the assembly lives here, where a test can read it without importing
+    pywebview, and `main()` unpacks it.
+
+    Returns the toolkit's own keyword names rather than a project-shaped record:
+    this is the boundary with pywebview, and translating twice would be a second
+    place to get it wrong.
+    """
+    x, y, width, height = spec.place(index, *screen)
+    arguments = {
+        "title": spec.title,
+        "url": window_target(spec, base),
+        "width": width,
+        "height": height,
+        "x": x,
+        "y": y,
+    }
+    return arguments
 
 
 def ui_asset(name: str) -> Path:
