@@ -180,7 +180,17 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
           endLabel: {
             show: line.points.length > 0,
             formatter: line.code,
-            color: colour,
+            // **`AXIS_TEXT`, not the line's own colour, and this panel is where it
+            // matters most.** The docstring above says the end label is the ONLY
+            // thing that tells two team-mates apart - and for VER and LAW that sole
+            // identification was 9 px of rgb(6,0,239) on the card, 1.88:1. Six of
+            // the twenty codes failed AA and four failed even the 3.0 floor.
+            //
+            // The mapping survives because the label sits ON its own line's end:
+            // adjacency carries it, which is why this panel can give the colour up
+            // where the tower had to move it to a swatch instead. #d1d5db is
+            // 11.9:1 on the card.
+            color: AXIS_TEXT,
             fontSize: 9,
             fontWeight: isOwn ? ("bold" as const) : ("normal" as const),
             distance: 3,

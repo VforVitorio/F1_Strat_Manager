@@ -33,6 +33,7 @@
  */
 
 import type { Bulk, LapRow } from "./bridge";
+import { formatSeconds } from "./format";
 import { neutralisedLaps } from "./neutralised";
 import { sessionBests } from "./sessionBests";
 
@@ -163,15 +164,7 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
  * panel puts the ordering anyway.
  */
 export function paceLabel(seconds: number, coarse = false): string {
-  if (coarse) {
-    const whole = Math.round(seconds);
-    const minutes = Math.floor(whole / 60);
-    return `${minutes}:${String(whole - minutes * 60).padStart(2, "0")}`;
-  }
-  const tenths = Math.round(seconds * 10);
-  const minutes = Math.floor(tenths / 600);
-  const rest = (tenths - minutes * 600) / 10;
-  return `${minutes}:${rest.toFixed(1).padStart(4, "0")}`;
+  return formatSeconds(seconds, coarse ? 0 : 1, true);
 }
 
 /**

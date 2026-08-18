@@ -554,7 +554,24 @@ await ringPage.addInitScript((payload) => {
   window.pywebview = {
     api: { get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload) },
   };
-}, tick(1, { drivers: FIELD, order: ["NOR", "PIA", "VER", "HUL", "HAD", "SAI"] }));
+}, tick(1, {
+  drivers: FIELD,
+  order: ["NOR", "PIA", "VER", "HUL", "HAD", "SAI"],
+  // **The REAL team colours, including the ones that fail.** `tick()` defaults every
+  // car to rgb(255,128,0), which is 6.94:1 on the card - it passes, so a fixture
+  // built on the default cannot fail a contrast assertion however the codes are
+  // painted. These are the arcade's own values for this session: VER at
+  // rgb(6,0,239) is 1.88:1 and HUL's rgb(0,231,0) is 10.35, so the guard has both
+  // ends of the range to work with.
+  colors: {
+    NOR: [255, 128, 0],
+    PIA: [255, 128, 0],
+    VER: [6, 0, 239],
+    HUL: [0, 231, 0],
+    HAD: [252, 215, 0],
+    SAI: [0, 160, 221],
+  },
+}));
 
 await ringPage.goto(url, { waitUntil: "domcontentloaded" });
 await ringPage.waitForSelector(".ring-dot", { timeout: 5000 });
@@ -610,6 +627,50 @@ check(
 check(
   (await ringPage.locator(".ring-code").count()) === 2,
   "only the two featured cars are labelled",
+);
+
+// --- Identity, and whether it can be READ -----------------------------------
+//
+// `driver_colors` are the arcade's own and they are TEAM colours, so colour never
+// identified a car here - the CODE does. Six of the twenty fail AA as 11 px text
+// on the card they are drawn on (VER and LAW at 1.88:1, ALO and STR at 2.55, HAM
+// and LEC at 3.71) and four fail even the 3.0 large-text floor, so the row key of
+// this window's primary panel was the part that could not be read.
+//
+// Asserted over the WHOLE enumeration of wire colours rather than on the codes
+// that happen to be on screen, and as a RATIO rather than as a colour name: a
+// membership test passes on any hex still in the palette.
+const contrast = await ringPage.evaluate(() => {
+  const lin = (c) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const ratio = (a, b) => {
+    const [hi, lo] = [L(a), L(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const parse = (value) => value.match(/\d+/g).slice(0, 3).map(Number);
+  const card = parse(getComputedStyle(document.querySelector(".tower")).backgroundColor);
+  // `td` only: the header shares the class and is a column label, not a code.
+  const cells = [...document.querySelectorAll("td.col-drv")];
+  return {
+    cells: cells.length,
+    swatches: cells.filter((cell) => cell.querySelector(".drv-swatch")).length,
+    // Every code, whatever its team colour: they all read against the card now.
+    worstCode: Math.min(...cells.map((cell) => ratio(parse(getComputedStyle(cell).color), card))),
+    // And no code is painted in a team colour any more.
+    tinted: cells.filter((cell) => {
+      const own = getComputedStyle(cell).color;
+      const swatch = cell.querySelector(".drv-swatch");
+      return swatch !== null && own === getComputedStyle(swatch).backgroundColor;
+    }).length,
+  };
+});
+check(
+  contrast.worstCode >= 4.5 && contrast.tinted === 0,
+  `every driver code reads against its card (worst ${contrast.worstCode.toFixed(2)}:1, ${contrast.tinted} still tinted)`,
+);
+check(
+  contrast.swatches === contrast.cells,
+  `and each one keeps its team colour as a swatch (${contrast.swatches}/${contrast.cells})`,
 );
 
 
@@ -1137,6 +1198,24 @@ check(
 // puts lap 2 there and the freshest message off the bottom of a 416 px card.
 check((await rowText(1)).startsWith("L23 VER"), "the newest event is the top row");
 check((await rowText(6)).startsWith("L2 RCM"), "and the oldest is the last one");
+
+// The minute boundary `paceLabel` documented and its two siblings did not have.
+// Evaluated against the SHIPPED module rather than a copy of its arithmetic.
+const boundary = await feedPage.evaluate(async () => {
+  const mod = await import("/src/lib/format.ts").catch(() => null);
+  return mod === null ? null : [
+    mod.formatSeconds(119.9996, 3),
+    mod.formatSeconds(59.9996, 3),
+    mod.formatSeconds(29.412, 3),
+    mod.formatSeconds(119.96, 1, true),
+  ];
+});
+if (boundary !== null) {
+  check(
+    JSON.stringify(boundary) === JSON.stringify(["2:00.000", "1:00.000", "29.412", "2:00.0"]),
+    `the shared formatter rounds before it splits (${JSON.stringify(boundary)})`,
+  );
+}
 
 // --- The history a reader could not reach ---------------------------------
 //

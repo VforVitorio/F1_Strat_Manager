@@ -244,10 +244,47 @@
   color: var(--qt-fg-3);
   width: 22px;
 }
+/* The code in the primary foreground, with the team colour beside it rather than
+ * inside it. Six of the twenty wire colours fail AA as 11 px text on this card and
+ * four fail the 3.0 large-text floor; the code is the row key of this window's main
+ * panel. `--qt-fg-1` is 15.8:1.
+ *
+ * **The swatch costs the table NO width**, and it had to: the cell is 34 px by a
+ * measurement, the table's natural width was 597.6 of the 608 the card gives, and
+ * an inline 3 px bar with a 4 px gap took it to 608.0625 - over by a sixteenth of
+ * a pixel, which the tower's own no-column-is-compressed guard caught. So the
+ * padding moves rather than growing: 8 left and 0 right instead of 4 and 4, and the
+ * swatch is absolutely positioned in the space that opens up. The column's total is
+ * unchanged and the eleven pixels of air the 630 px note budgets stay spent on
+ * nothing. */
 .col-drv {
   font-weight: 800;
   letter-spacing: 0.5px;
   width: 34px;
+  white-space: nowrap;
+}
+
+/* The body cells only: the header keeps the column-label treatment every other
+ * header has, and its own padding, so `DRV` stays aligned with its neighbours. */
+td.col-drv {
+  color: var(--qt-fg-1);
+  padding-left: 8px;
+  padding-right: 0;
+  position: relative;
+}
+
+/* A filled bar, not a dot, and nearly the row's height: a shape carries a dim
+ * colour where glyphs cannot, and this one is REDUNDANT - the code beside it
+ * already names the car - so a 1.88:1 team colour degrades to "hard to see"
+ * instead of to "unreadable". */
+.drv-swatch {
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 12px;
+  border-radius: 1px;
 }
 .col-last {
   color: var(--qt-fg-1);

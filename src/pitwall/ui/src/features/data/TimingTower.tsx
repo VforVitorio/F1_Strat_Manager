@@ -26,6 +26,7 @@
 
 import type { ArcadeState, Bulk, DriverLaps, LapRow, LiveLap } from "../../lib/bridge";
 import { driverStatus, type DriverStatus } from "../../lib/driverStatus";
+import { formatSeconds } from "../../lib/format";
 import { formatGapCell, gapCell } from "../../lib/gapCell";
 import { sessionBests, type BestField, type SessionBests } from "../../lib/sessionBests";
 
@@ -121,7 +122,25 @@ function TowerRow({ code, position, front, leader, arcade, bulk, live, bests }: 
     <tr className={`tower-row is-${status}`}>
       <td className="col-pos">{position}</td>
       <td className="col-num">{laps?.number ?? "—"}</td>
-      <td className="col-drv" style={{ color: driverColour(arcade, code) }}>
+      {/* **The colour moved off the glyphs and onto a swatch beside them.**
+       * `driver_colors` are the arcade's own and correct, and six of the twenty
+       * fail AA as TEXT on the card they are drawn on: VER and LAW at 1.88:1,
+       * ALO and STR at 2.55, HAM and LEC at 3.71, all at 11 px where 4.5 applies.
+       * Four of them fail even the 3.0 large-text floor. The DRV column is the row
+       * key of this window's primary panel, so it was the identification that
+       * could not be read.
+       *
+       * The code is `--qt-fg-1` now, 15.8:1, and the team colour is a filled bar
+       * next to it. A bar is a shape rather than glyphs, so a dim one degrades to
+       * "hard to see" instead of "unreadable" - and it is REDUNDANT here, because
+       * the code beside it already names the car.
+       *
+       * The alternative was lifting each failing colour's luminance until it
+       * passed. Rejected: it keeps the hue and the legibility but it publishes a
+       * colour the arcade never sent, on a window whose whole colour discipline is
+       * that `driver_colors` crosses the wire so no consumer invents one. */}
+      <td className="col-drv">
+        <span className="drv-swatch" style={{ background: driverColour(arcade, code) }} />
         {code}
       </td>
       <td className="col-gap">{formatGapCell(gap)}</td>
@@ -229,7 +248,7 @@ function lastCell(status: DriverStatus, last: LapRow | null): string {
   if (last === null) return "—";
   if (last.pit_in) return "IN PIT";
   if (last.pit_out) return "PIT EXIT";
-  return last.lap_time === null ? "—" : formatLapTime(last.lap_time);
+  return last.lap_time === null ? "—" : formatSeconds(last.lap_time, 3);
 }
 
 /**
@@ -248,13 +267,7 @@ function tyreCell(last: LapRow | null): string {
   return `${last.compound[0]}${age}`;
 }
 
-/** `1:25.744` past the minute, `58.220` under it, as a timing screen prints them. */
-function formatLapTime(seconds: number): string {
-  if (seconds < 60) return seconds.toFixed(3);
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds - minutes * 60;
-  return `${minutes}:${rest.toFixed(3).padStart(6, "0")}`;
-}
+
 
 /**
  * The driver's own colour, from the arcade's palette on the wire.
@@ -265,5 +278,8 @@ function formatLapTime(seconds: number): string {
  */
 function driverColour(arcade: ArcadeState, code: string): string {
   const rgb = arcade.driver_colors[code];
-  return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "var(--qt-fg-1)";
+  // `--qt-border` for a car the wire has no colour for, not `--qt-fg-1`: as a
+  // swatch the old fallback painted a bright white bar, which reads as a team
+  // colour rather than as the absence of one.
+  return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "var(--qt-border)";
 }
