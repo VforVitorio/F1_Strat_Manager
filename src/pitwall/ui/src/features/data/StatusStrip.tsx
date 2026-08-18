@@ -21,9 +21,11 @@ import { driverStatus } from "../../lib/driverStatus";
 interface StatusStripProps {
   tick: Tick | null;
   connection: string | null;
+  /** The producer is gone and every value on this strip is from before. */
+  frozen?: boolean;
 }
 
-export function StatusStrip({ tick, connection }: StatusStripProps) {
+export function StatusStrip({ tick, connection, frozen = false }: StatusStripProps) {
   const arcade = tick?.arcade;
   const playback = tick?.playback;
 
@@ -37,7 +39,16 @@ export function StatusStrip({ tick, connection }: StatusStripProps) {
       <TrackStatusChip
         label={arcade?.track_status_label ?? null}
         colour={arcade?.track_status_color ?? null}
+        frozen={frozen}
       />
+
+      {/* Where the chips already live, so the reader who only checks the top-left
+       * corner gets it too. The status bar says the same thing at the bottom. */}
+      {frozen ? (
+        <span className="strip-chip is-frozen" title="The arcade broadcast stopped">
+          DATA FROZEN
+        </span>
+      ) : null}
 
       {arcade && isProvisional(arcade.drivers) ? (
         <span className="strip-chip is-provisional" title="No classification exists until every car has completed a lap">
@@ -48,7 +59,9 @@ export function StatusStrip({ tick, connection }: StatusStripProps) {
       <span className="strip-spacer" />
 
       <StripField label="SESSION" value={sessionClock(arcade)} />
-      <StripField label="PLAYBACK" value={playbackLabel(playback)} />
+      {/* The last tick's speed is not the replay's speed once the ticks stop, and
+       * `2x` is an assertion that it is still advancing. */}
+      <StripField label="PLAYBACK" value={frozen ? "—" : playbackLabel(playback)} />
       <span className={`strip-chip ${connectionClass(connection)}`}>{connection ?? "—"}</span>
     </header>
   );
@@ -73,11 +86,19 @@ function StripField({ label, value }: { label: string; value: string }) {
 function TrackStatusChip({
   label,
   colour,
+  frozen,
 }: {
   label: string | null;
   colour: [number, number, number] | null;
+  frozen: boolean;
 }) {
   if (!label || !colour) return <span className="strip-chip is-unknown">NO STATUS</span>;
+  // **A dead feed cannot assert a track status.** The track may have gone red in
+  // the seconds since the last tick, and a frozen FILLED `SAFETY CAR` chip would
+  // be worse than a frozen green one: it would look like a live alarm. So the chip
+  // keeps its LABEL - the last thing that was true - and gives up its weight,
+  // rendering as the same dim unknown treatment `NO STATUS` uses.
+  if (frozen) return <span className="strip-chip is-unknown">{label}</span>;
   const rgb = `rgb(${colour[0]}, ${colour[1]}, ${colour[2]})`;
   // **A non-green status is FILLED, and that is the whole of the window's
   // reaction to a safety car.** Before this it was an outline chip swapping its
