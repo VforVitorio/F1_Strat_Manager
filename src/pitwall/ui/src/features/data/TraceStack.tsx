@@ -160,10 +160,15 @@ const LANES: Lane[] = [
     colour: ACCENT,
     weight: 1.7,
     step: true,
-    // Bottom, middle, top. Every-other-gear was still 8 px of pitch in a 37 px lane
-    // at the 1080p client; three marks are 16 px apart and the readout to the right
-    // carries the exact gear anyway.
-    labels: [0, 4, 8],
+    // **Two marks, and the reason the list is not three.** Every-other-gear was still
+    // 8 px of pitch in a 37 px lane at the 1080p client. `[0, 4, 8]` was the next try
+    // and the comment here claimed "bottom, middle, top" - but 0 is this axis's own
+    // MINIMUM and `valueAxis` sets `showMinLabel: false` on every locked axis
+    // (`chart.ts`), so the 0 never printed at any client and the entry was dead weight
+    // under a comment naming a mark that does not exist. Measured at all five clients
+    // before and after: `4` and `8`, 16 px apart. The readout to the right carries the
+    // exact gear.
+    labels: [4, 8],
     readout: (value) => `${Math.round(value)}`,
   },
   {

@@ -23,6 +23,7 @@
  *
  *   npm run build && node scripts/smoke-data.mjs
  */
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -31,6 +32,9 @@ import { staysStill } from "./settle.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = resolve(process.argv[2] ?? resolve(UI_DIR, "dist"));
+
+/** The lane table's own module, read so the palette lives in exactly one file. */
+const TRACE_STACK_SOURCE = resolve(UI_DIR, "src/features/data/TraceStack.tsx");
 
 const CIRCUIT_M = 5220;
 
@@ -389,6 +393,76 @@ check(
     }),
   `the own car is declared last so it paints over the rival on all six lanes (${paintOrder.join(" | ")})`,
 );
+// **Which lane wears which colour, as the RENDERED series style.**
+//
+// An adversarial gate swapped `colour: SUCCESS` and `colour: DANGER` between the
+// throttle and brake entries of the LANES table - throttle painted red, brake green -
+// rebuilt, and every check here plus the whole token suite stayed green. The token test
+// reads the `const NAME = "#hex"` declarations, so both hexes keep their values and only
+// the ASSIGNMENT flips; the one colour-sensitive probe in this file scans the delta
+// lane's blue baseline, which the swap never touches. That is "membership instead of the
+// slot", the failure this repo's own token test warns about in its docstring.
+//
+// The expected hexes are READ FROM THE SOURCE rather than typed here, so this file does
+// not become a second home for the palette: what is asserted is the MAP from lane to
+// constant, which is exactly what a swapped assignment breaks.
+const declared = Object.fromEntries(
+  [
+    ...readFileSync(TRACE_STACK_SOURCE, "utf8").matchAll(
+      /^const (\w+) = "(#[0-9a-fA-F]{6})";/gm,
+    ),
+  ].map((match) => [match[1], match[2].toLowerCase()]),
+);
+const laneColours = await page.evaluate(() => {
+  const el = document.querySelector(".trace-stack-plot");
+  return Object.fromEntries(
+    el.__pitwallChart.getOption().series.map((s) => {
+      // The delta lane's own car IS the baseline, so it is an empty series carrying a
+      // markLine and its colour lives there. Read the lane's colour wherever the lane
+      // puts it, which is the rendered EFFECT either way.
+      const colour =
+        s.lineStyle?.color ?? s.markLine?.data?.[0]?.lineStyle?.color ?? "";
+      return [s.name, String(colour).toLowerCase()];
+    }),
+  );
+});
+const laneToConstant = {
+  "speed-main": "INFO",
+  "delta-main": "INFO",
+  "throttle-main": "SUCCESS",
+  "brake-main": "DANGER",
+  "gear-main": "ACCENT",
+  "drs-main": "INFO",
+};
+const wrong = Object.entries(laneToConstant).filter(
+  ([series, name]) => laneColours[series] !== declared[name],
+);
+check(
+  wrong.length === 0,
+  `each lane paints its own channel's colour (${
+    wrong
+      .map(
+        ([series, name]) =>
+          `${series} is ${laneColours[series]}, ${name} is ${declared[name]}`,
+      )
+      .join("; ") || "all six correct"
+  })`,
+);
+// The two percentage lanes share a RANGE by coincidence and must never share a colour:
+// they are the pair the swap was performed on, and the pair a reader tells apart by hue.
+check(
+  laneColours["throttle-main"] !== laneColours["brake-main"],
+  `throttle and brake are told apart by colour (${laneColours["throttle-main"]} vs ${laneColours["brake-main"]})`,
+);
+// And every rival trace is the broadcast tier's amber, on all six lanes.
+const rivalWrong = Object.entries(laneColours).filter(
+  ([series, colour]) => series.endsWith("-rival") && colour !== declared.RIVAL,
+);
+check(
+  rivalWrong.length === 6 - 6 && rivalWrong.length === 0,
+  `and every rival trace is the broadcast amber (${rivalWrong.map(([s, c]) => `${s}=${c}`).join("; ") || "all six"})`,
+);
+
 // And the lane ORDER itself, asserted once rather than assumed by every lookup.
 check(
   paintOrder.map((pair) => pair.split("-")[0]).join(",") ===
@@ -1730,6 +1804,41 @@ check(
   `and the panel says how many are below the fold, in words (${folded.fold})`,
 );
 
+// **Now SCROLL it, because a one-edge measure is right until you do.** The first
+// version of this measure tested `rect.bottom <= listBottom`, which every row scrolled
+// off the TOP also satisfies: at the end of the list the header read `total / total`
+// and the fold line disappeared, while a third of the rows sat above the viewport. The
+// pace grid's sibling measure tested both edges from the start.
+await feedPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  list.scrollTop = list.scrollHeight;
+  list.dispatchEvent(new Event("scroll"));
+});
+await feedPage.waitForTimeout(300);
+const atEnd = await feedPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  const frame = list.getBoundingClientRect();
+  // The truth, measured independently of the component: rows intersecting the frame.
+  const trulyVisible = [...list.querySelectorAll("li")].filter((li) => {
+    const rect = li.getBoundingClientRect();
+    return rect.bottom > frame.top + 1 && rect.top < frame.bottom - 1;
+  }).length;
+  return {
+    header: document.querySelector(".radio-count")?.textContent?.trim() ?? "",
+    fold: document.querySelector(".radio-fold")?.textContent?.trim() ?? null,
+    trulyVisible,
+  };
+});
+const [shownAtEnd] = atEnd.header.split(" / ").map(Number);
+check(
+  shownAtEnd <= atEnd.trulyVisible + 1 && shownAtEnd < RADIO_EVENTS.length,
+  `scrolled to the end the header still counts what is IN VIEW (says ${shownAtEnd}, ${atEnd.trulyVisible} in view of ${RADIO_EVENTS.length})`,
+);
+check(
+  atEnd.fold !== null,
+  `and the fold line survives the scroll rather than vanishing (${atEnd.fold})`,
+);
+
 // EFFECT, not mechanism: the card must not spill past the column it lives in.
 const fits = await feedPage.evaluate(() => {
   const card = document.querySelector(".radio-feed");
@@ -1858,6 +1967,26 @@ check(
 check(
   collapsed.find((row) => row.lap === "L47")?.chip === "SC",
   `and the safety car is chipped SC (${collapsed.find((row) => row.lap === "L47")?.chip})`,
+);
+
+// **The header's two numbers have to be ONE population, and a collapse is where they
+// come apart.** The numerator counted collapsed ROWS while the denominator counted
+// EVENTS: identical until something collapses, and this fixture is the case where it
+// does (6 events, 3 rows). `visible + hidden == total` is the invariant, and it fails
+// by exactly the number of merged duplicates when the two halves disagree.
+await dupPage.addStyleTag({ content: ".radio-list { max-height: 30px; }" });
+await dupPage
+  .waitForSelector(".radio-fold", { timeout: 3000 })
+  .catch(() => null);
+const dupFold = await dupPage.evaluate(() => ({
+  header: document.querySelector(".radio-count")?.textContent?.trim() ?? "",
+  fold: document.querySelector(".radio-fold")?.textContent?.trim() ?? "",
+}));
+const [dupShown] = dupFold.header.split(" / ").map(Number);
+const dupHidden = Number((dupFold.fold.match(/\d+/) ?? [NaN])[0]);
+check(
+  dupShown + dupHidden === DUPLICATE_EVENTS.length,
+  `the visible and folded counts reconcile in EVENTS on a collapsed feed (${dupShown} + ${dupHidden} vs ${DUPLICATE_EVENTS.length}: "${dupFold.header}", "${dupFold.fold}")`,
 );
 await dupCtx.close();
 
@@ -2903,7 +3032,11 @@ for (const [width, height] of [
       const grids = chart.getOption().grid;
       const last = grids[grids.length - 1];
       const box = document.querySelector(".trace-stack").clientHeight;
-      return { box, below: Math.round(box - (last.top + last.height)) };
+      return {
+        box,
+        below: Math.round(box - (last.top + last.height)),
+        sum: grids.reduce((total, grid) => total + grid.height, 0),
+      };
     })),
   });
 
@@ -2967,16 +3100,42 @@ for (const [width, height] of [
   await ctx.close();
 }
 
-// The space below the last lane is the SHARED AXIS BAND and nothing else, so it must not
-// scale with the box: the stack grows 240 px between the smallest and the largest client
-// here, and the leftover has to stay put. Asserted as "identical across every client"
-// rather than pinned to a pixel, because the band's height is one constant in
-// `TraceStack.tsx` and a second copy of it here is the twin this repo pays for most.
-const leftovers = [...new Set(laneLeftovers.map((entry) => entry.below))];
+// **The lanes must SUM to the box, and the space below the last one must be the shared
+// axis band EXACTLY.**
+//
+// This started as "the leftover is identical at every client and under 50 px", which a
+// gate refuted with one line of arithmetic: a CONSTANT dead strip of 12 px makes the
+// leftover 46 at every client - identical, under 50, and green. Any invariant that a
+// constant offset satisfies cannot see a constant offset.
+//
+// So the constants are read FROM THE SOURCE and the arithmetic is asserted whole. That
+// is the one place they are declared, so this is not a second copy of them; and the
+// claim is now the one the comment makes, which is what the previous version of this
+// block promised and did not do.
+const layout = Object.fromEntries(
+  [
+    ...readFileSync(TRACE_STACK_SOURCE, "utf8").matchAll(
+      /^const (AXIS_BAND|LANE_GAP|LABEL_ROW) = (\d+);/gm,
+    ),
+  ].map((match) => [match[1], Number(match[2])]),
+);
 check(
-  leftovers.length === 1 && leftovers[0] > 0 && leftovers[0] < 50,
-  `the lanes fill their box at every client, leaving only the axis band (${laneLeftovers
-    .map((entry) => `${entry.client}: ${entry.below} of ${entry.box}`)
+  ["AXIS_BAND", "LANE_GAP", "LABEL_ROW"].every((key) =>
+    Number.isFinite(layout[key]),
+  ),
+  `the layout constants are readable from TraceStack.tsx (${JSON.stringify(layout)})`,
+);
+// `grid.height` is the PLOT, and each lane also carries a LABEL_ROW above it - which is
+// what makes this the whole arithmetic rather than a plausible subset of it: the first
+// version omitted the six label rows and came out 72 px short at every client, so the
+// guard's own first run told me the identity I had written down was incomplete.
+const predicted = (entry) =>
+  entry.sum + layout.LABEL_ROW * 6 + layout.LANE_GAP * 5 + layout.AXIS_BAND;
+const misfits = laneLeftovers.filter((entry) => predicted(entry) !== entry.box);
+check(
+  misfits.length === 0,
+  `the six lanes, their label rows, five gaps and the axis band ARE the box at every client (${laneLeftovers
+    .map((entry) => `${entry.client}: ${predicted(entry)} vs ${entry.box}`)
     .join("; ")})`,
 );
 

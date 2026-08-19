@@ -70,9 +70,11 @@ let ruler: CanvasRenderingContext2D | null | undefined;
  * would answer no as soon as the coarse form landed, and flip back.
  */
 function fineFormFits(cell: HTMLElement, label: string): boolean {
-  if (ruler === undefined) ruler = document.createElement("canvas").getContext("2d");
+  if (ruler === undefined)
+    ruler = document.createElement("canvas").getContext("2d");
   const style = window.getComputedStyle(cell);
-  const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  const padding =
+    parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
   const room = cell.clientWidth - padding;
   // No canvas: keep the tenths. Losing them is a real cost, so it is not the
   // thing to do when the measurement is unavailable rather than negative.
@@ -81,7 +83,13 @@ function fineFormFits(cell: HTMLElement, label: string): boolean {
   return ruler.measureText(label).width <= room;
 }
 
-export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string[] }) {
+export function RacePaceGrid({
+  bulk,
+  order,
+}: {
+  bulk: Bulk | null;
+  order: string[];
+}) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState<[number, number] | null>(null);
   const [coarse, setCoarse] = useState(false);
@@ -113,9 +121,12 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
     if (rows.length === 0) return setVisible(null);
     const top = box.scrollTop;
     const bottom = top + box.clientHeight;
-    const shown = rows.filter((row) => row.offsetTop + row.offsetHeight > top && row.offsetTop < bottom);
+    const shown = rows.filter(
+      (row) => row.offsetTop + row.offsetHeight > top && row.offsetTop < bottom,
+    );
     const edges = shown.length ? shown : rows;
-    const lapOf = (row: HTMLElement) => Number(row.querySelector("th")?.textContent ?? 0);
+    const lapOf = (row: HTMLElement) =>
+      Number(row.querySelector("th")?.textContent ?? 0);
     setVisible([lapOf(edges[0]), lapOf(edges[edges.length - 1])]);
   }, []);
 
@@ -139,7 +150,8 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
     const cell =
       box?.querySelector<HTMLElement>("tbody td") ??
       box?.querySelector<HTMLElement>("thead th + th");
-    if (cell && cell.clientWidth > 0) setCoarse(!fineFormFits(cell, widest.current));
+    if (cell && cell.clientWidth > 0)
+      setCoarse(!fineFormFits(cell, widest.current));
   }, []);
 
   useEffect(() => {
@@ -156,22 +168,40 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
   // deciding on are always the last few. Re-pinned on every reveal, which is
   // about once every four and a half seconds.
   //
-  // The pin only has work to do once the table outgrows the scroller, which on a
-  // 57-lap race is around lap 55. What holds the newest lap still for the other
-  // 54 is the stylesheet: `.pace` is `align-self: end`, so the CARD grows upward
-  // from the bottom of its column and the newest row sits at a fixed height from
-  // lap 1. (Anchoring the TABLE inside a full-height card does the same thing and
-  // leaves the empty space INSIDE the card; that is what this comment described
-  // for one commit, and it is not what ships. See the `.pace` rule.)
+  // **⚠️ What this comment claimed, and what is actually true.**
+  //
+  // It said the pin "only has work to do once the table outgrows the scroller" and that
+  // `.pace`'s `align-self: end` held the newest lap at a fixed height for the rest. Both
+  // halves are stale: that declaration is gone with the revealed-only table, and the
+  // table is the whole race from lap 1.
+  //
+  // **A fixed eye-line and a whole-race axis are mutually exclusive, and it is
+  // arithmetic rather than a defect.** 57 rows at 12 px is 684 px; the scroller is 674
+  // at 1485x833, so there are 22 px of scroll in the entire race. Measured live at
+  // revealed lap 23: `scrollTop` 0 (the target below clamps negative) and the newest
+  // revealed row 386 px ABOVE the scroller's bottom edge - 158 px at 1265x593, where
+  // the shorter box leaves more room and the row reaches the edge around lap 37. With
+  // every lap of the race laid out in advance, the newest row's position IS the lap
+  // number; nothing can pin it without scrolling the future off screen, which is the
+  // skeleton's whole point.
+  //
+  // So the trade #990 made is reversed here, deliberately and with a different subject:
+  // #990 bought a fixed eye-line with a table that showed only what had run, and paid
+  // for it with a 426 px void at lap 24. The skeleton pays the eye-line and keeps the
+  // room. The row is on screen throughout, and where it sits now reads as progress.
   useEffect(() => {
     const box = scroller.current;
     if (!box) return;
-    // **Pinned to the newest REVEALED lap, not to the bottom of the table.** The
-    // table is the whole race now, so its bottom is lap 57 - the future - and
-    // scrolling there would show a wall of empty rows. Putting the newest revealed
-    // row against the scroller's bottom edge keeps the property the bottom-anchored
-    // card was bought for (the row every decision is about sits at a fixed height)
-    // without the void that came with it.
+    // **Pinned to the newest REVEALED lap, not to the bottom of the table.** The table
+    // is the whole race now, so its bottom is lap 57 - the future - and scrolling there
+    // would show a wall of empty rows.
+    //
+    // What this buys is that the newest revealed row is never scrolled PAST: it is on
+    // screen for the whole race, and it comes to rest against the bottom edge once the
+    // revealed block is taller than the box (around lap 37 at 1265x593; at 1485x833 the
+    // race barely outgrows the box at all, so the offset clamps to 0 nearly throughout).
+    // It does NOT hold the row at a fixed height - see the paragraph above for why no
+    // scroll offset can, and measured numbers for both clients.
     const rows = box.querySelectorAll<HTMLElement>("tbody tr");
     const newest = grid.revealedTo > 0 ? rows[grid.revealedTo - 1] : undefined;
     box.scrollTop = newest
@@ -181,7 +211,10 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
   }, [grid.revealedTo, grid.laps.length, measure]);
 
   const total = bulk?.race.total_laps ?? grid.laps.length;
-  const [first, last] = visible ?? [grid.laps[0], grid.laps[grid.laps.length - 1]];
+  const [first, last] = visible ?? [
+    grid.laps[0],
+    grid.laps[grid.laps.length - 1],
+  ];
 
   return (
     <section className="card pace">
@@ -202,7 +235,9 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
           ) : null}
         </span>
         <span className="pace-range">
-          {grid.laps.length ? `LAPS ${first}-${last} of ${total}` : "no laps revealed"}
+          {grid.laps.length
+            ? `LAPS ${first}-${last} of ${total}`
+            : "no laps revealed"}
         </span>
       </header>
       <div className="pace-scroll" ref={scroller} onScroll={measure}>
@@ -222,7 +257,9 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
                 // A lap nobody has driven yet. It carries its number and nothing
                 // else, so the panel shows how much race is left without pretending
                 // to know anything about it.
-                className={grid.laps[index] > grid.revealedTo ? "is-future" : undefined}
+                className={
+                  grid.laps[index] > grid.revealedTo ? "is-future" : undefined
+                }
               >
                 {/* The rail on the lap number is the whole marker: on a
                  * neutralised lap the colour thirds rank the safety car's queue,

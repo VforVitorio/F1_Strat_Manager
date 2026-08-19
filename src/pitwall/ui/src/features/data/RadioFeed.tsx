@@ -140,7 +140,7 @@ export function RadioFeed({
   const list = useRef<HTMLOListElement | null>(null);
 
   /**
-   * How many rows are actually ON SCREEN.
+   * How many EVENTS are actually on screen.
    *
    * **The header count says how many events EXIST; it never said the panel was
    * showing about ten of them.** 58 events in a 404 px card is a ten-row fold, and
@@ -151,6 +151,21 @@ export function RadioFeed({
    * Measured off each row's own box rather than derived from a row-height constant,
    * for the reason that grid's `measure` gives: the height is CSS, and a second copy
    * of it here is the twin this repo pays for most often.
+   *
+   * **⚠️ Two things the first version of this got wrong, both found by an adversarial
+   * gate on the same branch.**
+   *
+   * 1. **It tested ONE edge** (`rect.bottom <= listBottom`), which anything scrolled
+   *    off the TOP also satisfies. Measured on the real Melbourne corpus at
+   *    1485x833: scrolled to the end the header read `47 / 47` and the fold line
+   *    vanished, with 13 rows actually in view and 34 hidden above it. The pace
+   *    grid's sibling `measure` tested both edges from the start - the same twin one
+   *    panel over, and this copy was written with half of it.
+   * 2. **It counted ROWS while the header's total counted EVENTS.** Those agree only
+   *    while nothing is collapsed. From Melbourne's lap 46 four identical BLUE FLAG
+   *    lines become one row, and `9 / 58` beside `+ 40 older` stops reconciling
+   *    (9 + 40 = 49 rows, not 58 events). Both halves count EVENTS now, which is what
+   *    the denominator always meant.
    */
   const measure = useCallback(() => {
     const box = list.current;
@@ -158,14 +173,19 @@ export function RadioFeed({
     const items = [...box.querySelectorAll<HTMLElement>("li")];
     if (items.length === 0) return setVisible(null);
     // Rects, not `offsetTop`: that is measured from the nearest POSITIONED ancestor,
-    // and `.radio-list` is a plain flex child, so the first version of this counted
-    // zero rows visible out of six. Viewport rects need no such assumption.
-    const edge = box.getBoundingClientRect().bottom;
-    setVisible(
-      items.filter((item) => item.getBoundingClientRect().bottom <= edge + 1)
-        .length,
-    );
-  }, []);
+    // and `.radio-list` is a plain flex child, so an earlier version counted zero
+    // rows visible out of six. Viewport rects need no such assumption.
+    const frame = box.getBoundingClientRect();
+    let onScreen = 0;
+    items.forEach((item, index) => {
+      const rect = item.getBoundingClientRect();
+      const inside =
+        rect.bottom <= frame.bottom + 1 && rect.top >= frame.top - 1;
+      // A collapsed row stands for `repeats` events, and the total counts events.
+      if (inside) onScreen += rows[index]?.repeats ?? 1;
+    });
+    setVisible(onScreen);
+  }, [rows]);
 
   useEffect(() => {
     measure();
@@ -176,14 +196,16 @@ export function RadioFeed({
     return () => observer.disconnect();
   }, [measure, rows.length]);
 
-  const hidden = visible === null ? 0 : Math.max(0, rows.length - visible);
+  // Events, not rows, so both numbers on screen come from one population.
+  const hidden = visible === null ? 0 : Math.max(0, events.length - visible);
 
   return (
     <section className="card radio-feed">
       <header className="radio-header">
         <span className="radio-title">RADIO · RCM</span>
         {feed?.available ? (
-          // `10 / 58`, not `58`. What the panel is showing, over what there is.
+          // `10 / 58`, not `58`. Events on screen, over events revealed - one
+          // population on both sides of the slash.
           <span className="radio-count">
             {visible === null ? events.length : `${visible} / ${events.length}`}
           </span>

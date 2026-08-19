@@ -1096,23 +1096,27 @@ td.col-drv {
   color: var(--qt-fg-1);
 }
 
-/* **The card grows UPWARD from the bottom of the column, and that is about where
- * the reader's eye can rest.** It used to be top-aligned and content-sized, so at
- * lap 24 of 57 it filled 288 px of a 722 px column and the newest row - the only
- * one a live wall reads - migrated ~12 px per lap for the whole race, 434 px in
- * total. The pin in `RacePaceGrid` cannot help: there is nothing to scroll until
- * the table outgrows the column, which on a 57-lap race is around lap 55.
+/* **The card fills the column, and the LAP AXIS is what stops the newest row moving.**
  *
- * Anchoring the TABLE to the bottom of a full-height card was the first attempt
- * and it is worse: it leaves the 426 px of empty space INSIDE the card, between
- * the header line and the column codes, which reads as a broken panel rather
- * than as a race that has not happened yet. Measured on the live page at a
- * 20-lap reveal before it was reverted. Anchoring the CARD instead puts the same
- * empty space outside it, where it is ordinary layout air.
+ * ⚠️ This comment described `align-self: end` - a card grown upward from the bottom of
+ * the column - and that declaration is gone. It was the right fix for a table that held
+ * only the laps that had run: content-sized and top-aligned, at lap 24 of 57 it filled
+ * 288 px of a 722 px column and the newest row migrated ~12 px per lap, 434 px over a
+ * race. Bottom-anchoring the card moved that emptiness outside it.
  *
- * `max-height: 100%` is what keeps this honest once the table is long: without
- * it the content-sized card would grow past the grid row and spill, and the
- * scroller - which needs a bounded height to scroll at all - would never bound. */
+ * The table is now the WHOLE race from lap 1, with future laps drawn as a grey
+ * skeleton, so there is no growth to anchor: the card is the same height at lap 1 and at
+ * lap 57 and the scroller does the work from the first reveal. `align-self: end` on a
+ * card that no longer grows is a no-op that reads as load-bearing, which is why it went
+ * with the mechanism rather than being left "just in case".
+ *
+ * **What did NOT survive the change** (`RacePaceGrid.tsx`'s pin comment carries the
+ * measurement): the newest revealed row is no longer at a FIXED height. It is on screen
+ * throughout, and it stops moving only once the revealed part outgrows the scroller.
+ *
+ * `max-height: 100%` still keeps this honest: without it the card would grow past the
+ * grid row and spill, and the scroller - which needs a bounded height to scroll at all -
+ * would never bound. */
 .pace {
   display: flex;
   flex-direction: column;

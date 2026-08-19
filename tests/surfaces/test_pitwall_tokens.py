@@ -386,7 +386,51 @@ def test_the_data_stylesheets_raw_hexes_are_guarded_too():
     )
     assert raw[3] == _rgb_to_hex(palette.DANGER), "band 1's Disconnected chip copies DANGER"
     assert raw[4] == _rgb_to_hex(palette.WARNING), (
-        "the rival chip, band 1's PROVISIONAL chip and a slower-than-own-best sector copy WARNING"
+        "the rival chip, band 1's PROVISIONAL chip, a slower-than-own-best sector, the "
+        "neutralised-lap rail and the radio's SC / flag category chips copy WARNING"
+    )
+
+
+def test_the_radio_category_chips_are_pinned_PER_SITE_not_as_a_set():
+    """The slot, not the membership - the failure this file's own docstrings warn about.
+
+    **An adversarial gate refuted the set-based guard above for these two sites.** The
+    category chips introduced `.radio-cat.is-sc` / `.is-flag` on WARNING and `.is-clear`
+    on SUCCESS, and both hexes were already in the stylesheet's set - so swapping the
+    clear chip to amber, or the safety-car chip to green, leaves
+    `test_the_data_stylesheets_raw_hexes_are_guarded_too` green while the panel says the
+    opposite of what happened. A CLEAR flag painted amber reads as a new warning.
+
+    So this reads the rules themselves: each selector, and the exact value it declares.
+    The pairing is the claim - amber for anything that changes how the track is being
+    driven, green for the all-clear - and it is the pairing a swap breaks.
+    """
+    from src.arcade import palette
+
+    css = _without_comments(DATA_CSS.read_text("utf-8"))
+    declared = {}
+    # Selector LISTS, not one selector per rule: `.is-sc` and `.is-flag` deliberately
+    # share a declaration because they carry the same weight, and a regex that stops at
+    # the first class silently drops the second - which is how the first version of this
+    # guard reported three chips where the stylesheet has four.
+    for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        match = re.search(r"background:\s*([^;]+);", body)
+        if match is None:
+            continue
+        for chip in re.findall(r"\.radio-cat\.(is-[\w-]+)", selectors):
+            declared[chip] = match.group(1).strip().lower()
+
+    assert set(declared) == {"is-sc", "is-flag", "is-clear", "is-drs"}, (
+        f"a category chip was added or renamed without pinning its colour: {sorted(declared)}"
+    )
+    warning = _rgb_to_hex(palette.WARNING)
+    assert declared["is-sc"] == warning, "a safety car changes how the track is driven"
+    assert declared["is-flag"] == warning, "so does a flag, and it wears the same weight"
+    assert declared["is-clear"] == _rgb_to_hex(palette.SUCCESS), (
+        "the all-clear is the one green chip; amber here would read as a new warning"
+    )
+    assert declared["is-drs"] == "var(--qt-fg-3)", (
+        "the DRS note is informational and takes the tertiary token, not a hue"
     )
 
 
