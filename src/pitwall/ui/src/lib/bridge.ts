@@ -38,7 +38,17 @@ export interface TelemetrySample {
   throttle: number;
   brake: number;
   gear: number;
+  /** The RAW FastF1 code. 8 means "eligible, not open" - never test it with `> 0`. */
   drs: number;
+  /**
+   * The wire's own answer to "is the wing open", decoded from
+   * `config.DRS_OPEN_CODES` producer-side.
+   *
+   * This field exists so no consumer here has to know the codes: the panel that
+   * charts it refused to fork that set into TypeScript, which is why the DRS lane
+   * could not be built until the producer published the answer instead.
+   */
+  drs_open: boolean;
 }
 
 export interface ArcadeState {

@@ -30,6 +30,7 @@ from src.arcade.config import (
     DRIVER_BOX_GAP,
     DRIVER_BOX_HEIGHT,
     DRIVER_BOX_WIDTH,
+    DRS_OPEN_CODES,
     FONT_BODY,
     FONT_TITLE,
     FPS,
@@ -190,6 +191,15 @@ def _frame_to_telemetry(frame, circuit_length_m: float, has_position: bool = Tru
         "brake": round(brake, 1),
         "gear": int(frame.gear),
         "drs": int(frame.drs),
+        # **Decoded here, and that is the point.** The open set lives in
+        # `config.DRS_OPEN_CODES`; `OwnCarTraces` refuses to fork it into
+        # TypeScript, which is why its DRS lane could not exist until the producer
+        # published the answer instead of the code - the same treatment
+        # `track_status_label` already gets. Both spans, main and rival, flow
+        # through this one function, so the rival's lane is fed by the same line.
+        # No schema bump: `stream.py`'s own contract says adding a key an old
+        # consumer can ignore does not bump it.
+        "drs_open": int(frame.drs) in DRS_OPEN_CODES,
     }
 
 

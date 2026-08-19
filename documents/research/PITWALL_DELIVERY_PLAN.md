@@ -390,8 +390,15 @@ on a time anchor (its `date` is UTC; every clock here is SessionTime, so it need
 `t0_date` - the same shape as #842) and on the decision that it would put a THIRD clock on one
 column, covering 19 drivers of 20.
 
-**Sprint 4, band 4 — SHIPPED 2026-08-10** (#897, #898). Own-car traces stacked on one x axis with
-a shared vertical cursor, pinned rival overlaid and labelled broadcast tier, and the ring.
+**Sprint 4, band 4 — SHIPPED 2026-08-10** (#897, #898). The four own-car traces, the pinned rival
+overlaid and labelled broadcast tier, and the ring.
+
+> ⚠️ **This paragraph used to read "traces stacked on one x axis with a shared vertical cursor",
+> and that was not what sprint 4 built.** It built the Qt window's 2x2 grid of four independent
+> charts, each with its own x axis and its own `markLine` cursor - which the agreed layout drawing
+> calls "the wrong shape" and assigns to **sprint 9**, where it actually landed (six lanes, one
+> chart, one axis, one cursor div spanning all of them). A plan that claims an item shipped is how
+> that item stops being scheduled.
 **Depended on sprint 1**: the traces need the span (#841) and the ring needs `rel_dist` (#842).
 Retired cars must render as retired, not as pending, which needs `active` (#842).
 

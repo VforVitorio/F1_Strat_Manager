@@ -352,3 +352,47 @@ GP_TO_LOCATION: Final[dict[str, str]] = {
     "Monza": "Monza",
     "Imola": "Imola",
 }
+
+# DRS codes that mean the wing is OPEN, and the one home for that fact.
+#
+# From FastF1's own channel documentation (`fastf1/_api.py`, `car_data`'s docstring):
+# 0 and 1 are Off, **8 is "Detected, Eligible once in Activation Zone"**, and
+# **10 / 12 / 14 are all On** with an undocumented distinction between them. So the
+# open set is the three On codes, and 8 is deliberately NOT in it: a car that may use
+# DRS is not a car with an open wing.
+#
+# **⚠️ The comment that stood here through `track.py` and this file said "Value 10
+# (eligible) covers the short stretch between the detection line and the moment the
+# wing actually opens".** Both halves were wrong against the source above - 10 is On,
+# and the eligible code is the 8 this set EXCLUDES - and the error is not cosmetic: it
+# told the next reader the set already contains a not-yet-open code, which is an
+# invitation to add 8 "for consistency". `tests/surfaces/test_arcade_telemetry_span.py`
+# exists to refuse exactly that, because publishing 8 as open draws an open wing on a
+# closed one.
+#
+# **It lives here rather than in `track.py` because five places in this repo decode it,
+# and a sixth cannot.** In Python: the track overlay's zones (`track.py`), the driver
+# telemetry box's label and colour (`overlays.py`, two sites), the wire's decoded
+# `drs_open` (`app.py::_frame_to_telemetry`), and the FIA-doc audit script
+# (`scripts/verify_drs_zones.py`). `OwnCarTraces` refused to fork the set into
+# TypeScript, correctly, and the way to honour that refusal is to decode it once here.
+#
+# **The sixth is out of reach and worth naming rather than hiding.** The telemetry
+# webapp's `channels.ts::binarizeDrs` tests `value >= 10`; it is TypeScript behind a git
+# submodule boundary, so it cannot import this and has to be kept in step by hand. Note
+# `>= 10` is not equivalent to this set - it admits 11 and 13, which FastF1 never emits
+# and the arcade's resampler manufactures (#1002).
+#
+# Two claims about this constant have already been wrong, both caught by adversarial
+# gates: the commit that created it said "two subsystems" while leaving `overlays.py`'s
+# pair literal, and the sentence replacing that said "FOUR call sites" while a fifth sat
+# in `scripts/` with a `>= 10` threshold the AST census could not see. The census now
+# looks for the threshold form too, and asserts it visited files at all.
+DRS_OPEN_CODES: Final[frozenset[int]] = frozenset({10, 12, 14})
+
+# The code that means "you may open it in the next zone", which is not "it is open".
+#
+# Named because two call sites compared against a bare `8`, and because it is the
+# boundary the open set is defined AGAINST: the guard that keeps 8 out of
+# `DRS_OPEN_CODES` reads better when both sides have names.
+DRS_ELIGIBLE_CODE: Final[int] = 8

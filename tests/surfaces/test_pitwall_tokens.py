@@ -168,7 +168,7 @@ QT_BASE_CSS = UI_SRC / "styles" / "qt-base.css"
 AGENTS_CSS = UI_SRC / "styles" / "agents.css"
 DATA_CSS = UI_SRC / "styles" / "data.css"
 AGENTS_WINDOW = UI_SRC / "features" / "agents" / "AgentsWindow.tsx"
-OWN_CAR_TRACES = UI_SRC / "features" / "data" / "OwnCarTraces.tsx"
+TRACE_STACK = UI_SRC / "features" / "data" / "TraceStack.tsx"
 
 # The `--qt-*` custom properties, and what each one copies from `palette.py`.
 QT_CSS_TOKENS = {
@@ -244,17 +244,21 @@ BOOT_SLOTS = {
 ECHART_MODULE = REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "lib" / "chart.ts"
 ECHART_SITES = (("TEXT_SECONDARY", 1), ("BORDER_COLOR", 1), ("TEXT_TERTIARY", 1))
 
-# Copy number six: band 4's four traces. Each metric draws in a DIFFERENT
-# palette colour (`telemetry_panel.py` passes INFO, DANGER and SUCCESS to
-# `_make_chart`), so this is a slot map for the same reason `BOOT_SLOTS` is -
-# swapping brake from DANGER to WARNING keeps every hex inside the palette
-# and is still the wrong chart in the wrong colour.
+# Copy number six: band 4's SIX lanes. Each channel draws in a DIFFERENT palette
+# colour, so this is a slot map for the same reason `BOOT_SLOTS` is - swapping brake
+# from DANGER to WARNING keeps every hex inside the palette and is still the wrong
+# lane in the wrong colour.
+#
+# The names moved with the panel: the 2x2's four `<metric>_main` constants became one
+# lane table in `TraceStack`, whose colours are the four palette names it uses plus
+# the two the new lanes add - ACCENT for gear (its own channel, a staircase) and INFO
+# reused for DRS (a bit, in the thinnest lane).
 TRACE_SLOTS = {
-    "delta_main": "INFO",
-    "speed_main": "INFO",
-    "brake_main": "DANGER",
-    "throttle_main": "SUCCESS",
-    "rival": "WARNING",
+    "INFO": "INFO",
+    "SUCCESS": "SUCCESS",
+    "DANGER": "DANGER",
+    "RIVAL": "WARNING",
+    "ACCENT": "ACCENT",
 }
 
 
@@ -323,21 +327,25 @@ def test_the_chart_axis_palette_has_not_drifted_either():
 
 
 def test_the_trace_colours_are_in_the_right_slots():
-    """Copy number six: band 4's four traces, one palette name each.
+    """Copy number six: band 4's six lanes, one palette name each.
 
-    `telemetry_panel.py` hands `_make_chart` a DIFFERENT main colour per
-    metric - INFO for delta and speed, DANGER for brake, SUCCESS for
-    throttle, WARNING for the rival on all four. A membership test cannot
-    see brake and throttle swapping places; both hexes stay in the palette
-    and the window is simply wrong.
+    A DIFFERENT colour per channel - INFO for speed and the delta baseline, SUCCESS
+    for throttle, DANGER for brake, ACCENT for gear, WARNING for the rival on every
+    lane. A membership test cannot see brake and throttle swapping places; both
+    hexes stay in the palette and the window is simply wrong.
+
+    Read from `TraceStack`, which is where the lane table lives now. The file this
+    used to read (`OwnCarTraces`) kept four `<metric>_main` constants for the 2x2;
+    the stack holds one named constant per palette colour and the lane table points
+    at them, so the slot map is by NAME rather than by metric.
     """
     from src.arcade import palette
 
-    source = OWN_CAR_TRACES.read_text("utf-8")
-    found = dict(re.findall(r"(\w+):\s*\"(#[0-9a-fA-F]{6})\"", source))
+    source = TRACE_STACK.read_text("utf-8")
+    found = dict(re.findall(r"^const (\w+) = \"(#[0-9a-fA-F]{6})\";", source, re.M))
 
     assert set(TRACE_SLOTS) <= set(found), (
-        f"a trace colour slot disappeared: {sorted(set(TRACE_SLOTS) - set(found))}"
+        f"a lane colour slot disappeared: {sorted(set(TRACE_SLOTS) - set(found))}"
     )
     for slot, name in TRACE_SLOTS.items():
         assert found[slot] == _rgb_to_hex(getattr(palette, name)), (
@@ -378,7 +386,57 @@ def test_the_data_stylesheets_raw_hexes_are_guarded_too():
     )
     assert raw[3] == _rgb_to_hex(palette.DANGER), "band 1's Disconnected chip copies DANGER"
     assert raw[4] == _rgb_to_hex(palette.WARNING), (
-        "the rival chip, band 1's PROVISIONAL chip and a slower-than-own-best sector copy WARNING"
+        "the rival chip, band 1's PROVISIONAL chip, a slower-than-own-best sector, the "
+        "neutralised-lap rail and the radio's SC / flag category chips copy WARNING"
+    )
+
+
+def test_the_radio_category_chips_are_pinned_PER_SITE_not_as_a_set():
+    """The slot, not the membership - the failure this file's own docstrings warn about.
+
+    **An adversarial gate refuted the set-based guard above for these two sites.** The
+    category chips introduced `.radio-cat.is-sc` / `.is-flag` on WARNING and `.is-clear`
+    on SUCCESS, and both hexes were already in the stylesheet's set - so swapping the
+    clear chip to amber, or the safety-car chip to green, leaves
+    `test_the_data_stylesheets_raw_hexes_are_guarded_too` green while the panel says the
+    opposite of what happened. A CLEAR flag painted amber reads as a new warning.
+
+    So this reads the rules themselves: each selector, and the exact value it declares.
+    The pairing is the claim - amber for anything that changes how the track is being
+    driven, green for the all-clear - and it is the pairing a swap breaks.
+    """
+    from src.arcade import palette
+
+    css = _without_comments(DATA_CSS.read_text("utf-8"))
+    declared = {}
+    # Selector LISTS, not one selector per rule: `.is-sc` and `.is-flag` deliberately
+    # share a declaration because they carry the same weight, and a regex that stops at
+    # the first class silently drops the second - which is how the first version of this
+    # guard reported three chips where the stylesheet has four.
+    #
+    # **And `background-color` as well as `background`, with the LAST rule winning**, which
+    # is what the cascade does. Reading only `background:` let a second rule appended later
+    # in the file repaint the all-clear chip amber with every assertion below still green -
+    # a gate proved it by executing exactly that. Rules are walked in file order and the
+    # dict is overwritten, so this guard now agrees with the browser about which one wins.
+    for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        matches = re.findall(r"background(?:-color)?:\s*([^;]+);", body)
+        if not matches:
+            continue
+        for chip in re.findall(r"\.radio-cat\.(is-[\w-]+)", selectors):
+            declared[chip] = matches[-1].strip().lower()
+
+    assert set(declared) == {"is-sc", "is-flag", "is-clear", "is-drs"}, (
+        f"a category chip was added or renamed without pinning its colour: {sorted(declared)}"
+    )
+    warning = _rgb_to_hex(palette.WARNING)
+    assert declared["is-sc"] == warning, "a safety car changes how the track is driven"
+    assert declared["is-flag"] == warning, "so does a flag, and it wears the same weight"
+    assert declared["is-clear"] == _rgb_to_hex(palette.SUCCESS), (
+        "the all-clear is the one green chip; amber here would read as a new warning"
+    )
+    assert declared["is-drs"] == "var(--qt-fg-3)", (
+        "the DRS note is informational and takes the tertiary token, not a hue"
     )
 
 

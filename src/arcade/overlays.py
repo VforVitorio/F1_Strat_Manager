@@ -22,6 +22,8 @@ from src.arcade.config import (
     CONTENT_BG,
     DRIVER_HEADER_HEIGHT,
     DRIVER_ROW_GAP,
+    DRS_ELIGIBLE_CODE,
+    DRS_OPEN_CODES,
     FLAG_COLORS,
     FONT_BODY,
     FONT_TITLE,
@@ -307,19 +309,26 @@ class DriverInfoPanel:
 
     @staticmethod
     def _drs_label(drs: int) -> str:
+        """ON / AVAIL / OFF, from the codes' single home in `config`.
+
+        These two methods each held their own `(10, 12, 14)` literal. The commit
+        that gave the open set one home moved the track overlay and the wire and
+        left this pair behind, so for one commit the window had three copies of a
+        set whose whole point was to have one.
+        """
         drs = int(drs)
-        if drs in (10, 12, 14):
+        if drs in DRS_OPEN_CODES:
             return "ON"
-        if drs == 8:
+        if drs == DRS_ELIGIBLE_CODE:
             return "AVAIL"
         return "OFF"
 
     @staticmethod
     def _drs_color(drs: int) -> tuple[int, int, int]:
         drs = int(drs)
-        if drs in (10, 12, 14):
+        if drs in DRS_OPEN_CODES:
             return (0, 220, 0)
-        if drs == 8:
+        if drs == DRS_ELIGIBLE_CODE:
             return (255, 210, 50)
         return TEXT_TERTIARY
 

@@ -17,62 +17,37 @@
  * cursor at the car's current point on the lap, and the BROADCAST tier label
  * on the rival's legend.
  *
- * **Gear and DRS are deliberately absent.** They ride on the wire and they
- * carry real values, but the window being ported charts neither, and `drs`
- * arrives as the raw FastF1 code whose open set `{10, 12, 14}` exists only
- * in `src/arcade/track.py:40`. Charting it here would fork that constant
- * across two languages, which is the defect `driver_colors` is on the wire
- * to prevent. If the charts are wanted the producer publishes a decoded
- * `drs_open` first.
+ * **Gear and DRS are here now, and the refusal that kept them out was honoured
+ * rather than overruled.** This docstring used to say they were "deliberately
+ * absent" because `drs` arrived as the raw FastF1 code whose open set lives in one
+ * place, and charting it here would fork that constant across two languages. That
+ * was right. So the producer decodes it: `config.DRS_OPEN_CODES` is the one home
+ * and the wire carries `drs_open`, the same treatment `track_status_label` gets.
+ * `gear` was already on the wire and read by nothing.
+ *
+ * **And the 2x2 is gone.** The agreed layout drawing assigned the stacked form to
+ * this sprint and calls the 2x2 "the wrong shape"; `TraceStack` is that form. What
+ * stays here is what the stack does not own: the accumulator, the header, and the
+ * frozen/starved question.
  */
 
 import { useMemo, useRef } from "react";
 import type { Tick } from "../../lib/bridge";
 import type { Discontinuity } from "../../lib/frameClock";
-import { TraceChart } from "./TraceChart";
-import { TraceAccumulator, deltaSeries, type SortedTrace } from "./traceBuffer";
+import { TraceStack } from "./TraceStack";
+import { TraceAccumulator, deltaSeries } from "./traceBuffer";
 
-// --- Everything below is `telemetry_panel.py`, transcribed --------------
+// --- What the stack does not own -----------------------------------------
+//
+// The four locked Y ranges and the per-metric colour slots moved into
+// `TraceStack`'s lane table, where they sit next to the two new lanes and are
+// pinned there by `test_pitwall_tokens.py`. What stays here is the X lock, because
+// it is a property of the SESSION rather than of a lane.
 
-/** `_SPEED_Y_RANGE`: Monza's straight tops out around 357 km/h. */
-const SPEED_Y: [number, number] = [0, 360];
-/**
- * `_BRAKE_Y_RANGE`: padded so a trace at 0 or 100 does not kiss the frame.
- *
- * Separate from the throttle range even though the two hold the same pair.
- * `telemetry_panel.py` declares them as two constants, and merging rules that
- * agree by coincidence is a defect class this repo has already paid for: a
- * compound-suitability floor and a minimum-stint bound shared a 12, so
- * recalibrating one silently rewrote the other.
- */
-const BRAKE_Y: [number, number] = [-5, 105];
-/** `_THROTTLE_Y_RANGE`. Equal to the brake range today, and its own rule. */
-const THROTTLE_Y: [number, number] = [-5, 105];
-/** `_DELTA_Y_RANGE`: generous for one lap, and it clips when the series wanders. */
-const DELTA_Y: [number, number] = [-3, 3];
 /** `_DEFAULT_X_RANGE`, used until a broadcast carries a real circuit length. */
 const FALLBACK_X_MAX = 5500;
 /** Below this a `circuit_length_m` is not a circuit; `update_from`'s own guard. */
 const MIN_CREDIBLE_CIRCUIT_M = 100;
-
-/**
- * The colour each metric's own-car trace draws in, and the one the rival
- * always draws in. SLOTS, not a palette membership: swapping brake from
- * DANGER to WARNING would keep every hex inside the palette and still be
- * wrong, so `test_pitwall_tokens.py` pins each name to its palette constant.
- */
-const TRACE_COLOURS = {
-  /** palette.INFO */
-  delta_main: "#3b82f6",
-  /** palette.INFO */
-  speed_main: "#3b82f6",
-  /** palette.DANGER */
-  brake_main: "#ef4444",
-  /** palette.SUCCESS */
-  throttle_main: "#10b981",
-  /** palette.WARNING - the rival, on all four charts */
-  rival: "#f59e0b",
-} as const;
 
 interface OwnCarTracesProps {
   tick: Tick;
@@ -128,77 +103,26 @@ export function OwnCarTraces({ tick, discontinuity, frozen = false }: OwnCarTrac
    *
    * Two samples, not one: one point draws nothing a reader can see either.
    */
-  const starved = (points: unknown[]) => (frozen && points.length < 2 ? "no telemetry since the feed stopped" : null);
+
 
   return (
     <section className="traces card">
       <TracesHeader tick={tick} />
-      <div className="traces-grid">
-        <TraceChart
-          title="Δ Time (s)"
-          subtitle="(rival − main)"
-          mainColour={TRACE_COLOURS.delta_main}
-          rivalColour={TRACE_COLOURS.rival}
-          yRange={DELTA_Y}
-          xMax={xMax}
-          rivalCode={rivalCode}
-          main={[]}
-          rival={frame.delta}
-          mainAsZeroLine
-          cursorX={cursorX}
-          // Two-driver mode is a property of the SESSION, not of whether
-          // this tick happened to carry a rival sample. Keyed on the buffer
-          // instead, the chart collapsed to its placeholder for the whole
-          // of a rewind hold and every lap change.
-          // **The session property wins here, and the starved caption only applies
-          // when there IS a rival.** `deltaSeries` is empty BY CONSTRUCTION in
-          // single-driver mode, so letting the frozen caption take precedence put
-          // "no telemetry since the feed stopped" beside three charts showing full
-          // traces of exactly the telemetry that sentence denies - a true state
-          // with a false cause. Measured: rival code and rival telemetry stripped,
-          // the caption flipped on the producer's death.
-          placeholder={rivalCode ? starved(frame.delta) : "single-driver mode"}
-        />
-        <TraceChart
-          title="Speed"
-          subtitle="km/h"
-          mainColour={TRACE_COLOURS.speed_main}
-          rivalColour={TRACE_COLOURS.rival}
-          yRange={SPEED_Y}
-          xMax={xMax}
-          rivalCode={rivalCode}
-          main={channel(frame.main, "speed")}
-          rival={channel(frame.rival, "speed")}
-          cursorX={cursorX}
-          placeholder={starved(frame.main.xs)}
-        />
-        <TraceChart
-          title="Brake Pressure"
-          subtitle="%"
-          mainColour={TRACE_COLOURS.brake_main}
-          rivalColour={TRACE_COLOURS.rival}
-          yRange={BRAKE_Y}
-          xMax={xMax}
-          rivalCode={rivalCode}
-          main={channel(frame.main, "brake")}
-          rival={channel(frame.rival, "brake")}
-          cursorX={cursorX}
-          placeholder={starved(frame.main.xs)}
-        />
-        <TraceChart
-          title="Throttle"
-          subtitle="%"
-          mainColour={TRACE_COLOURS.throttle_main}
-          rivalColour={TRACE_COLOURS.rival}
-          yRange={THROTTLE_Y}
-          xMax={xMax}
-          rivalCode={rivalCode}
-          main={channel(frame.main, "throttle")}
-          rival={channel(frame.rival, "throttle")}
-          cursorX={cursorX}
-          placeholder={starved(frame.main.xs)}
-        />
-      </div>
+      <TraceStack
+        main={frame.main}
+        rival={frame.rival}
+        delta={frame.delta}
+        xMax={xMax}
+        rivalCode={rivalCode}
+        cursorX={cursorX}
+        // ONE caption over the whole stack, where the 2x2 printed the same sentence
+        // four times. It claims starvation only when the MAIN trace is starved: a
+        // true state with a false cause is the defect this sprint already paid for
+        // on the delta chart's single-driver mode.
+        placeholder={
+          frozen && frame.main.xs.length < 2 ? "no telemetry since the feed stopped" : null
+        }
+      />
     </section>
   );
 }
@@ -237,6 +161,3 @@ function TracesHeader({ tick }: { tick: Tick }) {
   );
 }
 
-function channel(trace: SortedTrace, key: "speed" | "throttle" | "brake"): [number, number][] {
-  return trace.xs.map((x, index) => [x, trace.rows[index][key]]);
-}

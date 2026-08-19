@@ -613,73 +613,99 @@ td.col-drv {
 
 /* --- The 2x2 grid ------------------------------------------------------- */
 
-/* `grid.setSpacing(10)` with both columns and both rows stretched equally.
- * `1fr` rather than `auto`: an auto row sizes to content, and the four
- * plots would then divide whatever the taller title row left over. */
-.traces-grid {
+/* --- Band 4: the SIX-LANE stack ------------------------------------------
+ *
+ * The 2x2 grid that stood here is retired. The agreed layout drawing assigned the
+ * stacked form to this sprint and calls the 2x2 "the wrong shape"; the arithmetic
+ * and the research are in `documents/research/PITWALL_TRACES_SPACE_SPEC.md`.
+ *
+ * The stack is ONE canvas with six ECharts grids, so the geometry lives in
+ * `TraceStack.laneLayout` where it can be derived from the measured box - 666 px at
+ * the 1485 client, 430 at 1265 - rather than tabulated in two media queries. What
+ * this stylesheet owns is the positioning context and the two HTML overlays that
+ * must not be ECharts graphics, because `notMerge: true` would restart them ten
+ * times a second. */
+.trace-stack {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 10px;
 }
 
-/* One chart: `QVBoxLayout` margins 0, spacing 4, plot stretched. */
-.trace-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  min-height: 0;
+.trace-stack-plot {
+  position: absolute;
+  inset: 0;
 }
 
-.trace-title-row {
+/* One per lane, INSIDE its lane's height: the channel name on the left in the
+ * lane's own colour, its live value on the right. The MoTeC/AiM convention - a
+ * stacked lane is read with a cursor and a readout, not by counting gridlines - and
+ * on the DRS lane it is what tells a flat line apart from a broken one. */
+.trace-lane-label {
+  position: absolute;
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 0 4px;
+  justify-content: space-between;
+  height: 12px;
+  pointer-events: none;
 }
 
-.trace-title {
-  color: var(--qt-fg-1);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.trace-subtitle {
-  color: var(--qt-fg-3);
-  font-size: 10px;
-}
-
-/* `title_row.addStretch()` between the subtitle and the legend chips. */
-.trace-spacer {
-  flex: 1 1 auto;
-}
-
-/* `_LegendChip`: `MAIN · VER`, 10 px 700 with 0.5 px tracking, in the
- * trace's own colour (set inline, because it varies per chart). */
-.trace-legend {
+.trace-lane-name {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
+.trace-lane-unit {
+  color: var(--qt-fg-3);
+  font-weight: 400;
+}
+
+.trace-lane-value {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The ONE cursor: the car's live position on the lap, unbroken from lane 1's top to
+ * lane 6's bottom, so a reader's vertical cut is a single line rather than six
+ * fragments. Solid, not dashed, and that is measured: the car covers about 6 m per
+ * 100 ms tick, which on this plot is under one pixel, so a dashed line never moves a
+ * whole dash - it shifts its pattern by a fraction of a pixel ten times a second and
+ * shimmers. `--qt-fg-3` is the stroke this window already reserves for it. */
+.trace-cursor {
+  position: absolute;
+  width: 1px;
+  pointer-events: none;
+}
+
+/* `_delta_placeholder`, one lane deep. Centred, italic, tertiary - the Qt treatment,
+ * scoped to the lane that actually has nothing to draw instead of to a whole cell.
+ * The other five lanes are perfectly readable with one car in them. */
+.trace-lane-caption {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--qt-fg-3);
+  font-style: italic;
+  font-size: 12px;
+  pointer-events: none;
+}
+
 /* The tier tag the Qt window never had. `PITWALL_REALISM_AND_TELEMETRY_
  * SURFACE.md` 2.2 calls rival traces "broadcast tier": real and public,
- * but the coarse low-rate channel, not pit-wall-grade telemetry. It reads
- * as an annotation on the legend, not as a second label. */
+ * but the coarse low-rate channel, not pit-wall-grade telemetry. It rides the
+ * header's rival chip - one card, one header, six lanes; saying it six times is the
+ * wrongness the per-cell legends already died for. */
 .trace-tier {
   color: var(--qt-fg-3);
   font-weight: 700;
   font-size: 9px;
   letter-spacing: 0.5px;
-}
-
-.trace-plot {
-  flex: 1 1 auto;
-  min-height: 0;
 }
 
 /* `_delta_placeholder`: centred, italic, tertiary, 12 px — and it REPLACES
@@ -969,6 +995,59 @@ td.col-drv {
   overflow: hidden;
 }
 
+/* The RCM category, in three or four characters, from the two wire fields that
+ * nothing read. Existing palette values only - the same `#f59e0b` the tier tag and
+ * the neutralised rail already carry for "this changes how the track is being
+ * driven", `#10b981` for a clear, tertiary for the informational DRS note - so a
+ * reader ranks a ten-row fold by weight before reading a word of it. */
+.radio-cat {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-family: var(--qt-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  vertical-align: 1px;
+  color: var(--qt-bg);
+}
+
+.radio-cat.is-sc,
+.radio-cat.is-flag {
+  background: #f59e0b;
+}
+
+.radio-cat.is-clear {
+  background: #10b981;
+}
+
+.radio-cat.is-drs {
+  background: var(--qt-fg-3);
+}
+
+/* `x4` on a collapsed run. Dim, because the count annotates the message rather
+ * than being part of it. */
+.radio-repeats {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-weight: 700;
+}
+
+/* The fold, in words. `.radio-list` already scrolls - the comment above it says
+ * that is what "gives the reader the other 36 events back" - but this window hides
+ * scrollbars globally, so the scroll itself is invisible and nothing on screen said
+ * the other 36 were down there. */
+.radio-fold {
+  margin: 0;
+  padding: 3px 2px 0;
+  border-top: 1px solid var(--qt-border);
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
 /* --- The right column's tab strip, and band 3 --------------------------- */
 
 /* The two worlds take turns in this column rather than sharing it. Measured:
@@ -1017,23 +1096,27 @@ td.col-drv {
   color: var(--qt-fg-1);
 }
 
-/* **The card grows UPWARD from the bottom of the column, and that is about where
- * the reader's eye can rest.** It used to be top-aligned and content-sized, so at
- * lap 24 of 57 it filled 288 px of a 722 px column and the newest row - the only
- * one a live wall reads - migrated ~12 px per lap for the whole race, 434 px in
- * total. The pin in `RacePaceGrid` cannot help: there is nothing to scroll until
- * the table outgrows the column, which on a 57-lap race is around lap 55.
+/* **The card fills the column, and the LAP AXIS is what stops the newest row moving.**
  *
- * Anchoring the TABLE to the bottom of a full-height card was the first attempt
- * and it is worse: it leaves the 426 px of empty space INSIDE the card, between
- * the header line and the column codes, which reads as a broken panel rather
- * than as a race that has not happened yet. Measured on the live page at a
- * 20-lap reveal before it was reverted. Anchoring the CARD instead puts the same
- * empty space outside it, where it is ordinary layout air.
+ * ⚠️ This comment described `align-self: end` - a card grown upward from the bottom of
+ * the column - and that declaration is gone. It was the right fix for a table that held
+ * only the laps that had run: content-sized and top-aligned, at lap 24 of 57 it filled
+ * 288 px of a 722 px column and the newest row migrated ~12 px per lap, 434 px over a
+ * race. Bottom-anchoring the card moved that emptiness outside it.
  *
- * `max-height: 100%` is what keeps this honest once the table is long: without
- * it the content-sized card would grow past the grid row and spill, and the
- * scroller - which needs a bounded height to scroll at all - would never bound. */
+ * The table is now the WHOLE race from lap 1, with future laps drawn as a grey
+ * skeleton, so there is no growth to anchor: the card is the same height at lap 1 and at
+ * lap 57 and the scroller does the work from the first reveal. `align-self: end` on a
+ * card that no longer grows is a no-op that reads as load-bearing, which is why it went
+ * with the mechanism rather than being left "just in case".
+ *
+ * **What did NOT survive the change** (`RacePaceGrid.tsx`'s pin comment carries the
+ * measurement): the newest revealed row is no longer at a FIXED height. It is on screen
+ * throughout, and it stops moving only once the revealed part outgrows the scroller.
+ *
+ * `max-height: 100%` still keeps this honest: without it the card would grow past the
+ * grid row and spill, and the scroller - which needs a bounded height to scroll at all -
+ * would never bound. */
 .pace {
   display: flex;
   flex-direction: column;
@@ -1073,9 +1156,52 @@ td.col-drv {
   margin-left: auto;
 }
 
+/* **The scroll says it exists.**
+ *
+ * The wheel always worked here - hiding a scrollbar does not disable wheel, keyboard or
+ * touch scrolling - but this window hides scrollbars globally, and the research on that
+ * is unanimous: NN/g and Baymard both find users simply do not discover scrollable
+ * content once the one universal signal is gone (Baymard: 26 % of top e-commerce sites
+ * fail on exactly this), and GitLab shipped and then fixed the same bug. So the edge
+ * that has more behind it fades, and the classes are set from MEASURED overflow rather
+ * than from a breakpoint, so a panel that happens to fit shows nothing.
+ *
+ * A mask rather than a gradient overlay: the rows underneath keep their own colours and
+ * nothing new sits in the hit-testing path of a cell. */
 .pace-scroll {
   min-height: 0;
   overflow-y: auto;
+  /* Belt and braces for a webview that might ship a different default. */
+  scrollbar-width: none;
+}
+
+.pace-scroll.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+
+.pace-scroll.has-above {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.pace-scroll.has-above.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+
+/* Keyboard users reach the rest of the race through this element, so it has to say when
+ * it has focus. `:focus-visible`, so a mouse click does not draw a ring. */
+.pace-scroll:focus-visible {
+  outline: 1px solid var(--qt-accent);
+  outline-offset: -1px;
 }
 
 /* A lap that has not been driven. The number stays - that is the point, it says how

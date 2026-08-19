@@ -15,6 +15,7 @@ slice, and an unbounded payload.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +28,7 @@ from src.arcade.app import (  # noqa: E402
     _telemetry_span_bounds,
 )
 from src.arcade.config import (  # noqa: E402
+    DRS_OPEN_CODES,
     DT,
     FPS,
     PLAYBACK_SPEEDS,
@@ -187,7 +189,44 @@ def test_the_span_is_packed_oldest_first_and_keeps_the_sample_shape():
 
     assert len(packed) == 5
     assert [s["t"] for s in packed] == sorted(s["t"] for s in packed)
-    assert set(packed[0]) == {"lap", "t", "dist", "speed", "throttle", "brake", "gear", "drs"}
+    assert set(packed[0]) == {
+        "lap",
+        "t",
+        "dist",
+        "speed",
+        "throttle",
+        "brake",
+        "gear",
+        # The raw FastF1 code AND the decoded answer. PITWALL's DRS lane reads the
+        # boolean, because the open set lives in `config.DRS_OPEN_CODES` and the
+        # window refuses to fork it into TypeScript; the raw code stays for the
+        # track overlay and for anything that needs to tell 8 ("eligible") from 0.
+        "drs",
+        "drs_open",
+    }
+
+
+def test_drs_open_decodes_the_code_rather_than_publishing_it():
+    """The one thing the boolean is for: the consumer never sees a code.
+
+    8 is the case that makes this worth asserting - "eligible, not open", and the
+    third-commonest code on the real session. A naive `drs > 0` would publish it as
+    open and paint a DRS lane that is wrong for a fifth of the lap.
+    """
+    from src.arcade.app import _frame_to_telemetry
+    from src.arcade.config import DRS_OPEN_CODES
+
+    def packed(code: int) -> dict:
+        frame = _frames(1)[0]
+        frame.drs = code
+        return _frame_to_telemetry(frame, CIRCUIT_LENGTH_M)
+
+    for code in sorted(DRS_OPEN_CODES):
+        assert packed(code)["drs_open"] is True, code
+    for code in (0, 1, 8):
+        assert packed(code)["drs_open"] is False, code
+    # And the raw code survives alongside it, so nothing that reads it breaks.
+    assert packed(8)["drs"] == 8
 
 
 def test_the_span_is_clamped_to_the_frames_a_driver_actually_has():
@@ -271,3 +310,109 @@ def test_the_payload_growth_stays_small_at_the_fastest_speed():
     frames_per_tick = TICK_SECONDS * FPS * max(PLAYBACK_SPEEDS)
 
     assert math.ceil(frames_per_tick) <= 25
+
+
+def test_the_drs_open_set_has_exactly_one_home_in_the_source():
+    """No module may carry its own copy of {10, 12, 14}, `config` excepted.
+
+    **This is the guard the single-homing commit did not write, and the commit
+    needed it.** `feat(arcade): the wire publishes a decoded drs_open` moved the set
+    into `config.DRS_OPEN_CODES`, claimed in its own message that "two subsystems
+    decode it now", and left `overlays.py`'s `_drs_label` and `_drs_color` holding a
+    literal `(10, 12, 14)` each. Three copies of a set whose entire purpose was to
+    have one - the twin that never got the fix, which is this repo's most frequent
+    defect and the one an adversarial gate found here again.
+
+    Structural, not textual: the tree is parsed and every set / tuple / list of
+    integer constants is compared as a SET, so a reordered `(14, 10, 12)`, a
+    `{10, 12, 14}` and a `[10, 12, 14]` all count. A grep for one spelling is what
+    lets the next copy through.
+    """
+    import ast
+
+    # **Anchored to THIS FILE, not to the working directory.** The first version used
+    # relative roots, and a second gate pass executed it from `tests/`: `Path("src/arcade")`
+    # globbed nothing, the loop iterated over an empty set, and the guard PASSED with a
+    # planted copy sitting in the tree. A guard written to catch this repo's dominant defect
+    # was itself the empty-set failure - so the count below is asserted first.
+    repo = Path(__file__).resolve().parents[2]
+    roots = ("src/arcade", "src/pitwall", "src/simulation", "scripts")
+    allowed = (repo / "src/arcade/config.py").resolve()
+    offenders: list[str] = []
+    scanned = 0
+
+    lowest_open = min(DRS_OPEN_CODES)
+
+    for root in roots:
+        for path in (repo / root).rglob("*.py"):
+            if path.resolve() == allowed:
+                continue
+            scanned += 1
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                # Form one: the set written out, in any container and any order.
+                if isinstance(node, (ast.Set, ast.Tuple, ast.List)):
+                    values = [
+                        element.value
+                        for element in node.elts
+                        if isinstance(element, ast.Constant) and isinstance(element.value, int)
+                    ]
+                    if len(values) == len(node.elts) and set(values) == set(DRS_OPEN_CODES):
+                        offenders.append(f"{path.relative_to(repo)}:{node.lineno} (a literal set)")
+                    continue
+                # **Form two: the THRESHOLD, which the first version walked straight past.**
+                # `drs >= 10` is not a copy of the set, it is a DIVERGENT copy: it calls 11
+                # and 13 open, and those exist - 401 and 515 frames on Melbourne (#1002) -
+                # while `DRS_OPEN_CODES` calls them closed. `scripts/verify_drs_zones.py`
+                # carried exactly that, and the census reported the tree clean.
+                if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+                    continue
+                if not isinstance(node.ops[0], (ast.GtE, ast.Gt)):
+                    continue
+                right = node.comparators[0]
+                if not (isinstance(right, ast.Constant) and isinstance(right.value, int)):
+                    continue
+                if right.value not in (lowest_open, lowest_open - 1):
+                    continue
+                subject = ast.unparse(node.left).lower()
+                if "drs" in subject:
+                    offenders.append(f"{path.relative_to(repo)}:{node.lineno} (a threshold)")
+
+    assert scanned > 20, (
+        f"the census only visited {scanned} files, so it is asserting about nearly nothing. "
+        "The roots are resolved from this file's location; check they still exist."
+    )
+    assert offenders == [], (
+        "a second copy of the DRS open set entered the source: "
+        f"{offenders}. Import `DRS_OPEN_CODES` from src.arcade.config instead."
+    )
+
+
+def test_eligible_is_not_open_at_every_site_that_decodes_it():
+    """The 8 the open set is defined AGAINST, asserted as the rendered EFFECT.
+
+    Three consumers decode these codes and each could drift alone: the wire's
+    `drs_open`, and the driver box's label and colour. Asserting the constant only
+    would pass while a consumer compared against the wrong one - so this asserts
+    what each one PRODUCES for 8 and for 10.
+
+    FastF1's own channel docs (`fastf1/_api.py`, `car_data`) are the source:
+    8 is "Detected, Eligible once in Activation Zone", 10 / 12 / 14 are all On. The
+    comment that shipped in `track.py` and moved into `config.py` said value 10 was
+    the eligible one, which is wrong in both halves and is an invitation to widen the
+    set to include 8 - the exact change that would draw an open wing on a closed one.
+    """
+    from src.arcade.config import DRS_ELIGIBLE_CODE
+    from src.arcade.overlays import DriverInfoPanel
+
+    assert DRS_ELIGIBLE_CODE not in DRS_OPEN_CODES, "eligible is not open"
+
+    assert DriverInfoPanel._drs_label(DRS_ELIGIBLE_CODE) == "AVAIL"
+    assert DriverInfoPanel._drs_label(10) == "ON"
+    open_colour = DriverInfoPanel._drs_color(10)
+    assert DriverInfoPanel._drs_color(DRS_ELIGIBLE_CODE) != open_colour, (
+        "an eligible car must not be painted with the open colour"
+    )
+    for code in DRS_OPEN_CODES:
+        assert DriverInfoPanel._drs_label(code) == "ON", f"code {code} is documented as On"
+        assert DriverInfoPanel._drs_color(code) == open_colour

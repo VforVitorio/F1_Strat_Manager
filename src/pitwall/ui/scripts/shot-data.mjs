@@ -67,7 +67,7 @@ await page.addInitScript((payloads) => {
 await page.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
   waitUntil: "domcontentloaded",
 });
-await page.waitForSelector(".trace-plot canvas", { timeout: 10000 });
+await page.waitForSelector(".trace-stack-plot canvas", { timeout: 10000 });
 // Wait for the LAST tick to be consumed, then shoot almost immediately.
 // A fixed trailing margin overshot the status bar's 1.5 s auto-clear, so
 // every capture showed an empty bar - a window that looks like its producer

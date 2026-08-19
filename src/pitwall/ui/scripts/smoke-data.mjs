@@ -23,6 +23,7 @@
  *
  *   npm run build && node scripts/smoke-data.mjs
  */
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -32,9 +33,10 @@ import { staysStill } from "./settle.mjs";
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = resolve(process.argv[2] ?? resolve(UI_DIR, "dist"));
 
+/** The lane table's own module, read so the palette lives in exactly one file. */
+const TRACE_STACK_SOURCE = resolve(UI_DIR, "src/features/data/TraceStack.tsx");
+
 const CIRCUIT_M = 5220;
-
-
 
 /**
  * A span the delta chart can be checked by hand.
@@ -116,7 +118,10 @@ function tick(
       drivers: field,
       race_order: order ?? Object.keys(field),
       driver_colors:
-        colors ?? Object.fromEntries(Object.keys(field).map((code) => [code, [255, 128, 0]])),
+        colors ??
+        Object.fromEntries(
+          Object.keys(field).map((code) => [code, [255, 128, 0]]),
+        ),
       track_status: "1",
       // Decoded by the producer, never by the renderer. The pair is null
       // together when the loader has no entry for the lap, which band 1 must
@@ -125,7 +130,12 @@ function tick(
       track_status_color: [16, 185, 129],
       telemetry: { main, rival: rivalSpan, rewound, dropped },
     },
-    playback: { speed: 1, paused: false, frame_index: 1000 + seq, total_frames: 154173 },
+    playback: {
+      speed: 1,
+      paused: false,
+      frame_index: 1000 + seq,
+      total_frames: 154173,
+    },
     strategy: {},
   };
 }
@@ -137,13 +147,19 @@ const check = (ok, what) => {
   if (!ok) failures.push(what);
 };
 
-/** Read a chart's computed axis extents through the handle `useEChart` sets. */
+/**
+ * Read one LANE's computed axis extents off the stack's single chart.
+ *
+ * The index is a GRID index now, not a canvas index: the 2x2's four charts became
+ * one instance with six grids, so `getComponent(type, index)` asks the question the
+ * four separate `__pitwallChart` handles used to answer.
+ */
 const EXTENTS = (index) => `
   (() => {
-    const el = document.querySelectorAll(".trace-plot")[${index}];
+    const el = document.querySelector(".trace-stack-plot");
     const chart = el && el.__pitwallChart;
     if (!chart) return null;
-    const axis = (type) => chart.getModel().getComponent(type, 0).axis.scale.getExtent();
+    const axis = (type) => chart.getModel().getComponent(type, ${index}).axis.scale.getExtent();
     return { x: axis("xAxis"), y: axis("yAxis") };
   })()
 `;
@@ -154,7 +170,9 @@ const url = `http://127.0.0.1:${server.address().port}/data.html`;
 
 // --- Scenario A: two drivers, a real span -----------------------------------
 
-const ctx = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+const ctx = await browser.newContext({
+  viewport: { width: 1500, height: 950 },
+});
 const page = await ctx.newPage();
 page.on("pageerror", (error) => failures.push(`pageerror: ${error.message}`));
 page.on("console", (message) => {
@@ -187,25 +205,42 @@ await page.addInitScript((payload) => {
 }, tick(1));
 
 await page.goto(url, { waitUntil: "domcontentloaded" });
-await page.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
 await page.waitForTimeout(400);
 
-check((await page.locator(".trace-cell").count()) === 4, "four chart cells");
-check((await page.locator(".trace-plot canvas").count()) === 4, "four live canvases");
+// SIX lanes on ONE canvas. The 2x2 is retired: the agreed layout drawing assigned
+// the stacked form to this sprint and calls the 2x2 "the wrong shape".
+check(
+  (await page.locator(".trace-lane-label").count()) === 6,
+  "six lanes, each with its own label row",
+);
+check(
+  (await page.locator(".trace-stack-plot canvas").count()) === 1,
+  "on ONE canvas - four ECharts instances became one",
+);
+check(
+  (await page.locator(".trace-cursor").count()) === 1,
+  "and ONE cursor across all six",
+);
 check(
   (await page.locator(".traces-lap").innerText()).trim() === "LAP 24",
   "the header carries the lap and nothing else",
 );
-check((await page.locator(".driver-chip").count()) === 2, "main and rival chips");
 check(
-  (await page.locator(".trace-tier").first().innerText()).trim() === "BROADCAST",
+  (await page.locator(".driver-chip").count()) === 2,
+  "main and rival chips",
+);
+check(
+  (await page.locator(".trace-tier").first().innerText()).trim() ===
+    "BROADCAST",
   "the rival chip is labelled broadcast tier",
 );
 
 // --- Band 1: the status strip -----------------------------------------------
 
 check(
-  (await page.locator(".strip-lap").innerText()).replace(/\s+/g, "") === "L24/57",
+  (await page.locator(".strip-lap").innerText()).replace(/\s+/g, "") ===
+    "L24/57",
   "band 1 carries the lap out of the total",
 );
 check(
@@ -216,11 +251,13 @@ check(
 // keyed on. `t` alone is `frame_index * DT`, which means nothing off this
 // process. The stub sets t=1400 and global_t_min=0.
 check(
-  (await page.locator(".strip-field-value").first().innerText()).trim() === "0:23:20",
+  (await page.locator(".strip-field-value").first().innerText()).trim() ===
+    "0:23:20",
   "the session clock is SessionTime and not replay seconds",
 );
 check(
-  (await page.locator(".strip-chip.is-connected").innerText()).trim() === "Connected",
+  (await page.locator(".strip-chip.is-connected").innerText()).trim() ===
+    "Connected",
   "the connection comes from the host's socket, not from tick freshness",
 );
 check(
@@ -228,28 +265,59 @@ check(
   "no PROVISIONAL chip once the running field has completed a lap",
 );
 
-// Qt stretches both columns and both rows equally (`setColumnStretch(_, 1)`).
-// A `1fr 1fr` that silently became `auto auto` would put the dead space
-// inside the cells and the four plots would divide what the title rows left.
-const grid = await page.evaluate(() => {
-  const style = getComputedStyle(document.querySelector(".traces-grid"));
-  return { cols: style.gridTemplateColumns, rows: style.gridTemplateRows };
+// **The lanes must SUM to the box, and the last one carries the rounding.** The
+// heights are derived from weights rather than tabulated, precisely so the same six
+// lanes land on 666 px at one client and 430 at another - so the assertion is the
+// arithmetic, not a pixel table.
+const lanes = await page.evaluate(() => {
+  const el = document.querySelector(".trace-stack-plot");
+  const chart = el && el.__pitwallChart;
+  if (!chart) return null;
+  const stack = document.querySelector(".trace-stack");
+  const grids = chart.getOption().grid;
+  return {
+    box: stack.clientHeight,
+    tops: grids.map((g) => g.top),
+    heights: grids.map((g) => g.height),
+    lefts: grids.map((g) => g.left),
+    rights: grids.map((g) => g.right),
+    cursorHeight: parseFloat(
+      getComputedStyle(document.querySelector(".trace-cursor")).height,
+    ),
+  };
 });
-const equalPair = (value) => {
-  const [a, b] = value.split(" ").map(parseFloat);
-  return a > 0 && Math.abs(a - b) < 1;
-};
-check(equalPair(grid.cols), `two equal columns (${grid.cols})`);
-check(equalPair(grid.rows), `two equal rows (${grid.rows})`);
+check(
+  lanes !== null &&
+    lanes.heights.length === 6 &&
+    lanes.heights.every((h) => h > 0) &&
+    lanes.tops.every((top, i) => i === 0 || top > lanes.tops[i - 1]),
+  `six lanes in order, none collapsed (${JSON.stringify(lanes && lanes.heights)})`,
+);
+// All six share the plot margins, or the cursor is not one straight line.
+check(
+  lanes !== null &&
+    new Set(lanes.lefts).size === 1 &&
+    new Set(lanes.rights).size === 1,
+  `every lane shares the plot margins (${JSON.stringify(lanes && [lanes.lefts[0], lanes.rights[0]])})`,
+);
+// The cursor spans the whole stack, not one lane: a reader's cut must be unbroken.
+check(
+  lanes !== null && lanes.cursorHeight > lanes.box * 0.85,
+  `the cursor spans the lanes rather than one of them (${lanes && lanes.cursorHeight} of ${lanes && lanes.box})`,
+);
 
-// The four locked ranges, read as the extent the axis COMPUTED. This is the
-// claim the whole port rests on: only the lines move between updates.
-// Order is Qt's: delta, speed, brake, throttle.
+// The SIX locked ranges, read as the extent each axis COMPUTED. This is the claim
+// the whole panel rests on: only the lines move between updates. Order is the
+// stack's, speed first - the convention every client the spec surveyed uses.
+// BRAKE and THROTTLE hold the same pair from two SEPARATE constants; merging rules
+// that agree by coincidence is a defect class this repo has already paid for.
 const expected = [
-  ["delta", [-3, 3]],
   ["speed", [0, 360]],
-  ["brake", [-5, 105]],
+  ["delta", [-3, 3]],
   ["throttle", [-5, 105]],
+  ["brake", [-5, 105]],
+  ["gear", [0, 9]],
+  ["drs", [-0.2, 1.2]],
 ];
 for (const [index, [name, range]] of expected.entries()) {
   const extents = await page.evaluate(EXTENTS(index));
@@ -270,83 +338,181 @@ for (const [index, [name, range]] of expected.entries()) {
 // `series[0]`, and the declaration order is exactly what the z-order fix had to
 // change - an index-keyed probe turns that into two silently wrong assertions
 // about the wrong line.
-const seriesByName = (plot, name) =>
+/**
+ * One lane's series off the stack's single chart.
+ *
+ * The 2x2 named its two series `main` and `rival` inside each of four charts; the
+ * stack has twelve on one, named `<lane>-<car>` - so the lookup takes the lane by
+ * name rather than a canvas index, which also stops the assertions below depending
+ * on the lane ORDER (that is asserted once, in its own check).
+ */
+const laneSeries = (lane, car) =>
   page.evaluate(
-    ([which, series]) => {
-      const el = document.querySelectorAll(".trace-plot")[which];
-      return el.__pitwallChart.getOption().series.find((s) => s.name === series) ?? null;
+    ([which, side]) => {
+      const el = document.querySelector(".trace-stack-plot");
+      const found = el.__pitwallChart
+        .getOption()
+        .series.find((s) => s.name === `${which}-${side}`);
+      return found ?? null;
     },
-    [plot, name],
+    [lane, car],
   );
 
-const delta = (await seriesByName(0, "rival")).data;
+const delta = (await laneSeries("delta", "rival")).data;
 check(
   delta.length === 3 && delta.every(([, value]) => Math.abs(value - 2) < 1e-9),
   `the delta is +2.0 s over the rival's three samples only (${JSON.stringify(delta)})`,
 );
 
 // The speed trace carries the whole main span.
-const speedPoints = (await seriesByName(1, "main")).data.length;
-check(speedPoints === 5, `the speed trace holds all five samples (${speedPoints})`);
+const speedPoints = (await laneSeries("speed", "main")).data.length;
+check(
+  speedPoints === 5,
+  `the speed trace holds all five samples (${speedPoints})`,
+);
 
 // **The own car paints ON TOP, on every chart.** ECharts paints in declaration
 // order, and the rival's coarse broadcast dashes used to be last: wherever the
 // two cars run comparable numbers - which is when the comparison matters - the
 // solid pit-wall-grade line was underneath. The race trace one tab away builds
 // the opposite rule deliberately, so this is the twin that had it inverted.
-const paintOrder = await page.evaluate(() =>
-  [...document.querySelectorAll(".trace-plot")].map((el) =>
-    el.__pitwallChart.getOption().series.map((s) => s.name).join(">"),
-  ),
+const paintOrder = await page.evaluate(() => {
+  const el = document.querySelector(".trace-stack-plot");
+  const names = el.__pitwallChart.getOption().series.map((s) => s.name);
+  // Pairs, in declaration order: every lane must read rival-then-own.
+  const pairs = [];
+  for (let i = 0; i < names.length; i += 2)
+    pairs.push(`${names[i]}>${names[i + 1]}`);
+  return pairs;
+});
+check(
+  paintOrder.length === 6 &&
+    paintOrder.every((pair) => {
+      const [first, second] = pair.split(">");
+      return first.endsWith("-rival") && second.endsWith("-main");
+    }),
+  `the own car is declared last so it paints over the rival on all six lanes (${paintOrder.join(" | ")})`,
+);
+// **Which lane wears which colour, as the RENDERED series style.**
+//
+// An adversarial gate swapped `colour: SUCCESS` and `colour: DANGER` between the
+// throttle and brake entries of the LANES table - throttle painted red, brake green -
+// rebuilt, and every check here plus the whole token suite stayed green. The token test
+// reads the `const NAME = "#hex"` declarations, so both hexes keep their values and only
+// the ASSIGNMENT flips; the one colour-sensitive probe in this file scans the delta
+// lane's blue baseline, which the swap never touches. That is "membership instead of the
+// slot", the failure this repo's own token test warns about in its docstring.
+//
+// The expected hexes are READ FROM THE SOURCE rather than typed here, so this file does
+// not become a second home for the palette: what is asserted is the MAP from lane to
+// constant, which is exactly what a swapped assignment breaks.
+const declared = Object.fromEntries(
+  [
+    ...readFileSync(TRACE_STACK_SOURCE, "utf8").matchAll(
+      /^const (\w+) = "(#[0-9a-fA-F]{6})";/gm,
+    ),
+  ].map((match) => [match[1], match[2].toLowerCase()]),
+);
+const laneColours = await page.evaluate(() => {
+  const el = document.querySelector(".trace-stack-plot");
+  return Object.fromEntries(
+    el.__pitwallChart.getOption().series.map((s) => {
+      // The delta lane's own car IS the baseline, so it is an empty series carrying a
+      // markLine and its colour lives there. Read the lane's colour wherever the lane
+      // puts it, which is the rendered EFFECT either way.
+      const colour =
+        s.lineStyle?.color ?? s.markLine?.data?.[0]?.lineStyle?.color ?? "";
+      return [s.name, String(colour).toLowerCase()];
+    }),
+  );
+});
+const laneToConstant = {
+  "speed-main": "INFO",
+  "delta-main": "INFO",
+  "throttle-main": "SUCCESS",
+  "brake-main": "DANGER",
+  "gear-main": "ACCENT",
+  "drs-main": "INFO",
+};
+const wrong = Object.entries(laneToConstant).filter(
+  ([series, name]) => laneColours[series] !== declared[name],
 );
 check(
-  paintOrder.length === 4 && paintOrder.every((order) => order === "rival>main"),
-  `the own car is declared last so it paints over the rival on all four charts (${paintOrder.join(" | ")})`,
+  wrong.length === 0,
+  `each lane paints its own channel's colour (${
+    wrong
+      .map(
+        ([series, name]) =>
+          `${series} is ${laneColours[series]}, ${name} is ${declared[name]}`,
+      )
+      .join("; ") || "all six correct"
+  })`,
+);
+// The two percentage lanes share a RANGE by coincidence and must never share a colour:
+// they are the pair the swap was performed on, and the pair a reader tells apart by hue.
+check(
+  laneColours["throttle-main"] !== laneColours["brake-main"],
+  `throttle and brake are told apart by colour (${laneColours["throttle-main"]} vs ${laneColours["brake-main"]})`,
+);
+// And every rival trace is the broadcast tier's amber, on all six lanes.
+const rivalWrong = Object.entries(laneColours).filter(
+  ([series, colour]) => series.endsWith("-rival") && colour !== declared.RIVAL,
+);
+check(
+  rivalWrong.length === 6 - 6 && rivalWrong.length === 0,
+  `and every rival trace is the broadcast amber (${rivalWrong.map(([s, c]) => `${s}=${c}`).join("; ") || "all six"})`,
 );
 
-// The cursor, in PIXELS. It must be at the column ECharts maps 500 m to, and
-// must not be at a column the car has not reached - which is also a column
-// no trace passes through, so grey there could only be the cursor.
-//
-// "Grey and bright", not a colour distance: a 1 px dashed line lands
-// between two device columns and each gets it at part alpha, so the exact
-// hex appears nowhere. Nothing else in the plot area is both neutral and
-// bright - the traces are saturated, the panel and the grid are dark - so
-// the discriminator is the one that survives antialiasing. The scan stops
-// above the x axis for the same reason it has to: the tick labels below it
-// are TEXT_SECONDARY grey, and a full-height column would find "3000" and
-// call it a cursor.
-const cursor = await page.evaluate(
-  ({ at, away, gridBottom }) => {
-    const el = document.querySelectorAll(".trace-plot")[1];
-    const chart = el.__pitwallChart;
-    const canvas = el.querySelector("canvas");
-    const context = canvas.getContext("2d");
-    const ratio = canvas.width / canvas.getBoundingClientRect().width;
-    const plotHeight = Math.floor(canvas.height - gridBottom * ratio);
-    // A five-pixel window, not one column. `convertToPixel` answers in the
-    // chart's coordinate space and the canvas rounds; measured, the line
-    // lands one to two device pixels off the computed column, which is a
-    // rounding fact and not a placement claim. Five pixels out of a
-    // ~700-pixel plot still says "here and nowhere else".
-    const column = (metres) => {
-      const x = Math.round(chart.convertToPixel({ xAxisIndex: 0 }, metres) * ratio);
-      const data = context.getImageData(Math.max(0, x - 2), 0, 5, plotHeight).data;
-      let hits = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
-        const neutral = Math.max(r, g, b) - Math.min(r, g, b) < 25;
-        const bright = (r + g + b) / 3 > 80;
-        if (neutral && bright && data[i + 3] > 200) hits += 1;
-      }
-      return hits;
-    };
-    return { at: column(at), away: column(away) };
-  },
-  { at: CURSOR_DIST, away: 3000, gridBottom: 36 },
+// And the lane ORDER itself, asserted once rather than assumed by every lookup.
+check(
+  paintOrder.map((pair) => pair.split("-")[0]).join(",") ===
+    "speed,delta,throttle,brake,gear,drs",
+  `speed first, DRS last (${paintOrder.map((pair) => pair.split("-")[0]).join(",")})`,
 );
-check(cursor.at > 10, `the cursor is drawn at ${CURSOR_DIST} m (${cursor.at} px)`);
-check(cursor.away === 0, `and nowhere else (${cursor.away} px at 3000 m)`);
+
+// **The cursor, in pixels, against what ECharts says the same distance is.**
+//
+// It used to be a per-chart `markLine` and this check scanned canvas columns for a
+// grey pixel run. The stack draws ONE div across all six lanes instead - a markLine
+// per grid would be six fragments with five gaps, and the panel exists to be read
+// with an unbroken vertical cut - so the assertion moved with the mechanism: the
+// div's left edge must be where `convertToPixel` puts the car's distance, and the
+// div must be tall enough to cross every lane.
+//
+// This is still the EFFECT and not the mechanism: it asks "is the line at the car's
+// position on the axis", which is the claim, and it would fail on an off-by-`left`
+// transform, a stale `xMax`, or a cursor scoped to one lane.
+const cursor = await page.evaluate(
+  ({ at }) => {
+    const el = document.querySelector(".trace-stack-plot");
+    const chart = el.__pitwallChart;
+    const div = document.querySelector(".trace-cursor");
+    if (!div) return null;
+    const stack = document
+      .querySelector(".trace-stack")
+      .getBoundingClientRect();
+    const expected = chart.convertToPixel({ xAxisIndex: 0 }, at);
+    const actual = div.getBoundingClientRect().left - stack.left;
+    const grids = chart.getOption().grid;
+    const lastGrid = grids[grids.length - 1];
+    return {
+      expected: Math.round(expected),
+      actual: Math.round(actual),
+      height: Math.round(div.getBoundingClientRect().height),
+      lanesBottom: lastGrid.top + lastGrid.height,
+      firstLaneTop: grids[0].top,
+    };
+  },
+  { at: CURSOR_DIST },
+);
+check(
+  cursor !== null && Math.abs(cursor.expected - cursor.actual) <= 2,
+  `the cursor sits where the axis maps ${CURSOR_DIST} m (expected ${cursor && cursor.expected}, got ${cursor && cursor.actual})`,
+);
+check(
+  cursor !== null && cursor.height >= cursor.lanesBottom - cursor.firstLaneTop,
+  `and it crosses every lane rather than one (${cursor && cursor.height} px over ${cursor && cursor.lanesBottom - cursor.firstLaneTop})`,
+);
 
 // The delta chart's BASELINE has to cross the whole plot, because every value
 // on that chart is read against it and Qt draws it with `pg.InfiniteLine`.
@@ -354,14 +520,18 @@ check(cursor.away === 0, `and nowhere else (${cursor.away} px at 3000 m)`);
 // a 5220 m axis - and 36 green checks, four of which were about this very
 // chart, all passed over it. Only a pixel scan along the zero row sees it.
 const baseline = await page.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[0];
+  const el = document.querySelector(".trace-stack-plot");
   const chart = el.__pitwallChart;
   const canvas = el.querySelector("canvas");
   const context = canvas.getContext("2d");
   const ratio = canvas.width / canvas.getBoundingClientRect().width;
+  // **Lane 1, not lane 0.** The delta is the SECOND lane of the stack now (speed
+  // first, per the convention), so asking axis 0 where value 0 sits answers about
+  // the speed lane - a row where this line cannot be, which is how this check first
+  // reported `null` after the stack landed.
   const row = context.getImageData(
     0,
-    Math.round(chart.convertToPixel({ yAxisIndex: 0 }, 0) * ratio),
+    Math.round(chart.convertToPixel({ yAxisIndex: 1 }, 0) * ratio),
     canvas.width,
     1,
   ).data;
@@ -372,7 +542,7 @@ const baseline = await page.evaluate(() => {
     if (row[i] < 110 && row[i + 1] > 90 && row[i + 2] > 180) blue.push(x);
   }
   if (!blue.length) return null;
-  const metres = (px) => chart.convertFromPixel({ xAxisIndex: 0 }, px / ratio);
+  const metres = (px) => chart.convertFromPixel({ xAxisIndex: 1 }, px / ratio);
   return { from: metres(blue[0]), to: metres(blue[blue.length - 1]) };
 });
 check(
@@ -383,10 +553,16 @@ check(
 // A rewind must EMPTY the buffer. The producer sends the flag with an empty
 // span, and a distance-keyed store holds samples for track the car has not
 // re-driven - nothing else would ever evict them.
-await page.evaluate((payload) => window.__ticks.push(payload), tick(2, { main: [], rivalSpan: [], rewound: true }));
+await page.evaluate(
+  (payload) => window.__ticks.push(payload),
+  tick(2, { main: [], rivalSpan: [], rewound: true }),
+);
 await page.waitForTimeout(400);
-const afterRewind = (await seriesByName(1, "main")).data.length;
-check(afterRewind === 0, `a rewind empties the trace (${afterRewind} points left)`);
+const afterRewind = (await laneSeries("speed", "main")).data.length;
+check(
+  afterRewind === 0,
+  `a rewind empties the trace (${afterRewind} points left)`,
+);
 
 // ...and the rewind must NOT look like single-driver mode. This is the twin
 // the Qt panel actually shipped: visibility keyed on the buffer rather than
@@ -394,7 +570,7 @@ check(afterRewind === 0, `a rewind empties the trace (${afterRewind} points left
 // vanished for the whole of a rewind hold and every lap change. The buffer
 // is empty right now, which is exactly the moment that bug is visible.
 check(
-  (await page.locator(".trace-placeholder").count()) === 0,
+  (await page.locator(".trace-lane-caption, .trace-placeholder").count()) === 0,
   "an empty buffer is not single-driver mode",
 );
 // One tag on the card header, not one per cell: the per-cell legends were
@@ -428,7 +604,7 @@ await page.evaluate(
   tick(3, { main: JUMPED, rivalSpan: [], dropped: 60 }),
 );
 await page.waitForTimeout(400);
-const afterJump = (await seriesByName(1, "main")).data.map(([x]) => x);
+const afterJump = (await laneSeries("speed", "main")).data.map(([x]) => x);
 check(
   afterJump.length === 3 && afterJump[0] === 3100,
   `a forward jump keeps the span it arrived with (${JSON.stringify(afterJump)})`,
@@ -441,17 +617,21 @@ check(
 // the instance pointed at a detached node and the chart was dead for the rest
 // of the session, silently. Nothing in the 37 checks before this one could
 // see it: they all measured a chart that had never been unmounted.
-await page.evaluate((payload) => window.__ticks.push(payload), tick(4, { rival: null, rivalSpan: [] }));
+await page.evaluate(
+  (payload) => window.__ticks.push(payload),
+  tick(4, { rival: null, rivalSpan: [] }),
+);
 await page.waitForTimeout(400);
 check(
-  (await page.locator(".trace-placeholder").count()) === 1,
+  (await page.locator(".trace-lane-caption, .trace-placeholder").count()) === 1,
   "losing the rival shows the placeholder",
 );
 await page.evaluate((payload) => window.__ticks.push(payload), tick(5));
 await page.waitForTimeout(500);
-const revived = await page.evaluate(EXTENTS(0));
+// The delta lane is index 1 in the stack: speed owns 0.
+const revived = await page.evaluate(EXTENTS(1));
 check(
-  (await page.locator(".trace-plot canvas").count()) === 4,
+  (await page.locator(".trace-stack-plot canvas").count()) === 1,
   "the delta plot comes back as a live canvas",
 );
 check(
@@ -477,39 +657,60 @@ await ctx.close();
 
 // --- Scenario B: single driver, and a car the telemetry never placed --------
 
-const solo = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+const solo = await browser.newContext({
+  viewport: { width: 1500, height: 950 },
+});
 const soloPage = await solo.newPage();
-soloPage.on("pageerror", (error) => failures.push(`pageerror(solo): ${error.message}`));
+soloPage.on("pageerror", (error) =>
+  failures.push(`pageerror(solo): ${error.message}`),
+);
 
-await soloPage.addInitScript((payload) => {
-  window.pywebview = {
-    api: {
-      get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
-      get_bulk: async () => null,
-      get_live_lap: async () => null,
-      get_connection: async () => "Connected",
-    },
-  };
-}, tick(1, { rival: null, rivalSpan: [], mainDriver: { has_position: false, rel_dist: null } }));
+await soloPage.addInitScript(
+  (payload) => {
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) =>
+          sinceSeq === payload.seq ? null : payload,
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => "Connected",
+      },
+    };
+  },
+  tick(1, {
+    rival: null,
+    rivalSpan: [],
+    mainDriver: { has_position: false, rel_dist: null },
+  }),
+);
 
 await soloPage.goto(url, { waitUntil: "domcontentloaded" });
-await soloPage.waitForSelector(".trace-cell", { timeout: 5000 });
+await soloPage.waitForSelector(".trace-lane-label", { timeout: 5000 });
 await soloPage.waitForTimeout(400);
 
 check(
-  (await soloPage.locator(".trace-placeholder").innerText()).trim() === "single-driver mode",
+  (
+    await soloPage
+      .locator(".trace-lane-caption, .trace-placeholder")
+      .innerText()
+  ).trim() === "single-driver mode",
   "the delta chart collapses to its placeholder",
 );
 check(
-  (await soloPage.locator(".trace-plot canvas").count()) === 3,
+  (await soloPage.locator(".trace-stack-plot canvas").count()) === 1,
   "three canvases, because the placeholder REPLACES the delta plot",
 );
 check((await soloPage.locator(".driver-chip").count()) === 1, "no rival chip");
-check((await soloPage.locator(".trace-tier").count()) === 0, "and no broadcast-tier label");
+check(
+  (await soloPage.locator(".trace-tier").count()) === 0,
+  "and no broadcast-tier label",
+);
 // #856: the note names the blind car, and it must fire for the MAIN driver
 // too - the first version of it read the rival alone.
 check(
-  (await soloPage.locator(".traces-lap").innerText()).includes("NO POSITION DATA (NOR)"),
+  (await soloPage.locator(".traces-lap").innerText()).includes(
+    "NO POSITION DATA (NOR)",
+  ),
   "the header says the car was never placed",
 );
 // A null `rel_dist` is unknown, not zero. Drawing the cursor at 0 m would put
@@ -517,7 +718,7 @@ check(
 // Across EVERY series, not the one that happens to carry the marks: they hang
 // off whichever series is declared first, and that changed once already.
 const blindCursor = await soloPage.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[0];
+  const el = document.querySelector(".trace-stack-plot");
   return el.__pitwallChart
     .getOption()
     .series.flatMap((s) => s.markLine?.data ?? [])
@@ -543,35 +744,50 @@ const FIELD = {
   // what no fixture carried: the blind list used to collect him for all 57 laps,
   // so the ring's only telemetry alarm was lit from the first capture to the
   // last. A retired car cannot be a car the telemetry lost.
-  SAI: driver({ rel_dist: null, has_position: false, active: false, has_finished: false }),
+  SAI: driver({
+    rel_dist: null,
+    has_position: false,
+    active: false,
+    has_finished: false,
+  }),
 };
 
-const ring = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+const ring = await browser.newContext({
+  viewport: { width: 1500, height: 950 },
+});
 const ringPage = await ring.newPage();
-ringPage.on("pageerror", (error) => failures.push(`pageerror(ring): ${error.message}`));
+ringPage.on("pageerror", (error) =>
+  failures.push(`pageerror(ring): ${error.message}`),
+);
 
-await ringPage.addInitScript((payload) => {
-  window.pywebview = {
-    api: { get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload) },
-  };
-}, tick(1, {
-  drivers: FIELD,
-  order: ["NOR", "PIA", "VER", "HUL", "HAD", "SAI"],
-  // **The REAL team colours, including the ones that fail.** `tick()` defaults every
-  // car to rgb(255,128,0), which is 6.94:1 on the card - it passes, so a fixture
-  // built on the default cannot fail a contrast assertion however the codes are
-  // painted. These are the arcade's own values for this session: VER at
-  // rgb(6,0,239) is 1.88:1 and HUL's rgb(0,231,0) is 10.35, so the guard has both
-  // ends of the range to work with.
-  colors: {
-    NOR: [255, 128, 0],
-    PIA: [255, 128, 0],
-    VER: [6, 0, 239],
-    HUL: [0, 231, 0],
-    HAD: [252, 215, 0],
-    SAI: [0, 160, 221],
+await ringPage.addInitScript(
+  (payload) => {
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) =>
+          sinceSeq === payload.seq ? null : payload,
+      },
+    };
   },
-}));
+  tick(1, {
+    drivers: FIELD,
+    order: ["NOR", "PIA", "VER", "HUL", "HAD", "SAI"],
+    // **The REAL team colours, including the ones that fail.** `tick()` defaults every
+    // car to rgb(255,128,0), which is 6.94:1 on the card - it passes, so a fixture
+    // built on the default cannot fail a contrast assertion however the codes are
+    // painted. These are the arcade's own values for this session: VER at
+    // rgb(6,0,239) is 1.88:1 and HUL's rgb(0,231,0) is 10.35, so the guard has both
+    // ends of the range to work with.
+    colors: {
+      NOR: [255, 128, 0],
+      PIA: [255, 128, 0],
+      VER: [6, 0, 239],
+      HUL: [0, 231, 0],
+      HAD: [252, 215, 0],
+      SAI: [0, 160, 221],
+    },
+  }),
+);
 
 await ringPage.goto(url, { waitUntil: "domcontentloaded" });
 await ringPage.waitForSelector(".ring-dot", { timeout: 5000 });
@@ -588,9 +804,15 @@ const placed = await ringPage.evaluate(() =>
 );
 const of = (code) => placed.find((dot) => dot.code === code);
 
-check(placed.length === 4, `four dots for five cars, one of them unplaced (${placed.length})`);
+check(
+  placed.length === 4,
+  `four dots for five cars, one of them unplaced (${placed.length})`,
+);
 check(of("NOR")?.status === "running", "a car on track is running");
-check(of("HUL")?.status === "out" && of("HUL")?.hollow, "a retirement is out, and hollow");
+check(
+  of("HUL")?.status === "out" && of("HUL")?.hollow,
+  "a retirement is out, and hollow",
+);
 // The whole reason `has_finished` is on the wire.
 check(
   of("VER")?.status === "finished" && !of("VER")?.hollow,
@@ -603,11 +825,13 @@ check(
 const CENTRE = 100;
 const RADIUS = 78;
 check(
-  Math.abs(of("NOR").cx - CENTRE) < 0.5 && Math.abs(of("NOR").cy - (CENTRE - RADIUS)) < 0.5,
+  Math.abs(of("NOR").cx - CENTRE) < 0.5 &&
+    Math.abs(of("NOR").cy - (CENTRE - RADIUS)) < 0.5,
   `fraction 0 sits at the start line, top centre (${of("NOR").cx}, ${of("NOR").cy})`,
 );
 check(
-  Math.abs(of("PIA").cx - (CENTRE + RADIUS)) < 0.5 && Math.abs(of("PIA").cy - CENTRE) < 0.5,
+  Math.abs(of("PIA").cx - (CENTRE + RADIUS)) < 0.5 &&
+    Math.abs(of("PIA").cy - CENTRE) < 0.5,
   `fraction 0.25 is a quarter clockwise (${of("PIA").cx}, ${of("PIA").cy})`,
 );
 
@@ -641,26 +865,33 @@ check(
 // that happen to be on screen, and as a RATIO rather than as a colour name: a
 // membership test passes on any hex still in the palette.
 const contrast = await ringPage.evaluate(() => {
-  const lin = (c) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  const lin = (c) =>
+    c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4;
   const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
   const ratio = (a, b) => {
     const [hi, lo] = [L(a), L(b)].sort((x, y) => y - x);
     return (hi + 0.05) / (lo + 0.05);
   };
   const parse = (value) => value.match(/\d+/g).slice(0, 3).map(Number);
-  const card = parse(getComputedStyle(document.querySelector(".tower")).backgroundColor);
+  const card = parse(
+    getComputedStyle(document.querySelector(".tower")).backgroundColor,
+  );
   // `td` only: the header shares the class and is a column label, not a code.
   const cells = [...document.querySelectorAll("td.col-drv")];
   return {
     cells: cells.length,
     swatches: cells.filter((cell) => cell.querySelector(".drv-swatch")).length,
     // Every code, whatever its team colour: they all read against the card now.
-    worstCode: Math.min(...cells.map((cell) => ratio(parse(getComputedStyle(cell).color), card))),
+    worstCode: Math.min(
+      ...cells.map((cell) => ratio(parse(getComputedStyle(cell).color), card)),
+    ),
     // And no code is painted in a team colour any more.
     tinted: cells.filter((cell) => {
       const own = getComputedStyle(cell).color;
       const swatch = cell.querySelector(".drv-swatch");
-      return swatch !== null && own === getComputedStyle(swatch).backgroundColor;
+      return (
+        swatch !== null && own === getComputedStyle(swatch).backgroundColor
+      );
     }).length,
   };
 });
@@ -672,7 +903,6 @@ check(
   contrast.swatches === contrast.cells,
   `and each one keeps its team colour as a swatch (${contrast.swatches}/${contrast.cells})`,
 );
-
 
 // The two labels go on OPPOSITE sides of their dots. The main driver and the
 // car chosen to compare against are routinely seconds apart - on the real
@@ -697,7 +927,10 @@ check(
 // `textContent`, not `innerText`: these are SVG <text> nodes, which are not
 // HTMLElements and have no `innerText` at all.
 const lapText = await ringPage.locator(".ring-lap").textContent();
-check(lapText?.trim() === "24", `the ring carries the lap counter (${lapText})`);
+check(
+  lapText?.trim() === "24",
+  `the ring carries the lap counter (${lapText})`,
+);
 
 await ring.close();
 
@@ -710,7 +943,9 @@ await ring.close();
 // axis and restarting forever, and 42 checks stayed green either way - so
 // deleting that line would have been invisible. Its twin in the AGENTS charts
 // shipped the same defect a sprint later and Víctor is the one who saw it.
-const stillCtx = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+const stillCtx = await browser.newContext({
+  viewport: { width: 1500, height: 950 },
+});
 const stillPage = await stillCtx.newPage();
 await stillPage.addInitScript((payload) => {
   let seq = payload.seq;
@@ -728,10 +963,10 @@ await stillPage.addInitScript((payload) => {
   };
 }, tick(1));
 await stillPage.goto(url, { waitUntil: "domcontentloaded" });
-await stillPage.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+await stillPage.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
 
 check(
-  await staysStill(stillPage, ".trace-plot"),
+  await staysStill(stillPage, ".trace-stack-plot"),
   "the delta trace schedules no animation while the producer streams",
 );
 
@@ -746,27 +981,42 @@ await stillCtx.close();
 // 23, three of twenty drivers were under one lap and all three were OUT - the
 // chip built to mark the opening lap was still lit an hour in, which says
 // nothing at all. So the test is over the cars still IN the race.
-const RETIRED = { laps_completed: 0, progress: 0.4, active: false, has_finished: false };
+const RETIRED = {
+  laps_completed: 0,
+  progress: 0.4,
+  active: false,
+  has_finished: false,
+};
 
 async function provisionalChips(field) {
-  const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+  const context = await browser.newContext({
+    viewport: { width: 1500, height: 950 },
+  });
   const scenarioPage = await context.newPage();
-  scenarioPage.on("pageerror", (error) => failures.push(`pageerror(provisional): ${error.message}`));
-  await scenarioPage.addInitScript((payload) => {
-    window.pywebview = {
-      api: {
-        get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
-        get_bulk: async () => null,
-        get_live_lap: async () => null,
-      get_live_lap: async () => null,
-        get_connection: async () => "Connected",
-      },
-    };
-  }, tick(1, { drivers: field }));
+  scenarioPage.on("pageerror", (error) =>
+    failures.push(`pageerror(provisional): ${error.message}`),
+  );
+  await scenarioPage.addInitScript(
+    (payload) => {
+      window.pywebview = {
+        api: {
+          get_tick: async (sinceSeq) =>
+            sinceSeq === payload.seq ? null : payload,
+          get_bulk: async () => null,
+          get_live_lap: async () => null,
+          get_live_lap: async () => null,
+          get_connection: async () => "Connected",
+        },
+      };
+    },
+    tick(1, { drivers: field }),
+  );
   await scenarioPage.goto(url, { waitUntil: "domcontentloaded" });
   await scenarioPage.waitForSelector(".status-strip", { timeout: 5000 });
   await scenarioPage.waitForTimeout(300);
-  const count = await scenarioPage.locator(".strip-chip.is-provisional").count();
+  const count = await scenarioPage
+    .locator(".strip-chip.is-provisional")
+    .count();
   await context.close();
   return count;
 }
@@ -798,8 +1048,26 @@ check(
 // `race_order`, which always carries twenty.
 
 const TOWER_ORDER = [
-  "NOR", "PIA", "VER", "RUS", "LEC", "TSU", "ALB", "HAM", "GAS", "ALO",
-  "ANT", "STR", "HUL", "BOR", "LAW", "OCO", "BEA", "SAI", "DOO", "HAD",
+  "NOR",
+  "PIA",
+  "VER",
+  "RUS",
+  "LEC",
+  "TSU",
+  "ALB",
+  "HAM",
+  "GAS",
+  "ALO",
+  "ANT",
+  "STR",
+  "HUL",
+  "BOR",
+  "LAW",
+  "OCO",
+  "BEA",
+  "SAI",
+  "DOO",
+  "HAD",
 ];
 const RETIRED_CODES = ["SAI", "DOO", "HAD"];
 /** Crossing times at lap 23, chosen so every interval is exact at 2 dp. */
@@ -820,7 +1088,10 @@ function towerField() {
     // LAW is a full lap down: the positional laps-down branch must fire for
     // him instead of rendering tens of seconds as if he were racing.
     const progress = code === "LAW" ? 22.3 : 23.9 - index * 0.01;
-    field[code] = driver({ laps_completed: code === "LAW" ? 22 : 23, progress });
+    field[code] = driver({
+      laps_completed: code === "LAW" ? 22 : 23,
+      progress,
+    });
   });
   return field;
 }
@@ -845,67 +1116,76 @@ const TOWER_BESTS = {
 
 function towerBulk() {
   const drivers = {};
-  TOWER_ORDER.filter((code) => !RETIRED_CODES.includes(code)).forEach((code, index) => {
-    const revealed = code === "LAW" ? 22 : 23;
-    const crossings = {};
-    for (let lap = 1; lap <= revealed; lap += 1) {
-      crossings[lap] = CROSSING_AT_23[code] ?? 2070 + 5 * index - (23 - lap) * 90;
-    }
-    if (CROSSING_AT_23[code] !== undefined) crossings[revealed] = CROSSING_AT_23[code];
-    const crafted = TOWER_BESTS[code];
-    const best = crafted ?? {
-      s1: 31 + index * 0.1,
-      s2: 21 + index * 0.1,
-      s3: 28 + index * 0.1,
-      lap_time: 90 + index * 0.1,
-      lastS1: 31 + index * 0.1,
-    };
-    drivers[code] = {
-      number: String(index + 1),
-      laps_revealed: revealed,
-      stops: 2,
-      crossings,
-      laps: [
-        {
+  TOWER_ORDER.filter((code) => !RETIRED_CODES.includes(code)).forEach(
+    (code, index) => {
+      const revealed = code === "LAW" ? 22 : 23;
+      const crossings = {};
+      for (let lap = 1; lap <= revealed; lap += 1) {
+        crossings[lap] =
+          CROSSING_AT_23[code] ?? 2070 + 5 * index - (23 - lap) * 90;
+      }
+      if (CROSSING_AT_23[code] !== undefined)
+        crossings[revealed] = CROSSING_AT_23[code];
+      const crafted = TOWER_BESTS[code];
+      const best = crafted ?? {
+        s1: 31 + index * 0.1,
+        s2: 21 + index * 0.1,
+        s3: 28 + index * 0.1,
+        lap_time: 90 + index * 0.1,
+        lastS1: 31 + index * 0.1,
+      };
+      drivers[code] = {
+        number: String(index + 1),
+        laps_revealed: revealed,
+        stops: 2,
+        crossings,
+        laps: [
+          {
+            lap: revealed,
+            t: crossings[revealed],
+            lap_time: 85.744,
+            s1: best.lastS1,
+            s2: 30.128,
+            s3: 26.204,
+            v1: 301,
+            v2: 289,
+            vfl: 280,
+            vst: 321,
+            position: index + 1,
+            compound: "MEDIUM",
+            tyre_life: 12,
+            stint: 2,
+            track_status: "1",
+            neutralised: null,
+            pit_in: false,
+            pit_out: false,
+            deleted: false,
+            generated: false,
+            pb: false,
+          },
+        ],
+        best: {
           lap: revealed,
-          t: crossings[revealed],
-          lap_time: 85.744,
-          s1: best.lastS1,
-          s2: 30.128,
-          s3: 26.204,
+          lap_time: best.lap_time,
+          s1: best.s1,
+          s2: best.s2,
+          s3: best.s3,
           v1: 301,
           v2: 289,
           vfl: 280,
           vst: 321,
-          position: index + 1,
           compound: "MEDIUM",
-          tyre_life: 12,
-          stint: 2,
-          track_status: "1",
-          neutralised: null,
-          pit_in: false,
-          pit_out: false,
-          deleted: false,
-          generated: false,
-          pb: false,
         },
-      ],
-      best: {
-        lap: revealed,
-        lap_time: best.lap_time,
-        s1: best.s1,
-        s2: best.s2,
-        s3: best.s3,
-        v1: 301,
-        v2: 289,
-        vfl: 280,
-        vst: 321,
-        compound: "MEDIUM",
-      },
-      theoretical: best.s1 + best.s2 + best.s3,
-    };
-  });
-  return { rev: 1, available: true, race: { year: 2025, location: "Melbourne", total_laps: 57 }, drivers };
+        theoretical: best.s1 + best.s2 + best.s3,
+      };
+    },
+  );
+  return {
+    rev: 1,
+    available: true,
+    race: { year: 2025, location: "Melbourne", total_laps: 57 },
+    drivers,
+  };
 }
 
 /**
@@ -920,39 +1200,50 @@ function towerBulk() {
  */
 function towerLive() {
   const drivers = {};
-  TOWER_ORDER.filter((code) => !RETIRED_CODES.includes(code)).forEach((code, index) => {
-    const crafted = TOWER_BESTS[code];
-    drivers[code] = {
-      lap: code === "LAW" ? 23 : 24,
-      s1: crafted ? crafted.lastS1 : 31 + index * 0.1,
-      s2: 19.5,
-      s3: 26.75,
-      v1: 301,
-      v2: 288,
-      vfl: 279,
-      s1_fresh: true,
-      s2_fresh: false,
-      s3_fresh: false,
-    };
-  });
+  TOWER_ORDER.filter((code) => !RETIRED_CODES.includes(code)).forEach(
+    (code, index) => {
+      const crafted = TOWER_BESTS[code];
+      drivers[code] = {
+        lap: code === "LAW" ? 23 : 24,
+        s1: crafted ? crafted.lastS1 : 31 + index * 0.1,
+        s2: 19.5,
+        s3: 26.75,
+        v1: 301,
+        v2: 288,
+        vfl: 279,
+        s1_fresh: true,
+        s2_fresh: false,
+        s3_fresh: false,
+      };
+    },
+  );
   return { rev: 1, drivers };
 }
 
-const towerCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+const towerCtx = await browser.newContext({
+  viewport: { width: 1485, height: 833 },
+});
 const towerPage = await towerCtx.newPage();
-towerPage.on("pageerror", (error) => failures.push(`pageerror(tower): ${error.message}`));
+towerPage.on("pageerror", (error) =>
+  failures.push(`pageerror(tower): ${error.message}`),
+);
 await towerPage.addInitScript(
   ([payload, bulk, live]) => {
     window.pywebview = {
       api: {
-        get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
+        get_tick: async (sinceSeq) =>
+          sinceSeq === payload.seq ? null : payload,
         get_bulk: async (sinceRev) => (sinceRev === bulk.rev ? null : bulk),
         get_live_lap: async (sinceRev) => (sinceRev === live.rev ? null : live),
         get_connection: async () => "Connected",
       },
     };
   },
-  [tick(1, { drivers: towerField(), order: TOWER_ORDER }), towerBulk(), towerLive()],
+  [
+    tick(1, { drivers: towerField(), order: TOWER_ORDER }),
+    towerBulk(),
+    towerLive(),
+  ],
 );
 await towerPage.goto(url, { waitUntil: "domcontentloaded" });
 await towerPage.waitForSelector(".tower-row", { timeout: 5000 });
@@ -973,18 +1264,36 @@ const cell = async (row, column) => {
   }
 };
 
-check((await towerPage.locator(".tower-row").count()) === 20, "twenty rows, not the bulk's seventeen");
-check((await cell(18, 3)) === "SAI", "a car with no revealed lap still holds its place in the order");
+check(
+  (await towerPage.locator(".tower-row").count()) === 20,
+  "twenty rows, not the bulk's seventeen",
+);
+check(
+  (await cell(18, 3)) === "SAI",
+  "a car with no revealed lap still holds its place in the order",
+);
 
 // The four branches of the gap cell, each on the row that exercises it.
 check((await cell(1, 4)) === "LEADER", "the leader's GAP says so");
 check((await cell(1, 5)) === "—", "and the leader has no interval to anything");
 check((await cell(2, 4)) === "+1.24s", "GAP is measured to the LEADER");
 check((await cell(3, 4)) === "+3.07s", "and it accumulates down the order");
-check((await cell(3, 5)) === "+1.83s", "INT is measured to the car directly ahead");
-check((await cell(15, 4)) === "+1 LAP", "a lapped car reads in laps, not in tens of seconds");
-check((await cell(18, 4)) === "OUT", "a stopped car never shows a frozen interval");
-check((await cell(18, 9)) === "OUT", "and its LAST column says so in place of a lap time");
+check(
+  (await cell(3, 5)) === "+1.83s",
+  "INT is measured to the car directly ahead",
+);
+check(
+  (await cell(15, 4)) === "+1 LAP",
+  "a lapped car reads in laps, not in tens of seconds",
+);
+check(
+  (await cell(18, 4)) === "OUT",
+  "a stopped car never shows a frozen interval",
+);
+check(
+  (await cell(18, 9)) === "OUT",
+  "and its LAST column says so in place of a lap time",
+);
 
 // The row itself, on the leader.
 check((await cell(1, 3)) === "NOR", "the code column");
@@ -992,11 +1301,17 @@ check(
   (await cell(1, 6)).replace(/\s+/g, " ") === "29.000 301",
   "the sector time and its trap speed, inline",
 );
-check((await cell(1, 9)) === "1:25.744", "a lap time past the minute reads as m:ss.mmm");
+check(
+  (await cell(1, 9)) === "1:25.744",
+  "a lap time past the minute reads as m:ss.mmm",
+);
 check((await cell(1, 10)) === "321", "ST is the speed trap");
 check((await cell(1, 11)) === "M 12", "the compound letter and the set's age");
 check((await cell(1, 12)) === "2", "the stop count");
-check((await cell(18, 11)) === "—", "a driver the bulk never revealed shows dashes, not zeros");
+check(
+  (await cell(18, 11)) === "—",
+  "a driver the bulk never revealed shows dashes, not zeros",
+);
 
 // EFFECT, not a CSS property: all twenty rows are inside the card. Scrollbars
 // are hidden globally, so an overflowing tower does not announce itself - it
@@ -1020,13 +1335,16 @@ const towerFits = await towerPage.evaluate(() => {
   table.style.width = applied;
   const style = getComputedStyle(cardEl);
   const contentWidth =
-    cardEl.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    cardEl.clientWidth -
+    parseFloat(style.paddingLeft) -
+    parseFloat(style.paddingRight);
   return {
     lastBottom: last.bottom,
     cardBottom: card.bottom,
     naturalWidth,
     contentWidth,
-    visible: rows.filter((row) => row.getBoundingClientRect().height > 0).length,
+    visible: rows.filter((row) => row.getBoundingClientRect().height > 0)
+      .length,
   };
 });
 check(
@@ -1037,7 +1355,10 @@ check(
   towerFits.naturalWidth <= towerFits.contentWidth,
   `no column is compressed: the table wants ${towerFits.naturalWidth} and the card gives ${towerFits.contentWidth}`,
 );
-check(towerFits.visible === 20, `all twenty rows have height (${towerFits.visible})`);
+check(
+  towerFits.visible === 20,
+  `all twenty rows have height (${towerFits.visible})`,
+);
 
 // --- The sector colour code, on the tower ------------------------------------
 //
@@ -1045,11 +1366,22 @@ check(towerFits.visible === 20, `all twenty rows have height (${towerFits.visibl
 // yellow is slower than his own. The fixture arranges all three on the S1
 // column: NOR owns it and matched it, PIA matched his own, VER did not.
 const tone = async (row) =>
-  towerPage.locator(`.tower-row:nth-child(${row}) td:nth-child(6)`).getAttribute("class");
-check((await tone(1)).includes("is-purple"), "the session's fastest sector is purple");
+  towerPage
+    .locator(`.tower-row:nth-child(${row}) td:nth-child(6)`)
+    .getAttribute("class");
+check(
+  (await tone(1)).includes("is-purple"),
+  "the session's fastest sector is purple",
+);
 check((await tone(2)).includes("is-green"), "a driver's own best is green");
-check((await tone(3)).includes("is-yellow"), "slower than his own best is yellow");
-check((await tone(18)).includes("is-plain"), "a sector nobody has set is not coloured at all");
+check(
+  (await tone(3)).includes("is-yellow"),
+  "slower than his own best is yellow",
+);
+check(
+  (await tone(18)).includes("is-plain"),
+  "a sector nobody has set is not coloured at all",
+);
 
 // --- The sectors are the lap IN PROGRESS, not the last completed one ---------
 //
@@ -1060,14 +1392,29 @@ check((await tone(18)).includes("is-plain"), "a sector nobody has set is not col
 // that is the whole of #933: a cell that blanked until this lap's crossing
 // left S3 empty for the entire race, because a third sector's crossing IS the
 // end of its lap.
-check((await cell(1, 7)).startsWith("19.500"), "S2 shows the previous lap's value, not a dash");
-check((await cell(1, 8)).startsWith("26.750"), "and so does S3, which otherwise NEVER fills");
+check(
+  (await cell(1, 7)).startsWith("19.500"),
+  "S2 shows the previous lap's value, not a dash",
+);
+check(
+  (await cell(1, 8)).startsWith("26.750"),
+  "and so does S3, which otherwise NEVER fills",
+);
 const staleness = async (column) =>
-  (await towerPage.locator(`.tower-row:nth-child(1) td:nth-child(${column})`).getAttribute("class"))
-    .includes("is-stale");
+  (
+    await towerPage
+      .locator(`.tower-row:nth-child(1) td:nth-child(${column})`)
+      .getAttribute("class")
+  ).includes("is-stale");
 check((await staleness(6)) === false, "this lap's own sector is not dimmed");
-check((await staleness(7)) === true, "a carried-over sector says so by being dimmed");
-check((await staleness(8)) === true, "and S3 is carried over essentially always");
+check(
+  (await staleness(7)) === true,
+  "a carried-over sector says so by being dimmed",
+);
+check(
+  (await staleness(8)) === true,
+  "and S3 is carried over essentially always",
+);
 check(
   (await cell(1, 9)) === "1:25.744",
   "while LAST still shows the lap the car completed, which is what that column means",
@@ -1082,25 +1429,61 @@ check(
 const bestsRow = async (section, row) =>
   (
     await towerPage
-      .locator(`.bests-section:nth-child(${section}) .bests-row:nth-child(${row})`)
+      .locator(
+        `.bests-section:nth-child(${section}) .bests-row:nth-child(${row})`,
+      )
       .innerText()
   )
     .replace(/\s+/g, " ")
     .trim();
 
-check((await towerPage.locator(".bests-section").count()) === 4, "four ranked sections");
 check(
-  (await towerPage.locator(".bests-section:nth-child(1) .bests-row").count()) === 3,
-  "top three per section, because twenty would be 1,668 px of a 790 px body",
+  (await towerPage.locator(".bests-section").count()) === 4,
+  "four ranked sections",
+);
+// **Depth is the room's answer now, not a constant.** Three was argued against the
+// 63 px slot the narrow client leaves, and it left 150 px of nothing at the wide one
+// where the agreed drawing gives this card 303. So the assertion is the RULE: never
+// below the floor, never past the points, and whatever it picks it must SAY.
+const depth = await towerPage.evaluate(() => ({
+  rows: document.querySelectorAll(".bests-section:nth-child(1) .bests-row")
+    .length,
+  subtitle:
+    document.querySelector(".bests-subtitle")?.textContent?.trim() ?? "",
+  sections: [...document.querySelectorAll(".bests-section")].map(
+    (section) => section.querySelectorAll(".bests-row").length,
+  ),
+}));
+check(
+  depth.rows >= 3 && depth.rows <= 10,
+  `the ranked depth is between the floor and the points (${depth.rows})`,
+);
+check(
+  depth.subtitle.includes(`top ${depth.rows}`),
+  `and the panel says which depth it is showing ("${depth.subtitle}")`,
+);
+// All four sections at the same depth, or two of them are silently different lists.
+check(
+  new Set(depth.sections.filter((n) => n > 0)).size === 1,
+  `every section is the same depth (${JSON.stringify(depth.sections)})`,
 );
 // S1 is NOR 29.000, PIA 29.500, VER 29.800 - ranked across the FIELD, not per
 // driver, and the delta is a percentage off the section's leader.
-check((await bestsRow(1, 2)).startsWith("1 NOR 29.000"), "the section leader, with no delta");
-check((await bestsRow(1, 3)) === "2 PIA 29.500 +1.72%", "second, with its percentage off the top");
+check(
+  (await bestsRow(1, 2)).startsWith("1 NOR 29.000"),
+  "the section leader, with no delta",
+);
+check(
+  (await bestsRow(1, 3)) === "2 PIA 29.500 +1.72%",
+  "second, with its percentage off the top",
+);
 check((await bestsRow(1, 4)) === "3 VER 29.800 +2.76%", "and third");
 // S2 and S3 are owned by different drivers, so a panel reading one field for
 // all four sections would show NOR three times.
-check((await bestsRow(2, 2)).startsWith("1 PIA 18.500"), "S2 belongs to whoever set it");
+check(
+  (await bestsRow(2, 2)).startsWith("1 PIA 18.500"),
+  "S2 belongs to whoever set it",
+);
 check((await bestsRow(3, 2)).startsWith("1 VER 25.900"), "and so does S3");
 check(
   (await bestsRow(4, 2)).replace(/\s+$/, "") === "1 NOR 1:25.000 M",
@@ -1131,25 +1514,73 @@ await towerCtx.close();
  * races look like.
  */
 const RADIO_EVENTS = [
-  { kind: "rcm", lap: 2, driver: null, text: "DOUBLE YELLOW IN TRACK SECTOR 20", category: "Flag", flag: "DOUBLE YELLOW" },
-  { kind: "radio", lap: 6, driver: "NOR", text: "Weather update, no significant rain expected.", category: null, flag: null },
-  { kind: "radio", lap: 14, driver: "HAM", text: "", category: null, flag: null },
-  { kind: "rcm", lap: 20, driver: null, text: "FIA STEWARDS: INCIDENT INVOLVING CAR 22 (TSU) NO FURTHER ACTION - SAFETY CAR INFRINGEMENT", category: "Other", flag: null },
-  { kind: "radio", lap: 21, driver: "NOR", text: "Lando, a bit of an update on the safety car window.", category: null, flag: null },
-  { kind: "radio", lap: 23, driver: "VER", text: "If there is heavy rain we might need to fit inters, bear in mind.", category: null, flag: null },
+  {
+    kind: "rcm",
+    lap: 2,
+    driver: null,
+    text: "DOUBLE YELLOW IN TRACK SECTOR 20",
+    category: "Flag",
+    flag: "DOUBLE YELLOW",
+  },
+  {
+    kind: "radio",
+    lap: 6,
+    driver: "NOR",
+    text: "Weather update, no significant rain expected.",
+    category: null,
+    flag: null,
+  },
+  {
+    kind: "radio",
+    lap: 14,
+    driver: "HAM",
+    text: "",
+    category: null,
+    flag: null,
+  },
+  {
+    kind: "rcm",
+    lap: 20,
+    driver: null,
+    text: "FIA STEWARDS: INCIDENT INVOLVING CAR 22 (TSU) NO FURTHER ACTION - SAFETY CAR INFRINGEMENT",
+    category: "Other",
+    flag: null,
+  },
+  {
+    kind: "radio",
+    lap: 21,
+    driver: "NOR",
+    text: "Lando, a bit of an update on the safety car window.",
+    category: null,
+    flag: null,
+  },
+  {
+    kind: "radio",
+    lap: 23,
+    driver: "VER",
+    text: "If there is heavy rain we might need to fit inters, bear in mind.",
+    category: null,
+    flag: null,
+  },
 ];
 
 async function radioPage(radio) {
-  const context = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+  const context = await browser.newContext({
+    viewport: { width: 1485, height: 833 },
+  });
   const rPage = await context.newPage();
-  rPage.on("pageerror", (error) => failures.push(`pageerror(radio): ${error.message}`));
+  rPage.on("pageerror", (error) =>
+    failures.push(`pageerror(radio): ${error.message}`),
+  );
   await rPage.addInitScript(
     ([payload, bulk, live]) => {
       window.pywebview = {
         api: {
-          get_tick: async (sinceSeq) => (sinceSeq === payload.seq ? null : payload),
+          get_tick: async (sinceSeq) =>
+            sinceSeq === payload.seq ? null : payload,
           get_bulk: async (sinceRev) => (sinceRev === bulk.rev ? null : bulk),
-          get_live_lap: async (sinceRev) => (sinceRev === live.rev ? null : live),
+          get_live_lap: async (sinceRev) =>
+            sinceRev === live.rev ? null : live,
           get_connection: async () => "Connected",
         },
       };
@@ -1166,7 +1597,10 @@ async function radioPage(radio) {
   return [context, rPage];
 }
 
-const [radioCtx, feedPage] = await radioPage({ available: true, events: RADIO_EVENTS });
+const [radioCtx, feedPage] = await radioPage({
+  available: true,
+  events: RADIO_EVENTS,
+});
 
 // Tolerant for the same reason `cell` is: a defect that DROPS rows makes every
 // later selector miss, and a throwing helper kills the harness with a stack
@@ -1196,23 +1630,32 @@ check(
 
 // Newest FIRST. A pit wall reads the top line; a feed rendered in arrival order
 // puts lap 2 there and the freshest message off the bottom of a 416 px card.
-check((await rowText(1)).startsWith("L23 VER"), "the newest event is the top row");
-check((await rowText(6)).startsWith("L2 RCM"), "and the oldest is the last one");
+check(
+  (await rowText(1)).startsWith("L23 VER"),
+  "the newest event is the top row",
+);
+check(
+  (await rowText(6)).startsWith("L2 RCM"),
+  "and the oldest is the last one",
+);
 
 // The minute boundary `paceLabel` documented and its two siblings did not have.
 // Evaluated against the SHIPPED module rather than a copy of its arithmetic.
 const boundary = await feedPage.evaluate(async () => {
   const mod = await import("/src/lib/format.ts").catch(() => null);
-  return mod === null ? null : [
-    mod.formatSeconds(119.9996, 3),
-    mod.formatSeconds(59.9996, 3),
-    mod.formatSeconds(29.412, 3),
-    mod.formatSeconds(119.96, 1, true),
-  ];
+  return mod === null
+    ? null
+    : [
+        mod.formatSeconds(119.9996, 3),
+        mod.formatSeconds(59.9996, 3),
+        mod.formatSeconds(29.412, 3),
+        mod.formatSeconds(119.96, 1, true),
+      ];
 });
 if (boundary !== null) {
   check(
-    JSON.stringify(boundary) === JSON.stringify(["2:00.000", "1:00.000", "29.412", "2:00.0"]),
+    JSON.stringify(boundary) ===
+      JSON.stringify(["2:00.000", "1:00.000", "29.412", "2:00.0"]),
     `the shared formatter rounds before it splits (${JSON.stringify(boundary)})`,
   );
 }
@@ -1243,7 +1686,10 @@ if (boundary !== null) {
     driver: index % 3 === 0 ? null : "NOR",
     text: `event ${index} - long enough to occupy a row of its own on the panel`,
   }));
-  const [longCtx, longPage] = await radioPage({ available: true, events: many });
+  const [longCtx, longPage] = await radioPage({
+    available: true,
+    events: many,
+  });
   const reach = await longPage.evaluate(async () => {
     const list = document.querySelector(".radio-list");
     const rows = [...list.querySelectorAll(".radio-row")];
@@ -1259,7 +1705,10 @@ if (boundary !== null) {
       before,
       after: list.scrollTop,
       overflowY: getComputedStyle(list).overflowY,
-      oldestReached: !!oldest && oldest.bottom <= box.bottom + 1 && oldest.top >= box.top - 1,
+      oldestReached:
+        !!oldest &&
+        oldest.bottom <= box.bottom + 1 &&
+        oldest.top >= box.top - 1,
     };
   });
   check(
@@ -1267,7 +1716,9 @@ if (boundary !== null) {
     `the long feed really has a fold (${reach.folded} px hidden over ${reach.rows} rows)`,
   );
   check(
-    reach.overflowY === "auto" && reach.after > reach.before && reach.oldestReached,
+    reach.overflowY === "auto" &&
+      reach.after > reach.before &&
+      reach.oldestReached,
     `and the oldest event can be reached (${reach.overflowY}, scrollTop ${reach.before} -> ${reach.after}, oldest in view: ${reach.oldestReached})`,
   );
   await longCtx.close();
@@ -1281,7 +1732,9 @@ const tiers = await feedPage.evaluate(() =>
   })),
 );
 check(
-  tiers.filter((row) => row.who === "VER" || row.who === "HAM").every((row) => row.broadcast),
+  tiers
+    .filter((row) => row.who === "VER" || row.who === "HAM")
+    .every((row) => row.broadcast),
   "a rival's radio is tagged BROADCAST, exactly as band 4 tags a pinned rival's trace",
 );
 check(
@@ -1296,14 +1749,101 @@ check(
 // A radio whose audio was never transcribed still occupies a row. Dropping it
 // would present a race as quieter than it was, and that is the COMMON case:
 // 23 of the 24 published races have no transcript at all.
-check((await rowText(4)).includes("no transcript"), "a radio with no words still shows itself");
-
-// The count is what stops an overflow being silent. Scrollbars are hidden
-// globally, so a panel that shows nine of forty-two and says nothing looks
-// exactly like a panel showing all there is.
 check(
-  (await feedPage.locator(".radio-count").innerText()).trim() === String(RADIO_EVENTS.length),
-  "the header counts every revealed event, not the ones that happen to fit",
+  (await rowText(4)).includes("no transcript"),
+  "a radio with no words still shows itself",
+);
+
+// **The count is what stops an overflow being silent - and it now says BOTH
+// numbers.** The rationale this check shipped with was "a panel that shows nine of
+// forty-two and says nothing looks exactly like a panel showing all there is", and
+// `42` alone left the reader to notice the discrepancy by counting rows. The header
+// reads `visible / total`, so the assertion keeps the half that was load-bearing -
+// the TOTAL must survive, or the fix would have hidden the very thing it announces -
+// and adds the half that is new.
+const headerCount = (await feedPage.locator(".radio-count").innerText()).trim();
+check(
+  headerCount.endsWith(`/ ${RADIO_EVENTS.length}`) ||
+    headerCount === String(RADIO_EVENTS.length),
+  `the header still names every revealed event, not just the ones that fit (${headerCount})`,
+);
+const [shown] = headerCount.split(" / ").map(Number);
+// All six fixture events fit, so the honest assertion here is that the visible half
+// does not UNDER-count and the fold does not claim a fold that is not there. (The
+// first version of this measure read `offsetTop`, which is relative to the nearest
+// positioned ancestor rather than the list, and reported `0 / 6`.)
+check(
+  shown === RADIO_EVENTS.length,
+  `all ${RADIO_EVENTS.length} fixture events fit and the header says so (${headerCount})`,
+);
+check(
+  (await feedPage.locator(".radio-fold").count()) === 0,
+  "and no fold line is printed when there is nothing below the fold",
+);
+
+// **Now DRIVE the overflow**, because the fold is the affordance and a guard that
+// never sees one proves nothing. Squeezing the list is the same thing a real race
+// does with 58 events in a 404 px card.
+await feedPage.addStyleTag({ content: ".radio-list { max-height: 40px; }" });
+await feedPage
+  .waitForSelector(".radio-fold", { timeout: 3000 })
+  .catch(() => null);
+const folded = await feedPage.evaluate(() => ({
+  header: document.querySelector(".radio-count")?.textContent?.trim() ?? "",
+  fold: document.querySelector(".radio-fold")?.textContent?.trim() ?? null,
+}));
+const [nowShown] = folded.header.split(" / ").map(Number);
+check(
+  Number.isFinite(nowShown) && nowShown < RADIO_EVENTS.length,
+  `squeezed, the header drops to what fits (${folded.header})`,
+);
+// Not scrolled, so everything off screen IS below, and the fold names it.
+check(
+  folded.fold !== null &&
+    folded.fold.includes(String(RADIO_EVENTS.length - nowShown)) &&
+    folded.fold.includes("scroll"),
+  `and the panel says how many are below the fold, in words (${folded.fold})`,
+);
+
+// **Now SCROLL it, because a one-edge measure is right until you do.** The first
+// version of this measure tested `rect.bottom <= listBottom`, which every row scrolled
+// off the TOP also satisfies: at the end of the list the header read `total / total`
+// and the fold line disappeared, while a third of the rows sat above the viewport. The
+// pace grid's sibling measure tested both edges from the start.
+await feedPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  list.scrollTop = list.scrollHeight;
+  list.dispatchEvent(new Event("scroll"));
+});
+await feedPage.waitForTimeout(300);
+const atEnd = await feedPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  const frame = list.getBoundingClientRect();
+  // The truth, measured independently of the component: rows intersecting the frame.
+  const trulyVisible = [...list.querySelectorAll("li")].filter((li) => {
+    const rect = li.getBoundingClientRect();
+    return rect.bottom > frame.top + 1 && rect.top < frame.bottom - 1;
+  }).length;
+  return {
+    header: document.querySelector(".radio-count")?.textContent?.trim() ?? "",
+    fold: document.querySelector(".radio-fold")?.textContent?.trim() ?? null,
+    trulyVisible,
+  };
+});
+const [shownAtEnd] = atEnd.header.split(" / ").map(Number);
+check(
+  shownAtEnd <= atEnd.trulyVisible + 1 && shownAtEnd < RADIO_EVENTS.length,
+  `scrolled to the end the header still counts what is IN VIEW (says ${shownAtEnd}, ${atEnd.trulyVisible} in view of ${RADIO_EVENTS.length})`,
+);
+// **And the fold correctly goes AWAY, which is not what this check first asserted.** It
+// said "the fold line survives the scroll rather than vanishing", written to catch the
+// one-edge measure - but that bug's real symptom is the HEADER reading `total / total`,
+// which the check above holds. At the END of a newest-first list nothing OLDER is hidden,
+// so a line saying "+ N older" would be the lie. Right expectation, wrong reason, and the
+// fix to the fold's direction is what exposed it.
+check(
+  atEnd.fold === null,
+  `and no line claims older events below when the list is at its end (${atEnd.fold})`,
 );
 
 // EFFECT, not mechanism: the card must not spill past the column it lives in.
@@ -1311,22 +1851,204 @@ const fits = await feedPage.evaluate(() => {
   const card = document.querySelector(".radio-feed");
   const column = document.querySelector(".side-column");
   return {
-    overflow: card.getBoundingClientRect().bottom - column.getBoundingClientRect().bottom,
-    ringVisible: document.querySelector(".ring").getBoundingClientRect().height > 0,
+    overflow:
+      card.getBoundingClientRect().bottom -
+      column.getBoundingClientRect().bottom,
+    ringVisible:
+      document.querySelector(".ring").getBoundingClientRect().height > 0,
   };
 });
-check(fits.overflow <= 1, `the feed stays inside its column (spills ${fits.overflow.toFixed(1)}px)`);
+check(
+  fits.overflow <= 1,
+  `the feed stays inside its column (spills ${fits.overflow.toFixed(1)}px)`,
+);
 check(fits.ringVisible, "and the ring above it is still there");
 
+// **The two wire fields that nothing read.** `category` and `flag` have ridden the
+// bulk since the feed shipped, and both fixture RCM rows carry them - so a reader
+// could not tell `DOUBLE YELLOW` from the twentieth `NO FURTHER ACTION` without
+// reading the sentence. Asserted as the SLOT each row shows, not as "a chip exists
+// somewhere": the flag branch and the no-chip branch are different claims.
+const chips = await feedPage.evaluate(() =>
+  [...document.querySelectorAll(".radio-row")].map((row) => ({
+    lap: row.querySelector(".radio-lap")?.textContent ?? "",
+    chip: row.querySelector(".radio-cat")?.textContent ?? null,
+  })),
+);
+check(
+  chips.find((row) => row.lap === "L2")?.chip === "2Y",
+  `the DOUBLE YELLOW row wears its flag, not the word FLAG (${chips.find((row) => row.lap === "L2")?.chip})`,
+);
+check(
+  chips.find((row) => row.lap === "L20")?.chip === null,
+  "and an `Other` stewards note wears nothing - a badge on two thirds of the rows is a badge on none",
+);
+check(
+  chips.filter((row) => row.chip !== null).length === 1,
+  `so exactly one of the six rows is chipped (${chips.filter((row) => row.chip !== null).length})`,
+);
+
 await radioCtx.close();
+
+// **The collapse, driven.** Measured on the live 58-event payload there are ZERO
+// consecutive duplicate runs, so the panel's own key comment - "four identical BLUE
+// FLAG lines for the same car on Melbourne's lap 46" - is the only evidence the case
+// exists, and a guard that never sees a duplicate proves nothing about collapsing
+// one. This fixture is that lap 46.
+const DUPLICATE_EVENTS = [
+  {
+    kind: "rcm",
+    lap: 46,
+    driver: null,
+    text: "BLUE FLAG FOR CAR 31 (OCO)",
+    category: "Flag",
+    flag: "BLUE",
+  },
+  {
+    kind: "rcm",
+    lap: 46,
+    driver: null,
+    text: "BLUE FLAG FOR CAR 31 (OCO)",
+    category: "Flag",
+    flag: "BLUE",
+  },
+  {
+    kind: "rcm",
+    lap: 46,
+    driver: null,
+    text: "BLUE FLAG FOR CAR 31 (OCO)",
+    category: "Flag",
+    flag: "BLUE",
+  },
+  {
+    kind: "rcm",
+    lap: 46,
+    driver: null,
+    text: "BLUE FLAG FOR CAR 31 (OCO)",
+    category: "Flag",
+    flag: "BLUE",
+  },
+  {
+    kind: "rcm",
+    lap: 47,
+    driver: null,
+    text: "SAFETY CAR DEPLOYED",
+    category: "SafetyCar",
+    flag: null,
+  },
+  // Same text as the first four, an hour of race later. It must NOT join them.
+  {
+    kind: "rcm",
+    lap: 52,
+    driver: null,
+    text: "BLUE FLAG FOR CAR 31 (OCO)",
+    category: "Flag",
+    flag: "BLUE",
+  },
+];
+const [dupCtx, dupPage] = await radioPage({
+  available: true,
+  events: DUPLICATE_EVENTS,
+});
+const collapsed = await dupPage.evaluate(() =>
+  [...document.querySelectorAll(".radio-row")].map((row) => ({
+    lap: row.querySelector(".radio-lap")?.textContent ?? "",
+    chip: row.querySelector(".radio-cat")?.textContent ?? null,
+    repeats: row.querySelector(".radio-repeats")?.textContent?.trim() ?? null,
+  })),
+);
+check(
+  collapsed.length === 3,
+  `six events with a run of four render as three rows (${collapsed.length})`,
+);
+check(
+  collapsed[collapsed.length - 1]?.repeats === "x4",
+  `and the run says how many it stands for rather than hiding them (${collapsed[collapsed.length - 1]?.repeats})`,
+);
+// Newest first, so the lap-52 copy is row 0 and the run is last. The separated copy
+// must be its OWN row: collapsing by text alone would rewrite the chronology.
+check(
+  collapsed[0]?.lap === "L52" && collapsed[0]?.repeats === null,
+  `the same message six laps later stays a separate, uncounted row (${collapsed[0]?.lap} ${collapsed[0]?.repeats})`,
+);
+check(
+  collapsed.find((row) => row.lap === "L47")?.chip === "SC",
+  `and the safety car is chipped SC (${collapsed.find((row) => row.lap === "L47")?.chip})`,
+);
+
+// **The header's numerator, counted independently from the DOM.**
+//
+// The numerator used to count collapsed ROWS while the denominator counted EVENTS -
+// identical until something collapses, and this fixture is where it does (6 events, 3
+// rows). The first guard for it asserted `visible + hidden == total`, which a gate
+// refuted as a TAUTOLOGY: the component derives `hidden = events - visible`, so that sum
+// is the total by construction, and reverting the numerator to rows left 217/217 green.
+//
+// So the expectation is rebuilt here from the rendered rows and their own `x4` labels,
+// which the component does not get to define. Squeezed, the header must name the EVENTS
+// those rows stand for, and the two numbers must DIFFER or the fixture is not exercising
+// a collapse at all.
+// Squeezed, then SCROLLED TO THE END, because the collapsed run is the OLDEST row and a
+// squeeze alone leaves it below the fold - which is how the first version of this check
+// came to compare 1 event against 1 row and prove nothing about collapsing.
+await dupPage.addStyleTag({ content: ".radio-list { max-height: 34px; }" });
+await dupPage.waitForTimeout(300);
+await dupPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  list.scrollTop = list.scrollHeight;
+  list.dispatchEvent(new Event("scroll"));
+});
+await dupPage.waitForTimeout(400);
+const dupCounts = await dupPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  const frame = list.getBoundingClientRect();
+  let eventsInView = 0;
+  let rowsInView = 0;
+  for (const item of list.querySelectorAll("li")) {
+    const rect = item.getBoundingClientRect();
+    if (rect.bottom > frame.bottom + 1 || rect.top < frame.top - 1) continue;
+    rowsInView += 1;
+    const label =
+      item.querySelector(".radio-repeats")?.textContent?.trim() ?? "";
+    eventsInView += label ? Number(label.replace(/\D/g, "")) : 1;
+  }
+  return {
+    eventsInView,
+    rowsInView,
+    header: document.querySelector(".radio-count")?.textContent?.trim() ?? "",
+    fold: document.querySelector(".radio-fold")?.textContent?.trim() ?? "",
+  };
+});
+const [dupShown] = dupCounts.header.split(" / ").map(Number);
+check(
+  dupShown === dupCounts.eventsInView,
+  `the header names the EVENTS on screen, not the rows (says ${dupShown}, DOM has ${dupCounts.eventsInView} events over ${dupCounts.rowsInView} rows: "${dupCounts.header}")`,
+);
+check(
+  dupCounts.eventsInView !== dupCounts.rowsInView,
+  `and the fixture really is exercising a collapse (${dupCounts.eventsInView} events, ${dupCounts.rowsInView} rows)`,
+);
+// At the END of a newest-first list there is nothing OLDER hidden, so the line that says
+// "older" must be gone. It used to stay and count the NEWER rows above instead: measured
+// on the real corpus it read `+ 10 older` with nine of the ten being newer.
+check(
+  dupCounts.fold === "",
+  `at the end of the list nothing is older, so no fold line claims otherwise ("${dupCounts.fold}")`,
+);
+await dupCtx.close();
 
 // A race with no corpus SAYS so. An empty list and a missing corpus are the
 // same pixel otherwise, which is the twin F7 caught one sprint ago between
 // get_bulk and get_live_lap.
 const [emptyCtx, emptyPage] = await radioPage({ available: false, events: [] });
-check((await emptyPage.locator(".radio-row").count()) === 0, "no rows for a race with no corpus");
 check(
-  (await emptyPage.locator(".radio-subtitle").innerText()).includes("no corpus"),
+  (await emptyPage.locator(".radio-row").count()) === 0,
+  "no rows for a race with no corpus",
+);
+check(
+  (await emptyPage.locator(".radio-subtitle").innerText()).includes(
+    "no corpus",
+  ),
   "and the panel says so instead of going quietly blank",
 );
 await emptyCtx.close();
@@ -1380,13 +2102,47 @@ function paceBulk() {
     if (RETIRED_CODES.includes(code)) {
       // Generated-only: rendered, counted in nothing.
       drivers[code] = {
-        number, laps_revealed: 0, stops: 0, crossings: {},
-        laps: [{ lap: 1, t: null, lap_time: null, s1: null, s2: null, s3: null,
-          v1: null, v2: null, vfl: null, vst: null, position: null, compound: null,
-          tyre_life: null, stint: null, track_status: "1", neutralised: null,
-          pit_in: false, pit_out: false, deleted: false, generated: true, pb: false }],
-        best: { lap: null, lap_time: null, s1: null, s2: null, s3: null,
-          v1: null, v2: null, vfl: null, vst: null, compound: null },
+        number,
+        laps_revealed: 0,
+        stops: 0,
+        crossings: {},
+        laps: [
+          {
+            lap: 1,
+            t: null,
+            lap_time: null,
+            s1: null,
+            s2: null,
+            s3: null,
+            v1: null,
+            v2: null,
+            vfl: null,
+            vst: null,
+            position: null,
+            compound: null,
+            tyre_life: null,
+            stint: null,
+            track_status: "1",
+            neutralised: null,
+            pit_in: false,
+            pit_out: false,
+            deleted: false,
+            generated: true,
+            pb: false,
+          },
+        ],
+        best: {
+          lap: null,
+          lap_time: null,
+          s1: null,
+          s2: null,
+          s3: null,
+          v1: null,
+          v2: null,
+          vfl: null,
+          vst: null,
+          compound: null,
+        },
         theoretical: null,
       };
       return;
@@ -1430,7 +2186,8 @@ function paceBulk() {
       // row of this fixture used to say `deleted: false`, so the branch that
       // paints them was never entered by any check.
       const deleted = lap === 44 && index % 3 === 0;
-      if (!pitIn && !pitOut && !deleted && (best === null || time < best)) best = time;
+      if (!pitIn && !pitOut && !deleted && (best === null || time < best))
+        best = time;
       const lapTime = pitIn || pitOut ? time + 22 : time;
       // The crossing clock is the CUMULATIVE lap time, which is what it is on
       // the real wire and what makes the race trace mean anything: a pit stop
@@ -1444,21 +2201,58 @@ function paceBulk() {
       // the safety car.** It knew they were neutralised - `neutralised` above
       // makes their times 2.4x - and told the wire they were green, so the rail
       // and the trace's shaded band had no fixture that could exercise them.
-      laps.push({ lap, t: elapsed, lap_time: lapTime,
-        s1: 29, s2: 30, s3: 26, v1: 301, v2: 289, vfl: 280, vst: 321,
-        position: index + 1, compound: "MEDIUM", tyre_life: lap, stint: 1,
+      laps.push({
+        lap,
+        t: elapsed,
+        lap_time: lapTime,
+        s1: 29,
+        s2: 30,
+        s3: 26,
+        v1: 301,
+        v2: 289,
+        vfl: 280,
+        vst: 321,
+        position: index + 1,
+        compound: "MEDIUM",
+        tyre_life: lap,
+        stint: 1,
         track_status: neutralised ? "4" : "1",
         neutralised: neutralised ? "SAFETY CAR" : null,
-        pit_in: pitIn, pit_out: pitOut, deleted,
-        generated: false, pb: false });
+        pit_in: pitIn,
+        pit_out: pitOut,
+        deleted,
+        generated: false,
+        pb: false,
+      });
     }
-    drivers[code] = { number, laps_revealed: revealed, stops: 1, crossings, laps,
-      best: { lap: PACE_FASTEST.lap, lap_time: best, s1: 29, s2: 30, s3: 26,
-        v1: 301, v2: 289, vfl: 280, vst: 321, compound: "MEDIUM" },
-      theoretical: 85 };
+    drivers[code] = {
+      number,
+      laps_revealed: revealed,
+      stops: 1,
+      crossings,
+      laps,
+      best: {
+        lap: PACE_FASTEST.lap,
+        lap_time: best,
+        s1: 29,
+        s2: 30,
+        s3: 26,
+        v1: 301,
+        v2: 289,
+        vfl: 280,
+        vst: 321,
+        compound: "MEDIUM",
+      },
+      theoretical: 85,
+    };
   });
-  return { rev: 1, available: true, race: { year: 2025, location: "Melbourne", total_laps: PACE_LAPS },
-    drivers, radio: { available: true, events: [] } };
+  return {
+    rev: 1,
+    available: true,
+    race: { year: 2025, location: "Melbourne", total_laps: PACE_LAPS },
+    drivers,
+    radio: { available: true, events: [] },
+  };
 }
 
 /**
@@ -1484,26 +2278,42 @@ function paceField() {
   return field;
 }
 
-const paceCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+const paceCtx = await browser.newContext({
+  viewport: { width: 1485, height: 833 },
+});
 const pacePage = await paceCtx.newPage();
-pacePage.on("pageerror", (error) => failures.push(`pageerror(pace): ${error.message}`));
+pacePage.on("pageerror", (error) =>
+  failures.push(`pageerror(pace): ${error.message}`),
+);
 await pacePage.addInitScript(
   ([payload, bulk, live]) => {
-    window.pywebview = { api: {
-      get_tick: async (s) => (s === payload.seq ? null : payload),
-      get_bulk: async (r) => (r === bulk.rev ? null : bulk),
-      get_live_lap: async (r) => (r === live.rev ? null : live),
-      get_connection: async () => "Connected",
-    } };
+    window.pywebview = {
+      api: {
+        get_tick: async (s) => (s === payload.seq ? null : payload),
+        get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+        get_live_lap: async (r) => (r === live.rev ? null : live),
+        get_connection: async () => "Connected",
+      },
+    };
   },
-  [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+  [
+    tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+    paceBulk(),
+    towerLive(),
+  ],
 );
 await pacePage.goto(url, { waitUntil: "domcontentloaded" });
 await pacePage.waitForSelector(".tab-strip", { timeout: 5000 });
 
 // The ring and the traces own the column until the reader asks for the grid.
-check((await pacePage.locator(".ring").count()) === 1, "the TRACES tab opens with the ring on it");
-check((await pacePage.locator(".pace-table").count()) === 0, "and the grid is not mounted yet");
+check(
+  (await pacePage.locator(".ring").count()) === 1,
+  "the TRACES tab opens with the ring on it",
+);
+check(
+  (await pacePage.locator(".pace-table").count()) === 0,
+  "and the grid is not mounted yet",
+);
 
 await pacePage.getByRole("tab", { name: "RACE PACE" }).click();
 await pacePage.waitForSelector(".pace-table", { timeout: 5000 });
@@ -1512,13 +2322,24 @@ await pacePage.waitForTimeout(400);
 // Measured, not assumed: with the 260 px ring column still mounted the grid
 // gets 555 px, its columns fall to 25.25 px against 25 px of text and 1,101 of
 // 1,140 cells clip. There is no arrangement that keeps both.
-check((await pacePage.locator(".ring").count()) === 0, "the ring hides on the RACE PACE tab");
-check((await pacePage.locator(".radio-feed").count()) === 0, "and the radio feed hides with it");
+check(
+  (await pacePage.locator(".ring").count()) === 0,
+  "the ring hides on the RACE PACE tab",
+);
+check(
+  (await pacePage.locator(".radio-feed").count()) === 0,
+  "and the radio feed hides with it",
+);
 
 const paceHead = await pacePage.evaluate(() =>
-  [...document.querySelectorAll(".pace-table thead th")].slice(1).map((h) => h.textContent),
+  [...document.querySelectorAll(".pace-table thead th")]
+    .slice(1)
+    .map((h) => h.textContent),
 );
-check(paceHead.length === 20, `every driver the wire names gets a column (${paceHead.length})`);
+check(
+  paceHead.length === 20,
+  `every driver the wire names gets a column (${paceHead.length})`,
+);
 // One of them is absent from `bulk.drivers` altogether. The design says the
 // wire decides WHO races; a grid that reduced over the bulk instead would be
 // one column short and nothing would say so. (The reason once given for this -
@@ -1534,7 +2355,15 @@ check(
 // real bundle with one unknown at wire index 1, car 44 rendered ahead of car 1.
 const paceNumbers = await pacePage.evaluate(
   ([head, bulkNumbers]) => head.map((code) => bulkNumbers[code] ?? null),
-  [paceHead, Object.fromEntries(Object.entries(paceBulk().drivers).map(([c, d]) => [c, d.number === null ? null : Number(d.number)]))],
+  [
+    paceHead,
+    Object.fromEntries(
+      Object.entries(paceBulk().drivers).map(([c, d]) => [
+        c,
+        d.number === null ? null : Number(d.number),
+      ]),
+    ),
+  ],
 );
 const knownNumbers = paceNumbers.filter((n) => n !== null);
 check(
@@ -1551,7 +2380,8 @@ check(
   `unknown numbers sort to the end instead of stranding the cars before them (${paceNumbers.join(",")})`,
 );
 check(
-  new Set(paceHead).size === 20 && paceHead.every((code) => TOWER_ORDER.includes(code)),
+  new Set(paceHead).size === 20 &&
+    paceHead.every((code) => TOWER_ORDER.includes(code)),
   "every driver the wire names gets a column, exactly once",
 );
 // Stable across the race: `race_order` re-sorts every time two cars swap, and
@@ -1563,12 +2393,18 @@ check(
 
 const paceCells = await pacePage.evaluate(() => {
   const cells = [...document.querySelectorAll(".pace-table td")];
-  const tone = (name) => cells.filter((c) => c.className === `is-${name}`).length;
+  const tone = (name) =>
+    cells.filter((c) => c.className === `is-${name}`).length;
   return {
     total: cells.length,
     clipped: cells.filter((c) => c.scrollWidth > c.clientWidth).length,
-    best: tone("best"), t1: tone("t1"), t2: tone("t2"), t3: tone("t3"),
-    pit: tone("pit"), out: tone("out"), none: tone("none"),
+    best: tone("best"),
+    t1: tone("t1"),
+    t2: tone("t2"),
+    t3: tone("t3"),
+    pit: tone("pit"),
+    out: tone("out"),
+    none: tone("none"),
     pitText: cells.find((c) => c.className === "is-pit")?.textContent,
     outText: cells.find((c) => c.className === "is-out")?.textContent,
     rows: document.querySelectorAll(".pace-table tbody tr").length,
@@ -1578,10 +2414,18 @@ const paceCells = await pacePage.evaluate(() => {
 // EFFECT, not mechanism. `overflow-x` on the container reports zero for every
 // variant that clips - only the cell's own scrollWidth sees the digits cut,
 // which is how a 0.27 px "fit" measured as a pass right up to the screenshot.
-check(paceCells.clipped === 0, `no lap time is cut (${paceCells.clipped}/${paceCells.total} clipped)`);
-check(paceCells.rows === PACE_LAPS, `one row per lap of the race (${paceCells.rows})`);
-check(paceCells.pitText === "IN PIT" && paceCells.outText === "P.EXIT",
-  "the in-lap and the out-lap replace the time, as a timing screen shows them");
+check(
+  paceCells.clipped === 0,
+  `no lap time is cut (${paceCells.clipped}/${paceCells.total} clipped)`,
+);
+check(
+  paceCells.rows === PACE_LAPS,
+  `one row per lap of the race (${paceCells.rows})`,
+);
+check(
+  paceCells.pitText === "IN PIT" && paceCells.outText === "P.EXIT",
+  "the in-lap and the out-lap replace the time, as a timing screen shows them",
+);
 // **And neither of them says what the tower says about a RETIRED car.** The
 // tower's own docstring refuses to reuse that word for a car that is still
 // racing; this grid used it for the out-lap, in the same window, on the same
@@ -1589,7 +2433,9 @@ check(paceCells.pitText === "IN PIT" && paceCells.outText === "P.EXIT",
 // one sampled above, so a single tone reverting is still caught.
 const paceWords = await pacePage.evaluate(() => {
   const cells = [...document.querySelectorAll(".pace-table td")];
-  const tower = [...document.querySelectorAll(".tower-row .col-last")].map((c) => c.textContent);
+  const tower = [...document.querySelectorAll(".tower-row .col-last")].map(
+    (c) => c.textContent,
+  );
   return {
     collisions: cells.filter((c) => c.textContent.trim() === "OUT").length,
     towerUsesIt: tower.includes("OUT"),
@@ -1599,7 +2445,10 @@ check(
   paceWords.collisions === 0,
   `no pace cell says OUT, which the tower reserves for a retirement (${paceWords.collisions} do)`,
 );
-check(paceCells.best === 1, `exactly one purple cell - the session's fastest lap (${paceCells.best})`);
+check(
+  paceCells.best === 1,
+  `exactly one purple cell - the session's fastest lap (${paceCells.best})`,
+);
 
 // **The range says what is ON SCREEN, and the only way to check that is to
 // SCROLL.** It used to render `grid.laps[0]`, which is always 1, so the header
@@ -1644,7 +2493,12 @@ const scrolled = await pacePage.evaluate(() => {
   const box = document.querySelector(".pace-scroll");
   box.scrollTop = 0;
   box.dispatchEvent(new Event("scroll"));
-  return new Promise((done) => setTimeout(() => done(document.querySelector(".pace-range").textContent), 150));
+  return new Promise((done) =>
+    setTimeout(
+      () => done(document.querySelector(".pace-range").textContent),
+      150,
+    ),
+  );
 });
 check(
   rangeAtBottom !== scrolled,
@@ -1674,8 +2528,12 @@ const boundaryCell = await pacePage.evaluate(() => {
   return [...(row?.querySelectorAll("td") ?? [])].map((c) => c.textContent);
 });
 check(
-  boundaryCell.includes("2:00.0") && !boundaryCell.some((t) => /:60\./.test(t ?? "")),
-  `a lap just under a minute boundary rounds up to the next minute, never :60 (${boundaryCell.filter((t) => t && t.startsWith("1:5") === false && t.includes(":")).slice(0, 3).join(",")})`,
+  boundaryCell.includes("2:00.0") &&
+    !boundaryCell.some((t) => /:60\./.test(t ?? "")),
+  `a lap just under a minute boundary rounds up to the next minute, never :60 (${boundaryCell
+    .filter((t) => t && t.startsWith("1:5") === false && t.includes(":"))
+    .slice(0, 3)
+    .join(",")})`,
 );
 
 // A deleted time is struck through and carries NO rank. It used to carry the
@@ -1694,7 +2552,10 @@ const deletedCells = await pacePage.evaluate(() => {
     fastestToned: cells.filter((c) => c.className === "is-t1").length,
   };
 });
-check(deletedCells.struck > 0, `the deleted laps reach the grid (${deletedCells.struck})`);
+check(
+  deletedCells.struck > 0,
+  `the deleted laps reach the grid (${deletedCells.struck})`,
+);
 check(
   deletedCells.line === "line-through",
   `a deleted time is struck through, as the tower already shows it (${deletedCells.line})`,
@@ -1709,7 +2570,8 @@ check(
 // in one colour, because the race was wet and ran safety cars.
 const spread = [paceCells.t1, paceCells.t2, paceCells.t3];
 check(
-  spread.every((count) => count > 0) && Math.max(...spread) < paceCells.total * 0.75,
+  spread.every((count) => count > 0) &&
+    Math.max(...spread) < paceCells.total * 0.75,
   `the heat scale uses all three tones rather than painting one (${spread.join(" / ")})`,
 );
 
@@ -1721,7 +2583,10 @@ check(
 // 40 / 45 / 0, the slowest tone empty across all five laps. Ranking inside the
 // lap splits the field whatever the spread.
 const scLaps = await pacePage.evaluate(() => {
-  const rows = [...document.querySelectorAll(".pace-table tbody tr")].slice(1, 6);
+  const rows = [...document.querySelectorAll(".pace-table tbody tr")].slice(
+    1,
+    6,
+  );
   const tones = {};
   for (const row of rows) {
     for (const cell of row.querySelectorAll("td")) {
@@ -1761,10 +2626,12 @@ const rails = await pacePage.evaluate(() => {
     plain,
     // The rail is a border, so a text-colour assertion could not see it.
     width: railed.length
-      ? getComputedStyle(rows[railed[0] - 1].querySelector("th")).borderLeftWidth
+      ? getComputedStyle(rows[railed[0] - 1].querySelector("th"))
+          .borderLeftWidth
       : "0px",
     legend: document.querySelectorAll(".pace-legend-rail").length,
-    title: rows[railed[0] - 1]?.querySelector("th")?.getAttribute("title") ?? "",
+    title:
+      rows[railed[0] - 1]?.querySelector("th")?.getAttribute("title") ?? "",
   };
 });
 
@@ -1773,7 +2640,9 @@ check(
   `the neutralised laps carry a rail and only those (${rails.railed.join(",")})`,
 );
 check(
-  rails.plain.length === PACE_LAPS - 6 && !rails.plain.includes(4) && !rails.plain.includes(30),
+  rails.plain.length === PACE_LAPS - 6 &&
+    !rails.plain.includes(4) &&
+    !rails.plain.includes(30),
   `and the other ${rails.plain.length} laps carry none`,
 );
 check(
@@ -1794,19 +2663,29 @@ check(
 // widths are distinguishable - the column really is narrower - before asserting
 // that nothing clips at either.
 {
-  const narrowCtx = await browser.newContext({ viewport: { width: 1265, height: 593 } });
+  const narrowCtx = await browser.newContext({
+    viewport: { width: 1265, height: 593 },
+  });
   const narrow = await narrowCtx.newPage();
-  narrow.on("pageerror", (error) => failures.push(`pageerror(pace-narrow): ${error.message}`));
+  narrow.on("pageerror", (error) =>
+    failures.push(`pageerror(pace-narrow): ${error.message}`),
+  );
   await narrow.addInitScript(
     ([payload, bulk, live]) => {
-      window.pywebview = { api: {
-        get_tick: async (s) => (s === payload.seq ? null : payload),
-        get_bulk: async (r) => (r === bulk.rev ? null : bulk),
-        get_live_lap: async (r) => (r === live.rev ? null : live),
-        get_connection: async () => "Connected",
-      } };
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
     },
-    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+    ],
   );
   await narrow.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
     waitUntil: "domcontentloaded",
@@ -1819,7 +2698,8 @@ check(
     const cells = [...document.querySelectorAll(".pace-table td")];
     const populated = cells.filter((c) => c.textContent.trim().length > 0);
     return {
-      column: document.querySelector(".pace-table thead th + th")?.clientWidth ?? 0,
+      column:
+        document.querySelector(".pace-table thead th + th")?.clientWidth ?? 0,
       populated: populated.length,
       clipped: populated.filter((c) => c.scrollWidth > c.clientWidth).length,
       sample: populated.find((c) => c.className === "is-t1")?.textContent ?? "",
@@ -1855,7 +2735,9 @@ check(
   // is inside the column - rather than by checking a row count, which would pass
   // on a panel whose one remaining row still hung over the edge.
   const bests = await narrow.evaluate(() => {
-    const column = document.querySelector(".left-column").getBoundingClientRect();
+    const column = document
+      .querySelector(".left-column")
+      .getBoundingClientRect();
     const card = document.querySelector(".bests");
     const parts = [card, ...card.querySelectorAll("*")];
     const outside = parts.filter((el) => {
@@ -1866,7 +2748,11 @@ check(
       outside: outside.length,
       parts: parts.length,
       worst: outside.length
-        ? +(Math.max(...outside.map((el) => el.getBoundingClientRect().bottom)) - column.bottom).toFixed(1)
+        ? +(
+            Math.max(
+              ...outside.map((el) => el.getBoundingClientRect().bottom),
+            ) - column.bottom
+          ).toFixed(1)
         : 0,
       // The card is clamped to its slot, so an overflow no longer leaves the
       // column - it becomes a scroll inside the card. Asserting BOTH is what
@@ -1876,7 +2762,8 @@ check(
       subtitle: document.querySelector(".bests-subtitle")?.textContent ?? "",
       // The theoretical lap is the one value a wall reads off this panel that no
       // other panel carries, so it is the one that must survive the degradation.
-      theoretical: document.querySelector(".bests-theoretical-value")?.textContent ?? "",
+      theoretical:
+        document.querySelector(".bests-theoretical-value")?.textContent ?? "",
       ranked: document.querySelectorAll(".bests-row").length,
       leaders: document.querySelectorAll(".bests-leader").length,
     };
@@ -1910,9 +2797,13 @@ check(
 // whenever it exists and an HTTP route intercepts nothing - the lesson the BESTS
 // guard above had to learn the hard way.
 {
-  const partialCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+  const partialCtx = await browser.newContext({
+    viewport: { width: 1485, height: 833 },
+  });
   const partial = await partialCtx.newPage();
-  partial.on("pageerror", (error) => failures.push(`pageerror(skeleton): ${error.message}`));
+  partial.on("pageerror", (error) =>
+    failures.push(`pageerror(skeleton): ${error.message}`),
+  );
   const REVEALED_TO = 30;
   await partial.addInitScript(
     ([payload, bulk, live, cap]) => {
@@ -1928,7 +2819,12 @@ check(
         },
       };
     },
-    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive(), REVEALED_TO],
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+      REVEALED_TO,
+    ],
   );
   await partial.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
     waitUntil: "domcontentloaded",
@@ -1938,19 +2834,27 @@ check(
   await partial.waitForTimeout(600);
 
   const skeleton = await partial.evaluate(() => {
-    const lin = (v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
-    const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    const lin = (v) =>
+      v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4;
+    const L = ([r, g, b]) =>
+      0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
     const ratio = (a, b) => {
       const [hi, lo] = [L(a), L(b)].sort((x, y) => y - x);
       return (hi + 0.05) / (lo + 0.05);
     };
-    const parse = (value) => value.match(/[0-9]+/g).slice(0, 3).map(Number);
+    const parse = (value) =>
+      value
+        .match(/[0-9]+/g)
+        .slice(0, 3)
+        .map(Number);
     const rows = [...document.querySelectorAll(".pace-table tbody tr")];
     const future = rows.filter((row) => row.classList.contains("is-future"));
     const driven = rows.filter((row) => !row.classList.contains("is-future"));
     const newest = driven[driven.length - 1];
     const box = document.querySelector(".pace-scroll").getBoundingClientRect();
-    const card = parse(getComputedStyle(document.querySelector(".pace")).backgroundColor);
+    const card = parse(
+      getComputedStyle(document.querySelector(".pace")).backgroundColor,
+    );
     // Tolerant of there being NO future rows, because that is exactly the defect
     // this block exists to catch: reading `future[0]` blind turned a red check into
     // a thrown exception, and a stack trace names nothing.
@@ -1969,11 +2873,16 @@ check(
       driven: driven.length,
       future: future.length,
       futureWithText: future.filter((row) =>
-        [...row.querySelectorAll("td")].some((cell) => cell.textContent.trim().length > 0),
+        [...row.querySelectorAll("td")].some(
+          (cell) => cell.textContent.trim().length > 0,
+        ),
       ).length,
-      lastLapNumber: Number(rows[rows.length - 1].querySelector("th").textContent),
+      lastLapNumber: Number(
+        rows[rows.length - 1].querySelector("th").textContent,
+      ),
       newestLap: Number(newest.querySelector("th").textContent),
-      newestVisible: newestBox.top >= box.top - 1 && newestBox.bottom <= box.bottom + 1,
+      newestVisible:
+        newestBox.top >= box.top - 1 && newestBox.bottom <= box.bottom + 1,
       futureRatio,
     };
   });
@@ -1983,7 +2892,8 @@ check(
     `the grid draws the whole race, not the part that has run (${skeleton.rows} rows, last lap ${skeleton.lastLapNumber} of ${PACE_LAPS})`,
   );
   check(
-    skeleton.driven === REVEALED_TO && skeleton.future === PACE_LAPS - REVEALED_TO,
+    skeleton.driven === REVEALED_TO &&
+      skeleton.future === PACE_LAPS - REVEALED_TO,
     `and it knows which half is which (${skeleton.driven} driven, ${skeleton.future} future)`,
   );
   // The whole point of drawing them: they say how much race is left and NOTHING else.
@@ -2035,7 +2945,9 @@ for (const [width, height] of [
 ]) {
   const ctx = await browser.newContext({ viewport: { width, height } });
   const page = await ctx.newPage();
-  page.on("pageerror", (error) => failures.push(`pageerror(bests ${height}): ${error.message}`));
+  page.on("pageerror", (error) =>
+    failures.push(`pageerror(bests ${height}): ${error.message}`),
+  );
   // **Withheld at the STUB, not with `page.route`.** `bridge.ts` uses
   // `window.pywebview` whenever it exists and only falls back to `fetch`, so the
   // smoke's injected api is the transport and an HTTP route intercepts nothing -
@@ -2044,14 +2956,21 @@ for (const [width, height] of [
   await page.addInitScript(
     ([payload, bulk, live]) => {
       window.__holdBulk = true;
-      window.pywebview = { api: {
-        get_tick: async (s) => (s === payload.seq ? null : payload),
-        get_bulk: async (r) => (window.__holdBulk || r === bulk.rev ? null : bulk),
-        get_live_lap: async (r) => (r === live.rev ? null : live),
-        get_connection: async () => "Connected",
-      } };
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) =>
+            window.__holdBulk || r === bulk.rev ? null : bulk,
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
     },
-    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+    ],
   );
   await page.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
     waitUntil: "domcontentloaded",
@@ -2066,7 +2985,9 @@ for (const [width, height] of [
   await page.waitForTimeout(1200);
 
   const fit = await page.evaluate(() => {
-    const column = document.querySelector(".left-column").getBoundingClientRect();
+    const column = document
+      .querySelector(".left-column")
+      .getBoundingClientRect();
     const card = document.querySelector(".bests");
     const box = card.getBoundingClientRect();
     const theo = document.querySelector(".bests-theoretical-value");
@@ -2074,16 +2995,328 @@ for (const [width, height] of [
       hidden: card.scrollHeight - card.clientHeight,
       over: +(box.bottom - column.bottom).toFixed(1),
       // The one value the panel's own docstring calls irreplaceable.
-      theoreticalBelow: theo === null ? null : +(theo.getBoundingClientRect().bottom - column.bottom).toFixed(1),
-      form: document.querySelectorAll(".bests-row").length > 0 ? "ranked" : "leaders",
+      theoreticalBelow:
+        theo === null
+          ? null
+          : +(theo.getBoundingClientRect().bottom - column.bottom).toFixed(1),
+      form:
+        document.querySelectorAll(".bests-row").length > 0
+          ? "ranked"
+          : "leaders",
     };
   });
   check(
-    fit.hidden === 0 && fit.over <= 1 && fit.theoreticalBelow !== null && fit.theoreticalBelow <= 1,
+    fit.hidden === 0 &&
+      fit.over <= 1 &&
+      fit.theoreticalBelow !== null &&
+      fit.theoreticalBelow <= 1,
     `bests fits at ${width}x${height} whichever form it picks (${fit.form}, ${fit.hidden} px hidden, card ${fit.over} px over, THEORETICAL ${fit.theoreticalBelow} px over)`,
   );
   await ctx.close();
 }
+
+// --- The wheel scroll Víctor asked for, and whether it survives a reveal ------
+//
+// > *"yo veo esqueleto que si sobrepasa, tenga un mini scroll que se pueda hacer para
+// > bajar con la rueda del raton"*
+//
+// Three separate things have to be true and only one of them was: the wheel has to move
+// the panel (it always did - hiding a scrollbar disables nothing), the panel has to SAY
+// it scrolls (it did not, and research on hidden scrollbars is unanimous that nobody
+// discovers it), and **a reveal must not undo the reader's scroll** (it did: the pin
+// re-fires every reveal, about every 4.5 s, so a scroll to look at lap 5 was thrown away
+// before it could be read).
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 1265, height: 593 },
+  });
+  const page = await ctx.newPage();
+  page.on("pageerror", (error) =>
+    failures.push(`pageerror(wheel): ${error.message}`),
+  );
+  // **Capped at lap 30, like the skeleton block one section down.** `paceBulk()` reveals
+  // all 57 laps, so on it there are no future rows at all, the pin target IS the bottom of
+  // the scroller, and the reader can never be "away from" it - the first version of this
+  // block measured exactly that and proved nothing. A cap is what makes a mid-race panel.
+  const CAP = 30;
+  await page.addInitScript(
+    ([payload, bulk, live, cap]) => {
+      window.__advance = false;
+      const at = (limit) => {
+        const copy = JSON.parse(JSON.stringify(bulk));
+        copy.rev = bulk.rev + (limit > cap ? 1 : 0);
+        for (const driver of Object.values(copy.drivers)) {
+          driver.laps = driver.laps.filter((lap) => lap.lap <= limit);
+        }
+        return copy;
+      };
+      const first = at(cap);
+      const next = at(cap + 1);
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) => {
+            const served = window.__advance ? next : first;
+            return r === served.rev ? null : served;
+          },
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
+    },
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+      CAP,
+    ],
+  );
+  await page.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.getByRole("tab", { name: "RACE PACE" }).click();
+  await page.waitForSelector(".pace-scroll", { timeout: 5000 });
+  await page.waitForTimeout(700);
+
+  const box = page.locator(".pace-scroll");
+  // Keyboard reach: with the scrollbar hidden this is the only way a keyboard user gets
+  // to the rest of the race.
+  check(
+    (await box.getAttribute("tabindex")) === "0" &&
+      (await box.getAttribute("role")) === "region",
+    "the pace scroller is reachable by keyboard and named for a screen reader",
+  );
+
+  const room = await page.evaluate(() => {
+    const el = document.querySelector(".pace-scroll");
+    return el.scrollHeight - el.clientHeight;
+  });
+  check(
+    room > 0,
+    `the whole-race table really does overflow this client (${room} px of scroll)`,
+  );
+
+  // **The fade, from MEASURED overflow.** At rest there is more below and nothing above.
+  const atRest = await page.getAttribute(".pace-scroll", "class");
+  check(
+    atRest.includes("has-below") && !atRest.includes("has-above"),
+    `at rest the panel says there is more below and nothing above ("${atRest}")`,
+  );
+
+  // **The wheel.** Not `scrollTop = n`: the actual input device, over the actual element.
+  await box.hover();
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(400);
+  const afterWheel = await page.evaluate(
+    () => document.querySelector(".pace-scroll").scrollTop,
+  );
+  check(
+    afterWheel > 0,
+    `the mouse wheel scrolls it even with the scrollbar hidden (scrollTop ${afterWheel})`,
+  );
+  const scrolled = await page.getAttribute(".pace-scroll", "class");
+  check(
+    scrolled.includes("has-above"),
+    `and once scrolled the panel says there is something above ("${scrolled}")`,
+  );
+
+  // **A reveal must NOT take the scroll back.**
+  await page.evaluate(() => {
+    window.__advance = true;
+  });
+  await page.waitForFunction(
+    (before) =>
+      document.querySelectorAll(".pace-table tbody tr:not(.is-future)").length >
+      before,
+    await page.evaluate(
+      () =>
+        document.querySelectorAll(".pace-table tbody tr:not(.is-future)")
+          .length,
+    ),
+    { timeout: 8000 },
+  );
+  await page.waitForTimeout(500);
+  const afterReveal = await page.evaluate(
+    () => document.querySelector(".pace-scroll").scrollTop,
+  );
+  check(
+    Math.abs(afterReveal - afterWheel) <= 2,
+    `a new lap does not throw the reader's scroll away (${afterWheel} -> ${afterReveal})`,
+  );
+
+  await ctx.close();
+}
+
+// --- Can the lane axes be READ, at every client -----------------------------
+//
+// **A locked range picks its labels from the range, never from the room.** Measured
+// before this guard existed: THROTTLE and BRAKE printed `-5 0 20 40 60 80 100 105`,
+// whose closest pair sat 2.1 px apart in a 46 px lane under a 10 px font, and GEAR's
+// 4.1 px apart in 37 px. Seen at 3x on a real screenshot, then fixed with a per-lane
+// allow-list.
+//
+// **It was not a narrow-client defect, which is why this loop runs the WIDE size too.**
+// Driven red, 1485x833 fails at 3.8 px pitch - the client the panel had been signed
+// off against by eye.
+//
+// The assertion is the PITCH, computed from each lane's own box and its own locked
+// range, which is why it holds at five client sizes rather than pinning a pixel
+// table: a lane that shrinks has to drop labels, not squeeze them.
+// **How much of the stack the lanes leave unused, per client.** Collected across the
+// loop and asserted after it: nothing here asserted that the lanes FILL their box.
+// Ordered, non-collapsed, sharing margins, spanned by the cursor - all of those are
+// checked, and a layout that stopped consuming the room would satisfy every one of them
+// while leaving 100 px of dead space at the bottom. Which is precisely the complaint
+// that opened #998, one panel to the left.
+const laneLeftovers = [];
+for (const [width, height] of [
+  [1265, 593],
+  [1265, 650],
+  [1350, 660],
+  [1350, 673],
+  [1485, 833],
+]) {
+  const ctx = await browser.newContext({ viewport: { width, height } });
+  const page = await ctx.newPage();
+  page.on("pageerror", (error) =>
+    failures.push(`pageerror(lanes ${width}): ${error.message}`),
+  );
+  await page.addInitScript(
+    ([payload, bulk, live]) => {
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
+    },
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+    ],
+  );
+  await page.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  await page.waitForTimeout(700);
+
+  laneLeftovers.push({
+    client: `${width}x${height}`,
+    ...(await page.evaluate(() => {
+      const chart = document.querySelector(".trace-stack-plot").__pitwallChart;
+      const grids = chart.getOption().grid;
+      const last = grids[grids.length - 1];
+      const box = document.querySelector(".trace-stack").clientHeight;
+      return {
+        box,
+        below: Math.round(box - (last.top + last.height)),
+        sum: grids.reduce((total, grid) => total + grid.height, 0),
+      };
+    })),
+  });
+
+  const legible = await page.evaluate(() => {
+    const chart = document.querySelector(".trace-stack-plot").__pitwallChart;
+    const opt = chart.getOption();
+    return opt.grid.map((grid, index) => {
+      const cfg = opt.yAxis[index];
+      const font = cfg.axisLabel?.fontSize ?? 12;
+      // `formattedLabel` is the FORMATTER'S output, so an allow-listed blank reads as
+      // "". (A first version of this read `tickValue`, which does not exist on these
+      // items, and reported every lane as printing nothing.)
+      const painted =
+        cfg.axisLabel?.show === false
+          ? []
+          : chart
+              .getModel()
+              .getComponent("yAxis", index)
+              .axis.getViewLabels()
+              .filter((label) => label.formattedLabel !== "")
+              .map((label) => label.tick.value);
+      const span = cfg.max - cfg.min;
+      const gaps = painted
+        .slice(1)
+        .map((value, k) => Math.abs(value - painted[k]));
+      const pitch = gaps.length
+        ? (Math.min(...gaps) / span) * grid.height
+        : null;
+      return {
+        painted: painted.length,
+        font,
+        pitch: pitch === null ? null : +pitch.toFixed(1),
+        height: Math.round(grid.height),
+        ticks: cfg.axisTick?.show !== false,
+        split: cfg.splitLine?.show !== false,
+      };
+    });
+  });
+  const tight = legible.filter(
+    (lane) => lane.pitch !== null && lane.pitch < lane.font + 2,
+  );
+  check(
+    tight.length === 0,
+    `every lane's printed labels clear each other at ${width}x${height} (${
+      tight
+        .map(
+          (lane) =>
+            `${lane.height}px lane at ${lane.pitch}px pitch under ${lane.font}px`,
+        )
+        .join("; ") || "all clear"
+    })`,
+  );
+  // And the DRS strip, which at 11 px cannot carry an axis at all: six ticks and five
+  // split lines merged into a smear hanging off the frame. Killing the split lines
+  // alone left it - the marks were the TICKS - so both are asserted.
+  const drs = legible[legible.length - 1];
+  check(
+    drs.painted === 0 && !drs.ticks && !drs.split,
+    `the ${drs.height}px DRS strip carries no labels, ticks or split lines (${drs.painted}, ${drs.ticks}, ${drs.split})`,
+  );
+  await ctx.close();
+}
+
+// **The lanes must SUM to the box, and the space below the last one must be the shared
+// axis band EXACTLY.**
+//
+// This started as "the leftover is identical at every client and under 50 px", which a
+// gate refuted with one line of arithmetic: a CONSTANT dead strip of 12 px makes the
+// leftover 46 at every client - identical, under 50, and green. Any invariant that a
+// constant offset satisfies cannot see a constant offset.
+//
+// So the constants are read FROM THE SOURCE and the arithmetic is asserted whole. That
+// is the one place they are declared, so this is not a second copy of them; and the
+// claim is now the one the comment makes, which is what the previous version of this
+// block promised and did not do.
+const layout = Object.fromEntries(
+  [
+    ...readFileSync(TRACE_STACK_SOURCE, "utf8").matchAll(
+      /^const (AXIS_BAND|LANE_GAP|LABEL_ROW) = (\d+);/gm,
+    ),
+  ].map((match) => [match[1], Number(match[2])]),
+);
+check(
+  ["AXIS_BAND", "LANE_GAP", "LABEL_ROW"].every((key) =>
+    Number.isFinite(layout[key]),
+  ),
+  `the layout constants are readable from TraceStack.tsx (${JSON.stringify(layout)})`,
+);
+// `grid.height` is the PLOT, and each lane also carries a LABEL_ROW above it - which is
+// what makes this the whole arithmetic rather than a plausible subset of it: the first
+// version omitted the six label rows and came out 72 px short at every client, so the
+// guard's own first run told me the identity I had written down was incomplete.
+const predicted = (entry) =>
+  entry.sum + layout.LABEL_ROW * 6 + layout.LANE_GAP * 5 + layout.AXIS_BAND;
+const misfits = laneLeftovers.filter((entry) => predicted(entry) !== entry.box);
+check(
+  misfits.length === 0,
+  `the six lanes, their label rows, five gaps and the axis band ARE the box at every client (${laneLeftovers
+    .map((entry) => `${entry.client}: ${predicted(entry)} vs ${entry.box}`)
+    .join("; ")})`,
+);
 
 // --- Band 3, second panel: the race trace ---------------------------------
 
@@ -2101,8 +3334,14 @@ const tracePlotted = await pacePage
 check(tracePlotted, "the race trace draws a plot rather than its empty state");
 await pacePage.waitForTimeout(400);
 
-check((await pacePage.locator(".pace-table").count()) === 0, "the pace grid unmounts on the trace tab");
-check((await pacePage.locator(".ring").count()) === 0, "and the ring stays hidden here too");
+check(
+  (await pacePage.locator(".pace-table").count()) === 0,
+  "the pace grid unmounts on the trace tab",
+);
+check(
+  (await pacePage.locator(".ring").count()) === 0,
+  "and the ring stays hidden here too",
+);
 
 /** The trace's series and axes, read off the live ECharts instance. */
 const traceState = () =>
@@ -2111,7 +3350,8 @@ const traceState = () =>
     const chart = el && el.__pitwallChart;
     if (!chart) return null;
     const series = chart.getOption().series;
-    const axis = (type) => chart.getModel().getComponent(type, 0).axis.scale.getExtent();
+    const axis = (type) =>
+      chart.getModel().getComponent(type, 0).axis.scale.getExtent();
     return {
       x: axis("xAxis"),
       names: series.map((s) => s.name),
@@ -2168,7 +3408,11 @@ const bands = await pacePage.evaluate(() => {
   if (!area) return null;
   return {
     label: area.label?.position ?? "",
-    ranges: area.data.map(([from, to]) => [from.xAxis, to.xAxis, from.name ?? ""]),
+    ranges: area.data.map(([from, to]) => [
+      from.xAxis,
+      to.xAxis,
+      from.name ?? "",
+    ]),
   };
 });
 if (bands === null) {
@@ -2193,28 +3437,38 @@ if (bands === null) {
 // comparison - a formatter that shortened the labels and still did not fit would
 // pass a string test.
 {
-  const narrowCtx = await browser.newContext({ viewport: { width: 1265, height: 593 } });
+  const narrowCtx = await browser.newContext({
+    viewport: { width: 1265, height: 593 },
+  });
   const narrow = await narrowCtx.newPage();
-  narrow.on("pageerror", (error) => failures.push(`pageerror(axis): ${error.message}`));
+  narrow.on("pageerror", (error) =>
+    failures.push(`pageerror(axis): ${error.message}`),
+  );
   await narrow.addInitScript(
     ([payload, bulk, live]) => {
-      window.pywebview = { api: {
-        get_tick: async (s) => (s === payload.seq ? null : payload),
-        get_bulk: async (r) => (r === bulk.rev ? null : bulk),
-        get_live_lap: async (r) => (r === live.rev ? null : live),
-        get_connection: async () => "Connected",
-      } };
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
     },
-    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+    ],
   );
   await narrow.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
     waitUntil: "domcontentloaded",
   });
-  await narrow.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+  await narrow.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
   await narrow.waitForTimeout(500);
 
   const axis = await narrow.evaluate(() => {
-    const el = document.querySelector(".trace-plot");
+    const el = document.querySelector(".trace-stack-plot");
     const chart = el.__pitwallChart;
     const option = chart.getOption();
     const x = option.xAxis[0];
@@ -2226,11 +3480,17 @@ if (bands === null) {
     const format = x.axisLabel.formatter;
     // The bounds are not labelled on a locked axis (`valueAxis`), so they are not
     // glyphs on the axis and must not be counted as if they were.
-    const shown = x.axisLabel.showMinLabel === false ? ticks.slice(1, -1) : ticks;
-    const labels = shown.map((value) => (format ? format(value) : String(value)));
+    const shown =
+      x.axisLabel.showMinLabel === false ? ticks.slice(1, -1) : ticks;
+    const labels = shown.map((value) =>
+      format ? format(value) : String(value),
+    );
     const ruler = document.createElement("canvas").getContext("2d");
     ruler.font = `${x.axisLabel.fontSize}px ${getComputedStyle(document.body).fontFamily}`;
-    const glyphs = labels.reduce((total, text) => total + ruler.measureText(text).width, 0);
+    const glyphs = labels.reduce(
+      (total, text) => total + ruler.measureText(text).width,
+      0,
+    );
     const span = el.clientWidth - (option.grid[0].left + option.grid[0].right);
     return { labels, glyphs: +glyphs.toFixed(1), span, plot: el.clientWidth };
   });
@@ -2253,20 +3513,31 @@ if (bands === null) {
 // feeds real ticks first so the board is populated before the feed goes quiet -
 // a window that never had data cannot demonstrate a window whose data went stale.
 {
-  const deadCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+  const deadCtx = await browser.newContext({
+    viewport: { width: 1485, height: 833 },
+  });
   const dead = await deadCtx.newPage();
-  dead.on("pageerror", (error) => failures.push(`pageerror(dead): ${error.message}`));
+  dead.on("pageerror", (error) =>
+    failures.push(`pageerror(dead): ${error.message}`),
+  );
   await dead.addInitScript(
     ([payload, bulk, live]) => {
       window.__alive = true;
-      window.pywebview = { api: {
-        get_tick: async (s) => (s === payload.seq ? null : payload),
-        get_bulk: async (r) => (r === bulk.rev ? null : bulk),
-        get_live_lap: async (r) => (r === live.rev ? null : live),
-        get_connection: async () => (window.__alive ? "Connected" : "Disconnected"),
-      } };
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () =>
+            window.__alive ? "Connected" : "Disconnected",
+        },
+      };
     },
-    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive()],
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+    ],
   );
   await dead.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
     waitUntil: "domcontentloaded",
@@ -2284,7 +3555,9 @@ if (bands === null) {
     rows: document.querySelectorAll(".tower-row").length,
   }));
   check(
-    alive.rows === 20 && /^\d+x$/.test(alive.playback ?? "") && alive.bar.includes("live"),
+    alive.rows === 20 &&
+      /^\d+x$/.test(alive.playback ?? "") &&
+      alive.bar.includes("live"),
     `the board is live and says so before the producer dies (${alive.rows} rows, ${alive.playback}, "${alive.bar}")`,
   );
 
@@ -2307,7 +3580,9 @@ if (bands === null) {
   }));
 
   check(
-    frozen.playback === "—" && !frozen.bar.includes("live") && frozen.bar.includes("FROZEN"),
+    frozen.playback === "—" &&
+      !frozen.bar.includes("live") &&
+      frozen.bar.includes("FROZEN"),
     `nothing on the strip claims the replay is advancing (${frozen.playback}, "${frozen.bar}")`,
   );
   check(
@@ -2324,7 +3599,9 @@ if (bands === null) {
   // And the bar does not go blank. Its 1.5 s auto-clear is what left the window
   // with no message at all, which is how a dead feed looked like a quiet one.
   await dead.waitForTimeout(2000);
-  const later = await dead.evaluate(() => document.querySelector(".status-bar")?.textContent ?? "");
+  const later = await dead.evaluate(
+    () => document.querySelector(".status-bar")?.textContent ?? "",
+  );
   check(
     later.includes("FROZEN"),
     `and it is still saying so four seconds later, not auto-cleared ("${later}")`,
@@ -2337,7 +3614,9 @@ if (bands === null) {
 // never a flat line at zero, which is what a missing crossing read as a
 // default would draw, and which reads as a car circulating on the leader's
 // pace. That is the sentinel-collision class this repo has paid for twice.
-const retiredPoints = RETIRED_CODES.map((code) => traceLeader?.points[code]?.length ?? -1);
+const retiredPoints = RETIRED_CODES.map(
+  (code) => traceLeader?.points[code]?.length ?? -1,
+);
 check(
   retiredPoints.every((count) => count === 0),
   `a car with no crossings draws nothing rather than a flat line at zero (${retiredPoints.join(",")})`,
@@ -2351,7 +3630,9 @@ check(
 // mechanism. NOR is the fastest car in the fixture and pits on lap 20-21, each
 // of those laps carrying the stop's +22 s. Against the leader he therefore
 // falls about 44 s in two laps.
-const norLine = Object.fromEntries((traceLeader?.points.NOR ?? []).map(([lap, y]) => [lap, y]));
+const norLine = Object.fromEntries(
+  (traceLeader?.points.NOR ?? []).map(([lap, y]) => [lap, y]),
+);
 const step = norLine[21] - norLine[19];
 check(
   step <= -30,
@@ -2375,7 +3656,13 @@ const labelBoxes = await pacePage.evaluate(() => {
     .map((el) => {
       const rect = el.getBoundingRect().clone();
       rect.applyTransform(el.transform);
-      return { code: el.style.text, x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+      return {
+        code: el.style.text,
+        x: rect.x,
+        y: rect.y,
+        w: rect.width,
+        h: rect.height,
+      };
     });
   const overlaps = [];
   for (let i = 0; i < boxes.length; i += 1) {
@@ -2384,11 +3671,16 @@ const labelBoxes = await pacePage.evaluate(() => {
       const b = boxes[j];
       const dx = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
       const dy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-      if (dx > 0 && dy > 0) overlaps.push(`${a.code}/${b.code} ${dx.toFixed(1)}x${dy.toFixed(1)}`);
+      if (dx > 0 && dy > 0)
+        overlaps.push(`${a.code}/${b.code} ${dx.toFixed(1)}x${dy.toFixed(1)}`);
     }
   }
-  return { count: boxes.length, overlaps, right: Math.max(...boxes.map((z) => z.x + z.w)),
-           canvas: chart.getWidth() };
+  return {
+    count: boxes.length,
+    overlaps,
+    right: Math.max(...boxes.map((z) => z.x + z.w)),
+    canvas: chart.getWidth(),
+  };
 });
 check(
   labelBoxes.overlaps.length === 0,
@@ -2444,8 +3736,12 @@ check(
 if (tracePlotted) await pacePage.getByRole("tab", { name: "FIELD" }).click();
 await pacePage.waitForTimeout(300);
 const traceField = await traceState();
-const aboveField = Object.values(traceField?.points ?? {}).flat().filter(([, y]) => y > 0).length;
-const aboveLeader = Object.values(traceLeader?.points ?? {}).flat().filter(([, y]) => y > 0).length;
+const aboveField = Object.values(traceField?.points ?? {})
+  .flat()
+  .filter(([, y]) => y > 0).length;
+const aboveLeader = Object.values(traceLeader?.points ?? {})
+  .flat()
+  .filter(([, y]) => y > 0).length;
 check(
   aboveLeader === 0,
   `nothing is ahead of the car leading the lap (${aboveLeader} points above zero)`,
@@ -2458,7 +3754,9 @@ check(
 // A trace that stops and a race that ended are the same pixels, so the bound
 // says how far behind the race it sits. One car with a mid-race telemetry
 // dropout pins it silently otherwise (OBS-4).
-const traceRange = await pacePage.locator(".trace-band .pace-range").innerText();
+const traceRange = await pacePage
+  .locator(".trace-band .pace-range")
+  .innerText();
 check(
   traceRange.includes(`of ${PACE_LAPS}`),
   `the trace says how far behind the race its bound sits (${traceRange})`,
@@ -2507,7 +3805,8 @@ check(
   `the fixture can tell the two reference populations apart (${(historyStable?.everyone - historyStable?.stillRacing)?.toFixed(3)} s)`,
 );
 check(
-  historyStable !== null && Math.abs(historyStable.everyone - historyStable.actual) < 1e-9,
+  historyStable !== null &&
+    Math.abs(historyStable.everyone - historyStable.actual) < 1e-9,
   `a retired car still counts in the laps he drove (everyone ${historyStable?.everyone?.toFixed(3)}, still-racing ${historyStable?.stillRacing?.toFixed(3)}, rendered ${historyStable?.actual?.toFixed(3)}, over ${historyStable?.cars} cars)`,
 );
 
