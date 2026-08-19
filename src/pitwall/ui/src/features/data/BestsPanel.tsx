@@ -28,8 +28,42 @@ import {
   type BestField,
 } from "../../lib/sessionBests";
 
-/** How many rows a section shows. See the note above on why it is not twenty. */
-const RANKED = 3;
+/**
+ * The FLOOR for how many rows a section shows, and the cap. The room decides.
+ *
+ * **Three used to be a constant, and the sentence justifying it was true of a slot
+ * that no longer exists.** The panel's own docstring argued that "the
+ * fourth-fastest S2 of the afternoon is not a number anybody reads off a live wall"
+ * - and it argued that against the 63 px this card gets at the narrow client, not
+ * against the 303 px the agreed layout drawing gives it at the wide one, where
+ * three ranks leave 150 px of nothing. Victor saw that hole and called it out.
+ *
+ * Ten is the cap because P10 is the last point-scoring position: a ranked list on a
+ * wall stops meaning anything past the points.
+ */
+const RANKED_FLOOR = 3;
+const RANKED_CAP = 10;
+/** `.bests-row`'s pinned line-height. One copy, and it lives in the stylesheet. */
+const ROW_HEIGHT = 17;
+/**
+ * Slack kept back so a late font swap cannot turn a boundary fit into a clip.
+ *
+ * Measured by the sprint-9 exit gate: `--qt-mono` arrives after first layout and
+ * the card grows 8 px when it does. That is the whole reason this is not
+ * `floor(room / ROW)`.
+ */
+const FONT_GUARD = 8;
+
+/**
+ * What the room allows: the ranked form or the compact one, and how deep.
+ *
+ * One value rather than two pieces of state, so a render can never see "ranked"
+ * paired with the other form's depth.
+ */
+interface Fit {
+  ranked: boolean;
+  depth: number;
+}
 
 const SECTIONS: { field: BestField; label: string }[] = [
   { field: "s1", label: "S1" },
@@ -53,19 +87,49 @@ const SECTIONS: { field: BestField; label: string }[] = [
  * of whatever is currently rendered is the version that flips forever: 63 < 153
  * chooses compact, compact measures 54, 63 >= 54 chooses full again.
  */
-function useFitsRanked(card: HTMLElement | null, content: number): boolean {
-  const [compact, setCompact] = useState(false);
-  const rankedHeight = useRef<number | null>(null);
+function useFitsRanked(card: HTMLElement | null, content: number): Fit {
+  const [fitState, setFitState] = useState<Fit>({ ranked: true, depth: RANKED_FLOOR });
+  /** The card's height at the FLOOR depth, latched while it is showing exactly that. */
+  const floorHeight = useRef<number | null>(null);
 
   const fit = useCallback(() => {
     const column = card?.parentElement;
     if (!card || !column) return;
-    if (!compact) rankedHeight.current = card.scrollHeight;
-    const needed = rankedHeight.current;
-    if (needed === null) return;
+    // **Latched from ANY ranked depth, normalised back to the floor.**
+    //
+    // The first version of this latched only while the card was showing exactly the
+    // floor depth - and the arithmetic below MOVES it off the floor, so after the
+    // first bump the condition never held again and the latch kept the height of the
+    // empty panel. Measured: it clipped 72 px at 1265x650, which is the same defect
+    // this hook was hardened against one commit earlier, re-entering through a door
+    // the fix itself opened.
+    //
+    // Normalising is exact rather than approximate: `.bests-sections` is a
+    // four-COLUMN grid, so one extra rank adds one row height to the card, not four.
+    // And it is only ever read while the card is ranked, because the compact card's
+    // height says nothing about what the ranked one would need - that is why the
+    // latch exists at all.
+    if (fitState.ranked) {
+      const extraRows = Math.max(0, fitState.depth - RANKED_FLOOR);
+      floorHeight.current = card.scrollHeight - extraRows * ROW_HEIGHT;
+    }
+    const atFloor = floorHeight.current;
+    if (atFloor === null) return;
     const room = column.getBoundingClientRect().bottom - card.getBoundingClientRect().top;
-    setCompact(room < needed);
-  }, [card, compact]);
+    if (room < atFloor) {
+      setFitState({ ranked: false, depth: RANKED_FLOOR });
+      return;
+    }
+    // **How many MORE rows the leftover room buys, per section.**
+    //
+    // A function of `room` alone, which is what keeps it from oscillating: the room
+    // is a property of the tower and the column, and neither moves when this card
+    // renders more rows. `useFitsRanked` earned that argument once already; this
+    // extends it one step rather than inventing a second mechanism.
+    const spare = room - atFloor - FONT_GUARD;
+    const extra = Math.max(0, Math.floor(spare / ROW_HEIGHT));
+    setFitState({ ranked: true, depth: Math.min(RANKED_FLOOR + extra, RANKED_CAP) });
+  }, [card, fitState.ranked, fitState.depth]);
 
   // **`content` is in here because the card mounts EMPTY, and that was a P1.**
   // The card appears with the first TICK; its rows come from the BULK, which
@@ -106,7 +170,7 @@ function useFitsRanked(card: HTMLElement | null, content: number): boolean {
     return () => observer.disconnect();
   }, [card, fit, content]);
 
-  return !compact;
+  return fitState;
 }
 
 export function BestsPanel({ bulk }: { bulk: Bulk | null }) {
@@ -120,9 +184,9 @@ export function BestsPanel({ bulk }: { bulk: Bulk | null }) {
   // ranked rows across the four sections plus the theoretical. `bulk.rev` would
   // also work and would re-measure ten times more often for no gain.
   const content =
-    SECTIONS.reduce((total, { field }) => total + Math.min(bests[field].length, RANKED), 0) +
+    SECTIONS.reduce((total, { field }) => total + Math.min(bests[field].length, RANKED_CAP), 0) +
     (theoretical === null ? 0 : 1);
-  const ranked = useFitsRanked(card, content);
+  const fit = useFitsRanked(card, content);
 
   return (
     <section className="bests card" ref={setCard}>
@@ -140,16 +204,21 @@ export function BestsPanel({ bulk }: { bulk: Bulk | null }) {
        * entry on line two and pushes THEO under an unannounced fold, which is the
        * failure this whole degradation exists to remove. The next step down the
        * ladder, if that ever bites, is to drop the VALUES and keep the codes. */}
-      {ranked ? (
+      {fit.ranked ? (
         <>
           <header className="bests-header">
             <span className="bests-title">BESTS</span>
-            <span className="bests-subtitle">session, revealed laps only</span>
+            {/* The depth is said out loud, because it is not the same at every
+                client and two readers comparing panels must not be comparing two
+                silently different lists. */}
+            <span className="bests-subtitle">
+              session, revealed laps only · top {fit.depth}
+            </span>
           </header>
 
           <div className="bests-sections">
             {SECTIONS.map(({ field, label }) => (
-              <BestsSection key={field} label={label} entries={bests[field].slice(0, RANKED)} />
+              <BestsSection key={field} label={label} entries={bests[field].slice(0, fit.depth)} />
             ))}
           </div>
 

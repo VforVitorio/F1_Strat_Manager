@@ -1158,9 +1158,29 @@ const bestsRow = async (section, row) =>
     .trim();
 
 check((await towerPage.locator(".bests-section").count()) === 4, "four ranked sections");
+// **Depth is the room's answer now, not a constant.** Three was argued against the
+// 63 px slot the narrow client leaves, and it left 150 px of nothing at the wide one
+// where the agreed drawing gives this card 303. So the assertion is the RULE: never
+// below the floor, never past the points, and whatever it picks it must SAY.
+const depth = await towerPage.evaluate(() => ({
+  rows: document.querySelectorAll(".bests-section:nth-child(1) .bests-row").length,
+  subtitle: document.querySelector(".bests-subtitle")?.textContent?.trim() ?? "",
+  sections: [...document.querySelectorAll(".bests-section")].map(
+    (section) => section.querySelectorAll(".bests-row").length,
+  ),
+}));
 check(
-  (await towerPage.locator(".bests-section:nth-child(1) .bests-row").count()) === 3,
-  "top three per section, because twenty would be 1,668 px of a 790 px body",
+  depth.rows >= 3 && depth.rows <= 10,
+  `the ranked depth is between the floor and the points (${depth.rows})`,
+);
+check(
+  depth.subtitle.includes(`top ${depth.rows}`),
+  `and the panel says which depth it is showing ("${depth.subtitle}")`,
+);
+// All four sections at the same depth, or two of them are silently different lists.
+check(
+  new Set(depth.sections.filter((n) => n > 0)).size === 1,
+  `every section is the same depth (${JSON.stringify(depth.sections)})`,
 );
 // S1 is NOR 29.000, PIA 29.500, VER 29.800 - ranked across the FIELD, not per
 // driver, and the delta is a percentage off the section's leader.
