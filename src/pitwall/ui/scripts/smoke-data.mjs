@@ -1443,8 +1443,16 @@ check(
 );
 // **Depth is the room's answer now, not a constant.** Three was argued against the
 // 63 px slot the narrow client leaves, and it left 150 px of nothing at the wide one
-// where the agreed drawing gives this card 303. So the assertion is the RULE: never
-// below the floor, never past the points, and whatever it picks it must SAY.
+// where the agreed drawing gives this card 303.
+//
+// The cap was then 10, for "P10 is the last point-scoring position" - a real argument
+// about relevance and the wrong one for a CAP, which only bites when there is room to
+// spare. Measured at 1485 px wide: the ramp works to 833 px tall and then the depth
+// sticks while the hole grows, 91 px at 900 and 271 at 1600x1080. Víctor saw it on his
+// own screen. Twenty is the field, so the panel runs out of DATA before room.
+//
+// So the assertion is the RULE: never below the floor, never past the whole grid, and
+// whatever it picks it must SAY.
 const depth = await towerPage.evaluate(() => ({
   rows: document.querySelectorAll(".bests-section:nth-child(1) .bests-row")
     .length,
@@ -1455,8 +1463,8 @@ const depth = await towerPage.evaluate(() => ({
   ),
 }));
 check(
-  depth.rows >= 3 && depth.rows <= 10,
-  `the ranked depth is between the floor and the points (${depth.rows})`,
+  depth.rows >= 3 && depth.rows <= 20,
+  `the ranked depth is between the floor and the whole field (${depth.rows})`,
 );
 check(
   depth.subtitle.includes(`top ${depth.rows}`),

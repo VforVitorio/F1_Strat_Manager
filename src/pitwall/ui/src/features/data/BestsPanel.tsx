@@ -38,21 +38,36 @@ import {
  * against the 303 px the agreed layout drawing gives it at the wide one, where
  * three ranks leave 150 px of nothing. Victor saw that hole and called it out.
  *
- * Ten is the cap because P10 is the last point-scoring position: a ranked list on a
- * wall stops meaning anything past the points.
+ * **The cap is the FIELD, and it used to be ten.** Ten was chosen because P10 is the
+ * last point-scoring position - a real argument about relevance, and the wrong one for
+ * a cap, because a cap only bites when there is room to spare. Measured at 1485 px
+ * wide: the ramp works to 833 px tall (3 -> 6 -> 10 ranks, 17-24 px of air left) and
+ * then the depth sticks at ten while the hole grows - **91 px at 900, 191 at 1000, 271
+ * at 1600x1080**. Víctor saw exactly that on his own screen, one sprint after seeing
+ * the 150 px version of it.
+ *
+ * Twenty is the whole grid, so the panel now runs out of DATA before it runs out of
+ * room, and the leftover then means "there is no more", which explains itself. The
+ * subtitle still names the depth, so nothing is claimed that is not shown.
  */
 const RANKED_FLOOR = 3;
-const RANKED_CAP = 10;
-/** `.bests-row`'s pinned line-height. One copy, and it lives in the stylesheet. */
-const ROW_HEIGHT = 17;
+const RANKED_CAP = 20;
 /**
- * Slack kept back so a late font swap cannot turn a boundary fit into a clip.
+ * Rounding tolerance, and no longer a stand-in for a font that has not landed.
  *
- * Measured by the sprint-9 exit gate: `--qt-mono` arrives after first layout and
- * the card grows 8 px when it does. That is the whole reason this is not
- * `floor(room / ROW)`.
+ * **This was 8 px, and 8 px of caution cost 102 px of hole.** It existed because
+ * `--qt-mono` arrives after first layout and grows the card by about that much, so a
+ * boundary fit could become a clip. But it is subtracted from `room` before the
+ * ranked-or-compact decision too, and at 1350x673 the room is 153 px against a
+ * 153 px floor-depth card: the guard pushed it under, the panel fell all the way to
+ * its 41 px one-line form, and left **102 px of nothing** - a worse version of the
+ * hole this whole mechanism exists to close.
+ *
+ * The honest signal for "the font has landed" is `document.fonts.ready`, which the
+ * effect below now waits on, plus the ResizeObserver that was already watching the
+ * card's own box. With a real signal in place this is just sub-pixel slack.
  */
-const FONT_GUARD = 8;
+const FONT_GUARD = 2;
 
 /**
  * What the room allows: the ranked form or the compact one, and how deep.
@@ -88,7 +103,10 @@ const SECTIONS: { field: BestField; label: string }[] = [
  * chooses compact, compact measures 54, 63 >= 54 chooses full again.
  */
 function useFitsRanked(card: HTMLElement | null, content: number): Fit {
-  const [fitState, setFitState] = useState<Fit>({ ranked: true, depth: RANKED_FLOOR });
+  const [fitState, setFitState] = useState<Fit>({
+    ranked: true,
+    depth: RANKED_FLOOR,
+  });
   /** The card's height at the FLOOR depth, latched while it is showing exactly that. */
   const floorHeight = useRef<number | null>(null);
 
@@ -109,13 +127,23 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
     // And it is only ever read while the card is ranked, because the compact card's
     // height says nothing about what the ranked one would need - that is why the
     // latch exists at all.
+    // **The row height is READ, never copied.** It was a `17` here against a stylesheet
+    // that renders 18, and the error is per-row: harmless at a depth of three, ten px of
+    // drift at ten, and with the cap now at twenty it would be seventeen - enough to turn
+    // a fit into a clip. The pace grid's own row-height comment already demands this
+    // ("nothing in TSX may copy this number - a consumer reads it with getComputedStyle");
+    // this panel had the copy anyway.
+    const rowHeight =
+      card.querySelector(".bests-row")?.getBoundingClientRect().height ?? 0;
+    if (rowHeight <= 0) return;
     if (fitState.ranked) {
       const extraRows = Math.max(0, fitState.depth - RANKED_FLOOR);
-      floorHeight.current = card.scrollHeight - extraRows * ROW_HEIGHT;
+      floorHeight.current = card.scrollHeight - extraRows * rowHeight;
     }
     const atFloor = floorHeight.current;
     if (atFloor === null) return;
-    const room = column.getBoundingClientRect().bottom - card.getBoundingClientRect().top;
+    const room =
+      column.getBoundingClientRect().bottom - card.getBoundingClientRect().top;
     if (room < atFloor) {
       setFitState({ ranked: false, depth: RANKED_FLOOR });
       return;
@@ -127,8 +155,11 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
     // renders more rows. `useFitsRanked` earned that argument once already; this
     // extends it one step rather than inventing a second mechanism.
     const spare = room - atFloor - FONT_GUARD;
-    const extra = Math.max(0, Math.floor(spare / ROW_HEIGHT));
-    setFitState({ ranked: true, depth: Math.min(RANKED_FLOOR + extra, RANKED_CAP) });
+    const extra = Math.max(0, Math.floor(spare / rowHeight));
+    setFitState({
+      ranked: true,
+      depth: Math.min(RANKED_FLOOR + extra, RANKED_CAP),
+    });
   }, [card, fitState.ranked, fitState.depth]);
 
   // **`content` is in here because the card mounts EMPTY, and that was a P1.**
@@ -160,6 +191,19 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
   // the ranked height is only re-measured while the panel IS ranked - going compact
   // shrinks the card, the observer fires, and `fit` compares the same latched height
   // against the same room and keeps the same answer.
+  // **Re-fit once the webfont has actually arrived**, rather than reserving pixels
+  // against the possibility. `document.fonts.ready` is the signal; the observer below
+  // catches everything else that changes the card's box.
+  useEffect(() => {
+    let live = true;
+    document.fonts?.ready.then(() => {
+      if (live) fit();
+    });
+    return () => {
+      live = false;
+    };
+  }, [fit]);
+
   useEffect(() => {
     const column = card?.parentElement;
     if (!card || !column) return;
@@ -184,8 +228,10 @@ export function BestsPanel({ bulk }: { bulk: Bulk | null }) {
   // ranked rows across the four sections plus the theoretical. `bulk.rev` would
   // also work and would re-measure ten times more often for no gain.
   const content =
-    SECTIONS.reduce((total, { field }) => total + Math.min(bests[field].length, RANKED_CAP), 0) +
-    (theoretical === null ? 0 : 1);
+    SECTIONS.reduce(
+      (total, { field }) => total + Math.min(bests[field].length, RANKED_CAP),
+      0,
+    ) + (theoretical === null ? 0 : 1);
   const fit = useFitsRanked(card, content);
 
   return (
@@ -218,7 +264,11 @@ export function BestsPanel({ bulk }: { bulk: Bulk | null }) {
 
           <div className="bests-sections">
             {SECTIONS.map(({ field, label }) => (
-              <BestsSection key={field} label={label} entries={bests[field].slice(0, fit.depth)} />
+              <BestsSection
+                key={field}
+                label={label}
+                entries={bests[field].slice(0, fit.depth)}
+              />
             ))}
           </div>
 
@@ -294,7 +344,13 @@ function BestsLeaders({
   );
 }
 
-function BestsSection({ label, entries }: { label: string; entries: BestEntry[] }) {
+function BestsSection({
+  label,
+  entries,
+}: {
+  label: string;
+  entries: BestEntry[];
+}) {
   const leader = entries[0];
 
   return (
@@ -304,14 +360,19 @@ function BestsSection({ label, entries }: { label: string; entries: BestEntry[] 
         <div className="bests-empty">—</div>
       ) : (
         entries.map((entry, index) => (
-          <div key={entry.code} className={`bests-row ${index === 0 ? "is-purple" : ""}`}>
+          <div
+            key={entry.code}
+            className={`bests-row ${index === 0 ? "is-purple" : ""}`}
+          >
             <span className="bests-rank">{index + 1}</span>
             <span className="bests-code">{entry.code}</span>
             <span className="bests-value">{formatTime(entry.value)}</span>
             <span className="bests-delta">
               {index === 0 ? "" : formatDelta(entry.value, leader.value)}
             </span>
-            <span className="bests-compound">{entry.compound ? entry.compound[0] : ""}</span>
+            <span className="bests-compound">
+              {entry.compound ? entry.compound[0] : ""}
+            </span>
           </div>
         ))
       )}
