@@ -246,34 +246,42 @@ declare global {
 }
 
 /**
- * Is this page inside a PITWALL window, or in a browser tab?
+ * How long to wait for pywebview to announce its API before giving up on it.
  *
- * The same bundle serves both. In a window the host injects
- * `window.pywebview.api`; over http there is no such object and the same
- * payload arrives from `/api/tick` on the loopback server the host runs
- * alongside the windows. Everything above this module is unaware of which.
- *
- * `file:` is the giveaway a window ALWAYS has and a browser never does, but
- * it is not sufficient on its own: pywebview announces its API
- * asynchronously, so a page that has finished loading may not have it yet.
- * Hence the wait below rather than a single check here.
+ * A browser tab never fires `pywebviewready`, so the wait needs a floor, and the
+ * floor has to be short enough that a tab's first paint does not visibly stall.
+ * 250 ms is one and a half tick polls.
  */
-const IN_A_WINDOW = window.location.protocol === "file:";
+const BRIDGE_READY_TIMEOUT_MS = 250;
 
 /**
- * pywebview injects `window.pywebview.api` asynchronously and announces it
- * with a `pywebviewready` event. Code that reads the API at module scope
- * therefore sees `undefined` and fails silently, which renders an empty
- * window with nothing in any log.
+ * Wait for `window.pywebview.api`, briefly, whichever page this is.
  *
- * Over http there is nothing to wait for, and waiting for an event that will
- * never fire is how the browser path would render an empty page with nothing
- * in any log - the same failure, one transport over.
+ * pywebview injects the API asynchronously and announces it with a
+ * `pywebviewready` event. Code that reads it at module scope sees `undefined` and
+ * fails silently, which renders an empty window with nothing in any log - hence a
+ * wait at all.
+ *
+ * **There used to be an `IN_A_WINDOW` constant here, defined as
+ * `location.protocol === "file:"`, and #996 made it a lie.** The windows now load
+ * over the host's own loopback server, so a real PITWALL window reports `http:`
+ * exactly like a browser tab and the sniff answered "browser" inside the product.
+ * It was benign - every getter below dispatches on the OBJECT, so a window used its
+ * API as soon as one appeared - but the constant's name, its comment ("`file:` is
+ * the giveaway a window ALWAYS has") and its five early-return guards all described
+ * a world that no longer exists, and each guard skipped a `fetch` to a route that
+ * is now always there.
+ *
+ * So the protocol is not consulted at all. The event is raced against a timeout: in
+ * a window it resolves on the announcement, in a tab on the floor, and neither path
+ * needs to know which it is.
  */
 export function whenBridgeReady(): Promise<void> {
-  if (window.pywebview?.api || !IN_A_WINDOW) return Promise.resolve();
+  if (window.pywebview?.api) return Promise.resolve();
   return new Promise((resolve) => {
-    window.addEventListener("pywebviewready", () => resolve(), { once: true });
+    const done = () => resolve();
+    window.addEventListener("pywebviewready", done, { once: true });
+    window.setTimeout(done, BRIDGE_READY_TIMEOUT_MS);
   });
 }
 
@@ -309,7 +317,6 @@ async function fetchJson<T>(
 export async function getTick(sinceSeq: number): Promise<Tick | null> {
   const api = window.pywebview?.api;
   if (api) return api.get_tick(sinceSeq);
-  if (IN_A_WINDOW) return null;
   return fetchJson<Tick>("/api/tick", sinceSeq);
 }
 
@@ -333,7 +340,6 @@ export async function getTick(sinceSeq: number): Promise<Tick | null> {
 export async function getBulk(sinceRev: number): Promise<Bulk | null> {
   const api = window.pywebview?.api as { get_bulk?: (r: number) => Promise<Bulk | null> };
   if (api?.get_bulk) return api.get_bulk(sinceRev);
-  if (IN_A_WINDOW) return null;
   return fetchJson<Bulk>("/api/bulk", sinceRev);
 }
 
@@ -347,7 +353,6 @@ export async function getBulk(sinceRev: number): Promise<Bulk | null> {
 export async function getLiveLap(sinceRev: number): Promise<LiveLap | null> {
   const api = window.pywebview?.api as { get_live_lap?: (r: number) => Promise<LiveLap | null> };
   if (api?.get_live_lap) return api.get_live_lap(sinceRev);
-  if (IN_A_WINDOW) return null;
   return fetchJson<LiveLap>("/api/live", sinceRev);
 }
 
@@ -362,7 +367,6 @@ export async function getLiveLap(sinceRev: number): Promise<LiveLap | null> {
 export async function getConnection(): Promise<string | null> {
   const api = window.pywebview?.api as { get_connection?: () => Promise<string> };
   if (api?.get_connection) return api.get_connection();
-  if (IN_A_WINDOW) return null;
   try {
     const response = await fetch("/api/connection", { cache: "no-store" });
     if (!response.ok) return null;
@@ -391,7 +395,6 @@ export async function getAgentsView<T>(
     get_agents_view?: (s: number, c: string | null) => Promise<T | null>;
   };
   if (api?.get_agents_view) return api.get_agents_view(sinceSeq, sinceConnection);
-  if (IN_A_WINDOW) return null;
   const held = sinceConnection === null ? "" : `&connection=${encodeURIComponent(sinceConnection)}`;
   return fetchJson<T>("/api/agents", sinceSeq, held);
 }
