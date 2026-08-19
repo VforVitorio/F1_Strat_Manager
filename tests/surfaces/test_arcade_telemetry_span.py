@@ -15,6 +15,7 @@ slice, and an unbounded payload.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +28,7 @@ from src.arcade.app import (  # noqa: E402
     _telemetry_span_bounds,
 )
 from src.arcade.config import (  # noqa: E402
+    DRS_OPEN_CODES,
     DT,
     FPS,
     PLAYBACK_SPEEDS,
@@ -308,3 +310,77 @@ def test_the_payload_growth_stays_small_at_the_fastest_speed():
     frames_per_tick = TICK_SECONDS * FPS * max(PLAYBACK_SPEEDS)
 
     assert math.ceil(frames_per_tick) <= 25
+
+
+def test_the_drs_open_set_has_exactly_one_home_in_the_source():
+    """No module may carry its own copy of {10, 12, 14}, `config` excepted.
+
+    **This is the guard the single-homing commit did not write, and the commit
+    needed it.** `feat(arcade): the wire publishes a decoded drs_open` moved the set
+    into `config.DRS_OPEN_CODES`, claimed in its own message that "two subsystems
+    decode it now", and left `overlays.py`'s `_drs_label` and `_drs_color` holding a
+    literal `(10, 12, 14)` each. Three copies of a set whose entire purpose was to
+    have one - the twin that never got the fix, which is this repo's most frequent
+    defect and the one an adversarial gate found here again.
+
+    Structural, not textual: the tree is parsed and every set / tuple / list of
+    integer constants is compared as a SET, so a reordered `(14, 10, 12)`, a
+    `{10, 12, 14}` and a `[10, 12, 14]` all count. A grep for one spelling is what
+    lets the next copy through.
+    """
+    import ast
+
+    roots = ("src/arcade", "src/pitwall", "src/simulation", "scripts")
+    allowed = Path("src/arcade/config.py").resolve()
+    offenders: list[str] = []
+
+    for root in roots:
+        for path in Path(root).rglob("*.py"):
+            if path.resolve() == allowed:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.Set, ast.Tuple, ast.List)):
+                    continue
+                values = [
+                    element.value
+                    for element in node.elts
+                    if isinstance(element, ast.Constant) and isinstance(element.value, int)
+                ]
+                if len(values) == len(node.elts) and set(values) == set(DRS_OPEN_CODES):
+                    offenders.append(f"{path}:{node.lineno}")
+
+    assert offenders == [], (
+        "a second copy of the DRS open set entered the source: "
+        f"{offenders}. Import `DRS_OPEN_CODES` from src.arcade.config instead."
+    )
+
+
+def test_eligible_is_not_open_at_every_site_that_decodes_it():
+    """The 8 the open set is defined AGAINST, asserted as the rendered EFFECT.
+
+    Three consumers decode these codes and each could drift alone: the wire's
+    `drs_open`, and the driver box's label and colour. Asserting the constant only
+    would pass while a consumer compared against the wrong one - so this asserts
+    what each one PRODUCES for 8 and for 10.
+
+    FastF1's own channel docs (`fastf1/_api.py`, `car_data`) are the source:
+    8 is "Detected, Eligible once in Activation Zone", 10 / 12 / 14 are all On. The
+    comment that shipped in `track.py` and moved into `config.py` said value 10 was
+    the eligible one, which is wrong in both halves and is an invitation to widen the
+    set to include 8 - the exact change that would draw an open wing on a closed one.
+    """
+    from src.arcade.config import DRS_ELIGIBLE_CODE
+    from src.arcade.overlays import DriverInfoPanel
+
+    assert DRS_ELIGIBLE_CODE not in DRS_OPEN_CODES, "eligible is not open"
+
+    assert DriverInfoPanel._drs_label(DRS_ELIGIBLE_CODE) == "AVAIL"
+    assert DriverInfoPanel._drs_label(10) == "ON"
+    open_colour = DriverInfoPanel._drs_color(10)
+    assert DriverInfoPanel._drs_color(DRS_ELIGIBLE_CODE) != open_colour, (
+        "an eligible car must not be painted with the open colour"
+    )
+    for code in DRS_OPEN_CODES:
+        assert DriverInfoPanel._drs_label(code) == "ON", f"code {code} is documented as On"
+        assert DriverInfoPanel._drs_color(code) == open_colour

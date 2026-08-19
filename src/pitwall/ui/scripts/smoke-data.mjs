@@ -2854,6 +2854,13 @@ for (const [width, height] of [
 // The assertion is the PITCH, computed from each lane's own box and its own locked
 // range, which is why it holds at five client sizes rather than pinning a pixel
 // table: a lane that shrinks has to drop labels, not squeeze them.
+// **How much of the stack the lanes leave unused, per client.** Collected across the
+// loop and asserted after it: nothing here asserted that the lanes FILL their box.
+// Ordered, non-collapsed, sharing margins, spanned by the cursor - all of those are
+// checked, and a layout that stopped consuming the room would satisfy every one of them
+// while leaving 100 px of dead space at the bottom. Which is precisely the complaint
+// that opened #998, one panel to the left.
+const laneLeftovers = [];
 for (const [width, height] of [
   [1265, 593],
   [1265, 650],
@@ -2888,6 +2895,17 @@ for (const [width, height] of [
   });
   await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
   await page.waitForTimeout(700);
+
+  laneLeftovers.push({
+    client: `${width}x${height}`,
+    ...(await page.evaluate(() => {
+      const chart = document.querySelector(".trace-stack-plot").__pitwallChart;
+      const grids = chart.getOption().grid;
+      const last = grids[grids.length - 1];
+      const box = document.querySelector(".trace-stack").clientHeight;
+      return { box, below: Math.round(box - (last.top + last.height)) };
+    })),
+  });
 
   const legible = await page.evaluate(() => {
     const chart = document.querySelector(".trace-stack-plot").__pitwallChart;
@@ -2948,6 +2966,19 @@ for (const [width, height] of [
   );
   await ctx.close();
 }
+
+// The space below the last lane is the SHARED AXIS BAND and nothing else, so it must not
+// scale with the box: the stack grows 240 px between the smallest and the largest client
+// here, and the leftover has to stay put. Asserted as "identical across every client"
+// rather than pinned to a pixel, because the band's height is one constant in
+// `TraceStack.tsx` and a second copy of it here is the twin this repo pays for most.
+const leftovers = [...new Set(laneLeftovers.map((entry) => entry.below))];
+check(
+  leftovers.length === 1 && leftovers[0] > 0 && leftovers[0] < 50,
+  `the lanes fill their box at every client, leaving only the axis band (${laneLeftovers
+    .map((entry) => `${entry.client}: ${entry.below} of ${entry.box}`)
+    .join("; ")})`,
+);
 
 // --- Band 3, second panel: the race trace ---------------------------------
 

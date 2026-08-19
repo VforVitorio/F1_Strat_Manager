@@ -355,14 +355,34 @@ GP_TO_LOCATION: Final[dict[str, str]] = {
 
 # DRS codes that mean the wing is OPEN, and the one home for that fact.
 #
-# f1_replay uses {10, 12, 14} on a qualifying fastest lap, where the driver opens
-# the wing throughout each activation zone. Value 10 ("eligible") covers the short
-# stretch between the detection line and the moment the wing actually opens;
-# including it prevents a visible gap at the start of each zone.
+# From FastF1's own channel documentation (`fastf1/_api.py`, `car_data`'s docstring):
+# 0 and 1 are Off, **8 is "Detected, Eligible once in Activation Zone"**, and
+# **10 / 12 / 14 are all On** with an undocumented distinction between them. So the
+# open set is the three On codes, and 8 is deliberately NOT in it: a car that may use
+# DRS is not a car with an open wing.
 #
-# **It lives here rather than in `track.py` because two subsystems decode it now.**
-# The track overlay draws the zones from it, and `_frame_to_telemetry` publishes a
-# decoded `drs_open` on the wire so PITWALL's DRS lane never has to know the codes -
-# `OwnCarTraces` refused to fork this set into TypeScript, correctly, and the way to
-# honour that refusal is to decode it once on this side.
+# **⚠️ The comment that stood here through `track.py` and this file said "Value 10
+# (eligible) covers the short stretch between the detection line and the moment the
+# wing actually opens".** Both halves were wrong against the source above - 10 is On,
+# and the eligible code is the 8 this set EXCLUDES - and the error is not cosmetic: it
+# told the next reader the set already contains a not-yet-open code, which is an
+# invitation to add 8 "for consistency". `tests/surfaces/test_arcade_telemetry_span.py`
+# exists to refuse exactly that, because publishing 8 as open draws an open wing on a
+# closed one.
+#
+# **It lives here rather than in `track.py` because FOUR call sites decode it.** The
+# track overlay draws the zones from it, the driver telemetry box labels and colours
+# the state from it, and `_frame_to_telemetry` publishes a decoded `drs_open` on the
+# wire so PITWALL's DRS lane never has to know the codes - `OwnCarTraces` refused to
+# fork this set into TypeScript, correctly, and the way to honour that refusal is to
+# decode it once on this side. The commit that created this constant claimed "two
+# subsystems" and moved only two of the four; the overlay's own pair stayed literal
+# for a commit, which is this repo's dominant defect wearing its usual clothes.
 DRS_OPEN_CODES: Final[frozenset[int]] = frozenset({10, 12, 14})
+
+# The code that means "you may open it in the next zone", which is not "it is open".
+#
+# Named because two call sites compared against a bare `8`, and because it is the
+# boundary the open set is defined AGAINST: the guard that keeps 8 out of
+# `DRS_OPEN_CODES` reads better when both sides have names.
+DRS_ELIGIBLE_CODE: Final[int] = 8
