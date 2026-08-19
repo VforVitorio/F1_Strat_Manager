@@ -137,13 +137,19 @@ const check = (ok, what) => {
   if (!ok) failures.push(what);
 };
 
-/** Read a chart's computed axis extents through the handle `useEChart` sets. */
+/**
+ * Read one LANE's computed axis extents off the stack's single chart.
+ *
+ * The index is a GRID index now, not a canvas index: the 2x2's four charts became
+ * one instance with six grids, so `getComponent(type, index)` asks the question the
+ * four separate `__pitwallChart` handles used to answer.
+ */
 const EXTENTS = (index) => `
   (() => {
-    const el = document.querySelectorAll(".trace-plot")[${index}];
+    const el = document.querySelector(".trace-stack-plot");
     const chart = el && el.__pitwallChart;
     if (!chart) return null;
-    const axis = (type) => chart.getModel().getComponent(type, 0).axis.scale.getExtent();
+    const axis = (type) => chart.getModel().getComponent(type, ${index}).axis.scale.getExtent();
     return { x: axis("xAxis"), y: axis("yAxis") };
   })()
 `;
@@ -187,11 +193,20 @@ await page.addInitScript((payload) => {
 }, tick(1));
 
 await page.goto(url, { waitUntil: "domcontentloaded" });
-await page.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
 await page.waitForTimeout(400);
 
-check((await page.locator(".trace-cell").count()) === 4, "four chart cells");
-check((await page.locator(".trace-plot canvas").count()) === 4, "four live canvases");
+// SIX lanes on ONE canvas. The 2x2 is retired: the agreed layout drawing assigned
+// the stacked form to this sprint and calls the 2x2 "the wrong shape".
+check(
+  (await page.locator(".trace-lane-label").count()) === 6,
+  "six lanes, each with its own label row",
+);
+check(
+  (await page.locator(".trace-stack-plot canvas").count()) === 1,
+  "on ONE canvas - four ECharts instances became one",
+);
+check((await page.locator(".trace-cursor").count()) === 1, "and ONE cursor across all six");
 check(
   (await page.locator(".traces-lap").innerText()).trim() === "LAP 24",
   "the header carries the lap and nothing else",
@@ -228,28 +243,55 @@ check(
   "no PROVISIONAL chip once the running field has completed a lap",
 );
 
-// Qt stretches both columns and both rows equally (`setColumnStretch(_, 1)`).
-// A `1fr 1fr` that silently became `auto auto` would put the dead space
-// inside the cells and the four plots would divide what the title rows left.
-const grid = await page.evaluate(() => {
-  const style = getComputedStyle(document.querySelector(".traces-grid"));
-  return { cols: style.gridTemplateColumns, rows: style.gridTemplateRows };
+// **The lanes must SUM to the box, and the last one carries the rounding.** The
+// heights are derived from weights rather than tabulated, precisely so the same six
+// lanes land on 666 px at one client and 430 at another - so the assertion is the
+// arithmetic, not a pixel table.
+const lanes = await page.evaluate(() => {
+  const el = document.querySelector(".trace-stack-plot");
+  const chart = el && el.__pitwallChart;
+  if (!chart) return null;
+  const stack = document.querySelector(".trace-stack");
+  const grids = chart.getOption().grid;
+  return {
+    box: stack.clientHeight,
+    tops: grids.map((g) => g.top),
+    heights: grids.map((g) => g.height),
+    lefts: grids.map((g) => g.left),
+    rights: grids.map((g) => g.right),
+    cursorHeight: parseFloat(getComputedStyle(document.querySelector(".trace-cursor")).height),
+  };
 });
-const equalPair = (value) => {
-  const [a, b] = value.split(" ").map(parseFloat);
-  return a > 0 && Math.abs(a - b) < 1;
-};
-check(equalPair(grid.cols), `two equal columns (${grid.cols})`);
-check(equalPair(grid.rows), `two equal rows (${grid.rows})`);
+check(
+  lanes !== null &&
+    lanes.heights.length === 6 &&
+    lanes.heights.every((h) => h > 0) &&
+    lanes.tops.every((top, i) => i === 0 || top > lanes.tops[i - 1]),
+  `six lanes in order, none collapsed (${JSON.stringify(lanes && lanes.heights)})`,
+);
+// All six share the plot margins, or the cursor is not one straight line.
+check(
+  lanes !== null && new Set(lanes.lefts).size === 1 && new Set(lanes.rights).size === 1,
+  `every lane shares the plot margins (${JSON.stringify(lanes && [lanes.lefts[0], lanes.rights[0]])})`,
+);
+// The cursor spans the whole stack, not one lane: a reader's cut must be unbroken.
+check(
+  lanes !== null && lanes.cursorHeight > lanes.box * 0.85,
+  `the cursor spans the lanes rather than one of them (${lanes && lanes.cursorHeight} of ${lanes && lanes.box})`,
+);
 
-// The four locked ranges, read as the extent the axis COMPUTED. This is the
-// claim the whole port rests on: only the lines move between updates.
-// Order is Qt's: delta, speed, brake, throttle.
+// The SIX locked ranges, read as the extent each axis COMPUTED. This is the claim
+// the whole panel rests on: only the lines move between updates. Order is the
+// stack's, speed first - the convention every client the spec surveyed uses.
+// BRAKE and THROTTLE hold the same pair from two SEPARATE constants; merging rules
+// that agree by coincidence is a defect class this repo has already paid for.
 const expected = [
-  ["delta", [-3, 3]],
   ["speed", [0, 360]],
-  ["brake", [-5, 105]],
+  ["delta", [-3, 3]],
   ["throttle", [-5, 105]],
+  ["brake", [-5, 105]],
+  ["gear", [0, 9]],
+  ["drs", [-0.2, 1.2]],
 ];
 for (const [index, [name, range]] of expected.entries()) {
   const extents = await page.evaluate(EXTENTS(index));
@@ -270,23 +312,34 @@ for (const [index, [name, range]] of expected.entries()) {
 // `series[0]`, and the declaration order is exactly what the z-order fix had to
 // change - an index-keyed probe turns that into two silently wrong assertions
 // about the wrong line.
-const seriesByName = (plot, name) =>
+/**
+ * One lane's series off the stack's single chart.
+ *
+ * The 2x2 named its two series `main` and `rival` inside each of four charts; the
+ * stack has twelve on one, named `<lane>-<car>` - so the lookup takes the lane by
+ * name rather than a canvas index, which also stops the assertions below depending
+ * on the lane ORDER (that is asserted once, in its own check).
+ */
+const laneSeries = (lane, car) =>
   page.evaluate(
-    ([which, series]) => {
-      const el = document.querySelectorAll(".trace-plot")[which];
-      return el.__pitwallChart.getOption().series.find((s) => s.name === series) ?? null;
+    ([which, side]) => {
+      const el = document.querySelector(".trace-stack-plot");
+      const found = el.__pitwallChart
+        .getOption()
+        .series.find((s) => s.name === `${which}-${side}`);
+      return found ?? null;
     },
-    [plot, name],
+    [lane, car],
   );
 
-const delta = (await seriesByName(0, "rival")).data;
+const delta = (await laneSeries("delta", "rival")).data;
 check(
   delta.length === 3 && delta.every(([, value]) => Math.abs(value - 2) < 1e-9),
   `the delta is +2.0 s over the rival's three samples only (${JSON.stringify(delta)})`,
 );
 
 // The speed trace carries the whole main span.
-const speedPoints = (await seriesByName(1, "main")).data.length;
+const speedPoints = (await laneSeries("speed", "main")).data.length;
 check(speedPoints === 5, `the speed trace holds all five samples (${speedPoints})`);
 
 // **The own car paints ON TOP, on every chart.** ECharts paints in declaration
@@ -294,59 +347,70 @@ check(speedPoints === 5, `the speed trace holds all five samples (${speedPoints}
 // two cars run comparable numbers - which is when the comparison matters - the
 // solid pit-wall-grade line was underneath. The race trace one tab away builds
 // the opposite rule deliberately, so this is the twin that had it inverted.
-const paintOrder = await page.evaluate(() =>
-  [...document.querySelectorAll(".trace-plot")].map((el) =>
-    el.__pitwallChart.getOption().series.map((s) => s.name).join(">"),
-  ),
-);
+const paintOrder = await page.evaluate(() => {
+  const el = document.querySelector(".trace-stack-plot");
+  const names = el.__pitwallChart.getOption().series.map((s) => s.name);
+  // Pairs, in declaration order: every lane must read rival-then-own.
+  const pairs = [];
+  for (let i = 0; i < names.length; i += 2) pairs.push(`${names[i]}>${names[i + 1]}`);
+  return pairs;
+});
 check(
-  paintOrder.length === 4 && paintOrder.every((order) => order === "rival>main"),
-  `the own car is declared last so it paints over the rival on all four charts (${paintOrder.join(" | ")})`,
+  paintOrder.length === 6 &&
+    paintOrder.every((pair) => {
+      const [first, second] = pair.split(">");
+      return first.endsWith("-rival") && second.endsWith("-main");
+    }),
+  `the own car is declared last so it paints over the rival on all six lanes (${paintOrder.join(" | ")})`,
+);
+// And the lane ORDER itself, asserted once rather than assumed by every lookup.
+check(
+  paintOrder.map((pair) => pair.split("-")[0]).join(",") ===
+    "speed,delta,throttle,brake,gear,drs",
+  `speed first, DRS last (${paintOrder.map((pair) => pair.split("-")[0]).join(",")})`,
 );
 
-// The cursor, in PIXELS. It must be at the column ECharts maps 500 m to, and
-// must not be at a column the car has not reached - which is also a column
-// no trace passes through, so grey there could only be the cursor.
+// **The cursor, in pixels, against what ECharts says the same distance is.**
 //
-// "Grey and bright", not a colour distance: a 1 px dashed line lands
-// between two device columns and each gets it at part alpha, so the exact
-// hex appears nowhere. Nothing else in the plot area is both neutral and
-// bright - the traces are saturated, the panel and the grid are dark - so
-// the discriminator is the one that survives antialiasing. The scan stops
-// above the x axis for the same reason it has to: the tick labels below it
-// are TEXT_SECONDARY grey, and a full-height column would find "3000" and
-// call it a cursor.
+// It used to be a per-chart `markLine` and this check scanned canvas columns for a
+// grey pixel run. The stack draws ONE div across all six lanes instead - a markLine
+// per grid would be six fragments with five gaps, and the panel exists to be read
+// with an unbroken vertical cut - so the assertion moved with the mechanism: the
+// div's left edge must be where `convertToPixel` puts the car's distance, and the
+// div must be tall enough to cross every lane.
+//
+// This is still the EFFECT and not the mechanism: it asks "is the line at the car's
+// position on the axis", which is the claim, and it would fail on an off-by-`left`
+// transform, a stale `xMax`, or a cursor scoped to one lane.
 const cursor = await page.evaluate(
-  ({ at, away, gridBottom }) => {
-    const el = document.querySelectorAll(".trace-plot")[1];
+  ({ at }) => {
+    const el = document.querySelector(".trace-stack-plot");
     const chart = el.__pitwallChart;
-    const canvas = el.querySelector("canvas");
-    const context = canvas.getContext("2d");
-    const ratio = canvas.width / canvas.getBoundingClientRect().width;
-    const plotHeight = Math.floor(canvas.height - gridBottom * ratio);
-    // A five-pixel window, not one column. `convertToPixel` answers in the
-    // chart's coordinate space and the canvas rounds; measured, the line
-    // lands one to two device pixels off the computed column, which is a
-    // rounding fact and not a placement claim. Five pixels out of a
-    // ~700-pixel plot still says "here and nowhere else".
-    const column = (metres) => {
-      const x = Math.round(chart.convertToPixel({ xAxisIndex: 0 }, metres) * ratio);
-      const data = context.getImageData(Math.max(0, x - 2), 0, 5, plotHeight).data;
-      let hits = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
-        const neutral = Math.max(r, g, b) - Math.min(r, g, b) < 25;
-        const bright = (r + g + b) / 3 > 80;
-        if (neutral && bright && data[i + 3] > 200) hits += 1;
-      }
-      return hits;
+    const div = document.querySelector(".trace-cursor");
+    if (!div) return null;
+    const stack = document.querySelector(".trace-stack").getBoundingClientRect();
+    const expected = chart.convertToPixel({ xAxisIndex: 0 }, at);
+    const actual = div.getBoundingClientRect().left - stack.left;
+    const grids = chart.getOption().grid;
+    const lastGrid = grids[grids.length - 1];
+    return {
+      expected: Math.round(expected),
+      actual: Math.round(actual),
+      height: Math.round(div.getBoundingClientRect().height),
+      lanesBottom: lastGrid.top + lastGrid.height,
+      firstLaneTop: grids[0].top,
     };
-    return { at: column(at), away: column(away) };
   },
-  { at: CURSOR_DIST, away: 3000, gridBottom: 36 },
+  { at: CURSOR_DIST },
 );
-check(cursor.at > 10, `the cursor is drawn at ${CURSOR_DIST} m (${cursor.at} px)`);
-check(cursor.away === 0, `and nowhere else (${cursor.away} px at 3000 m)`);
+check(
+  cursor !== null && Math.abs(cursor.expected - cursor.actual) <= 2,
+  `the cursor sits where the axis maps ${CURSOR_DIST} m (expected ${cursor && cursor.expected}, got ${cursor && cursor.actual})`,
+);
+check(
+  cursor !== null && cursor.height >= cursor.lanesBottom - cursor.firstLaneTop,
+  `and it crosses every lane rather than one (${cursor && cursor.height} px over ${cursor && cursor.lanesBottom - cursor.firstLaneTop})`,
+);
 
 // The delta chart's BASELINE has to cross the whole plot, because every value
 // on that chart is read against it and Qt draws it with `pg.InfiniteLine`.
@@ -354,14 +418,18 @@ check(cursor.away === 0, `and nowhere else (${cursor.away} px at 3000 m)`);
 // a 5220 m axis - and 36 green checks, four of which were about this very
 // chart, all passed over it. Only a pixel scan along the zero row sees it.
 const baseline = await page.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[0];
+  const el = document.querySelector(".trace-stack-plot");
   const chart = el.__pitwallChart;
   const canvas = el.querySelector("canvas");
   const context = canvas.getContext("2d");
   const ratio = canvas.width / canvas.getBoundingClientRect().width;
+  // **Lane 1, not lane 0.** The delta is the SECOND lane of the stack now (speed
+  // first, per the convention), so asking axis 0 where value 0 sits answers about
+  // the speed lane - a row where this line cannot be, which is how this check first
+  // reported `null` after the stack landed.
   const row = context.getImageData(
     0,
-    Math.round(chart.convertToPixel({ yAxisIndex: 0 }, 0) * ratio),
+    Math.round(chart.convertToPixel({ yAxisIndex: 1 }, 0) * ratio),
     canvas.width,
     1,
   ).data;
@@ -372,7 +440,7 @@ const baseline = await page.evaluate(() => {
     if (row[i] < 110 && row[i + 1] > 90 && row[i + 2] > 180) blue.push(x);
   }
   if (!blue.length) return null;
-  const metres = (px) => chart.convertFromPixel({ xAxisIndex: 0 }, px / ratio);
+  const metres = (px) => chart.convertFromPixel({ xAxisIndex: 1 }, px / ratio);
   return { from: metres(blue[0]), to: metres(blue[blue.length - 1]) };
 });
 check(
@@ -385,7 +453,7 @@ check(
 // re-driven - nothing else would ever evict them.
 await page.evaluate((payload) => window.__ticks.push(payload), tick(2, { main: [], rivalSpan: [], rewound: true }));
 await page.waitForTimeout(400);
-const afterRewind = (await seriesByName(1, "main")).data.length;
+const afterRewind = (await laneSeries("speed", "main")).data.length;
 check(afterRewind === 0, `a rewind empties the trace (${afterRewind} points left)`);
 
 // ...and the rewind must NOT look like single-driver mode. This is the twin
@@ -394,7 +462,7 @@ check(afterRewind === 0, `a rewind empties the trace (${afterRewind} points left
 // vanished for the whole of a rewind hold and every lap change. The buffer
 // is empty right now, which is exactly the moment that bug is visible.
 check(
-  (await page.locator(".trace-placeholder").count()) === 0,
+  (await page.locator(".trace-lane-caption, .trace-placeholder").count()) === 0,
   "an empty buffer is not single-driver mode",
 );
 // One tag on the card header, not one per cell: the per-cell legends were
@@ -428,7 +496,7 @@ await page.evaluate(
   tick(3, { main: JUMPED, rivalSpan: [], dropped: 60 }),
 );
 await page.waitForTimeout(400);
-const afterJump = (await seriesByName(1, "main")).data.map(([x]) => x);
+const afterJump = (await laneSeries("speed", "main")).data.map(([x]) => x);
 check(
   afterJump.length === 3 && afterJump[0] === 3100,
   `a forward jump keeps the span it arrived with (${JSON.stringify(afterJump)})`,
@@ -444,14 +512,15 @@ check(
 await page.evaluate((payload) => window.__ticks.push(payload), tick(4, { rival: null, rivalSpan: [] }));
 await page.waitForTimeout(400);
 check(
-  (await page.locator(".trace-placeholder").count()) === 1,
+  (await page.locator(".trace-lane-caption, .trace-placeholder").count()) === 1,
   "losing the rival shows the placeholder",
 );
 await page.evaluate((payload) => window.__ticks.push(payload), tick(5));
 await page.waitForTimeout(500);
-const revived = await page.evaluate(EXTENTS(0));
+// The delta lane is index 1 in the stack: speed owns 0.
+const revived = await page.evaluate(EXTENTS(1));
 check(
-  (await page.locator(".trace-plot canvas").count()) === 4,
+  (await page.locator(".trace-stack-plot canvas").count()) === 1,
   "the delta plot comes back as a live canvas",
 );
 check(
@@ -493,15 +562,15 @@ await soloPage.addInitScript((payload) => {
 }, tick(1, { rival: null, rivalSpan: [], mainDriver: { has_position: false, rel_dist: null } }));
 
 await soloPage.goto(url, { waitUntil: "domcontentloaded" });
-await soloPage.waitForSelector(".trace-cell", { timeout: 5000 });
+await soloPage.waitForSelector(".trace-lane-label", { timeout: 5000 });
 await soloPage.waitForTimeout(400);
 
 check(
-  (await soloPage.locator(".trace-placeholder").innerText()).trim() === "single-driver mode",
+  (await soloPage.locator(".trace-lane-caption, .trace-placeholder").innerText()).trim() === "single-driver mode",
   "the delta chart collapses to its placeholder",
 );
 check(
-  (await soloPage.locator(".trace-plot canvas").count()) === 3,
+  (await soloPage.locator(".trace-stack-plot canvas").count()) === 1,
   "three canvases, because the placeholder REPLACES the delta plot",
 );
 check((await soloPage.locator(".driver-chip").count()) === 1, "no rival chip");
@@ -517,7 +586,7 @@ check(
 // Across EVERY series, not the one that happens to carry the marks: they hang
 // off whichever series is declared first, and that changed once already.
 const blindCursor = await soloPage.evaluate(() => {
-  const el = document.querySelectorAll(".trace-plot")[0];
+  const el = document.querySelector(".trace-stack-plot");
   return el.__pitwallChart
     .getOption()
     .series.flatMap((s) => s.markLine?.data ?? [])
@@ -728,10 +797,10 @@ await stillPage.addInitScript((payload) => {
   };
 }, tick(1));
 await stillPage.goto(url, { waitUntil: "domcontentloaded" });
-await stillPage.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+await stillPage.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
 
 check(
-  await staysStill(stillPage, ".trace-plot"),
+  await staysStill(stillPage, ".trace-stack-plot"),
   "the delta trace schedules no animation while the producer streams",
 );
 
@@ -2210,11 +2279,11 @@ if (bands === null) {
   await narrow.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
     waitUntil: "domcontentloaded",
   });
-  await narrow.waitForSelector(".trace-plot canvas", { timeout: 5000 });
+  await narrow.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
   await narrow.waitForTimeout(500);
 
   const axis = await narrow.evaluate(() => {
-    const el = document.querySelector(".trace-plot");
+    const el = document.querySelector(".trace-stack-plot");
     const chart = el.__pitwallChart;
     const option = chart.getOption();
     const x = option.xAxis[0];

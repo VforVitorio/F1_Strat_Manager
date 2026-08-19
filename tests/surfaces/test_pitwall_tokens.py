@@ -168,7 +168,7 @@ QT_BASE_CSS = UI_SRC / "styles" / "qt-base.css"
 AGENTS_CSS = UI_SRC / "styles" / "agents.css"
 DATA_CSS = UI_SRC / "styles" / "data.css"
 AGENTS_WINDOW = UI_SRC / "features" / "agents" / "AgentsWindow.tsx"
-OWN_CAR_TRACES = UI_SRC / "features" / "data" / "OwnCarTraces.tsx"
+TRACE_STACK = UI_SRC / "features" / "data" / "TraceStack.tsx"
 
 # The `--qt-*` custom properties, and what each one copies from `palette.py`.
 QT_CSS_TOKENS = {
@@ -244,17 +244,21 @@ BOOT_SLOTS = {
 ECHART_MODULE = REPO_ROOT / "src" / "pitwall" / "ui" / "src" / "lib" / "chart.ts"
 ECHART_SITES = (("TEXT_SECONDARY", 1), ("BORDER_COLOR", 1), ("TEXT_TERTIARY", 1))
 
-# Copy number six: band 4's four traces. Each metric draws in a DIFFERENT
-# palette colour (`telemetry_panel.py` passes INFO, DANGER and SUCCESS to
-# `_make_chart`), so this is a slot map for the same reason `BOOT_SLOTS` is -
-# swapping brake from DANGER to WARNING keeps every hex inside the palette
-# and is still the wrong chart in the wrong colour.
+# Copy number six: band 4's SIX lanes. Each channel draws in a DIFFERENT palette
+# colour, so this is a slot map for the same reason `BOOT_SLOTS` is - swapping brake
+# from DANGER to WARNING keeps every hex inside the palette and is still the wrong
+# lane in the wrong colour.
+#
+# The names moved with the panel: the 2x2's four `<metric>_main` constants became one
+# lane table in `TraceStack`, whose colours are the four palette names it uses plus
+# the two the new lanes add - ACCENT for gear (its own channel, a staircase) and INFO
+# reused for DRS (a bit, in the thinnest lane).
 TRACE_SLOTS = {
-    "delta_main": "INFO",
-    "speed_main": "INFO",
-    "brake_main": "DANGER",
-    "throttle_main": "SUCCESS",
-    "rival": "WARNING",
+    "INFO": "INFO",
+    "SUCCESS": "SUCCESS",
+    "DANGER": "DANGER",
+    "RIVAL": "WARNING",
+    "ACCENT": "ACCENT",
 }
 
 
@@ -323,21 +327,25 @@ def test_the_chart_axis_palette_has_not_drifted_either():
 
 
 def test_the_trace_colours_are_in_the_right_slots():
-    """Copy number six: band 4's four traces, one palette name each.
+    """Copy number six: band 4's six lanes, one palette name each.
 
-    `telemetry_panel.py` hands `_make_chart` a DIFFERENT main colour per
-    metric - INFO for delta and speed, DANGER for brake, SUCCESS for
-    throttle, WARNING for the rival on all four. A membership test cannot
-    see brake and throttle swapping places; both hexes stay in the palette
-    and the window is simply wrong.
+    A DIFFERENT colour per channel - INFO for speed and the delta baseline, SUCCESS
+    for throttle, DANGER for brake, ACCENT for gear, WARNING for the rival on every
+    lane. A membership test cannot see brake and throttle swapping places; both
+    hexes stay in the palette and the window is simply wrong.
+
+    Read from `TraceStack`, which is where the lane table lives now. The file this
+    used to read (`OwnCarTraces`) kept four `<metric>_main` constants for the 2x2;
+    the stack holds one named constant per palette colour and the lane table points
+    at them, so the slot map is by NAME rather than by metric.
     """
     from src.arcade import palette
 
-    source = OWN_CAR_TRACES.read_text("utf-8")
-    found = dict(re.findall(r"(\w+):\s*\"(#[0-9a-fA-F]{6})\"", source))
+    source = TRACE_STACK.read_text("utf-8")
+    found = dict(re.findall(r"^const (\w+) = \"(#[0-9a-fA-F]{6})\";", source, re.M))
 
     assert set(TRACE_SLOTS) <= set(found), (
-        f"a trace colour slot disappeared: {sorted(set(TRACE_SLOTS) - set(found))}"
+        f"a lane colour slot disappeared: {sorted(set(TRACE_SLOTS) - set(found))}"
     )
     for slot, name in TRACE_SLOTS.items():
         assert found[slot] == _rgb_to_hex(getattr(palette, name)), (

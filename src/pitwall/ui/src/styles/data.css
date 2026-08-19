@@ -613,73 +613,99 @@ td.col-drv {
 
 /* --- The 2x2 grid ------------------------------------------------------- */
 
-/* `grid.setSpacing(10)` with both columns and both rows stretched equally.
- * `1fr` rather than `auto`: an auto row sizes to content, and the four
- * plots would then divide whatever the taller title row left over. */
-.traces-grid {
+/* --- Band 4: the SIX-LANE stack ------------------------------------------
+ *
+ * The 2x2 grid that stood here is retired. The agreed layout drawing assigned the
+ * stacked form to this sprint and calls the 2x2 "the wrong shape"; the arithmetic
+ * and the research are in `documents/research/PITWALL_TRACES_SPACE_SPEC.md`.
+ *
+ * The stack is ONE canvas with six ECharts grids, so the geometry lives in
+ * `TraceStack.laneLayout` where it can be derived from the measured box - 666 px at
+ * the 1485 client, 430 at 1265 - rather than tabulated in two media queries. What
+ * this stylesheet owns is the positioning context and the two HTML overlays that
+ * must not be ECharts graphics, because `notMerge: true` would restart them ten
+ * times a second. */
+.trace-stack {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 10px;
 }
 
-/* One chart: `QVBoxLayout` margins 0, spacing 4, plot stretched. */
-.trace-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  min-height: 0;
+.trace-stack-plot {
+  position: absolute;
+  inset: 0;
 }
 
-.trace-title-row {
+/* One per lane, INSIDE its lane's height: the channel name on the left in the
+ * lane's own colour, its live value on the right. The MoTeC/AiM convention - a
+ * stacked lane is read with a cursor and a readout, not by counting gridlines - and
+ * on the DRS lane it is what tells a flat line apart from a broken one. */
+.trace-lane-label {
+  position: absolute;
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 0 4px;
+  justify-content: space-between;
+  height: 12px;
+  pointer-events: none;
 }
 
-.trace-title {
-  color: var(--qt-fg-1);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.trace-subtitle {
-  color: var(--qt-fg-3);
-  font-size: 10px;
-}
-
-/* `title_row.addStretch()` between the subtitle and the legend chips. */
-.trace-spacer {
-  flex: 1 1 auto;
-}
-
-/* `_LegendChip`: `MAIN · VER`, 10 px 700 with 0.5 px tracking, in the
- * trace's own colour (set inline, because it varies per chart). */
-.trace-legend {
+.trace-lane-name {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
+.trace-lane-unit {
+  color: var(--qt-fg-3);
+  font-weight: 400;
+}
+
+.trace-lane-value {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The ONE cursor: the car's live position on the lap, unbroken from lane 1's top to
+ * lane 6's bottom, so a reader's vertical cut is a single line rather than six
+ * fragments. Solid, not dashed, and that is measured: the car covers about 6 m per
+ * 100 ms tick, which on this plot is under one pixel, so a dashed line never moves a
+ * whole dash - it shifts its pattern by a fraction of a pixel ten times a second and
+ * shimmers. `--qt-fg-3` is the stroke this window already reserves for it. */
+.trace-cursor {
+  position: absolute;
+  width: 1px;
+  pointer-events: none;
+}
+
+/* `_delta_placeholder`, one lane deep. Centred, italic, tertiary - the Qt treatment,
+ * scoped to the lane that actually has nothing to draw instead of to a whole cell.
+ * The other five lanes are perfectly readable with one car in them. */
+.trace-lane-caption {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--qt-fg-3);
+  font-style: italic;
+  font-size: 12px;
+  pointer-events: none;
+}
+
 /* The tier tag the Qt window never had. `PITWALL_REALISM_AND_TELEMETRY_
  * SURFACE.md` 2.2 calls rival traces "broadcast tier": real and public,
- * but the coarse low-rate channel, not pit-wall-grade telemetry. It reads
- * as an annotation on the legend, not as a second label. */
+ * but the coarse low-rate channel, not pit-wall-grade telemetry. It rides the
+ * header's rival chip - one card, one header, six lanes; saying it six times is the
+ * wrongness the per-cell legends already died for. */
 .trace-tier {
   color: var(--qt-fg-3);
   font-weight: 700;
   font-size: 9px;
   letter-spacing: 0.5px;
-}
-
-.trace-plot {
-  flex: 1 1 auto;
-  min-height: 0;
 }
 
 /* `_delta_placeholder`: centred, italic, tertiary, 12 px — and it REPLACES

@@ -38,6 +38,10 @@ export interface TraceRow {
   speed: number;
   throttle: number;
   brake: number;
+  /** 1-8 on the real session, all eight values present. A STEP channel, not a curve. */
+  gear: number;
+  /** Decoded producer-side, because the open code set is not this language's to own. */
+  drsOpen: boolean;
 }
 
 /** A buffer flattened for plotting: x ascending, rows in the same order. */
@@ -107,6 +111,8 @@ function store(buffer: Map<number, TraceRow>, sample: TelemetrySample): void {
     speed: sample.speed,
     throttle: sample.throttle,
     brake: sample.brake,
+    gear: sample.gear,
+    drsOpen: sample.drs_open,
   });
 }
 
