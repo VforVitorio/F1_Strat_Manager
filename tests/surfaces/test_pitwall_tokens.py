@@ -413,12 +413,18 @@ def test_the_radio_category_chips_are_pinned_PER_SITE_not_as_a_set():
     # share a declaration because they carry the same weight, and a regex that stops at
     # the first class silently drops the second - which is how the first version of this
     # guard reported three chips where the stylesheet has four.
+    #
+    # **And `background-color` as well as `background`, with the LAST rule winning**, which
+    # is what the cascade does. Reading only `background:` let a second rule appended later
+    # in the file repaint the all-clear chip amber with every assertion below still green -
+    # a gate proved it by executing exactly that. Rules are walked in file order and the
+    # dict is overwritten, so this guard now agrees with the browser about which one wins.
     for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
-        match = re.search(r"background:\s*([^;]+);", body)
-        if match is None:
+        matches = re.findall(r"background(?:-color)?:\s*([^;]+);", body)
+        if not matches:
             continue
         for chip in re.findall(r"\.radio-cat\.(is-[\w-]+)", selectors):
-            declared[chip] = match.group(1).strip().lower()
+            declared[chip] = matches[-1].strip().lower()
 
     assert set(declared) == {"is-sc", "is-flag", "is-clear", "is-drs"}, (
         f"a category chip was added or renamed without pinning its colour: {sorted(declared)}"

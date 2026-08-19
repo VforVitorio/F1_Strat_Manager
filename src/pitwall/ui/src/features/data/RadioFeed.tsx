@@ -22,7 +22,7 @@
  * there are in total so the cut is never silent.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Bulk, RadioEvent } from "../../lib/bridge";
 
@@ -135,56 +135,72 @@ export function RadioFeed({
   // rather than there keeps the payload in the shape a future full-history
   // panel would want.
   const newestFirst = [...events].reverse();
-  const rows = collapse(newestFirst);
-  const [visible, setVisible] = useState<number | null>(null);
+  // Memoized: `measure` depends on it and the ResizeObserver is rebuilt whenever that
+  // identity changes, so an unmemoized array reconnected the observer on every render.
+  const rows = useMemo(() => collapse(newestFirst), [feed?.events]);
+  const [counts, setCounts] = useState<{
+    onScreen: number;
+    below: number;
+  } | null>(null);
   const list = useRef<HTMLOListElement | null>(null);
 
   /**
-   * How many EVENTS are actually on screen.
+   * How many EVENTS are on screen, and how many are hidden BELOW.
    *
-   * **The header count says how many events EXIST; it never said the panel was
-   * showing about ten of them.** 58 events in a 404 px card is a ten-row fold, and
-   * with the scrollbar hidden globally there was nothing to tell a reader the rest
-   * was there - the same missing-affordance shape the pace grid's LAPS range exists
-   * to fix, one panel over.
+   * **The header count says how many events EXIST; it never said the panel was showing
+   * about ten of them.** 58 events in a 404 px card is a ten-row fold, and with the
+   * scrollbar hidden globally there was nothing to tell a reader the rest was there - the
+   * same missing-affordance shape the pace grid's LAPS range exists to fix, one panel
+   * over.
    *
-   * Measured off each row's own box rather than derived from a row-height constant,
-   * for the reason that grid's `measure` gives: the height is CSS, and a second copy
-   * of it here is the twin this repo pays for most often.
+   * Measured off each row's own box rather than derived from a row-height constant, for
+   * the reason that grid's `measure` gives: the height is CSS, and a second copy of it
+   * here is the twin this repo pays for most often.
    *
-   * **⚠️ Two things the first version of this got wrong, both found by an adversarial
-   * gate on the same branch.**
+   * **⚠️ Three things earlier versions of this got wrong, each found by a gate.**
    *
-   * 1. **It tested ONE edge** (`rect.bottom <= listBottom`), which anything scrolled
-   *    off the TOP also satisfies. Measured on the real Melbourne corpus at
-   *    1485x833: scrolled to the end the header read `47 / 47` and the fold line
-   *    vanished, with 13 rows actually in view and 34 hidden above it. The pace
-   *    grid's sibling `measure` tested both edges from the start - the same twin one
-   *    panel over, and this copy was written with half of it.
-   * 2. **It counted ROWS while the header's total counted EVENTS.** Those agree only
-   *    while nothing is collapsed. From Melbourne's lap 46 four identical BLUE FLAG
-   *    lines become one row, and `9 / 58` beside `+ 40 older` stops reconciling
-   *    (9 + 40 = 49 rows, not 58 events). Both halves count EVENTS now, which is what
-   *    the denominator always meant.
+   * 1. **One edge** (`rect.bottom <= listBottom`), which anything scrolled off the TOP
+   *    also satisfies. Measured on the real corpus at 1485x833: scrolled to the end the
+   *    header read `47 / 47` and the fold vanished, with 13 rows in view and 34 above.
+   * 2. **Rows against events.** The numerator counted collapsed ROWS while the total
+   *    counted EVENTS; they agree only until something collapses. From Melbourne's lap 46
+   *    four BLUE FLAG lines become one row and `9 / 58` beside `+ 40 older` stops
+   *    reconciling. Both halves count EVENTS.
+   * 3. **`older` was a guess about direction.** Fixing (1) made the hidden count
+   *    bidirectional while the label still said "older", so scrolled to the end it read
+   *    `+ 10 older` with nine of the ten being NEWER. The fold counts what is strictly
+   *    BELOW the frame, which is the only thing that word can mean in a newest-first
+   *    list - and at the end of the list there is nothing below, so the line goes away,
+   *    which is the truth.
    */
   const measure = useCallback(() => {
     const box = list.current;
     if (!box) return;
     const items = [...box.querySelectorAll<HTMLElement>("li")];
-    if (items.length === 0) return setVisible(null);
-    // Rects, not `offsetTop`: that is measured from the nearest POSITIONED ancestor,
-    // and `.radio-list` is a plain flex child, so an earlier version counted zero
-    // rows visible out of six. Viewport rects need no such assumption.
+    if (items.length === 0) return setCounts(null);
+    // Rects, not `offsetTop`: that is measured from the nearest POSITIONED ancestor, and
+    // `.radio-list` is a plain flex child, so an earlier version counted zero rows
+    // visible out of six. Viewport rects need no such assumption.
     const frame = box.getBoundingClientRect();
     let onScreen = 0;
+    let below = 0;
     items.forEach((item, index) => {
+      // A collapsed row stands for `repeats` events, and every count here is in events.
+      const weight = rows[index]?.repeats ?? 1;
       const rect = item.getBoundingClientRect();
-      const inside =
-        rect.bottom <= frame.bottom + 1 && rect.top >= frame.top - 1;
-      // A collapsed row stands for `repeats` events, and the total counts events.
-      if (inside) onScreen += rows[index]?.repeats ?? 1;
+      const fullyInside =
+        rect.top >= frame.top - 1 && rect.bottom <= frame.bottom + 1;
+      // **The row straddling the bottom edge counts as BELOW, not as neither.** With three
+      // exclusive buckets it fell through both and the two numbers on screen stopped
+      // summing to the total (1 + 4 of 6). It is the next thing a reader would scroll to,
+      // and it is not readable where it is, so "below" is the honest bucket. Rows scrolled
+      // off the TOP are in neither on purpose: nothing on screen counts them.
+      const straddlesOrBelow =
+        rect.bottom > frame.bottom + 1 && rect.bottom > frame.top;
+      if (fullyInside) onScreen += weight;
+      else if (straddlesOrBelow) below += weight;
     });
-    setVisible(onScreen);
+    setCounts({ onScreen, below });
   }, [rows]);
 
   useEffect(() => {
@@ -196,8 +212,9 @@ export function RadioFeed({
     return () => observer.disconnect();
   }, [measure, rows.length]);
 
-  // Events, not rows, so both numbers on screen come from one population.
-  const hidden = visible === null ? 0 : Math.max(0, events.length - visible);
+  // What the fold names is what is BELOW, not everything off screen: see the measure's
+  // third note. Events on both sides.
+  const hidden = counts === null ? 0 : counts.below;
 
   return (
     <section className="card radio-feed">
@@ -207,7 +224,9 @@ export function RadioFeed({
           // `10 / 58`, not `58`. Events on screen, over events revealed - one
           // population on both sides of the slash.
           <span className="radio-count">
-            {visible === null ? events.length : `${visible} / ${events.length}`}
+            {counts === null
+              ? events.length
+              : `${counts.onScreen} / ${events.length}`}
           </span>
         ) : (
           <span className="radio-subtitle">no corpus</span>

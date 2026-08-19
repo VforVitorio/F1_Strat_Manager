@@ -83,6 +83,23 @@ function fineFormFits(cell: HTMLElement, label: string): boolean {
   return ruler.measureText(label).width <= room;
 }
 
+/**
+ * Where the scroller has to sit for the newest REVEALED lap to touch its bottom edge.
+ *
+ * One definition, used by the pin that writes it and by the measure that asks whether the
+ * reader has moved away from it. Two copies of this arithmetic would drift, and the drift
+ * would read as "the panel keeps stealing my scroll".
+ */
+function pinTarget(box: HTMLElement, revealedTo: number): number {
+  const rows = box.querySelectorAll<HTMLElement>("tbody tr");
+  const newest = revealedTo > 0 ? rows[revealedTo - 1] : undefined;
+  if (!newest) return box.scrollHeight;
+  const target = newest.offsetTop + newest.offsetHeight - box.clientHeight;
+  // The browser clamps a negative scrollTop to 0; clamping here too keeps the comparison
+  // in `measure` honest, which is the whole reason this is a function.
+  return Math.max(0, Math.min(target, box.scrollHeight - box.clientHeight));
+}
+
 export function RacePaceGrid({
   bulk,
   order,
@@ -92,6 +109,12 @@ export function RacePaceGrid({
 }) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState<[number, number] | null>(null);
+  /** Which edges have more behind them, so the fade can say so. */
+  const [edges, setEdges] = useState({ above: false, below: false });
+  /** False while the reader has scrolled away from the newest revealed lap. */
+  const following = useRef(true);
+  /** The reveal the pin is currently tracking, so `measure` can compute its target. */
+  const revealedTo = useRef(0);
   const [coarse, setCoarse] = useState(false);
   const grid = racePaceGrid(bulk, order, coarse);
   // A ref, not a dependency: `fit` must not be rebuilt on every reveal, and the
@@ -117,6 +140,28 @@ export function RacePaceGrid({
   const measure = useCallback(() => {
     const box = scroller.current;
     if (!box) return;
+    // **Does it overflow, and is there more in each direction?**
+    //
+    // Victor asked for "the skeleton, and if it overflows, a small scroll you can drive
+    // with the mouse wheel". The wheel already worked - hiding a scrollbar does not
+    // disable it - but nothing on screen said so, and the research on this is unanimous
+    // and unkind: NN/g, Baymard (26 % of top e-commerce sites get inline scroll wrong)
+    // and a GitLab production bug all document the same failure once the one universal
+    // affordance is removed. So the panel says it itself, with a fade at whichever edge
+    // has more behind it.
+    const overflows = box.scrollHeight - box.clientHeight > 1;
+    setEdges({
+      above: overflows && box.scrollTop > 1,
+      below:
+        overflows && box.scrollTop < box.scrollHeight - box.clientHeight - 1,
+    });
+    // **And whether the reader has taken the wheel.** The pin below re-fires on every
+    // reveal, about every four and a half seconds, so without this a scroll to look at
+    // lap 5 is undone before it can be read - which would make the thing Victor asked
+    // for useless. Standard follow-tail break: leave the tail when the reader moves away
+    // from it, rejoin when they come back.
+    following.current =
+      Math.abs(box.scrollTop - pinTarget(box, revealedTo.current)) <= 4;
     const rows = [...box.querySelectorAll<HTMLElement>("tbody tr")];
     if (rows.length === 0) return setVisible(null);
     const top = box.scrollTop;
@@ -202,11 +247,11 @@ export function RacePaceGrid({
     // race barely outgrows the box at all, so the offset clamps to 0 nearly throughout).
     // It does NOT hold the row at a fixed height - see the paragraph above for why no
     // scroll offset can, and measured numbers for both clients.
-    const rows = box.querySelectorAll<HTMLElement>("tbody tr");
-    const newest = grid.revealedTo > 0 ? rows[grid.revealedTo - 1] : undefined;
-    box.scrollTop = newest
-      ? newest.offsetTop + newest.offsetHeight - box.clientHeight
-      : box.scrollHeight;
+    //
+    // **And it yields to the reader.** `following` is false while they are somewhere else
+    // in the race; the reveal then leaves the scroll alone and only re-measures.
+    revealedTo.current = grid.revealedTo;
+    if (following.current) box.scrollTop = pinTarget(box, grid.revealedTo);
     measure();
   }, [grid.revealedTo, grid.laps.length, measure]);
 
@@ -240,7 +285,16 @@ export function RacePaceGrid({
             : "no laps revealed"}
         </span>
       </header>
-      <div className="pace-scroll" ref={scroller} onScroll={measure}>
+      <div
+        className={`pace-scroll${edges.above ? " has-above" : ""}${edges.below ? " has-below" : ""}`}
+        ref={scroller}
+        onScroll={measure}
+        // Keyboard-reachable, because with the scrollbar hidden this is the only way a
+        // keyboard user reaches the rest of the race at all.
+        tabIndex={0}
+        role="region"
+        aria-label="Race pace by lap, scrollable"
+      >
         <table className="pace-table">
           <thead>
             <tr>

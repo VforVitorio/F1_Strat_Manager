@@ -1156,9 +1156,52 @@ td.col-drv {
   margin-left: auto;
 }
 
+/* **The scroll says it exists.**
+ *
+ * The wheel always worked here - hiding a scrollbar does not disable wheel, keyboard or
+ * touch scrolling - but this window hides scrollbars globally, and the research on that
+ * is unanimous: NN/g and Baymard both find users simply do not discover scrollable
+ * content once the one universal signal is gone (Baymard: 26 % of top e-commerce sites
+ * fail on exactly this), and GitLab shipped and then fixed the same bug. So the edge
+ * that has more behind it fades, and the classes are set from MEASURED overflow rather
+ * than from a breakpoint, so a panel that happens to fit shows nothing.
+ *
+ * A mask rather than a gradient overlay: the rows underneath keep their own colours and
+ * nothing new sits in the hit-testing path of a cell. */
 .pace-scroll {
   min-height: 0;
   overflow-y: auto;
+  /* Belt and braces for a webview that might ship a different default. */
+  scrollbar-width: none;
+}
+
+.pace-scroll.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+
+.pace-scroll.has-above {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.pace-scroll.has-above.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+
+/* Keyboard users reach the rest of the race through this element, so it has to say when
+ * it has focus. `:focus-visible`, so a mouse click does not draw a ring. */
+.pace-scroll:focus-visible {
+  outline: 1px solid var(--qt-accent);
+  outline-offset: -1px;
 }
 
 /* A lap that has not been driven. The number stays - that is the point, it says how

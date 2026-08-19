@@ -330,26 +330,58 @@ def test_the_drs_open_set_has_exactly_one_home_in_the_source():
     """
     import ast
 
+    # **Anchored to THIS FILE, not to the working directory.** The first version used
+    # relative roots, and a second gate pass executed it from `tests/`: `Path("src/arcade")`
+    # globbed nothing, the loop iterated over an empty set, and the guard PASSED with a
+    # planted copy sitting in the tree. A guard written to catch this repo's dominant defect
+    # was itself the empty-set failure - so the count below is asserted first.
+    repo = Path(__file__).resolve().parents[2]
     roots = ("src/arcade", "src/pitwall", "src/simulation", "scripts")
-    allowed = Path("src/arcade/config.py").resolve()
+    allowed = (repo / "src/arcade/config.py").resolve()
     offenders: list[str] = []
+    scanned = 0
+
+    lowest_open = min(DRS_OPEN_CODES)
 
     for root in roots:
-        for path in Path(root).rglob("*.py"):
+        for path in (repo / root).rglob("*.py"):
             if path.resolve() == allowed:
                 continue
+            scanned += 1
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
-                if not isinstance(node, (ast.Set, ast.Tuple, ast.List)):
+                # Form one: the set written out, in any container and any order.
+                if isinstance(node, (ast.Set, ast.Tuple, ast.List)):
+                    values = [
+                        element.value
+                        for element in node.elts
+                        if isinstance(element, ast.Constant) and isinstance(element.value, int)
+                    ]
+                    if len(values) == len(node.elts) and set(values) == set(DRS_OPEN_CODES):
+                        offenders.append(f"{path.relative_to(repo)}:{node.lineno} (a literal set)")
                     continue
-                values = [
-                    element.value
-                    for element in node.elts
-                    if isinstance(element, ast.Constant) and isinstance(element.value, int)
-                ]
-                if len(values) == len(node.elts) and set(values) == set(DRS_OPEN_CODES):
-                    offenders.append(f"{path}:{node.lineno}")
+                # **Form two: the THRESHOLD, which the first version walked straight past.**
+                # `drs >= 10` is not a copy of the set, it is a DIVERGENT copy: it calls 11
+                # and 13 open, and those exist - 401 and 515 frames on Melbourne (#1002) -
+                # while `DRS_OPEN_CODES` calls them closed. `scripts/verify_drs_zones.py`
+                # carried exactly that, and the census reported the tree clean.
+                if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+                    continue
+                if not isinstance(node.ops[0], (ast.GtE, ast.Gt)):
+                    continue
+                right = node.comparators[0]
+                if not (isinstance(right, ast.Constant) and isinstance(right.value, int)):
+                    continue
+                if right.value not in (lowest_open, lowest_open - 1):
+                    continue
+                subject = ast.unparse(node.left).lower()
+                if "drs" in subject:
+                    offenders.append(f"{path.relative_to(repo)}:{node.lineno} (a threshold)")
 
+    assert scanned > 20, (
+        f"the census only visited {scanned} files, so it is asserting about nearly nothing. "
+        "The roots are resolved from this file's location; check they still exist."
+    )
     assert offenders == [], (
         "a second copy of the DRS open set entered the source: "
         f"{offenders}. Import `DRS_OPEN_CODES` from src.arcade.config instead."

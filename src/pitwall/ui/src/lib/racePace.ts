@@ -43,7 +43,8 @@ import { sessionBests } from "./sessionBests";
  * `deleted` is a time the stewards took away; `none` is a lap the driver has
  * no time for, revealed or not.
  */
-export type PaceTone = "best" | "t1" | "t2" | "t3" | "pit" | "out" | "deleted" | "none";
+export type PaceTone =
+  "best" | "t1" | "t2" | "t3" | "pit" | "out" | "deleted" | "none";
 
 export interface PaceCell {
   text: string;
@@ -124,8 +125,13 @@ const EMPTY: PaceCell = { text: "", tone: "none" };
 export function stableColumns(bulk: Bulk, order: string[]): string[] {
   const keyed = order.map((code, index) => {
     const raw = bulk.drivers[code]?.number;
-    const number = raw === null || raw === undefined ? null : Number.parseInt(raw, 10);
-    return { code, index, number: Number.isNaN(number as number) ? null : number };
+    const number =
+      raw === null || raw === undefined ? null : Number.parseInt(raw, 10);
+    return {
+      code,
+      index,
+      number: Number.isNaN(number as number) ? null : number,
+    };
   });
   keyed.sort((left, right) => {
     const byNumber = (left.number ?? Infinity) - (right.number ?? Infinity);
@@ -212,7 +218,10 @@ function isRacingLap(row: LapRow): boolean {
  * Built once for the whole grid rather than per cell: a per-cell scan is
  * O(drivers^2) per lap and this runs on every reveal.
  */
-function rankedByLap(byDriver: Map<string, Map<number, LapRow>>, laps: number[]) {
+function rankedByLap(
+  byDriver: Map<string, Map<number, LapRow>>,
+  laps: number[],
+) {
   const ranked = new Map<number, number[]>();
   for (const lap of laps) {
     const times: number[] = [];
@@ -264,9 +273,20 @@ function tone(times: number[], value: number): PaceTone {
  * The bottom edge is RAGGED on purpose: the reveal is per driver and strict,
  * and at most instants the field spans two or three different laps.
  */
-export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false): PaceGrid {
+export function racePaceGrid(
+  bulk: Bulk | null,
+  order: string[],
+  coarse = false,
+): PaceGrid {
   if (!bulk?.available)
-    return { laps: [], revealedTo: 0, neutralised: [], widestFine: "", columns: [...order], rows: [] };
+    return {
+      laps: [],
+      revealedTo: 0,
+      neutralised: [],
+      widestFine: "",
+      columns: [...order],
+      rows: [],
+    };
   const columns = stableColumns(bulk, order);
 
   const byDriver = new Map<string, Map<number, LapRow>>();
@@ -287,18 +307,35 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
   // stable height - which left a 382 px void above it for the first two thirds of
   // a race. Víctor called that out on the shipped window.
   //
-  // Drawing the full lap axis is the motorsport convention rather than a UI trick:
-  // a tyre-strategy chart and a lap chart both plot laps 1..N for the whole race
-  // and let the stints fill into it. It is deliberately NOT the web's "skeleton"
-  // idiom, which is a LOADING signal - these rows are not waiting for a fetch, they
-  // are laps that have not been driven, and the shimmer would say the wrong thing.
+  // **⚠️ This said "drawing the full lap axis is the motorsport convention". Research
+  // could not find that convention, so the sentence is replaced by what was found.**
+  //
+  // The one artefact with exactly this layout - laps down, drivers across, the whole race
+  // present - is the FIA's Race History Chart, and it exists only as a POST-RACE PDF. The
+  // one live tool found with a lap-indexed axis, MultiViewer's Race Trace, explicitly
+  // GROWS its axis as the race runs. So no live product was found doing this, and the
+  // claim of a domain convention was mine rather than a source's.
+  //
+  // What does support it is narrower and real: this total is KNOWN at lap 1, and reserving
+  // space for known-total incoming content is the standard remedy for "content walks as it
+  // arrives" in the layout-shift literature. The streaming-telemetry-table write-ups that
+  // grow-and-virtualise instead are all about UNBOUNDED streams, which this is not.
+  //
+  // It is still deliberately NOT the web's "skeleton" idiom in the loading sense - these
+  // rows are not waiting for a fetch, they are laps that have not been driven, so no
+  // shimmer - and the cost is stated where it lands, in `RacePaceGrid`'s pin comment: the
+  // newest row no longer sits at a fixed height. Víctor chose this shape knowing the void
+  // was the alternative, and asked for the wheel scroll that makes the rest reachable.
   //
   // Nothing about the reveal changes: a cell beyond `revealedTo` finds no row and
   // falls through to EMPTY exactly as an unrevealed cell always did, so this leaks
   // nothing. `total_laps` is already on the wire and already printed in the header
   // as "of 57".
   const total = bulk.race.total_laps || lastLap;
-  const laps = Array.from({ length: Math.max(total, lastLap) }, (_, index) => index + 1);
+  const laps = Array.from(
+    { length: Math.max(total, lastLap) },
+    (_, index) => index + 1,
+  );
   // **The ranking is unchanged on these laps, and the marker is why that is
   // honest.** Excluding them would leave holes in a history panel; re-ranking
   // them against something else would invent a scale. What was wrong was

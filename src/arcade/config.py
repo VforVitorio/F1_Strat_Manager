@@ -370,14 +370,24 @@ GP_TO_LOCATION: Final[dict[str, str]] = {
 # exists to refuse exactly that, because publishing 8 as open draws an open wing on a
 # closed one.
 #
-# **It lives here rather than in `track.py` because FOUR call sites decode it.** The
-# track overlay draws the zones from it, the driver telemetry box labels and colours
-# the state from it, and `_frame_to_telemetry` publishes a decoded `drs_open` on the
-# wire so PITWALL's DRS lane never has to know the codes - `OwnCarTraces` refused to
-# fork this set into TypeScript, correctly, and the way to honour that refusal is to
-# decode it once on this side. The commit that created this constant claimed "two
-# subsystems" and moved only two of the four; the overlay's own pair stayed literal
-# for a commit, which is this repo's dominant defect wearing its usual clothes.
+# **It lives here rather than in `track.py` because five places in this repo decode it,
+# and a sixth cannot.** In Python: the track overlay's zones (`track.py`), the driver
+# telemetry box's label and colour (`overlays.py`, two sites), the wire's decoded
+# `drs_open` (`app.py::_frame_to_telemetry`), and the FIA-doc audit script
+# (`scripts/verify_drs_zones.py`). `OwnCarTraces` refused to fork the set into
+# TypeScript, correctly, and the way to honour that refusal is to decode it once here.
+#
+# **The sixth is out of reach and worth naming rather than hiding.** The telemetry
+# webapp's `channels.ts::binarizeDrs` tests `value >= 10`; it is TypeScript behind a git
+# submodule boundary, so it cannot import this and has to be kept in step by hand. Note
+# `>= 10` is not equivalent to this set - it admits 11 and 13, which FastF1 never emits
+# and the arcade's resampler manufactures (#1002).
+#
+# Two claims about this constant have already been wrong, both caught by adversarial
+# gates: the commit that created it said "two subsystems" while leaving `overlays.py`'s
+# pair literal, and the sentence replacing that said "FOUR call sites" while a fifth sat
+# in `scripts/` with a `>= 10` threshold the AST census could not see. The census now
+# looks for the threshold form too, and asserts it visited files at all.
 DRS_OPEN_CODES: Final[frozenset[int]] = frozenset({10, 12, 14})
 
 # The code that means "you may open it in the next zone", which is not "it is open".

@@ -1797,6 +1797,7 @@ check(
   Number.isFinite(nowShown) && nowShown < RADIO_EVENTS.length,
   `squeezed, the header drops to what fits (${folded.header})`,
 );
+// Not scrolled, so everything off screen IS below, and the fold names it.
 check(
   folded.fold !== null &&
     folded.fold.includes(String(RADIO_EVENTS.length - nowShown)) &&
@@ -1834,9 +1835,15 @@ check(
   shownAtEnd <= atEnd.trulyVisible + 1 && shownAtEnd < RADIO_EVENTS.length,
   `scrolled to the end the header still counts what is IN VIEW (says ${shownAtEnd}, ${atEnd.trulyVisible} in view of ${RADIO_EVENTS.length})`,
 );
+// **And the fold correctly goes AWAY, which is not what this check first asserted.** It
+// said "the fold line survives the scroll rather than vanishing", written to catch the
+// one-edge measure - but that bug's real symptom is the HEADER reading `total / total`,
+// which the check above holds. At the END of a newest-first list nothing OLDER is hidden,
+// so a line saying "+ N older" would be the lie. Right expectation, wrong reason, and the
+// fix to the fold's direction is what exposed it.
 check(
-  atEnd.fold !== null,
-  `and the fold line survives the scroll rather than vanishing (${atEnd.fold})`,
+  atEnd.fold === null,
+  `and no line claims older events below when the list is at its end (${atEnd.fold})`,
 );
 
 // EFFECT, not mechanism: the card must not spill past the column it lives in.
@@ -1969,24 +1976,64 @@ check(
   `and the safety car is chipped SC (${collapsed.find((row) => row.lap === "L47")?.chip})`,
 );
 
-// **The header's two numbers have to be ONE population, and a collapse is where they
-// come apart.** The numerator counted collapsed ROWS while the denominator counted
-// EVENTS: identical until something collapses, and this fixture is the case where it
-// does (6 events, 3 rows). `visible + hidden == total` is the invariant, and it fails
-// by exactly the number of merged duplicates when the two halves disagree.
-await dupPage.addStyleTag({ content: ".radio-list { max-height: 30px; }" });
-await dupPage
-  .waitForSelector(".radio-fold", { timeout: 3000 })
-  .catch(() => null);
-const dupFold = await dupPage.evaluate(() => ({
-  header: document.querySelector(".radio-count")?.textContent?.trim() ?? "",
-  fold: document.querySelector(".radio-fold")?.textContent?.trim() ?? "",
-}));
-const [dupShown] = dupFold.header.split(" / ").map(Number);
-const dupHidden = Number((dupFold.fold.match(/\d+/) ?? [NaN])[0]);
+// **The header's numerator, counted independently from the DOM.**
+//
+// The numerator used to count collapsed ROWS while the denominator counted EVENTS -
+// identical until something collapses, and this fixture is where it does (6 events, 3
+// rows). The first guard for it asserted `visible + hidden == total`, which a gate
+// refuted as a TAUTOLOGY: the component derives `hidden = events - visible`, so that sum
+// is the total by construction, and reverting the numerator to rows left 217/217 green.
+//
+// So the expectation is rebuilt here from the rendered rows and their own `x4` labels,
+// which the component does not get to define. Squeezed, the header must name the EVENTS
+// those rows stand for, and the two numbers must DIFFER or the fixture is not exercising
+// a collapse at all.
+// Squeezed, then SCROLLED TO THE END, because the collapsed run is the OLDEST row and a
+// squeeze alone leaves it below the fold - which is how the first version of this check
+// came to compare 1 event against 1 row and prove nothing about collapsing.
+await dupPage.addStyleTag({ content: ".radio-list { max-height: 34px; }" });
+await dupPage.waitForTimeout(300);
+await dupPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  list.scrollTop = list.scrollHeight;
+  list.dispatchEvent(new Event("scroll"));
+});
+await dupPage.waitForTimeout(400);
+const dupCounts = await dupPage.evaluate(() => {
+  const list = document.querySelector(".radio-list");
+  const frame = list.getBoundingClientRect();
+  let eventsInView = 0;
+  let rowsInView = 0;
+  for (const item of list.querySelectorAll("li")) {
+    const rect = item.getBoundingClientRect();
+    if (rect.bottom > frame.bottom + 1 || rect.top < frame.top - 1) continue;
+    rowsInView += 1;
+    const label =
+      item.querySelector(".radio-repeats")?.textContent?.trim() ?? "";
+    eventsInView += label ? Number(label.replace(/\D/g, "")) : 1;
+  }
+  return {
+    eventsInView,
+    rowsInView,
+    header: document.querySelector(".radio-count")?.textContent?.trim() ?? "",
+    fold: document.querySelector(".radio-fold")?.textContent?.trim() ?? "",
+  };
+});
+const [dupShown] = dupCounts.header.split(" / ").map(Number);
 check(
-  dupShown + dupHidden === DUPLICATE_EVENTS.length,
-  `the visible and folded counts reconcile in EVENTS on a collapsed feed (${dupShown} + ${dupHidden} vs ${DUPLICATE_EVENTS.length}: "${dupFold.header}", "${dupFold.fold}")`,
+  dupShown === dupCounts.eventsInView,
+  `the header names the EVENTS on screen, not the rows (says ${dupShown}, DOM has ${dupCounts.eventsInView} events over ${dupCounts.rowsInView} rows: "${dupCounts.header}")`,
+);
+check(
+  dupCounts.eventsInView !== dupCounts.rowsInView,
+  `and the fixture really is exercising a collapse (${dupCounts.eventsInView} events, ${dupCounts.rowsInView} rows)`,
+);
+// At the END of a newest-first list there is nothing OLDER hidden, so the line that says
+// "older" must be gone. It used to stay and count the NEWER rows above instead: measured
+// on the real corpus it read `+ 10 older` with nine of the ten being newer.
+check(
+  dupCounts.fold === "",
+  `at the end of the list nothing is older, so no fold line claims otherwise ("${dupCounts.fold}")`,
 );
 await dupCtx.close();
 
@@ -2965,6 +3012,138 @@ for (const [width, height] of [
       fit.theoreticalBelow <= 1,
     `bests fits at ${width}x${height} whichever form it picks (${fit.form}, ${fit.hidden} px hidden, card ${fit.over} px over, THEORETICAL ${fit.theoreticalBelow} px over)`,
   );
+  await ctx.close();
+}
+
+// --- The wheel scroll Víctor asked for, and whether it survives a reveal ------
+//
+// > *"yo veo esqueleto que si sobrepasa, tenga un mini scroll que se pueda hacer para
+// > bajar con la rueda del raton"*
+//
+// Three separate things have to be true and only one of them was: the wheel has to move
+// the panel (it always did - hiding a scrollbar disables nothing), the panel has to SAY
+// it scrolls (it did not, and research on hidden scrollbars is unanimous that nobody
+// discovers it), and **a reveal must not undo the reader's scroll** (it did: the pin
+// re-fires every reveal, about every 4.5 s, so a scroll to look at lap 5 was thrown away
+// before it could be read).
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 1265, height: 593 },
+  });
+  const page = await ctx.newPage();
+  page.on("pageerror", (error) =>
+    failures.push(`pageerror(wheel): ${error.message}`),
+  );
+  // **Capped at lap 30, like the skeleton block one section down.** `paceBulk()` reveals
+  // all 57 laps, so on it there are no future rows at all, the pin target IS the bottom of
+  // the scroller, and the reader can never be "away from" it - the first version of this
+  // block measured exactly that and proved nothing. A cap is what makes a mid-race panel.
+  const CAP = 30;
+  await page.addInitScript(
+    ([payload, bulk, live, cap]) => {
+      window.__advance = false;
+      const at = (limit) => {
+        const copy = JSON.parse(JSON.stringify(bulk));
+        copy.rev = bulk.rev + (limit > cap ? 1 : 0);
+        for (const driver of Object.values(copy.drivers)) {
+          driver.laps = driver.laps.filter((lap) => lap.lap <= limit);
+        }
+        return copy;
+      };
+      const first = at(cap);
+      const next = at(cap + 1);
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) => {
+            const served = window.__advance ? next : first;
+            return r === served.rev ? null : served;
+          },
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
+    },
+    [
+      tick(1, { drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+      towerLive(),
+      CAP,
+    ],
+  );
+  await page.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.getByRole("tab", { name: "RACE PACE" }).click();
+  await page.waitForSelector(".pace-scroll", { timeout: 5000 });
+  await page.waitForTimeout(700);
+
+  const box = page.locator(".pace-scroll");
+  // Keyboard reach: with the scrollbar hidden this is the only way a keyboard user gets
+  // to the rest of the race.
+  check(
+    (await box.getAttribute("tabindex")) === "0" &&
+      (await box.getAttribute("role")) === "region",
+    "the pace scroller is reachable by keyboard and named for a screen reader",
+  );
+
+  const room = await page.evaluate(() => {
+    const el = document.querySelector(".pace-scroll");
+    return el.scrollHeight - el.clientHeight;
+  });
+  check(
+    room > 0,
+    `the whole-race table really does overflow this client (${room} px of scroll)`,
+  );
+
+  // **The fade, from MEASURED overflow.** At rest there is more below and nothing above.
+  const atRest = await page.getAttribute(".pace-scroll", "class");
+  check(
+    atRest.includes("has-below") && !atRest.includes("has-above"),
+    `at rest the panel says there is more below and nothing above ("${atRest}")`,
+  );
+
+  // **The wheel.** Not `scrollTop = n`: the actual input device, over the actual element.
+  await box.hover();
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(400);
+  const afterWheel = await page.evaluate(
+    () => document.querySelector(".pace-scroll").scrollTop,
+  );
+  check(
+    afterWheel > 0,
+    `the mouse wheel scrolls it even with the scrollbar hidden (scrollTop ${afterWheel})`,
+  );
+  const scrolled = await page.getAttribute(".pace-scroll", "class");
+  check(
+    scrolled.includes("has-above"),
+    `and once scrolled the panel says there is something above ("${scrolled}")`,
+  );
+
+  // **A reveal must NOT take the scroll back.**
+  await page.evaluate(() => {
+    window.__advance = true;
+  });
+  await page.waitForFunction(
+    (before) =>
+      document.querySelectorAll(".pace-table tbody tr:not(.is-future)").length >
+      before,
+    await page.evaluate(
+      () =>
+        document.querySelectorAll(".pace-table tbody tr:not(.is-future)")
+          .length,
+    ),
+    { timeout: 8000 },
+  );
+  await page.waitForTimeout(500);
+  const afterReveal = await page.evaluate(
+    () => document.querySelector(".pace-scroll").scrollTop,
+  );
+  check(
+    Math.abs(afterReveal - afterWheel) <= 2,
+    `a new lap does not throw the reader's scroll away (${afterWheel} -> ${afterReveal})`,
+  );
+
   await ctx.close();
 }
 
