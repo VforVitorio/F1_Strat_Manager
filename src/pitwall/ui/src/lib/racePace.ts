@@ -51,8 +51,16 @@ export interface PaceCell {
 }
 
 export interface PaceGrid {
-  /** Lap numbers, ascending. Empty until something is revealed. */
+  /** Lap numbers, ascending: the WHOLE race, not only the part that has happened. */
   laps: number[];
+  /**
+   * The highest lap ANY driver has revealed, so the renderer can tell the race
+   * that has been driven from the race that has not - and so the scroll pin has a
+   * row to pin to that is not the bottom of the table.
+   *
+   * 0 before the first reveal.
+   */
+  revealedTo: number;
   /**
    * The longest label the FINE form would emit for THIS data, whatever form is
    * currently rendered.
@@ -258,7 +266,7 @@ function tone(times: number[], value: number): PaceTone {
  */
 export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false): PaceGrid {
   if (!bulk?.available)
-    return { laps: [], neutralised: [], widestFine: "", columns: [...order], rows: [] };
+    return { laps: [], revealedTo: 0, neutralised: [], widestFine: "", columns: [...order], rows: [] };
   const columns = stableColumns(bulk, order);
 
   const byDriver = new Map<string, Map<number, LapRow>>();
@@ -272,7 +280,25 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
     byDriver.set(code, rows);
   }
 
-  const laps = Array.from({ length: lastLap }, (_, index) => index + 1);
+  // **The axis is the WHOLE RACE, not the part that has happened.**
+  //
+  // It used to stop at the last revealed lap, so the table grew downward and the
+  // card had to be anchored to the column's bottom to keep the newest row at a
+  // stable height - which left a 382 px void above it for the first two thirds of
+  // a race. Víctor called that out on the shipped window.
+  //
+  // Drawing the full lap axis is the motorsport convention rather than a UI trick:
+  // a tyre-strategy chart and a lap chart both plot laps 1..N for the whole race
+  // and let the stints fill into it. It is deliberately NOT the web's "skeleton"
+  // idiom, which is a LOADING signal - these rows are not waiting for a fetch, they
+  // are laps that have not been driven, and the shimmer would say the wrong thing.
+  //
+  // Nothing about the reveal changes: a cell beyond `revealedTo` finds no row and
+  // falls through to EMPTY exactly as an unrevealed cell always did, so this leaks
+  // nothing. `total_laps` is already on the wire and already printed in the header
+  // as "of 57".
+  const total = bulk.race.total_laps || lastLap;
+  const laps = Array.from({ length: Math.max(total, lastLap) }, (_, index) => index + 1);
   // **The ranking is unchanged on these laps, and the marker is why that is
   // honest.** Excluding them would leave holes in a history panel; re-ranking
   // them against something else would invent a scale. What was wrong was
@@ -341,6 +367,7 @@ export function racePaceGrid(bulk: Bulk | null, order: string[], coarse = false)
     anyWord && "IN PIT".length > longestTime.length ? "IN PIT" : longestTime;
   return {
     laps,
+    revealedTo: lastLap,
     neutralised: laps.map((lap) => neutral.get(lap) ?? null),
     widestFine,
     columns,

@@ -165,9 +165,20 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
   // for one commit, and it is not what ships. See the `.pace` rule.)
   useEffect(() => {
     const box = scroller.current;
-    if (box) box.scrollTop = box.scrollHeight;
+    if (!box) return;
+    // **Pinned to the newest REVEALED lap, not to the bottom of the table.** The
+    // table is the whole race now, so its bottom is lap 57 - the future - and
+    // scrolling there would show a wall of empty rows. Putting the newest revealed
+    // row against the scroller's bottom edge keeps the property the bottom-anchored
+    // card was bought for (the row every decision is about sits at a fixed height)
+    // without the void that came with it.
+    const rows = box.querySelectorAll<HTMLElement>("tbody tr");
+    const newest = grid.revealedTo > 0 ? rows[grid.revealedTo - 1] : undefined;
+    box.scrollTop = newest
+      ? newest.offsetTop + newest.offsetHeight - box.clientHeight
+      : box.scrollHeight;
     measure();
-  }, [grid.laps.length, measure]);
+  }, [grid.revealedTo, grid.laps.length, measure]);
 
   const total = bulk?.race.total_laps ?? grid.laps.length;
   const [first, last] = visible ?? [grid.laps[0], grid.laps[grid.laps.length - 1]];
@@ -206,7 +217,13 @@ export function RacePaceGrid({ bulk, order }: { bulk: Bulk | null; order: string
           </thead>
           <tbody>
             {grid.rows.map((row, index) => (
-              <tr key={grid.laps[index]}>
+              <tr
+                key={grid.laps[index]}
+                // A lap nobody has driven yet. It carries its number and nothing
+                // else, so the panel shows how much race is left without pretending
+                // to know anything about it.
+                className={grid.laps[index] > grid.revealedTo ? "is-future" : undefined}
+              >
                 {/* The rail on the lap number is the whole marker: on a
                  * neutralised lap the colour thirds rank the safety car's queue,
                  * not pace, and 213 of the 776 cells this grid ranks on the real
