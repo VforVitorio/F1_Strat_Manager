@@ -19,6 +19,7 @@ import numpy as np
 import arcade
 from src.arcade.config import (
     DRS_COLOR,
+    DRS_OPEN_CODES,
     DRS_WIDTH,
     FINISH_CHEQUER_SEGMENTS,
     FINISH_CHEQUER_WIDTH,
@@ -32,12 +33,9 @@ from src.arcade.config import (
 
 logger = logging.getLogger(__name__)
 
-# f1_replay uses {10, 12, 14} on a qualifying fastest lap, where the
-# driver opens the wing throughout each activation zone. Value 10
-# ("eligible") covers the short stretch between the detection line and the
-# moment the wing actually opens; including it prevents a visible gap at
-# the start of each zone.
-_DRS_ACTIVE: Final[set[int]] = {10, 12, 14}
+# The open-code set lives in `config.py` now: the wire publishes a decoded
+# `drs_open` for PITWALL's DRS lane, so two subsystems read this fact and a second
+# copy of it is the twin this repo pays for most often.
 _DRS_OUTWARD_OFFSET: Final[float] = 0.9  # fraction of track_width beyond the outer edge
 
 
@@ -229,7 +227,7 @@ class Track:
         produced."""
         if drs_flags.size < 2 or edge_len < 2:
             return []
-        active_raw = np.isin(np.round(drs_flags).astype(int), tuple(_DRS_ACTIVE))
+        active_raw = np.isin(np.round(drs_flags).astype(int), tuple(DRS_OPEN_CODES))
         if not active_raw.any():
             return []
         raw_len = len(drs_flags)

@@ -352,3 +352,17 @@ GP_TO_LOCATION: Final[dict[str, str]] = {
     "Monza": "Monza",
     "Imola": "Imola",
 }
+
+# DRS codes that mean the wing is OPEN, and the one home for that fact.
+#
+# f1_replay uses {10, 12, 14} on a qualifying fastest lap, where the driver opens
+# the wing throughout each activation zone. Value 10 ("eligible") covers the short
+# stretch between the detection line and the moment the wing actually opens;
+# including it prevents a visible gap at the start of each zone.
+#
+# **It lives here rather than in `track.py` because two subsystems decode it now.**
+# The track overlay draws the zones from it, and `_frame_to_telemetry` publishes a
+# decoded `drs_open` on the wire so PITWALL's DRS lane never has to know the codes -
+# `OwnCarTraces` refused to fork this set into TypeScript, correctly, and the way to
+# honour that refusal is to decode it once on this side.
+DRS_OPEN_CODES: Final[frozenset[int]] = frozenset({10, 12, 14})

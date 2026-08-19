@@ -187,7 +187,44 @@ def test_the_span_is_packed_oldest_first_and_keeps_the_sample_shape():
 
     assert len(packed) == 5
     assert [s["t"] for s in packed] == sorted(s["t"] for s in packed)
-    assert set(packed[0]) == {"lap", "t", "dist", "speed", "throttle", "brake", "gear", "drs"}
+    assert set(packed[0]) == {
+        "lap",
+        "t",
+        "dist",
+        "speed",
+        "throttle",
+        "brake",
+        "gear",
+        # The raw FastF1 code AND the decoded answer. PITWALL's DRS lane reads the
+        # boolean, because the open set lives in `config.DRS_OPEN_CODES` and the
+        # window refuses to fork it into TypeScript; the raw code stays for the
+        # track overlay and for anything that needs to tell 8 ("eligible") from 0.
+        "drs",
+        "drs_open",
+    }
+
+
+def test_drs_open_decodes_the_code_rather_than_publishing_it():
+    """The one thing the boolean is for: the consumer never sees a code.
+
+    8 is the case that makes this worth asserting - "eligible, not open", and the
+    third-commonest code on the real session. A naive `drs > 0` would publish it as
+    open and paint a DRS lane that is wrong for a fifth of the lap.
+    """
+    from src.arcade.app import _frame_to_telemetry
+    from src.arcade.config import DRS_OPEN_CODES
+
+    def packed(code: int) -> dict:
+        frame = _frames(1)[0]
+        frame.drs = code
+        return _frame_to_telemetry(frame, CIRCUIT_LENGTH_M)
+
+    for code in sorted(DRS_OPEN_CODES):
+        assert packed(code)["drs_open"] is True, code
+    for code in (0, 1, 8):
+        assert packed(code)["drs_open"] is False, code
+    # And the raw code survives alongside it, so nothing that reads it breaks.
+    assert packed(8)["drs"] == 8
 
 
 def test_the_span_is_clamped_to_the_frames_a_driver_actually_has():
