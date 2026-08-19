@@ -1897,6 +1897,116 @@ check(
   await narrowCtx.close();
 }
 
+// --- The axis is the WHOLE RACE, not the part that has happened --------------
+//
+// The grid used to stop at the last revealed lap, so the table grew downward and the
+// card had to be anchored to the column's bottom to hold the newest row at a stable
+// height - which left a 382 px void above it for two thirds of a race, and Victor
+// called it out on the shipped window. Drawing the full lap axis is the motorsport
+// convention (a tyre-strategy chart plots laps 1..N and lets the stints fill in) and
+// it is deliberately NOT the web's loading-skeleton idiom, which signals a fetch.
+//
+// The reveal is capped at the STUB, because `bridge.ts` uses `window.pywebview`
+// whenever it exists and an HTTP route intercepts nothing - the lesson the BESTS
+// guard above had to learn the hard way.
+{
+  const partialCtx = await browser.newContext({ viewport: { width: 1485, height: 833 } });
+  const partial = await partialCtx.newPage();
+  partial.on("pageerror", (error) => failures.push(`pageerror(skeleton): ${error.message}`));
+  const REVEALED_TO = 30;
+  await partial.addInitScript(
+    ([payload, bulk, live, cap]) => {
+      for (const driver of Object.values(bulk.drivers)) {
+        driver.laps = driver.laps.filter((lap) => lap.lap <= cap);
+      }
+      window.pywebview = {
+        api: {
+          get_tick: async (s) => (s === payload.seq ? null : payload),
+          get_bulk: async (r) => (r === bulk.rev ? null : bulk),
+          get_live_lap: async (r) => (r === live.rev ? null : live),
+          get_connection: async () => "Connected",
+        },
+      };
+    },
+    [tick(1, { drivers: paceField(), order: TOWER_ORDER }), paceBulk(), towerLive(), REVEALED_TO],
+  );
+  await partial.goto(`http://127.0.0.1:${server.address().port}/data.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await partial.getByRole("tab", { name: "RACE PACE", exact: true }).click();
+  await partial.waitForSelector(".pace-table", { timeout: 5000 });
+  await partial.waitForTimeout(600);
+
+  const skeleton = await partial.evaluate(() => {
+    const lin = (v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+    const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    const ratio = (a, b) => {
+      const [hi, lo] = [L(a), L(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const parse = (value) => value.match(/[0-9]+/g).slice(0, 3).map(Number);
+    const rows = [...document.querySelectorAll(".pace-table tbody tr")];
+    const future = rows.filter((row) => row.classList.contains("is-future"));
+    const driven = rows.filter((row) => !row.classList.contains("is-future"));
+    const newest = driven[driven.length - 1];
+    const box = document.querySelector(".pace-scroll").getBoundingClientRect();
+    const card = parse(getComputedStyle(document.querySelector(".pace")).backgroundColor);
+    // Tolerant of there being NO future rows, because that is exactly the defect
+    // this block exists to catch: reading `future[0]` blind turned a red check into
+    // a thrown exception, and a stack trace names nothing.
+    let futureRatio = null;
+    if (future.length > 0) {
+      const style = getComputedStyle(future[0].querySelector("th"));
+      const alpha = Number(style.opacity);
+      const composited = parse(style.color).map((v, i) =>
+        Math.round(card[i] + alpha * (v - card[i])),
+      );
+      futureRatio = +ratio(composited, card).toFixed(2);
+    }
+    const newestBox = newest.getBoundingClientRect();
+    return {
+      rows: rows.length,
+      driven: driven.length,
+      future: future.length,
+      futureWithText: future.filter((row) =>
+        [...row.querySelectorAll("td")].some((cell) => cell.textContent.trim().length > 0),
+      ).length,
+      lastLapNumber: Number(rows[rows.length - 1].querySelector("th").textContent),
+      newestLap: Number(newest.querySelector("th").textContent),
+      newestVisible: newestBox.top >= box.top - 1 && newestBox.bottom <= box.bottom + 1,
+      futureRatio,
+    };
+  });
+
+  check(
+    skeleton.rows === PACE_LAPS && skeleton.lastLapNumber === PACE_LAPS,
+    `the grid draws the whole race, not the part that has run (${skeleton.rows} rows, last lap ${skeleton.lastLapNumber} of ${PACE_LAPS})`,
+  );
+  check(
+    skeleton.driven === REVEALED_TO && skeleton.future === PACE_LAPS - REVEALED_TO,
+    `and it knows which half is which (${skeleton.driven} driven, ${skeleton.future} future)`,
+  );
+  // The whole point of drawing them: they say how much race is left and NOTHING else.
+  check(
+    skeleton.futureWithText === 0 && skeleton.newestLap === REVEALED_TO,
+    `a lap nobody has driven carries its number and no data (${skeleton.futureWithText} with text, newest driven ${skeleton.newestLap})`,
+  );
+  // Replaces what the bottom-anchored card was bought for: the row every decision is
+  // about stays on screen. Asserted as visibility, not as a scroll offset - the offset
+  // is 0 whenever the newest lap is still inside the first viewport.
+  check(
+    skeleton.newestVisible,
+    `the newest driven lap is on screen with the future drawn below it (lap ${skeleton.newestLap})`,
+  );
+  // A future lap number MEANS something - how much race is left - so it clears the 3:1
+  // floor for a meaningful graphic. The first version used `--qt-border`: 1.29:1.
+  check(
+    skeleton.futureRatio !== null && skeleton.futureRatio >= 3,
+    `and a future lap number is legible against its card (${skeleton.futureRatio}:1)`,
+  );
+  await partialCtx.close();
+}
+
 // --- The client heights BETWEEN the two anybody measured ---------------------
 //
 // The two settled sizes cannot see this and neither could the guard above: at

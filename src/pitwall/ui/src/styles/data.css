@@ -1035,7 +1035,6 @@ td.col-drv {
  * it the content-sized card would grow past the grid row and spill, and the
  * scroller - which needs a bounded height to scroll at all - would never bound. */
 .pace {
-  align-self: end;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1079,9 +1078,28 @@ td.col-drv {
   overflow-y: auto;
 }
 
-/* "Now", findable in one saccade. Every other lap number is `--qt-fg-3`; the
- * newest one is the row every decision is about. */
-.pace-table tbody tr:last-child th.pace-lapcol {
+/* A lap that has not been driven. The number stays - that is the point, it says how
+ * much race is left - and it steps back so the driven race is what the eye lands on.
+ * No cell treatment is needed: an unrevealed cell already renders empty.
+ *
+ * **`--qt-fg-3` at 0.6, not `--qt-border`, and the first attempt was measured wrong.**
+ * `--qt-border` came out at **1.29:1** on the card and 1.18 on the banded columns -
+ * invisible, on an element that CARRIES MEANING (how much race is left), so the 3:1
+ * floor for a meaningful graphic applies rather than nothing at all. The palette has
+ * no grey between `BORDER_COLOR` and `TEXT_TERTIARY`, so rather than invent a hex the
+ * cell steps `--qt-fg-3` back with opacity: 0.6 composites to 3.31:1 on the card and
+ * 3.16 on the banded columns, both clear, and it adds no colour for
+ * `test_pitwall_tokens.py` to pin. 0.55 was the other candidate and lands at 2.99 -
+ * under the floor on the card and 2.86 on the banding. */
+.pace-table tbody tr.is-future th.pace-lapcol {
+  color: var(--qt-fg-3);
+  opacity: 0.6;
+}
+
+/* "Now", findable in one saccade: the newest lap that HAS been driven, which is the
+ * last row before the future ones rather than the last row of the table. */
+.pace-table tbody tr:not(.is-future):last-of-type th.pace-lapcol,
+.pace-table tbody tr:not(.is-future):has(+ tr.is-future) th.pace-lapcol {
   color: var(--qt-fg-1);
   font-weight: 700;
 }
