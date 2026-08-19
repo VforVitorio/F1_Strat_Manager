@@ -995,6 +995,59 @@ td.col-drv {
   overflow: hidden;
 }
 
+/* The RCM category, in three or four characters, from the two wire fields that
+ * nothing read. Existing palette values only - the same `#f59e0b` the tier tag and
+ * the neutralised rail already carry for "this changes how the track is being
+ * driven", `#10b981` for a clear, tertiary for the informational DRS note - so a
+ * reader ranks a ten-row fold by weight before reading a word of it. */
+.radio-cat {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-family: var(--qt-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  vertical-align: 1px;
+  color: var(--qt-bg);
+}
+
+.radio-cat.is-sc,
+.radio-cat.is-flag {
+  background: #f59e0b;
+}
+
+.radio-cat.is-clear {
+  background: #10b981;
+}
+
+.radio-cat.is-drs {
+  background: var(--qt-fg-3);
+}
+
+/* `x4` on a collapsed run. Dim, because the count annotates the message rather
+ * than being part of it. */
+.radio-repeats {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-weight: 700;
+}
+
+/* The fold, in words. `.radio-list` already scrolls - the comment above it says
+ * that is what "gives the reader the other 36 events back" - but this window hides
+ * scrollbars globally, so the scroll itself is invisible and nothing on screen said
+ * the other 36 were down there. */
+.radio-fold {
+  margin: 0;
+  padding: 3px 2px 0;
+  border-top: 1px solid var(--qt-border);
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
 /* --- The right column's tab strip, and band 3 --------------------------- */
 
 /* The two worlds take turns in this column rather than sharing it. Measured:

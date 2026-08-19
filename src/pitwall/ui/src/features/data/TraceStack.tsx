@@ -64,6 +64,25 @@ interface Lane {
   weight: number;
   /** A staircase, not a curve: the value holds until the next sample. */
   step?: boolean;
+  /**
+   * Which y values print a label. Omitted means "whatever the scale picks".
+   *
+   * **A locked range picks its labels from the range, never from the room.** THROTTLE
+   * and BRAKE printed `-5 0 20 40 60 80 100 105`, so their closest pair - the `-5`
+   * padding value and `0` - landed **2.1 px apart in a 46 px lane under a 10 px
+   * font** at the 1080p client, and GEAR's closest pair 4.1 px apart in 37 px. The
+   * digits overlapped into a grey column.
+   *
+   * And it was never a narrow-client defect: the same pair is **3.8 px apart at
+   * 1485x833**, on the screenshot this panel was signed off against. The padding
+   * values are the worst offenders and the least worth a row - `-5` and `105` exist
+   * only to keep the trace off the frame.
+   *
+   * An allow-list rather than a tick `interval`, because `interval` counts from the
+   * scale's own first tick and would print `-5, 45, 95`: right arithmetic, and
+   * numbers nobody means.
+   */
+  labels?: number[];
   /** How the live value reads in the label row. */
   readout: (value: number) => string;
 }
@@ -113,6 +132,7 @@ const LANES: Lane[] = [
     range: [-5, 105],
     colour: SUCCESS,
     weight: 2,
+    labels: [0, 100],
     readout: (value) => `${Math.round(value)}`,
   },
   {
@@ -126,6 +146,8 @@ const LANES: Lane[] = [
     range: [-5, 105],
     colour: DANGER,
     weight: 2,
+    // Its own list too, for the reason the range comment above gives.
+    labels: [0, 100],
     readout: (value) => `${Math.round(value)}`,
   },
   {
@@ -138,6 +160,10 @@ const LANES: Lane[] = [
     colour: ACCENT,
     weight: 1.7,
     step: true,
+    // Bottom, middle, top. Every-other-gear was still 8 px of pitch in a 37 px lane
+    // at the 1080p client; three marks are 16 px apart and the readout to the right
+    // carries the exact gear anyway.
+    labels: [0, 4, 8],
     readout: (value) => `${Math.round(value)}`,
   },
   {
@@ -179,14 +205,19 @@ interface LaneBox {
  * the rounding so the six always sum to exactly the height given.
  */
 export function laneLayout(stackHeight: number): LaneBox[] {
-  const usable = Math.max(0, stackHeight - AXIS_BAND - LANE_GAP * (LANES.length - 1));
+  const usable = Math.max(
+    0,
+    stackHeight - AXIS_BAND - LANE_GAP * (LANES.length - 1),
+  );
   const total = LANES.reduce((sum, lane) => sum + lane.weight, 0);
   const boxes: LaneBox[] = [];
   let spent = 0;
   let top = 0;
   LANES.forEach((lane, index) => {
     const last = index === LANES.length - 1;
-    const height = last ? usable - spent : Math.round((usable * lane.weight) / total);
+    const height = last
+      ? usable - spent
+      : Math.round((usable * lane.weight) / total);
     boxes.push({ top, height });
     spent += height;
     top += height + LANE_GAP;
@@ -209,16 +240,23 @@ export interface TraceStackProps {
 }
 
 function channel(trace: SortedTrace, lane: Lane): [number, number][] {
-  if (lane.key === "drs") return trace.xs.map((x, i) => [x, trace.rows[i].drsOpen ? 1 : 0]);
-  if (lane.key === "gear") return trace.xs.map((x, i) => [x, trace.rows[i].gear]);
+  if (lane.key === "drs")
+    return trace.xs.map((x, i) => [x, trace.rows[i].drsOpen ? 1 : 0]);
+  if (lane.key === "gear")
+    return trace.xs.map((x, i) => [x, trace.rows[i].gear]);
   if (lane.key === "delta") return [];
   const key = lane.key as "speed" | "throttle" | "brake";
   return trace.xs.map((x, i) => [x, trace.rows[i][key]]);
 }
 
 /** The newest main-span value for a lane, for its label row. Null when starved. */
-function latest(lane: Lane, main: SortedTrace, delta: [number, number][]): number | null {
-  if (lane.key === "delta") return delta.length ? delta[delta.length - 1][1] : null;
+function latest(
+  lane: Lane,
+  main: SortedTrace,
+  delta: [number, number][],
+): number | null {
+  if (lane.key === "delta")
+    return delta.length ? delta[delta.length - 1][1] : null;
   if (!main.xs.length) return null;
   const row = main.rows[main.rows.length - 1];
   if (lane.key === "drs") return row.drsOpen ? 1 : 0;
@@ -227,7 +265,15 @@ function latest(lane: Lane, main: SortedTrace, delta: [number, number][]): numbe
 }
 
 export function TraceStack(props: TraceStackProps) {
-  const { main, rival, delta, xMax, rivalCode, cursorX, placeholder = null } = props;
+  const {
+    main,
+    rival,
+    delta,
+    xMax,
+    rivalCode,
+    cursorX,
+    placeholder = null,
+  } = props;
   const [box, attachHost] = useMeasuredHeight();
 
   const option = useMemo<EChartsOption>(() => {
@@ -274,10 +320,33 @@ export function TraceStack(props: TraceStackProps) {
           gridIndex: index,
           // A binary lane's label row and readout carry its meaning; two tick
           // labels reading 0 and 1 would be noise. Gear labels whole gears only.
+          // **Six ticks and five split lines inside an 11 px lane are a grey smear,
+          // not an axis.** Seen at 3x on the 1080p client: they merge into one band
+          // hanging off the left of the frame and read as damage. The lane is a state
+          // strip - its meaning is the step's height and the word to its right - so it
+          // keeps none of the three. (The split lines went first and the smear stayed:
+          // the marks were the TICKS, outside the axis line, which the fix had missed.)
+          ...(lane.key === "drs"
+            ? { splitLine: { show: false }, axisTick: { show: false } }
+            : {}),
           axisLabel:
             lane.key === "drs"
               ? { show: false }
-              : { ...axis.axisLabel, ...(lane.key === "gear" ? { interval: 1 } : {}) },
+              : {
+                  ...axis.axisLabel,
+                  // Blank rather than absent: a hidden label keeps its tick's
+                  // position, so the ones that DO print stay where the value is.
+                  ...(lane.labels
+                    ? {
+                        formatter: (value: number) =>
+                          lane.labels?.some(
+                            (allowed) => Math.abs(allowed - value) < 0.01,
+                          )
+                            ? String(value)
+                            : "",
+                      }
+                    : {}),
+                },
         };
       }),
       series: LANES.flatMap((lane, index) => {
@@ -301,7 +370,14 @@ export function TraceStack(props: TraceStackProps) {
                   symbol: "none" as const,
                   label: { show: false },
                   data: [
-                    { yAxis: 0, lineStyle: { color: lane.colour, width: 2, type: "solid" as const } },
+                    {
+                      yAxis: 0,
+                      lineStyle: {
+                        color: lane.colour,
+                        width: 2,
+                        type: "solid" as const,
+                      },
+                    },
                   ],
                 },
               }
@@ -318,7 +394,11 @@ export function TraceStack(props: TraceStackProps) {
           // Dashed on every lane, because dashed means BROADCAST TIER on this
           // window and the rival's span is the coarse public channel. The tag
           // itself stays on the header chip: one card, one header, six lanes.
-          data: rivalCode ? (lane.key === "delta" ? delta : channel(rival, lane)) : [],
+          data: rivalCode
+            ? lane.key === "delta"
+              ? delta
+              : channel(rival, lane)
+            : [],
           lineStyle: { color: RIVAL, width: 2, type: "dashed" as const },
           itemStyle: { color: RIVAL },
         };
@@ -333,9 +413,13 @@ export function TraceStack(props: TraceStackProps) {
 
   const chart = useEChart(box > 0 && !placeholder ? option : null);
   const boxes = laneLayout(box);
-  const stackBottom = boxes.length ? boxes[boxes.length - 1].top + boxes[boxes.length - 1].height : 0;
+  const stackBottom = boxes.length
+    ? boxes[boxes.length - 1].top + boxes[boxes.length - 1].height
+    : 0;
   const cursorFraction =
-    cursorX === null || xMax <= 0 ? null : Math.min(Math.max(cursorX, 0), xMax) / xMax;
+    cursorX === null || xMax <= 0
+      ? null
+      : Math.min(Math.max(cursorX, 0), xMax) / xMax;
 
   return (
     <div className="trace-stack" ref={attachHost}>
@@ -371,9 +455,14 @@ export function TraceStack(props: TraceStackProps) {
               className="trace-lane-label"
               style={{ top: lane.top, left: PLOT_LEFT, right: PLOT_RIGHT }}
             >
-              <span className="trace-lane-name" style={{ color: LANES[index].colour }}>
+              <span
+                className="trace-lane-name"
+                style={{ color: LANES[index].colour }}
+              >
                 {LANES[index].label}
-                {LANES[index].unit ? <span className="trace-lane-unit"> {LANES[index].unit}</span> : null}
+                {LANES[index].unit ? (
+                  <span className="trace-lane-unit"> {LANES[index].unit}</span>
+                ) : null}
               </span>
               <span className="trace-lane-value">
                 {(() => {
