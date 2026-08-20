@@ -1,14 +1,20 @@
 /**
- * PITWALL · AGENTS — the 1:1 port of the Qt strategy window.
+ * PITWALL · AGENTS — a decision band over six specialist consoles.
  *
- * The layout is frozen and matches `window.py:141-207`: a header strip, a
- * horizontal split at 540 / 740, the left column carrying the
- * orchestrator card, the scenario bars and the reasoning tabs, the right
- * column a 3x2 grid of agent cards, and a status bar at the bottom.
+ * **The Qt lineage ends here for the LAYOUT, and only for the layout.** Every
+ * string, colour and glyph below still comes out of `src/pitwall/agents_view/`,
+ * which is the Qt window's own code; what changed is where they sit. The port
+ * was a header strip, a 540 / 740 horizontal split with the decision in the
+ * left column and a 3x2 card grid in the right, and a status bar - `window.py`
+ * geometry, faithfully. Faithful is what was wrong with it: the split made the
+ * decision a PEER of the agent grid, two territories with no reading order, and
+ * the most important content on the window shared its column with a reasoning
+ * panel measured at 1.9 % ink.
  *
- * **One Qt bug fixes itself here.** The left column gave the reasoning
- * tabs about 268 px, so the decision-memory counterweight sentence fell
- * below the fold on the one lap it matters. CSS has no fixed heights.
+ * Four strata now, top to bottom: header, the DECISION BAND, the agent grid,
+ * status bar. The band answers one question per module, left to right, in the
+ * order a reader asks them - what are we doing, why, on what evidence, and what
+ * happens next - along the line the eye lands on anyway.
  *
  * Before the first view arrives the window renders what the Qt window
  * shows at startup, rather than a spinner. That is not the same as
@@ -31,12 +37,19 @@ import { AgentCard } from "./AgentCard";
 import { OrchestratorCard } from "./OrchestratorCard";
 import { ReasoningTabs } from "./ReasoningTabs";
 import { ScenarioBars } from "./ScenarioBars";
+import { PlanPanel } from "./PlanPanel";
 import { HeaderBar } from "./HeaderBar";
 import { PaceChart } from "./PaceChart";
 import { TireChart } from "./TireChart";
 import { useAgentsView, type AgentCardView, type AgentsView } from "../../lib/agents";
 
-/** Grid order, reading across then down, exactly as `window.py` adds them. */
+/**
+ * The six consoles, for the boot view's own card map.
+ *
+ * No longer a render order: the grid places them by name (`agents.css`'s
+ * `grid-template-areas`) because three of the six want a shape the reading
+ * order does not give them.
+ */
 const CARDS: ReadonlyArray<readonly [key: string, title: string]> = [
   ["pace", "Pace"],
   ["tire", "Tire"],
@@ -156,6 +169,33 @@ const IDLE_VIEW: AgentsView = {
   status_bar: { text: "Waiting for arcade stream…", transient: false },
 };
 
+/**
+ * One console in the grid.
+ *
+ * `chart` is a single optional node rather than two conditionals at the call
+ * site. Two of them made `children` an ARRAY OF NULLS for the four cards
+ * without a chart, and an array is truthy, so every text card rendered an
+ * empty `.agent-chart` - a 140 px min-height box holding nothing. That phantom
+ * box, not the grid, is what put 89-112 px of dead strip under four cards.
+ */
+function Console({
+  slot,
+  title,
+  card,
+  chart,
+}: {
+  slot: string;
+  title: string;
+  card: AgentCardView;
+  chart?: React.ReactNode;
+}) {
+  return (
+    <AgentCard title={title} card={card} slot={slot}>
+      {chart ?? null}
+    </AgentCard>
+  );
+}
+
 export function AgentsWindow() {
   const { view } = useAgentsView();
   const shown = view ?? IDLE_VIEW;
@@ -204,30 +244,57 @@ export function AgentsWindow() {
       <HeaderBar header={shown.header} frozen={frozen} />
 
       {/* Dimmed, not desaturated: the cards' colour is content here too - the
-          alarm red, the WARNING amber on a changed call, the confidence bar. */}
-      <div className={frozen ? "agents-split is-frozen" : "agents-split"}>
-        <div className="agents-left">
+          alarm red, the WARNING amber on a changed call, the confidence bar.
+
+          ONE class for this state, and it is the shipped one. The elevation
+          spec proposed a second, `.is-stale`, keyed off
+          `connection !== "Connected"` - which is also true for
+          "Connecting...", i.e. the whole ~11 s startup, and which would have
+          composed its `brightness()` with this one on a dead producer. Two
+          names for one state is this repo's dominant defect class. */}
+      <div className={frozen ? "agents-body is-frozen" : "agents-body"}>
+        {/* The decision band: what, how sure, why, and what happens next, in
+            one left-to-right sweep along the top of the window. It replaces a
+            540 px left column that made the decision a PEER of the agent grid
+            - two territories with no reading order, the most important content
+            sharing a column with the least. */}
+        <div className="agents-band">
           <OrchestratorCard view={shown.orchestrator} />
-          <ScenarioBars rows={shown.scenarios} />
           <ReasoningTabs tabs={shown.reasoning} />
+          <ScenarioBars rows={shown.scenarios} />
+          <PlanPanel plan={shown.orchestrator.plan} />
         </div>
-        <div className="agents-right">
-          {CARDS.map(([key, title]) => (
-            <AgentCard key={key} title={title} card={shown.cards[key] ?? IDLE_CARD}>
-              {/* ONE expression, not two conditionals. Two of them make
-                  `children` an ARRAY OF NULLS for the other four cards, and an
-                  array is truthy, so every text card rendered an empty
-                  `.agent-chart` — a 140 px min-height box holding nothing.
-                  That phantom box, not the grid, is what put 89-112 px of
-                  dead strip under four cards and pushed their bodies into a
-                  scroll with no scrollbar to show for it. */}
-              {key === "pace" ? (
-                <PaceChart series={shown.charts.pace} />
-              ) : key === "tire" ? (
-                <TireChart series={shown.charts.tire} />
-              ) : null}
-            </AgentCard>
-          ))}
+
+        {/* The six consoles below it, in named grid areas rather than source
+            order: the two chart cards take the tall slots, SITUATION and PIT
+            are compact and both feed the decision so they stack beside them,
+            and RADIO carries the wordiest content on the window - transcripts -
+            so it spans two columns.
+
+            SITUATION and PIT share ONE area through a stack rather than taking
+            a grid row each. Given a row each they sat at the top of two equal
+            cells and the leftover fell BETWEEN them, which reads as a card
+            that failed to load; stacked, the whole remainder is one block of
+            window background under the pair. */}
+        <div className="agents-grid">
+          <Console
+            slot="pace"
+            title="Pace"
+            card={shown.cards.pace ?? IDLE_CARD}
+            chart={<PaceChart series={shown.charts.pace} />}
+          />
+          <Console
+            slot="tire"
+            title="Tire"
+            card={shown.cards.tire ?? IDLE_CARD}
+            chart={<TireChart series={shown.charts.tire} />}
+          />
+          <div className="agents-side">
+            <Console slot="situation" title="Situation" card={shown.cards.situation ?? IDLE_CARD} />
+            <Console slot="pit" title="Pit" card={shown.cards.pit ?? IDLE_CARD} />
+          </div>
+          <Console slot="radio" title="Radio" card={shown.cards.radio ?? IDLE_CARD} />
+          <Console slot="rag" title="RAG" card={shown.cards.rag ?? IDLE_CARD} />
         </div>
       </div>
 

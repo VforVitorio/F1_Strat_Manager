@@ -4,8 +4,8 @@
  * **The gap this closes was named by the sprint-3 exit gate**: every one
  * of its render-layer findings sailed through 35 green Python tests,
  * because those pin the view DICT and nothing loaded the bundle. Deleting
- * `<PaceChart/>` from `AgentsWindow.tsx`, or the whole `.agents-split`
- * rule from the stylesheet, left the suite entirely green.
+ * `<PaceChart/>` from `AgentsWindow.tsx`, or the whole layout rule from
+ * the stylesheet, left the suite entirely green.
  *
  * So this asserts EFFECTS in a real engine: the elements exist, the
  * layout the port claims is frozen actually computes to Qt's numbers, and
@@ -248,12 +248,110 @@ const barWidths = await page.evaluate(() =>
 check(barWidths[1] > barWidths[0] && barWidths[0] > 0, `the bars carry their fill (${barWidths})`);
 check(await page.locator(".orchestrator").isVisible(), "the orchestrator card");
 
-// Qt pins the left panel at 540 px and sends every extra pixel right
-// (`setStretchFactor(0, 0)`). A proportional split grew it to 807 at 1920.
-const columns = await page.evaluate(
-  () => getComputedStyle(document.querySelector(".agents-split")).gridTemplateColumns,
+// --- The four strata -------------------------------------------------------
+//
+// The 540 px left column is gone with the Qt split it came from, and so is the
+// check that pinned it. What replaces it asserts the SHAPE the band claims: one
+// row of four modules, in the reader's question order, and six consoles placed
+// by name underneath.
+const band = await page.evaluate(() => {
+  const modules = [...document.querySelectorAll(".agents-band > *")];
+  const box = (el) => el.getBoundingClientRect();
+  return {
+    count: modules.length,
+    tops: modules.map((el) => Math.round(box(el).top)),
+    lefts: modules.map((el) => Math.round(box(el).left)),
+    widths: modules.map((el) => Math.round(box(el).width)),
+  };
+});
+check(band.count === 4, `the band carries four modules (${band.count})`);
+check(new Set(band.tops).size === 1, `all four sit on one row (${band.tops})`);
+check(
+  band.lefts.every((left, i) => i === 0 || left > band.lefts[i - 1]),
+  `and in reading order (${band.lefts})`,
 );
-check(columns.startsWith("540px"), `left column is 540px (got ${columns})`);
+// PLAN is the `1fr`: it must be the widest, and it must actually absorb the
+// slack rather than sitting at some fixed budget. The three fixed columns are
+// 340 / 290 / 330 against a 1466 px inner width.
+check(
+  band.widths[3] > Math.max(band.widths[0], band.widths[1], band.widths[2]),
+  `PLAN absorbs the width (${band.widths})`,
+);
+
+// The consoles, by rendered geometry rather than by class name: a card can
+// carry the right class and be placed in the wrong area.
+const grid = await page.evaluate(() => {
+  const box = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top) };
+  };
+  return {
+    pace: box(".slot-pace"),
+    tire: box(".slot-tire"),
+    situation: box(".slot-situation"),
+    pit: box(".slot-pit"),
+    radio: box(".slot-radio"),
+    rag: box(".slot-rag"),
+  };
+});
+check(
+  grid.pace.right <= grid.tire.left && grid.tire.right <= grid.situation.left,
+  "the three columns run pace, tire, then the side stack",
+);
+check(
+  grid.situation.top < grid.pit.top && grid.situation.left === grid.pit.left,
+  "SITUATION sits over PIT in one column",
+);
+check(
+  grid.radio.left === grid.pace.left && grid.radio.right >= grid.tire.right,
+  "RADIO spans the two chart columns",
+);
+check(
+  grid.rag.left === grid.situation.left && grid.rag.top >= grid.radio.top,
+  "and RAG closes the corner",
+);
+
+// **Nothing may overflow the client.** The old harness ran at 1320x900 - 67 px
+// taller than the window - so a layout that did not fit could not be seen here
+// at all. Asserted on the document, which is what the OS window scrolls or
+// clips, not on any one panel.
+const overflow = await page.evaluate(() => {
+  const h = (selector) => {
+    const el = document.querySelector(selector);
+    return el ? Math.round(el.getBoundingClientRect().height) : null;
+  };
+  return {
+    vertical: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    horizontal: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    // In the failure message, because "it does not fit" is not actionable and
+    // "the band is 195 and the grid wants 600" is.
+    client: document.documentElement.clientHeight,
+    // WHICH element sticks out, not just that something does. `.agent-card`
+    // is deliberately `overflow: visible` so nothing can clip its tooltip, so
+    // a card whose content exceeds its cell spills into the document rather
+    // than scrolling, and the document is where it shows up.
+    past: [...document.querySelectorAll(".agents-body *")]
+      .map((el) => ({
+        what: `${el.tagName.toLowerCase()}.${(el.className || "").toString().split(" ").join(".")}`,
+        over: Math.round(el.getBoundingClientRect().bottom - document.documentElement.clientHeight),
+      }))
+      .filter((e) => e.over > 0)
+      .sort((a, b) => b.over - a.over)
+      .slice(0, 4),
+    strata: {
+      header: h(".header-bar"),
+      band: h(".agents-band"),
+      grid: h(".agents-grid"),
+      status: h(".status-bar"),
+    },
+  };
+});
+check(
+  overflow.vertical <= 0 && overflow.horizontal <= 0,
+  `the window fits its client (${JSON.stringify(overflow)})`,
+);
 
 // The tooltip must appear only where the host sent content, and NOTHING
 // may clip it. Two fixes failed here and the second was passed by a check
@@ -295,6 +393,38 @@ const overlap = await page.evaluate(() => {
   return Math.round(x * y);
 });
 check(overlap === 0, `the tooltip does not cover its own card (${overlap} px2)`);
+
+// **And the same when the popup fits on neither side**, which is the branch a
+// wide card reaches and the one that used to place it on its own subject.
+// Forced rather than waited for: the width is `max-content`, so whether a real
+// tooltip trips it depends on the fonts the machine happens to have - it fired
+// on a CI runner and never here, from the same code and the same fixture.
+await page.mouse.move(0, 0);
+await page.waitForTimeout(150);
+const widen = await page.addStyleTag({
+  content: ".agent-tooltip { min-width: 1200px !important; }",
+});
+await page.locator(".agent-card").nth(4).hover();
+await page.waitForTimeout(200);
+const forced = await page.evaluate(() => {
+  const tip = document.querySelector(".agent-tooltip").getBoundingClientRect();
+  const card = document.querySelectorAll(".agent-card")[4].getBoundingClientRect();
+  const x = Math.max(0, Math.min(tip.right, card.right) - Math.max(tip.left, card.left));
+  const y = Math.max(0, Math.min(tip.bottom, card.bottom) - Math.max(tip.top, card.top));
+  return {
+    overlap: Math.round(x * y),
+    onScreen: tip.top >= 0 && tip.bottom <= window.innerHeight,
+    width: Math.round(tip.width),
+  };
+});
+check(
+  forced.overlap === 0,
+  `a popup too wide for either side still clears its card (${JSON.stringify(forced)})`,
+);
+check(forced.onScreen, `and stays on screen (${JSON.stringify(forced)})`);
+await widen.evaluate((node) => node.remove());
+await page.mouse.move(0, 0);
+await page.waitForTimeout(150);
 
 // Qt's `showMessage(text, 1500)` clears itself. The port typed a
 // `transient` flag and read it nowhere until #871.
