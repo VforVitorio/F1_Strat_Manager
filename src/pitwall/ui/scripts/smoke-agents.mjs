@@ -61,7 +61,7 @@ const VIEW = {
     action_colour: "#ef4444",
     confidence: 0.71,
     confidence_fill: 71.0,
-    confidence_label: "Confidence: 71%",
+    confidence_text: "71%",
     confidence_colour: "#10b981",
     pace: "Pace: PUSH",
     pace_colour: "#ef4444",
@@ -276,6 +276,63 @@ check(
 check(
   band.widths[3] > Math.max(band.widths[0], band.widths[1], band.widths[2]),
   `PLAN absorbs the width (${band.widths})`,
+);
+
+// --- The action is text, not a button ---------------------------------------
+//
+// It was a 200x70 filled pill: 14,000 px2 of the action's colour, which for
+// PIT_NOW is the same DANGER red that means a fault everywhere else on the
+// window. Asserted as PAINTED AREA rather than as "the pill class is gone",
+// because the class going away is not the point and a differently-named fill
+// would pass that.
+const banner = await page.evaluate(() => {
+  const action = document.querySelector(".orch-action");
+  const card = document.querySelector(".orchestrator");
+  const style = getComputedStyle(action);
+  const cardStyle = getComputedStyle(card);
+  const rect = action.getBoundingClientRect();
+  const bandText = [...document.querySelectorAll(".agents-band *")]
+    .map((el) => parseFloat(getComputedStyle(el).fontSize))
+    .filter((size) => Number.isFinite(size));
+  return {
+    colour: style.color,
+    fill: style.backgroundColor,
+    rule: cardStyle.borderLeftColor,
+    ruleWidth: parseFloat(cardStyle.borderLeftWidth),
+    size: parseFloat(style.fontSize),
+    // Every distinct type size in the band, largest first. Comparing against
+    // "the largest OTHER size" put the confidence numeral in its own
+    // comparison set and asked whether 22 > 22.
+    ranks: [...new Set(bandText)].sort((a, b) => b - a),
+    confidence: parseFloat(getComputedStyle(document.querySelector(".orch-conf-value")).fontSize),
+    painted: Math.round(rect.width * rect.height),
+    cardHeight: Math.round(card.getBoundingClientRect().height),
+  };
+});
+// A transparent or fully-unset background is what "no fill" looks like in
+// computed style; anything else is a painted rectangle.
+check(
+  banner.fill === "rgba(0, 0, 0, 0)" || banner.fill === "transparent",
+  `the action carries no fill (${banner.fill})`,
+);
+check(
+  banner.colour === banner.rule,
+  `the rule and the word carry one identity colour (${banner.colour} vs ${banner.rule})`,
+);
+// The identity survives at the rule's area instead of the pill's. 4 px times
+// the card height against the 14,000 px2 the badge painted.
+check(
+  banner.ruleWidth * banner.cardHeight < 0.1 * 14000,
+  `the identity colour is painted at a fraction of the badge's area (${
+    Math.round(banner.ruleWidth * banner.cardHeight)
+  } px2)`,
+);
+// The pair reads as one unit: what, and how much to trust it. The confidence
+// number used to render at 11 px, the size of an axis tick, beside a 26 px
+// word - so the window's two most decisive values sat five ranks apart.
+check(
+  banner.ranks[0] === banner.size && banner.ranks[1] === banner.confidence,
+  `the action and its confidence are the band's top two type ranks (${banner.ranks})`,
 );
 
 // The consoles, by rendered geometry rather than by class name: a card can

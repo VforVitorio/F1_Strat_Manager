@@ -75,14 +75,14 @@ export interface TireHistoryRow {
 
 export interface OrchestratorView {
   action: string;
+  /** Carried as TEXT on the panel, not as a fill: every value clears AA there. */
   action_colour: string;
-  /** The badge's TEXT colour, chosen host side against the fill (WCAG). */
-  action_text_colour: string;
   /** null before the first decision; the bar then draws empty. */
   confidence: number | null;
   /** The bar's width in per cent, already clamped and rounded host side. */
   confidence_fill: number;
-  confidence_label: string;
+  /** The numeral alone (`71%` / `--`); the caption beside it is chrome. */
+  confidence_text: string;
   confidence_colour: string;
   pace: string;
   pace_colour: string;

@@ -28,7 +28,6 @@ from src.arcade.palette import (
     WARNING,
     compound_pill_html,
     hex_str,
-    readable_on,
 )
 from src.arcade.strategy import classify_action
 
@@ -185,10 +184,9 @@ def build_orchestrator(
         return {
             "action": "--",
             "action_colour": hex_str(TEXT_TERTIARY),
-            "action_text_colour": hex_str(readable_on(TEXT_TERTIARY)),
             "confidence": None,
             "confidence_fill": 0.0,
-            "confidence_label": "Confidence: --",
+            "confidence_text": "--",
             "confidence_colour": hex_str(TEXT_TERTIARY),
             "pace": "Pace: --",
             "pace_colour": hex_str(TEXT_TERTIARY),
@@ -206,13 +204,12 @@ def build_orchestrator(
 
     return {
         "action": badge_label,
+        # There is no `action_text_colour` beside it any more. That field
+        # existed to pick a readable ink for the badge's FILL - white measured
+        # 2.54:1 on SUCCESS - and the band's banner has no fill: the action is
+        # text in this colour on `--qt-panel`, where all seven of
+        # `_ACTION_STYLE`'s colours plus the ACCENT fallback clear AA.
         "action_colour": hex_str(badge_colour),
-        # The badge's own text colour, decided here rather than fixed to
-        # white in the renderer. White on SUCCESS measures 2.54:1, so the
-        # single most important element on the screen failed AA in the one
-        # state - a guardrail veto - where a strategist most needs to read
-        # it. `readable_on` picks whichever ground actually contrasts.
-        "action_text_colour": hex_str(readable_on(badge_colour)),
         "confidence": confidence,
         # The bar's width, to the 0.1 % Qt's gradient stop resolves to
         # (`orchestrator_card.py::_bar_style` rounds the stop to 3 dp).
@@ -220,7 +217,11 @@ def build_orchestrator(
         # coarser and the exact kind of arithmetic the view exists to
         # keep out of the renderer.
         "confidence_fill": round(min(1.0, max(0.0, confidence)) * 100, 1),
-        "confidence_label": f"Confidence: {confidence * 100:.0f}%",
+        # The numeral alone. It used to ship as `Confidence: 71%`, one string
+        # carrying a caption and a measurement, which the band renders at two
+        # different sizes: the caption is chrome and belongs to the stylesheet,
+        # the number is data and belongs here.
+        "confidence_text": f"{confidence * 100:.0f}%",
         "confidence_colour": hex_str(_confidence_colour(confidence)),
         "pace": f"Pace: {pace_mode or '--'}",
         "pace_colour": hex_str(_PACE_COLOURS.get(str(pace_mode or "").upper(), TEXT_TERTIARY)),

@@ -74,6 +74,30 @@ def test_the_badge_builders_escape_what_comes_off_the_wire():
     assert "&lt;" in flag_chip_html("A<B")
 
 
+def _qt_token(name: str) -> str:
+    """One `--qt-*` value, read out of the stylesheet that declares it.
+
+    Not a hex written here. The ground the action is drawn on is a CSS custom
+    property, and a copy of it in this file would be one more site to drift -
+    which is the whole subject of `test_pitwall_tokens.py` next door.
+    """
+    import re
+    from pathlib import Path
+
+    css = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "pitwall"
+        / "ui"
+        / "src"
+        / "styles"
+        / "qt-base.css"
+    ).read_text(encoding="utf-8")
+    match = re.search(rf"{re.escape(name)}:\s*(#[0-9a-fA-F]{{6}})", css)
+    assert match, f"{name} is not declared in qt-base.css"
+    return match.group(1).lower()
+
+
 def _rendered_pair(span: str) -> tuple[str, str]:
     """The `(background, foreground)` a pill span actually carries."""
     import re
@@ -119,18 +143,26 @@ def test_every_pill_and_badge_is_legible_against_its_own_fill():
         ratio = contrast_ratio(rgb(background), rgb(foreground))
         assert ratio >= 4.5, f"{name}: {foreground} on {background} is {ratio:.2f}:1"
 
-    # The badge takes the same treatment through the view, for every action
-    # `classify_action` knows plus the fallback.
+    # The action takes the same treatment, against the ground it is now drawn
+    # on. It used to be a fill with an ink chosen against it; the band renders
+    # it as TEXT on `--qt-panel`, so the pair that has to contrast is the
+    # action colour and the card.
+    #
+    # **Over `_ACTION_STYLE` itself, not a hand-written list.** The old version
+    # named five actions; the map holds SEVEN (DNF and ERROR are display states
+    # the producer really emits) plus an unknown-key fallback that echoes the
+    # raw string in ACCENT. A guard that asserts about part of an enumeration
+    # is how the two missing ones would have stayed missing.
+    from src.arcade.strategy import _ACTION_STYLE
     from src.pitwall.agents_view.decision import build_orchestrator
 
-    for action in ("PIT_NOW", "STAY_OUT", "UNDERCUT", "OVERCUT", "SOMETHING_ELSE"):
+    panel = rgb(_qt_token("--qt-panel"))
+    for action in (*_ACTION_STYLE, "SOMETHING_A_FUTURE_PRODUCER_SENDS"):
         built = build_orchestrator({"action": action, "confidence": 0.5})
-        ratio = contrast_ratio(rgb(built["action_colour"]), rgb(built["action_text_colour"]))
-        assert ratio >= 4.5, f"{action}: {ratio:.2f}:1"
+        ratio = contrast_ratio(rgb(built["action_colour"]), panel)
+        assert ratio >= 4.5, f"{action}: {built['action_colour']} on the panel is {ratio:.2f}:1"
     idle = build_orchestrator(None)
-    assert contrast_ratio(rgb(idle["action_colour"]), rgb(idle["action_text_colour"])) >= 4.5, (
-        "the idle badge too"
-    )
+    assert contrast_ratio(rgb(idle["action_colour"]), panel) >= 4.5, "the idle action too"
 
 
 def test_the_tooltips_return_data_and_never_markup():
@@ -549,7 +581,7 @@ def test_the_orchestrator_card_is_the_qt_one_field_for_field():
 
     assert view["action"] == "PIT NOW"
     assert view["action_colour"] == "#ef4444"
-    assert view["confidence_label"] == "Confidence: 71%"
+    assert view["confidence_text"] == "71%"
     assert view["confidence_colour"] == "#10b981", "0.71 is over the 0.66 green tier"
     assert view["pace"] == "Pace: PUSH"
     # Text colour, not DANGER: a posture is a setting somebody chose, and
