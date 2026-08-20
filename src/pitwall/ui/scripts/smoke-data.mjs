@@ -164,6 +164,14 @@ const EXTENTS = (index) => `
   })()
 `;
 
+// The client area the product really hands this page, NOT the `WindowSpec`
+// size. `place()` opens DATA at 1500x870 on the reference desktop and the OS
+// keeps 14 px of frame and 37 px of title bar, so the page gets 1486x833.
+// Most scenarios below already used the real client; scenario A used the outer
+// size and was therefore measuring a surface 117 px taller than the window.
+// `tests/surfaces/test_pitwall_host.py` now refuses a viewport larger than it.
+const CLIENT = { width: 1486, height: 833 };
+
 const server = await serveDist(DIST);
 const browser = await chromium.launch();
 const url = `http://127.0.0.1:${server.address().port}/data.html`;
@@ -171,7 +179,7 @@ const url = `http://127.0.0.1:${server.address().port}/data.html`;
 // --- Scenario A: two drivers, a real span -----------------------------------
 
 const ctx = await browser.newContext({
-  viewport: { width: 1500, height: 950 },
+  viewport: CLIENT,
 });
 const page = await ctx.newPage();
 page.on("pageerror", (error) => failures.push(`pageerror: ${error.message}`));
@@ -658,7 +666,7 @@ await ctx.close();
 // --- Scenario B: single driver, and a car the telemetry never placed --------
 
 const solo = await browser.newContext({
-  viewport: { width: 1500, height: 950 },
+  viewport: CLIENT,
 });
 const soloPage = await solo.newPage();
 soloPage.on("pageerror", (error) =>
@@ -753,7 +761,7 @@ const FIELD = {
 };
 
 const ring = await browser.newContext({
-  viewport: { width: 1500, height: 950 },
+  viewport: CLIENT,
 });
 const ringPage = await ring.newPage();
 ringPage.on("pageerror", (error) =>
@@ -944,7 +952,7 @@ await ring.close();
 // deleting that line would have been invisible. Its twin in the AGENTS charts
 // shipped the same defect a sprint later and Víctor is the one who saw it.
 const stillCtx = await browser.newContext({
-  viewport: { width: 1500, height: 950 },
+  viewport: CLIENT,
 });
 const stillPage = await stillCtx.newPage();
 await stillPage.addInitScript((payload) => {
@@ -990,7 +998,7 @@ const RETIRED = {
 
 async function provisionalChips(field) {
   const context = await browser.newContext({
-    viewport: { width: 1500, height: 950 },
+    viewport: CLIENT,
   });
   const scenarioPage = await context.newPage();
   scenarioPage.on("pageerror", (error) =>
@@ -1221,7 +1229,7 @@ function towerLive() {
 }
 
 const towerCtx = await browser.newContext({
-  viewport: { width: 1485, height: 833 },
+  viewport: CLIENT,
 });
 const towerPage = await towerCtx.newPage();
 towerPage.on("pageerror", (error) =>
@@ -1574,7 +1582,7 @@ const RADIO_EVENTS = [
 
 async function radioPage(radio) {
   const context = await browser.newContext({
-    viewport: { width: 1485, height: 833 },
+    viewport: CLIENT,
   });
   const rPage = await context.newPage();
   rPage.on("pageerror", (error) =>
@@ -2287,7 +2295,7 @@ function paceField() {
 }
 
 const paceCtx = await browser.newContext({
-  viewport: { width: 1485, height: 833 },
+  viewport: CLIENT,
 });
 const pacePage = await paceCtx.newPage();
 pacePage.on("pageerror", (error) =>
@@ -2806,7 +2814,7 @@ check(
 // guard above had to learn the hard way.
 {
   const partialCtx = await browser.newContext({
-    viewport: { width: 1485, height: 833 },
+    viewport: CLIENT,
   });
   const partial = await partialCtx.newPage();
   partial.on("pageerror", (error) =>
@@ -3182,7 +3190,7 @@ for (const [width, height] of [
   [1265, 650],
   [1350, 660],
   [1350, 673],
-  [1485, 833],
+  [CLIENT.width, CLIENT.height],
 ]) {
   const ctx = await browser.newContext({ viewport: { width, height } });
   const page = await ctx.newPage();
@@ -3522,7 +3530,7 @@ if (bands === null) {
 // a window that never had data cannot demonstrate a window whose data went stale.
 {
   const deadCtx = await browser.newContext({
-    viewport: { width: 1485, height: 833 },
+    viewport: CLIENT,
   });
   const dead = await deadCtx.newPage();
   dead.on("pageerror", (error) =>
@@ -3831,7 +3839,7 @@ await paceCtx.close();
 // Asserted as an EFFECT and as a DIFFERENCE. Reading one string would pass on a
 // build that hardcoded it; requiring the two to differ cannot.
 async function waitingCopy(connection) {
-  const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+  const context = await browser.newContext({ viewport: CLIENT });
   const emptyPage = await context.newPage();
   emptyPage.on("pageerror", (error) =>
     failures.push(`pageerror(waiting/${connection}): ${error.message}`),

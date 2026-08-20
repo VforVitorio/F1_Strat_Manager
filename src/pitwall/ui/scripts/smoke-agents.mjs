@@ -28,6 +28,14 @@ const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // deliberately broken copy without touching the real one.
 const DIST = resolve(process.argv[2] ?? resolve(UI_DIR, "dist"));
 
+// The client area the product really hands this page, NOT the `WindowSpec`
+// size. `place()` opens AGENTS at 1500x870 on the reference desktop and the
+// OS keeps 14 px of frame and 37 px of title bar, so the page gets 1486x833.
+// Measuring the outer size instead hid 67 px of vertical overflow from every
+// assertion in this file; `tests/surfaces/test_pitwall_host.py` now refuses a
+// harness viewport larger than the real client.
+const CLIENT = { width: 1486, height: 833 };
+
 /**
  * Enough of a view to render every panel.
  *
@@ -193,7 +201,7 @@ const check = (ok, what) => {
 
 const server = await serveDist(DIST);
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+const ctx = await browser.newContext({ viewport: CLIENT });
 const page = await ctx.newPage();
 page.on("pageerror", (error) => failures.push(`pageerror: ${error.message}`));
 page.on("console", (message) => {
@@ -350,7 +358,7 @@ await ctx.close();
 // re-armed once per LAP, and the bar sat blank for the other eighty
 // seconds of it. The settled stub above cannot see that: it is the dead
 // producer, the case that already worked.
-const live = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+const live = await browser.newContext({ viewport: CLIENT });
 const livePage = await live.newPage();
 await livePage.addInitScript((view) => {
   let seq = 0;
@@ -413,7 +421,7 @@ await live.close();
 // states must be TELLABLE APART from the rendered bar. Reading one of them would
 // pass on a build that hardcoded the string.
 async function idleStatusBar(connection) {
-  const context = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+  const context = await browser.newContext({ viewport: CLIENT });
   const idlePage = await context.newPage();
   idlePage.on("pageerror", (error) =>
     failures.push(`pageerror(idle/${connection}): ${error.message}`),
@@ -456,7 +464,7 @@ check(
 // with a DISAGREEING connection, or a bar that ignored the poll entirely would
 // pass this too.
 const servedBar = await (async () => {
-  const context = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+  const context = await browser.newContext({ viewport: CLIENT });
   const viewPage = await context.newPage();
   await viewPage.addInitScript(
     ([view, state]) => {

@@ -11,9 +11,11 @@ so a machine with no system webview still runs the suite.
 from __future__ import annotations
 
 import json
+import re
 import socket
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -323,13 +325,107 @@ def test_every_shipped_window_fits_a_small_laptop():
         )
 
 
-def test_the_second_window_is_still_grabbable():
+@pytest.mark.parametrize("screen", [(1707, 960), (1366, 768), (3840, 2160)])
+def test_the_second_window_is_still_grabbable(screen):
     """The two windows overlap - they must, at these sizes - so the one
-    underneath needs its title bar reachable. A zero stagger would bury it."""
+    underneath needs its title bar reachable. A zero stagger would bury it.
+
+    Run over three screens rather than one. Pinned to 1707x960 alone this was
+    green through the whole life of the defect it names: on a 1366 laptop both
+    windows are clamped to the screen width, and an `x` that clamps against
+    the FULL window width collapses the stagger to zero, putting the top
+    window exactly over the bottom one's title bar. `place` narrows the
+    staggered window instead.
+    """
     from src.pitwall.config import WINDOWS
 
-    origins = [spec.place(index, 1707, 960)[0] for index, spec in enumerate(WINDOWS)]
-    assert len(set(origins)) == len(origins), f"two windows share an origin: {origins}"
+    origins = [spec.place(index, *screen)[0] for index, spec in enumerate(WINDOWS)]
+    assert len(set(origins)) == len(origins), (
+        f"two windows share an origin on {screen[0]}x{screen[1]}: {origins}"
+    )
+
+
+# The desktop every placement number in this section is measured on: a 2560x1440
+# panel at 150 %, which is 1707x960 logical.
+_REFERENCE_SCREEN = (1707, 960)
+
+# What the OS keeps for itself BETWEEN a placed window and the page inside it,
+# as opposed to `_OS_CHROME_ALLOWANCE_PX`, which is what it keeps around the
+# window. The 37 is the title bar `config.py` already names; the 14 is the
+# frame either side.
+#
+# **Measured, not remembered.** Both windows were opened on the reference
+# desktop and asked with `evaluate_js`: `innerWidth`, `documentElement
+# .clientWidth` and `body.clientWidth` all report **1486x833** from a placed
+# 1500x870, twice, at `devicePixelRatio` 1.5 and with no overflow in either
+# axis. The figure carried in this programme's notes since sprint 9 was
+# 1485 - one pixel short, and short in the direction that hides a clip.
+_WINDOW_FRAME_PX = 14
+_TITLE_BAR_PX = 37
+
+# Catches both `viewport: { width: N, height: M }` and a harness's own declared
+# client constant, which is the only other place these numbers may appear.
+_SIZE_LITERAL = re.compile(r"width:\s*(\d+),\s*height:\s*(\d+)")
+
+_HARNESSES = (
+    "smoke-agents.mjs",
+    "shot-agents.mjs",
+    "smoke-data.mjs",
+    "shot-data.mjs",
+)
+
+
+def _reference_client(index: int, spec) -> tuple[int, int]:
+    _, _, width, height = spec.place(index, *_REFERENCE_SCREEN)
+    return width - _WINDOW_FRAME_PX, height - _TITLE_BAR_PX
+
+
+def test_no_harness_measures_a_surface_larger_than_the_product_has():
+    """A viewport wider or taller than the real client cannot see a clip.
+
+    This is the shape of defect the programme keeps paying for: a check that
+    sits at the only size where the thing it guards cannot happen. Three of
+    the four harnesses were sized from the OUTER `WindowSpec` rather than from
+    the client the page actually receives - `smoke-agents.mjs` measured
+    1320x900 against a real 833, so **67 px of vertical overflow was invisible
+    to every assertion in it**, and `smoke-data.mjs` was the only one already
+    right.
+
+    Asserted as an inequality, not an equality, because a harness may
+    deliberately drive a SMALLER client (`smoke-data.mjs` sweeps a list of
+    them). Measuring bigger is the defect; measuring smaller is a test.
+    """
+    from src.pitwall.config import WINDOWS
+
+    scripts = Path(__file__).resolve().parents[2] / "src" / "pitwall" / "ui" / "scripts"
+    clients = [_reference_client(index, spec) for index, spec in enumerate(WINDOWS)]
+    widest = max(width for width, _ in clients)
+    tallest = max(height for _, height in clients)
+
+    seen = 0
+    for name in _HARNESSES:
+        source = (scripts / name).read_text(encoding="utf-8")
+        for width, height in _SIZE_LITERAL.findall(source):
+            seen += 1
+            assert int(width) <= widest and int(height) <= tallest, (
+                f"{name} measures {width}x{height}, larger than the real client {widest}x{tallest}"
+            )
+    # The enumeration itself, so this cannot pass by finding nothing.
+    assert seen >= len(_HARNESSES), f"only {seen} viewport literals found across {_HARNESSES}"
+
+
+def test_both_windows_hand_the_page_the_same_client_area():
+    """One surface, one number for the harnesses to point at.
+
+    The two windows used to differ: AGENTS was 1320 wide because it mirrored
+    the Qt strategy window's 540 + 740 columns plus the frame. That split is
+    gone, so the width had no argument behind it and the two harness families
+    had two numbers to drift apart.
+    """
+    from src.pitwall.config import WINDOWS
+
+    clients = {spec.key: _reference_client(index, spec) for index, spec in enumerate(WINDOWS)}
+    assert len(set(clients.values())) == 1, f"windows disagree about the client area: {clients}"
 
 
 # --- The connection label, which band 1 renders ------------------------------
