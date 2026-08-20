@@ -772,8 +772,75 @@ check(
   `and nothing is clipped inside it (${reached.map((r) => r.clipped).join(", ")})`,
 );
 
+// **A popup taller than its 22rem cap must be reachable, by either hand.**
+// It has a visible scrollbar and nothing could drive it: the pointer crossing
+// the 10 px gap fired the card's `mouseleave` and unmounted it, and the
+// keyboard could not reach an element the tab order never visits. A RADIO lap
+// with the model-detail sections appended after its rows overflows routinely.
+//
+// Forced, not waited for - the cap depends on the fonts the machine has.
+{
+  const tall = await page.addStyleTag({
+    content: ".agent-tooltip { max-height: 60px !important; }",
+  });
+  await page.locator(".agent-card").nth(4).hover();
+  await page.waitForTimeout(200);
+  const overflowed = await page.evaluate(() => {
+    const tip = document.querySelector(".agent-tooltip");
+    return tip ? tip.scrollHeight - tip.clientHeight : null;
+  });
+  check(overflowed > 0, `the probe really does overflow the popup (${overflowed})`);
+
+  // The pointer: from the card into the popup, which must survive the crossing.
+  const box = await page.locator(".agent-tooltip").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(220);
+  check(
+    (await page.locator(".agent-tooltip").count()) === 1,
+    "the popup survives the pointer crossing the gap into it",
+  );
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(150);
+  const wheeled = await page.evaluate(() => document.querySelector(".agent-tooltip")?.scrollTop ?? 0);
+  check(wheeled > 0, `and a wheel over it reaches its tail (${wheeled})`);
+
+  // The keyboard: the arrows are forwarded from the card, so the reader never
+  // has to reach an element Tab does not visit.
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(220);
+  // Blur first. `.focus()` on the element that is ALREADY `activeElement` fires
+  // no focus event, and the keyboard walk above left focus on this very card -
+  // so the probe read a closed popup and blamed the arrows.
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.waitForTimeout(80);
+  await page.locator(".agent-card").nth(4).focus();
+  await page.waitForTimeout(200);
+  const beforeArrow = await page.evaluate(() => {
+    const tip = document.querySelector(".agent-tooltip");
+    const active = document.activeElement;
+    return {
+      open: Boolean(tip),
+      id: tip ? tip.id : null,
+      over: tip ? tip.scrollHeight - tip.clientHeight : null,
+      focused: active ? [...active.classList].join(".") : null,
+    };
+  });
+  check(beforeArrow.open, `the popup is open under keyboard focus (${JSON.stringify(beforeArrow)})`);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(150);
+  const arrowed = await page.evaluate(() => document.querySelector(".agent-tooltip")?.scrollTop ?? 0);
+  check(arrowed > 0, `and ArrowDown from the card scrolls it too (${arrowed})`);
+
+  await tall.evaluate((node) => node.remove());
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(220);
+}
+
+await page.locator(".agent-card").nth(4).focus();
+await page.waitForTimeout(200);
 await page.keyboard.press("Escape");
-await page.waitForTimeout(120);
+await page.waitForTimeout(160);
 check(
   (await page.locator(".agent-tooltip").count()) === 0,
   "Escape closes it without moving focus away",

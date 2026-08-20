@@ -529,12 +529,24 @@ def test_no_pitwall_source_file_carries_an_unregistered_hex():
     # tick and the segments' colours reach no element. Tracked in #1026.
     known.update({"#f472b6", "#d946ef", "#facc15", "#22d3ee"})
 
-    roots = (
-        REPO_ROOT / "src" / "pitwall" / "agents_view",
-        UI_SRC / "features",
-        UI_SRC / "lib",
-        UI_SRC / "styles",
-    )
+    # Explicit globs, not one recursive root. `src/pitwall` contains `ui/dist`
+    # and `ui/node_modules`, and sweeping from the top pulled the BUILT bundle
+    # in - every hex in the repo, reported against a file nobody edits.
+    pitwall = REPO_ROOT / "src" / "pitwall"
+    sources = [
+        # The top level: `agent_formatters.py` and `host.py` live here, not in
+        # `agents_view`, and the first version of this sweep did not look.
+        *pitwall.glob("*.py"),
+        *(pitwall / "agents_view").rglob("*.py"),
+        *UI_SRC.joinpath("features").rglob("*.tsx"),
+        *UI_SRC.joinpath("features").rglob("*.ts"),
+        *UI_SRC.joinpath("lib").rglob("*.ts"),
+        *UI_SRC.joinpath("styles").rglob("*.css"),
+        # And the harness stubs, which spell colours BY DESIGN - they are what
+        # the smokes compare rendered pixels against, so a stub that drifts from
+        # the palette makes a green check meaningless.
+        *(pitwall / "ui" / "scripts").glob("*.mjs"),
+    ]
     # `tokens.css` is the WEB palette and it is deliberately a different one:
     # both PITWALL windows render in the Qt palette, and CLAUDE.md says so in as
     # many words. It has its own guard in this file -
@@ -560,20 +572,19 @@ def test_no_pitwall_source_file_carries_an_unregistered_hex():
 
     visited = 0
     offenders: list[str] = []
-    for root in roots:
-        for path in sorted(root.rglob("*")):
-            if path.suffix not in {".py", ".ts", ".tsx", ".css"} or path in skip:
-                continue
-            visited += 1
-            source = _without_comments(path.read_text("utf-8"))
-            for found in hex_literal.findall(source):
-                if found.lower() not in known:
-                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {found}")
+    for path in sorted(set(sources)):
+        if path in skip:
+            continue
+        visited += 1
+        source = _without_comments(path.read_text("utf-8"))
+        for found in hex_literal.findall(source):
+            if found.lower() not in known:
+                offenders.append(f"{path.relative_to(REPO_ROOT)}: {found}")
 
     # The enumeration first. A glob that resolves to nothing - a moved
     # directory, a wrong `parents[]` - passes silently, and this repo has
     # already shipped one census that found zero files and said so cheerfully.
-    assert visited >= 25, f"the sweep only visited {visited} files; the roots are wrong"
+    assert visited >= 55, f"the sweep only visited {visited} files; the roots are wrong"
     assert not offenders, (
         "a colour that palette.py does not define is written into PITWALL source: "
         + "; ".join(offenders)

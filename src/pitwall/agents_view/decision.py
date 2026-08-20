@@ -16,6 +16,7 @@ changes which scenario reads as the winner.
 
 from __future__ import annotations
 
+import html
 import re
 from typing import Any
 
@@ -44,9 +45,12 @@ from src.pitwall.reasoning_lines import clean
 # point of an alarm colour is pre-attentive triage, and six semantics deny the
 # reader exactly that at the moment they need it.
 #
-# DANGER now belongs to alarm-class facts: the ALERT glyph and a dead
-# connection. The guardrail line was the third and it is gone, because nothing
-# could fill it (#974, `build_orchestrator`). The dicts stay rather than
+# DANGER's owners now, enumerated rather than described - the exit gate found
+# this comment claiming two while the file gave it four: the ALERT glyph, a dead
+# connection, the imperative ACTION text (`classify_action` paints PIT_NOW and
+# ERROR red, and the band renders that as the word plus its 4 px rule), and the
+# confidence floor below 0.33. A HIGH threat headline is a fifth site one module
+# over. What the posture chips must NOT be is a sixth. The dicts stay rather than
 # collapsing into a constant, because a posture the producer has never sent
 # must still fall to TEXT_TERTIARY - which is what says "not reported" as
 # against "reported and unremarkable".
@@ -98,10 +102,17 @@ def _plan_line(latest: dict[str, Any], action: str) -> str:
         if action.upper() == "STAY_OUT":
             return "stint continues · no pit window yet"
         return "Pit plan pending"
+    # **Escaped, because this whole string is MARKUP.** It carries the compound
+    # pill, so `PlanTimeline` renders it through `dangerouslySetInnerHTML` - and
+    # `undercut_target` is an unconstrained `Optional[str]` the orchestrator LLM
+    # fills. The exit gate fed it `<img src=x onerror=...>` and watched it reach
+    # the caption verbatim, beside a comment of mine claiming the escaped pill
+    # was "the last markup sink on this window's decision surface". The pill was;
+    # the field next to it was not.
     bits = [
-        f"Pit: L{pit_target}" if pit_target else "Pit: —",
+        f"Pit: L{html.escape(str(pit_target))}" if pit_target else "Pit: —",
         f"Next: {compound_pill_html(compound_next)}" if compound_next else "Next: —",
-        f"UCUT: {undercut_target}" if undercut_target else "UCUT: —",
+        f"UCUT: {html.escape(str(undercut_target))}" if undercut_target else "UCUT: —",
     ]
     return " · ".join(bits)
 
@@ -158,7 +169,8 @@ def _previous_call(latest: dict[str, Any], tail: list[dict[str, Any]] | None) ->
 # that family.
 #
 # The bias is deliberate: when the rule is unsure it does NOT split, and the
-# module shows a longer sentence that CSS clamps to two lines. A first sentence
+# module shows a longer sentence that CSS clamps to three lines
+# (`.why-narrative`). A first sentence
 # that is too long is a layout question; one that is truncated is a lie.
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(])")
 _MIN_WORDS = 2
