@@ -69,7 +69,11 @@ def _frames(n: int) -> list[FrameData]:
             gear=7,
             drs=8,
             throttle=90.0,
-            brake=5.0,
+            # 100.0, not the 5.0 that stood here: since #1002 `brake` is resampled
+            # nearest-neighbour off a BOOLEAN raw channel, so the only values the
+            # producer can put on the wire are 0.0 and 100.0. A fixture outside that
+            # set describes a payload the arcade cannot build.
+            brake=100.0,
             lap=1 + i // 10,
             dist=float(i) * 10.0,
             rel_dist=(i % 10) / 10.0,

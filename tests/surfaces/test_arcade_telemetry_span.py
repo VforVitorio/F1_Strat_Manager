@@ -416,3 +416,213 @@ def test_eligible_is_not_open_at_every_site_that_decodes_it():
     for code in DRS_OPEN_CODES:
         assert DriverInfoPanel._drs_label(code) == "ON", f"code {code} is documented as On"
         assert DriverInfoPanel._drs_color(code) == open_colour
+
+
+# --- #1002: the discrete channels stop being interpolated ----------------------
+
+
+def _melbourne_or_skip():
+    """The cached arcade session, or a skip. The pickle is not in git."""
+    from src.arcade.config import ARCADE_CACHE_DIR, CACHE_VERSION
+
+    cached = ARCADE_CACHE_DIR / "Melbourne_2025_race.pkl"
+    if not cached.exists():
+        pytest.skip("the Melbourne 2025 arcade pickle is not on this install")
+    import pickle
+
+    with cached.open("rb") as handle:
+        session = pickle.load(handle)
+    if session.version != CACHE_VERSION:
+        pytest.skip(f"the cached pickle is {session.version}, not {CACHE_VERSION}")
+    return session
+
+
+def _active_frames(session) -> list:
+    frames = [
+        frame for driver in session.frames_by_driver.values() for frame in driver if frame.active
+    ]
+    # The set is DISCOVERED, so its size is asserted before anything reads it: an
+    # empty list would make every assertion below vacuously true, which is the
+    # exact shape of the green-on-nothing guard this repo has already shipped once.
+    assert len(frames) > 1_000_000, f"only {len(frames)} active frames"
+    return frames
+
+
+def test_no_served_frame_carries_a_gear_the_car_cannot_select():
+    """The EFFECT of #1002, on the frames the arcade actually broadcasts.
+
+    Not "the resampler is nearest-neighbour" - that is the mechanism, and measured,
+    the mechanism alone changes this number by four. The F1 live-timing feed itself
+    publishes `nGear` of 128 (151 raw samples on this race) and every value between
+    10 and 127, and three resampling stages carried it to **967 served frames at
+    128 and 1,840 above gear 8**. PITWALL's GEAR lane is locked to [0, 9], so each
+    is a full-height spike.
+
+    Gear 0 is asserted PRESENT in the same breath. It is a real reading, and a
+    validity predicate written `g < 1 or g > 8` would erase 4,773 frames of a
+    stationary car while making the first assertion pass.
+    """
+    frames = _active_frames(_melbourne_or_skip())
+    gears = {frame.gear for frame in frames}
+    assert max(gears) <= 8, f"gears above 8 are served: {sorted(g for g in gears if g > 8)}"
+    assert min(gears) >= 0
+    neutral = sum(1 for frame in frames if frame.gear == 0)
+    assert neutral > 1000, f"only {neutral} neutral frames: is 0 being filtered as invalid?"
+
+
+def test_no_served_frame_carries_a_drs_code_the_feed_never_emits():
+    """The raw channel holds {0, 1, 2, 3, 8, 10, 12, 14}; the wire used to hold more.
+
+    Linear interpolation between two real codes manufactures the ones in between,
+    and 9, 11 and 13 are read as CLOSED by `DRS_OPEN_CODES` while sitting between
+    two open frames - so an open wing drew as a flicker. Measured before the fix:
+    **1,775 served frames** on 4, 5, 6, 7, 9, 11 or 13.
+    """
+    frames = _active_frames(_melbourne_or_skip())
+    served = {frame.drs for frame in frames}
+    manufactured = served - {0, 1, 2, 3, 8, 10, 12, 14}
+    assert not manufactured, f"codes FastF1 never emits are on the wire: {sorted(manufactured)}"
+    # The open codes must still be REACHED, or a channel stuck at 0 would pass.
+    assert served & DRS_OPEN_CODES, "no open-wing frame survives at all"
+
+
+def test_the_brake_channel_is_the_boolean_it_was_measured_as():
+    """`Brake` is `{'type': 'discrete'}` to FastF1 and False/True in the raw stream.
+
+    It lived in the resampler's CONTINUOUS set and was multiplied by 100, so
+    **86,925 served frames (3.49 %) sat strictly between 2 and 98** across 10,976
+    distinct values, none of which any car ever published.
+    """
+    frames = _active_frames(_melbourne_or_skip())
+    served = {round(frame.brake, 6) for frame in frames}
+    assert served <= {0.0, 100.0}, f"interpolated brake pressures are served: {sorted(served)[:8]}"
+    assert served == {0.0, 100.0}, "both states must occur, or the channel is stuck"
+
+
+def test_a_tyre_age_is_a_whole_number_of_laps():
+    """`tyre_life` is a per-lap count with a reset at every stop, not a ramp.
+
+    It was in the continuous set beside `brake`, so it interpolated ACROSS the reset:
+    758 served frames carried a fractional age and **25 sat more than half a lap from
+    either neighbouring value, the worst 16.4 laps out**. The TimingTower renders this
+    number, and a pit exit is exactly where it was wrong.
+    """
+    frames = _active_frames(_melbourne_or_skip())
+    fractional = [f.tyre_life for f in frames if abs(f.tyre_life - round(f.tyre_life)) > 1e-9]
+    assert not fractional, f"{len(fractional)} frames carry a fractional tyre age"
+
+
+# --- the same rules on a hand-built driver, so CI can see them ------------------
+#
+# Every guard above reads the cached 382 MB pickle, which no CI runner has, so all of
+# them SKIP there. Worse, on a machine that HAS a current pickle they pass against the
+# artefact rather than the code: reverting `_resample_driver` to `np.interp` leaves the
+# already-built v13 frames untouched and every one of them stays green. The tests below
+# run the resampler itself on four samples and are the ones that go red for that.
+
+
+def _one_driver_two_samples() -> dict:
+    """Two raw samples a second apart, chosen so linear interpolation is VISIBLE.
+
+    At the midpoint every discrete channel would take a value that is not in the raw
+    array: gear 5 between 2 and 8, DRS 6 between 0 and 12 (a code FastF1 never emits),
+    brake 0.5 on a boolean channel, tyre 2 (MEDIUM) between SOFT and HARD, and a tyre age
+    of 2.5 on a channel counted in whole laps.
+    """
+    import numpy as np
+
+    return {
+        "t": np.array([0.0, 1.0]),
+        "x": np.array([0.0, 100.0]),
+        "y": np.array([0.0, 50.0]),
+        "speed": np.array([100.0, 200.0]),
+        "throttle": np.array([0.0, 100.0]),
+        "brake": np.array([0.0, 1.0]),
+        "dist": np.array([0.0, 200.0]),
+        "tyre_life": np.array([4.0, 1.0]),
+        "gear": np.array([2.0, 8.0]),
+        "drs": np.array([0.0, 12.0]),
+        "lap": np.array([1.0, 2.0]),
+        "tyre": np.array([1.0, 3.0]),
+    }
+
+
+def _resampled_midpoint():
+    """The frame the resampler builds exactly half way between the two samples."""
+    import numpy as np
+
+    from src.arcade.data import SessionLoader
+
+    data = _one_driver_two_samples()
+    timeline = np.array([0.0, 0.5, 1.0])
+    frames = SessionLoader()._resample_driver(
+        data, data["t"], timeline, 1.0, {"throttle": 1.0, "brake": 100.0}, 5000.0
+    )
+    assert len(frames) == 3, "the fixture must produce the midpoint frame it is about"
+    return frames[1]
+
+
+def test_a_discrete_channel_only_ever_takes_a_value_the_car_published():
+    """The mechanism, on four samples, without the 382 MB artefact.
+
+    This is the guard that goes red on a revert to `np.interp`, which the pickle-backed
+    guards above cannot: they would still be reading frames built by the fixed code.
+    """
+    midpoint = _resampled_midpoint()
+    assert midpoint.gear == 2, "gear 5 is what linear interpolation invents here"
+    assert midpoint.drs == 0, "DRS 6 is a code FastF1 never emits"
+    assert midpoint.brake == 0.0, "brake is boolean; 50.0 is a pressure nobody published"
+    assert midpoint.tyre == 1, "tyre 2 is MEDIUM, invented between SOFT and HARD"
+    assert midpoint.tyre_life == 4.0, "an age is a whole number of laps"
+    assert midpoint.lap == 1, "the lap does not advance until the sample that carries it"
+
+
+def test_a_continuous_channel_still_interpolates():
+    """The other half, or the fix could be 'resample nothing' and pass.
+
+    Speed, throttle and position are genuinely continuous and must still take the value
+    between two samples: a stepped speed trace is the defect this change must not create.
+    """
+    midpoint = _resampled_midpoint()
+    assert midpoint.speed == 150.0
+    assert midpoint.throttle == 50.0
+    assert (midpoint.x, midpoint.y) == (50.0, 25.0)
+
+
+def test_the_nearest_sample_pick_is_correct_at_both_ends_and_on_a_tie():
+    """Exact hits, extrapolation past either end, and a deterministic tie.
+
+    The tie matters on real data: Melbourne 2025 carries 907 duplicate-`t` pairs, and a
+    pick that depended on floating-point noise would resample the same race differently
+    on two machines.
+    """
+    import numpy as np
+
+    from src.arcade.data import _nearest_sample
+
+    t = np.array([0.0, 1.0, 2.0])
+    picked = _nearest_sample(t, np.array([-5.0, 0.0, 0.4, 0.5, 0.6, 1.0, 2.0, 9.0]))
+    assert list(picked) == [0, 0, 0, 0, 1, 1, 2, 2]
+
+
+def test_an_impossible_gear_is_replaced_by_the_last_real_one():
+    """`> 8` only, a leading invalid filled backwards, and neutral left alone."""
+    import numpy as np
+
+    from src.arcade.data import _drop_impossible_gears
+
+    assert list(_drop_impossible_gears(np.array([3.0, 128.0, 128.0, 5.0]))) == [3.0, 3.0, 3.0, 5.0]
+    assert list(_drop_impossible_gears(np.array([128.0, 12.0, 3.0, 4.0]))) == [3.0, 3.0, 3.0, 4.0]
+    # Neutral is a real reading, so a two-sided predicate would erase these.
+    untouched = np.array([0.0, 0.0, 2.0, 8.0])
+    assert list(_drop_impossible_gears(untouched)) == [0.0, 0.0, 2.0, 8.0]
+
+
+def test_a_channel_that_is_entirely_impossible_is_left_as_published():
+    """There is nothing to fill from, and a NaN column would raise at frame build."""
+    import numpy as np
+
+    from src.arcade.data import _drop_impossible_gears
+
+    published = np.array([128.0, 128.0])
+    assert list(_drop_impossible_gears(published)) == [128.0, 128.0]
