@@ -68,6 +68,23 @@ const VIEW = {
     risk: "Risk: AGGRESSIVE",
     risk_colour: "#ef4444",
     plan: "Pit: L24 · Next: HARD · UCUT: RUS",
+    why: "the undercut window against RUS opens now.",
+    why_detail: {
+      sections: [
+        {
+          title: "Reasoning",
+          rows: [
+            {
+              lead: "",
+              text: "the undercut window against RUS opens now. The gap is 1.4 s and his tyres are eight laps older.",
+            },
+          ],
+        },
+        { title: "Why this call changed", rows: [{ lead: "", text: "lap 22: STAY_OUT (0.58)" }] },
+      ],
+      footer: null,
+    },
+    changed: "was STAY OUT (0.58) · L22",
   },
   scenarios: ["STAY", "PIT", "UCUT", "OCUT"].map((label, index) => ({
     key: label,
@@ -256,7 +273,18 @@ check(
   (await page.locator(".agent-chart").count()) === 2,
   `only the two cards with a chart have a chart box (${await page.locator(".agent-chart").count()})`,
 );
-check((await page.locator(".reasoning-tab").count()) === 6, "six reasoning tabs");
+// The reasoning tabs are gone (#1020). What replaces the check is what
+// replaces the panel: one sentence on the glass, and the whole narrative plus
+// the memory block reachable from it - asserted in the keyboard walk below,
+// because reachability is the property that had to survive the deletion.
+check(
+  (await page.locator(".why-narrative").innerText()).trim().length > 0,
+  "the WHY module carries the narrative's first sentence",
+);
+check(
+  (await page.locator(".reasoning-tab").count()) === 0,
+  "and the tab panel it replaces is gone",
+);
 check((await page.locator(".scenario-row").count()) === 4, "four scenario rows");
 
 // ...and the winner's bar is actually wider. Counting rows passed over a
@@ -517,7 +545,7 @@ await page.waitForTimeout(150);
 // catch. Same mechanism-instead-of-effect trap the sprint-3 gate found in
 // this file's tooltip check.
 const overflowing = await page.evaluate(() =>
-  [...document.querySelectorAll(".agent-card-body, .reasoning-body")]
+  [...document.querySelectorAll(".agent-card-body")]
     .map((el, i) => ({ i, over: el.scrollHeight - el.clientHeight }))
     .filter((e) => e.over > 0)
     .map((e) => e.i),
@@ -527,7 +555,7 @@ check(overflowing.length > 0, `something overflows, or this checks nothing`);
 const wheeled = [];
 for (const index of overflowing) {
   const box = await page
-    .locator(".agent-card-body, .reasoning-body")
+    .locator(".agent-card-body")
     .nth(index)
     .boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -535,7 +563,7 @@ for (const index of overflowing) {
   await page.waitForTimeout(120);
   wheeled.push(
     await page.evaluate(
-      (i) => document.querySelectorAll(".agent-card-body, .reasoning-body")[i].scrollTop,
+      (i) => document.querySelectorAll(".agent-card-body")[i].scrollTop,
       index,
     ),
   );
@@ -586,15 +614,17 @@ check(
 // console cannot leave one silently unvisited.
 const reached = [];
 await page.locator(".header-bar").click();
-for (let i = 0; i < 40 && reached.length < 5; i += 1) {
+for (let i = 0; i < 40 && reached.length < 6; i += 1) {
   await page.keyboard.press("Tab");
   await page.waitForTimeout(60);
   const seen = await page.evaluate(() => {
     const active = document.activeElement;
-    if (!active || !active.classList.contains("agent-card")) return null;
+    const isCard = active && active.classList.contains("agent-card");
+    const isWhy = active && active.classList.contains("why-panel");
+    if (!isCard && !isWhy) return null;
     const tip = document.querySelector(".agent-tooltip");
     return {
-      slot: [...active.classList].find((c) => c.startsWith("slot-")),
+      slot: isWhy ? "why" : [...active.classList].find((c) => c.startsWith("slot-")),
       described: active.getAttribute("aria-describedby"),
       tipId: tip ? tip.id : null,
       text: tip ? tip.innerText : null,
@@ -603,14 +633,26 @@ for (let i = 0; i < 40 && reached.length < 5; i += 1) {
   });
   if (seen) reached.push(seen);
 }
+// Six: the WHY module and the five consoles with content. **The whole reason
+// the reasoning tabs could be deleted** - they were `<button>`s, so everything
+// they held was reachable with Tab, and the replacement has to be too.
 check(
-  reached.length === 5,
-  `Tab alone reaches all five consoles (${reached.map((r) => r.slot).join(", ")})`,
+  reached.length === 6,
+  `Tab alone reaches WHY and all five consoles (${reached.map((r) => r.slot).join(", ")})`,
 );
 check(
-  reached.every((r) => r.text && r.text.includes("Model detail")),
-  "and each one opens its model detail on focus",
+  reached.filter((r) => r.slot !== "why").every((r) => r.text && r.text.includes("Model detail")),
+  "each console opens its model detail on focus",
 );
+// The orchestrator narrative and the DecisionMemory block: the two things the
+// retired panel held that live nowhere else on the window.
+{
+  const why = reached.find((r) => r.slot === "why");
+  check(
+    why.text.includes("Reasoning") && why.text.includes("Why this call changed"),
+    `and WHY opens the whole narrative and the memory block (${JSON.stringify(why.text ?? "")})`,
+  );
+}
 check(
   reached.every((r) => r.described && r.described === r.tipId),
   "with the popup named by aria-describedby",
