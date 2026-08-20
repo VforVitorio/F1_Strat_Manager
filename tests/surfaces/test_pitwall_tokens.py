@@ -481,3 +481,100 @@ def test_the_two_raw_hexes_in_the_stylesheet_are_guarded_too():
     # palette.py: `orchestrator_card.py` writes it straight into its Qt
     # stylesheet too, so freezing it here is what makes the pair monitored.
     assert css.count("#282834") == 1, "the empty-bar shade is used in exactly one rule"
+
+
+# --- The sweep, because the list above is a list -----------------------------
+
+
+def test_no_pitwall_source_file_carries_an_unregistered_hex():
+    """Every guard above names its files. This one FINDS them.
+
+    That is the difference between a check that cannot miss and one that misses
+    by construction. `QT_BASE_CSS`, `AGENTS_CSS`, `DATA_CSS`, `AGENTS_WINDOW`
+    and `TRACE_STACK` are explicit paths, so a colour written into any file
+    that is not one of them is invisible to the palette guards - and a sprint
+    that adds `PlanTimeline.tsx`, `WhyPanel.tsx`, `Tooltip.tsx` and
+    `agents_view/timeline.py` adds four such files at once.
+
+    Discovery, then. Walk both PITWALL source trees, collect every literal hex,
+    and require each one to be a colour `palette.py` actually defines. The
+    palette is the register; a hex that is in it is a copy the other guards can
+    reason about, and a hex that is not is somebody's eyedropper.
+
+    Not a substitute for the slot maps above, which assert that a copy sits in
+    the RIGHT slot. This one only asserts that no copy is off the books.
+    """
+    from src.arcade import palette
+
+    known = {
+        _rgb_to_hex(value).lower()
+        for name, value in vars(palette).items()
+        if name.isupper() and isinstance(value, tuple) and len(value) == 3
+    }
+    # Compound and flag colours are palette data too, held in dicts rather than
+    # as module constants.
+    for mapping in (palette._COMPOUND_COLOUR_BY_LABEL, palette._FLAG_BG_BY_INTENT):
+        known.update(_rgb_to_hex(value).lower() for value in mapping.values())
+    # The empty half of the confidence and scenario bars. It is NOT in
+    # `palette.py` - `orchestrator_card.py` wrote it straight into its own Qt
+    # stylesheet too - and the guard above freezes it to exactly one rule.
+    known.add("#282834")
+    # The Qt reasoning highlighter's five rule colours, ported verbatim from
+    # `reasoning_tabs.py` and living in `agents_view/reasoning.py`. They are a
+    # palette copy the named guards above never covered - this sweep is what
+    # found them - so they are pinned here rather than waved through.
+    #
+    # **Nothing renders them since #1020.** The tabs they coloured are gone;
+    # `build_reasoning` still splits six bodies into per-character runs on every
+    # tick and the segments' colours reach no element. Tracked in #1026.
+    known.update({"#f472b6", "#d946ef", "#facc15", "#22d3ee"})
+
+    roots = (
+        REPO_ROOT / "src" / "pitwall" / "agents_view",
+        UI_SRC / "features",
+        UI_SRC / "lib",
+        UI_SRC / "styles",
+    )
+    # `tokens.css` is the WEB palette and it is deliberately a different one:
+    # both PITWALL windows render in the Qt palette, and CLAUDE.md says so in as
+    # many words. It has its own guard in this file -
+    # `test_the_pitwall_copy_is_byte_identical_to_the_webapp_source` - which is
+    # a stronger claim than membership of `palette.py`.
+    skip = {UI_SRC / "styles" / "tokens.css"}
+    # **Six hex digits, and NOTHING after them.** The first version of this
+    # line ended in a word boundary and the escape did not survive being
+    # written: the compiled pattern was `#[0-9a-fA-F]{6}` followed by a literal
+    # BACKSPACE, so it matched nothing, in any file, ever. The sweep visited 52
+    # files, found zero hexes and passed - a guard about the empty set, written
+    # to close the class of guards about the empty set. What caught it was
+    # planting a hex and watching this stay green.
+    hex_literal = re.compile("#[0-9a-fA-F]{6}")
+
+    # **The pattern, before the files.** Its first version ended in an escape
+    # that did not survive being written, and it matched nothing anywhere -
+    # which looked exactly like a clean repo. One probe is the difference
+    # between a sweep and a green light.
+    assert hex_literal.findall("a #123abc b") == ["#123abc"], (
+        f"the hex pattern matches nothing: {hex_literal.pattern!r}"
+    )
+
+    visited = 0
+    offenders: list[str] = []
+    for root in roots:
+        for path in sorted(root.rglob("*")):
+            if path.suffix not in {".py", ".ts", ".tsx", ".css"} or path in skip:
+                continue
+            visited += 1
+            source = _without_comments(path.read_text("utf-8"))
+            for found in hex_literal.findall(source):
+                if found.lower() not in known:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {found}")
+
+    # The enumeration first. A glob that resolves to nothing - a moved
+    # directory, a wrong `parents[]` - passes silently, and this repo has
+    # already shipped one census that found zero files and said so cheerfully.
+    assert visited >= 25, f"the sweep only visited {visited} files; the roots are wrong"
+    assert not offenders, (
+        "a colour that palette.py does not define is written into PITWALL source: "
+        + "; ".join(offenders)
+    )
