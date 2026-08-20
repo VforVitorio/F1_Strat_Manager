@@ -49,8 +49,15 @@ class AgentsViewBuilder:
         self._run: dict[str, Any] | None = None
         self._seq: int | None = None
 
-    def build(self, payload: dict[str, Any], connection: str = "Connected") -> dict[str, Any]:
-        """The whole view for one tick."""
+    def build(self, payload: dict[str, Any], connection: str) -> dict[str, Any]:
+        """The whole view for one tick.
+
+        `connection` has **no default**. It used to default to "Connected",
+        which is a green claim about a socket in the one field whose entire job
+        (#982, #1004, #1024) is to say when that claim is false - and a caller
+        that forgot the argument got it for free. The only production caller
+        always passes `_connection_label()`.
+        """
         strategy = payload.get("strategy") or {}
         latest = strategy.get("latest") or {}
 

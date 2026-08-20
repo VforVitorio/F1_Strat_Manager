@@ -27,7 +27,18 @@ import type { TooltipView } from "../../lib/agents";
 /** Breathing room between the card and the popup, and from the viewport edge. */
 const TOOLTIP_GAP = 10;
 
-export function Tooltip({ view, anchor, id }: { view: TooltipView; anchor: DOMRect; id: string }) {
+export function Tooltip({
+  view,
+  anchor,
+  id,
+  hold,
+}: {
+  view: TooltipView;
+  anchor: DOMRect;
+  id: string;
+  /** Keeps the popup open while the pointer is inside it. */
+  hold?: { onMouseEnter: () => void; onMouseLeave: () => void };
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   const [box, setBox] = useState({ left: anchor.left, top: anchor.top + 32 });
 
@@ -92,7 +103,7 @@ export function Tooltip({ view, anchor, id }: { view: TooltipView; anchor: DOMRe
   // presentation below can drift from the Qt window's; the structure the host
   // returns is pinned by a test.
   return createPortal(
-    <span ref={ref} id={id} role="tooltip" className="agent-tooltip" style={box}>
+    <span ref={ref} id={id} role="tooltip" className="agent-tooltip" style={box} {...hold}>
       {view.sections.map((section, index) => (
         <span className="tip-section" key={index}>
           <span className="tip-title">{section.title}</span>
@@ -123,22 +134,80 @@ export function Tooltip({ view, anchor, id }: { view: TooltipView; anchor: DOMRe
  */
 export function useTooltipTarget(id: string, enabled: boolean) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
-  const open = (element: HTMLElement) => enabled && setAnchor(element.getBoundingClientRect());
-  const close = () => setAnchor(null);
+  // The pointer's grace period between leaving the card and entering the popup,
+  // which sits `TOOLTIP_GAP` away from it. Long enough to cross 10 px, short
+  // enough that a popup left behind by a moving pointer does not linger.
+  const closing = useRef<number | undefined>(undefined);
+
+  const open = (element: HTMLElement) => {
+    window.clearTimeout(closing.current);
+    if (enabled) setAnchor(element.getBoundingClientRect());
+  };
+  const close = () => {
+    window.clearTimeout(closing.current);
+    setAnchor(null);
+  };
+  const closeSoon = () => {
+    window.clearTimeout(closing.current);
+    closing.current = window.setTimeout(() => setAnchor(null), 140);
+  };
+
+  /**
+   * **The popup's own content had no input path to it.**
+   *
+   * It has `max-height: 22rem` and a visible scrollbar, and the stylesheet
+   * argues the bar is the signal for a busy lap. Nothing could drive it. The
+   * mouse could not: the popup is a portal positioned 10 px away, so crossing
+   * the gap fired the card's `mouseleave` and unmounted it. The keyboard could
+   * not either: focus sits on the card, the popup has no `tabIndex`, and Tab
+   * moves focus, which closes it. So a RADIO tooltip on a busy lap - rows, then
+   * the model-detail sections appended after them - kept its reasoning and its
+   * nine `key = value` rows permanently below the fold.
+   *
+   * Two paths, one for each hand. The pointer gets the standard hover-intent
+   * grace period, and the popup keeps itself open while the pointer is inside
+   * it. The keyboard gets the arrows, forwarded from the card, so the reader
+   * never has to reach an element the tab order does not visit.
+   */
+  const hold = {
+    onMouseEnter: () => window.clearTimeout(closing.current),
+    onMouseLeave: close,
+  };
+
+  const scrollPopup = (delta: number) => {
+    const popup = document.getElementById(id);
+    if (!popup) return false;
+    const before = popup.scrollTop;
+    popup.scrollTop = before + delta;
+    return popup.scrollTop !== before;
+  };
 
   return {
     anchor,
+    /** Spread on the popup, so the pointer can enter it without closing it. */
+    hold,
     props: {
       // Only a target that HAS something to show is a tab stop; empty stops
       // between the reader and the next panel are a cost, not a courtesy.
       tabIndex: enabled ? 0 : undefined,
       "aria-describedby": enabled && anchor ? id : undefined,
       onMouseEnter: (event: React.MouseEvent<HTMLElement>) => open(event.currentTarget),
-      onMouseLeave: close,
+      onMouseLeave: closeSoon,
       onFocus: (event: React.FocusEvent<HTMLElement>) => open(event.currentTarget),
+      // Immediate, unlike the pointer's. Blur means the reader has moved on
+      // deliberately, and a grace period here left the previous console's popup
+      // on screen beside the next one's - two popups, and `aria-describedby`
+      // pointing at whichever the DOM listed first.
       onBlur: close,
       onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
-        if (event.key === "Escape") close();
+        if (event.key === "Escape") {
+          close();
+          return;
+        }
+        // Only swallow the arrow when it actually moved the popup; otherwise
+        // the reader loses the page scroll for nothing.
+        const step = event.key === "ArrowDown" ? 48 : event.key === "ArrowUp" ? -48 : 0;
+        if (step && scrollPopup(step)) event.preventDefault();
       },
     },
   };

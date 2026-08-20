@@ -686,11 +686,15 @@
 
 /* --- The two embedded charts --------------------------------------------- */
 
-/* The 260-420 band lives on the grid row (`.agents-right`), which carries
- * Qt's own caps; inside it the chart takes whatever the text leaves. An
- * earlier version of this comment said the row grew freely and that the
- * two magic numbers were absent - #871 put them in the sheet three
- * hundred lines above and left the sentence standing. */
+/* The chart takes whatever its console's text leaves.
+ *
+ * **Third generation of this comment, and the second time it was wrong about
+ * the same rule.** It described a 260-420 band on `.agents-right`, a column
+ * the decision band deleted; before that it claimed the row grew freely while
+ * the caps sat three hundred lines above it. There is no band and no right
+ * column now: the two chart consoles stretch to their grid row (`agents.css`'s
+ * `.agents-grid > .slot-pace`) and the chart fills what the headline and body
+ * do not take. */
 .chart {
   width: 100%;
   height: 100%;

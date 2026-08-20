@@ -37,7 +37,7 @@ export function AgentCard({
   // the empty string Qt used, because a falsy value that is also a legitimate
   // rendering is the sentinel shape this repo keeps paying for.
   const tooltipId = `tip-${slot ?? title.toLowerCase()}`;
-  const { anchor, props } = useTooltipTarget(tooltipId, card.tooltip !== null);
+  const { anchor, props, hold } = useTooltipTarget(tooltipId, card.tooltip !== null);
 
 
   return (
@@ -62,7 +62,7 @@ export function AgentCard({
       </header>
 
       {card.tooltip && anchor ? (
-        <Tooltip view={card.tooltip} anchor={anchor} id={tooltipId} />
+        <Tooltip view={card.tooltip} anchor={anchor} id={tooltipId} hold={hold} />
       ) : null}
 
       {/* The card scrolls here, not on the card itself, so the card is not

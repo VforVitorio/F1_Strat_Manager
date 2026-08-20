@@ -24,14 +24,14 @@ import { Tooltip, useTooltipTarget } from "./Tooltip";
 const TOOLTIP_ID = "tip-why";
 
 export function WhyPanel({ view }: { view: OrchestratorView }) {
-  const { anchor, props } = useTooltipTarget(TOOLTIP_ID, view.why_detail !== null);
+  const { anchor, props, hold } = useTooltipTarget(TOOLTIP_ID, view.why_detail !== null);
 
   return (
     <section className="card why-panel" {...props}>
       <h2 className="band-title">WHY THIS CALL</h2>
 
       {view.why_detail && anchor ? (
-        <Tooltip view={view.why_detail} anchor={anchor} id={TOOLTIP_ID} />
+        <Tooltip view={view.why_detail} anchor={anchor} id={TOOLTIP_ID} hold={hold} />
       ) : null}
 
       {/* An em dash, not an empty box. Before the first decision there is no

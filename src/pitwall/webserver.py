@@ -70,7 +70,9 @@ class TickSource(Protocol):
 
     def get_live_lap(self, since_rev: int = -1) -> dict[str, Any] | None: ...
 
-    def get_connection(self) -> str: ...
+    # `{label, colour}` since #1024: the colour rides with the word so the two
+    # windows cannot colour one socket state differently, which they did.
+    def get_connection(self) -> dict[str, str]: ...
 
 
 # Readers that take "the revision I hold" and answer null when it is current.

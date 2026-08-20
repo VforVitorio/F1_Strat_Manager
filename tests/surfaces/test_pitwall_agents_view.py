@@ -8,6 +8,7 @@ file guards the properties that make that possible.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import textwrap
@@ -185,7 +186,7 @@ def test_the_plan_timeline_spans_the_race_and_not_the_chart_window():
     for lap in range(1, 46):
         latest = _latest(lap)
         latest["compound"] = "MEDIUM" if lap <= 20 else "HARD"
-        view = builder.build(_payload(seq=lap, lap=lap, latest=latest))
+        view = builder.build(_payload(seq=lap, lap=lap, latest=latest), "Connected")
 
     timeline = view["plan_timeline"]
     assert len(view["history"]["tire"]) == KEEP_LAPS, "the chart store really did trim"
@@ -418,6 +419,124 @@ def test_every_reasoning_tab_body_is_reachable_from_its_card_tooltip():
             for row in section["rows"]
         )
         assert "own sentence for this lap" in rendered, f"{key}'s reasoning is not reachable"
+
+
+# A string that is harmless as TEXT and a tag as MARKUP. Not a curiosity: the
+# orchestrator's `undercut_target` is an unconstrained `Optional[str]` an LLM
+# fills, and every card headline and body line still reaches the window through
+# `dangerouslySetInnerHTML` because it can carry the compound pill.
+_HOSTILE = '<img src=x onerror="boom">'
+
+
+def test_no_agent_string_can_become_markup():
+    """Every formatter, every string-shaped field, one hostile value.
+
+    **Written because the enumeration is what fails, not the escaping.** The
+    module has had `_escaped` since sprint 8 and a docstring claiming every
+    free-text field went through it; the exit gate found six that did not, one
+    of them reaching a `dangerouslySetInnerHTML` sink this very sprint added.
+    A test naming the six would be the same list one layer down.
+
+    So this feeds `<img src=x onerror=...>` into every string field the
+    formatters accept and asserts no unescaped `<` survives into a headline or
+    a body line. A new field lands in this test the day it lands in a payload,
+    without anyone remembering to add it.
+
+    Tooltips are excluded ON PURPOSE and asserted separately: they return DATA
+    and the TSX renders React text nodes, so escaping there would put
+    `&lt;` on the screen as characters.
+    """
+    from src.pitwall.agent_formatters import (
+        format_pace,
+        format_pit,
+        format_radio,
+        format_rag,
+        format_situation,
+        format_tire,
+    )
+
+    blocks = {
+        "pace": (format_pace, {"lap_time_pred": 81.0, "delta_vs_prev": -0.2}),
+        "tire": (
+            format_tire,
+            {"compound": _HOSTILE, "warning_level": _HOSTILE, "laps_to_cliff_p50": 6.0},
+        ),
+        "situation": (format_situation, {"threat_level": _HOSTILE, "gap_ahead_s": 1.4}),
+        "radio": (
+            format_radio,
+            {
+                "radio_events": [{"driver": _HOSTILE, "message": _HOSTILE}],
+                "rcm_events": [{"lap": 23, "message": _HOSTILE}],
+                "alerts": [],
+            },
+        ),
+        "rag": (
+            format_rag,
+            {"question": _HOSTILE, "answer": _HOSTILE, "articles": [_HOSTILE], "chunks": []},
+        ),
+        "pit": (
+            format_pit,
+            {
+                "stop_duration_p50": 22.4,
+                "compound_recommendation": _HOSTILE,
+                "undercut_prob": 0.6,
+                "undercut_target": _HOSTILE,
+            },
+        ),
+    }
+
+    # **The assertion is "no angle bracket survives", not "no `<img` survives".**
+    # The first draft looked for the literal tag and passed against a real
+    # regression, because `format_situation` upper-cases its field and the
+    # headline read `Threat <IMG SRC=...>`. A case-sensitive substring check is
+    # a guard that is right for the wrong reason.
+    #
+    # The palette's own pill and chip spans are the one legitimate markup on
+    # these lines, so they are removed first - and the removal is anchored to
+    # their exact shape rather than to `<span`, so a hostile string wearing a
+    # span of its own is not waved through.
+    pill = re.compile(r'<span style="background-color: #[0-9a-f]{6};[^"]*">.*?</span>')
+
+    checked = 0
+    for name, (formatter, block) in blocks.items():
+        formatted = formatter(block, active=True) if name in {"pit", "rag"} else formatter(block)
+        headline, _, lines, _ = formatted
+        for text in [headline, *(line for line, _ in lines)]:
+            checked += 1
+            residue = pill.sub("", text)
+            assert "<" not in residue and ">" not in residue, (
+                f"{name}: an unescaped angle bracket reached a rendered line: {text!r}"
+            )
+
+    assert checked >= 12, f"only {checked} rendered strings were probed"
+
+
+def test_the_plan_caption_escapes_the_field_an_llm_fills():
+    """The sink this sprint added, and the field that rides into it.
+
+    `_plan_line` composes markup - it carries the compound pill - and
+    `PlanTimeline` renders it through `dangerouslySetInnerHTML`.
+    `undercut_target` is `Optional[str]` on `StrategyRecommendation` with no
+    pattern and no length bound, filled by the orchestrator LLM.
+    """
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    caption = build_orchestrator(
+        {
+            "action": "PIT_NOW",
+            "confidence": 0.7,
+            "pit_lap_target": 24,
+            "compound_next": "HARD",
+            "undercut_target": _HOSTILE,
+        }
+    )["plan"]
+
+    residue = re.sub(r'<span style="background-color: #[0-9a-f]{6};[^"]*">.*?</span>', "", caption)
+    assert "<" not in residue and ">" not in residue, f"the caption carries a tag: {caption!r}"
+    assert "&lt;img" in caption, "and the text is still there, escaped"
+    # The pill IS markup and must survive as markup, or the fix would have
+    # escaped the one thing on this line that is supposed to be a span.
+    assert '<span style="background-color:' in caption
 
 
 def test_the_tooltips_return_data_and_never_markup():
@@ -717,10 +836,12 @@ def test_the_pace_chart_says_where_its_prediction_stopped():
 
     builder = AgentsViewBuilder()
     for lap in range(20, 23):
-        builder.build(_payload(seq=lap, lap=lap, latest=_latest(lap)))
+        builder.build(_payload(seq=lap, lap=lap, latest=_latest(lap)), "Connected")
 
     # Lap 23 arrives with a lap time and no per-agent block at all.
-    stale = builder.build(_payload(seq=99, lap=23, latest={"lap_number": 23, "lap_time_s": 81.4}))
+    stale = builder.build(
+        _payload(seq=99, lap=23, latest={"lap_number": 23, "lap_time_s": 81.4}), "Connected"
+    )
 
     pace = stale["charts"]["pace"]
     assert pace["current_lap"] == 23.0
@@ -734,7 +855,7 @@ def test_the_pace_chart_says_where_its_prediction_stopped():
     assert [lap for lap, _ in tire["trend"]][-1] == 23.0, "its trend is live"
 
     # And on a healthy tick the two agree, so the renderer draws no tag.
-    live = builder.build(_payload(seq=100, lap=24, latest=_latest(24)))
+    live = builder.build(_payload(seq=100, lap=24, latest=_latest(24)), "Connected")
     assert live["charts"]["pace"]["prediction_lap"] == live["charts"]["pace"]["current_lap"]
 
 
@@ -760,7 +881,7 @@ def test_an_active_pit_console_is_not_a_warning_unless_something_is_pressing():
         "compound_recommendation": "HARD",
     }
 
-    calm = format_pit(block, active=True)
+    calm = format_pit({**block, "action": "STAY_OUT"}, active=True)
     pressing = format_pit({**block, "sc_reactive": True}, active=True)
 
     assert calm[0] == "stop 22.40s → HARD", "and it says STOP, not PIT"
@@ -769,6 +890,26 @@ def test_an_active_pit_console_is_not_a_warning_unless_something_is_pressing():
     assert hex_str(pressing[1]) == hex_str(WARNING)
     assert pressing[3] == "WATCH"
     assert pressing[0].endswith(" · SC")
+
+    # **And the console reads its own agent's verdict, not a proxy for it.**
+    # Keyed on `sc_reactive` alone, a degradation- or undercut-driven PIT_NOW
+    # with low safety-car probability rendered a green OK disc while the SAME
+    # card's model detail printed `action = PIT_NOW` - the glyph contradicting
+    # its own dump. Asserted over the whole enumeration of
+    # `PitStrategyOutput.action`, because a check on PIT_NOW alone would go on
+    # passing the day a sixth value arrives.
+    by_action = {
+        action: format_pit({**block, "action": action}, active=True)[3]
+        for action in ("PIT_NOW", "REACTIVE_SC", "UNDERCUT", "OVERCUT", "STAY_OUT")
+    }
+    assert by_action == {
+        "PIT_NOW": "WATCH",
+        "REACTIVE_SC": "WATCH",
+        # A plan with a window, not a deadline. Their own amber is the UCUT line.
+        "UNDERCUT": "OK",
+        "OVERCUT": "OK",
+        "STAY_OUT": "OK",
+    }, by_action
 
 
 def test_the_radio_console_ranks_severity_over_recency():
@@ -1637,11 +1778,11 @@ def test_a_different_race_does_not_inherit_the_last_ones_laps():
 
     builder = AgentsViewBuilder()
     for lap in range(14, 24):
-        builder.build(_payload(seq=lap, lap=lap))
-    melbourne = builder.build(_payload(seq=30, lap=23))
+        builder.build(_payload(seq=lap, lap=lap), "Connected")
+    melbourne = builder.build(_payload(seq=30, lap=23), "Connected")
     assert len(melbourne["history"]["pace"]) >= 9, "the fixture never accumulated anything"
 
-    suzuka = builder.build(_other_race_payload(seq=1, lap=3))
+    suzuka = builder.build(_other_race_payload(seq=1, lap=3), "Connected")
     laps = [row["lap"] for row in suzuka["history"]["pace"]]
     assert laps == [3], f"the new race inherited {laps}"
 
@@ -1657,9 +1798,9 @@ def test_the_same_race_relaunched_is_a_restart_too():
 
     builder = AgentsViewBuilder()
     for lap in range(14, 24):
-        builder.build(_payload(seq=lap, lap=lap))
+        builder.build(_payload(seq=lap, lap=lap), "Connected")
 
-    relaunched = builder.build(_payload(seq=1, lap=2))
+    relaunched = builder.build(_payload(seq=1, lap=2), "Connected")
     laps = [row["lap"] for row in relaunched["history"]["pace"]]
     assert laps == [2], f"the relaunched run inherited {laps}"
 
@@ -1676,11 +1817,11 @@ def test_a_rewind_inside_one_run_still_evicts_nothing():
 
     builder = AgentsViewBuilder()
     for lap in range(14, 24):
-        builder.build(_payload(seq=lap, lap=lap))
+        builder.build(_payload(seq=lap, lap=lap), "Connected")
 
     rewound = _payload(seq=99, lap=15)
     rewound["playback"]["frame_index"] = 10
-    view = builder.build(rewound)
+    view = builder.build(rewound, "Connected")
     laps = [row["lap"] for row in view["history"]["pace"]]
     assert max(laps) == 23, f"a rewind evicted the future: {laps}"
 
@@ -1697,13 +1838,13 @@ def test_the_stale_lap_that_setdefault_would_have_made_permanent():
 
     builder = AgentsViewBuilder()
     for lap in range(14, 24):
-        builder.build(_payload(seq=lap, lap=lap))
+        builder.build(_payload(seq=lap, lap=lap), "Connected")
 
     fresh = _other_race_payload(seq=1, lap=3)
     fresh["strategy"]["history_tail"] = [
         {"lap_number": 18, "lap_time_s": 92.18, "tyre_life": 4, "compound": "MEDIUM"}
     ]
-    view = builder.build(fresh)
+    view = builder.build(fresh, "Connected")
     lap18 = next((row for row in view["history"]["pace"] if row["lap"] == 18), None)
     assert lap18 is not None and lap18["actual"] == 92.18, (
         f"lap 18 kept the dead race's number: {lap18}"

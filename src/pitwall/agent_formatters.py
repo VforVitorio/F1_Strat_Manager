@@ -84,6 +84,26 @@ def _escaped(text: str | None, limit: int = 70) -> str:
     return html.escape(_truncate(text, limit))
 
 
+def _markup_safe(value: Any) -> str:
+    """A producer string, made safe as MARKUP, with nothing else done to it.
+
+    `_escaped` is this plus the body's 70-character width budget, which is
+    right for a transcript and wrong for a compound label or a driver code: a
+    truncated `MEDIUM` is a different fact, and a truncated `RUS` is a
+    different driver.
+
+    **Every field that lands in a headline or a body line needs one of the
+    two.** Those still reach the window through `dangerouslySetInnerHTML`
+    because they can carry the compound pill and the flag chips, so the WHOLE
+    line is markup, and the exit gate found the free-text ones riding
+    unescaped: the orchestrator's `undercut_target` is an unconstrained
+    `Optional[str]` filled by an LLM, and it reached the PLAN caption verbatim.
+    `test_no_agent_string_can_become_markup` feeds a hostile string through
+    every formatter rather than trusting this list to stay complete.
+    """
+    return html.escape(str(value))
+
+
 def _truncate(text: str | None, limit: int = 70) -> str:
     """Collapse a free-text string to ``limit`` visible characters with an ellipsis suffix.
 
@@ -216,7 +236,7 @@ def format_tire(t: dict[str, Any] | None) -> Formatted:
         pill = compound_pill_html(compound_label)
         body: list[Line] = [
             (f"deg {deg_text} · {pill}", TEXT_SECONDARY),
-            (warning, _status_colour(status)),
+            (_markup_safe(warning), _status_colour(status)),
         ]
         return headline, TEXT_TERTIARY, body, STATUS_WATCH if status == STATUS_OK else status
 
@@ -225,7 +245,7 @@ def format_tire(t: dict[str, Any] | None) -> Formatted:
     body = [
         (f"range {int(p10)}–{int(p90)} laps", TEXT_SECONDARY),
         (f"deg {deg_text} · {pill}", TEXT_SECONDARY),
-        (warning, _status_colour(status)),
+        (_markup_safe(warning), _status_colour(status)),
     ]
     return headline, TEXT_PRIMARY, body, status
 
@@ -277,7 +297,7 @@ def format_situation(s: dict[str, Any] | None) -> Formatted:
         (f"safety car {sc * 100:.0f}%", sc_color),
         (f"gap {gap:.1f}s · Δpace {_signed(pace_delta, 2)}s/lap", TEXT_TERTIARY),
     ]
-    return f"Threat {threat}", headline_color, body, status
+    return f"Threat {_markup_safe(threat)}", headline_color, body, status
 
 
 # --- N29 Radio ----------------------------------------------------------
@@ -558,6 +578,12 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
 
 # --- N28 Pit (conditional) ---------------------------------------------
 
+# The two `PitStrategyOutput.action` values that mean "stop on this lap", as
+# opposed to a plan with a window. Read from the agent's own verdict rather
+# than inferred from a proxy: `sc_reactive` covers safety-car urgency only, and
+# keying on it alone painted a degradation-driven PIT_NOW calm green.
+_PIT_ACTIONS_NOW: frozenset[str] = frozenset({"PIT_NOW", "REACTIVE_SC"})
+
 
 def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
     """CLI §1.5: active shows pit p50 → compound; idle shows trigger hint.
@@ -592,21 +618,32 @@ def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
     # is the whole excursion including the lap-time loss; this is the first, and
     # a headline reading "pit 22.40s" invites the reader to take it for the
     # second. The two are a pair this repo's notes flag by name.
-    headline = f"stop {p50:.2f}s → {compound}" + (" · SC" if sc_reactive else "")
+    headline = f"stop {p50:.2f}s → {_markup_safe(compound)}" + (" · SC" if sc_reactive else "")
     lines: list[Line] = [(f"range {p05:.2f}–{p95:.2f}s", TEXT_SECONDARY)]
     if up is not None and target:
-        lines.append((f"UCUT {float(up) * 100:.0f}% → {target}", WARNING))
+        lines.append((f"UCUT {float(up) * 100:.0f}% → {_markup_safe(target)}", WARNING))
     else:
         lines.append(("no undercut target", TEXT_TERTIARY))
 
-    # **Being awake is not being worried.** The console wore WARNING amber and
-    # WATCH whenever N28 was routed, which is every lap with a pit question -
-    # so the state that means "look at this" was the state that means "this
-    # agent ran". WATCH is kept for the one thing in this block that says
-    # something is pressing: a recommendation driven by safety-car pressure
-    # rather than by tyre or compound logic, which carries a different risk
-    # profile and a deadline.
-    if sc_reactive:
+    # **Being awake is not being worried - but a stop THIS LAP is.**
+    #
+    # The console wore WARNING amber and WATCH whenever N28 was routed, which is
+    # every lap with a pit question, so the state that means "look at this" was
+    # the state that means "this agent ran". Removing that took the urgent lap
+    # with it: keyed on `sc_reactive` alone, a degradation- or undercut-driven
+    # `PIT_NOW` with low safety-car probability rendered a green OK disc while
+    # the SAME card's model detail printed `action = PIT_NOW` and
+    # `recommended_lap = <this lap>`. The glyph contradicted its own dump.
+    #
+    # So the question is the agent's own verdict, not a proxy for it.
+    # `PitStrategyOutput.action` is PIT_NOW / STAY_OUT / UNDERCUT / OVERCUT /
+    # REACTIVE_SC and `recommended_lap` is this lap whenever the action is not
+    # STAY_OUT; the two that mean "stop now" get WATCH. UNDERCUT and OVERCUT
+    # are plans with a window rather than a deadline, and they stay calm - the
+    # UCUT line carries their own amber.
+    action = str(p.get("action") or "").upper()
+    pressing = sc_reactive or action in _PIT_ACTIONS_NOW
+    if pressing:
         return headline, WARNING, lines, STATUS_WATCH
     return headline, TEXT_PRIMARY, lines, STATUS_OK
 
@@ -648,7 +685,7 @@ def _format_article_refs(articles: list[Any] | None) -> str:
         return ""
     head = cleaned[:3]
     tail = ", ..." if len(cleaned) > 3 else ""
-    return "Art. " + ", ".join(head) + tail
+    return "Art. " + ", ".join(_markup_safe(item) for item in head) + tail
 
 
 def rag_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -668,13 +705,25 @@ def rag_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
     if r is None:
         return None
     chunks = r.get("chunks") or []
-    if not chunks:
+    answer = str(r.get("answer") or "").strip()
+    # **The answer alone is enough to open a tooltip.** It used to require
+    # chunks, so a lap whose retriever returned none had no popup at all - and
+    # the answer is the one synthesised sentence this console exists to deliver.
+    if not chunks and not answer:
         return None
 
     sections: list[dict[str, Any]] = []
     question = (r.get("question") or "").strip()
     if question:
         sections.append({"title": "Question", "rows": [{"lead": "", "text": question}]})
+    # **The answer, in full.** The card renders it through `_escaped`'s 70
+    # character budget, so anything longer was truncated there and absent here -
+    # the model's actual answer reachable NOWHERE, while this function's own
+    # docstring said "the full answer text ... lives in the tooltip". Every
+    # other console's full text was wired into its popup in #1019; this is the
+    # one that was left with a ceiling on its primary content.
+    if answer:
+        sections.append({"title": "Answer", "rows": [{"lead": "", "text": answer}]})
 
     head = chunks[:4]
     for chunk in head:
@@ -699,9 +748,14 @@ def format_rag(rag: dict[str, Any] | str | None, active: bool) -> Formatted:
     The active branch surfaces a 70-character snippet of the LLM answer
     on body line 1 and the first three deduplicated article references
     (``"Art. 48.3, 55.1"``) on body line 2. The 70-char cap mirrors the
-    radio ticker so the two cards read as a balanced pair; the full
-    answer text and every retrieved chunk live in the tooltip, which the
-    window wires onto the card via ``rag_tooltip_html``.
+    radio ticker so the two cards read as a balanced pair; the full answer
+    text and every retrieved chunk live in the tooltip (``rag_tooltip``).
+
+    **That last sentence was false until the sprint-10 exit gate.** The
+    tooltip carried the question and the chunks and never the answer, so an
+    answer longer than 70 characters existed nowhere the reader could get to
+    it - and the function that says otherwise is this one. It also named
+    ``rag_tooltip_html``, which has not existed since sprint 8.
 
     The parameter is typed permissively (``dict | str | None``) because
     the upstream wire historically carried only the answer string; when
