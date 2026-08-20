@@ -108,6 +108,21 @@ def _truncate(text: str | None, limit: int = 70) -> str:
 # --- N25 Pace -----------------------------------------------------------
 
 
+# --- What an idle console says -----------------------------------------------
+#
+# **"no prediction — stub" was a word about the CODE on a surface a race
+# engineer reads.** A stub is a thing a developer knows about; what the reader
+# needs to know is that this agent has no reading for this lap, which is a fact
+# about the race. Same for "no radio/rcm pipeline output", which names a
+# pipeline, and for "triggers on ...", which describes a routing rule rather
+# than telling the reader what would wake the console.
+#
+# The trigger hints are the two conditional agents' own wake conditions, in the
+# operational voice the rest of the window uses. They teach the reader what the
+# system does, which is why this window dims an idle console rather than
+# blanking it.
+
+
 def format_pace(p: dict[str, Any] | None) -> Formatted:
     """CLI §1.1: pace delta to next predicted lap, with absolute predicted lap time.
 
@@ -121,7 +136,7 @@ def format_pace(p: dict[str, Any] | None) -> Formatted:
     """
     if not p:
         return (
-            "no prediction — stub",
+            "no reading this lap",
             TEXT_TERTIARY,
             [],
             STATUS_IDLE,
@@ -173,7 +188,7 @@ def format_tire(t: dict[str, Any] | None) -> Formatted:
     """
     if not t:
         return (
-            "no prediction — stub",
+            "no reading this lap",
             TEXT_TERTIARY,
             [],
             STATUS_IDLE,
@@ -233,7 +248,7 @@ def format_situation(s: dict[str, Any] | None) -> Formatted:
     """
     if not s:
         return (
-            "no prediction — stub",
+            "no reading this lap",
             TEXT_TERTIARY,
             [],
             STATUS_IDLE,
@@ -445,7 +460,7 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
     """
     if r is None:
         return (
-            "no radio/rcm pipeline output",
+            "radio silent",
             TEXT_TERTIARY,
             [],
             STATUS_IDLE,
@@ -520,7 +535,7 @@ def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
     """
     if not active or not p:
         return (
-            "triggers on cliff pressure, compound change, or problem radio",
+            "wakes on tyre cliff, compound change, or a problem radio",
             TEXT_TERTIARY,
             [],
             STATUS_IDLE,
@@ -643,7 +658,7 @@ def format_rag(rag: dict[str, Any] | str | None, active: bool) -> Formatted:
     """
     if not active:
         return (
-            "triggers on compound change, SC >30%, or FIA warning/penalty",
+            "wakes on compound change, SC risk above 30%, or an FIA warning",
             TEXT_TERTIARY,
             [],
             STATUS_IDLE,

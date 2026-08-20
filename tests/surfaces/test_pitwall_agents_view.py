@@ -698,6 +698,55 @@ def test_the_situation_card_says_out_of_range_and_never_zero_per_cent():
     assert view["cards"]["situation"]["lines"][0]["text"] == "overtake — (out of model range)"
 
 
+def test_every_console_state_has_its_own_shape():
+    """No console state may be readable by colour alone.
+
+    OK and ALERT were the same filled disc, green against red - the single most
+    common colour-vision confusion there is - so the two states a reader most
+    needs to tell apart were, for some readers, one state.
+
+    Asserted as DISTINCTNESS over the whole map rather than as "ALERT is a
+    triangle": the property is what matters, and a check on one entry would go
+    on passing the day a fifth state arrives wearing a disc.
+    """
+    from src.pitwall.agents_view.panels import STATUS_GLYPHS
+
+    glyphs = [glyph for glyph, _ in STATUS_GLYPHS.values()]
+    assert len(set(glyphs)) == len(STATUS_GLYPHS), (
+        f"two console states share a glyph and differ only in colour: {STATUS_GLYPHS}"
+    )
+    colours = [colour for _, colour in STATUS_GLYPHS.values()]
+    assert len(set(colours)) == len(STATUS_GLYPHS), f"two states share a colour: {STATUS_GLYPHS}"
+
+
+def test_an_idle_console_says_what_would_wake_it_in_the_readers_language():
+    """The copy a race engineer reads, not the copy a developer writes.
+
+    "no prediction - stub" named a thing about the CODE. "no radio/rcm pipeline
+    output" named a pipeline. "triggers on ..." described a routing rule. None
+    of the three tells the reader what they need, which is either that this
+    agent has no reading for this lap or what would wake it.
+    """
+    from src.pitwall.agent_formatters import format_pace, format_pit, format_radio, format_rag
+
+    idle = {
+        "pace": format_pace(None)[0],
+        "radio": format_radio(None)[0],
+        "pit": format_pit(None, active=False)[0],
+        "rag": format_rag(None, active=False)[0],
+    }
+
+    assert idle["pace"] == "no reading this lap"
+    assert idle["radio"] == "radio silent"
+    assert idle["pit"].startswith("wakes on ")
+    assert idle["rag"].startswith("wakes on ")
+
+    # And nothing anywhere says any of it in the old dialect.
+    for where, text in idle.items():
+        for jargon in ("stub", "pipeline", "triggers on", "rcm"):
+            assert jargon not in text.lower(), f"{where} still speaks in code: {text!r}"
+
+
 def test_the_conditional_cards_read_agent_ids_and_not_block_names():
     latest = _latest()
     latest["per_agent"]["active"] = []
@@ -705,16 +754,16 @@ def test_the_conditional_cards_read_agent_ids_and_not_block_names():
     cards = _host(_payload(latest=latest)).get_agents_view(-1)["cards"]
 
     assert cards["pit"]["status"] == "IDLE"
-    assert cards["pit"]["headline"].startswith("triggers on")
+    assert cards["pit"]["headline"].startswith("wakes on")
     assert cards["rag"]["status"] == "IDLE"
-    assert cards["rag"]["headline"].startswith("triggers on")
+    assert cards["rag"]["headline"].startswith("wakes on")
 
 
 def test_a_tick_with_no_per_agent_block_shows_the_idle_copy_and_not_an_empty_card():
     cards = _host(_payload(latest={"lap_number": 3})).get_agents_view(-1)["cards"]
 
-    assert cards["pace"]["headline"] == "no prediction — stub"
-    assert cards["radio"]["headline"] == "no radio/rcm pipeline output"
+    assert cards["pace"]["headline"] == "no reading this lap"
+    assert cards["radio"]["headline"] == "radio silent"
     assert all(card["status"] == "IDLE" for card in cards.values())
 
 
