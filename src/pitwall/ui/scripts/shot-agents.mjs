@@ -78,7 +78,16 @@ function serveDist(root) {
 }
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const [viewPath, out, width = "1320", height = "900"] = process.argv.slice(2);
+
+// The client area the product really hands this page, NOT the `WindowSpec`
+// size. `place()` opens AGENTS at 1500x870 on the reference desktop and the OS
+// keeps 14 px of frame and 37 px of title bar, so the page gets 1486x833.
+// Shooting the outer size instead means every capture is 67 px taller than the
+// window, which is where a vertical overflow would show.
+const CLIENT = { width: 1486, height: 833 };
+
+const [viewPath, out, width = String(CLIENT.width), height = String(CLIENT.height)] =
+  process.argv.slice(2);
 
 if (!viewPath || !out) {
   console.error("usage: node scripts/shot-agents.mjs <view.json> <out.png> [w] [h]");

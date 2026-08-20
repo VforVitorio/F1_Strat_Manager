@@ -34,8 +34,15 @@ import { serveDist } from "./serve-dist.mjs";
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TICKS = JSON.parse(readFileSync(process.argv[2], "utf-8"));
 const OUT = resolve(process.argv[3] ?? resolve(UI_DIR, "data.png"));
-const WIDTH = Number(process.argv[4] ?? 1500);
-const HEIGHT = Number(process.argv[5] ?? 950);
+// The client area the product really hands this page, NOT the `WindowSpec`
+// size. `place()` opens DATA at 1500x870 on the reference desktop and the OS
+// keeps 14 px of frame and 37 px of title bar, so the page gets 1486x833. The
+// defaults were the outer size, so every capture was 117 px taller and 14 px
+// wider than the window it claimed to show. `smoke-data.mjs` was already close
+// to the real client, which is how the two disagreed.
+const CLIENT = { width: 1486, height: 833 };
+const WIDTH = Number(process.argv[4] ?? CLIENT.width);
+const HEIGHT = Number(process.argv[5] ?? CLIENT.height);
 
 const ticks = Array.isArray(TICKS) ? TICKS : [TICKS];
 const server = await serveDist(resolve(UI_DIR, "dist"));

@@ -86,9 +86,17 @@ class WindowSpec:
         visible and AGENTS' still under the taskbar. So the origin is set
         here rather than left to the toolkit, and `y` is always 0.
 
-        The windows overlap. They always did, and on a 1707-wide desktop a
-        1500 and a 1320 cannot do anything else; the small `x` stagger exists
-        so both title bars stay grabbable.
+        The windows overlap. They always did, and on a 1707-wide desktop two
+        1500s cannot do anything else; the small `x` stagger exists so both
+        title bars stay grabbable.
+
+        **The origin is chosen before the width, and the window narrows to
+        what is left.** Clamping `x` against the window's own size instead
+        collapsed the stagger to zero the moment both windows hit the screen
+        width - on a 1366 laptop the top window landed exactly over the
+        bottom one's title bar. That was invisible while the two specs had
+        different widths, so the guard only sees it when run on more than one
+        screen.
 
         Pure, and takes the screen rather than reading it, so this module
         still imports on a machine with no system webview and so the rule can
@@ -96,18 +104,24 @@ class WindowSpec:
         layout decision and a big monitor is not a reason to override it.
         """
         usable_height = max(1, screen_height - _OS_CHROME_ALLOWANCE_PX)
-        width = min(self.width, screen_width)
         height = min(self.height, usable_height)
-        x = min(index * _WINDOW_STAGGER_PX, max(0, screen_width - width))
+        x = index * _WINDOW_STAGGER_PX
+        width = min(self.width, max(1, screen_width - x))
         return x, 0, width, height
 
 
-# DATA is the wider of the two: it holds a full timing tower plus traces.
-# AGENTS mirrors the Qt window it replaces (540 + 740 px columns, plus the
-# frame), so the layout ports across without being redesigned.
+# Both windows are the same size, so both hand their page the same client area
+# and the two harness families have one number to point at rather than two to
+# drift apart.
+#
+# AGENTS was 1320 x 900 until sprint 10, and the number had an argument behind
+# it: it mirrored the Qt strategy window's 540 + 740 px columns plus the frame.
+# The layout elevation deletes that split, so the argument went with it, and
+# what was left was a decision band budgeted 180 px wider than the window it
+# renders in.
 WINDOWS: Final[tuple[WindowSpec, ...]] = (
     WindowSpec("data", "PITWALL · DATA", "data.html", 1500, 950),
-    WindowSpec("agents", "PITWALL · AGENTS", "agents.html", 1320, 900),
+    WindowSpec("agents", "PITWALL · AGENTS", "agents.html", 1500, 950),
 )
 
 
