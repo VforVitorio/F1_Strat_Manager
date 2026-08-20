@@ -698,6 +698,46 @@ def test_the_situation_card_says_out_of_range_and_never_zero_per_cent():
     assert view["cards"]["situation"]["lines"][0]["text"] == "overtake — (out of model range)"
 
 
+def test_the_pace_chart_says_where_its_prediction_stopped():
+    """The solid line advances and the dashed one does not.
+
+    A tick with no `per_agent` block still carries `lap_time_s`, so the actual
+    keeps being plotted while the prediction and its band stay where the last
+    one was - and nothing on the chart said so. The reader saw two lines, one
+    of which had quietly become history.
+
+    **Only the PACE chart.** The elevation spec dimmed the tyre chart's TREND
+    too, and that is backwards: the trend is a rolling mean of OBSERVED lap
+    times and keeps advancing on exactly the tick that makes the prediction
+    stale, so dimming it would claim staleness about live data. The tyre
+    chart's own stale element is the cliff band, which is recomputed from
+    `per_agent.tire` every tick and disappears when there is none.
+    """
+    from src.pitwall.agents_view.builder import AgentsViewBuilder
+
+    builder = AgentsViewBuilder()
+    for lap in range(20, 23):
+        builder.build(_payload(seq=lap, lap=lap, latest=_latest(lap)))
+
+    # Lap 23 arrives with a lap time and no per-agent block at all.
+    stale = builder.build(_payload(seq=99, lap=23, latest={"lap_number": 23, "lap_time_s": 81.4}))
+
+    pace = stale["charts"]["pace"]
+    assert pace["current_lap"] == 23.0
+    assert pace["prediction_lap"] == 22.0, "the prediction stopped a lap back"
+    assert [lap for lap, _ in pace["actual"]][-1] == 23.0, "and the actual did not"
+
+    # The tyre chart keeps advancing on the same tick, which is why it gets no
+    # tag: its trend is observed data.
+    tire = stale["charts"]["tire"]
+    assert tire["cliff"] is None, "the tyre chart's stale element removes itself"
+    assert [lap for lap, _ in tire["trend"]][-1] == 23.0, "its trend is live"
+
+    # And on a healthy tick the two agree, so the renderer draws no tag.
+    live = builder.build(_payload(seq=100, lap=24, latest=_latest(24)))
+    assert live["charts"]["pace"]["prediction_lap"] == live["charts"]["pace"]["current_lap"]
+
+
 def test_an_active_pit_console_is_not_a_warning_unless_something_is_pressing():
     """Being awake is not being worried.
 

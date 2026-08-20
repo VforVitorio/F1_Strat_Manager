@@ -18,9 +18,40 @@ import { useEChart } from "../../lib/chart";
 import { CHART_BASE, currentLapMark, lapAxis } from "./useEChart";
 
 export function PaceChart({ series }: { series: PaceSeries }) {
+  /**
+   * **The prediction stopped and the actual did not.**
+   *
+   * A tick with no `per_agent` block still carries the lap time, so the solid
+   * line keeps advancing while the dashed one and its band stay where the last
+   * prediction was. Nothing on the chart said so: the reader saw two lines,
+   * one of which had quietly become history.
+   *
+   * Dimmed AND labelled, because dimming alone is ambiguous on a chart that
+   * already draws a translucent band, and a label alone is easy to miss.
+   */
+  const stale =
+    series.prediction_lap !== null &&
+    series.current_lap !== null &&
+    series.prediction_lap < series.current_lap;
+
   const option = useMemo<EChartsOption>(
     () => ({
       ...CHART_BASE,
+      graphic: stale
+        ? [
+            {
+              type: "text",
+              right: 4,
+              top: 2,
+              silent: true,
+              style: {
+                text: `prediction to L${series.prediction_lap}`,
+                fill: series.cursor_colour,
+                font: "10px sans-serif",
+              },
+            },
+          ]
+        : [],
       // The tyre chart's lap axis, borrowed. Two charts of the same quantity
       // side by side used to autorange independently, so lap 23 sat at 95 %
       // of this plot and 47 % of its neighbour — a comparison a reader
@@ -43,7 +74,7 @@ export function PaceChart({ series }: { series: PaceSeries }) {
           stack: "band",
           data: series.band.map(([lap, low, high]) => [lap, high - low]),
           lineStyle: { opacity: 0 },
-          areaStyle: { color: series.band_colour, opacity: 0.2 },
+          areaStyle: { color: series.band_colour, opacity: stale ? 0.07 : 0.2 },
           symbol: "none",
           silent: true,
         },
@@ -51,8 +82,13 @@ export function PaceChart({ series }: { series: PaceSeries }) {
           type: "line",
           name: "predicted",
           data: series.pred,
-          lineStyle: { color: series.pred_colour, width: 2, type: "dashed" },
-          itemStyle: { color: series.pred_colour },
+          lineStyle: {
+            color: series.pred_colour,
+            width: 2,
+            type: "dashed",
+            opacity: stale ? 0.35 : 1,
+          },
+          itemStyle: { color: series.pred_colour, opacity: stale ? 0.35 : 1 },
           symbol: "none",
         },
         {
@@ -66,7 +102,7 @@ export function PaceChart({ series }: { series: PaceSeries }) {
         },
       ],
     }),
-    [series],
+    [series, stale],
   );
 
   return <div className="chart" ref={useEChart(option)} />;

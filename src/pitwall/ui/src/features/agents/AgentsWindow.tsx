@@ -77,11 +77,6 @@ const IDLE_VIEW: AgentsView = {
     driver: "--",
     lap: "L 0/0",
     playback: "-- × · --",
-    // Qt builds the chip grey in the constructor and its client thread
-    // flips it to amber within milliseconds; the host's own
-    // `_connection_label` answers "Connecting..." until something has been
-    // rendered. Red "Disconnected" matched none of the three. #871 ported
-    // the badge, the plan line and the scores and left this one behind.
     // Overwritten from the polled channel below while there is no view. It is
     // a placeholder, not a claim: the host owns both the word and its colour
     // (`agents_view/panels.CONNECTION_COLOURS`), and this literal used to
@@ -151,6 +146,7 @@ const IDLE_VIEW: AgentsView = {
       x_range: null,
       current_lap: null,
       cursor_colour: "#9ca3af",
+      prediction_lap: null,
     },
     tire: {
       stints: [],
