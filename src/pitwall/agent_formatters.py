@@ -439,6 +439,47 @@ def with_model_detail(
     return {"sections": [*tooltip["sections"], *sections], "footer": tooltip.get("footer")}
 
 
+# The card shows at most this many radio lines. Two, because the console spans
+# two grid columns in the decision-band layout and one line left the row half
+# empty; more than two and the RCM line below it falls out of the card.
+_RADIO_LINES = 2
+
+
+def _radios_worth_the_room(
+    radio_events: list[dict[str, Any]], alerts: list[Any]
+) -> list[dict[str, Any]]:
+    """The lap's radios, most important first, capped at what the card holds.
+
+    **Severity before recency, and the severity is not decided here.** The card
+    showed `radio_events[-1]` - the newest, whatever it said - so a rival's
+    routine "box this lap" could evict our own driver reporting a problem, on a
+    surface whose whole purpose is noticing the problem.
+
+    Which intents are severe is a question this module must not answer. The
+    radio agent already did: `_build_alerts` filters by
+    `RadioAgentCFG.alert_intents` and hands the result over in `alerts`, so the
+    ranking reads the agent's own verdict FOR THIS LAP rather than carrying a
+    copy of the rule. That matters here specifically - this repo already has
+    three separately maintained severity maps (`_ALERT_SEVERITY`,
+    `_FLAG_BG_BY_INTENT`, and the agent's own), one of which was found missing a
+    key the others had, and this module cannot import the agent's config at all
+    because doing so loads three models.
+
+    With no alerts the order is recency, which is what it always was.
+    """
+    flagged = {
+        str(alert.get("intent") or alert.get("event_type") or "").upper()
+        for alert in alerts
+        if isinstance(alert, dict)
+    }
+    ranked = sorted(
+        enumerate(radio_events),
+        key=lambda pair: (_radio_intent(pair[1]).upper() in flagged, pair[0]),
+        reverse=True,
+    )
+    return [event for _, event in ranked[:_RADIO_LINES]]
+
+
 def format_radio(r: dict[str, Any] | None) -> Formatted:
     """CLI §1.4: alert intents headline, plus a per-lap transcript ticker.
 
@@ -503,13 +544,12 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
                 TEXT_SECONDARY,
             )
         )
-    if radio_events:
-        last_radio = radio_events[-1]
+    for event in _radios_worth_the_room(radio_events, alerts):
         body.append(
             (
-                f"{html.escape(_radio_driver(last_radio))} "
-                f"{html.escape(_radio_intent(last_radio))}: "
-                f'"{_escaped(last_radio.get("message"))}"',
+                f"{html.escape(_radio_driver(event))} "
+                f"{html.escape(_radio_intent(event))}: "
+                f'"{_escaped(event.get("message"))}"',
                 TEXT_TERTIARY,
             )
         )
@@ -548,13 +588,27 @@ def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
     target = p.get("undercut_target")
     sc_reactive = bool(p.get("sc_reactive", False))
 
-    headline = f"pit {p50:.2f}s → {compound}" + (" · SC" if sc_reactive else "")
+    # "stop", not "pit". `pit_duration_s` is the physical stop and `pit_delta`
+    # is the whole excursion including the lap-time loss; this is the first, and
+    # a headline reading "pit 22.40s" invites the reader to take it for the
+    # second. The two are a pair this repo's notes flag by name.
+    headline = f"stop {p50:.2f}s → {compound}" + (" · SC" if sc_reactive else "")
     lines: list[Line] = [(f"range {p05:.2f}–{p95:.2f}s", TEXT_SECONDARY)]
     if up is not None and target:
         lines.append((f"UCUT {float(up) * 100:.0f}% → {target}", WARNING))
     else:
         lines.append(("no undercut target", TEXT_TERTIARY))
-    return headline, WARNING, lines, STATUS_WATCH
+
+    # **Being awake is not being worried.** The console wore WARNING amber and
+    # WATCH whenever N28 was routed, which is every lap with a pit question -
+    # so the state that means "look at this" was the state that means "this
+    # agent ran". WATCH is kept for the one thing in this block that says
+    # something is pressing: a recommendation driven by safety-car pressure
+    # rather than by tyre or compound logic, which carries a different risk
+    # profile and a deadline.
+    if sc_reactive:
+        return headline, WARNING, lines, STATUS_WATCH
+    return headline, TEXT_PRIMARY, lines, STATUS_OK
 
 
 # --- N30 RAG (conditional) ---------------------------------------------
