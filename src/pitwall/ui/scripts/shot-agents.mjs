@@ -25,6 +25,7 @@ import { createServer } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import { watchPage } from "./page-guard.mjs";
 
 const MIME = {
   ".html": "text/html",
@@ -101,8 +102,11 @@ const bundle = `http://127.0.0.1:${server.address().port}/agents.html`;
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: +width, height: +height } });
 const page = await ctx.newPage();
-page.on("console", (m) => console.log(`[console:${m.type()}] ${m.text()}`));
-page.on("pageerror", (e) => console.log(`[pageerror] ${e.message}`));
+// A capture with a console error is not a capture of the product. This used to
+// print and carry on, which is how every AGENTS shot since #1004 was taken with
+// `useConnection` falling through to `fetch("/api/connection")` and a 404.
+const failures = [];
+watchPage(page, failures);
 
 await page.addInitScript((payload) => {
   window.pywebview = {
@@ -112,6 +116,10 @@ await page.addInitScript((payload) => {
       // under the screenshot.
       get_agents_view: async (sinceSeq) => (sinceSeq >= payload.seq ? null : payload),
       get_tick: async () => null,
+      // Polled by `useConnection` while there is no view. Without it the
+      // bridge falls back to `fetch("/api/connection")`, the static server
+      // answers 404, and the window renders an unknown connection.
+      get_connection: async () => "Connected",
     },
   };
 }, view);
@@ -124,4 +132,10 @@ await page.screenshot({ path: resolve(out), fullPage: false });
 await ctx.close();
 await browser.close();
 server.close();
+
+if (failures.length) {
+  console.error(`shot-agents FAILED (${failures.length}):`);
+  for (const failure of failures) console.error(`  - ${failure}`);
+  process.exit(1);
+}
 console.log(`saved ${out}`);
