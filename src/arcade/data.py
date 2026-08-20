@@ -243,6 +243,84 @@ def _hex_to_rgb(h: str) -> tuple[int, int, int]:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
+def _nearest_sample(t: np.ndarray, timeline: np.ndarray) -> np.ndarray:
+    """For each timeline instant, the index of the closest raw sample (#1002).
+
+    The resampler used to run `np.interp` over channels whose values are LABELS,
+    which manufactures labels nobody measured. Melbourne 2025, 2,491,006 served
+    frames: **1,775 DRS frames** carried 4, 5, 6, 7, 9, 11 or 13, codes the raw
+    stream never contains and `DRS_OPEN_CODES` reads as closed, so an open wing
+    drew as a flicker; and **86,925 brake frames (3.49 %)** sat strictly between
+    2 and 98 on a channel whose raw form is BOOLEAN. Both go to zero here.
+
+    `fastf1.core.Telemetry._CHANNELS` marks `DRS`, `nGear` and `Brake` as
+    `{'type': 'discrete'}` and fills them rather than interpolating. This is that
+    distinction, which the arcade had inverted for `brake`.
+
+    Ties go to the EARLIER sample, which matters because the raw stream carries
+    907 duplicate-`t` pairs on this race: `<=` makes the pick deterministic
+    instead of dependent on floating-point noise.
+
+    Leans on `len(t) >= 2`, which `_process_driver_data` guarantees - it skips
+    any lap with fewer than two samples and returns None when a driver has no
+    laps at all, so the shortest array reaching here is 862 samples long.
+    """
+    right = np.searchsorted(t, timeline).clip(1, len(t) - 1)
+    closer_to_left = timeline - t[right - 1] <= t[right] - timeline
+    return np.where(closer_to_left, right - 1, right)
+
+
+# The eight forward gears plus neutral. 0 is a REAL reading - 1,400 raw samples
+# on Melbourne 2025, and the PITWALL GEAR lane's [0, 9] range renders it - so the
+# validity test is one-sided.
+_MAX_GEAR = 8
+
+
+def _drop_impossible_gears(gears: np.ndarray) -> np.ndarray:
+    """Replace a gear no car has with the last one it really was in (#1002).
+
+    The F1 live-timing feed publishes `nGear` values that do not exist. Read from
+    `session.car_data` for Melbourne 2025, before any resampling this repo does:
+    **151 samples at 128**, plus one or two each of almost every value between 10
+    and 127. FastF1's own two resampling stages carry that to 310 and then 570,
+    and the arcade's carried it to 967 frames at 128. PITWALL's GEAR lane is
+    locked to [0, 9], so each one is a full-height spike.
+
+    Nearest-neighbour resampling does NOT fix this: measured, it moves the count
+    from 1,840 frames above 8 to 1,836. The sentinel is upstream of the
+    interpolation, so it has to be rejected as data rather than smoothed.
+
+    The repair is FastF1's own discrete-channel fill idiom (`.ffill()` then
+    `.bfill()`) applied to a validity check FastF1 does not itself perform: it
+    fills gaps in the merge, it does not judge whether a published gear is
+    possible. The `bfill` tail is for a driver whose FIRST sample is invalid,
+    where there is nothing behind to carry forward.
+
+    A dropout longer than a blink therefore renders as a frozen gear rather than
+    a spike. PIA's lap 44 is the worst case on this race and freezes at gear 8
+    for about 75 s at 0 km/h. That is a visible artefact and the intended one:
+    the alternative is a gear the car cannot select.
+    """
+    impossible = gears > _MAX_GEAR
+    if not impossible.any():
+        return gears
+    if impossible.all():
+        # Nothing to carry from in either direction, so the fill would return a
+        # column of NaN and `int(...)` on the frame would raise. Unreachable on
+        # real telemetry, where the sentinel is a handful of samples in tens of
+        # thousands, and handled rather than left because the alternative failure
+        # is the whole session load, not one frame.
+        logger.warning("Every nGear sample is out of range; leaving the channel as published")
+        return gears
+    # The fill also closes any pre-existing NaN in the channel, because `ffill` does not
+    # distinguish the ones this mask made from the ones it found. That is inconsistent
+    # with the no-invalid-samples path above, which returns such an array untouched for
+    # `int()` to raise on. Left as it is: no raw channel on any race measured carries a
+    # NaN, and the raising half is what the interpolating resampler did too.
+    repaired = pd.Series(gears).mask(impossible)
+    return repaired.ffill().bfill().to_numpy()
+
+
 def _process_driver_data(args: tuple) -> dict | None:
     """Module-level worker: iterate a driver's laps and flatten telemetry.
 
@@ -333,6 +411,10 @@ def _process_driver_data(args: tuple) -> dict | None:
     order = np.argsort(concat["t"])
     for k in concat:
         concat[k] = concat[k][order]
+    # After the sort, because the fill carries a gear FORWARD in time and the
+    # per-lap arrays are concatenated in lap order but the samples inside them
+    # are only sorted here.
+    concat["gear"] = _drop_impossible_gears(concat["gear"])
 
     return {
         "code": driver_code,
@@ -512,17 +594,22 @@ class SessionLoader:
         pedal_multipliers: dict[str, float],
         circuit_length_m: float,
     ) -> list[FrameData]:
-        cont = {
-            k: np.interp(timeline, t, data[k])
-            for k in ("x", "y", "speed", "throttle", "brake", "dist", "tyre_life")
-        }
-        disc = {k: np.interp(timeline, t, data[k]) for k in ("gear", "drs", "lap", "tyre")}
-        for name, multiplier in pedal_multipliers.items():
-            cont[name] = np.clip(cont[name] * multiplier, 0.0, 100.0)
+        cont = {k: np.interp(timeline, t, data[k]) for k in ("x", "y", "speed", "throttle", "dist")}
+        nearest = _nearest_sample(t, timeline)
+        disc = {k: data[k][nearest] for k in ("gear", "drs", "lap", "tyre", "brake", "tyre_life")}
+        # The two pedals are scaled the same way and no longer live in the same dict, so
+        # they are applied one by one rather than by iterating `pedal_multipliers`. The
+        # shape being avoided is not the loop, which would raise `KeyError: 'brake'` and
+        # be loud: it is brake ADDED to the discrete set and left in `cont` as well, where
+        # the loop would keep scaling a copy nothing reads while the wire served the
+        # unscaled one. Naming each pedal beside the dict it lives in makes that
+        # impossible to write.
+        cont["throttle"] = np.clip(cont["throttle"] * pedal_multipliers["throttle"], 0.0, 100.0)
+        disc["brake"] = np.clip(disc["brake"] * pedal_multipliers["brake"], 0.0, 100.0)
         # Race distance cannot decrease; the per-lap accumulator leaves float
         # seams at lap boundaries (measured worst 0.11 m on Melbourne 2025).
         cont["dist"] = np.maximum.accumulate(cont["dist"])
-        lap_numbers = np.maximum(1, np.rint(disc["lap"]).astype(int))
+        lap_numbers = np.maximum(1, disc["lap"].astype(int))
         rel_dist = _lap_fraction_from_distance(cont["dist"], lap_numbers, circuit_length_m)
         frames: list[FrameData] = []
         for i, ti in enumerate(timeline):
@@ -533,15 +620,15 @@ class SessionLoader:
                     x=float(cont["x"][i]),
                     y=float(cont["y"][i]),
                     speed=float(cont["speed"][i]),
-                    gear=int(round(disc["gear"][i])),
-                    drs=int(round(disc["drs"][i])),
+                    gear=int(disc["gear"][i]),
+                    drs=int(disc["drs"][i]),
                     throttle=float(cont["throttle"][i]),
-                    brake=float(cont["brake"][i]),
+                    brake=float(disc["brake"][i]),
                     lap=int(lap_numbers[i]),
                     dist=float(cont["dist"][i]),
                     rel_dist=float(rel_dist[i]),
-                    tyre=int(round(disc["tyre"][i])),
-                    tyre_life=float(cont["tyre_life"][i]),
+                    tyre=int(disc["tyre"][i]),
+                    tyre_life=float(disc["tyre_life"][i]),
                     active=active,
                 )
             )

@@ -79,9 +79,13 @@ That row is 7,017 distinct pairs. Three honest caveats on it:
    against an official 8.481 s.
 2. **The error budget is not "one frame".** Per crossing (n=921) the error
    is median 22 ms, p95 67 ms and worst 486 ms, and **9.8 % land more than
-   one 40 ms frame from the parquet time**, because the `lap` field is
-   `np.interp` plus `round` over a step function rather than a true line
-   detector.
+   one 40 ms frame from the parquet time**, because the `lap` field is a
+   resampled step function rather than a true line detector: the crossing
+   lands on whichever resampled frame first carries the new lap, never on
+   the moment the car crossed. #1002 moved that resampling from
+   `np.interp` plus `round` to nearest-neighbour, which for a one-step
+   change switches at the same instant (both pick the midpoint between the
+   two raw samples), so these numbers are unchanged.
 3. **The tail moved when the keying did.** Keying on the LAST frame of an
    increment measured p95 101 ms / p99 160 ms, and the first-frame keying
    this module ships improves the per-crossing error while making the pair

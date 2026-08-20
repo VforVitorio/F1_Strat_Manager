@@ -166,7 +166,14 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # `RelativeDistance` extraction in the worker intermediate, which nothing
 # had consumed since v10 and which left the cached bytes identical. A
 # maintainer trusting the old sentence would have deleted its readers.)
-CACHE_VERSION: Final[str] = "v12"  # + official classification (SessionData.official_status)
+# **The obvious guard cannot enforce this, and one tried.** `CACHE_VERSION != "v12"` is true
+# forever from the commit that writes it and can never see the NEXT change that forgets to
+# bump. A golden test keyed to the version COULD catch part of it (pin a small rebuilt
+# session's frames against a fixture and require the version to move when they do), and is
+# not written because rebuilding a session costs 254 s. Until it is, the obligation lives
+# here: if the bytes a rebuild would produce differ from the bytes on disk, this string moves
+# in the SAME commit, or the fix reaches nobody who already has a pickle.
+CACHE_VERSION: Final[str] = "v13"  # + the discrete channels stop being interpolated (#1002)
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial by default — Windows spawn + pickling a loaded session across 8
