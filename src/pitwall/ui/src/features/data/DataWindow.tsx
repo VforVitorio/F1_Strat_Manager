@@ -36,8 +36,7 @@ import { useConnection } from "../../lib/useConnection";
 import { useLiveLap } from "../../lib/useLiveLap";
 import { useStatusText } from "../../lib/useStatusText";
 import { useTick } from "../../lib/useTick";
-
-const WAITING = { text: "Waiting for arcade stream…", transient: false } as const;
+import { waitingBody, waitingStatus } from "../../lib/waitingCopy";
 
 /**
  * The right column's tabs, in the order a strategist reaches for them.
@@ -77,7 +76,7 @@ export function DataWindow() {
   // it is why the only remaining signal used to be an EMPTY bar. It also has to
   // stop saying `live`, or the window contradicts its own banner one line down.
   const status = !tick
-    ? WAITING
+    ? { text: waitingStatus(connection), transient: false }
     : frozen
       ? { text: `DATA FROZEN · last tick lap ${tick.arcade.lap}`, transient: false }
       : { text: `lap ${tick.arcade.lap} · live`, transient: true };
@@ -138,9 +137,7 @@ export function DataWindow() {
             </div>
           </div>
         ) : (
-          <p className="data-waiting">
-            Waiting for the arcade broadcast. Start a replay with <code>--strategy</code>.
-          </p>
+          <p className="data-waiting">{waitingBody(connection)}</p>
         )}
       </div>
       <footer className="status-bar">{statusText}</footer>

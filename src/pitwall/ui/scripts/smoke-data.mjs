@@ -3820,6 +3820,64 @@ check(
 
 await paceCtx.close();
 
+// --- The EMPTY window, and the two states behind it (#1004) ------------------
+//
+// The producer takes about 11 s to reach its first tick because it unpickles a
+// 382 MB session, and the socket is accepted at about 8 s of that. So a blank
+// window is two different situations, measured on the real path, and the copy
+// used to be one sentence across both: "Start a replay with --strategy", which
+// is an instruction to do the thing that has already been running for 3 s.
+//
+// Asserted as an EFFECT and as a DIFFERENCE. Reading one string would pass on a
+// build that hardcoded it; requiring the two to differ cannot.
+async function waitingCopy(connection) {
+  const context = await browser.newContext({ viewport: { width: 1500, height: 950 } });
+  const emptyPage = await context.newPage();
+  emptyPage.on("pageerror", (error) =>
+    failures.push(`pageerror(waiting/${connection}): ${error.message}`),
+  );
+  await emptyPage.addInitScript((state) => {
+    window.pywebview = {
+      api: {
+        get_tick: async () => null,
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => state,
+      },
+    };
+  }, connection);
+  await emptyPage.goto(url, { waitUntil: "domcontentloaded" });
+  await emptyPage.waitForSelector(".data-waiting", { timeout: 5000 });
+  // 1.2 s: `useConnection` polls at 1 Hz and its first read is behind
+  // `whenBridgeReady`, so a shorter wait measures the null-connection frame,
+  // which is the "Connecting..." copy whichever state was stubbed - a guard that
+  // would pass on both branches while seeing only one.
+  await emptyPage.waitForTimeout(1200);
+  const body = (await emptyPage.locator(".data-waiting").textContent()) ?? "";
+  const bar = (await emptyPage.locator(".status-bar").textContent()) ?? "";
+  await context.close();
+  return { body, bar };
+}
+
+const waitingUp = await waitingCopy("Connected");
+const waitingDown = await waitingCopy("Connecting...");
+check(
+  waitingUp.body !== waitingDown.body,
+  `an empty window says something DIFFERENT once the socket is up (up: "${waitingUp.body}", down: "${waitingDown.body}")`,
+);
+check(
+  waitingDown.body.includes("--strategy"),
+  "with no producer the window still says how to start one",
+);
+check(
+  !waitingUp.body.includes("--strategy"),
+  `with the socket up it stops telling you to start a replay ("${waitingUp.body}")`,
+);
+check(
+  waitingUp.bar !== waitingDown.bar && waitingUp.bar.includes("Connected"),
+  `the status bar tracks the same two states (up: "${waitingUp.bar}", down: "${waitingDown.bar}")`,
+);
+
 await browser.close();
 server.close();
 
