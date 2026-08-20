@@ -257,17 +257,14 @@ def _tyre_stops(revealed: list[dict[str, Any]]) -> int:
       the outgoing set's. `tyre_stint_repair` measures used sets starting
       anywhere from 2 to 16, so a short first stint replaced by a used set is
       invisible here. It errs toward missing a stop, never toward inventing one.
-    * A feed that republishes `TyreLife` as 1 on a transit, which is #988.
-      Measured over the whole of Melbourne 2025: **five cars** carry that
-      artefact - ALB and STR on lap 3, LAW on lap 4, BEA and OCO on lap 5, all
-      with the compound unchanged - so each reads one stop high. The field's
-      total goes from **82 in-laps to 36 against a true 31**; the residual 5 is
-      that artefact and belongs where it can be repaired, not here.
-
-      (An earlier version of this comment said STR alone. That figure came from
-      comparing two candidate RULES and reporting where they differed, which is
-      not the same population as where the DATA is wrong: on the other four both
-      rules agreed, and agreed wrongly.)
+    * A set refitted with the same compound while the feed REPUBLISHES the age as
+      1. That reads as a stop here and it is one of the two things it could be.
+      It is not a gap this rule can close, because the two are identical in every
+      field it reads; `tyre_stint_repair`'s `_republished_age_mask` nulls those
+      ages upstream instead, so the age arrives as None and neither reading is
+      published. Melbourne 2025's five cases (ALB and STR on lap 3, LAW on lap 4,
+      BEA and OCO on lap 5) are repaired there, which is what takes the field
+      from **82 in-laps to 31**.
     """
     rows = [row for row in revealed if not row["generated"]]
     changed = 0
