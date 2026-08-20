@@ -127,7 +127,121 @@
 .plan-panel {
   padding: 10px 14px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+
+/* --- The race on one lap axis --------------------------------------------
+ *
+ * Three lanes and two marks, all placed by a per cent the host computed. The
+ * track is `position: relative` and everything inside it is absolute against
+ * that, so a lane's height never moves a mark's x. */
+
+.plan-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.plan-track {
+  position: relative;
+  padding-top: 4px;
+}
+.plan-lane {
+  position: relative;
+  width: 100%;
+}
+.plan-lane-hazard {
+  height: 5px;
+  margin-bottom: 2px;
+}
+/* **The empty track has to read as a groove, not as a bar.** It was
+ * `--qt-elevated`, and a run stint at 0.42 alpha over it came out the same
+ * tone: the laps this window never saw looked exactly like a stint it did see,
+ * which is the one thing this lane must never do. Window ground with a hairline
+ * reads as absence. */
+.plan-lane-stints {
+  height: 26px;
+  border-radius: 3px;
+  background: var(--qt-bg);
+  border: 1px solid var(--qt-border);
+  box-sizing: border-box;
+}
+.plan-lane-labels {
+  height: 16px;
+  margin-top: 3px;
+}
+
+/* The colour arrives inline, from the tyre chart's own `cliff_colour`, so the
+ * cliff is one fact drawn at two zoom levels rather than two ambers that
+ * happen to be close. The alpha is here because it is presentation. */
+.plan-cliff {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 2px;
+  opacity: 0.45;
+}
+
+/* A run stint: the compound at low alpha with a full-strength top edge, which
+ * is the boundary treatment the tyre chart already uses. */
+.plan-stint {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 2px;
+  border-top: 2px solid;
+  /* Enough for a compound to read as itself against the groove. Below about
+   * 0.5 the HARD white and the empty track were the same value. */
+  opacity: 0.62;
+}
+/* Planned: hollow. Not DASHED - a dashed stroke means broadcast-tier data in
+ * the sibling DATA window, and one stroke cannot mean two things across two
+ * windows a reader has open at once. */
+.plan-stint.is-planned {
+  border: 1px solid;
+  opacity: 1;
+}
+
+.plan-now {
+  position: absolute;
+  top: 0;
+  bottom: 19px;
+  width: 1px;
+  background: var(--qt-fg-3);
+}
+/* Directly over the lane it points into, not floating at the top of the
+ * module: a marker three lanes away from the bar it refers to is a decoration.
+ * `top` is the hazard lane's height plus its margin. */
+.plan-pit {
+  position: absolute;
+  top: 1px;
+  transform: translateX(-50%);
+  color: var(--qt-fg-1);
+  font-size: 9px;
+  line-height: 1;
+}
+.plan-end,
+.plan-cursor-label {
+  position: absolute;
+  top: 0;
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  white-space: nowrap;
+}
+.plan-end.is-start {
+  left: 0;
+}
+.plan-end.is-finish {
+  right: 0;
+}
+.plan-cursor-label {
+  transform: translateX(-50%);
+  color: var(--qt-fg-2);
+}
+
 .plan-caption {
   margin: 0;
   color: var(--qt-fg-2);

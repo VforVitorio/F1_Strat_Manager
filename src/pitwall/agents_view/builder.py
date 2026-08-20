@@ -23,6 +23,7 @@ from src.pitwall.agents_view.decision import build_orchestrator, build_scenarios
 from src.pitwall.agents_view.history import LapHistory
 from src.pitwall.agents_view.panels import build_cards, build_header, build_status_bar
 from src.pitwall.agents_view.reasoning import build_reasoning
+from src.pitwall.agents_view.timeline import build_plan_timeline
 
 # Bumped when the view's shape changes in a way a built UI bundle would
 # misread. Separate from the wire's `schema_version`, which describes the
@@ -72,11 +73,26 @@ class AgentsViewBuilder:
             "tire": tire,
         }
 
+        orchestrator = build_orchestrator(latest or None, strategy.get("history_tail"))
+
         return {
             "view_version": AGENTS_VIEW_VERSION,
             "seq": payload.get("seq"),
             "header": build_header(payload, connection),
-            "orchestrator": build_orchestrator(latest or None, strategy.get("history_tail")),
+            "orchestrator": orchestrator,
+            # The PLAN module reads the tyre chart's OWN cliff rather than
+            # recomputing it: one fact drawn at two zoom levels cannot disagree
+            # with itself. Its stints come from the never-trimmed compound map,
+            # not from the 40-lap chart store, because this lane spans the race.
+            "plan_timeline": build_plan_timeline(
+                self._history.compound_runs(),
+                latest or None,
+                payload.get("arcade") or {},
+                current_lap if isinstance(current_lap, int) else None,
+                tire.get("cliff"),
+                tire["cliff_colour"],
+                orchestrator["plan"],
+            ),
             # The action goes in with the scores: a guardrail can veto the
             # Monte Carlo winner, and a panel that does not know which plan
             # was ENACTED crowns the one that was overruled (#962).
