@@ -37,6 +37,7 @@ from src.pitwall.agent_formatters import (
     format_tire,
     radio_tooltip,
     rag_tooltip,
+    with_model_detail,
 )
 
 # window.py's HeaderBar.set_connection, with its three states and their
@@ -130,12 +131,38 @@ def build_cards(latest: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     # legacy fallback for producers that have not been updated.
     rag_block = per.get("rag") or per.get("regulation_context")
     rag_active = "N30" in active
+
+    # **Every card carries its model detail now, and four of them had no
+    # tooltip at all.** The band's WHY module replaces the reasoning tabs, and
+    # what the tabs held for the five agents - each one's own sentences plus
+    # its `key = value` dump - has to land somewhere reachable or the window
+    # loses it. This is the drill-down tier a debugging engineer already opens
+    # for a transcript or a RAG chunk, so it joins them rather than adding a
+    # seventh place to look.
     return {
-        "pace": _card(format_pace(per.get("pace"))),
-        "tire": _card(format_tire(per.get("tire"))),
-        "situation": _card(format_situation(per.get("situation"))),
-        "pit": _card(format_pit(per.get("pit"), active="N28" in active)),
-        "radio": _card(format_radio(radio_block), radio_tooltip(radio_block)),
+        "pace": _card(
+            format_pace(per.get("pace")),
+            with_model_detail(None, "pace", per.get("pace")),
+        ),
+        "tire": _card(
+            format_tire(per.get("tire")),
+            with_model_detail(None, "tire", per.get("tire")),
+        ),
+        "situation": _card(
+            format_situation(per.get("situation")),
+            with_model_detail(None, "situation", per.get("situation")),
+        ),
+        "pit": _card(
+            format_pit(per.get("pit"), active="N28" in active),
+            with_model_detail(None, "pit", per.get("pit")),
+        ),
+        "radio": _card(
+            format_radio(radio_block),
+            with_model_detail(radio_tooltip(radio_block), "radio", radio_block),
+        ),
+        # RAG is the one agent with no `reasoning_lines` builder: its tooltip
+        # already carries the question and the retrieved chunks, which is the
+        # same tier and more of it than a dump would be.
         "rag": _card(
             format_rag(rag_block, active=rag_active),
             rag_tooltip(rag_block) if rag_active else None,

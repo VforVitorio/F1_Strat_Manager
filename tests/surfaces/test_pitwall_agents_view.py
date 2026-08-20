@@ -165,6 +165,73 @@ def test_every_pill_and_badge_is_legible_against_its_own_fill():
     assert contrast_ratio(rgb(idle["action_colour"]), panel) >= 4.5, "the idle action too"
 
 
+def test_every_reasoning_tab_body_is_reachable_from_its_card_tooltip():
+    """The condition the layout elevation had to satisfy to retire the tabs.
+
+    The reasoning panel held two things per agent that live nowhere else on
+    the window: the agent's OWN sentences for the lap, and its `key = value`
+    dump. The elevation spec described those bodies as "snake_case field dumps
+    that duplicate what the cards already say", which is false the moment an
+    agent produces reasoning - `build_reasoning` composes the sentences ON TOP
+    of the numbers - so a move that carried only the numbers would have dropped
+    every agent's explanation of why.
+
+    Asserted ACROSS the two surfaces rather than inside either: the tab's own
+    body, token by token, against what the card's tooltip renders. A test that
+    checked the tooltip against the same builder that fills it would pass on a
+    move that dropped half the content, because both halves would have moved
+    together in its arithmetic.
+    """
+    # **The fixture has to CARRY reasoning or this guard is about nothing.**
+    # `_latest()` gives every agent numbers and no sentences, so the first
+    # draft of this test passed against a mutation that dropped the reasoning
+    # half entirely: there was none in the population it measured. The tab
+    # bodies and the tooltips agreed, and both agreed with the wrong thing.
+    agents = ("pace", "tire", "situation", "radio", "pit")
+    latest = _latest()
+    for name in agents:
+        latest["per_agent"][name]["reasoning"] = (
+            f"the {name} agent's own sentence for this lap, which lives nowhere else"
+        )
+
+    view = _host(_payload(latest=latest)).get_agents_view(-1)
+    tabs = {
+        tab["key"]: "".join(segment["text"] for segment in tab["segments"])
+        for tab in view["reasoning"]
+    }
+
+    checked = 0
+    for key in agents:
+        tooltip = view["cards"][key]["tooltip"]
+        assert tooltip is not None, f"{key} has no tooltip to reach its dump through"
+        rendered = " ".join(
+            f"{row['lead']} {row['text']}"
+            for section in tooltip["sections"]
+            for row in section["rows"]
+        )
+        for line in tabs[key].splitlines():
+            token = line.split("=")[0].strip()
+            if not token:
+                continue
+            checked += 1
+            assert token in rendered, (
+                f"{key}: the tab shows {token!r} and the tooltip does not: {rendered}"
+            )
+
+    # The enumeration itself, so an empty `per_agent` cannot make this pass by
+    # having nothing to compare - and the sentences separately from the
+    # numbers, because they are the half a move can drop while the count still
+    # looks healthy.
+    assert checked >= 25, f"only {checked} tab lines were cross-checked"
+    for key in agents:
+        rendered = " ".join(
+            row["text"]
+            for section in view["cards"][key]["tooltip"]["sections"]
+            for row in section["rows"]
+        )
+        assert "own sentence for this lap" in rendered, f"{key}'s reasoning is not reachable"
+
+
 def test_the_tooltips_return_data_and_never_markup():
     """What replaces the guarantee the hybrid gives up (#960).
 

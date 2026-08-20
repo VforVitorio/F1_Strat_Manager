@@ -35,7 +35,7 @@ import re
 from typing import Any
 
 from src.arcade.palette import TEXT_PRIMARY, hex_str
-from src.pitwall.reasoning_lines import LINE_BUILDERS, clean, compose
+from src.pitwall.reasoning_lines import agent_body, clean
 
 # reasoning_tabs.py's five colours, in its order. The order matters: the
 # action keywords are last, so `PIT_NOW` inside a percentage-bearing
@@ -150,8 +150,6 @@ def build_reasoning(latest: dict[str, Any] | None) -> list[dict[str, Any]]:
         if key == "orchestrator":
             body = _orchestrator_body(latest)
         else:
-            agent_out = per.get(key) or {}
-            metrics = LINE_BUILDERS[key](agent_out) if agent_out else []
-            body = compose(clean(agent_out.get("reasoning")), metrics)
+            body = agent_body(key, per.get(key))
         tabs.append({"key": key, "label": label, "segments": highlight(body)})
     return tabs
