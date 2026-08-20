@@ -43,11 +43,12 @@ from src.arcade.strategy import classify_action
 # point of an alarm colour is pre-attentive triage, and six semantics deny the
 # reader exactly that at the moment they need it.
 #
-# DANGER now belongs to alarm-class facts: the ALERT glyph, the guardrail
-# line, and a dead connection. The dicts stay rather than collapsing into a
-# constant, because a posture the producer has never sent must still fall to
-# TEXT_TERTIARY - which is what says "not reported" as against "reported and
-# unremarkable".
+# DANGER now belongs to alarm-class facts: the ALERT glyph and a dead
+# connection. The guardrail line was the third and it is gone, because nothing
+# could fill it (#974, `build_orchestrator`). The dicts stay rather than
+# collapsing into a constant, because a posture the producer has never sent
+# must still fall to TEXT_TERTIARY - which is what says "not reported" as
+# against "reported and unremarkable".
 _PACE_COLOURS: dict[str, tuple[int, int, int]] = {
     "PUSH": TEXT_SECONDARY,
     "NEUTRAL": TEXT_SECONDARY,
@@ -148,7 +149,38 @@ def _previous_call(latest: dict[str, Any], tail: list[dict[str, Any]] | None) ->
 def build_orchestrator(
     latest: dict[str, Any] | None, history_tail: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
-    """The action badge, the confidence bar, the two chips and the plan."""
+    """The action badge, the confidence bar, the two chips and the plan.
+
+    **There is no guardrail line, and that is the fix rather than an omission
+    (#974).** The window used to render `⚠ Guardrail: <reason>` from
+    `latest["guardrail_reason"]`, a field typed, documented, styled and tested
+    on a path that cannot deliver it. The chain, walked end to end:
+
+    - `apply_guard_rails` produces a reason at exactly one production site,
+      `src/strategy/inference/no_llm.py:302`.
+    - `run_lap` hardcodes `guardrail_reason=None` for the `rich` profile
+      (`src/strategy/inference/engine.py:303`), because rich mode puts the
+      bounds in the LLM's prompt instead of applying them after the fact.
+    - `src/arcade/strategy_pipeline.py:48` hardcodes `profile="rich"`, and
+      `src/arcade/app.py` builds its request with a literal `no_llm=False`.
+
+    So on every arcade path the value is None by construction, and the line
+    was permanently blank.
+
+    --- WHERE TO CHANGE IF THE ARCADE LEARNS TO RUN WITHOUT AN LLM ---
+    Restore the field here, the `guardrail` key on `OrchestratorView`
+    (`lib/agents.ts`), the render in `OrchestratorCard.tsx` and the
+    `.orch-guardrail` rule, and give the raw hex back its row in
+    `test_pitwall_tokens.py`.
+
+    **What must NOT be done instead** is calling `apply_guard_rails` post-hoc
+    on the rich path to fill the line. In rich mode the bounds live in the
+    prompt and the model weighed them, so a deterministic check afterwards
+    would report an override that never ran; the prompt and the deterministic
+    mirror have also diverged (#716); and the bounds proscribe a real
+    percentage of professional stops, so the line would wear the alarm colour
+    on correct calls at that rate.
+    """
     if not latest:
         return {
             "action": "--",
@@ -163,7 +195,6 @@ def build_orchestrator(
             "risk": "Risk: --",
             "risk_colour": hex_str(TEXT_TERTIARY),
             "plan": "Pit: -- · Next: -- · UCUT: --",
-            "guardrail": "",
             "changed": "",
         }
 
@@ -171,7 +202,6 @@ def build_orchestrator(
     confidence = float(latest.get("confidence") or 0.0)
     pace_mode = latest.get("pace_mode")
     risk_posture = latest.get("risk_posture")
-    guardrail = latest.get("guardrail_reason")
     badge_colour, badge_label = classify_action(action)
 
     return {
@@ -197,7 +227,6 @@ def build_orchestrator(
         "risk": f"Risk: {risk_posture or '--'}",
         "risk_colour": hex_str(_RISK_COLOURS.get(str(risk_posture or "").upper(), TEXT_TERTIARY)),
         "plan": _plan_line(latest, action),
-        "guardrail": f"⚠ Guardrail: {guardrail}" if guardrail else "",
         "changed": _previous_call(latest, history_tail),
     }
 

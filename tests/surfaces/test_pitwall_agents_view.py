@@ -560,7 +560,6 @@ def test_the_orchestrator_card_is_the_qt_one_field_for_field():
     assert view["risk_colour"] == "#d1d5db"
     assert view["plan"].startswith("Pit: L24 · Next: <span")
     assert view["plan"].endswith("· UCUT: RUS")
-    assert view["guardrail"] == ""
 
 
 def test_the_lap_the_call_moves_says_what_it_moved_from():
@@ -624,9 +623,9 @@ def test_no_posture_wears_the_alarm_colour():
         built = build_orchestrator({"action": "STAY_OUT", "risk_posture": posture})
         assert built["risk_colour"] != danger, f"risk {posture} wears the alarm colour"
 
-    # And the one field that still may: a guardrail is a constraint violation.
-    vetoed = build_orchestrator({"action": "STAY_OUT", "guardrail_reason": "min stint"})
-    assert vetoed["guardrail"].startswith("⚠ Guardrail:")
+    # DANGER is left with two owners on this window, both alarm-class facts:
+    # the ALERT glyph and the dead-producer chip. The guardrail line was the
+    # third until #974.
 
 
 def test_the_confidence_tiers_are_the_three_qt_paints():
@@ -661,13 +660,29 @@ def test_an_empty_plan_on_stay_out_says_the_stint_continues():
     assert idle["action"] == "--"
 
 
-def test_the_guardrail_line_only_exists_when_the_orchestrator_overrode_the_winner():
+def test_the_window_renders_no_guardrail_line_because_nothing_can_fill_it():
+    """#974: a field typed, styled, documented and written by no producer.
+
+    The view used to carry `⚠ Guardrail: <reason>` from
+    `latest["guardrail_reason"]`. `run_lap` hardcodes that to None for the
+    `rich` profile, `strategy_pipeline` hardcodes `profile="rich"`, and
+    `src/arcade/app.py` builds its request with a literal `no_llm=False`, so
+    on every arcade path the line was permanently blank.
+
+    Asserted as the KEY BEING ABSENT while a reason is supplied, not as an
+    empty string. An empty string is what the defect produced for its whole
+    life, so a test pinning `== ""` would have been green throughout and green
+    afterwards, which is the shape of guard this repo keeps paying for. The
+    key's absence is the only thing that changed.
+    """
     from src.pitwall.agents_view.decision import build_orchestrator
 
-    assert build_orchestrator({"guardrail_reason": "min stint"})["guardrail"] == (
-        "⚠ Guardrail: min stint"
-    )
-    assert build_orchestrator({"guardrail_reason": None})["guardrail"] == ""
+    supplied = build_orchestrator({"action": "STAY_OUT", "guardrail_reason": "min stint"})
+    idle = build_orchestrator(None)
+
+    assert "guardrail" not in supplied, "the view must not carry a line no producer can fill"
+    assert "guardrail" not in idle
+    assert "min stint" not in str(supplied), "and nothing may smuggle the reason into another field"
 
 
 def test_the_scenario_bars_normalise_across_scores_that_are_all_negative():
