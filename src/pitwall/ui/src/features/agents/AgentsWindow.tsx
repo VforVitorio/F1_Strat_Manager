@@ -82,8 +82,14 @@ const IDLE_VIEW: AgentsView = {
     // `_connection_label` answers "Connecting..." until something has been
     // rendered. Red "Disconnected" matched none of the three. #871 ported
     // the badge, the plan line and the scores and left this one behind.
+    // Overwritten from the polled channel below while there is no view. It is
+    // a placeholder, not a claim: the host owns both the word and its colour
+    // (`agents_view/panels.CONNECTION_COLOURS`), and this literal used to
+    // hardcode WARNING amber - so a socket that had come up and not yet
+    // delivered a lap read as still connecting, in a colour that means
+    // something is wrong, for the whole startup.
     connection: "Connecting...",
-    connection_colour: "#f59e0b",
+    connection_colour: "#9ca3af",
   },
   orchestrator: {
     action: "--",
@@ -239,19 +245,27 @@ export function AgentsWindow() {
    * to poll separately here: `view !== null` means a payload has arrived, and the
    * connection field is what still moves after the ticks stop.
    */
+  // The header the window paints: the view's own label once a payload has
+  // arrived - it travels WITH the lap beside it, so it cannot disagree with it
+  // - and the polled pair before that, which is the only thing that knows.
+  const header =
+    view === null && connection
+      ? { ...shown.header, connection: connection.label, connection_colour: connection.colour }
+      : shown.header;
+
   const frozen = view !== null && shown.header.connection === "Disconnected";
   const statusText = useStatusText(
     frozen
       ? { text: `DATA FROZEN · last tick ${shown.header.lap}`, transient: false }
       : view === null
-        ? { text: waitingStatus(connection), transient: false }
+        ? { text: waitingStatus(connection?.label ?? null), transient: false }
         : shown.status_bar,
     shown.seq,
   );
 
   return (
     <div className="agents-window">
-      <HeaderBar header={shown.header} frozen={frozen} />
+      <HeaderBar header={header} frozen={frozen} />
 
       {/* Dimmed, not desaturated: the cards' colour is content here too - the
           alarm red, the WARNING amber on a changed call, the confidence bar.

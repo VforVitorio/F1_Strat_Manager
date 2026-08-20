@@ -11,21 +11,21 @@
  */
 
 import { useEffect, useState } from "react";
-import { getConnection, whenBridgeReady } from "./bridge";
+import { getConnection, whenBridgeReady, type Connection } from "./bridge";
 
 const POLL_INTERVAL_MS = 1000;
 
-export function useConnection(): string | null {
-  const [connection, setConnection] = useState<string | null>(null);
+export function useConnection(): Connection | null {
+  const [connection, setConnection] = useState<Connection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
 
     const poll = async () => {
-      const label = await getConnection();
+      const state = await getConnection();
       if (cancelled) return;
-      setConnection(label);
+      setConnection(state);
       timer = window.setTimeout(poll, POLL_INTERVAL_MS);
     };
 

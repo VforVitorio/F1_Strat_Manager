@@ -6,6 +6,15 @@
  * ever measured to hurt - this is the one file that changes.
  */
 
+/**
+ * The socket state, as the host reports it: one word and the colour that word
+ * wears, from a single map (`agents_view/panels.CONNECTION_COLOURS`).
+ */
+export interface Connection {
+  label: string;
+  colour: string;
+}
+
 export interface PlaybackState {
   speed: number;
   paused: boolean;
@@ -367,20 +376,25 @@ export async function getLiveLap(sinceRev: number): Promise<LiveLap | null> {
 }
 
 /**
- * The socket's state as a word: Connected / Connecting... / Disconnected.
+ * The socket's state as a word AND its colour: Connected / Connecting... /
+ * Disconnected.
+ *
+ * The colour rides with the word because it used to ride separately, and the
+ * two windows disagreed about "Connecting..." - amber through the AGENTS view,
+ * dim grey through the DATA strip's own CSS classes, for one socket.
  *
  * No revision, because there is nothing to be current with: when the arcade
  * dies the ticks stop and this is the only thing left that changes. Null only
  * when the transport itself failed, which the caller renders as unknown
  * rather than inventing a state.
  */
-export async function getConnection(): Promise<string | null> {
-  const api = window.pywebview?.api as { get_connection?: () => Promise<string> };
+export async function getConnection(): Promise<Connection | null> {
+  const api = window.pywebview?.api as { get_connection?: () => Promise<Connection> };
   if (api?.get_connection) return api.get_connection();
   try {
     const response = await fetch("/api/connection", { cache: "no-store" });
     if (!response.ok) return null;
-    return (await response.json()) as string;
+    return (await response.json()) as Connection;
   } catch {
     return null;
   }

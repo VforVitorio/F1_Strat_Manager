@@ -466,6 +466,56 @@ def test_both_windows_hand_the_page_the_same_client_area():
     assert len(set(clients.values())) == 1, f"windows disagree about the client area: {clients}"
 
 
+def test_the_socket_state_has_one_colour_across_both_windows():
+    """The twin this closes, and the shape it had.
+
+    The AGENTS window took the chip's colour from `CONNECTION_COLOURS` through
+    the view; the DATA strip mapped the same three words to CSS classes of its
+    own. They agreed on two states and **disagreed on the third**: dim grey
+    here, WARNING amber there, for one socket, on two windows a reader has open
+    side by side.
+
+    The colour rides with the word now, from one lookup. This asserts the
+    property that makes the drift impossible - that no state colour is spelled
+    anywhere but in that map - and it asserts it over the WHOLE enumeration,
+    because a check on "Connected" alone would have been green through the
+    entire life of the defect.
+    """
+    from src.arcade.palette import DANGER, SUCCESS, TEXT_TERTIARY, hex_str
+    from src.pitwall.agents_view.panels import CONNECTION_COLOURS
+
+    assert CONNECTION_COLOURS == {
+        "Connected": hex_str(SUCCESS),
+        # An absence, not a state.
+        "Connecting...": hex_str(TEXT_TERTIARY),
+        "Disconnected": hex_str(DANGER),
+    }
+
+    # The strip's own stylesheet may no longer name a connection state. The two
+    # rules it used to carry are what disagreed.
+    data_css = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "pitwall"
+        / "ui"
+        / "src"
+        / "styles"
+        / "data.css"
+    ).read_text(encoding="utf-8")
+    for stale in (".strip-chip.is-connected", ".strip-chip.is-lost"):
+        assert stale not in data_css, f"{stale} is a second owner of a socket colour"
+
+    # And every state the host can report has an entry, so a fourth word cannot
+    # arrive and be coloured by a `.get(..., default)` nobody notices.
+    host = PitwallHost(_ConnectableClient(_tick(1), connected=True), window_count=1)
+    reported = {host.get_connection()["label"]}
+    host._client.connected = False
+    reported.add(host.get_connection()["label"])
+    fresh = PitwallHost(_ConnectableClient(None, connected=False), window_count=1)
+    reported.add(fresh.get_connection()["label"])
+    assert reported == set(CONNECTION_COLOURS), f"the host reports {reported}"
+
+
 # --- The connection label, which band 1 renders ------------------------------
 
 
@@ -489,11 +539,11 @@ def test_the_data_window_alone_still_learns_that_the_producer_died():
     client = _ConnectableClient(_tick(3), connected=True)
     host = PitwallHost(client, window_count=1)
 
-    assert host.get_connection() == "Connected"
+    assert host.get_connection()["label"] == "Connected"
 
     client.connected = False
 
-    assert host.get_connection() == "Disconnected", (
+    assert host.get_connection()["label"] == "Disconnected", (
         "the socket has been up once, so this is a loss and not a first attempt"
     )
 
@@ -502,7 +552,7 @@ def test_before_the_socket_has_ever_been_up_the_word_is_connecting():
     """Retrying is not the same as having been dropped."""
     host = PitwallHost(_ConnectableClient(None, connected=False), window_count=1)
 
-    assert host.get_connection() == "Connecting..."
+    assert host.get_connection()["label"] == "Connecting..."
 
 
 def test_both_windows_read_the_same_label_from_the_same_memory():
@@ -518,7 +568,7 @@ def test_both_windows_read_the_same_label_from_the_same_memory():
 
     client.connected = False
 
-    assert host.get_connection() == "Disconnected"
+    assert host.get_connection()["label"] == "Disconnected"
     assert host.get_agents_view(1, "Connected")["header"]["connection"] == "Disconnected"
 
 

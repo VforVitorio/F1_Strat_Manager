@@ -119,7 +119,7 @@ await page.addInitScript((payload) => {
       // Polled by `useConnection` while there is no view. Without it the
       // bridge falls back to `fetch("/api/connection")`, the static server
       // answers 404, and the window renders an unknown connection.
-      get_connection: async () => "Connected",
+      get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
     },
   };
 }, view);

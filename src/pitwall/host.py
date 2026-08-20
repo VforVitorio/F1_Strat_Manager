@@ -23,6 +23,7 @@ import logging
 
 from src.f1_strat_manager.data_cache import get_data_root
 from src.pitwall.agents_view import AgentsViewBuilder
+from src.pitwall.agents_view.panels import CONNECTION_COLOURS
 from src.pitwall.radio_feed import RadioCorpus
 from src.pitwall.radio_feed import unavailable as radio_unavailable
 from src.pitwall.session_data import SessionLaps, unavailable
@@ -107,7 +108,7 @@ class PitwallHost:
             return payload
         return None
 
-    def get_connection(self) -> str:
+    def _connection_label(self) -> str:
         """The three states both windows paint: Connected / Connecting... / Disconnected.
 
         "Disconnected" needs a memory, because the socket looks identical
@@ -130,6 +131,24 @@ class PitwallHost:
             self._ever_connected = True
             return "Connected"
         return "Disconnected" if self._ever_connected else "Connecting..."
+
+    def get_connection(self) -> dict[str, str]:
+        """The socket state as a word AND its colour, from one map.
+
+        **The colour rides with the word because it used to ride separately.**
+        The AGENTS window took it from `CONNECTION_COLOURS` through the view,
+        the DATA strip mapped the same three words to CSS classes of its own,
+        and the two disagreed about "Connecting..." - amber on one window, dim
+        grey on the other, for one socket, on two windows a reader has open
+        side by side. A word plus a colour from the same lookup cannot do that.
+
+        And the AGENTS window could not paint the word at all before its first
+        tick: its boot literal hardcoded "Connecting..." in amber, so a socket
+        that came up and had not yet delivered a lap read as still connecting,
+        in the wrong colour, for the whole startup.
+        """
+        label = self._connection_label()
+        return {"label": label, "colour": CONNECTION_COLOURS[label]}
 
     def get_agents_view(
         self, since_seq: int = -1, since_connection: str | None = None
@@ -166,7 +185,7 @@ class PitwallHost:
         `None` means "I have rendered nothing", so a first poll always gets a
         view.
         """
-        connection = self.get_connection()
+        connection = self._connection_label()
         payload = self.get_tick(since_seq)
         if payload is None:
             if connection == since_connection:

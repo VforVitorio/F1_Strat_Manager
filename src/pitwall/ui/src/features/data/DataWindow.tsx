@@ -71,12 +71,12 @@ export function DataWindow() {
    * A frozen tower that looks live is the one state a pit wall must not mistake,
    * and this window sits beside a moving arcade.
    */
-  const frozen = connection === "Disconnected" && tick !== null;
+  const frozen = connection?.label === "Disconnected" && tick !== null;
   // Not transient when frozen: the 1.5 s auto-clear is what a LIVE bar wants, and
   // it is why the only remaining signal used to be an EMPTY bar. It also has to
   // stop saying `live`, or the window contradicts its own banner one line down.
   const status = !tick
-    ? { text: waitingStatus(connection), transient: false }
+    ? { text: waitingStatus(connection?.label ?? null), transient: false }
     : frozen
       ? { text: `DATA FROZEN · last tick lap ${tick.arcade.lap}`, transient: false }
       : { text: `lap ${tick.arcade.lap} · live`, transient: true };
@@ -137,7 +137,7 @@ export function DataWindow() {
             </div>
           </div>
         ) : (
-          <p className="data-waiting">{waitingBody(connection)}</p>
+          <p className="data-waiting">{waitingBody(connection?.label ?? null)}</p>
         )}
       </div>
       <footer className="status-bar">{statusText}</footer>

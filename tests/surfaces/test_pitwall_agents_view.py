@@ -817,11 +817,24 @@ def test_the_window_learns_the_arcade_died_even_though_no_tick_arrives():
 
 
 def test_before_the_first_connection_the_chip_says_connecting():
-    """Retrying is not the same as having been dropped, and the colours differ."""
+    """Retrying is not the same as having been dropped, and the colours differ.
+
+    **And retrying is not a state either.** It was WARNING amber here while the
+    DATA window's own strip painted the same socket dim grey, with its argument
+    written down beside its rule: "Connecting..." is an ABSENCE, and an absence
+    that borrows the green or the amber is a made-up answer. One socket, two
+    windows a reader has open side by side, two colours. The map is shared now
+    and the argument won.
+    """
+    from src.arcade.palette import TEXT_TERTIARY, WARNING, hex_str
+
     view = _host(_payload(), connected=False).get_agents_view(-1)
 
     assert view["header"]["connection"] == "Connecting..."
-    assert view["header"]["connection_colour"] == "#f59e0b"
+    assert view["header"]["connection_colour"] == hex_str(TEXT_TERTIARY)
+    assert view["header"]["connection_colour"] != hex_str(WARNING), (
+        "an absence must not wear the colour that means something is wrong"
+    )
 
 
 def test_nothing_to_render_is_none_rather_than_an_empty_view():

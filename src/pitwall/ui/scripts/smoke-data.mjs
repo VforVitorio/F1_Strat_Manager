@@ -206,7 +206,7 @@ await page.addInitScript((payload) => {
       },
       get_bulk: async () => null,
       get_live_lap: async () => null,
-      get_connection: async () => "Connected",
+      get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
     },
   };
 }, tick(1));
@@ -262,10 +262,19 @@ check(
     "0:23:20",
   "the session clock is SessionTime and not replay seconds",
 );
+// The chip no longer has a state class: the colour arrives WITH the word from
+// the host's own map, because the two windows used to map the same three
+// states separately and disagreed about "Connecting...". So this asserts the
+// pair - the word, and that it is not wearing the neutral grey an unknown gets.
+const connectionChip = await page.evaluate(() => {
+  const chip = [...document.querySelectorAll(".strip-chip")].find((el) =>
+    ["Connected", "Connecting...", "Disconnected"].includes(el.innerText.trim()),
+  );
+  return chip ? { text: chip.innerText.trim(), colour: getComputedStyle(chip).color } : null;
+});
 check(
-  (await page.locator(".strip-chip.is-connected").innerText()).trim() ===
-    "Connected",
-  "the connection comes from the host's socket, not from tick freshness",
+  connectionChip?.text === "Connected" && connectionChip.colour === "rgb(16, 185, 129)",
+  `the connection comes from the host's socket, word and colour (${JSON.stringify(connectionChip)})`,
 );
 check(
   (await page.locator(".strip-chip.is-provisional").count()) === 0,
@@ -678,7 +687,7 @@ await soloPage.addInitScript(
           sinceSeq === payload.seq ? null : payload,
         get_bulk: async () => null,
         get_live_lap: async () => null,
-        get_connection: async () => "Connected",
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
       },
     };
   },
@@ -774,7 +783,7 @@ await ringPage.addInitScript(
         // 404 four times, which nothing on this page was listening for.
         get_bulk: async () => null,
         get_live_lap: async () => null,
-        get_connection: async () => "Connected",
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
       },
     };
   },
@@ -968,7 +977,7 @@ await stillPage.addInitScript((payload) => {
       get_tick: async () => ({ ...structuredClone(payload), seq: ++seq }),
       get_bulk: async () => null,
       get_live_lap: async () => null,
-      get_connection: async () => "Connected",
+      get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
     },
   };
 }, tick(1));
@@ -1012,7 +1021,7 @@ async function provisionalChips(field) {
             sinceSeq === payload.seq ? null : payload,
           get_bulk: async () => null,
           get_live_lap: async () => null,
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -1240,7 +1249,7 @@ await towerPage.addInitScript(
           sinceSeq === payload.seq ? null : payload,
         get_bulk: async (sinceRev) => (sinceRev === bulk.rev ? null : bulk),
         get_live_lap: async (sinceRev) => (sinceRev === live.rev ? null : live),
-        get_connection: async () => "Connected",
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
       },
     };
   },
@@ -1592,7 +1601,7 @@ async function radioPage(radio) {
           get_bulk: async (sinceRev) => (sinceRev === bulk.rev ? null : bulk),
           get_live_lap: async (sinceRev) =>
             sinceRev === live.rev ? null : live,
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -2309,7 +2318,7 @@ await pacePage.addInitScript(
         get_tick: async (s) => (s === payload.seq ? null : payload),
         get_bulk: async (r) => (r === bulk.rev ? null : bulk),
         get_live_lap: async (r) => (r === live.rev ? null : live),
-        get_connection: async () => "Connected",
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
       },
     };
   },
@@ -2692,7 +2701,7 @@ check(
           get_tick: async (s) => (s === payload.seq ? null : payload),
           get_bulk: async (r) => (r === bulk.rev ? null : bulk),
           get_live_lap: async (r) => (r === live.rev ? null : live),
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -2828,7 +2837,7 @@ check(
           get_tick: async (s) => (s === payload.seq ? null : payload),
           get_bulk: async (r) => (r === bulk.rev ? null : bulk),
           get_live_lap: async (r) => (r === live.rev ? null : live),
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -2973,7 +2982,7 @@ for (const [width, height] of [
           get_bulk: async (r) =>
             window.__holdBulk || r === bulk.rev ? null : bulk,
           get_live_lap: async (r) => (r === live.rev ? null : live),
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -3069,7 +3078,7 @@ for (const [width, height] of [
             return r === served.rev ? null : served;
           },
           get_live_lap: async (r) => (r === live.rev ? null : live),
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -3195,7 +3204,7 @@ for (const [width, height] of [
           get_tick: async (s) => (s === payload.seq ? null : payload),
           get_bulk: async (r) => (r === bulk.rev ? null : bulk),
           get_live_lap: async (r) => (r === live.rev ? null : live),
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -3456,7 +3465,7 @@ if (bands === null) {
           get_tick: async (s) => (s === payload.seq ? null : payload),
           get_bulk: async (r) => (r === bulk.rev ? null : bulk),
           get_live_lap: async (r) => (r === live.rev ? null : live),
-          get_connection: async () => "Connected",
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
         },
       };
     },
@@ -3532,7 +3541,9 @@ if (bands === null) {
           get_bulk: async (r) => (r === bulk.rev ? null : bulk),
           get_live_lap: async (r) => (r === live.rev ? null : live),
           get_connection: async () =>
-            window.__alive ? "Connected" : "Disconnected",
+            window.__alive
+              ? { label: "Connected", colour: "#10b981" }
+              : { label: "Disconnected", colour: "#ef4444" },
         },
       };
     },
@@ -3579,7 +3590,9 @@ if (bands === null) {
     trackFilled: document.querySelectorAll(".strip-chip.is-filled").length,
     filter: getComputedStyle(document.querySelector(".data-main")).filter,
     rows: document.querySelectorAll(".tower-row").length,
-    lost: document.querySelectorAll(".strip-chip.is-lost").length,
+    lost: [...document.querySelectorAll(".strip-chip")].filter(
+      (el) => el.innerText.trim() === "Disconnected",
+    ).length,
   }));
 
   check(
@@ -3828,7 +3841,9 @@ await paceCtx.close();
 async function waitingCopy(connection) {
   const context = await browser.newContext({ viewport: CLIENT });
   const emptyPage = await context.newPage();
-  watchPage(emptyPage, failures, "waiting/${connection}");
+  watchPage(emptyPage, failures, `waiting/${connection.label}`);
+  // The PAIR goes in as the argument: `addInitScript` runs the function in the
+  // page, so a Node-side constant it closes over is not there.
   await emptyPage.addInitScript((state) => {
     window.pywebview = {
       api: {
@@ -3852,8 +3867,16 @@ async function waitingCopy(connection) {
   return { body, bar };
 }
 
-const waitingUp = await waitingCopy("Connected");
-const waitingDown = await waitingCopy("Connecting...");
+const CONNECTION_COLOURS = {
+  Connected: "#10b981",
+  "Connecting...": "#9ca3af",
+  Disconnected: "#ef4444",
+};
+const waitingUp = await waitingCopy({ label: "Connected", colour: CONNECTION_COLOURS.Connected });
+const waitingDown = await waitingCopy({
+  label: "Connecting...",
+  colour: CONNECTION_COLOURS["Connecting..."],
+});
 check(
   waitingUp.body !== waitingDown.body,
   `an empty window says something DIFFERENT once the socket is up (up: "${waitingUp.body}", down: "${waitingDown.body}")`,
