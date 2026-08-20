@@ -533,55 +533,41 @@
   white-space: pre;
 }
 
-/* --- Reasoning tabs (reasoning_tabs.py) ---------------------------------- */
+/* --- WHY (band module 2) --------------------------------------------------
+ *
+ * What stood here was a `QTabWidget` port: six tabs and a monospace pane, the
+ * largest bordered surface on the window carrying five short lines at 1.9 %
+ * ink with 318 px of it empty. The tabs are gone; the module holds the one
+ * sentence that earned the glass and points at the rest. */
 
-/* The band's WHY slot, until the module that replaces it lands. It is a card
- * now rather than a bare panel, so it reads as one of the four modules. */
-.reasoning {
+.why-panel {
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  gap: 6px;
+  min-width: 0;
+}
+/* Clamped, and the clamp earns its place HERE and not on `.tip-text`. This is
+ * a summary by construction and the whole narrative is one keypress away, so
+ * cutting it is the design; cutting the drill-down tier, which is the only
+ * copy, is a silent amputation. */
+.why-narrative {
+  margin: 0;
+  color: var(--qt-fg-1);
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.reasoning-tabbar {
-  flex-wrap: wrap;
-}
-.reasoning-tabbar {
-  display: flex;
-  gap: 0;
-}
-.reasoning-tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--qt-fg-2);
-  padding: 6px 12px;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.reasoning-tab.is-selected {
-  color: var(--qt-accent);
-  border-bottom-color: var(--qt-accent);
-}
-/* The pane, matching Qt's `QTabWidget::pane` rule, with `top: -1px` folded
- * into the negative margin so the selected tab sits on its edge. */
-.reasoning-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  margin-top: -1px;
-  padding: 8px;
-  border: 1px solid var(--qt-border);
-  border-radius: 6px;
-  font-family: var(--qt-mono);
-  font-size: 11px;
-  line-height: 140%;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+
+/* Both tooltip targets are keyboard targets now, so both need a focus ring.
+ * `:focus-visible` rather than `:focus`, so a mouse click does not paint one. */
+.why-panel:focus-visible,
+.agent-card:focus-visible {
+  outline: 2px solid var(--qt-accent);
+  outline-offset: 2px;
 }
 
 /* --- The two embedded charts --------------------------------------------- */

@@ -123,7 +123,7 @@ def highlight(text: str) -> list[dict[str, Any]]:
     return segments
 
 
-def _orchestrator_body(latest: dict[str, Any]) -> str:
+def orchestrator_body(latest: dict[str, Any]) -> str:
     """The decision's reasoning, plus the memory block on a changed lap only.
 
     DecisionMemory leaves no trace in `reasoning` even when it drives the
@@ -148,7 +148,7 @@ def build_reasoning(latest: dict[str, Any] | None) -> list[dict[str, Any]]:
     tabs: list[dict[str, Any]] = []
     for key, label in TABS:
         if key == "orchestrator":
-            body = _orchestrator_body(latest)
+            body = orchestrator_body(latest)
         else:
             body = agent_body(key, per.get(key))
         tabs.append({"key": key, "label": label, "segments": highlight(body)})

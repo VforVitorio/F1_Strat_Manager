@@ -90,6 +90,10 @@ export interface OrchestratorView {
   risk_colour: string;
   /** Qt rich text: may carry the compound pill. */
   plan: string;
+  /** The narrative's first sentence, on the glass. Empty before the first call. */
+  why: string;
+  /** The whole narrative plus the memory block, one hover or keypress away. */
+  why_detail: TooltipView | null;
   /** `was STAY OUT (0.58) · L22`, only on the lap the call moved. */
   changed: string;
 }
@@ -115,6 +119,17 @@ export interface ScenarioRow {
   score_colour: string;
 }
 
+/**
+ * The six reasoning tabs. **Nothing renders this any more** (#1020): the
+ * orchestrator's narrative is the band's WHY module and its tooltip, and the
+ * five agent bodies are their own consoles' model detail.
+ *
+ * It stays on the wire because it is what the cross-surface guard in
+ * `test_pitwall_agents_view.py` compares the tooltips AGAINST, and a guard
+ * that measured the tooltips against the same builder that fills them would
+ * pass on a move that dropped half the content. That is a different case from
+ * the guardrail field #974 deleted, which no producer could populate at all.
+ */
 export interface ReasoningSegment {
   text: string;
   colour: string;

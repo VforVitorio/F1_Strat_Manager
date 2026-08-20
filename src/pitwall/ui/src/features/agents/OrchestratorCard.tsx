@@ -24,6 +24,10 @@
  * The banner is bounded (`nowrap` + ellipsis) because `classify_action` falls
  * back to echoing the raw string for anything outside its seven, and an
  * unknown producer word at 32 px/800 is unbounded.
+ *
+ * The `was STAY OUT (0.58) · L22` chip lives in the WHY module, not here: what
+ * CHANGED is part of why, not part of what, and rendering it in both modules
+ * put the same sentence on the glass twice.
  */
 
 import type { OrchestratorView } from "../../lib/agents";
@@ -58,13 +62,6 @@ export function OrchestratorCard({ view }: { view: OrchestratorView }) {
         <span className="orch-facts-sep"> · </span>
         <span style={{ color: view.risk_colour }}>{view.risk}</span>
       </p>
-
-      {/* What changed since the last lap, which this window had no
-          first-class answer to: everything else overwrites in place ten times
-          a second, and the only trace of a moved call was a heading inside a
-          tab panel. Only rendered on the lap the ACTION moved, which is rare
-          enough to stay a signal. */}
-      {view.changed ? <p className="orch-changed">{view.changed}</p> : null}
     </section>
   );
 }

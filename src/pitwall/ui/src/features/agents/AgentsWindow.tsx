@@ -35,7 +35,7 @@ import { waitingStatus } from "../../lib/waitingCopy";
 
 import { AgentCard } from "./AgentCard";
 import { OrchestratorCard } from "./OrchestratorCard";
-import { ReasoningTabs } from "./ReasoningTabs";
+import { WhyPanel } from "./WhyPanel";
 import { ScenarioBars } from "./ScenarioBars";
 import { PlanPanel } from "./PlanPanel";
 import { HeaderBar } from "./HeaderBar";
@@ -98,6 +98,8 @@ const IDLE_VIEW: AgentsView = {
     risk: "Risk: --",
     risk_colour: "#9ca3af",
     plan: "Pit: — · Next: — · UCUT: —",
+    why: "",
+    why_detail: null,
     changed: "",
   },
   scenarios: [
@@ -257,7 +259,7 @@ export function AgentsWindow() {
             sharing a column with the least. */}
         <div className="agents-band">
           <OrchestratorCard view={shown.orchestrator} />
-          <ReasoningTabs tabs={shown.reasoning} />
+          <WhyPanel view={shown.orchestrator} />
           <ScenarioBars rows={shown.scenarios} />
           <PlanPanel plan={shown.orchestrator.plan} />
         </div>

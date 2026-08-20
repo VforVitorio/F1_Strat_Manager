@@ -16,6 +16,7 @@ changes which scenario reads as the winner.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from src.arcade.palette import (
@@ -30,6 +31,7 @@ from src.arcade.palette import (
     hex_str,
 )
 from src.arcade.strategy import classify_action
+from src.pitwall.reasoning_lines import clean
 
 # The two posture chips are FACTS, not warnings, so they wear text colour and
 # the word carries the meaning (#964).
@@ -145,6 +147,63 @@ def _previous_call(latest: dict[str, Any], tail: list[dict[str, Any]] | None) ->
     return f"was {label}{confidence} · L{previous['lap_number']}"
 
 
+# A sentence ends at `. ` followed by a CAPITAL or an opening quote - never by
+# a digit, and never inside a token with no space in it.
+#
+# Both exclusions are earned. A bare "." cuts `0.58`, `1.4 s` and `Art. 30.5(m)`
+# mid-number, and all three appear in real orchestrator prose. Allowing a digit
+# to start the next sentence still turned `Art. 30.5(m) requires two dry
+# specifications.` into `Art.` - a three-character "narrative" that reads as a
+# rendering bug. Requiring two words in the candidate is what stops the rest of
+# that family.
+#
+# The bias is deliberate: when the rule is unsure it does NOT split, and the
+# module shows a longer sentence that CSS clamps to two lines. A first sentence
+# that is too long is a layout question; one that is truncated is a lie.
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(])")
+_MIN_WORDS = 2
+
+
+def first_sentence(text: str) -> str:
+    """The opening sentence of the orchestrator's narrative, or all of it.
+
+    Returns the whole string when it holds no boundary, which is the common
+    case: the model usually answers in one sentence, and a rule that returned
+    "" for those would blank the module on most laps.
+    """
+    cleaned = clean(text)
+    if not cleaned:
+        return ""
+    head = _SENTENCE_END.split(cleaned, maxsplit=1)[0]
+    if len(head.split()) < _MIN_WORDS:
+        return cleaned
+    return head
+
+
+def _why_detail(latest: dict[str, Any]) -> dict[str, Any] | None:
+    """The orchestrator's whole narrative as a tooltip, or None when it has none.
+
+    The same body the reasoning tab composed, including the DecisionMemory
+    block that only appears on a lap where the call moved - rendered through
+    the popup the consoles already use rather than through a second mechanism.
+    """
+    reasoning = clean(latest.get("reasoning"))
+    memory_block = latest.get("memory_block")
+    sections: list[dict[str, Any]] = []
+    if reasoning:
+        sections.append({"title": "Reasoning", "rows": [{"lead": "", "text": reasoning}]})
+    if latest.get("plan_changed") and memory_block:
+        sections.append(
+            {
+                "title": "Why this call changed",
+                "rows": [{"lead": "", "text": str(memory_block)}],
+            }
+        )
+    if not sections:
+        return None
+    return {"sections": sections, "footer": None}
+
+
 def build_orchestrator(
     latest: dict[str, Any] | None, history_tail: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
@@ -193,6 +252,8 @@ def build_orchestrator(
             "risk": "Risk: --",
             "risk_colour": hex_str(TEXT_TERTIARY),
             "plan": "Pit: -- · Next: -- · UCUT: --",
+            "why": "",
+            "why_detail": None,
             "changed": "",
         }
 
@@ -228,6 +289,16 @@ def build_orchestrator(
         "risk": f"Risk: {risk_posture or '--'}",
         "risk_colour": hex_str(_RISK_COLOURS.get(str(risk_posture or "").upper(), TEXT_TERTIARY)),
         "plan": _plan_line(latest, action),
+        # The band's WHY module: one sentence on the glass, the rest a keypress
+        # away. The panel that used to hold the whole narrative measured 1.9 %
+        # ink, so the trade is a line that is always read against a block that
+        # mostly was not.
+        "why": first_sentence(latest.get("reasoning")),
+        # And the rest of it, one hover or one keypress away. The tabs showed
+        # this and the DecisionMemory block below it; both had to land
+        # somewhere reachable before the panel could go, which is the same
+        # obligation the agent consoles' model detail answers.
+        "why_detail": _why_detail(latest),
         "changed": _previous_call(latest, history_tail),
     }
 

@@ -165,6 +165,92 @@ def test_every_pill_and_badge_is_legible_against_its_own_fill():
     assert contrast_ratio(rgb(idle["action_colour"]), panel) >= 4.5, "the idle action too"
 
 
+def test_the_narrative_is_cut_at_a_sentence_and_never_mid_number():
+    """`why` is the one line of prose the band puts on the glass.
+
+    A naive split on "." is what this must not be. Real orchestrator text
+    carries `0.58`, `1.4 s` and `Art. 30.5(m)`, and the first draft of this
+    rule - splitting before a capital OR a digit - turned that last one into
+    `Art.`, a three-character narrative that reads as a rendering bug.
+
+    **The bias is not to split.** When the rule is unsure the module shows a
+    longer sentence and CSS clamps it to three lines; a first sentence that is
+    too long is a layout question, one that is truncated is a lie. That is why
+    two of the cases below deliberately return the WHOLE string.
+    """
+    from src.pitwall.agents_view.decision import first_sentence
+
+    assert first_sentence("the undercut window against RUS opens now") == (
+        "the undercut window against RUS opens now"
+    )
+    assert first_sentence("Confidence is 0.58 here. The gap to RUS is 1.4 s.") == (
+        "Confidence is 0.58 here."
+    )
+    assert first_sentence("Pitting now costs 22.4 s. Staying out risks the cliff.") == (
+        "Pitting now costs 22.4 s."
+    )
+    # The abbreviation. Splitting here is what produced `Art.`
+    assert first_sentence("Art. 30.5(m) requires two dry specifications. We have not.") == (
+        "Art. 30.5(m) requires two dry specifications."
+    )
+    # A digit opening the next sentence: not split, on purpose.
+    assert first_sentence("The delta is -0.204 s. 71% of runs prefer PIT_NOW.") == (
+        "The delta is -0.204 s. 71% of runs prefer PIT_NOW."
+    )
+    # One word before the stop is not a sentence.
+    assert first_sentence("Ok. Then we box.") == "Ok. Then we box."
+    assert first_sentence("") == ""
+    assert first_sentence(None) == ""
+
+
+def test_the_memory_block_is_reachable_only_on_the_lap_the_call_moved():
+    """The counterweight sentence the retired panel showed, and its condition.
+
+    DecisionMemory leaves no trace in `reasoning` even when it drives the call,
+    so the block is rendered rather than trusted to the model's own narration -
+    and only on a changed lap, because the action moves on a small minority of
+    them and unconditional display was measured as wallpaper.
+    """
+    from src.pitwall.agents_view.decision import build_orchestrator
+
+    changed = build_orchestrator(_latest())
+    quiet = build_orchestrator({**_latest(), "plan_changed": False})
+
+    titles = [section["title"] for section in changed["why_detail"]["sections"]]
+    assert titles == ["Reasoning", "Why this call changed"]
+    assert [s["title"] for s in quiet["why_detail"]["sections"]] == ["Reasoning"]
+    assert build_orchestrator(None)["why_detail"] is None, "nothing to open before the first call"
+
+
+def test_the_orchestrator_tab_body_is_reachable_from_the_why_module():
+    """The other half of retiring the reasoning panel.
+
+    Its five agent bodies went to the consoles' tooltips; its ORCHESTRATOR tab
+    - the narrative plus the memory block - is the band's WHY module and the
+    popup behind it. Compared across the two surfaces for the same reason the
+    per-agent one is: measuring the tooltip against the builder that fills it
+    would pass on a move that dropped half of it.
+    """
+    view = _host(_payload()).get_agents_view(-1)
+    tab = "".join(
+        segment["text"]
+        for segment in next(t for t in view["reasoning"] if t["key"] == "orchestrator")["segments"]
+    )
+    rendered = " ".join(
+        row["text"]
+        for section in view["orchestrator"]["why_detail"]["sections"]
+        for row in section["rows"]
+    )
+
+    assert view["orchestrator"]["why"], "the module has a sentence on the glass"
+    assert view["orchestrator"]["why"] in rendered, "and it is the opening of what the popup holds"
+    for line in tab.splitlines():
+        stripped = line.strip().strip("- ")
+        if not stripped or stripped == "why this call changed":
+            continue
+        assert stripped in rendered, f"the tab showed {stripped!r} and the popup does not"
+
+
 def test_every_reasoning_tab_body_is_reachable_from_its_card_tooltip():
     """The condition the layout elevation had to satisfy to retire the tabs.
 
