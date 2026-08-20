@@ -58,22 +58,45 @@ function Tooltip({ view, anchor }: { view: TooltipView; anchor: DOMRect }) {
     // card was blanketed and the popup spilled below it. A tooltip that
     // hides its own subject is worse than no tooltip.
     //
-    // Right of the card by preference, left when there is no room, and only
-    // then below - which is the old behaviour kept as the last resort for a
-    // card that is wider than the space either side of it.
+    // Right of the card by preference, left when there is no room, and
+    // OUTSIDE IT VERTICALLY when neither side fits.
+    //
+    // **That third branch used to keep the popup at the card's own left edge,
+    // which is on top of it.** It was survivable while every card was about a
+    // third of the window; the decision band made RADIO span two columns, so
+    // the room either side of a 984 px card is 492 px and a tooltip wider than
+    // that lands on its own subject. It reached CI and not this machine,
+    // because `width` is `max-content` and the runner has neither JetBrains
+    // Mono nor the body font: 37,285 px2 of overlap there, zero here, from the
+    // same code and the same fixture.
     const roomRight = window.innerWidth - anchor.right - TOOLTIP_GAP;
     const roomLeft = anchor.left - TOOLTIP_GAP;
-    let left: number;
-    if (roomRight >= width) left = anchor.right + TOOLTIP_GAP;
-    else if (roomLeft >= width) left = anchor.left - TOOLTIP_GAP - width;
-    else left = Math.max(TOOLTIP_GAP, Math.min(anchor.left, window.innerWidth - width - TOOLTIP_GAP));
+    const onScreenTop = (wanted: number) =>
+      Math.max(TOOLTIP_GAP, Math.min(wanted, window.innerHeight - height - TOOLTIP_GAP));
 
-    // Vertically aligned with the card's top, then pulled up only as far as
-    // it must be to stay on screen.
-    const top = Math.max(
-      TOOLTIP_GAP,
-      Math.min(anchor.top, window.innerHeight - height - TOOLTIP_GAP),
-    );
+    let left: number;
+    let top: number;
+    if (roomRight >= width) {
+      left = anchor.right + TOOLTIP_GAP;
+      top = onScreenTop(anchor.top);
+    } else if (roomLeft >= width) {
+      left = anchor.left - TOOLTIP_GAP - width;
+      top = onScreenTop(anchor.top);
+    } else {
+      left = Math.max(
+        TOOLTIP_GAP,
+        Math.min(anchor.left, window.innerWidth - width - TOOLTIP_GAP),
+      );
+      // Under the card if it fits there, over it if not. Preferring BELOW
+      // rather than above keeps the reading order for the four cards that have
+      // room under them; RADIO and RAG sit on the bottom row and take the
+      // other branch.
+      const roomBelow = window.innerHeight - anchor.bottom - TOOLTIP_GAP;
+      const roomAbove = anchor.top - TOOLTIP_GAP;
+      if (roomBelow >= height) top = anchor.bottom + TOOLTIP_GAP;
+      else if (roomAbove >= height) top = anchor.top - TOOLTIP_GAP - height;
+      else top = onScreenTop(anchor.top);
+    }
     setBox({ left, top });
   }, [anchor, view]);
 

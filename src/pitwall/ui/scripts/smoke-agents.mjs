@@ -394,6 +394,38 @@ const overlap = await page.evaluate(() => {
 });
 check(overlap === 0, `the tooltip does not cover its own card (${overlap} px2)`);
 
+// **And the same when the popup fits on neither side**, which is the branch a
+// wide card reaches and the one that used to place it on its own subject.
+// Forced rather than waited for: the width is `max-content`, so whether a real
+// tooltip trips it depends on the fonts the machine happens to have - it fired
+// on a CI runner and never here, from the same code and the same fixture.
+await page.mouse.move(0, 0);
+await page.waitForTimeout(150);
+const widen = await page.addStyleTag({
+  content: ".agent-tooltip { min-width: 1200px !important; }",
+});
+await page.locator(".agent-card").nth(4).hover();
+await page.waitForTimeout(200);
+const forced = await page.evaluate(() => {
+  const tip = document.querySelector(".agent-tooltip").getBoundingClientRect();
+  const card = document.querySelectorAll(".agent-card")[4].getBoundingClientRect();
+  const x = Math.max(0, Math.min(tip.right, card.right) - Math.max(tip.left, card.left));
+  const y = Math.max(0, Math.min(tip.bottom, card.bottom) - Math.max(tip.top, card.top));
+  return {
+    overlap: Math.round(x * y),
+    onScreen: tip.top >= 0 && tip.bottom <= window.innerHeight,
+    width: Math.round(tip.width),
+  };
+});
+check(
+  forced.overlap === 0,
+  `a popup too wide for either side still clears its card (${JSON.stringify(forced)})`,
+);
+check(forced.onScreen, `and stays on screen (${JSON.stringify(forced)})`);
+await widen.evaluate((node) => node.remove());
+await page.mouse.move(0, 0);
+await page.waitForTimeout(150);
+
 // Qt's `showMessage(text, 1500)` clears itself. The port typed a
 // `transient` flag and read it nowhere until #871.
 // The scrollbars are HIDDEN, not deleted. Víctor asked for the bars inside
