@@ -678,7 +678,7 @@ def test_the_view_is_what_the_qt_window_renders_line_for_line():
         "gap 1.4s · Δpace -0.12s/lap",
     ]
 
-    assert cards["pit"]["headline"] == "pit 22.40s → HARD"
+    assert cards["pit"]["headline"] == "stop 22.40s → HARD"
     assert cards["radio"]["headline"] == "quiet"
     assert cards["rag"]["headline"] == "regulation loaded"
 
@@ -696,6 +696,79 @@ def test_the_situation_card_says_out_of_range_and_never_zero_per_cent():
     view = _host(_payload(latest=latest)).get_agents_view(-1)
 
     assert view["cards"]["situation"]["lines"][0]["text"] == "overtake — (out of model range)"
+
+
+def test_an_active_pit_console_is_not_a_warning_unless_something_is_pressing():
+    """Being awake is not being worried.
+
+    The console wore WARNING amber and WATCH whenever N28 was routed, which is
+    every lap with a pit question - so the state that means "look at this" was
+    the state that means "this agent ran", and the reader had no way to tell
+    the two apart on a surface built for pre-attentive triage.
+
+    WATCH is kept for the one thing in the block that says something is
+    pressing: a recommendation driven by safety-car pressure, which carries a
+    different risk profile and a deadline.
+    """
+    from src.arcade.palette import TEXT_PRIMARY, WARNING, hex_str
+    from src.pitwall.agent_formatters import format_pit
+
+    block = {
+        "stop_duration_p05": 21.14,
+        "stop_duration_p50": 22.40,
+        "stop_duration_p95": 24.81,
+        "compound_recommendation": "HARD",
+    }
+
+    calm = format_pit(block, active=True)
+    pressing = format_pit({**block, "sc_reactive": True}, active=True)
+
+    assert calm[0] == "stop 22.40s → HARD", "and it says STOP, not PIT"
+    assert hex_str(calm[1]) == hex_str(TEXT_PRIMARY)
+    assert calm[3] == "OK"
+    assert hex_str(pressing[1]) == hex_str(WARNING)
+    assert pressing[3] == "WATCH"
+    assert pressing[0].endswith(" · SC")
+
+
+def test_the_radio_console_ranks_severity_over_recency():
+    """A rival's routine message could evict our own driver's problem.
+
+    The card showed `radio_events[-1]`, the newest whatever it said, on a
+    surface whose whole purpose is noticing the problem.
+
+    **Severity is read from the agent's own `alerts`**, not from a fourth copy
+    of an intent-severity map - this repo already carries three, one of which
+    was found missing a key the others had, and this module cannot import the
+    agent's config because doing so loads three models.
+    """
+    from src.pitwall.agent_formatters import format_radio
+
+    events = [
+        {"driver": "NOR", "analysis": {"intent": "PROBLEM"}, "message": "no grip at the rear"},
+        {"driver": "RUS", "analysis": {"intent": "INFORMATION"}, "message": "box this lap"},
+    ]
+    block = {
+        "radio_events": events,
+        "rcm_events": [],
+        "alerts": [{"driver": "NOR", "intent": "PROBLEM"}],
+    }
+
+    lines = [text for text, _ in format_radio(block)[2]]
+    messages = [line for line in lines if ":" in line and "radios" not in line]
+
+    assert messages, "the console shows at least one message"
+    assert "no grip at the rear" in messages[0], (
+        f"the flagged radio has to lead, not the newest: {messages}"
+    )
+    assert any("box this lap" in line for line in messages), "and the other still fits"
+
+    # With nothing flagged the order is recency, which is what it always was.
+    quiet = {"radio_events": events, "rcm_events": [], "alerts": []}
+    quiet_lines = [
+        text for text, _ in format_radio(quiet)[2] if ":" in text and "radios" not in text
+    ]
+    assert "box this lap" in quiet_lines[0], f"unflagged falls back to newest-first: {quiet_lines}"
 
 
 def test_every_console_state_has_its_own_shape():
