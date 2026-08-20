@@ -1,6 +1,6 @@
 /**
- * The N31 decision panel: action badge, confidence, the two regime chips,
- * the plan line and the guardrail.
+ * The N31 decision panel: action badge, confidence, the two regime chips
+ * and the plan line.
  *
  * 1:1 with `orchestrator_card.py`. Every string and colour is decided
  * host side, including the plan line's three branches, so the "stint
@@ -16,7 +16,8 @@ export function OrchestratorCard({ view }: { view: OrchestratorView }) {
       <div className="orch-top">
         {/* The text colour comes from the host too. Fixed to white here it
             measured 2.54:1 on the SUCCESS fill — the primary decision, below
-            AA, in the state where a guardrail has just overruled the plan. */}
+            AA, in the state where the orchestrator has just overruled the
+            Monte Carlo winner. */}
         <div
           className="orch-badge"
           style={{ background: view.action_colour, color: view.action_text_colour }}
@@ -55,7 +56,6 @@ export function OrchestratorCard({ view }: { view: OrchestratorView }) {
           tab panel. Only rendered on the lap the ACTION moved, which is rare
           enough to stay a signal. */}
       {view.changed ? <p className="orch-changed">{view.changed}</p> : null}
-      {view.guardrail ? <p className="orch-guardrail">{view.guardrail}</p> : null}
     </section>
   );
 }

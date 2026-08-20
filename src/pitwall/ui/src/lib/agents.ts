@@ -90,8 +90,6 @@ export interface OrchestratorView {
   risk_colour: string;
   /** Qt rich text: may carry the compound pill. */
   plan: string;
-  /** Empty string when the orchestrator did not override the MC winner. */
-  guardrail: string;
   /** `was STAY OUT (0.58) · L22`, only on the lap the call moved. */
   changed: string;
 }

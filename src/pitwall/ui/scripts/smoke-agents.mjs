@@ -67,7 +67,6 @@ const VIEW = {
     risk: "Risk: AGGRESSIVE",
     risk_colour: "#ef4444",
     plan: "Pit: L24 · Next: HARD · UCUT: RUS",
-    guardrail: "",
   },
   scenarios: ["STAY", "PIT", "UCUT", "OCUT"].map((label, index) => ({
     key: label,

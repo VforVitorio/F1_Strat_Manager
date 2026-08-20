@@ -459,7 +459,10 @@ def test_the_two_raw_hexes_in_the_stylesheet_are_guarded_too():
         f"a new raw hex entered the stylesheet: {raw}. Either use a --qt-* token or add it here "
         "with the palette name it copies."
     )
-    assert "#ef4444" == _rgb_to_hex(palette.DANGER), "the guardrail rule copies DANGER"
+    # `.chip.is-frozen`, the dead-producer chip. It was the guardrail rule too
+    # until #974 deleted a line no producer could fill, and the hex survived
+    # that deletion because the frozen chip is its second copy site.
+    assert "#ef4444" == _rgb_to_hex(palette.DANGER), "the frozen chip copies DANGER"
     assert "#f59e0b" == _rgb_to_hex(palette.WARNING), (
         "the `was <call>` dot copies WARNING - a CHANGE worth noticing, deliberately not the "
         "DANGER one line below it, which means a fault"
