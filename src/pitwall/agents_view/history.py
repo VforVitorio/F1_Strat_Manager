@@ -54,6 +54,18 @@ class LapHistory:
         self._keep = keep
         self._pace: dict[int, dict[str, Any]] = {}
         self._tire: dict[int, dict[str, Any]] = {}
+        # **Never trimmed, and that is the point.** The two stores above are a
+        # rolling 40-lap window because the charts draw one; the PLAN timeline
+        # draws the WHOLE race, so a stint that started on lap 1 has to still
+        # be describable on lap 57. Reading stint structure out of `_tire`
+        # would have made the opening bar shrink from the left from lap 41 and
+        # then vanish - and it would have worn the costume this window uses for
+        # "opened mid-race", so one rendering would have covered two truths
+        # with the boundary between them moving during the race.
+        #
+        # One short string per lap: about 60 entries for a grand prix, against
+        # the two dicts' 40 rows of floats.
+        self._compound_by_lap: dict[int, str] = {}
 
     # --- Ingest -----------------------------------------------------------
 
@@ -74,6 +86,8 @@ class LapHistory:
             tire_row.setdefault("tyre_life", row.get("tyre_life"))
             tire_row.setdefault("compound", row.get("compound"))
             tire_row.setdefault("lap_time_s", row.get("lap_time_s"))
+            if row.get("compound"):
+                self._compound_by_lap.setdefault(lap, str(row["compound"]))
         self.trim()
 
     def ingest_latest(self, latest: dict[str, Any] | None) -> None:
@@ -97,6 +111,7 @@ class LapHistory:
             trow["tyre_life"] = latest.get("tyre_life")
         if latest.get("compound"):
             trow["compound"] = latest.get("compound")
+            self._compound_by_lap[lap] = str(latest["compound"])
         if latest.get("lap_time_s") is not None:
             trow["lap_time_s"] = latest.get("lap_time_s")
         self.trim()
@@ -120,3 +135,27 @@ class LapHistory:
     def tire_rows(self) -> list[dict[str, Any]]:
         """Chronological rows, the shape `TireChart.update_from` takes."""
         return [{"lap": lap, **row} for lap, row in sorted(self._tire.items())]
+
+    def compound_runs(self) -> list[dict[str, Any]]:
+        """`[{lo, hi, compound}]`, one per stint, over the whole race so far.
+
+        A run breaks where the compound changes, and gaps in the lap numbers do
+        NOT break one: the featured laps drop safety-car and pit laps, so a
+        stint routinely has holes in it, and treating each hole as a pit stop
+        would draw a stop that never happened.
+
+        **Nothing is invented for an unknown compound.** The tyre chart's own
+        segmentation inherits the previous label and falls back to "MEDIUM",
+        which paints a confident yellow over a lap nobody reported; a timeline
+        of the whole race would carry that fiction from lap 1. A lap with no
+        compound simply is not in this map, so it lands in a run only if the
+        laps either side of it agree.
+        """
+        runs: list[dict[str, Any]] = []
+        for lap in sorted(self._compound_by_lap):
+            compound = self._compound_by_lap[lap]
+            if runs and runs[-1]["compound"] == compound:
+                runs[-1]["hi"] = lap
+                continue
+            runs.append({"lo": lap, "hi": lap, "compound": compound})
+        return runs

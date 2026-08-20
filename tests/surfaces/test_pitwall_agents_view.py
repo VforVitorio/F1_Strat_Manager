@@ -165,6 +165,108 @@ def test_every_pill_and_badge_is_legible_against_its_own_fill():
     assert contrast_ratio(rgb(idle["action_colour"]), panel) >= 4.5, "the idle action too"
 
 
+def test_the_plan_timeline_spans_the_race_and_not_the_chart_window():
+    """The lane draws lap 1 to the flag, so it cannot read the 40-lap stores.
+
+    `LapHistory` keeps a rolling `KEEP_LAPS = 40` window because the charts
+    draw one. Melbourne is 57 laps, so from lap 41 a timeline built on those
+    stores would lose its opening stint from the left, one lap at a time - and
+    it would lose it into the SAME rendering this module uses for "opened
+    mid-race", so one costume would cover two truths with the boundary between
+    them moving during the race.
+
+    Driven past the trim on purpose: 45 laps ingested, `KEEP_LAPS` laps of tyre
+    rows surviving, and the first stint still starting where it started.
+    """
+    from src.pitwall.agents_view.builder import AgentsViewBuilder
+    from src.pitwall.agents_view.history import KEEP_LAPS
+
+    builder = AgentsViewBuilder()
+    for lap in range(1, 46):
+        latest = _latest(lap)
+        latest["compound"] = "MEDIUM" if lap <= 20 else "HARD"
+        view = builder.build(_payload(seq=lap, lap=lap, latest=latest))
+
+    timeline = view["plan_timeline"]
+    assert len(view["history"]["tire"]) == KEEP_LAPS, "the chart store really did trim"
+    assert timeline["first_known_lap"] == 1, "and the timeline still starts at lap 1"
+    runs = [(s["lo"], s["hi"], s["compound"]) for s in timeline["segments"] if not s["planned"]]
+    assert runs == [(1, 20, "MEDIUM"), (21, 45, "HARD")]
+    assert timeline["segments"][0]["left_pct"] == 0.0, "lap 1 is the start of the track"
+
+
+def test_the_plan_timeline_invents_nothing_it_was_not_told():
+    """Three absences, three honest renderings.
+
+    An unknown compound is the one that matters most: the tyre chart's own
+    segmentation inherits the previous label and falls back to `"MEDIUM"`,
+    which paints a confident yellow over a lap nobody reported. Over a
+    40-lap window that is a small lie; over the whole race it would be the
+    opening bar.
+    """
+    from src.arcade.palette import TEXT_TERTIARY, hex_str
+    from src.pitwall.agents_view.timeline import build_plan_timeline
+
+    # No `total_laps`: an empty track, and no division by a zero span.
+    empty = build_plan_timeline([], None, {}, None, None, "#f59e0b", "Pit plan pending")
+    assert empty == {
+        "total_laps": 0,
+        "first_known_lap": None,
+        "segments": [],
+        "pit_lap": None,
+        "pit_pct": None,
+        "cliff": None,
+        "current_lap": None,
+        "current_pct": None,
+        "caption": "Pit plan pending",
+    }
+
+    # An unknown compound: neutral, and it says so by carrying no name.
+    unknown = build_plan_timeline(
+        [{"lo": 1, "hi": 5, "compound": None}], None, {"total_laps": 57}, 5, None, "#f59e0b", "x"
+    )
+    assert unknown["segments"][0]["compound"] is None
+    assert unknown["segments"][0]["colour"] == hex_str(TEXT_TERTIARY)
+
+    # A stop with no compound: no hollow bar. A planned stint the producer
+    # never named would be a claim the window made up.
+    nameless = build_plan_timeline(
+        [], {"pit_lap_target": 24}, {"total_laps": 57}, 23, None, "#f59e0b", "x"
+    )
+    assert [s for s in nameless["segments"] if s["planned"]] == []
+    assert nameless["pit_lap"] == 24, "the marker still shows; only the bar is withheld"
+
+
+def test_the_last_lap_lands_on_the_flag():
+    """Off-by-one, and it is the one everybody writes.
+
+    Dividing by `total_laps` puts lap 57 of 57 at 98.2 % and leaves a sliver of
+    track after the chequered flag; the span is `total_laps - 1`. And a stint's
+    bar runs to the END of its last lap, so a one-lap stint has width rather
+    than none.
+    """
+    from src.pitwall.agents_view.timeline import build_plan_timeline
+
+    view = build_plan_timeline(
+        [{"lo": 1, "hi": 57, "compound": "HARD"}], None, {"total_laps": 57}, 57, None, "#f59e0b", ""
+    )
+
+    assert view["current_pct"] == 100.0
+    assert view["segments"][0]["left_pct"] == 0.0
+    assert view["segments"][0]["width_pct"] == 100.0
+
+    one_lap = build_plan_timeline(
+        [{"lo": 30, "hi": 30, "compound": "SOFT"}],
+        None,
+        {"total_laps": 57},
+        30,
+        None,
+        "#f59e0b",
+        "",
+    )
+    assert one_lap["segments"][0]["width_pct"] > 0, "a one-lap stint is still a bar"
+
+
 def test_the_narrative_is_cut_at_a_sentence_and_never_mid_number():
     """`why` is the one line of prose the band puts on the glass.
 

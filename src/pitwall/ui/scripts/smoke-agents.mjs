@@ -221,6 +221,21 @@ const VIEW = {
       cursor_colour: "#9ca3af",
     },
   },
+  plan_timeline: {
+    total_laps: 57,
+    first_known_lap: 11,
+    segments: [
+      { lo: 11, hi: 17, compound: "MEDIUM", colour: "#e6c832", planned: false, left_pct: 17.86, width_pct: 12.5 },
+      { lo: 18, hi: 23, compound: "HARD", colour: "#e6e6e6", planned: false, left_pct: 30.36, width_pct: 10.71 },
+      { lo: 24, hi: 57, compound: "HARD", colour: "#e6e6e6", planned: true, left_pct: 41.07, width_pct: 58.93 },
+    ],
+    pit_lap: 24,
+    pit_pct: 41.07,
+    cliff: { lo: 27, hi: 32, colour: "#f59e0b", left_pct: 46.43, width_pct: 8.93 },
+    current_lap: 23,
+    current_pct: 39.29,
+    caption: "Pit: L24 · Next: HARD · UCUT: RUS",
+  },
   status_bar: { text: "lap 23 · streaming", transient: true },
 };
 
@@ -380,6 +395,70 @@ check(
 check(
   banner.ranks[0] === banner.size && banner.ranks[1] === banner.confidence,
   `the action and its confidence are the band's top two type ranks (${banner.ranks})`,
+);
+
+// --- The PLAN timeline ------------------------------------------------------
+//
+// Four rectangles and two rules, so the assertions are the rendered geometry.
+// The one thing this lane must never do is make a lap it never saw look like a
+// lap it did: measured against the track's own box, not against a colour name.
+const plan = await page.evaluate(() => {
+  const track = document.querySelector(".plan-lane-stints").getBoundingClientRect();
+  const rel = (el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      left: Math.round(((r.left - track.left) / track.width) * 1000) / 10,
+      right: Math.round(((r.right - track.left) / track.width) * 1000) / 10,
+      fill: getComputedStyle(el).backgroundColor,
+    };
+  };
+  const stints = [...document.querySelectorAll(".plan-stint")].map((el) => ({
+    ...rel(el),
+    planned: el.classList.contains("is-planned"),
+  }));
+  const now = document.querySelector(".plan-now");
+  const cliff = document.querySelector(".plan-cliff");
+  return {
+    stints,
+    nowLeft: now ? Math.round(((now.getBoundingClientRect().left - track.left) / track.width) * 1000) / 10 : null,
+    cliffFill: cliff ? getComputedStyle(cliff).backgroundColor : null,
+    trackFill: getComputedStyle(document.querySelector(".plan-lane-stints")).backgroundColor,
+    labels: [...document.querySelectorAll(".plan-end, .plan-cursor-label")].map((el) => el.innerText),
+    overflow: Math.max(...stints.map((s) => s.right)) - 100,
+  };
+});
+check(plan.stints.length === 3, `three stints on the lane (${plan.stints.length})`);
+// The window opened on lap 11, so the first ten laps are TRACK. A lane that
+// started its first bar at zero would be claiming a stint nobody reported.
+check(
+  plan.stints[0].left > 5,
+  `the laps this window never saw are blank track (first bar at ${plan.stints[0].left}%)`,
+);
+// Filled versus hollow, asserted as a computed fill rather than as a class:
+// the class is the mechanism, the paint is the encoding.
+check(
+  plan.stints.filter((s) => s.planned).every((s) => s.fill === "rgba(0, 0, 0, 0)"),
+  `the planned stint is hollow (${plan.stints.filter((s) => s.planned).map((s) => s.fill)})`,
+);
+check(
+  plan.stints.filter((s) => !s.planned).every((s) => s.fill !== "rgba(0, 0, 0, 0)"),
+  "and the stints already run are filled",
+);
+// **The empty track may not look like a stint.** This is the pair that came
+// out the same tone on the first draft: a run stint over `--qt-elevated` at
+// 0.42 alpha was indistinguishable from the ground behind it.
+check(
+  plan.trackFill !== plan.stints[0].fill,
+  `an unrun lap and a run stint are different paint (${plan.trackFill} vs ${plan.stints[0].fill})`,
+);
+check(plan.overflow <= 0.5, `no bar runs past the flag (${plan.overflow}% over)`);
+check(
+  plan.labels.includes("L1") && plan.labels.includes("L57") && plan.labels.includes("L23"),
+  `the axis names its ends and the current lap (${plan.labels.join(", ")})`,
+);
+check(
+  plan.nowLeft !== null && Math.abs(plan.nowLeft - 39.3) < 1.5,
+  `the NOW cursor sits on the current lap (${plan.nowLeft}%)`,
 );
 
 // The consoles, by rendered geometry rather than by class name: a card can

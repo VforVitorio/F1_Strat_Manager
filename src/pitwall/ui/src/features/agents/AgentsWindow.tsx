@@ -161,6 +161,17 @@ const IDLE_VIEW: AgentsView = {
       cursor_colour: "#9ca3af",
     },
   },
+  plan_timeline: {
+    total_laps: 0,
+    first_known_lap: null,
+    segments: [],
+    pit_lap: null,
+    pit_pct: null,
+    cliff: null,
+    current_lap: null,
+    current_pct: null,
+    caption: "Pit: — · Next: — · UCUT: —",
+  },
   history: { pace: [], tire: [] },
   // Replaced by `waitingStatus(connection)` while `view` is null: the idle
   // view cannot know whether the socket is up, and this window has no other
@@ -261,7 +272,7 @@ export function AgentsWindow() {
           <OrchestratorCard view={shown.orchestrator} />
           <WhyPanel view={shown.orchestrator} />
           <ScenarioBars rows={shown.scenarios} />
-          <PlanPanel plan={shown.orchestrator.plan} />
+          <PlanPanel view={shown.plan_timeline} />
         </div>
 
         {/* The six consoles below it, in named grid areas rather than source

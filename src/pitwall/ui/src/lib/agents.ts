@@ -184,6 +184,40 @@ export interface TireSeries {
   cursor_colour: string;
 }
 
+/** One bar on the stint lane. `compound` is null when nobody reported one. */
+export interface PlanSegment {
+  lo: number;
+  hi: number;
+  compound: string | null;
+  colour: string;
+  /** Hollow rather than filled: the stop has not happened yet. */
+  planned: boolean;
+  left_pct: number;
+  width_pct: number;
+}
+
+export interface PlanTimelineView {
+  /** 0 before the arcade has said how long the race is; the track draws empty. */
+  total_laps: number;
+  /** Laps before this one are blank track: this window never saw them. */
+  first_known_lap: number | null;
+  segments: PlanSegment[];
+  pit_lap: number | null;
+  pit_pct: number | null;
+  /** The tyre chart's own band, so one fact is drawn at two zoom levels. */
+  cliff: {
+    lo: number;
+    hi: number;
+    colour: string;
+    left_pct: number;
+    width_pct: number;
+  } | null;
+  current_lap: number | null;
+  current_pct: number | null;
+  /** The orchestrator's plan line, verbatim; may carry the compound pill. */
+  caption: string;
+}
+
 export interface AgentsView {
   view_version: number;
   seq: number | null;
@@ -193,6 +227,7 @@ export interface AgentsView {
   reasoning: ReasoningTab[];
   cards: Record<string, AgentCardView>;
   charts: { pace: PaceSeries; tire: TireSeries };
+  plan_timeline: PlanTimelineView;
   history: { pace: PaceHistoryRow[]; tire: TireHistoryRow[] };
   status_bar: { text: string; transient: boolean };
 }
