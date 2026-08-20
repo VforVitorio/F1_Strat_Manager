@@ -60,14 +60,27 @@ CONNECTION_COLOURS: dict[str, str] = {
     "Disconnected": hex_str(DANGER),
 }
 
-# `agent_card.py::_GLYPH_FOR`, which cannot be imported because it lives in
-# a QFrame subclass. It is repeated rather than reimplemented, and
-# `test_the_status_glyphs_match_the_qt_cards` compares the two for as long
-# as both exist - which is the twin-detector this repo keeps needing.
+# The four console states, as a SHAPE and a colour.
+#
+# **Both, because colour alone was carrying two of them.** OK and ALERT were
+# the same filled disc and differed only in green against red - the single most
+# common colour-vision confusion there is - so the two states a reader most
+# needs to tell apart were, for some readers, one state. ALERT is a triangle
+# now: pointed, conventional for a warning, and legible with the colour
+# removed entirely.
+#
+# The map was transcribed from `agent_card.py::_GLYPH_FOR`, which could not be
+# imported because it lived in a QFrame subclass. **That file no longer exists**
+# - sprint 7 retired `src/arcade/dashboard/` - and the comment here went on
+# naming a `test_the_status_glyphs_match_the_qt_cards` that went with it,
+# promising a comparison "for as long as both exist" when only one did. What
+# guards the map now is `test_every_console_state_has_its_own_shape`, which
+# asserts the property rather than the parity: four states, four distinct
+# glyphs, and no state readable by colour alone.
 STATUS_GLYPHS: dict[str, tuple[str, str]] = {
     "OK": ("●", hex_str(SUCCESS)),
     "WATCH": ("◐", hex_str(WARNING)),
-    "ALERT": ("●", hex_str(DANGER)),
+    "ALERT": ("▲", hex_str(DANGER)),
     "IDLE": ("○", hex_str(TEXT_TERTIARY)),
 }
 
