@@ -105,10 +105,13 @@ function Tooltip({ view, anchor }: { view: TooltipView; anchor: DOMRect }) {
 export function AgentCard({
   title,
   card,
+  slot,
   children,
 }: {
   title: string;
   card: AgentCardView;
+  /** Which console this is, as a `slot-*` class; the stylesheet owns the shape. */
+  slot?: string;
   children?: React.ReactNode;
 }) {
   const idle = card.status === "IDLE";
@@ -119,7 +122,16 @@ export function AgentCard({
 
   return (
     <section
-      className={idle ? "card agent-card is-idle" : "card agent-card"}
+      className={
+        [
+          "card",
+          "agent-card",
+          idle ? "is-idle" : "",
+          slot ? `slot-${slot}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      }
       onMouseEnter={(event) => card.tooltip && setAnchor(event.currentTarget.getBoundingClientRect())}
       onMouseLeave={() => setAnchor(null)}
     >

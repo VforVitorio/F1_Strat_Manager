@@ -1,11 +1,16 @@
-/* PITWALL · AGENTS — the Qt window's geometry, in CSS.
+/* PITWALL · AGENTS — a decision band over six specialist consoles.
  *
- * Every number here comes from a Qt call in the retired `src/arcade/dashboard/`:
- * the 44 px header (`HeaderBar.setFixedHeight`), the 540 / 740 split
- * (`splitter.setSizes`), the 10 px panel margins and 8 px spacing
- * (`setContentsMargins` / `setSpacing`), the card border and radius
- * (`theme.apply_dark_palette`'s `QFrame[card="true"]` rule), and the
- * font sizes on each widget.
+ * The chrome numbers are still the Qt window's, because they were never the
+ * problem: the 44 px header (`HeaderBar.setFixedHeight`), the 10 px panel
+ * margins and 8 px spacing (`setContentsMargins` / `setSpacing`), the card
+ * border and radius (`theme.apply_dark_palette`'s `QFrame[card="true"]` rule),
+ * and the font sizes on each widget.
+ *
+ * **The SHAPE is not.** The 540 / 740 split (`splitter.setSizes`) is gone with
+ * the column it described, and so is the `WindowSpec` width derived from it.
+ * What replaces it is four horizontal strata, sized by the client the window
+ * really gets - 1486x833, measured inside the real window rather than taken
+ * from the `WindowSpec`.
  *
  * The `--qt-*` tokens and the `body` rule moved to `qt-base.css` when the
  * DATA window needed the same palette in sprint 4. Pasting them into a
@@ -73,56 +78,139 @@
  * changed call, the confidence bar). `brightness()` scales all three channels
  * together, so nothing moves relative to anything else. The header strip and the
  * status bar stay at full strength: they carry the tells. */
-.agents-split.is-frozen {
+.agents-body.is-frozen {
   filter: brightness(0.72);
 }
 
-/* --- The split ---------------------------------------------------------- */
+/* --- The four strata ------------------------------------------------------
+ *
+ * header 44 · band · grid · status bar, inside 833 px of client. The band is
+ * `auto` and the grid is `1fr`, so the band takes what its content needs and
+ * the grid absorbs the remainder. Writing both as fixed pixel budgets is what
+ * the elevation spec proposed and it came out 5 px over the real height - a
+ * grid that takes the leftover cannot be over budget by construction. */
 
-.agents-split {
+.agents-body {
   display: grid;
-  /* 540 PIXELS, not 540fr. `setStretchFactor(0, 0)` pins the left panel
-   * and sends every extra pixel right; a proportional split grew it to
-   * 807 px at 1920, 267 px wider than Qt. The 740 was only ever the
-   * initial size of the half that stretches. */
-  grid-template-columns: 540px 1fr;
-  gap: 2px; /* QSplitter.setHandleWidth(2) */
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  padding: 10px;
+  box-sizing: border-box;
   flex: 1;
   min-height: 0;
 }
-.agents-left,
-.agents-right {
-  padding: 10px;
+
+/* --- The decision band ----------------------------------------------------
+ *
+ * Four modules in the order the reader's question unfolds: what we are doing,
+ * why, on what evidence, and what happens next.
+ *
+ * The three fixed columns are budgeted against the client's real inner width
+ * (1486 − 20 px padding = 1466), which leaves PLAN 482 px of `1fr`. They are
+ * pixels rather than fractions for the same reason Qt's left panel was: the
+ * first three carry a known amount of text and the fourth is the one that
+ * should absorb width, so a proportional split would grow the wrong three. */
+
+.agents-band {
   display: grid;
+  grid-template-columns: 340px 290px 330px 1fr;
   gap: 8px;
   min-height: 0;
-  overflow: auto;
 }
-.agents-left {
-  /* Orchestrator and scenarios size to content; the reasoning tabs take
-   * what their text needs and no more. In Qt they took the rest, which
-   * left ~268 px and dropped the decision-memory block below the fold;
-   * here the opposite happened - the largest bordered surface in the
-   * window carried five short lines at 1.9 % ink, 318 px of it empty.
-   * An empty bordered panel reads as content missing; the leftover is
-   * honest window background instead. */
-  grid-template-rows: auto auto minmax(180px, max-content);
-  align-content: start;
+.band-title {
+  margin: 0 0 6px;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
-.agents-right {
-  grid-template-columns: 1fr 1fr;
-  /* Qt's own caps were `agent_card.py:70-72`: a text card 140-260, and
-   * `attach_chart` bumping the two with charts to 260-420. The grid is a
-   * fixed 3x2, so the three rows are written out rather than inferred.
-   *
-   * The two text rows size to CONTENT rather than toward a 260 px cap.
-   * Handing height out by grid position left four cards 44-57 % dead
-   * strip - a reader scanning past ~100 px of panel-coloured nothing to
-   * reach the next headline - while the two charts, the densest surfaces
-   * here, sat at 319 px in a row that could go to 420. Density is
-   * hierarchy on a glance surface, so the surplus goes to row 1, which
-   * is also where the tyre chart needs it. */
-  grid-template-rows: minmax(260px, 1fr) minmax(140px, max-content) minmax(140px, max-content);
+.plan-panel {
+  padding: 10px 14px;
+  min-width: 0;
+}
+.plan-caption {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-size: 12px;
+}
+
+/* --- The agent grid -------------------------------------------------------
+ *
+ * Named areas rather than source order, because three of the six want a shape
+ * the reading order does not give them: the two chart cards need the tall
+ * slots, SITUATION and PIT are compact and both feed the decision so they
+ * stack beside them, and RADIO carries the wordiest content on the window -
+ * transcripts - so it spans two columns.
+ *
+ * Rows 1 and 2 are `minmax(0, 1fr)` so the chart column splits the available
+ * height evenly with the two stacked cards; row 3 is content-sized with a
+ * floor. `minmax(0, …)` rather than `1fr` alone: a `1fr` row has an automatic
+ * MINIMUM of its content, so a card that overflows pushes the grid past its
+ * container instead of scrolling inside itself. */
+
+.agents-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "pace tire side"
+    "radio radio rag";
+  gap: 8px;
+  min-height: 0;
+}
+.slot-pace {
+  grid-area: pace;
+}
+.slot-tire {
+  grid-area: tire;
+}
+/* The stack that holds SITUATION over PIT, so the column's leftover is one
+ * block under the pair rather than a gap between them. */
+.agents-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+/* **`min-height: 0`, or a long card leaves the window entirely.** A flex item's
+ * automatic minimum is its content, so a console with more lines than the
+ * column has room for cannot shrink - and `.agent-card` is deliberately
+ * `overflow: visible` so nothing can clip its tooltip, so it does not scroll
+ * either: it simply renders past the bottom of the client. Measured on the
+ * smoke's own fixture, PIT ran 384 px past a 833 px client while every stratum
+ * still summed to exactly 833, which is why the check that caught it asserts
+ * the DOCUMENT rather than the panels.
+ *
+ * With the minimum lifted the pair share the column and each body scrolls,
+ * which is this window's own rule: `qt-base.css` hides the scrollBAR and keeps
+ * the body reachable. */
+.agents-side > .agent-card {
+  min-height: 0;
+}
+.slot-radio {
+  grid-area: radio;
+}
+.slot-rag {
+  grid-area: rag;
+}
+
+/* **Size the CARD, not the cell.** A grid cell stretches its item by default,
+ * so the four text consoles took whatever height their row was handed and
+ * carried the difference as dead strip inside a bordered panel - 44-57 % of
+ * the card on the layout this replaces, and the reason sprint 8 made the rows
+ * content-sized in the first place. An empty bordered panel reads as content
+ * missing; window background does not read as anything.
+ *
+ * The two chart consoles are the exception and stretch on purpose: a chart
+ * has no natural height and the density is the point. */
+.agents-grid > .agent-card {
+  align-self: start;
+  max-height: 100%;
+}
+.agents-grid > .slot-pace,
+.agents-grid > .slot-tire {
+  align-self: stretch;
 }
 
 /* --- Cards -------------------------------------------------------------- */
@@ -343,11 +431,6 @@
   font-size: 12px;
   font-weight: 700;
 }
-.orch-plan {
-  margin: 0;
-  color: var(--qt-fg-2);
-  font-size: 12px;
-}
 /* The previous call, on the lap this one replaced it. Tertiary text with a
  * WARNING dot: it is a CHANGE, which is worth noticing, and not a fault,
  * which is what the alarm colour one line below means. */
@@ -439,18 +522,18 @@
   white-space: pre;
 }
 
-/* The reasoning tabs land here in PR 5; the slot keeps the column's
- * `auto auto 1fr` honest in the meantime. */
-.reasoning-slot {
-  min-height: 0;
-}
-
 /* --- Reasoning tabs (reasoning_tabs.py) ---------------------------------- */
 
+/* The band's WHY slot, until the module that replaces it lands. It is a card
+ * now rather than a bare panel, so it reads as one of the four modules. */
 .reasoning {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+}
+.reasoning-tabbar {
+  flex-wrap: wrap;
 }
 .reasoning-tabbar {
   display: flex;

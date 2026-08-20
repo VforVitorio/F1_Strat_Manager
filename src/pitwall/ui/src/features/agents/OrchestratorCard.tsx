@@ -1,6 +1,10 @@
 /**
- * The N31 decision panel: action badge, confidence, the two regime chips
- * and the plan line.
+ * The decision band's first module: what the orchestrator called, and how
+ * sure it is.
+ *
+ * The plan line moved to `PlanPanel` when the band replaced the left column:
+ * "what we are doing" and "what happens next" are two of the four questions
+ * the band answers in order, and they were sharing a card.
  *
  * 1:1 with `orchestrator_card.py`. Every string and colour is decided
  * host side, including the plan line's three branches, so the "stint
@@ -45,10 +49,6 @@ export function OrchestratorCard({ view }: { view: OrchestratorView }) {
           {view.risk}
         </span>
       </div>
-
-      {/* The plan line can carry a compound pill, which is an HTML span
-          built and escaped in src/arcade/palette.py. */}
-      <p className="orch-plan" dangerouslySetInnerHTML={{ __html: view.plan }} />
 
       {/* What changed since the last lap, which this window had no
           first-class answer to: everything else overwrites in place ten times
