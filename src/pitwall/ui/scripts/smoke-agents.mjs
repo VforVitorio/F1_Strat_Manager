@@ -205,6 +205,11 @@ await page.addInitScript((view) => {
     api: {
       get_agents_view: async (sinceSeq) => (sinceSeq >= view.seq ? null : view),
       get_tick: async () => null,
+      // Stubbed since #1004: `getConnection` falls back to `fetch("/api/connection")`
+      // when the injected api has no such method, and the static server answers 404.
+      // A missing stub method is a 404 in the console, not a thrown error, so it
+      // costs three console failures and no clue about which call made them.
+      get_connection: async () => "Connected",
     },
   };
 }, VIEW);
@@ -395,6 +400,89 @@ check(
 );
 
 await live.close();
+
+// --- The IDLE window before the first view, and #1004's two states ------------
+//
+// `get_agents_view` returns null until a tick has arrived, so this window has no
+// connection word at all for the whole startup: measured on the real path, null
+// on all 169 samples across 11 s, of which the last 3 s had the socket UP and the
+// arcade loading its session. The status bar said "Waiting for arcade stream…"
+// throughout, which describes only the first 8 s.
+//
+// The word is polled with `useConnection` while `view` is null, and the two
+// states must be TELLABLE APART from the rendered bar. Reading one of them would
+// pass on a build that hardcoded the string.
+async function idleStatusBar(connection) {
+  const context = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+  const idlePage = await context.newPage();
+  idlePage.on("pageerror", (error) =>
+    failures.push(`pageerror(idle/${connection}): ${error.message}`),
+  );
+  await idlePage.addInitScript((state) => {
+    window.pywebview = {
+      api: {
+        get_agents_view: async () => null,
+        get_tick: async () => null,
+        get_connection: async () => state,
+      },
+    };
+  }, connection);
+  await idlePage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await idlePage.waitForSelector(".agents-window", { timeout: 5000 });
+  // 1.2 s, because `useConnection` polls at 1 Hz behind `whenBridgeReady`: a
+  // shorter wait reads the null-connection frame, which renders the same
+  // sentence for both stubs and would make this pass while seeing one branch.
+  await idlePage.waitForTimeout(1200);
+  const bar = (await idlePage.locator(".status-bar").textContent()) ?? "";
+  await context.close();
+  return bar;
+}
+
+const idleUp = await idleStatusBar("Connected");
+const idleDown = await idleStatusBar("Connecting...");
+check(
+  idleUp !== idleDown,
+  `the idle status bar tells the two socket states apart (up: "${idleUp}", down: "${idleDown}")`,
+);
+check(
+  idleUp.includes("Connected"),
+  `with the socket up the idle bar says so ("${idleUp}")`,
+);
+
+// The view, once it exists, still wins over the polled word: it is host-built and
+// travels WITH the payload, so it cannot disagree with the lap beside it. Stubbed
+// with a DISAGREEING connection, or a bar that ignored the poll entirely would
+// pass this too.
+const servedBar = await (async () => {
+  const context = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+  const viewPage = await context.newPage();
+  await viewPage.addInitScript(
+    ([view, state]) => {
+      window.pywebview = {
+        api: {
+          get_agents_view: async (sinceSeq) => (sinceSeq >= view.seq ? null : view),
+          get_tick: async () => null,
+          get_connection: async () => state,
+        },
+      };
+    },
+    [VIEW, "Connecting..."],
+  );
+  await viewPage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await viewPage.waitForSelector(".agent-card", { timeout: 5000 });
+  await viewPage.waitForTimeout(1200);
+  const bar = (await viewPage.locator(".status-bar").textContent()) ?? "";
+  await context.close();
+  return bar;
+})();
+check(
+  servedBar === "lap 23 · streaming",
+  `a rendered view keeps its own host-built status line, not the polled word ("${servedBar}")`,
+);
 
 await browser.close();
 server.close();

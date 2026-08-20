@@ -23,7 +23,9 @@
  * lasts milliseconds and is not a state anybody sees.
  */
 
+import { useConnection } from "../../lib/useConnection";
 import { useStatusText } from "../../lib/useStatusText";
+import { waitingStatus } from "../../lib/waitingCopy";
 
 import { AgentCard } from "./AgentCard";
 import { OrchestratorCard } from "./OrchestratorCard";
@@ -149,12 +151,30 @@ const IDLE_VIEW: AgentsView = {
     },
   },
   history: { pace: [], tire: [] },
+  // Replaced by `waitingStatus(connection)` while `view` is null: the idle
+  // view cannot know whether the socket is up, and this window has no other
+  // channel that does before the first tick arrives (#1004).
   status_bar: { text: "Waiting for arcade stream…", transient: false },
 };
 
 export function AgentsWindow() {
   const { view } = useAgentsView();
   const shown = view ?? IDLE_VIEW;
+  /**
+   * Polled separately, and ONLY while there is no view (#1004).
+   *
+   * `get_agents_view` returns None until a tick has arrived, so this window has
+   * no connection word at all for the whole startup - measured on the real path,
+   * None on all 169 samples across 11 s, including the last 3 s during which the
+   * socket was up and the arcade was loading its session. The DATA window has
+   * polled `get_connection` since #982; this one had nothing to poll it for until
+   * the wait itself became the thing worth describing.
+   *
+   * Once a view exists the view's own label wins: it is host-built and travels
+   * WITH the payload (#950), so it cannot disagree with the lap beside it, which
+   * a separately-polled word could.
+   */
+  const connection = useConnection();
 
   /**
    * The producer is gone, and every card is holding a call from before.
@@ -174,7 +194,9 @@ export function AgentsWindow() {
   const statusText = useStatusText(
     frozen
       ? { text: `DATA FROZEN · last tick ${shown.header.lap}`, transient: false }
-      : shown.status_bar,
+      : view === null
+        ? { text: waitingStatus(connection), transient: false }
+        : shown.status_bar,
     shown.seq,
   );
 
