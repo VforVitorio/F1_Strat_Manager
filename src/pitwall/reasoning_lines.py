@@ -117,6 +117,28 @@ LINE_BUILDERS: dict[str, Any] = {
 }
 
 
+def agent_reasoning(block: dict[str, Any] | None) -> str:
+    """One agent's own words for the lap, cleaned, or empty."""
+    return clean((block or {}).get("reasoning"))
+
+
+def agent_metrics(key: str, block: dict[str, Any] | None) -> list[str]:
+    """One agent's `key = value` dump, or empty when it produced nothing."""
+    if not block:
+        return []
+    return LINE_BUILDERS[key](block)
+
+
+def agent_body(key: str, block: dict[str, Any] | None) -> str:
+    """The whole of one agent's reasoning-tab body: its words, then its numbers.
+
+    **The one place that composition happens.** The tabs and the card tooltips
+    both show it, and writing it twice is how the copy that got a fix and the
+    copy that did not come about - the dominant defect class in this repo.
+    """
+    return compose(agent_reasoning(block), agent_metrics(key, block))
+
+
 def compose(reasoning: str, metrics: list[str]) -> str:
     """Assemble the final tab body: reasoning on top, metrics below.
 

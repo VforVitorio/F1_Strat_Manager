@@ -42,7 +42,7 @@ import type { AgentCardView, TooltipView } from "../../lib/agents";
 /** Breathing room between the card and the popup, and from the viewport edge. */
 const TOOLTIP_GAP = 10;
 
-function Tooltip({ view, anchor }: { view: TooltipView; anchor: DOMRect }) {
+function Tooltip({ view, anchor, id }: { view: TooltipView; anchor: DOMRect; id: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [box, setBox] = useState({ left: anchor.left, top: anchor.top + 32 });
 
@@ -107,7 +107,7 @@ function Tooltip({ view, anchor }: { view: TooltipView; anchor: DOMRect }) {
   // presentation below can drift from the Qt window's; the structure the host
   // returns is pinned by a test.
   return createPortal(
-    <span ref={ref} className="agent-tooltip" style={box}>
+    <span ref={ref} id={id} role="tooltip" className="agent-tooltip" style={box}>
       {view.sections.map((section, index) => (
         <span className="tip-section" key={index}>
           <span className="tip-title">{section.title}</span>
@@ -142,6 +142,24 @@ export function AgentCard({
   // popup - not the empty string Qt used, because a falsy value that is also
   // a legitimate rendering is the sentinel shape this repo keeps paying for.
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const tooltipId = `tip-${slot ?? title.toLowerCase()}`;
+
+  /**
+   * **The popup opens on FOCUS as well as on hover, and Escape closes it.**
+   *
+   * The reasoning tabs were `<button>`s: reachable with Tab, by anyone, and
+   * that is the only reason the per-agent dumps they held were reachable at
+   * all. Moving that content into a mouse-only popup would have made the
+   * window strictly worse for a keyboard user than the panel it replaces -
+   * zero of the six dumps against six - which is why the elevation spec's own
+   * line about the keyboard pattern no longer being needed is wrong: the
+   * WIDGET went away, the requirement did not.
+   *
+   * `onFocus`/`onBlur` rather than `onFocusCapture`: the card is the tab stop
+   * and nothing inside it is focusable, so the events do not repeat.
+   */
+  const open = (element: HTMLElement) => card.tooltip && setAnchor(element.getBoundingClientRect());
+  const close = () => setAnchor(null);
 
   return (
     <section
@@ -155,8 +173,17 @@ export function AgentCard({
           .filter(Boolean)
           .join(" ")
       }
-      onMouseEnter={(event) => card.tooltip && setAnchor(event.currentTarget.getBoundingClientRect())}
-      onMouseLeave={() => setAnchor(null)}
+      // Only a card that HAS something to show is a tab stop; six empty stops
+      // between the reader and the next panel is the cost of doing otherwise.
+      tabIndex={card.tooltip ? 0 : undefined}
+      aria-describedby={card.tooltip && anchor ? tooltipId : undefined}
+      onMouseEnter={(event) => open(event.currentTarget)}
+      onMouseLeave={close}
+      onFocus={(event) => open(event.currentTarget)}
+      onBlur={close}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") close();
+      }}
     >
       <header className="agent-card-head">
         <span className="agent-glyph" style={{ color: card.glyph_colour }}>
@@ -165,7 +192,9 @@ export function AgentCard({
         <span className="agent-title">{title}</span>
       </header>
 
-      {card.tooltip && anchor ? <Tooltip view={card.tooltip} anchor={anchor} /> : null}
+      {card.tooltip && anchor ? (
+        <Tooltip view={card.tooltip} anchor={anchor} id={tooltipId} />
+      ) : null}
 
       {/* The card scrolls here, not on the card itself, so the card is not
           a scrolling ancestor of anything. Qt clips a card that overflows

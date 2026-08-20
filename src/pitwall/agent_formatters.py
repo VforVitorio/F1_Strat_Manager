@@ -44,6 +44,7 @@ from src.arcade.palette import (
     compound_pill_html,
     flag_chip_html,
 )
+from src.pitwall.reasoning_lines import agent_metrics, agent_reasoning
 
 # Status tokens consumed by AgentCard.set_status
 STATUS_OK: str = "OK"
@@ -367,6 +368,60 @@ def radio_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
             }
         )
     return {"sections": sections, "footer": None}
+
+
+def model_detail_sections(key: str, block: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """What the reasoning tab showed for one agent, as tooltip sections.
+
+    Two of them, and BOTH halves matter. The card says `Δnext -0.204s (81.00s)`
+    in operational language; the tab said that in `key = value` form AND
+    carried the agent's own sentences above it. A move that took only the
+    numbers would have dropped every agent's explanation of WHY off the window
+    entirely, on the runs where an agent produces one - which is every run with
+    an LLM.
+
+    Composed from `reasoning_lines`' own halves rather than re-derived here, so
+    there is one definition of what an agent's body is (`agent_body` is the
+    same pair joined for the tab).
+
+    The metric rows split on their first `=` into lead and value. The padding
+    that aligns them is for a monospace block; a tooltip lays the pair out
+    itself, so it goes.
+    """
+    reasoning = agent_reasoning(block)
+    metrics = agent_metrics(key, block)
+
+    sections: list[dict[str, Any]] = []
+    if reasoning:
+        sections.append({"title": "Reasoning", "rows": [{"lead": "", "text": reasoning}]})
+    if metrics:
+        rows = []
+        for line in metrics:
+            lead, separator, value = line.partition("=")
+            if separator:
+                rows.append({"lead": lead.strip(), "text": value.strip()})
+            else:
+                rows.append({"lead": "", "text": line.strip()})
+        sections.append({"title": "Model detail", "rows": rows})
+    return sections
+
+
+def with_model_detail(
+    tooltip: dict[str, Any] | None, key: str, block: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Append an agent's model detail to whatever tooltip it already had.
+
+    Appended rather than replacing, because two of the six already carry
+    content the tab never did - RADIO's whole lap of messages, RAG's question
+    and chunks - and that is the drill-down tier this joins rather than
+    supersedes.
+    """
+    sections = model_detail_sections(key, block)
+    if not sections:
+        return tooltip
+    if tooltip is None:
+        return {"sections": sections, "footer": None}
+    return {"sections": [*tooltip["sections"], *sections], "footer": tooltip.get("footer")}
 
 
 def format_radio(r: dict[str, Any] | None) -> Formatted:

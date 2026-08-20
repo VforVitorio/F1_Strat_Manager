@@ -121,23 +121,42 @@ const VIEW = {
         // Structured, not markup. Sprint 8 turned the two tooltip formatters
         // into data, so a string here would be the stale-stub shape this file
         // already carries one scar from.
+        // Five of the six carry model detail now, which is where the reasoning
+        // tabs' per-agent bodies went. RAG keeps `null` on purpose: it is the
+        // one agent with no `reasoning_lines` builder, and a card with no
+        // tooltip is also what proves the tab-stop rule is not "every card".
         tooltip:
-          key === "radio"
-            ? {
+          key === "rag"
+            ? null
+            : {
                 sections: [
+                  ...(key === "radio"
+                    ? [
+                        {
+                          title: "Radio",
+                          rows: [
+                            {
+                              lead: "NOR PROBLEM",
+                              text: "Rear grip is going away, especially through the last sector, and the balance moves every lap.",
+                            },
+                          ],
+                        },
+                      ]
+                    : []),
                   {
-                    title: "Radio",
+                    title: "Reasoning",
+                    rows: [{ lead: "", text: `${key} agent reasoning for this lap` }],
+                  },
+                  {
+                    title: "Model detail",
                     rows: [
-                      {
-                        lead: "NOR PROBLEM",
-                        text: "Rear grip is going away, especially through the last sector, and the balance moves every lap.",
-                      },
+                      { lead: `${key}_first`, text: "1.234s" },
+                      { lead: `${key}_second`, text: "56.7%" },
                     ],
                   },
                 ],
                 footer: null,
-              }
-            : null,
+              },
       },
     ]),
   ),
@@ -421,7 +440,7 @@ check(
 check((await page.locator(".agent-tooltip").count()) === 0, "no tooltip before hover");
 await page.locator(".agent-card").nth(4).hover();
 await page.waitForTimeout(200);
-check((await page.locator(".agent-tooltip").count()) === 1, "one tooltip, on RADIO only");
+check((await page.locator(".agent-tooltip").count()) === 1, "one tooltip at a time");
 
 const clip = await page.evaluate(() => {
   const box = document.querySelector(".agent-tooltip").getBoundingClientRect();
@@ -532,6 +551,83 @@ check(
 );
 await page.waitForTimeout(1800);
 check((await page.locator(".status-bar").innerText()).trim() === "", "the status bar auto-clears");
+
+// --- Reachable without a mouse --------------------------------------------
+//
+// The reasoning tabs were `<button>`s, so the per-agent bodies they held were
+// reachable with Tab by anyone. The band replaces them with card tooltips, and
+// a mouse-only popup would make this window strictly WORSE for a keyboard user
+// than the panel it retires: zero of the dumps against six.
+//
+// Driven with real key presses, not by calling `.focus()`. Focus set from
+// script reaches an element the tab order may never visit, which is precisely
+// the thing in question.
+await page.mouse.move(0, 0);
+await page.waitForTimeout(150);
+
+const stops = await page.evaluate(() =>
+  [...document.querySelectorAll(".agent-card")].map((el) => ({
+    slot: [...el.classList].find((c) => c.startsWith("slot-")),
+    tabIndex: el.tabIndex,
+    hasTip: el.getAttribute("tabindex") !== null,
+  })),
+);
+check(
+  stops.filter((s) => s.tabIndex === 0).length === 5,
+  `the five consoles with content are tab stops (${JSON.stringify(stops.map((s) => [s.slot, s.tabIndex]))})`,
+);
+check(
+  stops.find((s) => s.slot === "slot-rag").tabIndex === -1,
+  "and the one with no tooltip is not, so it is not an empty stop in the way",
+);
+
+// Walk the tab order and collect what each stop reveals. The loop bounds
+// itself on the number of stops rather than on a fixed count, so adding a
+// console cannot leave one silently unvisited.
+const reached = [];
+await page.locator(".header-bar").click();
+for (let i = 0; i < 40 && reached.length < 5; i += 1) {
+  await page.keyboard.press("Tab");
+  await page.waitForTimeout(60);
+  const seen = await page.evaluate(() => {
+    const active = document.activeElement;
+    if (!active || !active.classList.contains("agent-card")) return null;
+    const tip = document.querySelector(".agent-tooltip");
+    return {
+      slot: [...active.classList].find((c) => c.startsWith("slot-")),
+      described: active.getAttribute("aria-describedby"),
+      tipId: tip ? tip.id : null,
+      text: tip ? tip.innerText : null,
+      clipped: tip ? tip.scrollHeight - tip.clientHeight : null,
+    };
+  });
+  if (seen) reached.push(seen);
+}
+check(
+  reached.length === 5,
+  `Tab alone reaches all five consoles (${reached.map((r) => r.slot).join(", ")})`,
+);
+check(
+  reached.every((r) => r.text && r.text.includes("Model detail")),
+  "and each one opens its model detail on focus",
+);
+check(
+  reached.every((r) => r.described && r.described === r.tipId),
+  "with the popup named by aria-describedby",
+);
+// **Nothing silently cut.** `.tip-text` used to carry a 4-line clamp, so a
+// long row was amputated with no scrollbar and no ellipsis to say so.
+check(
+  reached.every((r) => r.clipped <= 0),
+  `and nothing is clipped inside it (${reached.map((r) => r.clipped).join(", ")})`,
+);
+
+await page.keyboard.press("Escape");
+await page.waitForTimeout(120);
+check(
+  (await page.locator(".agent-tooltip").count()) === 0,
+  "Escape closes it without moving focus away",
+);
 
 await ctx.close();
 

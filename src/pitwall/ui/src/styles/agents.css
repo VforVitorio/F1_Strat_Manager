@@ -358,11 +358,14 @@
   margin-right: 6px;
   white-space: nowrap;
 }
+/* **No line clamp.** It cut every row at four lines with nothing saying so,
+ * which is the silent truncation this window's whole idle-state doctrine is
+ * against - and it now also lands on the model-detail rows, where the four
+ * lines would be an agent's reasoning cut mid-sentence. The popup has a height
+ * cap and a visible scrollbar for the case where the content really is long;
+ * a bar is a signal, a clamp is not. */
 .tip-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .tip-footer {
   display: block;
