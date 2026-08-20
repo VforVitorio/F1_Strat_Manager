@@ -21,6 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { serveDist } from "./serve-dist.mjs";
+import { watchPage } from "./page-guard.mjs";
 import { staysStill } from "./settle.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -202,10 +203,7 @@ const server = await serveDist(DIST);
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: CLIENT });
 const page = await ctx.newPage();
-page.on("pageerror", (error) => failures.push(`pageerror: ${error.message}`));
-page.on("console", (message) => {
-  if (message.type() === "error") failures.push(`console: ${message.text()}`);
-});
+watchPage(page, failures);
 
 await page.addInitScript((view) => {
   window.pywebview = {
@@ -359,6 +357,7 @@ await ctx.close();
 // producer, the case that already worked.
 const live = await browser.newContext({ viewport: CLIENT });
 const livePage = await live.newPage();
+watchPage(livePage, failures, "live");
 await livePage.addInitScript((view) => {
   let seq = 0;
   window.pywebview = {
@@ -376,6 +375,7 @@ await livePage.addInitScript((view) => {
       // until this line changed.
       get_agents_view: async () => ({ ...structuredClone(view), seq: ++seq }),
       get_tick: async () => null,
+      get_connection: async () => "Connected",
     },
   };
 }, VIEW);
@@ -422,9 +422,7 @@ await live.close();
 async function idleStatusBar(connection) {
   const context = await browser.newContext({ viewport: CLIENT });
   const idlePage = await context.newPage();
-  idlePage.on("pageerror", (error) =>
-    failures.push(`pageerror(idle/${connection}): ${error.message}`),
-  );
+  watchPage(idlePage, failures, "idle/${connection}");
   await idlePage.addInitScript((state) => {
     window.pywebview = {
       api: {
@@ -465,6 +463,7 @@ check(
 const servedBar = await (async () => {
   const context = await browser.newContext({ viewport: CLIENT });
   const viewPage = await context.newPage();
+watchPage(viewPage, failures, "frozen");
   await viewPage.addInitScript(
     ([view, state]) => {
       window.pywebview = {

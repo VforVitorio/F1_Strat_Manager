@@ -414,6 +414,44 @@ def test_no_harness_measures_a_surface_larger_than_the_product_has():
     assert seen >= len(_HARNESSES), f"only {seen} viewport literals found across {_HARNESSES}"
 
 
+_NEW_PAGE = re.compile(r"(?:const|let)\s+(\w+)\s*=\s*await\s+\w+\.newPage\(\)")
+_WATCHED = re.compile(r"watchPage\((\w+),")
+
+
+def test_every_harness_page_is_watched_for_console_errors():
+    """The invariant that makes a missing bridge stub visible at all.
+
+    `bridge.ts` calls `window.pywebview.api.<method>` when the shell provides
+    one and falls back to `fetch("/api/...")` when it does not, and the
+    fallback swallows a bad status on purpose (`if (!response.ok) return
+    null`) because in the product that is a server restarting. So a stub
+    missing a method throws nothing and fails no assertion: the window renders
+    the unknown state and chromium logs one console error.
+
+    By sprint 10 four stubs had drifted that way and **18 of the 22 pages
+    across the four harnesses had no console listener**, so none of them could
+    have reported it. Watching every page is what turns the whole class from
+    silent into loud, which is why this asserts the listener rather than any
+    particular method: the next hook to be wired will be some other method.
+
+    Counts the pages first, so it cannot pass by finding none.
+    """
+    scripts = Path(__file__).resolve().parents[2] / "src" / "pitwall" / "ui" / "scripts"
+
+    pages = 0
+    unwatched: list[str] = []
+    for name in _HARNESSES:
+        source = (scripts / name).read_text(encoding="utf-8")
+        watched = set(_WATCHED.findall(source))
+        for variable in _NEW_PAGE.findall(source):
+            pages += 1
+            if variable not in watched:
+                unwatched.append(f"{name}:{variable}")
+
+    assert pages >= len(_HARNESSES), f"only {pages} pages found across {_HARNESSES}"
+    assert not unwatched, f"pages with no console listener: {unwatched}"
+
+
 def test_both_windows_hand_the_page_the_same_client_area():
     """One surface, one number for the harnesses to point at.
 

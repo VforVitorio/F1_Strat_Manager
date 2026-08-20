@@ -30,6 +30,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { serveDist } from "./serve-dist.mjs";
+import { watchPage } from "./page-guard.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TICKS = JSON.parse(readFileSync(process.argv[2], "utf-8"));
@@ -49,8 +50,11 @@ const server = await serveDist(resolve(UI_DIR, "dist"));
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: WIDTH, height: HEIGHT } });
 const page = await context.newPage();
-page.on("console", (message) => console.log(`[page:${message.type()}] ${message.text()}`));
-page.on("pageerror", (error) => console.error(`[pageerror] ${error.message}`));
+// A capture with a console error is not a capture of the product. This used to
+// print and carry on, which is how every DATA shot since #982 was taken with
+// `useConnection` falling through to `fetch("/api/connection")` and a 404.
+const failures = [];
+watchPage(page, failures);
 
 // Monotone, exactly like the smoke's stub: hand back the current tick until
 // the window has rendered it, then advance. A stub that returns "anything you
@@ -60,6 +64,11 @@ await page.addInitScript((payloads) => {
   window.__cursor = 0;
   window.pywebview = {
     api: {
+      // The four the DATA window polls. Three were missing, so the bridge fell
+      // back to `fetch("/api/…")` and the static server answered 404 on each.
+      get_bulk: async () => null,
+      get_live_lap: async () => null,
+      get_connection: async () => "Connected",
       get_tick: async (sinceSeq) => {
         if (window.__ticks[window.__cursor].seq === sinceSeq) {
           if (window.__cursor + 1 >= window.__ticks.length) return null;
@@ -92,3 +101,9 @@ console.log(`shot-data: ${consumed}/${ticks.length} ticks replayed -> ${OUT}`);
 await context.close();
 await browser.close();
 server.close();
+
+if (failures.length) {
+  console.error(`shot-data FAILED (${failures.length}):`);
+  for (const failure of failures) console.error(`  - ${failure}`);
+  process.exit(1);
+}

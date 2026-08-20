@@ -28,6 +28,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { serveDist } from "./serve-dist.mjs";
+import { watchPage } from "./page-guard.mjs";
+import ts from "typescript";
 import { staysStill } from "./settle.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -182,10 +184,7 @@ const ctx = await browser.newContext({
   viewport: CLIENT,
 });
 const page = await ctx.newPage();
-page.on("pageerror", (error) => failures.push(`pageerror: ${error.message}`));
-page.on("console", (message) => {
-  if (message.type() === "error") failures.push(`console: ${message.text()}`);
-});
+watchPage(page, failures);
 
 // A MONOTONE script, never "return whatever the caller has not seen". The
 // first version of this stub returned the first tick whose seq differed, so
@@ -669,9 +668,7 @@ const solo = await browser.newContext({
   viewport: CLIENT,
 });
 const soloPage = await solo.newPage();
-soloPage.on("pageerror", (error) =>
-  failures.push(`pageerror(solo): ${error.message}`),
-);
+watchPage(soloPage, failures, "solo");
 
 await soloPage.addInitScript(
   (payload) => {
@@ -764,9 +761,7 @@ const ring = await browser.newContext({
   viewport: CLIENT,
 });
 const ringPage = await ring.newPage();
-ringPage.on("pageerror", (error) =>
-  failures.push(`pageerror(ring): ${error.message}`),
-);
+watchPage(ringPage, failures, "ring");
 
 await ringPage.addInitScript(
   (payload) => {
@@ -774,6 +769,12 @@ await ringPage.addInitScript(
       api: {
         get_tick: async (sinceSeq) =>
           sinceSeq === payload.seq ? null : payload,
+        // The other three the DATA window polls. Without them the bridge
+        // falls back to `fetch("/api/...")` and the static server answers
+        // 404 four times, which nothing on this page was listening for.
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => "Connected",
       },
     };
   },
@@ -955,6 +956,7 @@ const stillCtx = await browser.newContext({
   viewport: CLIENT,
 });
 const stillPage = await stillCtx.newPage();
+watchPage(stillPage, failures, "still");
 await stillPage.addInitScript((payload) => {
   let seq = payload.seq;
   window.pywebview = {
@@ -1001,9 +1003,7 @@ async function provisionalChips(field) {
     viewport: CLIENT,
   });
   const scenarioPage = await context.newPage();
-  scenarioPage.on("pageerror", (error) =>
-    failures.push(`pageerror(provisional): ${error.message}`),
-  );
+  watchPage(scenarioPage, failures, "provisional");
   await scenarioPage.addInitScript(
     (payload) => {
       window.pywebview = {
@@ -1011,7 +1011,6 @@ async function provisionalChips(field) {
           get_tick: async (sinceSeq) =>
             sinceSeq === payload.seq ? null : payload,
           get_bulk: async () => null,
-          get_live_lap: async () => null,
           get_live_lap: async () => null,
           get_connection: async () => "Connected",
         },
@@ -1232,9 +1231,7 @@ const towerCtx = await browser.newContext({
   viewport: CLIENT,
 });
 const towerPage = await towerCtx.newPage();
-towerPage.on("pageerror", (error) =>
-  failures.push(`pageerror(tower): ${error.message}`),
-);
+watchPage(towerPage, failures, "tower");
 await towerPage.addInitScript(
   ([payload, bulk, live]) => {
     window.pywebview = {
@@ -1585,9 +1582,7 @@ async function radioPage(radio) {
     viewport: CLIENT,
   });
   const rPage = await context.newPage();
-  rPage.on("pageerror", (error) =>
-    failures.push(`pageerror(radio): ${error.message}`),
-  );
+  watchPage(rPage, failures, "radio");
   await rPage.addInitScript(
     ([payload, bulk, live]) => {
       window.pywebview = {
@@ -1656,25 +1651,33 @@ check(
 );
 
 // The minute boundary `paceLabel` documented and its two siblings did not have.
-// Evaluated against the SHIPPED module rather than a copy of its arithmetic.
-const boundary = await feedPage.evaluate(async () => {
-  const mod = await import("/src/lib/format.ts").catch(() => null);
-  return mod === null
-    ? null
-    : [
-        mod.formatSeconds(119.9996, 3),
-        mod.formatSeconds(59.9996, 3),
-        mod.formatSeconds(29.412, 3),
-        mod.formatSeconds(119.96, 1, true),
-      ];
+// Evaluated against the real module rather than a copy of its arithmetic.
+//
+// **This ran in the browser until sprint 10 and it never executed once.** It
+// asked for `/src/lib/format.ts` from a server that holds the BUILT bundle, so
+// the import 404'd, `.catch(() => null)` turned that into `null`, and the `if`
+// below skipped the whole assertion - a guard about the empty set, and the one
+// page in this file with nothing watching its console, so the 404 was silent
+// too. Transpiled here instead, with the `typescript` this project already
+// depends on: same source the bundle is built from, no browser needed for a
+// pure function, and no way left for it to skip itself.
+const formatSource = readFileSync(resolve(UI_DIR, "src/lib/format.ts"), "utf-8");
+const { outputText } = ts.transpileModule(formatSource, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 });
-if (boundary !== null) {
-  check(
-    JSON.stringify(boundary) ===
-      JSON.stringify(["2:00.000", "1:00.000", "29.412", "2:00.0"]),
-    `the shared formatter rounds before it splits (${JSON.stringify(boundary)})`,
-  );
-}
+const format = await import(
+  `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
+);
+const boundary = [
+  format.formatSeconds(119.9996, 3),
+  format.formatSeconds(59.9996, 3),
+  format.formatSeconds(29.412, 3),
+  format.formatSeconds(119.96, 1, true),
+];
+check(
+  JSON.stringify(boundary) === JSON.stringify(["2:00.000", "1:00.000", "29.412", "2:00.0"]),
+  `the shared formatter rounds before it splits (${JSON.stringify(boundary)})`,
+);
 
 // --- The history a reader could not reach ---------------------------------
 //
@@ -2298,9 +2301,7 @@ const paceCtx = await browser.newContext({
   viewport: CLIENT,
 });
 const pacePage = await paceCtx.newPage();
-pacePage.on("pageerror", (error) =>
-  failures.push(`pageerror(pace): ${error.message}`),
-);
+watchPage(pacePage, failures, "pace");
 await pacePage.addInitScript(
   ([payload, bulk, live]) => {
     window.pywebview = {
@@ -2683,9 +2684,7 @@ check(
     viewport: { width: 1265, height: 593 },
   });
   const narrow = await narrowCtx.newPage();
-  narrow.on("pageerror", (error) =>
-    failures.push(`pageerror(pace-narrow): ${error.message}`),
-  );
+  watchPage(narrow, failures, "pace-narrow");
   await narrow.addInitScript(
     ([payload, bulk, live]) => {
       window.pywebview = {
@@ -2817,9 +2816,7 @@ check(
     viewport: CLIENT,
   });
   const partial = await partialCtx.newPage();
-  partial.on("pageerror", (error) =>
-    failures.push(`pageerror(skeleton): ${error.message}`),
-  );
+  watchPage(partial, failures, "skeleton");
   const REVEALED_TO = 30;
   await partial.addInitScript(
     ([payload, bulk, live, cap]) => {
@@ -2961,9 +2958,7 @@ for (const [width, height] of [
 ]) {
   const ctx = await browser.newContext({ viewport: { width, height } });
   const page = await ctx.newPage();
-  page.on("pageerror", (error) =>
-    failures.push(`pageerror(bests ${height}): ${error.message}`),
-  );
+  watchPage(page, failures, "bests ${height}");
   // **Withheld at the STUB, not with `page.route`.** `bridge.ts` uses
   // `window.pywebview` whenever it exists and only falls back to `fetch`, so the
   // smoke's injected api is the transport and an HTTP route intercepts nothing -
@@ -3047,9 +3042,7 @@ for (const [width, height] of [
     viewport: { width: 1265, height: 593 },
   });
   const page = await ctx.newPage();
-  page.on("pageerror", (error) =>
-    failures.push(`pageerror(wheel): ${error.message}`),
-  );
+  watchPage(page, failures, "wheel");
   // **Capped at lap 30, like the skeleton block one section down.** `paceBulk()` reveals
   // all 57 laps, so on it there are no future rows at all, the pin target IS the bottom of
   // the scroller, and the reader can never be "away from" it - the first version of this
@@ -3194,9 +3187,7 @@ for (const [width, height] of [
 ]) {
   const ctx = await browser.newContext({ viewport: { width, height } });
   const page = await ctx.newPage();
-  page.on("pageerror", (error) =>
-    failures.push(`pageerror(lanes ${width}): ${error.message}`),
-  );
+  watchPage(page, failures, "lanes ${width}");
   await page.addInitScript(
     ([payload, bulk, live]) => {
       window.pywebview = {
@@ -3457,9 +3448,7 @@ if (bands === null) {
     viewport: { width: 1265, height: 593 },
   });
   const narrow = await narrowCtx.newPage();
-  narrow.on("pageerror", (error) =>
-    failures.push(`pageerror(axis): ${error.message}`),
-  );
+  watchPage(narrow, failures, "axis");
   await narrow.addInitScript(
     ([payload, bulk, live]) => {
       window.pywebview = {
@@ -3533,9 +3522,7 @@ if (bands === null) {
     viewport: CLIENT,
   });
   const dead = await deadCtx.newPage();
-  dead.on("pageerror", (error) =>
-    failures.push(`pageerror(dead): ${error.message}`),
-  );
+  watchPage(dead, failures, "dead");
   await dead.addInitScript(
     ([payload, bulk, live]) => {
       window.__alive = true;
@@ -3841,9 +3828,7 @@ await paceCtx.close();
 async function waitingCopy(connection) {
   const context = await browser.newContext({ viewport: CLIENT });
   const emptyPage = await context.newPage();
-  emptyPage.on("pageerror", (error) =>
-    failures.push(`pageerror(waiting/${connection}): ${error.message}`),
-  );
+  watchPage(emptyPage, failures, "waiting/${connection}");
   await emptyPage.addInitScript((state) => {
     window.pywebview = {
       api: {
