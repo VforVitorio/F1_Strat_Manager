@@ -202,6 +202,7 @@ const VIEW = {
       x_range: [20.5, 34],
       current_lap: 23,
       cursor_colour: "#9ca3af",
+      prediction_lap: 22,
     },
     tire: {
       stints: [
@@ -317,6 +318,25 @@ const barWidths = await page.evaluate(() =>
   [...document.querySelectorAll(".scenario-bar-fill")].map((el) => Math.round(el.getBoundingClientRect().width)),
 );
 check(barWidths[1] > barWidths[0] && barWidths[0] > 0, `the bars carry their fill (${barWidths})`);
+
+// The fixture's prediction stopped a lap behind the car, so the pace chart owes
+// the reader a tag saying where. Asserted on the RENDERED chart rather than on
+// the option object: `graphic` is a config, and a config that never reaches the
+// canvas is exactly the mechanism-instead-of-effect trap this file keeps.
+const staleTag = await page.evaluate(() => {
+  const el = document.querySelector(".slot-pace .chart");
+  const chart = el && el.__pitwallChart;
+  if (!chart) return null;
+  const texts = [];
+  chart.getZr().storage.traverse((shape) => {
+    if (shape.type === "text" && shape.style && shape.style.text) texts.push(shape.style.text);
+  });
+  return texts;
+});
+check(
+  Array.isArray(staleTag) && staleTag.some((t) => t.includes("prediction to L22")),
+  `the pace chart names the lap its prediction stopped at (${JSON.stringify(staleTag)})`,
+);
 check(await page.locator(".orchestrator").isVisible(), "the orchestrator card");
 
 // --- The four strata -------------------------------------------------------

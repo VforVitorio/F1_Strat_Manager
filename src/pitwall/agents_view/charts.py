@@ -99,6 +99,7 @@ def build_pace_series(
     actual: list[list[float]] = []
     pred: list[list[float]] = []
     band: list[list[float]] = []
+    predicted_laps: list[int] = []
     for lap in sorted(history):
         row = history[lap]
         observed = _sane_lap_time(row.get("actual"))
@@ -109,6 +110,7 @@ def build_pace_series(
             actual.append([float(lap), observed])
         if predicted is not None:
             pred.append([float(lap), predicted])
+            predicted_laps.append(lap)
         if low is not None and high is not None:
             band.append([float(lap), low, high])
     return {
@@ -126,6 +128,19 @@ def build_pace_series(
         "x_range": x_range,
         "current_lap": None if current_lap is None else float(current_lap),
         "cursor_colour": CURSOR_COLOUR,
+        # The newest lap that carries a PREDICTION, which is not the newest lap
+        # on the chart. A tick with no `per_agent` block still delivers the
+        # actual lap time, so the solid line keeps advancing while the dashed
+        # one and its band stop where the last prediction was - and nothing on
+        # the chart said so. The renderer dims the two stale series and prints
+        # the lap.
+        #
+        # **Only the PACE chart gets this.** The tyre chart's own stale element
+        # is the cliff band, which is recomputed from `per_agent.tire` every
+        # tick and simply disappears when there is none; its trend is a rolling
+        # mean of OBSERVED lap times and keeps advancing, so dimming it would
+        # claim staleness about live data.
+        "prediction_lap": float(max(predicted_laps)) if predicted_laps else None,
     }
 
 

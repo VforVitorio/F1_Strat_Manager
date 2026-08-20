@@ -157,6 +157,12 @@ export interface PaceSeries {
   /** Where the car is NOW, marked on both charts. */
   current_lap: number | null;
   cursor_colour: string;
+  /**
+   * The newest lap carrying a PREDICTION, which is not the newest lap plotted.
+   * A tick with no `per_agent` still delivers the actual lap time, so the solid
+   * line advances while the dashed one stops - and nothing said so.
+   */
+  prediction_lap: number | null;
 }
 
 export interface TireStint {
