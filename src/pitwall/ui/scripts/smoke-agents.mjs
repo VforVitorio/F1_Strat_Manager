@@ -37,6 +37,15 @@ const DIST = resolve(process.argv[2] ?? resolve(UI_DIR, "dist"));
 // harness viewport larger than the real client.
 const CLIENT = { width: 1486, height: 833 };
 
+// The host's own map, so the states this file drives wear the colours the
+// product gives them rather than a second set invented here. Kept in step by
+// `test_pitwall_tokens.py`, which reads both.
+const CONNECTION_COLOURS = {
+  Connected: "#10b981",
+  "Connecting...": "#9ca3af",
+  Disconnected: "#ef4444",
+};
+
 /**
  * Enough of a view to render every panel.
  *
@@ -265,7 +274,7 @@ await page.addInitScript((view) => {
       // when the injected api has no such method, and the static server answers 404.
       // A missing stub method is a 404 in the console, not a thrown error, so it
       // costs three console failures and no clue about which call made them.
-      get_connection: async () => "Connected",
+      get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
     },
   };
 }, VIEW);
@@ -779,7 +788,7 @@ await livePage.addInitScript((view) => {
       // until this line changed.
       get_agents_view: async () => ({ ...structuredClone(view), seq: ++seq }),
       get_tick: async () => null,
-      get_connection: async () => "Connected",
+      get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
     },
   };
 }, VIEW);
@@ -826,7 +835,11 @@ await live.close();
 async function idleStatusBar(connection) {
   const context = await browser.newContext({ viewport: CLIENT });
   const idlePage = await context.newPage();
-  watchPage(idlePage, failures, "idle/${connection}");
+  watchPage(idlePage, failures, `idle/${connection}`);
+  // The PAIR goes in as the argument. `addInitScript` serialises the function
+  // and runs it in the page, so a Node-side constant it closes over is simply
+  // not there - which surfaced as `CONNECTION_COLOURS is not defined` on three
+  // pages at once, and only because every page watches its console now.
   await idlePage.addInitScript((state) => {
     window.pywebview = {
       api: {
@@ -835,7 +848,7 @@ async function idleStatusBar(connection) {
         get_connection: async () => state,
       },
     };
-  }, connection);
+  }, { label: connection, colour: CONNECTION_COLOURS[connection] });
   await idlePage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
     waitUntil: "domcontentloaded",
   });
@@ -878,7 +891,7 @@ watchPage(viewPage, failures, "frozen");
         },
       };
     },
-    [VIEW, "Connecting..."],
+    [VIEW, { label: "Connecting...", colour: CONNECTION_COLOURS["Connecting..."] }],
   );
   await viewPage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
     waitUntil: "domcontentloaded",

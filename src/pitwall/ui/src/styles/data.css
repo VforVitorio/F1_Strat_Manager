@@ -78,15 +78,16 @@
   white-space: nowrap;
 }
 
-.strip-chip.is-connected {
-  color: #10b981;
-}
-.strip-chip.is-lost {
-  color: #ef4444;
-}
-/* Unknown is DIM, never a colour that means something. "Connecting..." and a
- * missing track status are both absences, and an absence that borrows the
- * green or the amber is a made-up answer. */
+/* **The two connection rules that used to sit here are gone.** They were a
+ * second owner of the socket's colours, and they disagreed with the first:
+ * "Connecting..." was dim through `is-unknown` here and WARNING amber through
+ * the AGENTS view, for one socket, on two windows a reader has open side by
+ * side. `PitwallHost.get_connection` now returns the word AND its colour from
+ * one map, and the argument this comment makes is what that map adopted.
+ *
+ * Unknown is DIM, never a colour that means something. A missing track status
+ * is an absence, and an absence that borrows the green or the amber is a
+ * made-up answer. */
 .strip-chip.is-unknown {
   color: var(--qt-fg-3);
 }

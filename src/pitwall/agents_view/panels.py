@@ -28,6 +28,8 @@ from src.arcade.palette import (
     WARNING,
     hex_str,
 )
+
+__all__ = ["CONNECTION_COLOURS", "STATUS_GLYPHS", "build_cards", "build_header", "build_status_bar"]
 from src.pitwall.agent_formatters import (
     format_pace,
     format_pit,
@@ -40,12 +42,21 @@ from src.pitwall.agent_formatters import (
     with_model_detail,
 )
 
-# window.py's HeaderBar.set_connection, with its three states and their
-# colours. "Connecting..." is what the socket thread reports while it
-# retries, which is most of the time before an arcade exists.
+# The three socket states and their colours, for BOTH windows.
+#
+# **"Connecting..." was WARNING amber here and dim grey on the DATA window's
+# own strip**, so one socket wore two colours on two windows a reader has open
+# side by side. The strip's argument is the better one and it was already
+# written down beside its rule: "Connecting..." is an ABSENCE, not a state, and
+# an absence that borrows the green or the amber is a made-up answer. The amber
+# came from Qt's `set_connection` - a port decision, never a designed one.
+#
+# The map is the only owner now. `PitwallHost.get_connection` returns the word
+# AND this colour, so the DATA strip stops mapping the same three words to CSS
+# classes of its own.
 CONNECTION_COLOURS: dict[str, str] = {
     "Connected": hex_str(SUCCESS),
-    "Connecting...": hex_str(WARNING),
+    "Connecting...": hex_str(TEXT_TERTIARY),
     "Disconnected": hex_str(DANGER),
 }
 

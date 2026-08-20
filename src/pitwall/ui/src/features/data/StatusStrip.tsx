@@ -15,12 +15,12 @@
  * anyway. A broadcast timing tower marks exactly this state; so does this.
  */
 
-import type { Tick } from "../../lib/bridge";
+import type { Connection, Tick } from "../../lib/bridge";
 import { driverStatus } from "../../lib/driverStatus";
 
 interface StatusStripProps {
   tick: Tick | null;
-  connection: string | null;
+  connection: Connection | null;
   /** The producer is gone and every value on this strip is from before. */
   frozen?: boolean;
 }
@@ -62,7 +62,18 @@ export function StatusStrip({ tick, connection, frozen = false }: StatusStripPro
       {/* The last tick's speed is not the replay's speed once the ticks stop, and
        * `2x` is an assertion that it is still advancing. */}
       <StripField label="PLAYBACK" value={frozen ? "—" : playbackLabel(playback)} />
-      <span className={`strip-chip ${connectionClass(connection)}`}>{connection ?? "—"}</span>
+      <span
+        className="strip-chip"
+        // **The colour arrives with the word.** These were three CSS classes
+        // mapping the same three states the AGENTS window mapped in Python,
+        // and the two disagreed: "Connecting..." was dim here and WARNING
+        // amber there, for one socket, on two windows open side by side. The
+        // argument this window had written down - an absence must not borrow
+        // the colour of a state - won, and moved into the shared map.
+        style={connection ? { color: connection.colour } : undefined}
+      >
+        {connection?.label ?? "—"}
+      </span>
     </header>
   );
 }
@@ -172,12 +183,6 @@ function sessionClock(arcade: Tick["arcade"] | undefined): string {
 function playbackLabel(playback: Tick["playback"] | undefined): string {
   if (!playback) return "—";
   return playback.paused ? "PAUSED" : `${playback.speed}x`;
-}
-
-function connectionClass(connection: string | null): string {
-  if (connection === "Connected") return "is-connected";
-  if (connection === "Disconnected") return "is-lost";
-  return "is-unknown";
 }
 
 function pad(value: number): string {

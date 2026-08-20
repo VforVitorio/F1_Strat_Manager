@@ -215,7 +215,12 @@ BOOT_SLOTS = {
     "confidence_colour": "TEXT_TERTIARY",
     "pace_colour": "TEXT_TERTIARY",
     "risk_colour": "TEXT_TERTIARY",
-    "connection_colour": "WARNING",
+    # TEXT_TERTIARY, not WARNING. The boot literal is a placeholder for the
+    # polled pair, and "Connecting..." is an ABSENCE rather than a state: the
+    # DATA strip made that argument in its own stylesheet while this window
+    # painted the same socket amber, so one socket wore two colours on two
+    # windows open side by side.
+    "connection_colour": "TEXT_TERTIARY",
     "bar_colour": "TEXT_SECONDARY",
     "label_colour": "TEXT_SECONDARY",
     "score_colour": "TEXT_SECONDARY",

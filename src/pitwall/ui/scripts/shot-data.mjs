@@ -68,7 +68,7 @@ await page.addInitScript((payloads) => {
       // back to `fetch("/api/…")` and the static server answered 404 on each.
       get_bulk: async () => null,
       get_live_lap: async () => null,
-      get_connection: async () => "Connected",
+      get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
       get_tick: async (sinceSeq) => {
         if (window.__ticks[window.__cursor].seq === sinceSeq) {
           if (window.__cursor + 1 >= window.__ticks.length) return null;
