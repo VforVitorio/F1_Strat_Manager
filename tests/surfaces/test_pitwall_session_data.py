@@ -388,23 +388,22 @@ def test_the_real_race_never_reports_a_stop_nobody_made():
     3 and 4, so `PitInTime` is set for all seventeen runners on each. At lap 24
     not one car has changed tyres; NOR's real stops are laps 35 and 45.
 
-    Five cars read one stop high and it is #988's artefact, not this rule's: the
-    feed republishes their `TyreLife` as 1 on one of the transits. They are named
-    below rather than absorbed into a tolerance, so the day #988 lands this test
-    fails and says which line to change. Everyone else is exact.
+    Five cars used to read one stop high on #988's artefact - the feed republishing
+    their `TyreLife` as 1 on one of the transits. That is repaired upstream now, in
+    `tyre_stint_repair`, so every car is exact here and the field total is the 31 real
+    stops rather than 36.
     """
     session = _session_or_skip()
     reveal = _all_revealed(session)
-    # The exact five, with the transit that corrupts each: ALB and STR on lap 3,
-    # LAW on lap 4, BEA and OCO on lap 5. See #988.
-    republished = {"ALB", "BEA", "LAW", "OCO", "STR"}
 
     early = session.masked_view({code: 24 for code in reveal}, 0.0)["drivers"]
+    # Asserted before the loop: a masked view that returned no drivers would make every
+    # assertion inside it vacuous and the test would pass green on an empty set.
+    assert len(early) == 20, "the whole grid should be in the view"
     for code, driver in early.items():
-        expected = 1 if code in republished else 0
-        assert driver["stops"] == expected, f"{code} at lap 24"
+        assert driver["stops"] == 0, f"{code} at lap 24"
     # Counting in-laps gave the field 51 here, on a lap where nobody has stopped.
-    assert sum(driver["stops"] for driver in early.values()) == len(republished)
+    assert sum(driver["stops"] for driver in early.values()) == 0
 
     final = session.masked_view(reveal, 0.0)["drivers"]
     # Melbourne 2025 was wet-dry-wet, so every real stop is a compound change.
@@ -413,7 +412,11 @@ def test_the_real_race_never_reports_a_stop_nobody_made():
     assert final["ALO"]["stops"] == 0
     # SAI, DOO and HAD have only generated rows: no laps, no transits, no stops.
     assert [final[code]["stops"] for code in ("SAI", "DOO", "HAD")] == [0, 0, 0]
-    assert sum(driver["stops"] for driver in final.values()) == 36, "31 real + #988's five"
+    # The five that used to read high: ALB and STR transited on lap 3, LAW on lap 4,
+    # BEA and OCO on lap 5. Each has two real stops except LAW, who has one.
+    assert [final[code]["stops"] for code in ("ALB", "BEA", "OCO", "STR")] == [2, 2, 2, 2]
+    assert final["LAW"]["stops"] == 1
+    assert sum(driver["stops"] for driver in final.values()) == 31, "the real stops, #988"
 
 
 def _row(frame: pd.DataFrame, index: int) -> dict:
