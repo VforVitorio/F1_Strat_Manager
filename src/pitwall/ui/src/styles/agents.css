@@ -374,62 +374,70 @@
 
 /* --- Orchestrator card (orchestrator_card.py) ---------------------------- */
 
+/* The 4 px rule is the identity colour's second, quieter home: the inline
+ * `border-left-color` is the action's own colour, so the module is marked
+ * without anything being painted. */
 .orchestrator {
-  padding: 12px 14px;
+  padding: 12px 14px 12px 12px;
+  border-left: 4px solid transparent;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
-.orch-top {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-}
-.orch-badge {
-  min-width: 200px;
-  min-height: 70px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  padding: 14px 18px;
-  /* Fallback only. The live colour is inline, decided against the fill by
-   * `readable_on`, because a fixed white measured 2.54:1 on SUCCESS. */
-  color: var(--qt-fg-1);
-  font-size: 26px;
+
+/* **Bounded on purpose.** `classify_action` maps seven actions and falls back
+ * to echoing the raw string, so an unknown producer word arrives here at
+ * 32 px/800 with no upper length. Seven of the seven fit (UNDERCUT is the
+ * widest at 179 px against ~308 px of inner width); the eighth is whatever a
+ * future producer sends. */
+.orch-action {
+  margin: 0;
+  font-size: 32px;
   font-weight: 800;
   letter-spacing: 1px;
-  text-align: center;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .orch-conf {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
-.orch-conf-label {
-  color: var(--qt-fg-2);
-  font-size: 11px;
+/* Promoted from 11 px to the same visual rank as the word it qualifies: the
+ * action and its confidence are one unit, and the number used to render at
+ * the size of an axis tick. */
+.orch-conf-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.orch-conf-caption {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 .orch-bar {
-  height: 14px;
-  border-radius: 6px;
+  height: 8px;
+  border-radius: 4px;
   background: #282834; /* the empty stop of Qt's gradient */
   overflow: hidden;
 }
 .orch-bar-fill {
   height: 100%;
 }
-.orch-chips {
-  display: flex;
-  gap: 8px;
-}
-.orch-chip {
-  padding: 4px 10px;
-  border: 1px solid currentColor;
-  border-radius: 10px;
+/* Plain text. These were outline pills, which is a button costume on a surface
+ * where nothing can be pressed, and they are facts: a posture somebody chose,
+ * not a state to act on. */
+.orch-facts {
+  margin: 0;
   font-size: 12px;
-  font-weight: 700;
+}
+.orch-facts-sep {
+  color: var(--qt-fg-3);
 }
 /* The previous call, on the lap this one replaced it. Tertiary text with a
  * WARNING dot: it is a CHANGE, which is worth noticing, and not a fault,

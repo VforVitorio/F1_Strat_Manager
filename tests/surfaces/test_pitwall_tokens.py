@@ -227,11 +227,16 @@ BOOT_SLOTS = {
     "trend_colour": "TEXT_PRIMARY",
     "cliff_colour": "WARNING",
     "boundary_colour": "TEXT_TERTIARY",
-    # Sprint 8's two additions. The map is a SUBSET assertion, so a new boot
-    # colour it does not name is invisible to it: flipping the badge's text
-    # back to white - 2.72:1 on the accent fill, the failure #965 fixed -
-    # left every check green until these two lines existed.
-    "action_text_colour": "BG_COLOR",
+    # Sprint 8's addition. The map is a SUBSET assertion, so a new boot colour
+    # it does not name is invisible to it - which is why every slot that exists
+    # has to be listed here rather than only the interesting ones.
+    #
+    # `action_text_colour` sat here too, mapped to BG_COLOR, until the decision
+    # band stopped painting the action as a FILL. Text on `--qt-panel` needs no
+    # chosen ink, so the field has no consumer and no boot literal; what
+    # replaces the guarantee is the contrast assertion in
+    # `test_pitwall_agents_view.py`, which now runs the action colour against
+    # the panel over the whole of `_ACTION_STYLE` plus its fallback.
     "cursor_colour": "TEXT_TERTIARY",
 }
 

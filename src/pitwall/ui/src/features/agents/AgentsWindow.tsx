@@ -89,12 +89,9 @@ const IDLE_VIEW: AgentsView = {
     action: "--",
     // ACCENT: `orchestrator_card.py:100` styles the badge at construction.
     action_colour: "#a78bfa",
-    // Dark on the accent fill, as `readable_on` picks for the live badge:
-    // white measured 2.72:1 here.
-    action_text_colour: "#121127",
     confidence: null,
     confidence_fill: 0,
-    confidence_label: "Confidence: --",
+    confidence_text: "--",
     confidence_colour: "#9ca3af",
     pace: "Pace: --",
     pace_colour: "#9ca3af",
