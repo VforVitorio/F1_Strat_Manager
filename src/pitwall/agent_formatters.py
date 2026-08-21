@@ -340,6 +340,30 @@ def _radio_intent(event: dict[str, Any]) -> str:
     return str((event.get("analysis") or {}).get("intent") or "INFO")
 
 
+def _correction_row(entry: dict[str, Any]) -> dict[str, str]:
+    """One NLP mismatch, as a tooltip row.
+
+    N29 asks the LLM to compare each message's text against the intent the
+    classifier assigned it and to say so when they contradict. The entry names
+    the label it would have given instead, the verbatim span that contradicts the
+    model, and a one-line reason.
+
+    It is a claim ABOUT a label, never a replacement for one: `alerts` stays
+    deterministic and the orchestrator weighs the two itself, so this reads as
+    "treat that PROBLEM as weaker" rather than as a relabelling. Every value is
+    LLM-filled free text and is stringified here for that reason.
+    """
+    original = str(entry.get("original_intent") or "?")
+    suggested = str(entry.get("suggested_intent") or "?")
+    reason = str(entry.get("reason") or "").strip()
+    span = str(entry.get("span") or "").strip()
+    text = f'{reason} Quoted: "{span}"' if span else reason
+    return {
+        "lead": f"{str(entry.get('driver') or '?')} {original} reads as {suggested}",
+        "text": text,
+    }
+
+
 def radio_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
     """Every radio and RCM of the lap, as DATA the window renders itself.
 
@@ -372,7 +396,8 @@ def radio_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
     radio_events = r.get("radio_events") or []
     rcm_events = r.get("rcm_events") or []
-    if not radio_events and not rcm_events:
+    corrections = r.get("corrections") or []
+    if not radio_events and not rcm_events and not corrections:
         return None
 
     sections: list[dict[str, Any]] = []
@@ -399,6 +424,17 @@ def radio_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
                         "text": str(ev.get("message") or ""),
                     }
                     for ev in radio_events
+                ],
+            }
+        )
+    # Last, because it qualifies what the two sections above say rather than
+    # adding events of its own: a reader needs the message before the doubt.
+    if corrections:
+        sections.append(
+            {
+                "title": "NLP corrections",
+                "rows": [
+                    _correction_row(entry) for entry in corrections if isinstance(entry, dict)
                 ],
             }
         )
