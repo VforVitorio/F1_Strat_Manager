@@ -869,3 +869,71 @@ def test_a_lap_with_no_track_status_entry_is_unknown_and_not_green():
 
     assert track_status_label("") is None, "unknown is None, never GREEN"
     assert track_status_label("1") is not None, "a real clear IS green and says so"
+
+
+def test_every_recommendation_field_the_wire_drops_was_decided_about():
+    """A field that stops at the DTO boundary must be a decision, not an oversight.
+
+    `StrategyRecommendation` has fourteen fields and `LapDecisionDTO` copies ten.
+    The rest used to vanish silently, so a new field added to the orchestrator
+    would join them without anybody noticing it never reached a surface. This is
+    the guard against that: the difference between the two sets is FROZEN, and a
+    fifteenth field fails here until someone writes down where it goes.
+
+    Read with `ast` for the reason `_dataclass_field_names` gives: importing
+    `src/arcade/strategy_pipeline.py` pulls torch, langchain and three transformer
+    checkpoints, measured at 18.4 s, and CI has no model weights at all.
+    """
+    recommendation = _dataclass_field_names(
+        "src/agents/strategy_orchestrator.py", "StrategyRecommendation"
+    )
+    dto = _dataclass_field_names("src/arcade/strategy.py", "LapDecisionDTO")
+
+    assert recommendation - dto == {
+        # Decision content, held back only because adding it is a schema change;
+        # rides with #1048's bump rather than migrating a frozen contract twice.
+        "contingencies",
+        "key_risks",
+        # The PLAN timeline already draws the stint boundary from `pit_lap_target`.
+        # A second source for one number on one surface is the twin shape.
+        "expected_stint_end",
+        # `None` by Art. 55.7 under a safety car, and the absence is the
+        # load-bearing case. Nothing on either window asks for it yet.
+        "target_lap_time_s",
+        # NOT dropped: it reaches the wire through `PerAgentOutputsDTO`, which is
+        # why it is listed here rather than treated as missing.
+        "regulation_context",
+    }, "a recommendation field changed sides without a decision being recorded (#1046)"
+
+    # And the other direction, so the frozen set cannot be satisfied by the DTO
+    # quietly losing a field it is supposed to carry.
+    assert {"action", "confidence", "reasoning", "scenario_scores"} <= dto
+
+
+def test_the_pipeline_delegate_no_longer_throws_the_stage_timings_away():
+    """`run_lap`'s third value reaches a logger instead of the floor (#1045).
+
+    It used to be bound to `_timings` and dropped on the same line that computed
+    it, under a docstring promising a future change would put it on the wire.
+    Nothing consumed it at any of the three call sites.
+
+    Asserted on the SOURCE, and that limitation is real: exercising the function
+    means importing the agent stack (18.4 s, three checkpoints) and then running
+    the `rich` profile, which spends LLM calls. What the source can say is that
+    the value is bound to a real name and that the name reaches a logging call.
+    """
+    tree = ast.parse((REPO_ROOT / "src/arcade/strategy_pipeline.py").read_text(encoding="utf-8"))
+    func = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "run_strategy_pipeline"
+    )
+    body = ast.dump(func)
+    assert "_timings" not in body, "the third value is still bound to a discard name"
+    assert "timings" in body, "the third value is not bound at all"
+    logged = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, ast.Attribute) and node.attr in {"debug", "info", "warning"}
+    ]
+    assert logged, "the timings are bound and then still go nowhere"
