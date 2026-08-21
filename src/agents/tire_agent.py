@@ -545,6 +545,11 @@ class TireOutput:
             the Monte Carlo, nor the orchestrator prompt, nor any UI. Measured
             over the same 110 laps it correlates +0.369 with tyre life and swings
             0.411 s/lap across a stint.
+
+            #727 restored the first two. The UI half stayed true until #1041:
+            PITWALL's TIRE console now prints this and ``deg_cost_s`` in its
+            model detail (``src/pitwall/reasoning_lines.py``), which is the only
+            surface that renders either.
         deg_cost_s: Seconds per lap staying out costs versus a fresh set, bounded.
             This is ``cumulative_deg_s`` minus the model's own prediction on this
             stint's early laps, which cancels N04's per-stint baseline instead of
