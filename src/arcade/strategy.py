@@ -108,6 +108,29 @@ class PerAgentOutputsDTO:
 
 @dataclass(frozen=True)
 class LapDecisionDTO:
+    """One lap's decision, as the wire carries it.
+
+    **What this deliberately does NOT copy from ``StrategyRecommendation``, and
+    why (#1046).** That object has fourteen fields and this takes ten. The four
+    it leaves behind used to stop here silently, which reads as an oversight
+    rather than a decision:
+
+    - ``contingencies`` and ``key_risks`` are decision CONTENT and have a claim on
+      the window. They are held back only because adding them is a schema change,
+      so they ride with #1048's bump rather than being a second migration of a
+      frozen contract. ``contingencies`` is the one the orchestrator memory audit
+      calls load-bearing, and it is invisible in ``reasoning``, which is why it was
+      given its own field instead of being left to the model's prose.
+    - ``expected_stint_end`` stays out. The PLAN timeline already draws the stint
+      boundary from ``pit_lap_target``, and a second source for one number on one
+      surface is the twin shape this repo pays for most.
+    - ``target_lap_time_s`` stays out. Under a safety car the rail sets it to
+      ``None`` by Art. 55.7, because N06 predicts green-flag pace and publishing a
+      target above the delta sends the driver at a penalty. A field whose absence
+      is the load-bearing case needs a designed rendering before it is worth
+      carrying, and nothing on either window asks for it.
+    """
+
     lap_number: int = 0
     compound: str = ""
     tyre_life: int = 0
