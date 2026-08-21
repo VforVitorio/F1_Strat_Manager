@@ -72,6 +72,28 @@
   font-weight: 800;
 }
 
+/* The neutralisation chip's two non-default states. The colours are INLINE, off
+ * the wire's own `track_status_color`, so nothing here names one: these rules
+ * carry the weight and the border only.
+ *
+ * A non-green status is filled and bold, because that is this window's whole
+ * reaction to a safety car and an outline chip swapping its text is a change a
+ * reader misses at a glance. The DATA strip made the same move for the same
+ * reason; `lib/trackStatus.ts` is the rule both of them ask. */
+.chip.is-filled {
+  color: var(--qt-bg);
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+/* An absence is not an alarm, so it gives up its weight AND its colour. This is
+ * what a missing TrackStatus entry wears, and what a live status wears once the
+ * feed is frozen: the label was true, the assertion is not. */
+.chip.is-unknown {
+  color: var(--qt-fg-3);
+  background: var(--qt-elevated);
+  font-weight: 500;
+}
+
 /* The cards while the feed is dead: dimmed, NOT desaturated. Same reasoning as the
  * DATA window's `.data-main.is-frozen` - `saturate()` collapses hue differences and
  * this window's colour is content too (the alarm red, the WARNING amber on a

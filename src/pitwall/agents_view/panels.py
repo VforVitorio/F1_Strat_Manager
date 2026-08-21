@@ -86,7 +86,22 @@ STATUS_GLYPHS: dict[str, tuple[str, str]] = {
 
 
 def build_header(payload: dict[str, Any], connection: str) -> dict[str, Any]:
-    """The top strip: session, driver, connection, playback, lap counter."""
+    """The top strip: session, driver, neutralisation, connection, playback, lap.
+
+    **The track status comes off the tick, NOT off the situation agent.** N27
+    publishes `sc_currently_active` and `vsc_active` on the same payload, and
+    rendering those instead would put two sources for one fact on a desk where
+    both windows are open at once, free to disagree: one is FastF1's TrackStatus
+    for the lap on screen, decoded by the producer's own priority rule
+    (`app.py`'s `track_status_label`) precisely so no consumer re-derives it, and
+    the other is a boolean the agent computed for the lap it was asked about. The
+    DATA window renders the decoded one; so does this. The agent's pair are a
+    deletion, tracked with the schema work rather than as a third wire change.
+
+    The colour rides along for the same reason the label does: the priority order
+    and the palette entry are a project rule, and picking a colour here would be a
+    second copy of it in a second language.
+    """
     arcade = payload.get("arcade") or {}
     strategy = payload.get("strategy") or {}
     playback = payload.get("playback") or {}
@@ -107,6 +122,11 @@ def build_header(payload: dict[str, Any], connection: str) -> dict[str, Any]:
         "playback": f"{speed:.2f}× · {'PAUSED' if paused else 'PLAYING'}",
         "connection": connection,
         "connection_colour": CONNECTION_COLOURS.get(connection, hex_str(TEXT_SECONDARY)),
+        # Both `None` when the loader has no entry for the lap, which is NOT the
+        # same as a green track and must not render as one. The renderer's
+        # unknown treatment is what says so.
+        "track_status": arcade.get("track_status_label"),
+        "track_status_colour": arcade.get("track_status_color"),
     }
 
 

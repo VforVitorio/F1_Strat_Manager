@@ -17,6 +17,7 @@
 
 import type { Connection, Tick } from "../../lib/bridge";
 import { driverStatus } from "../../lib/driverStatus";
+import { trackStatusTreatment } from "../../lib/trackStatus";
 
 interface StatusStripProps {
   tick: Tick | null;
@@ -88,11 +89,29 @@ function StripField({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * The decoded status, or an explicit unknown.
+ * The decoded status, or an explicit unknown, in this strip's chip idiom.
  *
- * A null label means the loader has no TrackStatus entry for this lap, which
- * is NOT a green track. Rendering it as GREEN would be a confident answer to
- * a question nobody asked the data.
+ * **The three-state rule moved to `lib/trackStatus.ts` and is shared with the
+ * AGENTS header**, which renders the same neutralisation in its own idiom. Both
+ * windows are open on one desk; a second copy of this rule is a second chance
+ * for them to disagree, which is exactly what the connection chip did.
+ *
+ * What stays here is the markup, because the two chips are not the same object:
+ * this one is a 1465 x 28 strip cell and the other is a header chip.
+ *
+ * A non-green status is FILLED, and that is the whole of the window's reaction
+ * to a safety car. Before this it was an outline chip swapping its text, `GREEN`
+ * at 54.3 x 18 px against `SAFETY CAR` at about 86 x 18, and nothing else on the
+ * window changed at all: two captures, one green and one under the safety car,
+ * differed in no element but that one.
+ *
+ * The fill is a DIFFERENT amber from the one the pace grid's rail and the race
+ * trace's band use for the same state. The wire sends `SAFETY CAR` as
+ * rgb(255,140,0) while those two use `palette.WARNING` #f59e0b. Both names live
+ * in `palette.py` so neither is a stray literal, and at a glance the two are
+ * indistinguishable; recorded so the next reader finds a decision rather than a
+ * bug. The wire's colour is the right one to fill with, because it is the one
+ * the arcade paints its own banner in on the screen beside this window.
  */
 function TrackStatusChip({
   label,
@@ -103,41 +122,18 @@ function TrackStatusChip({
   colour: [number, number, number] | null;
   frozen: boolean;
 }) {
-  if (!label || !colour) return <span className="strip-chip is-unknown">NO STATUS</span>;
-  // **A dead feed cannot assert a track status.** The track may have gone red in
-  // the seconds since the last tick, and a frozen FILLED `SAFETY CAR` chip would
-  // be worse than a frozen green one: it would look like a live alarm. So the chip
-  // keeps its LABEL - the last thing that was true - and gives up its weight,
-  // rendering as the same dim unknown treatment `NO STATUS` uses.
-  if (frozen) return <span className="strip-chip is-unknown">{label}</span>;
-  const rgb = `rgb(${colour[0]}, ${colour[1]}, ${colour[2]})`;
-  // **A non-green status is FILLED, and that is the whole of the window's
-  // reaction to a safety car.** Before this it was an outline chip swapping its
-  // text - `GREEN` measured 54.3 x 18 px, `SAFETY CAR` about 86 x 18 - inside a
-  // 1465 x 28 strip, and nothing else on the window changed at all. Two captures
-  // of the same window, one green and one under the safety car, differed in no
-  // element but that one; glanced at from the arcade beside it, the race's most
-  // decision-dense state and its calmest looked the same.
-  //
-  // The colour is the wire's own (`track_status_color`, decoded by the producer
-  // out of `palette.py`), so this spends no new constant, and it degrades
-  // honestly: `NO STATUS` above stays the dim unknown chip rather than borrowing
-  // the weight, because an absence is not an alarm.
-  //
-  // It is a DIFFERENT amber from the one the pace grid's rail and the race trace's
-  // band use for the same state - the wire sends `SAFETY CAR` as rgb(255,140,0)
-  // while those two use `palette.WARNING` #f59e0b. Both names live in `palette.py`
-  // so neither is a stray literal, and at a glance the two are indistinguishable;
-  // it is recorded here so the next reader finds a decision rather than a bug. The
-  // wire's colour is the right one to fill with, because it is the one the arcade
-  // paints its own banner in on the screen beside this window.
-  const green = label === "GREEN";
+  const worn = trackStatusTreatment(label, colour, frozen);
+  if (worn.kind === "unknown") return <span className="strip-chip is-unknown">{worn.text}</span>;
   return (
     <span
-      className={green ? "strip-chip" : "strip-chip is-filled"}
-      style={green ? { color: rgb, borderColor: rgb } : { background: rgb, borderColor: rgb }}
+      className={worn.kind === "filled" ? "strip-chip is-filled" : "strip-chip"}
+      style={
+        worn.kind === "filled"
+          ? { background: worn.rgb, borderColor: worn.rgb }
+          : { color: worn.rgb, borderColor: worn.rgb }
+      }
     >
-      {label}
+      {worn.text}
     </span>
   );
 }

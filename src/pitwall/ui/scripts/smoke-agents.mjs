@@ -64,6 +64,11 @@ const VIEW = {
     playback: "2.00× · PLAYING",
     connection: "Connected",
     connection_colour: "#10b981",
+    // Green, so the default page exercises the OUTLINE branch; the filled and
+    // unknown branches are driven explicitly further down. A fixture that
+    // omitted these would only ever render the unknown one.
+    track_status: "GREEN",
+    track_status_colour: [16, 185, 129],
   },
   orchestrator: {
     action: "PIT NOW",
@@ -992,6 +997,71 @@ watchPage(viewPage, failures, "frozen");
 check(
   servedBar === "lap 23 · streaming",
   `a rendered view keeps its own host-built status line, not the polled word ("${servedBar}")`,
+);
+
+// ── The neutralisation chip, all three treatments ────────────────────────────
+//
+// The window said nothing about a safety car before this except as RCM prose
+// inside the RADIO card. What is asserted here is the EFFECT: a non-green status
+// has to be visibly heavier than green, because the failure this replaces is a
+// chip that only swapped its text and that a reader misses at a glance.
+//
+// The unknown branch is asserted too, and it is the one that costs if it is
+// wrong: `null` means the loader had no entry for the lap, which is not a green
+// track.
+const chipFor = async (header) => {
+  const ctx = await browser.newContext({ viewport: CLIENT });
+  const p = await ctx.newPage();
+  watchPage(p, failures);
+  await p.addInitScript(
+    (view) => {
+      window.pywebview = {
+        api: {
+          get_agents_view: async (s) => (s >= view.seq ? null : view),
+          get_tick: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    },
+    { ...VIEW, header: { ...VIEW.header, ...header } },
+  );
+  await p.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await p.waitForSelector(".agent-card", { timeout: 5000 });
+  await p.waitForTimeout(400);
+  const seen = await p.evaluate(() => {
+    const chips = [...document.querySelectorAll(".header-bar .chip")];
+    const el = chips.find((c) => /GREEN|SAFETY CAR|VSC|RED|YELLOW|NO STATUS/.test(c.textContent));
+    if (!el) return null;
+    const s = getComputedStyle(el);
+    return { text: el.textContent, weight: s.fontWeight, background: s.backgroundColor };
+  });
+  await ctx.close();
+  return seen;
+};
+
+const greenChip = await chipFor({ track_status: "GREEN", track_status_colour: [16, 185, 129] });
+const scChip = await chipFor({ track_status: "SAFETY CAR", track_status_colour: [255, 140, 0] });
+const blindChip = await chipFor({ track_status: null, track_status_colour: null });
+
+check(greenChip?.text === "GREEN", `the header carries the track status ("${greenChip?.text}")`);
+check(scChip?.text === "SAFETY CAR", `a safety car reaches the header ("${scChip?.text}")`);
+check(
+  scChip?.background === "rgb(255, 140, 0)",
+  `the safety car chip is FILLED with the wire's own colour (${scChip?.background})`,
+);
+check(
+  Number(scChip?.weight) > Number(greenChip?.weight),
+  `a neutralised track is heavier than a green one (${scChip?.weight} vs ${greenChip?.weight})`,
+);
+check(
+  blindChip?.text === "NO STATUS",
+  `an absent status says so rather than rendering green ("${blindChip?.text}")`,
+);
+check(
+  blindChip?.background !== "rgb(255, 140, 0)",
+  "an absence does not borrow the alarm's weight",
 );
 
 await browser.close();
