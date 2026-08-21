@@ -56,6 +56,11 @@ export interface HeaderView {
   playback: string;
   connection: string;
   connection_colour: string;
+  /** The tick's decoded TrackStatus, `null` when the loader has no entry for
+   *  the lap. `null` is NOT a green track and must not render as one. */
+  track_status: string | null;
+  /** The wire's own colour for it, so neither window decodes the digits. */
+  track_status_colour: [number, number, number] | null;
 }
 
 export interface PaceHistoryRow {

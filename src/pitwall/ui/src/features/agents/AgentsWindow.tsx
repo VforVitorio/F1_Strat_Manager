@@ -77,6 +77,11 @@ const IDLE_VIEW: AgentsView = {
     driver: "--",
     lap: "L 0/0",
     playback: "-- × · --",
+    // `null` before a view arrives, which renders the unknown chip. There is no
+    // tick yet, so the window genuinely does not know the track status, and
+    // "GREEN" here would be a claim it cannot make.
+    track_status: null,
+    track_status_colour: null,
     // Overwritten from the polled channel below while there is no view. It is
     // a placeholder, not a claim: the host owns both the word and its colour
     // (`agents_view/panels.CONNECTION_COLOURS`), and this literal used to
