@@ -31,11 +31,9 @@
  * frozen/starved question.
  */
 
-import { useMemo, useRef } from "react";
 import type { Tick } from "../../lib/bridge";
-import type { Discontinuity } from "../../lib/frameClock";
 import { TraceStack } from "./TraceStack";
-import { TraceAccumulator, deltaSeries } from "./traceBuffer";
+import type { TraceFrame } from "./useTraceFrame";
 
 // --- What the stack does not own -----------------------------------------
 //
@@ -51,33 +49,26 @@ const MIN_CREDIBLE_CIRCUIT_M = 100;
 
 interface OwnCarTracesProps {
   tick: Tick;
-  discontinuity: Discontinuity;
+  /**
+   * The accumulated buffers, owned by `DataWindow`.
+   *
+   * **A prop rather than a `useRef` here, and that is the fix for #1056.** This
+   * component is rendered conditionally by the tab strip, so it unmounts when the
+   * reader leaves TRACES; owning the buffer meant losing the rest of the lap, with
+   * nothing on the wire able to rebuild it.
+   */
+  frame: TraceFrame;
   /** The producer is gone; these buffers will not fill. */
   frozen?: boolean;
 }
 
-export function OwnCarTraces({ tick, discontinuity, frozen = false }: OwnCarTracesProps) {
-  const accumulator = useRef(new TraceAccumulator());
+export function OwnCarTraces({ tick, frame, frozen = false }: OwnCarTracesProps) {
   const { arcade } = tick;
   const rivalCode = arcade.driver_rival;
 
-  // Keyed on the sequence, so one tick is folded in once per tick even
-  // though StrictMode runs this factory twice - `ingest` is idempotent for
-  // exactly that reason. The X lock is derived here too: `circuit_length_m`
-  // rides on every tick, so unlike Qt there is no first-time flag to hold.
-  const frame = useMemo(() => {
-    const { telemetry } = arcade;
-    // The producer's own eviction signals, plus the clock's - `FrameClock`
-    // sees a backwards jump smaller than one broadcast that the flags miss.
-    const evict =
-      telemetry.rewound || telemetry.dropped > 0 || discontinuity.kind !== "continuous";
-    accumulator.current.ingest(telemetry.main, telemetry.rival, evict);
-    const main = accumulator.current.mainTrace;
-    const rival = accumulator.current.rivalTrace;
-    return { main, rival, delta: deltaSeries(main, rival) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick.seq]);
-
+  // The X lock is derived here because `circuit_length_m` rides on every tick, so
+  // unlike Qt there is no first-time flag to hold. The BUFFERS are not derived
+  // here any more; see the `frame` prop.
   const xMax =
     arcade.circuit_length_m > MIN_CREDIBLE_CIRCUIT_M ? arcade.circuit_length_m : FALLBACK_X_MAX;
 
