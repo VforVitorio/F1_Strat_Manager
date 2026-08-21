@@ -53,10 +53,31 @@ def _pace_lines(p: dict[str, Any]) -> list[str]:
 
 
 def _tire_lines(t: dict[str, Any]) -> list[str]:
+    """N26's dump, with the two cost fields the console used to leave on the wire.
+
+    `deg_cost_s` is the one the scorers consume: seconds a lap that staying out
+    costs against a fresh set, bounded, with this stint's baseline cancelled. It
+    sits directly under `deg_rate` because it is the corrective to it - `deg_rate`
+    is a RAW lap-to-lap derivative that fuel burn cancels, negative on 43 of 110
+    measured laps and not monotonic by tyre-life band, so a reader taking it as
+    the wear signal is reading the wrong row (`tire_agent.py`'s own docstring).
+
+    `cumulative_deg_s` is the level rather than the cost, and it carries a
+    per-stint offset with a 5.48 s standard deviation across stints, so it is not
+    comparable between cars or laps. It is here as a model detail, which is what
+    this dump is, and not on the card.
+
+    Both are `None` and never 0.0 when the TCN did not run or its output did not
+    parse, because 0.0 is a reading a genuinely fresh tyre produces. `_fnum`
+    renders that absence rather than a number; do not give either a numeric
+    default.
+    """
     return [
         f"compound          = {t.get('compound', '—')}",
         f"current_tyre_life = {t.get('current_tyre_life', '—')} laps",
         f"deg_rate          = {_fnum(t.get('deg_rate'), 3)}s/lap",
+        f"deg_cost_s        = {_fnum(t.get('deg_cost_s'), 3)}s/lap",
+        f"cumulative_deg_s  = {_fnum(t.get('cumulative_deg_s'), 3)}s/lap",
         f"laps_to_cliff_p10 = {_fnum(t.get('laps_to_cliff_p10'), 1)}",
         f"laps_to_cliff_p50 = {_fnum(t.get('laps_to_cliff_p50'), 1)}",
         f"laps_to_cliff_p90 = {_fnum(t.get('laps_to_cliff_p90'), 1)}",

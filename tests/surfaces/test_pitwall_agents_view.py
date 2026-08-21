@@ -421,6 +421,52 @@ def test_every_reasoning_tab_body_is_reachable_from_its_card_tooltip():
         assert "own sentence for this lap" in rendered, f"{key}'s reasoning is not reachable"
 
 
+def test_the_tyre_console_reports_what_the_wear_has_cost():
+    """`deg_cost_s` and `cumulative_deg_s` reach a pixel, and an absent one is not a zero.
+
+    Both ride the tick on every lap because the producer `asdict`s the whole
+    `TireOutput`, and until now neither appeared anywhere in PITWALL. `deg_cost_s`
+    is the field the scorers consume; `deg_rate`, which the console DID show, is a
+    raw derivative that fuel burn cancels and that its own docstring says does not
+    separate a worn tyre from a fresh one.
+
+    The second half is the one that matters more. Both fields are `None` rather
+    than 0.0 when the TCN did not run, deliberately, because 0.0 is what a
+    genuinely fresh set reads - so a renderer that defaulted them to a number
+    would print a real-looking measurement for a missing one. This asserts the
+    absence renders AS an absence, which a test that only checked the populated
+    case would never see.
+
+    Asserted on the rendered tooltip rather than on `_tire_lines`, because what is
+    being claimed is that a reader can see them.
+    """
+
+    def tyre_rows(block: dict) -> str:
+        latest = _latest()
+        latest["per_agent"]["tire"].update(block)
+        view = _host(_payload(latest=latest)).get_agents_view(-1)
+        tooltip = view["cards"]["tire"]["tooltip"]
+        assert tooltip is not None, "the TIRE card has no tooltip to carry a dump"
+        return " | ".join(
+            f"{row['lead']}={row['text']}"
+            for section in tooltip["sections"]
+            for row in section["rows"]
+        )
+
+    measured = tyre_rows({"deg_cost_s": 0.412, "cumulative_deg_s": 1.284})
+    assert "deg_cost_s=0.412s/lap" in measured, (
+        f"the cost the scorers read is not shown: {measured}"
+    )
+    assert "cumulative_deg_s=1.284s/lap" in measured, f"the level is not shown: {measured}"
+
+    absent = tyre_rows({"deg_cost_s": None, "cumulative_deg_s": None})
+    for field in ("deg_cost_s", "cumulative_deg_s"):
+        assert f"{field}=—s/lap" in absent, f"{field} does not render its absence: {absent}"
+        assert f"{field}=0.000s/lap" not in absent, (
+            f"{field} printed a fresh-tyre reading for a missing one: {absent}"
+        )
+
+
 # A string that is harmless as TEXT and a tag as MARKUP. Not a curiosity: the
 # orchestrator's `undercut_target` is an unconstrained `Optional[str]` an LLM
 # fills, and every card headline and body line still reaches the window through
