@@ -145,7 +145,19 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
                     }
                 ],
                 "alerts": [{"intent": "PROBLEM", "driver": "NOR"}],
-                "corrections": [],
+                # A mismatch against the radio above, because an empty list here
+                # leaves the section this fixture exists to exercise invisible.
+                # N29 only fills this on an LLM profile, so the free dev path is
+                # the ONLY way to see it without spending a call.
+                "corrections": [
+                    {
+                        "driver": "NOR",
+                        "original_intent": "PROBLEM",
+                        "suggested_intent": "INFORMATION",
+                        "span": "especially through the last sector",
+                        "reason": "reads as a description of where, not a request to act",
+                    }
+                ],
                 "reasoning": "The driver reports rear grip fading; sector 2 is under yellow.",
             },
             pit={

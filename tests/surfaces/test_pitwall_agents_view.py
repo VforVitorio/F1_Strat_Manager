@@ -653,6 +653,84 @@ def test_the_tooltips_return_data_and_never_markup():
         assert "<" not in repr(value), f"markup reached the view: {value!r}"
 
 
+def test_the_radio_tooltip_carries_the_nlp_corrections():
+    """N29's mismatch list reaches the popup, and an LLM string in it is not markup.
+
+    `corrections` rides the tick on every lap, because the producer `asdict`s the
+    whole `RadioOutput`, and reached nothing. It is what lets a reader judge how
+    much to trust a quoted message: the classifier said PROBLEM, the LLM read the
+    text and disagreed, and `alerts` stays deterministic either way.
+
+    Every field of an entry is LLM-filled free text with no pattern and no length
+    bound, which is the same shape as the `undercut_target` that reached a markup
+    sink in #1037. The tooltip is data rather than markup, so the guarantee here
+    is that it stays data.
+    """
+    from src.pitwall.agent_formatters import radio_tooltip
+
+    built = radio_tooltip(
+        {
+            "radio_events": [
+                {"driver": "NOR", "message": "Box now", "analysis": {"intent": "PROBLEM"}}
+            ],
+            "rcm_events": [],
+            "corrections": [
+                {
+                    "driver": "NOR",
+                    "original_intent": "PROBLEM",
+                    "suggested_intent": "INFORMATION",
+                    "span": "Box now",
+                    "reason": "a routine call, not a complaint",
+                }
+            ],
+        }
+    )
+    section = built["sections"][-1]
+    assert section["title"] == "NLP corrections", (
+        f"the corrections never reach the popup: {[s['title'] for s in built['sections']]}"
+    )
+    assert section["rows"] == [
+        {
+            "lead": "NOR PROBLEM reads as INFORMATION",
+            "text": 'a routine call, not a complaint Quoted: "Box now"',
+        }
+    ]
+    # It qualifies the messages above it, so a reader meets the message first.
+    assert [s["title"] for s in built["sections"]] == ["Radio", "NLP corrections"]
+
+    # A lap with a correction and no events still has something to say.
+    only = radio_tooltip({"radio_events": [], "rcm_events": [], "corrections": [{"reason": "r"}]})
+    assert only is not None and only["sections"][0]["title"] == "NLP corrections"
+
+    # A hostile entry stays DATA: carried verbatim, in a str, never assembled into
+    # a markup string here. That is this tooltip's whole contract - it decides what
+    # is said and the TSX decides how it looks, so the string reaches a React text
+    # node, which is not a parser. The thing to guard is therefore not escaping but
+    # SHAPE: the moment any of this is concatenated into markup, the sink is back
+    # and the escaping question returns with it (#1037).
+    hostile = radio_tooltip(
+        {
+            "radio_events": [],
+            "rcm_events": [],
+            "corrections": [
+                {
+                    "driver": _HOSTILE,
+                    "original_intent": _HOSTILE,
+                    "suggested_intent": _HOSTILE,
+                    "span": _HOSTILE,
+                    "reason": _HOSTILE,
+                }
+            ],
+        }
+    )
+    row = hostile["sections"][0]["rows"][0]
+    assert set(row) == {"lead", "text"} and all(isinstance(v, str) for v in row.values())
+    assert _HOSTILE in row["text"], f"the hostile string was dropped rather than carried: {row}"
+    assert "&lt;" not in row["text"], (
+        "escaped here, this string would render as visible entity noise in a text node"
+    )
+
+
 def test_the_two_charts_bound_their_axes_to_what_they_actually_draw():
     """The headline chart fix of sprint 8, which shipped with no guard (#966).
 
