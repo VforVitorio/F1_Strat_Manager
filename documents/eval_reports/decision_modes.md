@@ -59,9 +59,14 @@ This tier used to build its own ``RaceState`` instead of calling
 ``src/agents/race_state_builder.build_race_state``, and two of the fields it
 invented were constants: ``gap_ahead_s`` came from a key the driver dict does
 not carry, so it was **2.0 s on every lap of every race**, and ``pace_delta_s``
-was hardcoded to 0.0. Both feed N27's overtake scoring and the Monte Carlo this
-tier grades, so every figure published before this fix described a stack fed two
-constants. **Figures generated before 2026-08-06 are not comparable to these.**
+was hardcoded to 0.0. Both reach the orchestrator's synthesis prompt, which is
+what this tier grades, so every figure published before this fix described a
+synthesis told on every lap that the car ahead sat exactly 2.0 s away and matched
+its pace. **Figures generated before 2026-08-06 are not comparable to these.**
+
+They do not reach N27, which derives its own pair gap from ``laps_df``, nor the
+Monte Carlo, which takes the rivals list from the lap state. An earlier wording
+here said they did.
 
 ### Scope
 

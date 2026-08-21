@@ -337,9 +337,17 @@ def _decisions_in_window(
     # construct its own ``RaceState`` and two of its fields were constants: the gap
     # to the car ahead was `car.get("gap_ahead_s") or 2.0` on a dict that has no
     # such key (it carries `gap_to_leader_s`), so 2.0 was the value on 100% of laps
-    # of every race, and `pace_delta_s` was hardcoded to 0.0 beside it. Both feed
-    # N27's overtake scoring and the Monte Carlo this tier grades, so every figure
-    # it published described a stack fed two constants (#829).
+    # of every race, and `pace_delta_s` was hardcoded to 0.0 beside it. Both reach
+    # the orchestrator's SYNTHESIS PROMPT, which is the thing this tier grades, so
+    # every figure it published described a synthesis told on every lap that the car
+    # ahead sat exactly 2.0 s away and matched its pace (#829).
+    #
+    # Where they do NOT reach, because saying it wrongly is what #1044 corrected in
+    # four places at once: N27 derives its own pair gap from laps_df and pairs by
+    # position, and the Monte Carlo takes `lap_state["rivals"]` rather than anything
+    # off the RaceState (`engine.py`'s mc stage passes `rivals=`, `position=`,
+    # `laps_remaining=`, `pit_context=`). The invalidation stands; the route is the
+    # prompt.
     #
     # Imported here and not at module scope because ``build_race_state`` lazily
     # imports ``RaceState`` from the orchestrator on CALL, which pulls the whole
@@ -685,9 +693,14 @@ def _render_table(
         "``src/agents/race_state_builder.build_race_state``, and two of the fields it",
         "invented were constants: ``gap_ahead_s`` came from a key the driver dict does",
         "not carry, so it was **2.0 s on every lap of every race**, and ``pace_delta_s``",
-        "was hardcoded to 0.0. Both feed N27's overtake scoring and the Monte Carlo this",
-        "tier grades, so every figure published before this fix described a stack fed two",
-        "constants. **Figures generated before 2026-08-06 are not comparable to these.**",
+        "was hardcoded to 0.0. Both reach the orchestrator's synthesis prompt, which is",
+        "what this tier grades, so every figure published before this fix described a",
+        "synthesis told on every lap that the car ahead sat exactly 2.0 s away and matched",
+        "its pace. **Figures generated before 2026-08-06 are not comparable to these.**",
+        "",
+        "They do not reach N27, which derives its own pair gap from ``laps_df``, nor the",
+        "Monte Carlo, which takes the rivals list from the lap state. An earlier wording",
+        "here said they did.",
         "",
         "### Scope",
         "",

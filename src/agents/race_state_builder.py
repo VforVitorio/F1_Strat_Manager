@@ -107,8 +107,13 @@ def _targeting_against_rival(
     Returns ``(gap_ahead_s, pace_delta_s)`` framed around the rival the user
     picked in the Strategy tab, so the recommendation reasons about the duel the
     user actually asked for instead of about whichever car happens to sit one
-    position ahead (#431). Both values land on the RaceState, which feeds N27's
-    overtake scoring inputs and the orchestrator's synthesis prompt.
+    position ahead (#431). Both values land on the RaceState, and from there they
+    reach the orchestrator's synthesis prompt (its RACE CONTEXT block) and
+    nothing else. They do NOT re-target the sub-agents: N27 derives its own pair
+    gap from laps_df against the car one position ahead, and N28 picks undercut
+    candidates positionally too, so choosing a rival reframes what the synthesis
+    READS, never what the models SCORE. Anything that needs the models to analyse
+    a chosen car is a different piece of work.
 
     gap_ahead_s is the absolute on-track interval to the rival, read from the
     rival's ``interval_to_driver_s`` (rival elapsed time minus ours: the sign
