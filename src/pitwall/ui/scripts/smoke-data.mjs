@@ -3894,6 +3894,93 @@ check(
   `the status bar tracks the same two states (up: "${waitingUp.bar}", down: "${waitingDown.bar}")`,
 );
 
+// ── Leaving TRACES and coming back keeps the lap (#1056) ─────────────────────
+//
+// The tab strip renders `OwnCarTraces` conditionally, so leaving TRACES unmounts
+// it. While the accumulator lived inside that component the unmount destroyed it
+// and the six panels restarted from wherever the car was on the way back, with
+// the rest of the lap gone and nothing on the wire able to rebuild it: the span
+// carries only what happened since the last tick.
+//
+// The assertion is the EFFECT and it has to be the LEFT edge of the data. Asking
+// whether the chart has points would pass against the defect, because after the
+// remount it has plenty of them; what it does not have is the beginning.
+{
+  const span = (from) =>
+    [0, 1, 2, 3, 4].map((i) => ({
+      lap: 24,
+      t: 10 + from / 100 + i,
+      dist: from + i * 100,
+      speed: 200 + i * 10,
+      throttle: 50 + i,
+      brake: 0,
+      gear: 6,
+      drs: 8,
+    }));
+
+  const ctx = await browser.newContext({ viewport: CLIENT });
+  const tabPage = await ctx.newPage();
+  watchPage(tabPage, failures, "tab-return");
+  await tabPage.addInitScript((payload) => {
+    window.__ticks = [payload];
+    window.__cursor = 0;
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) => {
+          if (window.__ticks[window.__cursor].seq === sinceSeq) {
+            if (window.__cursor + 1 >= window.__ticks.length) return null;
+            window.__cursor += 1;
+          }
+          return window.__ticks[window.__cursor];
+        },
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, tick(1, { main: span(100), rivalSpan: [] }));
+
+  await tabPage.goto(url, { waitUntil: "domcontentloaded" });
+  await tabPage.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+
+  const feed = async (payload) => {
+    await tabPage.evaluate((t) => window.__ticks.push(t), payload);
+    await tabPage.waitForTimeout(260);
+  };
+  const leftEdge = () =>
+    tabPage.evaluate(() => {
+      const el = document.querySelector(".trace-stack-plot");
+      const series = el.__pitwallChart.getOption().series.filter((x) => x.data?.length);
+      const xs = series.flatMap((x) => x.data.map((p) => p[0]));
+      return xs.length ? Math.min(...xs) : null;
+    });
+
+  await feed(tick(2, { main: span(600), rivalSpan: [] }));
+  const before = await leftEdge();
+
+  // Away, and the producer keeps sending while the panel is unmounted.
+  await tabPage.getByRole("tab", { name: "RACE PACE" }).click();
+  await tabPage.waitForTimeout(200);
+  check(
+    (await tabPage.locator(".trace-stack-plot").count()) === 0,
+    "leaving TRACES really unmounts the panel, or this check proves nothing",
+  );
+  await feed(tick(3, { main: span(1100), rivalSpan: [] }));
+  await feed(tick(4, { main: span(1600), rivalSpan: [] }));
+
+  await tabPage.getByRole("tab", { name: "TRACES" }).click();
+  await tabPage.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  await tabPage.waitForTimeout(300);
+  const after = await leftEdge();
+
+  check(before === 100, `the lap starts where the first span did (${before})`);
+  check(
+    after === before,
+    `returning to TRACES keeps the whole lap, not just what arrived after (${after} vs ${before})`,
+  );
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 

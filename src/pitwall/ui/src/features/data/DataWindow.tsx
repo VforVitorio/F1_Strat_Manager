@@ -25,6 +25,7 @@ import { useState } from "react";
 
 import { BestsPanel } from "./BestsPanel";
 import { OwnCarTraces } from "./OwnCarTraces";
+import { useTraceFrame } from "./useTraceFrame";
 import { RacePaceGrid } from "./RacePaceGrid";
 import { RaceTraceChart } from "./RaceTraceChart";
 import { RadioFeed } from "./RadioFeed";
@@ -53,6 +54,13 @@ const TABS = [
 
 export function DataWindow() {
   const { tick, discontinuity, live } = useTick();
+  // **Owned here, not in the panel that draws it (#1056).** The tab strip renders
+  // `OwnCarTraces` conditionally, so a reader leaving TRACES unmounts it; a buffer
+  // living inside it was destroyed and the rest of the lap went with it, because
+  // the wire carries only the span since the last tick and cannot backfill. This
+  // component sees every tick whichever tab is showing, so ingestion continues
+  // while the panel is away.
+  const traceFrame = useTraceFrame(tick, discontinuity);
   const connection = useConnection();
   const bulk = useBulk();
   const liveLap = useLiveLap();
@@ -125,7 +133,9 @@ export function DataWindow() {
               </nav>
               {tab === "traces" && (
                 <div className="band4">
-                  <OwnCarTraces tick={tick} discontinuity={discontinuity} frozen={frozen} />
+                  {traceFrame && (
+                    <OwnCarTraces tick={tick} frame={traceFrame} frozen={frozen} />
+                  )}
                   <div className="side-column">
                     <TrackRing arcade={tick.arcade} />
                     <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />
