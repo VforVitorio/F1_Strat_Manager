@@ -87,9 +87,21 @@ export function PlanTimeline({ view }: { view: PlanTimelineView }) {
       </div>
 
       {/* The orchestrator's own plan line, verbatim, including the compound
-          pill it can carry. That pill is an HTML span built and escaped in
-          `src/arcade/palette.py` and it is the last markup sink on this
-          window's decision surface. */}
+          pill it can carry - an HTML span built and escaped in
+          `src/arcade/palette.py`.
+
+          **This comment used to call that pill "the last markup sink on this
+          window's decision surface", and the exit gate found the hole one line
+          away from the sentence.** The pill was escaped; `undercut_target`
+          beside it was not, and it is an unconstrained `Optional[str]` the
+          orchestrator LLM fills - `<img src=x onerror=...>` reached this
+          caption verbatim. `_plan_line` escapes every field it interpolates
+          now, and `test_no_agent_string_can_become_markup` feeds a hostile
+          string through every formatter rather than trusting a list of sites.
+
+          The sink itself is still here, and it is still the reason #1036 wants
+          the pill to become a typed segment: a component that renders HTML is
+          one escape away from this every time somebody adds a field. */}
       <p className="plan-caption" dangerouslySetInnerHTML={{ __html: view.caption }} />
     </div>
   );
