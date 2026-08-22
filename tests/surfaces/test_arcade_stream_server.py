@@ -1,15 +1,16 @@
 """The broadcast server must never block the caller (`src/arcade/stream.py`).
 
 `broadcast()` is called from the pyglet main thread on every due
-`on_update`. `sendall` blocks. A subscriber that stops reading therefore
-used to freeze the replay window itself, and the sprint's span change made
-that far likelier by enlarging the message: the measured time-to-freeze
-fell from about 130 s to 0.7 s, with the product always opening two
-subscribers.
+`on_update`, and it takes a FACTORY: the caller neither builds the payload
+nor encodes it nor sends it, because all three used to cost the frame loop
+milliseconds it does not have (#1049). `sendall` blocks too, which is why
+the write moved to the sender thread first.
 
-These tests pin the two properties that make that impossible: the caller
-returns promptly whatever the socket does, and a consumer that falls
-behind loses stale payloads rather than the newest one.
+These tests pin the properties that make a stall impossible: the caller
+returns promptly whatever the socket does AND without running the factory,
+a consumer that falls behind loses stale payloads rather than the newest
+one, and a factory that raises costs its own tick rather than the thread
+every later tick depends on.
 """
 
 from __future__ import annotations
@@ -54,7 +55,10 @@ def test_broadcast_returns_immediately_even_when_a_client_has_stalled():
         assert stalled.started.wait(timeout=2.0) or True  # let the sender pick one up
         started = time.perf_counter()
         for seq in range(20):
-            server.broadcast({"seq": seq})
+            # `seq=seq` is not decoration: the factory runs on another thread
+            # after this loop has finished, so a closure over the loop
+            # variable would encode 19 twenty times.
+            server.broadcast(lambda seq=seq: {"seq": seq})
         elapsed = time.perf_counter() - started
 
         # 20 ticks is two seconds of real playback; anything near the 5 s the
@@ -62,6 +66,68 @@ def test_broadcast_returns_immediately_even_when_a_client_has_stalled():
         assert elapsed < 0.5, f"broadcast blocked the caller for {elapsed:.2f}s"
     finally:
         stalled.close()
+        server._running = False
+
+
+def test_broadcast_does_not_BUILD_the_payload_on_the_caller_s_thread():
+    """The EFFECT #1049 is about, asserted on the thread the work ran on.
+
+    A test that only compared the bytes before and after would pass with the
+    build still inline, because moving work between threads does not change
+    what it produces. So the factory records who called it, and the assertion
+    is that it was not the caller.
+
+    The 3.19 ms a steady 8x tick used to cost the frame loop is the reason;
+    a seek tick under schema v2 is 32 ms, about two dropped frames at 60 FPS.
+    """
+    ran_on: list[int] = []
+    server = _server_with(type("C", (), {"sendall": lambda self, m: None})())
+    try:
+        caller = threading.get_ident()
+
+        def build() -> dict:
+            ran_on.append(threading.get_ident())
+            return {"seq": 1}
+
+        server.broadcast(build)
+        assert ran_on == [], "the factory ran before broadcast() returned"
+
+        deadline = time.time() + 5
+        while not ran_on and time.time() < deadline:
+            time.sleep(0.01)
+        assert ran_on, "the factory never ran at all"
+        assert ran_on[0] != caller, "the payload was still built on the caller's thread"
+    finally:
+        server._running = False
+
+
+def test_a_factory_that_raises_costs_its_tick_and_not_the_sender_thread():
+    """A daemon that dies is silent, and takes every later tick with it.
+
+    `_send_loop` is where the factory now runs, and it is the one body in this
+    module that had no guard: an exception there ends the only thread that
+    writes to a socket, while the replay window keeps running and every
+    subscriber keeps a connection that will never carry another byte.
+    `_accept_loop` already pays for this lesson.
+    """
+    sent: list[bytes] = []
+    server = _server_with(type("C", (), {"sendall": lambda self, m: sent.append(m)})())
+    try:
+
+        def explode() -> dict:
+            raise ValueError("a model output nobody guarded")
+
+        server.broadcast(explode)
+        time.sleep(0.3)
+        assert sent == [], "the raising tick must not reach a socket"
+
+        server.broadcast(lambda: {"seq": 2})
+        deadline = time.time() + 5
+        while not sent and time.time() < deadline:
+            time.sleep(0.01)
+        assert sent, "the sender thread died with the tick that raised"
+        assert json.loads(sent[0])["seq"] == 2
+    finally:
         server._running = False
 
 
@@ -82,7 +148,7 @@ def test_a_consumer_that_falls_behind_loses_the_STALE_payloads():
     server = _server_with(_SlowClient())
     try:
         for seq in range(50):
-            server.broadcast({"seq": seq})
+            server.broadcast(lambda seq=seq: {"seq": seq})
         gate.set()
         time.sleep(0.4)
 
@@ -100,7 +166,7 @@ def test_nothing_non_finite_reaches_a_socket():
     sent: list[bytes] = []
     server = _server_with(type("C", (), {"sendall": lambda self, m: sent.append(m)})())
     try:
-        server.broadcast({"seq": 1, "model": {"lap_time_s": float("nan")}})
+        server.broadcast(lambda: {"seq": 1, "model": {"lap_time_s": float("nan")}})
         time.sleep(0.3)
 
         assert sent, "a NaN must cost its field, not the whole message"
@@ -245,7 +311,7 @@ def test_a_pruned_subscriber_is_closed_so_it_can_notice_and_reconnect():
         payload = {"filler": "x" * 20000}
         deadline = time.time() + 15
         while server.client_count() > 0 and time.time() < deadline:
-            server.broadcast(payload)
+            server.broadcast(lambda: payload)
             time.sleep(0.02)
         assert server.client_count() == 0, "the server never pruned the stalled subscriber"
 
