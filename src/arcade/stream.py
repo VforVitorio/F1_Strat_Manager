@@ -48,16 +48,25 @@ import select
 import socket
 import threading
 import time
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
 # How long a client may take to accept a broadcast before it is treated as
-# dead. `sendall` is called from the pyglet main thread, so a subscriber that
-# stops reading blocks the replay window itself, not just its own view. The
-# span change made that worse rather than better: a bigger message fills the
-# socket buffer in fewer broadcasts, cutting the measured time-to-freeze from
-# about 130 s to 0.7 s. A real dashboard on localhost accepts a 30 KB message
-# in microseconds, so anything past 50 ms is not slow, it is gone.
+# dead. It bounds what ONE subscriber can cost the sender thread, which is
+# also the thread that builds and encodes the next payload, so a stalled
+# client delays the next tick rather than blocking the replay window. (This
+# comment used to say `sendall` ran on the pyglet main thread and froze the
+# window itself. That stopped being true in `d24a59e1`, which moved the write
+# to `_send_loop`; the rewrite reached `broadcast`'s docstring and not this
+# constant.)
+#
+# The threshold that matters is bytes buffered rather than seconds: a bigger
+# message fills a stalled subscriber's socket buffer in fewer broadcasts, so
+# it is pruned sooner. Measured against a peer that never reads, the time to
+# prune fell from 1.26 s with two telemetry spans to 0.50 s with twenty.
+# A real dashboard on localhost accepts a 30 KB message in microseconds, so
+# anything past 50 ms is not slow, it is gone.
 CLIENT_SEND_TIMEOUT_S = 0.05
 # A transient `accept()` error is retried rather than treated as shutdown, but
 # a listening socket that keeps failing is not going to recover, and a hot
@@ -147,14 +156,15 @@ def _blame(value, path: str = "") -> str:
 
 
 class TelemetryStreamServer:
-    """Non-blocking TCP server that broadcasts JSON dicts to all clients.
+    """Non-blocking TCP server that broadcasts JSON payloads to all clients.
 
-    Runs in a daemon thread, accepts up to many simultaneous connections,
-    writes `json.dumps(data).encode() + b"\\n"` to every live socket on
-    `broadcast()`. Dead sockets are pruned on the next broadcast; no
-    heartbeat needed because the replay pushes at ≥5 Hz. Designed to be
-    started inside `F1ArcadeView._init_strategy_layer` and torn down in
-    `on_hide_view`."""
+    Two daemon threads: one accepts connections, one drains the outbox.
+    `broadcast()` takes a FACTORY and queues it; the sender thread runs it,
+    encodes the result as `json.dumps(...).encode() + b"\\n"` and writes that
+    to every live socket, so the caller never builds, encodes or sends. Dead
+    sockets are pruned on the next broadcast; no heartbeat needed because the
+    replay pushes at >=5 Hz. Designed to be started inside
+    `F1ArcadeView._init_strategy_layer` and torn down in `on_hide_view`."""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 9998) -> None:
         self.host = host
@@ -166,7 +176,7 @@ class TelemetryStreamServer:
         # Depth 1 with drop-oldest. Each payload is a COMPLETE snapshot, not a
         # delta, so a consumer that falls behind wants the newest one and
         # nothing else; `seq` is what makes the discard visible to it.
-        self._outbox: queue.Queue[bytes] = queue.Queue(maxsize=1)
+        self._outbox: queue.Queue[Callable[[], dict]] = queue.Queue(maxsize=1)
 
     def start(self) -> None:
         """Bind the listening socket and spawn the accept thread."""
@@ -204,26 +214,49 @@ class TelemetryStreamServer:
             self._clients.clear()
         logger.info("TelemetryStreamServer stopped")
 
-    def broadcast(self, data: dict) -> None:
-        """Queue one JSON-encoded payload for every connected client.
+    def broadcast(self, build: Callable[[], dict]) -> None:
+        """Queue one payload for every connected client, BUILT off this thread.
 
-        **Returns without touching a socket.** `sendall` blocks, and this is
-        called from the pyglet main thread on `on_update`, so a subscriber
-        that stops reading used to freeze the replay window itself — not its
-        own view, the whole race. The span change made that far likelier by
-        enlarging the message: the measured time-to-freeze against a stalled
-        client fell from about 130 s to 0.7 s, and the product always opens
-        two subscribers.
+        Takes a factory rather than a dict, and that is the whole point. The
+        caller is the pyglet frame loop, and assembling a tick is not cheap:
+        measured on the real Melbourne 2025 replay, `_broadcast_if_due` cost
+        its caller 3.19 ms on a steady 8x tick and 5.41 ms on a seek, of which
+        the recursive `asdict` over the decision history is 2.48 ms and the
+        JSON encode 1.81 ms. Schema v2's twenty telemetry spans take the seek
+        tick to 32 ms, about two dropped frames at 60 FPS. Handing over a
+        closure moves all of it to the sender thread that already existed for
+        `sendall`, and leaves the frame loop paying one queue put.
 
-        The encode stays here, on the caller's thread: it is sub-millisecond,
-        it keeps wire order deterministic, and it keeps the "which field was
-        NaN" log next to the tick that produced it."""
+        **Returns without touching a socket, and without calling `build`.**
+
+        What supersede-drop discards is now the JOB rather than the bytes, one
+        stage earlier and with the same policy: each payload is a complete
+        snapshot, so a consumer that falls behind wants the newest and nothing
+        else. A tick that misses its slot is never built at all."""
         if not self._running:
             return
         with self._clients_lock:
             if not self._clients:
                 return
-        payload = _json_safe(data)
+        self._enqueue(build)
+
+    def _encode(self, build: Callable[[], dict]) -> bytes | None:
+        """Run one payload factory and encode the result, or say why not.
+
+        Both halves are guarded because both run on the sender daemon now, and
+        a daemon thread that raises dies silently: the replay window keeps
+        running, subscribers keep their sockets open, and nothing is ever sent
+        again. `_accept_loop` below carries the same lesson for the same
+        reason. That is why the factory's guard is deliberately broad, and why
+        it logs rather than passing: the payload is assembled from twenty
+        drivers' telemetry and five agents' dataclasses, so enumerating what it
+        can raise means enumerating all of that.
+        """
+        try:
+            data = build()
+        except Exception:
+            logger.exception("Broadcast dropped, the payload factory raised")
+            return None
         try:
             # allow_nan=False is what makes the "nothing non-finite reaches
             # the wire" promise above a mechanism rather than a claim. The
@@ -231,22 +264,27 @@ class TelemetryStreamServer:
             # Python's own parser reads it back, and JSON.parse rejects the
             # whole message. A web consumer would have lost every tick that
             # carried one model output it could not compute.
-            message = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode() + b"\n"
+            payload = _json_safe(data)
+            return json.dumps(payload, separators=(",", ":"), allow_nan=False).encode() + b"\n"
         except (TypeError, ValueError) as exc:
             # Dropping the message is the point: an unparseable one is worse
             # than a missing one, and `seq` makes the hole visible. Blame the
             # ORIGINAL, not the sanitised copy: the copy cannot contain a
             # non-finite value by construction, so pointing the log at it
-            # would print nothing every time.
-            logger.warning("Broadcast dropped, payload not JSON-safe: %s | %s", exc, _blame(data))
-            return
+            # would print nothing every time. The seq goes in the line because
+            # the log no longer sits next to the tick that produced it.
+            logger.warning(
+                "Broadcast dropped, payload not JSON-safe: seq=%s %s | %s",
+                data.get("seq") if isinstance(data, dict) else None,
+                exc,
+                _blame(data),
+            )
+            return None
 
-        self._enqueue(message)
-
-    def _enqueue(self, message: bytes) -> None:
-        """Hand the message to the sender thread, discarding a stale one."""
+    def _enqueue(self, job: Callable[[], dict]) -> None:
+        """Hand the job to the sender thread, discarding a stale one."""
         try:
-            self._outbox.put_nowait(message)
+            self._outbox.put_nowait(job)
             return
         except queue.Full:
             pass
@@ -256,19 +294,27 @@ class TelemetryStreamServer:
             # The sender drained it between the two calls; nothing to discard.
             pass
         try:
-            self._outbox.put_nowait(message)
+            self._outbox.put_nowait(job)
         except queue.Full:
             # It refilled again, which means the sender is keeping up with a
             # newer payload than this one. Dropping this is the right outcome.
             logger.debug("Broadcast outbox full, dropping a superseded payload")
 
     def _send_loop(self) -> None:
-        """Drain the outbox onto the sockets, off the pyglet thread."""
+        """Build, encode and write, off the pyglet thread.
+
+        The build and the encode moved here from the caller in #1049; the
+        write has been here since `d24a59e1`. One thread does all three, in
+        wire order, so a payload cannot overtake an older one.
+        """
         while self._running:
             try:
-                message = self._outbox.get(timeout=0.5)
+                job = self._outbox.get(timeout=0.5)
             except queue.Empty:
                 continue  # the timeout is what lets `stop()` end this thread
+            message = self._encode(job)
+            if message is None:
+                continue  # `_encode` logged why; `seq` makes the hole visible
             dead: list[socket.socket] = []
             with self._clients_lock:
                 clients_snapshot = list(self._clients)

@@ -159,7 +159,13 @@ def _view(session: SessionData, state: StrategyState, rival: str | None, clients
         _year=2025,
         _gaps=RaceGapCalculator(session),
         _color_for=lambda code: (255, 255, 255),
-        _stream_server=SimpleNamespace(client_count=lambda: clients, broadcast=_sent.append),
+        # `broadcast` takes a FACTORY since #1049, so the stub has to RUN it.
+        # `broadcast=_sent.append` would append the uncalled closure and every
+        # assertion below would shape a function instead of the payload.
+        _stream_server=SimpleNamespace(
+            client_count=lambda: clients,
+            broadcast=lambda build: _sent.append(build()),
+        ),
         _strategy_state=state,
         # `_broadcast_if_due` increments the tick then broadcasts when it
         # wraps to 0, so -1 makes the very next call due.
@@ -679,7 +685,7 @@ def _sent_bytes(payload: dict) -> list[bytes]:
     # the wire, because that is the thing under test.
     sender = threading.Thread(target=server._send_loop, daemon=True)
     sender.start()
-    server.broadcast(payload)
+    server.broadcast(lambda: payload)
     deadline = time.perf_counter() + 2.0
     while not written and time.perf_counter() < deadline:
         time.sleep(0.01)
