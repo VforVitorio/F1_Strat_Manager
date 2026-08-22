@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -41,6 +42,21 @@ from src.arcade.strategy import (  # noqa: E402
 )
 
 CIRCUIT_LENGTH_M = 5278.0
+
+# One telemetry sample's frozen types. Named rather than written out once per
+# driver: v2 puts a span under every code on the grid, and twenty copies of a
+# nine-key literal is twenty chances for one of them to drift.
+_TELEMETRY_SAMPLE_SHAPE = {
+    "brake": "float",
+    "dist": "float",
+    "drs": "int",
+    "drs_open": "bool",
+    "gear": "int",
+    "lap": "int",
+    "speed": "float",
+    "t": "float",
+    "throttle": "float",
+}
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -264,34 +280,18 @@ GOLDEN_SHAPE = {
         "race_order": ["str"],
         "t": "float",
         "telemetry": {
-            "main": [
-                {
-                    "brake": "float",
-                    "dist": "float",
-                    "drs": "int",
-                    "drs_open": "bool",
-                    "gear": "int",
-                    "lap": "int",
-                    "speed": "float",
-                    "t": "float",
-                    "throttle": "float",
-                }
-            ],
+            # One span per driver since schema v2 (#1048), keyed exactly like
+            # the `drivers` block above, `driver_colors` and `race_order`. The
+            # fixture carries two cars, so two keys; what is pinned is that
+            # BOTH appear regardless of which one is the rival, which is the
+            # whole point of the change and is asserted directly in
+            # `test_the_span_key_set_does_not_depend_on_who_the_rival_is`.
+            "drivers": {
+                "NOR": [_TELEMETRY_SAMPLE_SHAPE],
+                "PIA": [_TELEMETRY_SAMPLE_SHAPE],
+            },
             "dropped": "int",
             "rewound": "bool",
-            "rival": [
-                {
-                    "brake": "float",
-                    "dist": "float",
-                    "drs": "int",
-                    "drs_open": "bool",
-                    "gear": "int",
-                    "lap": "int",
-                    "speed": "float",
-                    "t": "float",
-                    "throttle": "float",
-                }
-            ],
         },
         "total_laps": "int",
         "track_status": "str",
@@ -436,7 +436,11 @@ def _minimal_payload() -> dict:
 # type generated from the rich shape alone would get wrong.
 GOLDEN_MINIMAL_DIFFS = {
     "arcade.driver_rival": "NoneType",
-    "arcade.telemetry.rival": [],
+    # `arcade.telemetry.rival: []` used to sit here, and its absence is the
+    # point of #1048: with a span per driver the telemetry block is identical
+    # whether or not a rival is pinned, because the key set is the grid rather
+    # than a pair of roles. If a telemetry entry ever reappears in this dict,
+    # the spans have started depending on the rival again.
     "strategy.start": "NoneType",
     "strategy.latest": "NoneType",
     "strategy.history_tail": [],
@@ -491,6 +495,30 @@ def test_the_states_that_make_a_field_null_are_frozen_too():
 
 def test_the_payload_carries_the_schema_version():
     assert _payload()["schema_version"] == STREAM_SCHEMA_VERSION
+
+
+def test_the_smoke_harness_declares_the_schema_version_the_producer_emits():
+    """The DATA smoke fabricates ticks, and it had drifted ahead of the wire.
+
+    `src/pitwall/ui/scripts/smoke-data.mjs` is the only other thing in this
+    repo that builds a whole tick, and its 233 checks are what the DATA window
+    is developed against. It carried a hardcoded `schema_version: 2` for
+    twelve days while this constant was still 1, which the #1048 bump makes
+    accidentally correct. Nothing tied the two together, so the next bump
+    would drift the same way and the harness would go on describing a payload
+    the producer stopped sending.
+
+    Read as text rather than executed: the harness is an ES module driven by
+    a browser bundle, and this suite has no Node in it.
+    """
+    harness = (REPO_ROOT / "src/pitwall/ui/scripts/smoke-data.mjs").read_text(encoding="utf-8")
+    declared = re.findall(r"schema_version:\s*(\d+)", harness)
+
+    assert declared, "the smoke harness stopped declaring a schema version at all"
+    assert set(declared) == {str(STREAM_SCHEMA_VERSION)}, (
+        f"smoke-data.mjs declares schema_version {sorted(set(declared))}, "
+        f"the producer emits {STREAM_SCHEMA_VERSION}"
+    )
 
 
 # --- the per_agent contract, against the producer rather than against itself -

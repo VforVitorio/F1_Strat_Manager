@@ -550,10 +550,10 @@ Constraint 7's table: every element reads a field already on the wire, or is pri
 
 | element | source | producer change |
 |---|---|---|
-| SPEED / THROTTLE / BRAKE lanes | `telemetry.main[] / .rival[]` `.speed/.throttle/.brake` | none |
+| SPEED / THROTTLE / BRAKE lanes | `telemetry.drivers[code][]` `.speed/.throttle/.brake` (was `.main[]`/`.rival[]` before schema v2, #1048) | none |
 | Δ TIME lane | computed from `.t` via `deltaSeries` (unchanged) | none |
-| **GEAR lane** | `telemetry.*[].gear` - on the wire since #841, read by nothing today | **none** |
-| **DRS lane** | NEW `telemetry.*[].drs_open` | **§5.2-bis, priced: 3 source files + 2 test files + bridge.ts, ~80 bytes/tick, no schema bump** |
+| **GEAR lane** | `telemetry.drivers[code][].gear` - on the wire since #841, read by nothing today | **none** |
+| **DRS lane** | NEW `telemetry.drivers[code][].drs_open` | **§5.2-bis, priced: 3 source files + 2 test files + bridge.ts, ~80 bytes/tick, no schema bump** |
 | cursor + readouts | `drivers[driver_main].rel_dist` x `circuit_length_m`; newest main-span sample | none |
 | lane colours | `palette.ACCENT` (gear, new site), `palette.INFO` (DRS, new site); rest existing | none (token-test counts move) |
 | BESTS depth | `bulk` (unchanged data); depth is client geometry | none |

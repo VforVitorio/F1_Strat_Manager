@@ -226,13 +226,15 @@ def test_a_car_with_no_position_data_is_unknown_rather_than_at_the_line():
 
     assert wire["drivers"]["HAD"]["rel_dist"] is None
     assert wire["drivers"][MAIN]["rel_dist"] is not None
-    # The two-car telemetry block takes the same route, so it must agree.
-    # It did not: `has_position` was read for the drivers block only, so the
-    # same car read "no position" in one half of the payload and sat in
-    # distance bucket 0 in the other.
-    telemetry = _snapshot(_session(), frame_idx=3, rival="HAD")["telemetry"]
-    assert telemetry["rival"][0]["dist"] is None
-    assert telemetry["main"][0]["dist"] is not None
+    # The telemetry block takes the same route, so it must agree. It did not:
+    # `has_position` was read for the drivers block only, so the same car read
+    # "no position" in one half of the payload and sat in distance bucket 0 in
+    # the other. Since #1048 the block carries a span per driver, so the read
+    # has to be right for every car rather than for the two that were pinned,
+    # and HAD is asserted here WITHOUT being the rival.
+    spans = _snapshot(_session(), frame_idx=3)["telemetry"]["drivers"]
+    assert spans["HAD"][0]["dist"] is None
+    assert spans[MAIN][0]["dist"] is not None
 
 
 def test_the_arcade_block_carries_nothing_non_finite():

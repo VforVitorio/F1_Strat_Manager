@@ -186,7 +186,13 @@ POOL_SIZE: Final[int] = 1
 # renamed, removed, or changes meaning; adding a key an old consumer can
 # ignore does not need a bump. A consumer that reads a version it does not
 # know should say so rather than silently render a field it guessed at.
-STREAM_SCHEMA_VERSION: Final[int] = 1
+#
+# 2 (#1048): the telemetry block went from two role-keyed spans,
+# `{main: [...], rival: [...]}`, to one span per driver under
+# `{drivers: {CODE: [...]}}`. `rewound` and `dropped` stay where they were:
+# they describe the tick, not a car. Read the pair a v1 consumer wanted as
+# `telemetry.drivers[arcade.driver_main]` and `[arcade.driver_rival]`.
+STREAM_SCHEMA_VERSION: Final[int] = 2
 STREAM_HOST: Final[str] = os.environ.get("F1_STREAM_HOST", "127.0.0.1")
 STREAM_PORT: Final[int] = int(os.environ.get("F1_STREAM_PORT", "9998"))
 # Broadcast every N arcade frames. At 60 FPS on_update, N=6 gives ~10 Hz,

@@ -120,9 +120,16 @@ def _frames_to_telemetry_span(
 ) -> list[dict]:
     """Pack `frames[span_start : frame_idx + 1]` for the wire, oldest first.
 
-    Bounds are clamped to the array rather than trusted: a driver whose
-    telemetry is shorter than the global timeline would otherwise raise
-    at the end of the race.
+    Bounds are clamped rather than trusted, but not for the reason this
+    docstring used to give. `SessionLoader` resamples every driver onto the
+    one global timeline, so all twenty arrays are exactly `total_frames`
+    long: measured on Melbourne 2025, 154,173 for all of them, no exceptions.
+    Nothing here is ever "shorter than the timeline".
+
+    What the clamp actually guards is the CALLER's arithmetic. `span_start`
+    is `last_sent_idx + 1` and can sit past the end on the last tick of a
+    race, and `frame_idx` is a float clock truncated to an int; the empty
+    slice both produce is the honest answer, and a raise would not be.
     """
     if not frames:
         return []
@@ -751,35 +758,52 @@ class F1ArcadeView(arcade.View):
         main_frames = self._session.frames_by_driver.get(self._driver_main)
         if main_frames and frame_idx < len(main_frames):
             main_frame = main_frames[frame_idx]
-        # Telemetry for the main driver (always) + the rival when two-driver
-        # mode is active, published as {main: [...], rival: [...]} — a SPAN
-        # of samples, oldest first, not the single current point.
+        # A telemetry SPAN per driver, oldest first, not the single current
+        # point: `{drivers: {CODE: [...]}}`.
         #
         # The clock advances `delta_time * FPS * speed` indices per second
         # over 25 Hz data while the broadcast fires at ~10 Hz, so sending one
         # point per tick discarded 60 % of the trace at 1x and 95 % at 8x: a
         # speed trace went from a point every 8 metres to one every 170. The
         # producer already holds the whole array, so the span costs a slice
-        # and no disk read. In single-driver mode `rival` is an empty list
-        # and the delta chart collapses to its "single driver" placeholder.
+        # and no disk read.
+        #
+        # **Keyed off `drivers`, not off `frames_by_driver`** (#1048). It used
+        # to carry two spans under the ROLE keys `main` and `rival`, chosen
+        # once at launch, so a consumer could only ever chart those two cars.
+        # Publishing all twenty is what lets PITWALL pin any row without a
+        # control channel back to the producer, which is a decision this
+        # project does not want to take. Iterating the block built above
+        # rather than the session makes these keys identical to `drivers`,
+        # `driver_colors` and `race_order` by construction: four per-driver
+        # maps on one payload is already three chances to drift, and it does
+        # not need a fourth rule.
+        #
+        # **A retired car still carries a span**, because its frame array runs
+        # the full length of the race and the values simply stop changing. On
+        # Melbourne 2025 that is three lap-1 retirements, 14.5 % of a seek
+        # message. They stay: `active` and `has_position` are published beside
+        # them for exactly this, and a key set that came and went as cars
+        # retired would be a second rule again. **A consumer gates a span on
+        # `drivers[code].active` and `.has_position`** rather than on whether
+        # the span is empty.
         circuit_length = float(self._session.circuit_length_m or 0.0)
-        rival_frames = (
-            self._session.frames_by_driver.get(self._driver_rival) if self._driver_rival else None
-        )
         positions = self._session.has_position
-        main_has_position = bool(positions.get(self._driver_main, True))
-        rival_has_position = bool(positions.get(self._driver_rival, True))
         telemetry = {
-            # `has_position` rides along so the span says the same thing the
+            # `has_position` rides into each span so it says the same thing the
             # drivers block does. Without it the same car reads "no position"
             # in one half of the payload and "at the line" in the other, and
             # the telemetry window keys every sample into distance bucket 0.
-            "main": _frames_to_telemetry_span(
-                main_frames, span_start, frame_idx, circuit_length, main_has_position
-            ),
-            "rival": _frames_to_telemetry_span(
-                rival_frames, span_start, frame_idx, circuit_length, rival_has_position
-            ),
+            "drivers": {
+                code: _frames_to_telemetry_span(
+                    self._session.frames_by_driver[code],
+                    span_start,
+                    frame_idx,
+                    circuit_length,
+                    bool(positions.get(code, True)),
+                )
+                for code in drivers
+            },
             # True when the user seeked backwards. The span is empty and the
             # consumer must drop what it has: a buffer keyed on
             # distance-within-lap holds samples for track the car has not

@@ -40,12 +40,25 @@ export function useTraceFrame(tick: Tick | null, discontinuity: Discontinuity): 
   // reason.
   return useMemo(() => {
     if (!tick) return null;
-    const { telemetry } = tick.arcade;
+    const { telemetry, driver_main, driver_rival } = tick.arcade;
     // The producer's own eviction signals, plus the clock's - `FrameClock` sees a
     // backwards jump smaller than one broadcast that the flags miss.
     const evict =
       telemetry.rewound || telemetry.dropped > 0 || discontinuity.kind !== "continuous";
-    accumulator.current.ingest(telemetry.main, telemetry.rival, evict);
+    // Schema v2 puts a span under every driver code, so the pair this panel
+    // charts is a LOOKUP rather than two fixed keys (#1048). `?? []` is not
+    // defensive padding: single-driver mode has no rival at all, and the
+    // accumulator's rival map is meant to stay empty then.
+    //
+    // Selecting here rather than accumulating per driver is deliberate for
+    // now: switching the pinned car mid-lap would mix two cars' samples in one
+    // distance-keyed map, and the fix for that is per-driver buffers with the
+    // choice applied at render (#1050), which is R2's subject.
+    accumulator.current.ingest(
+      telemetry.drivers[driver_main] ?? [],
+      driver_rival ? (telemetry.drivers[driver_rival] ?? []) : [],
+      evict,
+    );
     const main = accumulator.current.mainTrace;
     const rival = accumulator.current.rivalTrace;
     return { main, rival, delta: deltaSeries(main, rival) };

@@ -88,6 +88,20 @@ function driver(overrides = {}) {
   };
 }
 
+/**
+ * Which span a fixture driver carries: the main's, the rival's, or none.
+ *
+ * The real producer sends a real span for every car including retirements,
+ * which keep a full-length frame array and simply stop moving. The fixture
+ * leaves the rest of the field empty because no scenario here asserts on a
+ * third car's trace; a scenario that starts to will have to fill it.
+ */
+function spanFor(code, rival, main, rivalSpan) {
+  if (code === "NOR") return main;
+  if (code === rival) return rivalSpan;
+  return [];
+}
+
 function tick(
   seq,
   {
@@ -130,7 +144,20 @@ function tick(
       // render as unknown rather than as a green track.
       track_status_label: "GREEN",
       track_status_color: [16, 185, 129],
-      telemetry: { main, rival: rivalSpan, rewound, dropped },
+      // Schema v2 keys the spans by driver code, exactly like the `drivers`
+      // block above (#1048). The harness still takes `main` and `rivalSpan`,
+      // because that is what a DATA scenario is about, and files them under
+      // the codes the window looks them up by.
+      telemetry: {
+        drivers: Object.fromEntries(
+          Object.keys(field).map((code) => [
+            code,
+            spanFor(code, rival, main, rivalSpan),
+          ]),
+        ),
+        rewound,
+        dropped,
+      },
     },
     playback: {
       speed: 1,
