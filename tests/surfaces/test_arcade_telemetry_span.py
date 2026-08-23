@@ -269,19 +269,26 @@ def test_the_snapshot_publishes_spans_and_the_rewind_flag():
     )
 
     moving = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)["telemetry"]
-    assert len(moving["main"]) == 5
-    assert len(moving["rival"]) == 5
+    assert len(moving["drivers"]["NOR"]) == 5
+    assert len(moving["drivers"]["PIA"]) == 5
     assert moving["rewound"] is False
 
     paused = F1ArcadeView._build_arcade_snapshot(view, 20, 21, False)["telemetry"]
-    assert paused["main"] == [] and paused["rival"] == []
+    assert paused["drivers"]["NOR"] == [] and paused["drivers"]["PIA"] == []
 
     rewound = F1ArcadeView._build_arcade_snapshot(view, 20, 21, True)["telemetry"]
-    assert rewound["main"] == []
+    assert rewound["drivers"]["NOR"] == []
     assert rewound["rewound"] is True
 
 
-def test_single_driver_mode_publishes_an_empty_rival_span():
+def test_single_driver_mode_still_publishes_every_car_the_session_has():
+    """No rival pinned is a choice about what to CHART, not about what to send.
+
+    Before #1048 the wire carried two role-keyed spans, so this case had an
+    empty `rival` list. With a span per driver there is no role to leave
+    empty: the block carries whatever cars the session holds, and `driver_rival`
+    being null is the only thing that says nobody is pinned.
+    """
     session = SessionData(
         gp_name="Australia",
         location="Melbourne",
@@ -299,14 +306,203 @@ def test_single_driver_mode_publishes_an_empty_rival_span():
         _color_for=lambda code: (255, 255, 255),
     )
 
-    telemetry = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)["telemetry"]
+    snapshot = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)
 
-    assert telemetry["rival"] == []
-    assert len(telemetry["main"]) == 5
+    assert snapshot["driver_rival"] is None
+    assert set(snapshot["telemetry"]["drivers"]) == {"NOR"}
+    assert len(snapshot["telemetry"]["drivers"]["NOR"]) == 5
 
 
-def test_the_payload_growth_stays_small_at_the_fastest_speed():
-    """Two drivers carry traces, so 8x costs about 20 samples a tick, not 200."""
+_GRID = ("NOR", "PIA", "VER", "LEC")
+
+
+def _sweep_the_served_spans(speeds_and_ticks, seek_at: int | None = None):
+    """Drive the real snapshot builder and return the frames each driver got.
+
+    #841's acceptance is "every frame the clock crosses is sent exactly once",
+    and until #1048 it could be checked on the bounds arithmetic alone,
+    because the bounds were the whole story for a pair of role keys. With a
+    span per driver the question is per driver, so this reads the SERVED
+    payload instead: every sample carries `t`, and `t` is `frame_index * DT`,
+    so the index is recoverable from the wire itself rather than from the
+    arithmetic that was supposed to produce it.
+
+    Returns `(sent_by_driver, dropped_total)`.
+    """
+    session = SessionData(
+        gp_name="Australia",
+        location="Melbourne",
+        year=2025,
+        frames_by_driver={code: _frames(4000) for code in _GRID},
+        circuit_length_m=CIRCUIT_LENGTH_M,
+        total_frames=4000,
+    )
+    view = SimpleNamespace(
+        _session=session,
+        _driver_main="NOR",
+        _driver_rival="PIA",
+        _year=2025,
+        _gaps=RaceGapCalculator(session),
+        _color_for=lambda code: (255, 255, 255),
+    )
+
+    sent: dict[str, list[int]] = {code: [] for code in _GRID}
+    dropped_total = 0
+    frame_index = 0.0
+    last_sent = -1
+    tick = 0
+    for speed, n_ticks in speeds_and_ticks:
+        for _ in range(n_ticks):
+            frame_index += TICK_SECONDS * FPS * speed
+            if seek_at is not None and tick == seek_at:
+                frame_index += 2000  # a progress-bar click, past the span cap
+            tick += 1
+            frame_idx = int(frame_index)
+            span_start, rewound, dropped = _telemetry_span_bounds(
+                last_sent, frame_idx, STREAM_MAX_SPAN_FRAMES
+            )
+            last_sent = frame_idx
+            dropped_total += dropped
+            spans = F1ArcadeView._build_arcade_snapshot(
+                view, frame_idx, span_start, rewound, dropped
+            )["telemetry"]["drivers"]
+            for code, samples in spans.items():
+                sent[code].extend(round(sample["t"] / DT) for sample in samples)
+    return sent, dropped_total
+
+
+def test_every_frame_the_clock_crosses_reaches_EVERY_driver_exactly_once():
+    """#841's acceptance, re-stated per driver now that there are twenty.
+
+    The old formulation was a property of `_telemetry_span_bounds`, which
+    every span shares. That is still true and still tested above, but it is
+    no longer sufficient: the bounds can be perfect while the per-driver
+    slice that consumes them drops a car, repeats a sample, or hands one
+    driver another's frames. This asserts on what the payload actually
+    carried, at 1x, 2x and 8x in sequence, and requires the four drivers to
+    have received exactly the same frames.
+    """
+    sent, dropped = _sweep_the_served_spans([(1.0, 30), (2.0, 30), (8.0, 30)])
+
+    assert dropped == 0, "smooth playback must never reach the span cap"
+    reference = sent["NOR"]
+    assert reference, "the sweep sent nothing at all"
+    assert reference == sorted(reference), "samples must arrive oldest first"
+    assert len(reference) == len(set(reference)), "a sample was sent twice"
+    assert reference == list(range(reference[0], reference[-1] + 1)), "a frame was skipped"
+    for code in _GRID:
+        assert sent[code] == reference, f"{code} did not get the same frames as NOR"
+
+
+def test_a_seek_is_capped_and_counted_for_every_driver_alike():
+    """A progress-bar click outruns the span, and every car must say so once.
+
+    The hole is reported by `dropped` rather than by the samples, so the
+    assertion is that the count is non-zero, that no driver silently spliced
+    across it, and that the twenty spans agree about where the hole is.
+    """
+    sent, dropped = _sweep_the_served_spans([(1.0, 20), (8.0, 20)], seek_at=10)
+
+    assert dropped > 0, "the seek did not outrun the span cap"
+    reference = sent["NOR"]
+    assert len(reference) == len(set(reference)), "a sample was sent twice across the seek"
+    assert reference == sorted(reference)
+    for code in _GRID:
+        assert sent[code] == reference, f"{code} disagrees about the seek"
+
+
+def test_the_per_driver_sweep_actually_bites_on_a_planted_duplicate(monkeypatch):
+    """The sweep above passes; this is the proof it can fail.
+
+    A continuity check that has never been seen red closes nothing. The
+    mutation is the cheapest real defect the per-driver slice could have: one
+    car's span re-sending its first sample. It lands on LEC, which is exactly
+    why the sweep compares the drivers against EACH OTHER: LEC's own list is
+    still sorted and still starts and ends where it should, so a per-driver
+    check that only looked at one car at a time would stay green.
+
+    The sweep runs outside any `raises` block on purpose. Wrapping it would
+    let an unrelated error inside it satisfy the test, which is the shape of
+    a guard that passes for the wrong reason.
+    """
+    import src.arcade.app as app_module
+
+    real = app_module._frames_to_telemetry_span
+    calls = {"n": 0}
+
+    def duplicating(frames, span_start, frame_idx, circuit_length_m, has_position=True):
+        packed = real(frames, span_start, frame_idx, circuit_length_m, has_position)
+        calls["n"] += 1
+        # Every fourth call is one driver's span, so exactly one car repeats.
+        if packed and calls["n"] % len(_GRID) == 0:
+            return [packed[0], *packed]
+        return packed
+
+    monkeypatch.setattr(app_module, "_frames_to_telemetry_span", duplicating)
+    sent, _ = _sweep_the_served_spans([(1.0, 10)])
+
+    reference = sent["NOR"]
+    assert len(reference) == len(set(reference)), "the mutation was supposed to spare NOR"
+    corrupted = [code for code in _GRID if sent[code] != reference]
+    assert corrupted == ["LEC"], f"the planted duplicate landed on {corrupted}, not on one car"
+    assert len(sent["LEC"]) != len(set(sent["LEC"])), "the plant did not actually duplicate"
+
+
+def test_the_span_key_set_does_not_depend_on_who_the_rival_is():
+    """The claim #1048 exists to make true, asserted over every choice of rival.
+
+    A client can only pin a row it has samples for, so the failure this
+    forbids is the one the old wire had by design: a car the producer happens
+    not to have chosen carrying nothing. Sweeping every rival (and none) is
+    what separates "the spans are published per driver" from "the spans still
+    follow the pick, and the fixture happened to pin the car we asserted on".
+
+    The key set is also checked against the three OTHER per-driver maps on the
+    payload. Four maps keyed four ways is three chances to drift; the producer
+    builds all four from one dict so that they cannot.
+    """
+    session = SessionData(
+        gp_name="Australia",
+        location="Melbourne",
+        year=2025,
+        frames_by_driver={"NOR": _frames(50), "PIA": _frames(50), "VER": _frames(50)},
+        circuit_length_m=CIRCUIT_LENGTH_M,
+        total_frames=50,
+    )
+    grid = {"NOR", "PIA", "VER"}
+
+    for rival in (None, "PIA", "VER", "NOR"):
+        view = SimpleNamespace(
+            _session=session,
+            _driver_main="NOR",
+            _driver_rival=rival,
+            _year=2025,
+            _gaps=RaceGapCalculator(session),
+            _color_for=lambda code: (255, 255, 255),
+        )
+        snapshot = F1ArcadeView._build_arcade_snapshot(view, 20, 16, False)
+        spans = snapshot["telemetry"]["drivers"]
+
+        assert set(spans) == grid, f"rival={rival} changed which cars carry a span"
+        assert all(len(samples) == 5 for samples in spans.values()), (
+            f"rival={rival} left a car on the grid without samples"
+        )
+        assert set(snapshot["drivers"]) == grid
+        assert set(snapshot["driver_colors"]) == grid
+        assert set(snapshot["race_order"]) == grid
+
+
+def test_the_span_length_stays_bounded_at_the_fastest_speed():
+    """A span is about 20 samples a tick at 8x, not 200, whoever carries it.
+
+    This bounds the span LENGTH, which is what the clock decides. Since #1048
+    the tick carries one per driver, so the block costs twenty of these rather
+    than two: measured on the real Melbourne 2025 replay, a steady 8x tick
+    goes from 20,795 to 61,374 bytes and a full-tail one from 37,852 to
+    78,513, which is 767 KB/s at 10 Hz. The cost that bound the change was
+    never the bytes, it was the encode, and that moved off the render thread
+    in #1049.
+    """
     frames_per_tick = TICK_SECONDS * FPS * max(PLAYBACK_SPEEDS)
 
     assert math.ceil(frames_per_tick) <= 25

@@ -162,8 +162,17 @@ readings, `fuel_load`, and the in/out-lap pair live only in `get_driver_state`
 
 One SURFACE-level qualification, not a contract leak: in Head-to-Head mode the Arcade
 telemetry window renders the rival's throttle/brake/speed traces
-(`src/arcade/app.py:460-473` broadcasts `telemetry.rival` built by `_frame_to_telemetry`,
-`app.py:65-96`; rendered by the 2x2 grid in `src/arcade/dashboard/telemetry_panel.py:1-27`).
+(the producer broadcasts a rival span built by `_frame_to_telemetry`; the Qt 2x2 grid
+that rendered it was retired in `7ea6a7a6` and PITWALL's DATA window draws it now).
+
+**Schema v2 widened this and the conclusion is unchanged (#1048).** The tick used to
+carry a span for two cars and now carries one for all twenty, so the wire holds
+broadcast-tier telemetry for the whole grid rather than for a pinned pair. That does not
+move the boundary this section is about, because the boundary is the AGENTS' input space:
+the spans reach no model and no prompt, which the rival-selector feasibility gate verified
+by tracing every route from the chosen rival into `src/agents/`. What changed is how many
+cars a SURFACE may draw, and the tiering and labelling requirement in section 3.4 now
+applies to any of them rather than to one.
 Because FastF1 car telemetry IS the broadcast channel, this is broadcast-tier, not
 privileged, so it is defensible; but it is UNLABELED today, and the module docstring's
 own framing ("timing-screen only", `race_state_manager.py:8-9`) would not predict it.

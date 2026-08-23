@@ -91,9 +91,24 @@ export interface ArcadeState {
   /** The label's RGB, from the arcade's own palette. Null exactly when the label is. */
   track_status_color: [number, number, number] | null;
   telemetry: {
-    /** Every sample the replay clock crossed since the previous tick, oldest first. */
-    main: TelemetrySample[];
-    rival: TelemetrySample[];
+    /**
+     * Every sample the replay clock crossed since the previous tick, oldest
+     * first, keyed by driver code (schema v2, #1048).
+     *
+     * The pair a v1 consumer read as `main`/`rival` is
+     * `drivers[driver_main]` and `drivers[driver_rival]`. It carries the whole
+     * grid rather than those two so a client can chart any car without asking
+     * the producer to publish it, which would need a control channel PITWALL
+     * deliberately does not have.
+     *
+     * **The key set is the same as `drivers`, `driver_colors` and
+     * `race_order`**, so a car present in one is present in all four. That
+     * includes RETIRED cars: a retirement keeps its full-length frame array
+     * and simply stops moving, so its span is real samples of a stationary
+     * car, not an empty list. **Gate a span on `drivers[code].active` and
+     * `.has_position`**, never on whether it has samples.
+     */
+    drivers: Record<string, TelemetrySample[]>;
     /** The user seeked backwards: drop what you have, do not append. */
     rewound: boolean;
     /** Frames a forward jump could not carry. Non-zero means a hole in the trace. */
