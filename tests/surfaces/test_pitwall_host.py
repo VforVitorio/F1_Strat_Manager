@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -20,22 +21,8 @@ from pathlib import Path
 import pytest
 
 from src.pitwall.host import PitwallHost
-from src.pitwall.stream_client import ArcadeStreamClient
-
-
-class _FakeClient:
-    """Stands in for the socket, so the host's own logic is what is tested."""
-
-    def __init__(self, payload=None):
-        self.latest = payload
-        self.started = False
-        self.stopped = False
-
-    def start(self):
-        self.started = True
-
-    def stop(self):
-        self.stopped = True
+from src.pitwall.stream_client import SIGNAL_LOG_DEPTH, ArcadeStreamClient
+from tests.surfaces.fake_stream_client import FakeStreamClient as _FakeClient
 
 
 def _tick(seq: int) -> dict:
@@ -118,6 +105,227 @@ def test_a_payload_with_no_sequence_is_returned_rather_than_withheld():
     host = PitwallHost(_FakeClient({"arcade": {"lap": 3}}), window_count=1)
 
     assert host.get_tick(since_seq=999) == {"arcade": {"lap": 3}}
+
+
+# --- The eviction signals survive a discarded tick (#1060) -------------------
+#
+# `rewound` and `dropped` describe the gap BETWEEN two ticks rather than the
+# state of one, so the latest-payload slot - which is right to keep only the
+# newest snapshot - is wrong to drop them with the tick that carried them.
+# Measured before the fix: 6 of 905 published ticks (0.7 %) were never served to
+# a window polling the way `useTick` polls.
+
+
+def _signalling_tick(seq: int, rewound: bool = False, dropped: int = 0) -> dict:
+    """A tick shaped like the producer's, carrying its continuity flags."""
+    return {
+        "seq": seq,
+        "schema_version": 2,
+        "arcade": {
+            "lap": 12,
+            "telemetry": {"drivers": {}, "rewound": rewound, "dropped": dropped},
+        },
+    }
+
+
+def _telemetry_of(tick: dict) -> dict:
+    return tick["arcade"]["telemetry"]
+
+
+def test_a_rewind_on_a_tick_the_slot_discarded_still_reaches_the_window():
+    """The defect, at its smallest: one tick published, overwritten, never served.
+
+    Before the fix the window saw only the second tick, whose own `rewound` is
+    False, so `FrameClock` reported `continuous` across the hole and the trace
+    buffer kept appending samples from two unrelated parts of the race.
+    """
+    client = _FakeClient(_signalling_tick(1))
+    host = PitwallHost(client, window_count=1)
+    assert host.get_tick(since_seq=-1)["seq"] == 1, "the window is caught up at seq 1"
+
+    client.receive(_signalling_tick(2, rewound=True))  # published...
+    client.receive(_signalling_tick(3))  # ...and overwritten before any poll
+
+    served = host.get_tick(since_seq=1)
+
+    assert served["seq"] == 3, "the newest snapshot is still the one served"
+    assert _telemetry_of(served)["rewound"] is True, (
+        "the rewind rode on seq 2, which no window ever received"
+    )
+
+
+def test_dropped_frames_are_SUMMED_across_every_tick_the_window_missed():
+    """`dropped` is a count, not a flag: two discarded jumps are both real."""
+    client = _FakeClient(_signalling_tick(1))
+    host = PitwallHost(client, window_count=1)
+    host.get_tick(since_seq=-1)
+
+    client.receive(_signalling_tick(2, dropped=250))
+    client.receive(_signalling_tick(3, dropped=40))
+    client.receive(_signalling_tick(4))
+
+    served = host.get_tick(since_seq=1)
+
+    assert _telemetry_of(served)["dropped"] == 290, "250 + 40, not the newest and not 1"
+
+
+def test_two_cursors_each_get_their_OWN_missed_range():
+    """The assertion that fails under any drain-once design.
+
+    `get_tick` has more than one caller - `useTick`, `get_agents_view` at
+    host.py:189, and the loopback server's `/api/tick` - each with its own
+    cursor. A pending slot cleared by the first caller hands the signal to
+    whoever polled first and hides it from everyone else. That is #950 in
+    another field: `lib/agents.ts` carries the comment describing exactly this
+    failure for the connection label.
+
+    AGENTS never reads these flags, and that does not save the design: the
+    DRAIN, not the consumption, is what empties a slot.
+    """
+    client = _FakeClient(_signalling_tick(1))
+    host = PitwallHost(client, window_count=2)
+    host.get_tick(since_seq=-1)  # both windows start caught up at seq 1
+    host.get_tick(since_seq=-1)
+
+    client.receive(_signalling_tick(2, dropped=100))
+    client.receive(_signalling_tick(3))
+
+    first = host.get_tick(since_seq=1)
+    second = host.get_tick(since_seq=1)
+
+    assert _telemetry_of(first)["dropped"] == 100
+    assert _telemetry_of(second)["dropped"] == 100, (
+        "the second window's range is its own; the first did not consume it"
+    )
+
+
+def test_the_fold_does_not_mutate_the_payload_another_window_is_still_holding():
+    """The copy-on-fold rule, and why `get_tick` cannot fold in place.
+
+    Every caller is handed the same dict object out of the slot. Window A folds
+    its range in; window B then polls with a DIFFERENT cursor and would rewrite
+    the same telemetry block to its own, shorter range - so A's payload silently
+    changes underneath it, before A has serialised it across the bridge.
+    """
+    client = _FakeClient(_signalling_tick(1))
+    host = PitwallHost(client, window_count=2)
+    host.get_tick(since_seq=-1)
+
+    client.receive(_signalling_tick(2, dropped=100))
+    client.receive(_signalling_tick(3))
+
+    held_by_a = host.get_tick(since_seq=1)
+    a_dropped_when_served = _telemetry_of(held_by_a)["dropped"]
+
+    host.get_tick(since_seq=2)  # window B, a shorter range, same underlying dict
+
+    assert a_dropped_when_served == 100
+    assert _telemetry_of(held_by_a)["dropped"] == 100, (
+        "another caller's fold rewrote the block this one is holding"
+    )
+    assert _telemetry_of(client.latest)["dropped"] == 0, (
+        "the slot's own payload must never be edited by a read"
+    )
+
+
+def test_a_cursor_the_log_cannot_place_is_served_unmerged_rather_than_invented():
+    """A first poll, or a tab asleep past the log's 6.4 s, has no knowable range.
+
+    Fabricating a `dropped` for it would put a made-up number in the one field
+    whose entire job is to say that something real happened.
+    """
+    client = _FakeClient(_signalling_tick(1, dropped=7))
+    host = PitwallHost(client, window_count=1)
+
+    for _ in range(SIGNAL_LOG_DEPTH + 5):
+        client.receive(_signalling_tick(client.latest["seq"] + 1, dropped=3))
+
+    served = host.get_tick(since_seq=1)  # seq 1 fell off the end of the log
+
+    assert _telemetry_of(served)["dropped"] == 3, "the payload's own flags, unmerged"
+    assert _telemetry_of(served)["rewound"] is False
+
+
+def test_the_signal_log_and_the_slot_are_read_as_ONE_snapshot():
+    """The atomicity contract, asserted on the invariant it produces.
+
+    Two lock acquisitions let `_consume` publish between them, and the fold then
+    picks up ticks NEWER than the payload being served while the caller's cursor
+    only advances to that payload - so the same entries are folded again on the
+    next poll. Measured against a live producer, that over-counts `dropped` by
+    66 %, and every phantom count is a spurious eviction of the buffer this fix
+    exists to protect.
+
+    The observable invariant: whatever `snapshot` returns, its last log entry
+    describes the payload beside it.
+
+    **This has to run against a CONTENDING publisher.** An earlier version of this
+    guard read a client fed by the slow one-shot server and asserted the same
+    invariant; the two-lock mutant survived it, because nothing was publishing in
+    the window between the two acquisitions. A guard for a race that never runs
+    the race is the empty set wearing a thread.
+    """
+    client = ArcadeStreamClient("127.0.0.1", 0)  # never started: `_consume` is driven here
+    lines = [json.dumps(_signalling_tick(i, dropped=1)).encode() + b"\n" for i in range(1, 400)]
+    stop = threading.Event()
+
+    def publish() -> None:
+        while not stop.is_set():
+            for line in lines:
+                if stop.is_set():
+                    return
+                client._consume(line)
+
+    # The window between two lock acquisitions is a handful of bytecodes, and the
+    # default 5 ms switch interval means a publisher thread almost never lands in
+    # it - which is how the two-lock mutant survived the first version of this
+    # guard. Forcing frequent switches is what makes the race actually run.
+    previous_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    publisher = threading.Thread(target=publish, daemon=True)
+    publisher.start()
+    try:
+        assert _wait_for(lambda: client.latest is not None), "the publisher never ran"
+        torn = 0
+        for _ in range(20_000):
+            payload, signals = client.snapshot()
+            if payload is None:
+                continue
+            assert signals, "a payload is in the slot but the log is empty"
+            if signals[-1].seq != payload["seq"]:
+                torn += 1
+        assert torn == 0, (
+            f"{torn} of 20,000 snapshots had a log newer than the payload beside it; "
+            "the fold would count those entries again on the next poll"
+        )
+    finally:
+        stop.set()
+        publisher.join(timeout=2.0)
+        sys.setswitchinterval(previous_interval)
+
+
+def test_the_signal_log_dies_with_the_connection():
+    """A relaunched arcade restarts `seq` at 1, so two runs must not share a log.
+
+    With both runs resident, a cursor holding an old-run number can match a
+    new-run entry and the fold spans a range that never existed.
+    """
+    port, _ = _serve_lines(
+        [json.dumps(_signalling_tick(i, dropped=5)).encode() + b"\n" for i in (1, 2)]
+    )
+    client = ArcadeStreamClient("127.0.0.1", port)
+    client.start()
+    try:
+        assert _wait_for(lambda: len(client.snapshot()[1]) == 2), "both ticks did not arrive"
+        assert _wait_for(lambda: client.snapshot()[1] == ()), (
+            "the log outlived the socket that produced it"
+        )
+        assert client.latest is not None, (
+            "the last payload is KEPT - a frozen board is still readable, and the "
+            "windows render it dimmed; only the continuity signals are dropped"
+        )
+    finally:
+        client.stop()
 
 
 # --- Trap 2: closing one window must not stop the shared client --------------
