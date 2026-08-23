@@ -4147,6 +4147,271 @@ check(
   await ctx.close();
 }
 
+// --- Scenario: the tower row pins the broadcast rival (#1051) ----------------
+//
+// The pin has to reach ALL FOUR consumers of the chosen rival or one window
+// shows two: the chart's selection (`useTraceFrame`), the header chip, the
+// header's blind-note, and the ring's label placement. The assertions below run
+// over the WHOLE driver enumeration rather than one example, because a bug that
+// happens to work for the second car in the order is the one that ships.
+//
+// Every driver carries its own speed band, so "which car is plotted" is read off
+// the SERVED value rather than inferred from the code the header prints.
+{
+  const LAP = 30;
+  const FIELD = ["NOR", "PIA", "VER", "LEC", "RUS"];
+  const RETIRED = "SAI";
+  // A car that is RUNNING and sends nothing on this lap - the common case once
+  // the tower can pin anyone, measured at five of seven on real Melbourne ticks.
+  const FAR = "HAM";
+  const bandFor = (code) => (FIELD.indexOf(code) + 3) * 100;
+  const XS = [100, 200, 300, 400];
+  const spanOf = (code) =>
+    XS.map((dist, i) => ({
+      lap: LAP,
+      t: 10 + (dist - 100) / 100 + FIELD.indexOf(code),
+      dist,
+      speed: bandFor(code) + i,
+      throttle: 50,
+      brake: 0,
+      gear: 6,
+      drs: 8,
+    }));
+
+  const field = Object.fromEntries([
+    ...FIELD.map((code) => [code, driver({ lap: LAP })]),
+    // A car that stopped. It renders in the tower and must NOT be a keyboard
+    // stop or a pin target: the pin releases on retirement, so allowing it
+    // would be a state the next tick undoes.
+    [RETIRED, driver({ lap: LAP, active: false, has_finished: false })],
+    [FAR, driver({ lap: LAP })],
+  ]);
+  const spans = Object.fromEntries([
+    ...FIELD.map((code) => [code, spanOf(code)]),
+    [RETIRED, []],
+    [FAR, []],
+  ]);
+  // The retired car sits BETWEEN two selectable rows, not at the end. At the end
+  // nothing can be observed to skip over it: ArrowDown from the row before would
+  // land on the same place either way. Here PIA -> VER only works if SAI is
+  // skipped, so the keyboard block below doubles as the skip guard.
+  const order = ["NOR", "PIA", RETIRED, "VER", "LEC", "RUS", FAR];
+  const pinTick = (seq, extra = {}) =>
+    tick(seq, { rival: "PIA", drivers: field, spans, order, ...extra });
+
+  const ctx = await browser.newContext({ viewport: CLIENT });
+  const page = await ctx.newPage();
+  watchPage(page, failures);
+  await page.addInitScript((payloads) => {
+    window.__ticks = payloads;
+    window.__cursor = 0;
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) => {
+          if (window.__ticks[window.__cursor].seq === sinceSeq) {
+            if (window.__cursor + 1 >= window.__ticks.length) return null;
+            window.__cursor += 1;
+          }
+          return window.__ticks[window.__cursor];
+        },
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, [pinTick(1)]);
+
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  await page.waitForTimeout(400);
+
+  /** What every consumer of the chosen rival currently says, in one read. */
+  const trio = () =>
+    page.evaluate(() => {
+      const el = document.querySelector(".trace-stack-plot");
+      const series = el.__pitwallChart.getOption().series.find((s) => s.name === "speed-rival");
+      const chip = document.querySelector(".driver-chip-rival");
+      return {
+        // The plotted car, read off its values rather than off a label.
+        speeds: series ? series.data.map(([, value]) => value) : [],
+        chip: chip ? chip.textContent.trim() : null,
+        ringLabels: [...document.querySelectorAll(".ring-code")].map((n) => n.textContent),
+        pinnedRows: [...document.querySelectorAll(".tower-row[aria-selected='true']")].map((row) =>
+          row.querySelector(".col-drv").textContent.trim(),
+        ),
+      };
+    });
+
+  const rowFor = (code) => page.locator(".tower-row").filter({ hasText: code }).first();
+
+  // Every driver in the enumeration, pinned in turn, checked on all four.
+  for (const code of FIELD.filter((c) => c !== "NOR")) {
+    await rowFor(code).click();
+    await page.waitForTimeout(250);
+    const state = await trio();
+    const band = bandFor(code);
+    check(
+      state.speeds.length > 0 && state.speeds.every((v) => v >= band && v < band + 100),
+      `pinning ${code} plots ${code}'s own samples (${JSON.stringify(state.speeds)})`,
+    );
+    check(
+      state.chip !== null && state.chip.startsWith(code) && state.chip.includes("BROADCAST"),
+      `pinning ${code} labels the chip ${code} BROADCAST (${state.chip})`,
+    );
+    check(
+      state.ringLabels.length === 2 && state.ringLabels.includes(code),
+      `pinning ${code} moves the ring's second label to it (${JSON.stringify(state.ringLabels)})`,
+    );
+    check(
+      state.pinnedRows.length === 1 && state.pinnedRows[0] === code,
+      `exactly one row carries aria-selected, and it is ${code} (${JSON.stringify(state.pinnedRows)})`,
+    );
+  }
+
+  // --- The keyboard contract, driven with REAL key presses --------------------
+  const focused = () =>
+    page.evaluate(() => {
+      const row = document.activeElement?.closest?.(".tower-row");
+      return row ? row.querySelector(".col-drv").textContent.trim() : null;
+    });
+
+  // **Start from a KNOWN candidate, and never from the last row.** The handler
+  // moves the CANDIDATE, not whatever row happens to hold focus, and the
+  // enumeration loop above left RUS pinned - the last selectable row, where
+  // ArrowDown clamps to itself. An earlier version of this block focused LEC and
+  // asserted the arrows landed on RUS and back; both checks passed against a
+  // mutant that moved the candidate by ZERO, because the candidate was already
+  // where the assertions expected it to end up.
+  await rowFor("PIA").click();
+  await page.waitForTimeout(250);
+  const stops = await page.evaluate(
+    () => document.querySelectorAll('.tower-row[tabindex="0"]').length,
+  );
+  check(stops === 1, `the tower is ONE tab stop under a roving tabindex (${stops})`);
+
+  await rowFor("PIA").focus();
+  check((await focused()) === "PIA", "the candidate row takes focus");
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(150);
+  check((await focused()) === "VER", "ArrowDown moves the candidate one row down");
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(150);
+  check((await focused()) === "LEC", "and again, so the move is not a one-off clamp");
+  await page.keyboard.press("ArrowUp");
+  await page.waitForTimeout(150);
+  check((await focused()) === "VER", "ArrowUp moves it back");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  check((await trio()).pinnedRows[0] === "VER", "Enter pins the candidate row");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const cleared = await trio();
+  check(cleared.pinnedRows.length === 0, "Escape clears the pin");
+  check(
+    cleared.chip !== null && cleared.chip.startsWith("PIA"),
+    `and the window falls back to the producer's own rival (${cleared.chip})`,
+  );
+
+  // --- A retired car is not selectable ----------------------------------------
+  //
+  // **Not asserted through `tabindex`.** Every row that is not the candidate
+  // carries `tabindex="-1"`, selectable or not, so that attribute is invariant
+  // across exactly the thing being distinguished: a mutant making retired rows
+  // selectable left it at "-1" and the check passed. What separates them is the
+  // ABSENCE of `aria-selected` and the fact that the row does nothing when
+  // clicked - plus the skip, which the ArrowDown above already measures because
+  // the retired car sits BETWEEN two selectable rows in the order.
+  const retiredAria = await page.evaluate(
+    (code) =>
+      [...document.querySelectorAll(".tower-row")]
+        .find((row) => row.querySelector(".col-drv").textContent.trim() === code)
+        ?.hasAttribute("aria-selected"),
+    RETIRED,
+  );
+  check(
+    retiredAria === false,
+    `a retired row carries no aria-selected at all, rather than "false" (${retiredAria})`,
+  );
+
+  // --- A pinned car with nothing on this lap SAYS so ---------------------------
+  //
+  // Measured on real Melbourne ticks at lap 23 with NOR as the main car: of the
+  // seven cars that can be pinned, five contribute ZERO samples and one
+  // contributes eleven. Four silent axes under a control the reader has just
+  // used read as a broken window, so the header names the reason.
+  await rowFor(FAR).click();
+  await page.waitForTimeout(350);
+  const lapLine = await page.locator(".traces-lap").innerText();
+  check(
+    lapLine.includes(`${FAR} NOT ON THIS LAP YET`),
+    `a pinned car with no samples on this lap says so (${lapLine.trim()})`,
+  );
+  const rusSeries = (await trio()).speeds;
+  check(
+    rusSeries.length === 0,
+    `and it really has nothing to draw (${JSON.stringify(rusSeries)})`,
+  );
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const backToPia = await page.locator(".traces-lap").innerText();
+  check(
+    !backToPia.includes("NOT ON THIS LAP YET"),
+    `and the note clears with the pin (${backToPia.trim()})`,
+  );
+
+  const beforeClick = (await trio()).chip;
+  await rowFor(RETIRED).click();
+  await page.waitForTimeout(250);
+  check(
+    (await trio()).chip === beforeClick,
+    `clicking a retired row pins nothing (${(await trio()).chip} vs ${beforeClick})`,
+  );
+
+  // --- The pin SURVIVES a rewind ---------------------------------------------
+  // The eviction clears the accumulated samples, which is right; it must not
+  // clear the reader's CHOICE, which is not tick state.
+  await rowFor("VER").click();
+  await page.waitForTimeout(250);
+  await page.evaluate((payload) => {
+    window.__ticks.push(payload);
+  }, pinTick(2, { rewound: true }));
+  await page.waitForTimeout(500);
+  const afterRewind = await trio();
+  check(
+    afterRewind.pinnedRows.length === 1 && afterRewind.pinnedRows[0] === "VER",
+    `the pin survives a rewind (${JSON.stringify(afterRewind.pinnedRows)})`,
+  );
+
+  // --- The pin CLEARS when its car retires ------------------------------------
+  const retiredField = { ...field, VER: driver({ lap: LAP, active: false, has_finished: false }) };
+  await page.evaluate((payload) => {
+    window.__ticks.push(payload);
+  }, tick(3, { rival: "PIA", drivers: retiredField, spans, order }));
+  await page.waitForTimeout(600);
+  const afterRetire = await trio();
+  // **`pinnedRows` alone cannot see this, and a mutation proved it.** A retired
+  // row is not selectable, so it carries no `aria-selected` at all - a pin still
+  // HELD on it therefore reads as "no row is pinned" to that probe, which is the
+  // empty set answering a question about presence. The chip and the plotted
+  // values are what actually show whether the pin released.
+  check(
+    afterRetire.pinnedRows.length === 0,
+    `no row claims the pin once its car retires (${JSON.stringify(afterRetire.pinnedRows)})`,
+  );
+  check(
+    afterRetire.chip !== null && afterRetire.chip.startsWith("PIA"),
+    `band 4 goes back to naming the producer's rival (${afterRetire.chip})`,
+  );
+  const pia = bandFor("PIA");
+  check(
+    afterRetire.speeds.length > 0 &&
+      afterRetire.speeds.every((v) => v >= pia && v < pia + 100),
+    `and PLOTS it, read off the served values (${JSON.stringify(afterRetire.speeds)})`,
+  );
+
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 

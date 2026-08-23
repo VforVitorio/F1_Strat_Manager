@@ -107,7 +107,7 @@ export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTrace
 
   return (
     <section className="traces card">
-      <TracesHeader tick={tick} rival={rival} />
+      <TracesHeader tick={tick} rival={rival} rivalSamples={frame.rival.xs.length} />
       <TraceStack
         main={frame.main}
         rival={frame.rival}
@@ -127,8 +127,17 @@ export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTrace
   );
 }
 
-/** `LAP 24  NOR vs PIA`, plus the note for a car the telemetry never placed. */
-function TracesHeader({ tick, rival: rivalCode }: { tick: Tick; rival: string | null }) {
+/** `LAP 24  NOR vs PIA`, plus the notes for a rival the chart cannot draw. */
+function TracesHeader({
+  tick,
+  rival: rivalCode,
+  rivalSamples,
+}: {
+  tick: Tick;
+  rival: string | null;
+  /** How many of the rival's samples landed on the main car's current lap. */
+  rivalSamples: number;
+}) {
   const { arcade } = tick;
   // BOTH charted drivers, not just the main one. Reading the main alone left
   // a header saying nothing was wrong above an empty rival trace when the
@@ -137,11 +146,31 @@ function TracesHeader({ tick, rival: rivalCode }: { tick: Tick; rival: string | 
     (code): code is string => !!code && arcade.drivers[code]?.has_position === false,
   );
 
+  /**
+   * The chosen rival has nothing on this lap, so its four overlays are empty.
+   *
+   * **The selector is what made this reachable, and it is not a defect in it.**
+   * A rival sample is kept only while that car is on the MAIN driver's current
+   * lap - the rule exists because mixing laps puts unrelated `t` next to each
+   * other in a distance-keyed store and spikes the delta interpolation by 4-6 s.
+   * Until the tower could pin a car, the only rival ever charted was the one the
+   * producer chose, and it sits seconds away. Measured on Melbourne lap 23 with
+   * NOR as the main car: PIA (+2.10 s) contributes 233 samples, VER (+10.88 s)
+   * eleven, and RUS, LEC, TSU, ALB and HAM none at all.
+   *
+   * So the note says WHY the lane is blank. Four silent axes under a control the
+   * reader has just used read as a broken window - the same argument this file
+   * already makes for the starved-trace placeholder, and for the blind-note
+   * above. Widening the horizon itself is a separate question (#1066).
+   */
+  const noOverlap = rivalCode !== null && rivalSamples < 2 && !blind.includes(rivalCode);
+
   return (
     <header className="traces-header">
       <span className="traces-lap">
         {arcade.lap ? `LAP ${arcade.lap}` : "LAP —"}
         {blind.length ? `  ·  NO POSITION DATA (${blind.join(", ")})` : ""}
+        {noOverlap ? `  ·  ${rivalCode} NOT ON THIS LAP YET` : ""}
       </span>
       <span className="driver-chip driver-chip-main">{arcade.driver_main || "—"}</span>
       {rivalCode ? (

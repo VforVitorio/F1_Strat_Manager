@@ -21,7 +21,7 @@
  * band-height-budget.md`; the drawn layout is in the project's memory.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { BestsPanel } from "./BestsPanel";
 import { OwnCarTraces } from "./OwnCarTraces";
@@ -32,6 +32,7 @@ import { RadioFeed } from "./RadioFeed";
 import { StatusStrip } from "./StatusStrip";
 import { TimingTower } from "./TimingTower";
 import { TrackRing } from "./TrackRing";
+import { driverStatus } from "../../lib/driverStatus";
 import { useBulk } from "../../lib/useBulk";
 import { useConnection } from "../../lib/useConnection";
 import { useLiveLap } from "../../lib/useLiveLap";
@@ -67,8 +68,26 @@ export function DataWindow() {
   // while there is one possible answer; the moment the tower can pin a car
   // (#1051) any consumer left reading the tick shows a different rival from the
   // rest, inside one window. One value passed down cannot disagree with itself.
-  const rival = tick?.arcade.driver_rival ?? null;
+  //
+  // `null` means FOLLOW THE PRODUCER, not "no rival". It cannot collide with a
+  // real choice because a driver code on the wire is a non-null non-empty
+  // string, which is the sentinel rule this repo has paid for twice: a defaulted
+  // position of 0 is a place a real car can be, and the leader then "found" the
+  // car that had just crashed.
+  const [pinned, setPinned] = useState<string | null>(null);
+  const rival = pinned ?? tick?.arcade.driver_rival ?? null;
   const traceFrame = useTraceFrame(tick, discontinuity, rival);
+
+  // The pin releases when its car retires, or when the code stops being on the
+  // wire at all - a relaunched arcade pointed at another race is the second
+  // case, and it is why the car is checked for existence before its status.
+  // Holding a pin on a car that is not racing would leave band 4 comparing
+  // against a frozen trace with nothing to say.
+  useEffect(() => {
+    if (pinned === null || !tick) return;
+    const car = tick.arcade.drivers[pinned];
+    if (!car || driverStatus(car) === "out") setPinned(null);
+  }, [pinned, tick]);
   const connection = useConnection();
   const bulk = useBulk();
   const liveLap = useLiveLap();
@@ -110,7 +129,13 @@ export function DataWindow() {
           // unavailable".
           <div className={frozen ? "data-main is-frozen" : "data-main"}>
             <div className="left-column">
-              <TimingTower arcade={tick.arcade} bulk={bulk} live={liveLap} />
+              <TimingTower
+                arcade={tick.arcade}
+                bulk={bulk}
+                live={liveLap}
+                pinned={pinned}
+                onPin={setPinned}
+              />
               <BestsPanel bulk={bulk} />
             </div>
             <div className="right-column">

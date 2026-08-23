@@ -33,8 +33,13 @@ import { serveDist } from "./serve-dist.mjs";
 import { watchPage } from "./page-guard.mjs";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const TICKS = JSON.parse(readFileSync(process.argv[2], "utf-8"));
-const OUT = resolve(process.argv[3] ?? resolve(UI_DIR, "data.png"));
+const ARGV = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+// `--pin=VER` clicks that tower row before the shot, so a capture can show the
+// selector's own state (#1051). Without it the window is captured following the
+// producer's rival, which is what every earlier DATA shot shows.
+const PIN = (process.argv.find((a) => a.startsWith("--pin=")) ?? "").slice(6) || null;
+const TICKS = JSON.parse(readFileSync(ARGV[0], "utf-8"));
+const OUT = resolve(ARGV[1] ?? resolve(UI_DIR, "data.png"));
 // The client area the product really hands this page, NOT the `WindowSpec`
 // size. `place()` opens DATA at 1500x870 on the reference desktop and the OS
 // keeps 14 px of frame and 37 px of title bar, so the page gets 1486x833. The
@@ -42,8 +47,8 @@ const OUT = resolve(process.argv[3] ?? resolve(UI_DIR, "data.png"));
 // wider than the window it claimed to show. `smoke-data.mjs` was already close
 // to the real client, which is how the two disagreed.
 const CLIENT = { width: 1486, height: 833 };
-const WIDTH = Number(process.argv[4] ?? CLIENT.width);
-const HEIGHT = Number(process.argv[5] ?? CLIENT.height);
+const WIDTH = Number(ARGV[2] ?? CLIENT.width);
+const HEIGHT = Number(ARGV[3] ?? CLIENT.height);
 
 const ticks = Array.isArray(TICKS) ? TICKS : [TICKS];
 const server = await serveDist(resolve(UI_DIR, "dist"));
@@ -94,9 +99,28 @@ await page.waitForFunction(() => window.__cursor + 1 >= window.__ticks.length, n
 });
 await page.waitForTimeout(250);
 
+if (PIN !== null) {
+  // Clicked, not injected: the point of capturing the pin is that the CONTROL
+  // works, and setting React state from outside would photograph a state no
+  // reader can reach.
+  await page.locator(".tower-row").filter({ hasText: PIN }).first().click();
+  await page.waitForTimeout(400);
+  const pinned = await page.evaluate(() =>
+    [...document.querySelectorAll(".tower-row[aria-selected='true']")].map((row) =>
+      row.querySelector(".col-drv").textContent.trim(),
+    ),
+  );
+  if (pinned.length !== 1 || pinned[0] !== PIN) {
+    failures.push(`--pin=${PIN} did not take (aria-selected: ${JSON.stringify(pinned)})`);
+  }
+}
+
 const consumed = await page.evaluate(() => window.__cursor + 1);
 await page.screenshot({ path: OUT, fullPage: false });
-console.log(`shot-data: ${consumed}/${ticks.length} ticks replayed -> ${OUT}`);
+console.log(
+  `shot-data: ${consumed}/${ticks.length} ticks replayed` +
+    `${PIN ? `, pinned ${PIN}` : ""} -> ${OUT}`,
+);
 
 await context.close();
 await browser.close();
