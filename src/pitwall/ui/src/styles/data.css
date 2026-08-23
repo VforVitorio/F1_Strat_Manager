@@ -542,6 +542,31 @@ td.col-drv {
   opacity: 0.65;
 }
 
+/* The tower doubles as the rival selector (#1051). A selectable row is a tab
+ * stop under a roving tabindex; the pinned one is the car band 4 compares
+ * against.
+ *
+ * The pin reads as a LEFT EDGE plus a lifted ground rather than a colour on the
+ * text. Every cell in the row already carries meaning through colour - purple
+ * and green sectors, the deleted-lap strike, the OUT dimming - so tinting the
+ * text would collide with the timing screen's own code. The edge is the one
+ * channel the row has spare. */
+.tower-row.is-pinned td {
+  background: var(--qt-elevated);
+}
+
+.tower-row.is-pinned td:first-child {
+  box-shadow: inset 2px 0 0 var(--qt-accent);
+}
+
+/* Focus is visible on its own, separately from the pin: the reader moves the
+ * candidate row with Up and Down BEFORE committing it with Enter, and a
+ * candidate nobody can see is a keyboard trap that looks like a dead key. */
+.tower-row:focus {
+  outline: 1px solid var(--qt-accent);
+  outline-offset: -1px;
+}
+
 .tower-row.is-finished .col-last {
   color: var(--qt-fg-2);
 }

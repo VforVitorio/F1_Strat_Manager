@@ -24,6 +24,8 @@
  * once, rather than each of the forty cells repeating it.
  */
 
+import { useEffect, useRef, useState } from "react";
+
 import type { ArcadeState, Bulk, DriverLaps, LapRow, LiveLap } from "../../lib/bridge";
 import { driverStatus, type DriverStatus } from "../../lib/driverStatus";
 import { formatSeconds } from "../../lib/format";
@@ -34,9 +36,24 @@ interface TimingTowerProps {
   arcade: ArcadeState;
   bulk: Bulk | null;
   live: LiveLap | null;
+  /** The pinned rival, or null while the window follows the producer's choice. */
+  pinned: string | null;
+  onPin: (code: string | null) => void;
 }
 
-export function TimingTower({ arcade, bulk, live }: TimingTowerProps) {
+/**
+ * The car's status, with the tower's own missing-car guard.
+ *
+ * `driverStatus` takes a car, and a code in `race_order` can have no entry in
+ * `drivers` - a relaunched arcade pointed at another race with a pin still set is
+ * the reachable case. The bare call reads `undefined.active` there.
+ */
+function statusOf(arcade: ArcadeState, code: string): DriverStatus {
+  const car = arcade.drivers[code];
+  return car ? driverStatus(car) : "out";
+}
+
+export function TimingTower({ arcade, bulk, live, pinned, onPin }: TimingTowerProps) {
   const order = arcade.race_order;
   const leader = order[0];
   // The same reduction the bests panel ranks, from the same module. Two
@@ -44,9 +61,82 @@ export function TimingTower({ arcade, bulk, live }: TimingTowerProps) {
   // painting a purple the panel does not list.
   const bests = sessionBests(bulk);
 
+  // **A retired car is not selectable, and that is one rule rather than two.**
+  // The pin clears when its car retires, so allowing it to be pinned in the
+  // first place would be a state the next tick undoes. Retired rows still
+  // RENDER - a timing screen classifies retirements, it does not hide them -
+  // they simply leave the keyboard order.
+  const selectable = order.filter((code) => statusOf(arcade, code) !== "out");
+  const selectableKey = selectable.join(",");
+  const rows = useRef(new Map<string, HTMLTableRowElement>());
+  const [anchor, setAnchor] = useState<string | null>(null);
+  // Where the single tab stop sits: the reader's own candidate while it is still
+  // selectable, otherwise the pinned row, otherwise the leader.
+  const candidate =
+    anchor !== null && selectable.includes(anchor)
+      ? anchor
+      : pinned !== null && selectable.includes(pinned)
+        ? pinned
+        : (selectable[0] ?? null);
+
+  // **Any row leaving the order moves the anchor, not just the pinned one.**
+  // A merely FOCUSED row can retire on the same tick by the same mechanism, and
+  // an anchor left on it leaves every row at `tabIndex=-1`, so keyboard entry
+  // lands nowhere.
+  //
+  // Focus itself moves ONLY if the vanished row was holding it. The tower is
+  // mounted on every tick whichever tab is showing, so an unconditional move
+  // would yank focus out of whatever the reader is actually using.
+  useEffect(() => {
+    if (anchor === null || selectable.includes(anchor)) return;
+    const wasAt = order.indexOf(anchor);
+    const replacement =
+      selectable.find((code) => order.indexOf(code) >= wasAt) ??
+      selectable[selectable.length - 1] ??
+      null;
+    const held = rows.current.get(anchor);
+    const hadFocus = held !== undefined && document.activeElement === held;
+    setAnchor(replacement);
+    if (hadFocus && replacement !== null) rows.current.get(replacement)?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor, selectableKey]);
+
+  const moveCandidate = (delta: number) => {
+    if (selectable.length === 0) return;
+    const at = candidate === null ? 0 : Math.max(0, selectable.indexOf(candidate));
+    const next = selectable[Math.min(selectable.length - 1, Math.max(0, at + delta))];
+    setAnchor(next);
+    rows.current.get(next)?.focus();
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLTableSectionElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveCandidate(1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveCandidate(-1);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      // A second Enter on the pinned row releases it, so the keyboard can undo
+      // itself without reaching for Escape.
+      if (candidate !== null) onPin(candidate === pinned ? null : candidate);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      onPin(null);
+    }
+  };
+
   return (
     <section className="tower card">
-      <table className="tower-table">
+      {/* **`role="grid"`, chosen rather than inherited.** `aria-selected` is not
+       * meaningful on a row outside a grid, and the two roving idioms this repo
+       * already ships (`RaceTraceChart`'s reference strip, the DATA tab strip)
+       * are `<button>` strips that do not transfer to a `<table>` of `<tr>`.
+       * Promoting the table changes its semantics for every screen-reader user,
+       * which is why it is stated here rather than left to fall out of the
+       * `tabIndex` on the rows. */}
+      <table className="tower-table" role="grid" aria-multiselectable="false">
         <thead>
           <tr>
             <th className="col-pos">P</th>
@@ -70,7 +160,7 @@ export function TimingTower({ arcade, bulk, live }: TimingTowerProps) {
             <th className="col-stops">STOPS</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody onKeyDown={onKeyDown}>
           {order.map((code, index) => (
             <TowerRow
               key={code}
@@ -82,6 +172,14 @@ export function TimingTower({ arcade, bulk, live }: TimingTowerProps) {
               bulk={bulk}
               live={live}
               bests={bests}
+              pinned={pinned === code}
+              selectable={selectable.includes(code)}
+              isCandidate={candidate === code}
+              onPin={onPin}
+              register={(element) => {
+                if (element === null) rows.current.delete(code);
+                else rows.current.set(code, element);
+              }}
             />
           ))}
         </tbody>
@@ -100,9 +198,31 @@ interface TowerRowProps {
   bulk: Bulk | null;
   live: LiveLap | null;
   bests: SessionBests;
+  /** This row's car is the one band 4 is comparing against. */
+  pinned: boolean;
+  /** A retired car cannot be pinned, so it is not a keyboard stop either. */
+  selectable: boolean;
+  /** The single tab stop, under the roving tabindex. */
+  isCandidate: boolean;
+  onPin: (code: string | null) => void;
+  register: (element: HTMLTableRowElement | null) => void;
 }
 
-function TowerRow({ code, position, front, leader, arcade, bulk, live, bests }: TowerRowProps) {
+function TowerRow({
+  code,
+  position,
+  front,
+  leader,
+  arcade,
+  bulk,
+  live,
+  bests,
+  pinned,
+  selectable,
+  isCandidate,
+  onPin,
+  register,
+}: TowerRowProps) {
   const car = arcade.drivers[code];
   const status: DriverStatus = car ? driverStatus(car) : "out";
   const laps: DriverLaps | undefined = bulk?.drivers[code];
@@ -119,7 +239,16 @@ function TowerRow({ code, position, front, leader, arcade, bulk, live, bests }: 
   const interval = front === null ? null : gapCell(front, code, arcade, bulk);
 
   return (
-    <tr className={`tower-row is-${status}`}>
+    <tr
+      ref={register}
+      className={`tower-row is-${status}${pinned ? " is-pinned" : ""}`}
+      // `aria-selected` only on rows that can carry the state at all. On a
+      // retired row it would announce "not selected" about a car that can never
+      // be selected, which is noise rather than information.
+      aria-selected={selectable ? pinned : undefined}
+      tabIndex={selectable && isCandidate ? 0 : -1}
+      onClick={selectable ? () => onPin(pinned ? null : code) : undefined}
+    >
       <td className="col-pos">{position}</td>
       <td className="col-num">{laps?.number ?? "—"}</td>
       {/* **The colour moved off the glyphs and onto a swatch beside them.**
