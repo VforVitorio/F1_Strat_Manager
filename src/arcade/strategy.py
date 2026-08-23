@@ -811,10 +811,17 @@ def _contingency_dicts(contingencies: Any) -> list[dict[str, Any]]:
     """Flatten the orchestrator's ``Contingency`` models into wire dicts.
 
     Four keys each: ``trigger``, ``switch_to``, ``priority``, ``rationale``.
-    Named rather than inlined because the orchestrator can hand this back as
-    Pydantic models OR, on the dict-shaped result path, as dicts already, and a
-    comprehension that assumed one of the two would produce a payload of empty
-    objects on the other without failing anywhere.
+
+    Both ITEM shapes are handled because the list can hold either, and a
+    comprehension that assumed one would produce a payload of empty objects on
+    the other without failing anywhere.
+
+    **The fork that matters is one level up and it is the caller's**, not this
+    function's. ``_build_decision`` reads every optional field with ``getattr``,
+    so a dict-shaped ``rec`` would yield ``None`` for all of them, silently. That
+    shape does not reach the arcade today - ``run_lap``'s contract is a real
+    ``StrategyRecommendation`` on both the rich and the no-llm paths - and the
+    day one does, the hole is at the call site rather than here.
     """
     packed: list[dict[str, Any]] = []
     for item in contingencies or []:

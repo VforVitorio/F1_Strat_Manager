@@ -163,13 +163,22 @@ def test_the_first_tick_sends_one_sample_not_the_whole_race():
 # --- Packing the span -------------------------------------------------------
 
 
-def _frames(n: int) -> list[FrameData]:
+def _frames(n: int, signature: float = 0.0) -> list[FrameData]:
+    """`n` frames on the global clock, optionally stamped so the OWNER is readable.
+
+    `t` is `i * DT` for every driver, because that is what resampling onto one
+    timeline means, so an index recovered from `t` cannot say whose array it came
+    from. `signature` shifts `speed` by a per-driver amount, which is the only
+    thing in a served sample that a test can use to tell two cars apart. Without
+    it every fixture in this file hands all drivers byte-identical arrays, and a
+    producer serving the WRONG driver's frames is invisible to every assertion.
+    """
     return [
         FrameData(
             t=i * DT,
             x=0.0,
             y=0.0,
-            speed=200.0 + i,
+            speed=200.0 + i + signature,
             gear=6,
             drs=0,
             throttle=80.0,
@@ -327,13 +336,19 @@ def _sweep_the_served_spans(speeds_and_ticks, seek_at: int | None = None):
     so the index is recoverable from the wire itself rather than from the
     arithmetic that was supposed to produce it.
 
-    Returns `(sent_by_driver, dropped_total)`.
+    Returns `(sent_by_driver, dropped_total, signature_slots_seen_per_driver)`.
     """
     session = SessionData(
         gp_name="Australia",
         location="Melbourne",
         year=2025,
-        frames_by_driver={code: _frames(4000) for code in _GRID},
+        # Each car's speed is offset by 1000 * its grid slot, so a sample says who
+        # it belongs to. Identical arrays would make the swap class below
+        # unfalsifiable: `t` is the global clock, so an index recovered from it is
+        # the same whichever array the span was filled from.
+        frames_by_driver={
+            code: _frames(4000, signature=1000.0 * slot) for slot, code in enumerate(_GRID)
+        },
         circuit_length_m=CIRCUIT_LENGTH_M,
         total_frames=4000,
     )
@@ -347,6 +362,7 @@ def _sweep_the_served_spans(speeds_and_ticks, seek_at: int | None = None):
     )
 
     sent: dict[str, list[int]] = {code: [] for code in _GRID}
+    served_by: dict[str, set[int]] = {code: set() for code in _GRID}
     dropped_total = 0
     frame_index = 0.0
     last_sent = -1
@@ -368,7 +384,14 @@ def _sweep_the_served_spans(speeds_and_ticks, seek_at: int | None = None):
             )["telemetry"]["drivers"]
             for code, samples in spans.items():
                 sent[code].extend(round(sample["t"] / DT) for sample in samples)
-    return sent, dropped_total
+                # Whose array the span was actually filled from. The index above
+                # cannot answer that, and a producer keying the comprehension on
+                # the wrong code would pass every count-based assertion.
+                served_by[code].update(
+                    round(sample["speed"] - 200.0 - round(sample["t"] / DT)) // 1000
+                    for sample in samples
+                )
+    return sent, dropped_total, served_by
 
 
 def test_every_frame_the_clock_crosses_reaches_EVERY_driver_exactly_once():
@@ -381,8 +404,25 @@ def test_every_frame_the_clock_crosses_reaches_EVERY_driver_exactly_once():
     driver another's frames. This asserts on what the payload actually
     carried, at 1x, 2x and 8x in sequence, and requires the four drivers to
     have received exactly the same frames.
+
+    **The third class needs a second metric, and did not have one.** Recovering
+    the frame index from `t` cannot see a wrong-key defect at all, because `t` is
+    the global clock and every driver's array carries the same value at the same
+    index; and every fixture in this file used to hand all drivers byte-identical
+    arrays, so nothing else could see it either. Measured by the exit gate: a
+    producer serving every driver the FIRST driver's frames passed all 277 tests.
+    The speed signature and the `served_by` assertion are what close that.
     """
-    sent, dropped = _sweep_the_served_spans([(1.0, 30), (2.0, 30), (8.0, 30)])
+    sent, dropped, served_by = _sweep_the_served_spans([(1.0, 30), (2.0, 30), (8.0, 30)])
+
+    # Identity FIRST, because the index assertions below cannot see it: `t` is the
+    # global clock, so a span filled from another car's array recovers the same
+    # index list. Each driver's samples must carry that driver's own speed offset
+    # and no other's (#1048 exit gate, finding 1).
+    for slot, code in enumerate(_GRID):
+        assert served_by[code] == {slot}, (
+            f"{code} was served frames belonging to grid slot(s) {served_by[code]}"
+        )
 
     assert dropped == 0, "smooth playback must never reach the span cap"
     reference = sent["NOR"]
@@ -401,7 +441,7 @@ def test_a_seek_is_capped_and_counted_for_every_driver_alike():
     assertion is that the count is non-zero, that no driver silently spliced
     across it, and that the twenty spans agree about where the hole is.
     """
-    sent, dropped = _sweep_the_served_spans([(1.0, 20), (8.0, 20)], seek_at=10)
+    sent, dropped, _ = _sweep_the_served_spans([(1.0, 20), (8.0, 20)], seek_at=10)
 
     assert dropped > 0, "the seek did not outrun the span cap"
     reference = sent["NOR"]
@@ -439,7 +479,7 @@ def test_the_per_driver_sweep_actually_bites_on_a_planted_duplicate(monkeypatch)
         return packed
 
     monkeypatch.setattr(app_module, "_frames_to_telemetry_span", duplicating)
-    sent, _ = _sweep_the_served_spans([(1.0, 10)])
+    sent, _, _ = _sweep_the_served_spans([(1.0, 10)])
 
     reference = sent["NOR"]
     assert len(reference) == len(set(reference)), "the mutation was supposed to spare NOR"

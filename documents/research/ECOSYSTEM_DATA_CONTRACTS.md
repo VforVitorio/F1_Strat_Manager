@@ -182,8 +182,8 @@ final `error` with `lap=0` instead of crashing the response.
 
 | Event `type` | Payload model (simulator.py) | Fields |
 |---|---|---|
-| `start` | `StartEvent` (line 89) | `gp, year, driver, driver2?, team, lap_start, lap_end, total_laps, no_llm, provider, timestamp` (total_laps authoritative; lap_start/end = effective window) |
-| `lap` | `LapDecision` (line 110) | `lap_number, compound, tyre_life, position, lap_time_s?, gap_ahead_s, action, confidence, reasoning, scenario_scores: dict[str,float], pace_mode?, risk_posture?, pit_lap_target?, compound_next?, undercut_target?, agent_alerts: list[str], guardrail_reason?` |
+| `start` | `StartEvent` (line 89) | `gp, year, driver, team, lap_start, lap_end, total_laps, no_llm, provider, timestamp` (`driver2?` removed by `F1_Telemetry_Manager#219`: it reached the stream and no consumer read it) (total_laps authoritative; lap_start/end = effective window) |
+| `lap` | `LapDecision` (line 110) | `lap_number, compound, tyre_life, position, lap_time_s?, gap_ahead_s, action, confidence, reasoning, scenario_scores: dict[str,float], pace_mode?, risk_posture?, pit_lap_target?, compound_next?, undercut_target?, guardrail_reason?` (`agent_alerts` removed by `F1_Telemetry_Manager#219`: it was a lossy copy of `per_agent.radio.alerts` for a retired Qt dashboard) |
 | `error` | `ErrorEvent` (line 140) | `lap, message` (stream continues; consumer renders a partial race) |
 | `summary` | `RunSummary` (line 151) | `status, positions, actions, agents_fired, stint, timing, gap_ahead, mc_confidence_series: list[float], best_decision, worst_decision, time_compression: float, reasoning_tokens: dict[str,int]` |
 

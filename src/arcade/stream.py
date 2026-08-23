@@ -219,13 +219,16 @@ class TelemetryStreamServer:
 
         Takes a factory rather than a dict, and that is the whole point. The
         caller is the pyglet frame loop, and assembling a tick is not cheap:
-        measured on the real Melbourne 2025 replay, `_broadcast_if_due` cost
-        its caller 3.19 ms on a steady 8x tick and 5.41 ms on a seek, of which
-        the recursive `asdict` over the decision history is 2.48 ms and the
-        JSON encode 1.81 ms. Schema v2's twenty telemetry spans take the seek
-        tick to 32 ms, about two dropped frames at 60 FPS. Handing over a
-        closure moves all of it to the sender thread that already existed for
-        `sendall`, and leaves the frame loop paying one queue put.
+        measured on the real Melbourne 2025 replay with two spans on the wire,
+        `_broadcast_if_due` cost its caller 3.19 ms on a steady 8x tick and
+        5.41 ms on a seek. Of that 3.19, the recursive `asdict` over the
+        decision history is 2.48 ms, the JSON encode 0.44 ms and the arcade
+        snapshot 0.19 ms - which is why the whole assembly moved rather than
+        the encode alone. Under schema v2's twenty spans the same decomposition
+        reads 2.48 / 1.81 / 0.83 on a steady tick and takes a seek to 32 ms,
+        about two dropped frames at 60 FPS. Handing over a closure moves all of
+        it to the sender thread that already existed for `sendall`, and leaves
+        the frame loop paying one queue put.
 
         **Returns without touching a socket, and without calling `build`.**
 

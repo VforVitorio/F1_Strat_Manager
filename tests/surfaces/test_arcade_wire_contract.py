@@ -966,6 +966,61 @@ def test_every_recommendation_field_the_wire_drops_was_decided_about():
     assert {"action", "confidence", "reasoning", "scenario_scores"} <= dto
 
 
+def test_the_producer_really_copies_the_contingencies_it_was_handed():
+    """`_build_decision` is what fills the wire, and nothing executed it (#1046).
+
+    Every other guard for these two fields reads a hand-built `LapDecisionDTO`:
+    the golden's `_decision()` writes them directly, and the dev producer writes
+    dicts straight into the DTO. So the extraction itself was uncovered, and the
+    exit gate measured what that costs: replacing the real copy with
+    `contingencies=[]` leaves all 277 tests green while every rich lap ships the
+    field empty.
+
+    It cannot be closed by running the pipeline. The rich profile spends LLM
+    calls, and on the free profile `no_llm.py` builds `contingencies=[]` by
+    design, so no affordable run reds it. A stand-in recommendation does.
+
+    The four keys are checked against `Contingency`'s own declaration rather than
+    against this file's idea of them: hardcoded on both sides, a rename would ship
+    four empty strings on every lap and stay green - the same drift the situation
+    filter's guard below is written to stop.
+    """
+    from src.arcade.strategy import _build_decision
+
+    declared = _dataclass_field_names("src/agents/strategy_orchestrator.py", "Contingency")
+    assert declared, "Contingency has no annotated fields; the flattener guards nothing"
+
+    class _Contingency:
+        def __init__(self, **values):
+            for key, value in values.items():
+                setattr(self, key, value)
+
+    payload = {name: f"{name}-value" for name in sorted(declared)}
+    rec = SimpleNamespace(
+        action="PIT_NOW",
+        confidence=0.71,
+        reasoning="undercut window open",
+        scenario_scores={"PIT_NOW": 0.71},
+        contingencies=[_Contingency(**payload), dict(payload)],
+        key_risks=["rejoin into traffic", "the cliff arrives first"],
+    )
+    race_state = SimpleNamespace(
+        lap=12, compound="MEDIUM", tyre_life=9, position=4, gap_ahead_s=1.42
+    )
+
+    decision = _build_decision(rec, race_state, 81.2, {})
+
+    assert decision.key_risks == ["rejoin into traffic", "the cliff arrives first"]
+    assert len(decision.contingencies) == 2, "an item shape was dropped on the floor"
+    # Both item shapes, because the orchestrator's list can hold either, and both
+    # must survive with every declared key carrying its value rather than "".
+    for item in decision.contingencies:
+        assert set(item) == declared, f"the wire dict does not match Contingency: {item}"
+        assert all(item[name] == f"{name}-value" for name in declared), (
+            f"a declared field was flattened to an empty string: {item}"
+        )
+
+
 def test_the_two_neutralisation_booleans_are_filtered_out_of_the_situation_dump():
     """N27 still computes them; the wire stops carrying them (#1043).
 

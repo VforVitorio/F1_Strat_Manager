@@ -90,7 +90,7 @@
         <mxCell id="dash-subs" value="Strategy Dashboard &#8212; MainWindow (QMainWindow)&#10;TelemetryStreamClient (QThread)&#10;socket.recv() &#8594; split by \n &#8594; pyqtSignal(dict)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#F59E0B;fontColor=#E6E8EF;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="140" y="640" width="560" height="100" as="geometry"/>
         </mxCell>
-        <mxCell id="tel-subs" value="Live Telemetry &#8212; TelemetryWindow (QMainWindow)&#10;TelemetryStreamClient (QThread) &#8212; separate socket connection&#10;consumes only arcade.telemetry.{main, rival}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#06B6D4;fontColor=#E6E8EF;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="tel-subs" value="RETIRED (7ea6a7a6) &#8212; Qt TelemetryWindow (QMainWindow)&#10;TelemetryStreamClient (QThread) &#8212; separate socket connection&#10;consumed arcade.telemetry.{main, rival}, the shape schema v2 replaced&#10;with a span per driver under arcade.telemetry.drivers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#06B6D4;fontColor=#E6E8EF;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="740" y="640" width="560" height="100" as="geometry"/>
         </mxCell>
 

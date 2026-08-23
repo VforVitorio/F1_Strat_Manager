@@ -94,7 +94,9 @@ The 2x2 grid of telemetry plots. Lives in its own module so `TelemetryWindow` ca
 
 ## Wire protocol
 
-The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-terminated payload. The shape below is the shape the **Qt** dashboard consumes; the wire has since grown the fields PITWALL needs, listed after it.
+The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-terminated payload.
+
+**The JSON below is a historical example and no longer describes the wire.** It is the shape the Qt dashboard consumed before that dashboard was retired in `7ea6a7a6`: a single telemetry sample per car under the role keys `main` and `rival`, plus `session`, `driver`, `driver2` and `delta_s` keys the producer does not emit. The current contract is the table under it, and the frozen shape lives in `tests/surfaces/test_arcade_wire_contract.py`.
 
 ```json
 {
