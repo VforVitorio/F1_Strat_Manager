@@ -45,19 +45,19 @@ import { neutralisedLaps, neutralisedRanges } from "../../lib/neutralised";
 import { raceTrace } from "../../lib/raceTrace";
 import type { TraceReference } from "../../lib/raceTrace";
 import type { ArcadeState, Bulk } from "../../lib/bridge";
+import { driverColour } from "../../lib/driverColour";
 
 /** The own car is drawn heavier than the nineteen it has to be picked out of. */
 const OWN_WIDTH = 2;
 const FIELD_WIDTH = 1;
 
-function colourOf(arcade: ArcadeState, code: string): string {
-  const rgb = arcade.driver_colors[code];
-  // Never a CSS custom property here, unlike the tower's version of this: an
-  // ECharts canvas cannot resolve `var(--qt-fg-1)` and would draw the series
-  // in its own default palette, which is the one colour set on this window
-  // that answers to nothing.
-  return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : AXIS_TEXT;
-}
+/**
+ * Never a CSS custom property here, unlike the tower's fallback: an ECharts
+ * canvas cannot resolve `var(--qt-fg-1)` and would draw the series in its own
+ * default palette, which is the one colour set on this window that answers to
+ * nothing.
+ */
+const NO_COLOUR = AXIS_TEXT;
 
 /** `+12.3` / `-4.5` - the sign is the whole reading, so it is always printed. */
 function signedSeconds(value: number): string {
@@ -121,7 +121,7 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
         },
       },
       series: trace.lines.map((line) => {
-        const colour = colourOf(arcade, line.code);
+        const colour = driverColour(arcade.driver_colors, line.code, NO_COLOUR);
         const isOwn = line.code === own;
         return {
           type: "line" as const,

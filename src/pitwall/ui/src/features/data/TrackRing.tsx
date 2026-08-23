@@ -25,6 +25,7 @@
  */
 
 import type { ArcadeState } from "../../lib/bridge";
+import { driverColour } from "../../lib/driverColour";
 import { driverStatus, type DriverStatus } from "../../lib/driverStatus";
 
 /** SVG user units. The viewBox is square and the ring is centred in it. */
@@ -59,9 +60,8 @@ function place(fraction: number): { x: number; y: number } {
   };
 }
 
-function rgb(colour: [number, number, number] | undefined): string {
-  return colour ? `rgb(${colour[0]}, ${colour[1]}, ${colour[2]})` : "var(--qt-fg-2)";
-}
+/** This ring's dim dot for a car the wire has no colour for. */
+const NO_COLOUR = "var(--qt-fg-2)";
 
 export function TrackRing({ arcade, rival }: { arcade: ArcadeState; rival: string | null }) {
   // The two labelled cars go on OPPOSITE sides of their dots. They are the
@@ -106,7 +106,7 @@ export function TrackRing({ arcade, rival }: { arcade: ArcadeState; rival: strin
     dots.push({
       code,
       ...place(car.rel_dist),
-      colour: rgb(arcade.driver_colors[code]),
+      colour: driverColour(arcade.driver_colors, code, NO_COLOUR),
       status: driverStatus(car),
       label: labelSide(code),
     });

@@ -93,8 +93,6 @@ const INFO = "#3b82f6";
 const SUCCESS = "#10b981";
 /** palette.DANGER */
 const DANGER = "#ef4444";
-/** palette.WARNING - the rival, on every lane */
-const RIVAL = "#f59e0b";
 /** palette.ACCENT - gear, the one new colour site */
 const ACCENT = "#a78bfa";
 
@@ -253,6 +251,22 @@ export interface TraceStackProps {
   /** Locked X maximum: the circuit length, or the fallback until one arrives. */
   xMax: number;
   rivalCode: string | null;
+  /**
+   * The rival's own team colour, resolved by `DataWindow` (#1070).
+   *
+   * A prop rather than a constant here, and that IS the fix. Every rival series
+   * on all six lanes used to draw in a fixed `palette.WARNING` amber, inherited
+   * 1:1 from the Qt panel this is a port of, which fixes the rival to WARNING at
+   * `telemetry_panel.py:101,131,167,181,195`. That was deliberate and it stopped
+   * being right the moment the tower could pin any car: the amber sits an RGB
+   * distance of 33.5 from McLaren papaya, the closest pair in the whole team
+   * palette, so pinning a McLaren looked correct and pinning anyone else looked
+   * like the colour had gone stale.
+   *
+   * Resolved once above and passed down for the same reason the CODE is (#1051):
+   * the chip and the six series must not be able to disagree about one car.
+   */
+  rivalColour: string;
   /** Where the car is on the lap right now, in metres. Null before the first tick. */
   cursorX: number | null;
   /** Replaces the whole stack when set - a dead feed with nothing accumulated. */
@@ -291,6 +305,7 @@ export function TraceStack(props: TraceStackProps) {
     delta,
     xMax,
     rivalCode,
+    rivalColour,
     cursorX,
     placeholder = null,
   } = props;
@@ -419,8 +434,8 @@ export function TraceStack(props: TraceStackProps) {
               ? delta
               : channel(rival, lane)
             : [],
-          lineStyle: { color: RIVAL, width: 2, type: "dashed" as const },
-          itemStyle: { color: RIVAL },
+          lineStyle: { color: rivalColour, width: 2, type: "dashed" as const },
+          itemStyle: { color: rivalColour },
         };
         // **The rival is declared FIRST so the own car paints on top of it.** The
         // race trace states the rule ("our own car moved LAST so it draws on top")
@@ -429,7 +444,7 @@ export function TraceStack(props: TraceStackProps) {
         return [rivalSeries, own];
       }),
     };
-  }, [box, main, rival, delta, xMax, rivalCode]);
+  }, [box, main, rival, delta, xMax, rivalCode, rivalColour]);
 
   const chart = useEChart(box > 0 && !placeholder ? option : null);
   const boxes = laneLayout(box);

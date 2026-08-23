@@ -69,11 +69,25 @@ interface OwnCarTracesProps {
    * pinned car.
    */
   rival: string | null;
+  /**
+   * The rival's own team colour, resolved by `DataWindow` alongside its code.
+   *
+   * Both halves travel together on purpose (#1070): this file holds the chip and
+   * the stack, and handing it a code without a colour is how they came to
+   * disagree in the first place.
+   */
+  rivalColour: string;
   /** The producer is gone; these buffers will not fill. */
   frozen?: boolean;
 }
 
-export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTracesProps) {
+export function OwnCarTraces({
+  tick,
+  frame,
+  rival,
+  rivalColour,
+  frozen = false,
+}: OwnCarTracesProps) {
   const { arcade } = tick;
 
   // The X lock is derived here because `circuit_length_m` rides on every tick, so
@@ -108,13 +122,14 @@ export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTrace
 
   return (
     <section className="traces card">
-      <TracesHeader tick={tick} rival={rival} frame={frame} />
+      <TracesHeader tick={tick} rival={rival} rivalColour={rivalColour} frame={frame} />
       <TraceStack
         main={frame.main}
         rival={frame.rival}
         delta={frame.delta}
         xMax={xMax}
         rivalCode={rival}
+        rivalColour={rivalColour}
         cursorX={cursorX}
         // ONE caption over the whole stack, where the 2x2 printed the same sentence
         // four times. It claims starvation only when the MAIN trace is starved: a
@@ -132,10 +147,13 @@ export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTrace
 function TracesHeader({
   tick,
   rival: rivalCode,
+  rivalColour,
   frame,
 }: {
   tick: Tick;
   rival: string | null;
+  /** The chip paints in the rival's own team colour; the border follows it. */
+  rivalColour: string;
   /** The buffers themselves: every note below is about what the DELTA lane has. */
   frame: TraceFrame;
 }) {
@@ -212,7 +230,14 @@ function TracesHeader({
            * statement, and without it a reader has no way to know the two traces
            * are not simultaneous. Both numbers come from the accumulator, never
            * one from it and one from `arcade.drivers`. */}
-          <span className="driver-chip driver-chip-rival" title="broadcast tier">
+          {/* `color` inline, because the value is per-driver and a stylesheet
+           * cannot know it. `data.css` gives this chip a `currentColor` border,
+           * so the border follows the team colour for free. */}
+          <span
+            className="driver-chip driver-chip-rival"
+            style={{ color: rivalColour }}
+            title="broadcast tier"
+          >
             {rivalCode}
             {frame.rivalLap !== null && frame.rivalLap !== frame.mainLap ? (
               <span className="trace-rival-lap"> L{frame.rivalLap}</span>

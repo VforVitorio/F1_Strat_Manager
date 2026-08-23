@@ -642,14 +642,22 @@ td.col-drv {
   padding: 2px 8px;
 }
 
-/* palette.INFO / palette.WARNING, the two chip colours `TelemetryPanel`
- * constructs with. Guarded by `test_pitwall_tokens.py`. */
+/* palette.INFO, the own car's chip colour `TelemetryPanel` constructs with.
+ * Guarded by `test_pitwall_tokens.py`. */
 .driver-chip-main {
   color: #3b82f6;
 }
-.driver-chip-rival {
-  color: #f59e0b;
-}
+
+/* **The rival chip has no colour here, and that is the fix for #1070.** It used
+ * to carry palette.WARNING beside the rule above, matching the fixed amber the
+ * six trace lanes drew in. Both came from the Qt port, which fixes the rival to
+ * WARNING whoever it is. Once the tower could pin any car that stopped being
+ * right: the amber sits an RGB distance of 33.5 from McLaren papaya, the closest
+ * pair in the team palette, so a McLaren rival looked correct and everyone else
+ * looked like a stale colour. The value is now per-driver, off `driver_colors`
+ * on the wire, and arrives as an inline `color` from `DataWindow`; the
+ * `currentColor` border above follows it. A stylesheet cannot know which car is
+ * pinned, so there is nothing to put here. */
 
 /* --- The 2x2 grid ------------------------------------------------------- */
 

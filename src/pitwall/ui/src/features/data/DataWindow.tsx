@@ -39,6 +39,8 @@ import { useLiveLap } from "../../lib/useLiveLap";
 import { useStatusText } from "../../lib/useStatusText";
 import { useTick } from "../../lib/useTick";
 import { waitingBody, waitingStatus } from "../../lib/waitingCopy";
+import { AXIS_TEXT } from "../../lib/chart";
+import { driverColour } from "../../lib/driverColour";
 
 /**
  * The right column's tabs, in the order a strategist reaches for them.
@@ -77,6 +79,12 @@ export function DataWindow() {
   const [pinned, setPinned] = useState<string | null>(null);
   const rival = pinned ?? tick?.arcade.driver_rival ?? null;
   const traceFrame = useTraceFrame(tick, discontinuity, rival);
+  // The rival's COLOUR is resolved here for the same reason its code is: band 4
+  // draws it on six series and on the header chip, and those were free to
+  // disagree. The fallback is a literal rather than a `var(--qt-*)` because one
+  // of the consumers is an ECharts canvas, which cannot resolve a custom
+  // property and would silently fall back to its own palette (#1070).
+  const rivalColour = driverColour(tick?.arcade.driver_colors ?? {}, rival, AXIS_TEXT);
 
   // The pin releases when its car retires, or when the code stops being on the
   // wire at all - a relaunched arcade pointed at another race is the second
@@ -167,7 +175,13 @@ export function DataWindow() {
               {tab === "traces" && (
                 <div className="band4">
                   {traceFrame && (
-                    <OwnCarTraces tick={tick} frame={traceFrame} rival={rival} frozen={frozen} />
+                    <OwnCarTraces
+              tick={tick}
+              frame={traceFrame}
+              rival={rival}
+              rivalColour={rivalColour}
+              frozen={frozen}
+            />
                   )}
                   <div className="side-column">
                     <TrackRing arcade={tick.arcade} rival={rival} />
