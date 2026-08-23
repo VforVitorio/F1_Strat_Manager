@@ -79,7 +79,19 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
         pit_lap_target=lap + 1,
         compound_next="HARD",
         undercut_target="RUS",
-        agent_alerts=["tyre cliff in 2 laps", "DRS window opens on the main straight"],
+        # Both landed on the DTO with schema v2 (#1046). They are here because a
+        # fixture that omits a field the real producer sends is the drift #853
+        # was about: the window gets developed against a payload thinner than
+        # the one it will receive.
+        contingencies=[
+            {
+                "trigger": "if RUS pits within two laps",
+                "switch_to": "PIT_NOW",
+                "priority": "HIGH",
+                "rationale": "the undercut window shuts once he clears traffic",
+            }
+        ],
+        key_risks=["rejoin into traffic", "the cliff arrives before the stop"],
         # `None`, not the STRING "none". A non-empty string is truthy, so the
         # window rendered `⚠ Guardrail: none` in the alarm colour on every lap
         # of every dev run - a red warning whose content is that there is
@@ -124,8 +136,6 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
                 "threat_level": "MEDIUM",
                 "gap_ahead_s": 1.42,
                 "pace_delta_s": -0.12,
-                "sc_currently_active": False,
-                "vsc_active": False,
                 "reasoning": "DRS threat building: the gap to PIA has closed for three laps.",
             },
             radio={
@@ -211,7 +221,6 @@ state.start = StartEventDTO(
     gp="Melbourne",
     year=2025,
     driver="NOR",
-    driver2="PIA",
     team="McLaren",
     lap_start=1,
     lap_end=57,
