@@ -30,6 +30,17 @@ export interface TraceFrame {
   main: SortedTrace;
   rival: SortedTrace;
   delta: ReturnType<typeof deltaSeries>;
+  /**
+   * The lap each charted buffer holds, from the accumulator and nowhere else.
+   *
+   * The header needs the rival's lap now that the two cars are compared lap
+   * against lap rather than instant against instant, and `arcade.drivers[code].lap`
+   * is a DIFFERENT number: it reads the frame at the tick's index while these read
+   * the last sample stored. They disagree across a lap change inside one span and
+   * at every lap-channel glitch.
+   */
+  mainLap: number | null;
+  rivalLap: number | null;
 }
 
 export function useTraceFrame(
@@ -55,7 +66,7 @@ export function useTraceFrame(
   // which is the half that changes without a new tick.
   return useMemo(() => {
     if (!tick) return null;
-    const { telemetry, driver_main } = tick.arcade;
+    const { telemetry, driver_main, drivers } = tick.arcade;
     // The producer's own eviction signals, plus the clock's - `FrameClock` sees a
     // backwards jump smaller than one broadcast that the flags miss.
     const evict =
@@ -63,13 +74,22 @@ export function useTraceFrame(
     // Every driver on the wire is accumulated; the comparison is a LOOKUP at
     // render (#1050). Selecting at ingest was safe only while the producer could
     // not switch rivals, and the tower's pin is exactly that switch.
-    accumulator.current.ingest(telemetry.drivers, driver_main, evict);
+    // The state block rides along so a car that has STOPPED stops being stored:
+    // the producer republishes its last frame every tick with an advancing `t`,
+    // and nothing else here would ever clear it (#1066).
+    accumulator.current.ingest(telemetry.drivers, evict, drivers);
     const main = accumulator.current.trace(driver_main);
     // Null in single-driver mode, which is a real state and not padding: the
     // rival trace is meant to be empty there, and `TraceStack` renders its own
     // placeholder for it.
     const rival = accumulator.current.trace(rivalCode);
-    return { main, rival, delta: deltaSeries(main, rival) };
+    return {
+      main,
+      rival,
+      delta: deltaSeries(main, rival),
+      mainLap: accumulator.current.lapOf(driver_main),
+      rivalLap: accumulator.current.lapOf(rivalCode),
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick?.seq, rivalCode]);
 }

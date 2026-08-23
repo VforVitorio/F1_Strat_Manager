@@ -32,6 +32,7 @@
  */
 
 import type { Tick } from "../../lib/bridge";
+import { driverStatus } from "../../lib/driverStatus";
 import { TraceStack } from "./TraceStack";
 import type { TraceFrame } from "./useTraceFrame";
 
@@ -107,7 +108,7 @@ export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTrace
 
   return (
     <section className="traces card">
-      <TracesHeader tick={tick} rival={rival} rivalSamples={frame.rival.xs.length} />
+      <TracesHeader tick={tick} rival={rival} frame={frame} />
       <TraceStack
         main={frame.main}
         rival={frame.rival}
@@ -131,12 +132,12 @@ export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTrace
 function TracesHeader({
   tick,
   rival: rivalCode,
-  rivalSamples,
+  frame,
 }: {
   tick: Tick;
   rival: string | null;
-  /** How many of the rival's samples landed on the main car's current lap. */
-  rivalSamples: number;
+  /** The buffers themselves: every note below is about what the DELTA lane has. */
+  frame: TraceFrame;
 }) {
   const { arcade } = tick;
   // BOTH charted drivers, not just the main one. Reading the main alone left
@@ -147,30 +148,55 @@ function TracesHeader({
   );
 
   /**
-   * The chosen rival has nothing on this lap, so its four overlays are empty.
+   * The delta lane has nothing to draw, and the note has to say WHICH nothing.
    *
-   * **The selector is what made this reachable, and it is not a defect in it.**
-   * A rival sample is kept only while that car is on the MAIN driver's current
-   * lap - the rule exists because mixing laps puts unrelated `t` next to each
-   * other in a distance-keyed store and spikes the delta interpolation by 4-6 s.
-   * Until the tower could pin a car, the only rival ever charted was the one the
-   * producer chose, and it sits seconds away. Measured on Melbourne lap 23 with
-   * NOR as the main car: PIA (+2.10 s) contributes 233 samples, VER (+10.88 s)
-   * eleven, and RUS, LEC, TSU, ALB and HAM none at all.
+   * **The predicate is the DELTA, not the rival's sample count**, and the
+   * difference is the whole of #1066. While every car was held to the main
+   * driver's lap the two were equivalent: no samples meant no series. Now a
+   * rival carries hundreds of samples of its OWN lap and can still share no
+   * track with the main car, because each buffer only holds from its own
+   * crossing forward and the two cars sit at different points of the circuit.
+   * Measured on the Melbourne capture that state is 2,564 of 9,936 car-ticks,
+   * and a note keyed on `rival.xs.length` fires on none of them: four silent
+   * axes under a chip saying the car is being compared.
    *
-   * So the note says WHY the lane is blank. Four silent axes under a control the
-   * reader has just used read as a broken window - the same argument this file
-   * already makes for the starved-trace placeholder, and for the blind-note
-   * above. Widening the horizon itself is a separate question (#1066).
+   * Three causes, three sentences, because a true state with a false cause is
+   * the defect this file already pays for twice above:
+   *
+   * - the rival has STOPPED, so its trace ended whenever it ended;
+   * - the MAIN car is blind, so there is no reference to compare against;
+   * - neither, so the two simply have no common track yet.
    */
-  const noOverlap = rivalCode !== null && rivalSamples < 2 && !blind.includes(rivalCode);
+  const rivalState = rivalCode === null ? undefined : arcade.drivers[rivalCode];
+  const rivalStopped = rivalState !== undefined && driverStatus(rivalState) !== "running";
+  const mainBlind = arcade.drivers[arcade.driver_main]?.has_position === false;
+  const noDelta = rivalCode !== null && frame.delta.length < 2 && !blind.includes(rivalCode);
+
+  /**
+   * Where the delta lane's zero sits, when it is not the start/finish line.
+   *
+   * The series is anchored at the first x the two cars share, which IS the line
+   * once both buffers have rooted at a crossing. Until then - a window just
+   * opened, or just seeked, measured at up to 84.9 s of session time - the
+   * anchor is wherever the main buffer happens to start, and the readout then
+   * means "lost since 409 m" while reading `Δ TIME s +0.42`. Nothing else on
+   * screen carries that 409 m: every other lane starts at the same x, so a
+   * partial lap looks identical either way.
+   */
+  const anchorX = frame.delta.length >= 2 ? frame.delta[0][0] : null;
+  const offLine = anchorX !== null && anchorX > 0;
 
   return (
     <header className="traces-header">
       <span className="traces-lap">
         {arcade.lap ? `LAP ${arcade.lap}` : "LAP —"}
         {blind.length ? `  ·  NO POSITION DATA (${blind.join(", ")})` : ""}
-        {noOverlap ? `  ·  ${rivalCode} NOT ON THIS LAP YET` : ""}
+        {offLine ? `  ·  Δ FROM ${Math.round(anchorX)} m` : ""}
+        {noDelta && rivalStopped ? `  ·  ${rivalCode} STOPPED, NO DELTA` : ""}
+        {noDelta && !rivalStopped && mainBlind ? "  ·  NO DELTA WITHOUT THE OWN CAR" : ""}
+        {noDelta && !rivalStopped && !mainBlind
+          ? `  ·  NO TRACK IN COMMON WITH ${rivalCode} YET`
+          : ""}
       </span>
       <span className="driver-chip driver-chip-main">{arcade.driver_main || "—"}</span>
       {rivalCode ? (
@@ -180,8 +206,18 @@ function TracesHeader({
            * legends are gone. Rival car data is real and public, but it is the
            * coarse low-rate channel every team sees rather than pit-wall-grade
            * telemetry, and the Qt window rendered it unlabelled. */}
+          {/* The rival's OWN lap, whenever it differs from the main car's. The
+           * overlay compares two laps rather than two instants (#1066), so which
+           * two has to be on screen: `NOR vs GAS L23` under `LAP 24` is the whole
+           * statement, and without it a reader has no way to know the two traces
+           * are not simultaneous. Both numbers come from the accumulator, never
+           * one from it and one from `arcade.drivers`. */}
           <span className="driver-chip driver-chip-rival" title="broadcast tier">
-            {rivalCode} <span className="trace-tier">BROADCAST</span>
+            {rivalCode}
+            {frame.rivalLap !== null && frame.rivalLap !== frame.mainLap ? (
+              <span className="trace-rival-lap"> L{frame.rivalLap}</span>
+            ) : null}{" "}
+            <span className="trace-tier">BROADCAST</span>
           </span>
         </>
       ) : null}

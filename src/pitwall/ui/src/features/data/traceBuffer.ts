@@ -15,22 +15,28 @@
  * the same sample both times, and the second pass therefore reproduces the
  * first exactly.
  *
- * Ported 1:1, including the two rules that look like bugs and are not:
+ * Ported 1:1, including the rule that looks like a bug and is not:
  *
  * - **Eviction happens BEFORE the append**, not after. The tick that reports
  *   `dropped` also carries a valid post-jump span, and clearing afterwards
  *   threw those samples away - up to 250 of them, ten seconds of trace the
  *   payload had already delivered.
- * - **Rival samples are only kept while the rival is on the main driver's
- *   current lap.** Mixing laps puts samples with unrelated `t` next to each
- *   other in a distance-keyed store and the delta interpolation spikes 4-6 s.
- *   The visible cost is real and inherited: each lap opens with the rival
- *   trace empty for exactly the gap between the two cars (16.76 s on lap 30
- *   of the session measured), and a rival a full lap down never matches at
- *   all.
+ *
+ * **The second inherited rule is GONE, and this says so because it was load
+ *   bearing for two years.** Qt kept a rival sample only while that car was on
+ *   the main driver's current lap, on the argument that mixing laps puts
+ *   samples with unrelated `t` in one distance-keyed store. That argument is
+ *   the BROADCAST convention - the battle graphic drawn only for two cars
+ *   close together - and band 4 is the engineer's overlay, which is lap
+ *   against lap everywhere in motorsport. Keeping it cost the whole panel:
+ *   once the tower could pin any car (#1051), five of seven pinnable cars drew
+ *   nothing at all, because a car not yet across the main driver's line was
+ *   never stored. Each car now keeps its OWN lap and the delta subtracts the
+ *   two anchors, so the store never holds two laps at once (#1066).
  */
 
 import type { TelemetrySample } from "../../lib/bridge";
+import { driverStatus, type StatusInputs } from "../../lib/driverStatus";
 
 /** What a chart needs out of one sample; `dist` is the key, not a field. */
 export interface TraceRow {
@@ -52,6 +58,12 @@ export interface SortedTrace {
 
 const EMPTY: SortedTrace = { xs: [], rows: [] };
 
+/** One driver's current lap and the samples it has covered of it. */
+interface LapBuffer {
+  lap: number;
+  rows: Map<number, TraceRow>;
+}
+
 /**
  * One buffer per DRIVER, with the comparison chosen at render (#1050).
  *
@@ -64,70 +76,104 @@ const EMPTY: SortedTrace = { xs: [], rows: [] };
  * another.
  *
  * Accumulating every driver removes the question. The newly pinned car's trace is
- * already populated back to the start of the main driver's current lap, because
- * it was being kept all along, and the lap is the buffer's whole horizon anyway -
- * the wire carries only the span since the last tick and cannot backfill.
+ * already populated back to the start of ITS OWN lap, because it was being kept
+ * all along, and one lap is the buffer's whole horizon anyway - the wire carries
+ * only the span since the last tick and cannot backfill.
+ *
+ * Each buffer also owns its own LAP NUMBER (#1066), which is the half #1050 left
+ * on the main driver: accumulating every car while letting one car's crossing
+ * wipe every buffer meant a car not yet across that line was stored and then
+ * thrown away, so nine of nineteen drew nothing on the tick measured.
  *
  * Cost: twenty spans of `FPS x speed / 10 Hz` samples, so about 400 `Map.set`
  * calls a tick at 8x against 40 before, and 5,000 on a capped forward jump. On
  * integer keys that is sub-millisecond beside the ECharts render it feeds.
  */
 export class TraceAccumulator {
-  private buffers = new Map<string, Map<number, TraceRow>>();
-  private currentLap: number | null = null;
+  private entries = new Map<string, LapBuffer>();
 
-  /** Fold one tick's spans in. Safe to call twice with the same tick. */
-  ingest(spans: Record<string, TelemetrySample[]>, mainCode: string, evict: boolean): void {
+  /**
+   * Fold one tick's spans in. Safe to call twice with the same tick.
+   *
+   * `drivers` is the tick's own state block, and it is here for ONE reason: a
+   * car that has stopped must stop being stored. The producer republishes a
+   * retired car's last frame every tick with an advancing `t`, so a buffer that
+   * keeps accepting it rewrites its last distance key with the current session
+   * clock forever - measured on Melbourne 2025, ALO's last point drifts +2,785 s
+   * between its lap-33 retirement and the flag, and the readout that reads it
+   * counts up one second per second. The old shared lap number wiped every
+   * buffer at each of the main car's crossings and hid this; per-driver laps
+   * remove that wipe, so the predicate has to be explicit.
+   */
+  ingest(
+    spans: Record<string, TelemetrySample[]>,
+    evict: boolean,
+    drivers: Record<string, StatusInputs>,
+  ): void {
     if (evict) this.clear();
 
-    // The MAIN driver's span runs first and to completion, then everyone else is
-    // compared against the lap it left behind. That ordering is inherited rather
-    // than incidental: reading it as "store a sample while its driver is on the
-    // current lap" is a different algorithm, interleaved in time, and the two
-    // agree only because the lap-change clear wipes the old lap anyway.
-    for (const sample of spans[mainCode] ?? []) {
-      const lap = Math.trunc(sample.lap || 0);
-      if (lap !== this.currentLap) {
-        this.currentLap = lap;
-        this.buffers.clear();
-      }
-      store(this.bufferFor(mainCode), sample);
-    }
-
+    // The main driver's code was a parameter here until #1066 and is not one now,
+    // which is the change in one line: its lap used to decide what every other car
+    // was allowed to store, and that is what forced its span to run first and to
+    // completion. Each car now answers only for itself, so there is no ordering
+    // between drivers and nothing to privilege.
     for (const [code, span] of Object.entries(spans)) {
-      if (code === mainCode) continue;
-      for (const sample of span) {
-        // Same rule the single rival has always been held to: a car on another
-        // lap carries an unrelated `t`, and mixing those into one distance-keyed
-        // store spikes the delta interpolation by 4-6 s.
-        if (Math.trunc(sample.lap || 0) === this.currentLap) store(this.bufferFor(code), sample);
-      }
+      const state = drivers[code];
+      // Unknown rather than stopped: a code with a span and no state block is not
+      // a case the wire produces (`bridge.ts` pins the key sets equal), and
+      // dropping it silently would be the same mistake as trusting it silently.
+      if (state !== undefined && driverStatus(state) !== "running") continue;
+      for (const sample of span) this.absorb(code, sample);
     }
   }
 
   clear(): void {
-    this.buffers.clear();
-    this.currentLap = null;
+    this.entries.clear();
   }
 
   /** One driver's accumulated lap, or the empty trace for a car with nothing. */
   trace(code: string | null): SortedTrace {
     if (code === null) return EMPTY;
-    const buffer = this.buffers.get(code);
-    return buffer === undefined ? EMPTY : sorted(buffer);
+    const entry = this.entries.get(code);
+    return entry === undefined ? EMPTY : sorted(entry.rows);
   }
 
-  get lap(): number | null {
-    return this.currentLap;
+  /**
+   * The lap THIS buffer holds, which is the only honest source for the header.
+   *
+   * `tick.arcade.drivers[code].lap` is the other candidate and it is a different
+   * number: it reads the frame at the tick's own index while this reads the last
+   * sample actually stored, and the two disagree across a lap change inside one
+   * span and at all 70 of the lap-channel glitches a race carries. One number,
+   * one source.
+   */
+  lapOf(code: string | null): number | null {
+    if (code === null) return null;
+    return this.entries.get(code)?.lap ?? null;
   }
 
-  private bufferFor(code: string): Map<number, TraceRow> {
-    let buffer = this.buffers.get(code);
-    if (buffer === undefined) {
-      buffer = new Map<number, TraceRow>();
-      this.buffers.set(code, buffer);
+  /** Store one sample under its driver's own lap, opening a new lap when it turns. */
+  private absorb(code: string, sample: TelemetrySample): void {
+    const lap = Math.trunc(sample.lap || 0);
+    const entry = this.entries.get(code);
+    if (entry === undefined) {
+      this.entries.set(code, { lap, rows: new Map() });
+    } else if (lap > entry.lap) {
+      // A new lap replaces the buffer rather than adding to it: one lap is the
+      // whole horizon, and the wire cannot backfill what came before.
+      this.entries.set(code, { lap, rows: new Map() });
+    } else if (lap < entry.lap) {
+      // A lap number that goes BACKWARDS is a glitch, not a rewind - a rewind
+      // arrives as `rewound` and evicts everything. Measured on Melbourne 2025:
+      // 70 of these a race across 17 of the 20 drivers, one frame each, and the
+      // glitch frame carries a stale lap with a mid-lap `dist` (HAM reads lap 23
+      // at 2586.2 m one frame after crossing into 24). Storing it would put a
+      // foreign lap in the map; clearing on it, which `lap !== currentLap` used
+      // to do, would throw the lap away twice per crossing. It is a producer-side
+      // defect and it reaches every consumer of `rel_dist`, not just this buffer.
+      return;
     }
-    return buffer;
+    store(this.entries.get(code)!.rows, sample);
   }
 }
 
@@ -182,13 +228,35 @@ export function lerpSorted(xs: number[], ys: number[], x: number): number | null
 }
 
 /**
- * The delta series: `t_rival(x) - t_main(x)` along the main driver's x.
+ * The delta series along the main driver's x, RE-BASED to lap-relative time.
  *
- * F1-broadcast convention - main is the flat reference at y=0, so a POSITIVE
- * trace means the rival is slower at that point on the lap and a negative one
- * means faster. Verified against the producer's own `interval_at_line`: the
- * delta at each lap's first common x agreed to 0.000 s on laps 10, 30 and 50
- * of Melbourne 2025, which is what one shared clock looks like.
+ * Main is the flat reference at y=0, so a POSITIVE trace means the rival is
+ * slower to that point of the lap and a negative one means faster.
+ *
+ * **What the subtraction at the end buys, and why it is the whole of #1066.**
+ * The raw difference `t_rival(x) - t_main(x)` is session time, so it carries the
+ * gap between the two cars as a constant offset. That was harmless while the
+ * only rival ever charted was one the producer picked to sit two seconds away;
+ * the moment the tower could pin anyone, a car ten seconds ahead drew a trace
+ * ten seconds off a lane locked to three. Subtracting the value at the first
+ * common x removes the offset and leaves the SHAPE, which is the question an
+ * engineer's overlay asks: not how far apart the two cars are, but where one is
+ * quicker. The gap is answered elsewhere, by the tower's GAP and INT columns.
+ *
+ * With both buffers rooted at their own line crossings the anchor sits at x = 0
+ * and this IS the lap-relative delta. It is exact to within one frame rather
+ * than exactly: `store` keys by integer metre, so a second frame landing in the
+ * same metre displaces the first, and the anchor moves with it. Measured over
+ * the Melbourne capture the divergence is 0.080 s on the one car whose lap
+ * channel glitched and 0.000 s on the other fifteen, and it is reachable on any
+ * crossing taken below 90 km/h, where 40 ms covers less than a metre: the pit
+ * lane, a safety-car queue, a spin.
+ *
+ * Below two common points there is no series and no anchor. Returning the empty
+ * array rather than a one-point one is deliberate: a single point draws nothing
+ * but would still feed the lane's readout, and by construction its value is
+ * exactly 0.00 - a manufactured number indistinguishable from a genuinely level
+ * pair. `delta.length < 2` is what the header tests to explain the blank lane.
  */
 export function deltaSeries(main: SortedTrace, rival: SortedTrace): [number, number][] {
   if (main.xs.length < 2 || rival.xs.length < 2) return [];
@@ -199,5 +267,11 @@ export function deltaSeries(main: SortedTrace, rival: SortedTrace): [number, num
     if (interpolated === null) return;
     out.push([x, interpolated - main.rows[index].t]);
   });
-  return out;
+  // Two traces that are each long enough can still share NO track: two cars on
+  // their own laps sit at different points of the circuit, and a buffer only
+  // holds from its own root forward. Measured at 2,564 of 9,936 car-ticks on the
+  // Melbourne capture, every running car among them.
+  if (out.length < 2) return [];
+  const anchor = out[0][1];
+  return out.map(([x, value]) => [x, value - anchor]);
 }

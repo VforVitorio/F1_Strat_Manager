@@ -43,12 +43,30 @@ const CIRCUIT_M = 5220;
 /**
  * A span the delta chart can be checked by hand.
  *
- * The rival covers 100-300 m and the main covers 100-500, so three of the
- * five main samples have a rival time to interpolate against and two do not.
- * Times are chosen so the rival is a flat +2.0 s behind: at x=100 the main
- * is at t=10.0 and the rival at t=12.0, and both advance 1 s per 100 m.
+ * The rival covers 0-200 m and the main covers 0-500, so three of the six main
+ * samples have a rival time to interpolate against and three do not.
+ *
+ * **Both cars start at dist 0 and at DIFFERENT times, and they run at different
+ * PACE, and all three of those are load-bearing** (#1066):
+ *
+ * - starting at 0 is what a real buffer does. Measured over the Melbourne
+ *   capture, 24 of 25 line crossings put a sample at `dist == 0.0` exactly, so a
+ *   fixture opening at 100 m models a window mid-warm-up rather than the normal
+ *   state, and it makes the header's off-the-line note fire on every scenario.
+ * - starting at different times, the main at t=10.0 and the rival at t=12.0, is
+ *   what lets the anchor subtraction be OBSERVED. With a shared lap start the
+ *   value at the anchor is already 0 and removing the subtraction changes
+ *   nothing.
+ * - differing in pace is what lets the VALUES be observed. The rival was a flat
+ *   +2.0 s behind at identical pace, and a re-based delta reports that, quite
+ *   correctly, as 0.0 everywhere - so every value assertion in this file went
+ *   invariant at once and could no longer tell one car from another.
+ *
+ * The rival loses 0.2 s per 100 m: main advances 1 s per 100 m, rival 1.2 s. So
+ * the delta reads 0.0, +0.2, +0.4 and the on-track gap the old fixture pinned,
+ * +2.0, is exactly what the subtraction removes.
  */
-const MAIN_SPAN = [100, 200, 300, 400, 500].map((dist, i) => ({
+const MAIN_SPAN = [0, 100, 200, 300, 400, 500].map((dist, i) => ({
   lap: 24,
   t: 10 + i,
   dist,
@@ -58,9 +76,9 @@ const MAIN_SPAN = [100, 200, 300, 400, 500].map((dist, i) => ({
   gear: 6,
   drs: 8,
 }));
-const RIVAL_SPAN = [100, 200, 300].map((dist, i) => ({
+const RIVAL_SPAN = [0, 100, 200].map((dist, i) => ({
   lap: 24,
-  t: 12 + i,
+  t: 12 + i * 1.2,
   dist,
   speed: 190 + i * 10,
   throttle: 40 + i,
@@ -68,6 +86,12 @@ const RIVAL_SPAN = [100, 200, 300].map((dist, i) => ({
   gear: 6,
   drs: 8,
 }));
+/** What the delta lane must read, worked out by hand from the two spans above. */
+const EXPECTED_DELTA = [
+  [0, 0],
+  [100, 0.2],
+  [200, 0.4],
+];
 /** The main driver's own position, which is where the cursor must land. */
 const CURSOR_DIST = 500;
 
@@ -380,8 +404,8 @@ for (const [index, [name, range]] of expected.entries()) {
   );
 }
 
-// The delta the interpolation produced. Three points, not five: the rival's
-// samples stop at 300 m and `lerpSorted` returns null past the end rather
+// The delta the interpolation produced. Three points, not six: the rival's
+// samples stop at 200 m and `lerpSorted` returns null past the end rather
 // than extrapolating a flat tail that would look like real data.
 // Looked up by NAME, not by index. These two used to read `series[1]` and
 // `series[0]`, and the declaration order is exactly what the z-order fix had to
@@ -409,15 +433,38 @@ const laneSeries = (lane, car) =>
 
 const delta = (await laneSeries("delta", "rival")).data;
 check(
-  delta.length === 3 && delta.every(([, value]) => Math.abs(value - 2) < 1e-9),
-  `the delta is +2.0 s over the rival's three samples only (${JSON.stringify(delta)})`,
+  delta.length === EXPECTED_DELTA.length &&
+    delta.every(
+      ([x, value], i) =>
+        x === EXPECTED_DELTA[i][0] && Math.abs(value - EXPECTED_DELTA[i][1]) < 1e-9,
+    ),
+  `the delta is lap-relative: 0.0, +0.2, +0.4 over the rival's three samples only (${JSON.stringify(delta)})`,
+);
+// The anchor, stated as its own assertion rather than left implicit in the list
+// above. The raw difference at x=0 is the rival's +2.0 s on-track gap; the series
+// starts at exactly 0 because that gap is subtracted out. Removing the
+// subtraction turns this list into 2.0, 2.2, 2.4, and it is this check that says
+// which of those two the lane is drawing.
+check(
+  delta.length > 0 && delta[0][1] === 0,
+  `and it is anchored: the first point is exactly 0 (${JSON.stringify(delta[0])})`,
+);
+// The gap is GONE from the lane, deliberately (#1066). Asserted as an absence
+// because "the values are lap-relative" and "the values are the gap" are two
+// claims and the first does not imply the second on a fixture where they could
+// coincide.
+check(
+  !delta.some(([, value]) => Math.abs(value - 2) < 1e-9),
+  `and the on-track gap of +2.0 s appears nowhere in it (${JSON.stringify(delta)})`,
 );
 
-// The speed trace carries the whole main span.
+// The speed trace carries the whole main span. Derived from the fixture rather
+// than typed, so adding a sample to the span cannot leave this asserting a stale
+// count that happens to still pass.
 const speedPoints = (await laneSeries("speed", "main")).data.length;
 check(
-  speedPoints === 5,
-  `the speed trace holds all five samples (${speedPoints})`,
+  speedPoints === MAIN_SPAN.length,
+  `the speed trace holds all ${MAIN_SPAN.length} samples (${speedPoints})`,
 );
 
 // **The own car paints ON TOP, on every chart.** ECharts paints in declaration
@@ -4044,10 +4091,27 @@ check(
   const FIRST = [100, 200, 300];
   const SECOND = [400, 500, 600];
   const mainT = (dist) => 10 + (dist - 100) / 100;
-  // PIA sits +2.0 s behind the main car for the whole lap, VER +5.0 s. The two
-  // offsets are what make a surviving PIA sample visible in the delta.
-  const piaT = (dist) => mainT(dist) + 2;
-  const verT = (dist) => mainT(dist) + 5;
+  /**
+   * PIA is QUICKER than the main car and VER is slower, and that is the point.
+   *
+   * These were `mainT + 2` and `mainT + 5`: pure offsets at identical pace. A
+   * re-based delta (#1066) subtracts the value at the anchor, so both collapsed
+   * to flat zero and the two checks below stopped being able to tell the cars
+   * apart - the positive one would have gone red and invited a repair to `- 0`,
+   * which leaves the negative one, the actual chimera guard, true no matter what
+   * the buffer holds.
+   *
+   * The starting offsets stay, because the anchor has to have something to remove.
+   * What is new is the PACE: PIA takes 0.9 s per 100 m against the main car's 1.0
+   * and VER takes 1.3. So PIA's anchored delta runs 0, -0.1 ... -0.5 and VER's
+   * runs 0, +0.3 ... +1.5 - disjoint apart from the anchor, and on opposite sides
+   * of zero, so a single surviving PIA sample shows up as a sign the series
+   * should not contain.
+   */
+  const piaT = (dist) => 12 + ((dist - 100) / 100) * 0.9;
+  const verT = (dist) => 15 + ((dist - 100) / 100) * 1.3;
+  /** VER's anchored delta against the main car, per 100 m: 0.3 s lost each time. */
+  const verDelta = (dist) => ((dist - 100) / 100) * 0.3;
 
   const field = { NOR: driver(), PIA: driver(), VER: driver() };
   const beforeSwitch = tick(1, {
@@ -4116,12 +4180,16 @@ check(
     `the newly pinned car is charted back to the start of the lap, not from the switch (${values.length} of 6)`,
   );
   check(
-    values.every((value) => Math.abs(value - 5) < 1e-9),
-    `every delta point is VER's +5.0 s (${JSON.stringify(values)})`,
+    switched.every(([x, value]) => Math.abs(value - verDelta(x)) < 1e-9),
+    `every delta point is VER's own lap-relative loss, 0.3 s per 100 m (${JSON.stringify(values)})`,
   );
+  // The chimera guard, and it is this one rather than the check above: a buffer
+  // holding PIA's early samples beside VER's late ones still produces SIX points
+  // and could still satisfy a count. PIA is quicker than the main car, so every
+  // delta point it contributes is negative, and VER contributes none below zero.
   check(
-    !values.some((value) => Math.abs(value - 2) < 1e-9),
-    `no sample of the PREVIOUS rival survives in the delta (${JSON.stringify(values)})`,
+    !values.some((value) => value < -1e-9),
+    `and no sample of the PREVIOUS rival survives: PIA runs NEGATIVE (${JSON.stringify(values)})`,
   );
 
   // The identity check the delta cannot make on its own: read the OWNER off the
@@ -4161,15 +4229,44 @@ check(
   const LAP = 30;
   const FIELD = ["NOR", "PIA", "VER", "LEC", "RUS"];
   const RETIRED = "SAI";
-  // A car that is RUNNING and sends nothing on this lap - the common case once
-  // the tower can pin anyone, measured at five of seven on real Melbourne ticks.
+  /**
+   * A car that is RUNNING, sending plenty, and sharing NO TRACK with the main car.
+   *
+   * This used to be a car with an empty span, on the premise that a pinned car
+   * "sends nothing on this lap", measured at five of seven. #1066 abolishes that
+   * premise: every car now keeps its own lap, so those five draw. What survives
+   * is the state per-driver laps CREATE, which is the opposite shape - hundreds of
+   * samples, none of them at a distance the main car has also covered, measured
+   * at 2,564 of 9,936 car-ticks on the Melbourne capture.
+   *
+   * The difference is the whole guard. An empty span trips a note keyed on the
+   * rival's sample COUNT and a note keyed on the DELTA alike, so it cannot tell
+   * the two apart; this fixture trips only the second.
+   */
   const FAR = "HAM";
+  const FAR_XS = [3000, 3100, 3200, 3300];
   const bandFor = (code) => (FIELD.indexOf(code) + 3) * 100;
-  const XS = [100, 200, 300, 400];
+  const XS = [0, 100, 200, 300];
+  /**
+   * Each car gets its own LAP START and its own PACE, and both are required.
+   *
+   * The times here used to be `10 + (dist - 100) / 100 + index`: one shared pace,
+   * a constant per-car offset. Under a re-based delta (#1066) that offset is
+   * exactly what gets subtracted, so every car produced an identical flat-zero
+   * series and any delta assertion built on this fixture would have been born
+   * unable to tell one car from another.
+   *
+   * Now car `i` starts its lap `i` seconds after the main car and takes
+   * `1 + i/10` seconds per 100 m, so its anchored delta against NOR climbs by
+   * `i/10` per 100 m: PIA draws 0, 0.1, 0.2, 0.3 and VER draws 0, 0.2, 0.4, 0.6.
+   * Distinct at every point except the anchor, which is 0 for everyone by
+   * construction.
+   */
+  const paceOf = (code) => 1 + FIELD.indexOf(code) / 10;
   const spanOf = (code) =>
     XS.map((dist, i) => ({
       lap: LAP,
-      t: 10 + (dist - 100) / 100 + FIELD.indexOf(code),
+      t: 10 + FIELD.indexOf(code) + (dist / 100) * paceOf(code),
       dist,
       speed: bandFor(code) + i,
       throttle: 50,
@@ -4177,6 +4274,8 @@ check(
       gear: 6,
       drs: 8,
     }));
+  /** What car `code`'s anchored delta against NOR must be, point by point. */
+  const deltaOf = (code) => XS.map((dist) => (dist / 100) * (paceOf(code) - paceOf("NOR")));
 
   const field = Object.fromEntries([
     ...FIELD.map((code) => [code, driver({ lap: LAP })]),
@@ -4189,7 +4288,19 @@ check(
   const spans = Object.fromEntries([
     ...FIELD.map((code) => [code, spanOf(code)]),
     [RETIRED, []],
-    [FAR, []],
+    [
+      FAR,
+      FAR_XS.map((dist, i) => ({
+        lap: LAP,
+        t: 40 + i,
+        dist,
+        speed: 800 + i,
+        throttle: 50,
+        brake: 0,
+        gear: 6,
+        drs: 8,
+      })),
+    ],
   ]);
   // The retired car sits BETWEEN two selectable rows, not at the end. At the end
   // nothing can be observed to skip over it: ArrowDown from the row before would
@@ -4333,29 +4444,42 @@ check(
     `a retired row carries no aria-selected at all, rather than "false" (${retiredAria})`,
   );
 
-  // --- A pinned car with nothing on this lap SAYS so ---------------------------
+  // --- A pinned car the DELTA cannot use SAYS so -------------------------------
   //
-  // Measured on real Melbourne ticks at lap 23 with NOR as the main car: of the
-  // seven cars that can be pinned, five contribute ZERO samples and one
-  // contributes eleven. Four silent axes under a control the reader has just
-  // used read as a broken window, so the header names the reason.
+  // Four silent axes under a control the reader has just used read as a broken
+  // window, so the header names the reason. The reason changed with #1066: it is
+  // no longer "that car sends nothing on this lap" but "the two have covered no
+  // common track yet", and the note has to be keyed on the DELTA rather than on
+  // the rival's sample count. FAR sends four samples at 3000-3300 m while the
+  // main car has covered 0-300, so a note keyed on the count would stay silent.
   await rowFor(FAR).click();
   await page.waitForTimeout(350);
   const lapLine = await page.locator(".traces-lap").innerText();
   check(
-    lapLine.includes(`${FAR} NOT ON THIS LAP YET`),
-    `a pinned car with no samples on this lap says so (${lapLine.trim()})`,
+    lapLine.includes(`NO TRACK IN COMMON WITH ${FAR} YET`),
+    `a pinned car the delta cannot use says so (${lapLine.trim()})`,
   );
-  const rusSeries = (await trio()).speeds;
+  const farSpeeds = (await trio()).speeds;
   check(
-    rusSeries.length === 0,
-    `and it really has nothing to draw (${JSON.stringify(rusSeries)})`,
+    farSpeeds.length === FAR_XS.length,
+    `and it is NOT a car with nothing to send: its speed trace draws ${FAR_XS.length} points (${JSON.stringify(farSpeeds)})`,
+  );
+  const farDelta = await page.evaluate(() => {
+    const found = document
+      .querySelector(".trace-stack-plot")
+      .__pitwallChart.getOption()
+      .series.find((s) => s.name === "delta-rival");
+    return found ? found.data : null;
+  });
+  check(
+    Array.isArray(farDelta) && farDelta.length === 0,
+    `while the delta lane has nothing at all (${JSON.stringify(farDelta)})`,
   );
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   const backToPia = await page.locator(".traces-lap").innerText();
   check(
-    !backToPia.includes("NOT ON THIS LAP YET"),
+    !backToPia.includes("NO TRACK IN COMMON"),
     `and the note clears with the pin (${backToPia.trim()})`,
   );
 
@@ -4410,6 +4534,215 @@ check(
   );
 
   await ctx.close();
+}
+
+// --- Per-driver laps: the four properties #1066 turns on ---------------------
+//
+// The buffer used to hold ONE lap number, the main car's, and wipe every driver
+// when it turned. Measured on real Melbourne ticks, that left nine of nineteen
+// cars with no trace at all: a car that has not yet crossed the main car's line
+// is on a different lap and every sample of it was thrown away. Each car now
+// keeps its own lap and the delta subtracts the two anchors.
+//
+// Four properties, four fixtures, because each fails in its own way and a single
+// scenario asserting all four could pass on three.
+{
+  const MAIN_LAP = 24;
+  const behind = (dist, i) => ({
+    lap: MAIN_LAP - 1,
+    // A whole lap's worth of elapsed time behind, which is the point: under the
+    // old rule these samples were discarded, and under session-time subtraction
+    // they would draw an 80-second delta on a lane locked to three.
+    t: 90 + i * 1.1,
+    dist,
+    speed: 700 + i,
+    throttle: 50,
+    brake: 0,
+    gear: 6,
+    drs: 8,
+  });
+  const ownLap = [0, 100, 200, 300, 400, 500].map(behind);
+
+  const deltaOf = (page) =>
+    page.evaluate(() => {
+      const found = document
+        .querySelector(".trace-stack-plot")
+        .__pitwallChart.getOption()
+        .series.find((s) => s.name === "delta-rival");
+      return found ? found.data : null;
+    });
+
+  const render = async (ticks) => {
+    const ctx = await browser.newContext({ viewport: CLIENT });
+    const page = await ctx.newPage();
+    watchPage(page, failures, "per-driver laps");
+    await page.addInitScript((payload) => {
+      window.__ticks = payload;
+      window.__cursor = -1;
+      window.pywebview = {
+        api: {
+          get_tick: async () => {
+            if (window.__cursor < window.__ticks.length - 1) window.__cursor += 1;
+            return window.__ticks[window.__cursor];
+          },
+          get_bulk: async () => null,
+          get_live_lap: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    }, ticks);
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+    await page.waitForTimeout(ticks.length * 250 + 400);
+    return { ctx, page };
+  };
+
+  // (1) A car on ANOTHER lap is charted, over the whole stretch the two share.
+  {
+    const { ctx, page } = await render([
+      tick(1, {
+        rival: "PIA",
+        drivers: { NOR: driver(), PIA: driver({ lap: MAIN_LAP - 1 }) },
+        spans: { NOR: MAIN_SPAN, PIA: ownLap },
+      }),
+    ]);
+    const data = await deltaOf(page);
+    // Six points, not three: the rival covers 0-500 of ITS lap and the main
+    // covers 0-500 of its own, so every main sample interpolates. Asserted on the
+    // COUNT, because a mutant restoring the shared lap number drops it to zero
+    // while any assertion on the VALUES could still hold for the wrong reason.
+    check(
+      Array.isArray(data) && data.length === MAIN_SPAN.length,
+      `a car on another lap is charted across every shared metre (${JSON.stringify(data)})`,
+    );
+    check(
+      Array.isArray(data) && data.length > 0 && data[0][1] === 0,
+      `and its delta is anchored, not the 80 s of session time between the laps (${JSON.stringify(data?.[0])})`,
+    );
+    const lapLine = await page.locator(".traces-lap").innerText();
+    check(
+      lapLine.includes(`LAP ${MAIN_LAP}`) && !lapLine.includes("NO TRACK IN COMMON"),
+      `and no note claims it has nothing to draw (${lapLine.trim()})`,
+    );
+    const chip = await page.locator(".driver-chip-rival").innerText();
+    check(
+      chip.includes(`L${MAIN_LAP - 1}`),
+      `and the chip names the rival's OWN lap, so the reader knows which two laps (${chip.trim()})`,
+    );
+    await ctx.close();
+  }
+
+  // (2) A backwards lap number is a glitch, not a rewind, and must not clear.
+  //
+  // Measured on the Melbourne capture: 70 of these a race across 17 of the 20
+  // drivers. One frame carries a stale lap with a mid-lap `dist` - HAM reads lap
+  // 23 at 2586.2 m one frame after crossing into 24. The old `lap !== currentLap`
+  // fired in both directions and threw the fresh lap away.
+  {
+    const glitched = [
+      { ...MAIN_SPAN[0] },
+      { ...MAIN_SPAN[1] },
+      // The stale frame: previous lap, mid-lap distance, between two good ones.
+      { ...MAIN_SPAN[2], lap: MAIN_LAP - 1, dist: 2586 },
+      { ...MAIN_SPAN[3] },
+    ];
+    const { ctx, page } = await render([
+      tick(1, {
+        rival: "PIA",
+        drivers: { NOR: driver(), PIA: driver() },
+        spans: { NOR: glitched, PIA: RIVAL_SPAN },
+      }),
+    ]);
+    const speeds = await page.evaluate(() => {
+      const found = document
+        .querySelector(".trace-stack-plot")
+        .__pitwallChart.getOption()
+        .series.find((s) => s.name === "speed-main");
+      return found ? found.data.map(([x]) => x) : null;
+    });
+    // Three of the four survive: the two before the glitch and the one after. The
+    // glitch frame itself is dropped rather than stored, so 2586 m is absent. A
+    // mutant that CLEARS on it keeps only the last frame, and one that STORES it
+    // puts a foreign lap's distance in the trace.
+    check(
+      Array.isArray(speeds) && speeds.length === 3,
+      `a stale backwards lap frame does not clear the buffer: 3 of 4 survive (${JSON.stringify(speeds)})`,
+    );
+    check(
+      Array.isArray(speeds) && !speeds.includes(2586),
+      `and the glitch frame's own distance is not stored (${JSON.stringify(speeds)})`,
+    );
+    await ctx.close();
+  }
+
+  // (3) A car that has STOPPED stops being stored.
+  //
+  // The producer republishes a retired car's last frame every tick with an
+  // ADVANCING `t` - measured on the wire, SAI, DOO and HAD each carry one sample
+  // per tick exactly like a running car. `store` keys by distance, so the last key
+  // is rewritten with the current session clock forever: ALO's last point drifts
+  // +2,785 s between its lap-33 retirement and the flag. The shared lap number
+  // used to wipe it once a lap and hide it.
+  {
+    const frozen = (t) => [{ ...RIVAL_SPAN[RIVAL_SPAN.length - 1], t }];
+    const stopped = driver({ active: false, has_finished: false });
+    const { ctx, page } = await render([
+      tick(1, {
+        rival: "PIA",
+        drivers: { NOR: driver(), PIA: driver() },
+        spans: { NOR: MAIN_SPAN, PIA: RIVAL_SPAN },
+      }),
+      // Same car, now stopped, republishing its last frame 500 s later.
+      tick(2, {
+        rival: "PIA",
+        drivers: { NOR: driver(), PIA: stopped },
+        spans: { NOR: [], PIA: frozen(RIVAL_SPAN[RIVAL_SPAN.length - 1].t + 500) },
+      }),
+    ]);
+    const data = await deltaOf(page);
+    check(
+      Array.isArray(data) &&
+        data.length === EXPECTED_DELTA.length &&
+        data.every(([, v], i) => Math.abs(v - EXPECTED_DELTA[i][1]) < 1e-9),
+      `a stopped car's last point does not absorb the advancing clock (${JSON.stringify(data)})`,
+    );
+    await ctx.close();
+  }
+
+  // (4) One common metre is not a reading.
+  //
+  // A single shared point is `[[x, 0]]` by construction - the anchor subtracts
+  // itself - so it draws nothing and would still hand the lane's readout a `+0.00`
+  // that a reader cannot tell from a genuinely level pair. This repo has paid for
+  // a manufactured value colliding with a real one before.
+  {
+    // The rival's range starts exactly where the main's ends, so `lerpSorted`
+    // returns a value at that one metre and null everywhere else. A rival
+    // straddling the main's range would interpolate across all of it.
+    const oneCommon = [
+      { ...RIVAL_SPAN[0], dist: MAIN_SPAN[MAIN_SPAN.length - 1].dist },
+      { ...RIVAL_SPAN[1], dist: 9000 },
+    ];
+    const { ctx, page } = await render([
+      tick(1, {
+        rival: "PIA",
+        drivers: { NOR: driver(), PIA: driver() },
+        spans: { NOR: MAIN_SPAN, PIA: oneCommon },
+      }),
+    ]);
+    const data = await deltaOf(page);
+    check(
+      Array.isArray(data) && data.length === 0,
+      `a single common metre yields no series rather than a manufactured 0.00 (${JSON.stringify(data)})`,
+    );
+    // Lane 1 is the delta: speed owns 0.
+    const readout = await page.locator(".trace-lane-value").nth(1).innerText();
+    check(
+      readout.trim() === "—",
+      `and the lane's readout prints the no-value dash, not +0.00 (${readout.trim()})`,
+    );
+    await ctx.close();
+  }
 }
 
 await browser.close();
