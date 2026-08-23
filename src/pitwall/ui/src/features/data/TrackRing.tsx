@@ -63,7 +63,7 @@ function rgb(colour: [number, number, number] | undefined): string {
   return colour ? `rgb(${colour[0]}, ${colour[1]}, ${colour[2]})` : "var(--qt-fg-2)";
 }
 
-export function TrackRing({ arcade }: { arcade: ArcadeState }) {
+export function TrackRing({ arcade, rival }: { arcade: ArcadeState; rival: string | null }) {
   // The two labelled cars go on OPPOSITE sides of their dots. They are the
   // main driver and the car chosen to compare against, so they are routinely
   // seconds apart - on the session this was built against, NOR and PIA sit
@@ -72,7 +72,7 @@ export function TrackRing({ arcade }: { arcade: ArcadeState }) {
   // deterministic, so the same car is always in the same place.
   const labelSide = (code: string): "above" | "below" | null => {
     if (code === arcade.driver_main) return "above";
-    if (code === arcade.driver_rival) return "below";
+    if (code === rival) return "below";
     return null;
   };
 

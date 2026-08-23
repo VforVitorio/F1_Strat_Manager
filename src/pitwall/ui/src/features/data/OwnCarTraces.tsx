@@ -58,13 +58,22 @@ interface OwnCarTracesProps {
    * nothing on the wire able to rebuild it.
    */
   frame: TraceFrame;
+  /**
+   * The car being compared against, resolved by `DataWindow`.
+   *
+   * A prop rather than `arcade.driver_rival` read here, and the same for the
+   * header below. This file held TWO independent reads of that field, so
+   * converting one would have left the header saying `vs PIA · BROADCAST`, and
+   * computing its NO-POSITION warning against PIA, above a chart plotting the
+   * pinned car.
+   */
+  rival: string | null;
   /** The producer is gone; these buffers will not fill. */
   frozen?: boolean;
 }
 
-export function OwnCarTraces({ tick, frame, frozen = false }: OwnCarTracesProps) {
+export function OwnCarTraces({ tick, frame, rival, frozen = false }: OwnCarTracesProps) {
   const { arcade } = tick;
-  const rivalCode = arcade.driver_rival;
 
   // The X lock is derived here because `circuit_length_m` rides on every tick, so
   // unlike Qt there is no first-time flag to hold. The BUFFERS are not derived
@@ -98,13 +107,13 @@ export function OwnCarTraces({ tick, frame, frozen = false }: OwnCarTracesProps)
 
   return (
     <section className="traces card">
-      <TracesHeader tick={tick} />
+      <TracesHeader tick={tick} rival={rival} />
       <TraceStack
         main={frame.main}
         rival={frame.rival}
         delta={frame.delta}
         xMax={xMax}
-        rivalCode={rivalCode}
+        rivalCode={rival}
         cursorX={cursorX}
         // ONE caption over the whole stack, where the 2x2 printed the same sentence
         // four times. It claims starvation only when the MAIN trace is starved: a
@@ -119,9 +128,8 @@ export function OwnCarTraces({ tick, frame, frozen = false }: OwnCarTracesProps)
 }
 
 /** `LAP 24  NOR vs PIA`, plus the note for a car the telemetry never placed. */
-function TracesHeader({ tick }: { tick: Tick }) {
+function TracesHeader({ tick, rival: rivalCode }: { tick: Tick; rival: string | null }) {
   const { arcade } = tick;
-  const rivalCode = arcade.driver_rival;
   // BOTH charted drivers, not just the main one. Reading the main alone left
   // a header saying nothing was wrong above an empty rival trace when the
   // blind car was the one being compared against (#856).

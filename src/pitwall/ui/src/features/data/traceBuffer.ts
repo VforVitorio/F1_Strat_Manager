@@ -52,47 +52,82 @@ export interface SortedTrace {
 
 const EMPTY: SortedTrace = { xs: [], rows: [] };
 
+/**
+ * One buffer per DRIVER, with the comparison chosen at render (#1050).
+ *
+ * It used to key two buffers by ROLE - `main` and `rival` - and that was safe
+ * only because the producer cannot change its mind: `_driver_rival` is assigned
+ * once, at construction (`src/arcade/app.py:236`). The tower's pin introduces the
+ * mid-lap switch, and re-pointing a role-keyed buffer leaves the old car's
+ * samples in the same distance-keyed map: `deltaSeries` then interpolates across
+ * the seam and draws a delta against a car that is half one driver and half
+ * another.
+ *
+ * Accumulating every driver removes the question. The newly pinned car's trace is
+ * already populated back to the start of the main driver's current lap, because
+ * it was being kept all along, and the lap is the buffer's whole horizon anyway -
+ * the wire carries only the span since the last tick and cannot backfill.
+ *
+ * Cost: twenty spans of `FPS x speed / 10 Hz` samples, so about 400 `Map.set`
+ * calls a tick at 8x against 40 before, and 5,000 on a capped forward jump. On
+ * integer keys that is sub-millisecond beside the ECharts render it feeds.
+ */
 export class TraceAccumulator {
-  private main = new Map<number, TraceRow>();
-  private rival = new Map<number, TraceRow>();
+  private buffers = new Map<string, Map<number, TraceRow>>();
   private currentLap: number | null = null;
 
   /** Fold one tick's spans in. Safe to call twice with the same tick. */
-  ingest(main: TelemetrySample[], rival: TelemetrySample[], evict: boolean): void {
+  ingest(spans: Record<string, TelemetrySample[]>, mainCode: string, evict: boolean): void {
     if (evict) this.clear();
 
-    // Per sample, not per tick: at 8x a single span crosses the start line.
-    for (const sample of main) {
+    // The MAIN driver's span runs first and to completion, then everyone else is
+    // compared against the lap it left behind. That ordering is inherited rather
+    // than incidental: reading it as "store a sample while its driver is on the
+    // current lap" is a different algorithm, interleaved in time, and the two
+    // agree only because the lap-change clear wipes the old lap anyway.
+    for (const sample of spans[mainCode] ?? []) {
       const lap = Math.trunc(sample.lap || 0);
       if (lap !== this.currentLap) {
         this.currentLap = lap;
-        this.main.clear();
-        this.rival.clear();
+        this.buffers.clear();
       }
-      store(this.main, sample);
+      store(this.bufferFor(mainCode), sample);
     }
 
-    for (const sample of rival) {
-      if (Math.trunc(sample.lap || 0) === this.currentLap) store(this.rival, sample);
+    for (const [code, span] of Object.entries(spans)) {
+      if (code === mainCode) continue;
+      for (const sample of span) {
+        // Same rule the single rival has always been held to: a car on another
+        // lap carries an unrelated `t`, and mixing those into one distance-keyed
+        // store spikes the delta interpolation by 4-6 s.
+        if (Math.trunc(sample.lap || 0) === this.currentLap) store(this.bufferFor(code), sample);
+      }
     }
   }
 
   clear(): void {
-    this.main.clear();
-    this.rival.clear();
+    this.buffers.clear();
     this.currentLap = null;
   }
 
-  get mainTrace(): SortedTrace {
-    return sorted(this.main);
-  }
-
-  get rivalTrace(): SortedTrace {
-    return sorted(this.rival);
+  /** One driver's accumulated lap, or the empty trace for a car with nothing. */
+  trace(code: string | null): SortedTrace {
+    if (code === null) return EMPTY;
+    const buffer = this.buffers.get(code);
+    return buffer === undefined ? EMPTY : sorted(buffer);
   }
 
   get lap(): number | null {
     return this.currentLap;
+  }
+
+  private bufferFor(code: string): Map<number, TraceRow> {
+    let buffer = this.buffers.get(code);
+    if (buffer === undefined) {
+      buffer = new Map<number, TraceRow>();
+      this.buffers.set(code, buffer);
+    }
+    return buffer;
   }
 }
 

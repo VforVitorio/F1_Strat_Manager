@@ -114,6 +114,10 @@ function tick(
     drivers = null,
     order = null,
     colors = null,
+    // Per-driver spans, verbatim. `main`/`rivalSpan` cover the two-car scenarios
+    // this harness was built for; a scenario about WHICH car is charted needs to
+    // fill a third, so it hands the whole map instead.
+    spans = null,
   } = {},
 ) {
   const field = drivers ?? { NOR: driver(mainDriver), PIA: driver() };
@@ -149,12 +153,14 @@ function tick(
       // because that is what a DATA scenario is about, and files them under
       // the codes the window looks them up by.
       telemetry: {
-        drivers: Object.fromEntries(
-          Object.keys(field).map((code) => [
-            code,
-            spanFor(code, rival, main, rivalSpan),
-          ]),
-        ),
+        drivers:
+          spans ??
+          Object.fromEntries(
+            Object.keys(field).map((code) => [
+              code,
+              spanFor(code, rival, main, rivalSpan),
+            ]),
+          ),
         rewound,
         dropped,
       },
@@ -4005,6 +4011,139 @@ check(
     after === before,
     `returning to TRACES keeps the whole lap, not just what arrived after (${after} vs ${before})`,
   );
+  await ctx.close();
+}
+
+// --- Scenario: the rival changes MID-LAP, and no sample of the old one survives -
+//
+// The accumulator used to key two buffers by ROLE. That was safe only while the
+// producer could not change its mind - `_driver_rival` is assigned once, at
+// construction - and re-pointing the rival mid-lap left the previous car's
+// samples sitting in the same distance-keyed map, so `deltaSeries` interpolated
+// across the seam and drew a delta against a car that was half one driver and
+// half another (#1050).
+//
+// Every driver here carries a DISTINGUISHABLE signature, in both channels the
+// assertions read. R1's exit gate measured why: a fixture that hands every car
+// identical values makes an identity claim unfalsifiable, and a producer serving
+// all twenty the same car's frames passed 277 tests.
+{
+  const SWITCH_LAP = 24;
+  // main t: 100->10 ... 600->15, one second per hundred metres.
+  const lapSpan = (xs, tAt, speedBase) =>
+    xs.map((dist, i) => ({
+      lap: SWITCH_LAP,
+      t: tAt(dist),
+      dist,
+      speed: speedBase + i,
+      throttle: 50,
+      brake: 0,
+      gear: 6,
+      drs: 8,
+    }));
+  const FIRST = [100, 200, 300];
+  const SECOND = [400, 500, 600];
+  const mainT = (dist) => 10 + (dist - 100) / 100;
+  // PIA sits +2.0 s behind the main car for the whole lap, VER +5.0 s. The two
+  // offsets are what make a surviving PIA sample visible in the delta.
+  const piaT = (dist) => mainT(dist) + 2;
+  const verT = (dist) => mainT(dist) + 5;
+
+  const field = { NOR: driver(), PIA: driver(), VER: driver() };
+  const beforeSwitch = tick(1, {
+    rival: "PIA",
+    drivers: field,
+    spans: {
+      NOR: lapSpan(FIRST, mainT, 200),
+      PIA: lapSpan(FIRST, piaT, 300),
+      VER: lapSpan(FIRST, verT, 400),
+    },
+  });
+  const afterSwitch = tick(2, {
+    rival: "VER",
+    drivers: field,
+    spans: {
+      NOR: lapSpan(SECOND, mainT, 203),
+      PIA: lapSpan(SECOND, piaT, 303),
+      VER: lapSpan(SECOND, verT, 403),
+    },
+  });
+
+  const ctx = await browser.newContext({ viewport: CLIENT });
+  const page = await ctx.newPage();
+  watchPage(page, failures);
+  await page.addInitScript((payloads) => {
+    window.__ticks = payloads;
+    window.__cursor = 0;
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) => {
+          if (window.__ticks[window.__cursor].seq === sinceSeq) {
+            if (window.__cursor + 1 >= window.__ticks.length) return null;
+            window.__cursor += 1;
+          }
+          return window.__ticks[window.__cursor];
+        },
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, [beforeSwitch, afterSwitch]);
+
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  // Long enough for BOTH ticks to be polled and folded in, which is the whole
+  // scenario: one tick alone cannot mix two cars.
+  await page.waitForTimeout(600);
+
+  const series = (lane, car) =>
+    page.evaluate(
+      ([which, side]) => {
+        const el = document.querySelector(".trace-stack-plot");
+        const found = el.__pitwallChart
+          .getOption()
+          .series.find((s) => s.name === `${which}-${side}`);
+        return found ? found.data : null;
+      },
+      [lane, car],
+    );
+
+  const switched = await series("delta", "rival");
+  const values = switched.map(([, value]) => value);
+  check(
+    values.length === 6,
+    `the newly pinned car is charted back to the start of the lap, not from the switch (${values.length} of 6)`,
+  );
+  check(
+    values.every((value) => Math.abs(value - 5) < 1e-9),
+    `every delta point is VER's +5.0 s (${JSON.stringify(values)})`,
+  );
+  check(
+    !values.some((value) => Math.abs(value - 2) < 1e-9),
+    `no sample of the PREVIOUS rival survives in the delta (${JSON.stringify(values)})`,
+  );
+
+  // The identity check the delta cannot make on its own: read the OWNER off the
+  // plotted values. VER's speeds run 400.., PIA's 300.., so a chart still holding
+  // the old rival's samples shows it here even if the arithmetic happened to agree.
+  const speeds = (await series("speed", "rival")).map(([, value]) => value);
+  check(
+    speeds.length === 6 && speeds.every((value) => value >= 400),
+    `the rival speed trace is VER's throughout (${JSON.stringify(speeds)})`,
+  );
+  check(
+    !speeds.some((value) => value >= 300 && value < 400),
+    `not one of PIA's speed samples is left in it (${JSON.stringify(speeds)})`,
+  );
+
+  // The main car is untouched by the switch.
+  const mainSpeeds = (await series("speed", "main")).map(([, value]) => value);
+  check(
+    mainSpeeds.length === 6 && mainSpeeds.every((value) => value < 300),
+    `the main trace keeps its own six samples (${JSON.stringify(mainSpeeds)})`,
+  );
+
   await ctx.close();
 }
 
