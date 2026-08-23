@@ -202,8 +202,9 @@ def _frame_to_telemetry(frame, circuit_length_m: float, has_position: bool = Tru
         # `config.DRS_OPEN_CODES`; `OwnCarTraces` refuses to fork it into
         # TypeScript, which is why its DRS lane could not exist until the producer
         # published the answer instead of the code - the same treatment
-        # `track_status_label` already gets. Both spans, main and rival, flow
-        # through this one function, so the rival's lane is fed by the same line.
+        # `track_status_label` already gets. EVERY driver's span flows through this
+        # one function, so no car's lane can be fed by a different rule. (It said
+        # "both spans, main and rival" until schema v2 put twenty on the wire.)
         # No schema bump: `stream.py`'s own contract says adding a key an old
         # consumer can ignore does not bump it.
         "drs_open": int(frame.drs) in DRS_OPEN_CODES,
@@ -781,8 +782,11 @@ class F1ArcadeView(arcade.View):
         #
         # **A retired car still carries a span**, because its frame array runs
         # the full length of the race and the values simply stop changing. On
-        # Melbourne 2025 that is three lap-1 retirements, 14.5 % of a seek
-        # message. They stay: `active` and `has_position` are published beside
+        # Melbourne 2025 that is three lap-1 retirements, 14.5 % of the arcade
+        # block on a seek tick and about 13.8 % of the whole message once the
+        # strategy block rides along. What each of them costs per tick moves with
+        # playback: a span is `FPS x speed / 10 Hz` samples, so 2-3 at 1x and 20
+        # at 8x, not a fixed handful. They stay: `active` and `has_position` are published beside
         # them for exactly this, and a key set that came and went as cars
         # retired would be a second rule again. **A consumer gates a span on
         # `drivers[code].active` and `.has_position`** rather than on whether

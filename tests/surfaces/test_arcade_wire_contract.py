@@ -123,7 +123,15 @@ def _decision() -> LapDecisionDTO:
         pit_lap_target=13,
         compound_next="HARD",
         undercut_target="RUS",
-        agent_alerts=["tyre cliff in 2 laps"],
+        contingencies=[
+            {
+                "trigger": "if RUS pits within two laps",
+                "switch_to": "PIT_NOW",
+                "priority": "HIGH",
+                "rationale": "the undercut window shuts once he clears traffic",
+            }
+        ],
+        key_risks=["rejoin into traffic"],
         guardrail_reason="none",
         # Real field names, taken from the agents' own output dataclasses and
         # guarded by `test_the_per_agent_fixture_uses_the_producers_real_field_names`.
@@ -215,7 +223,6 @@ def _payload() -> dict:
         gp="Melbourne",
         year=2025,
         driver="NOR",
-        driver2="PIA",
         team="McLaren",
         lap_start=1,
         lap_end=57,
@@ -315,10 +322,18 @@ GOLDEN_SHAPE = {
         "history_tail": [
             {
                 "action": "str",
-                "agent_alerts": ["str"],
                 "compound": "str",
                 "compound_next": "str",
                 "confidence": "float",
+                "contingencies": [
+                    {
+                        "priority": "str",
+                        "rationale": "str",
+                        "switch_to": "str",
+                        "trigger": "str",
+                    }
+                ],
+                "key_risks": ["str"],
                 "gap_ahead_s": "float",
                 "guardrail_reason": "str",
                 "lap_number": "int",
@@ -337,10 +352,18 @@ GOLDEN_SHAPE = {
         ],
         "latest": {
             "action": "str",
-            "agent_alerts": ["str"],
             "compound": "str",
             "compound_next": "str",
             "confidence": "float",
+            "contingencies": [
+                {
+                    "priority": "str",
+                    "rationale": "str",
+                    "switch_to": "str",
+                    "trigger": "str",
+                }
+            ],
+            "key_risks": ["str"],
             "gap_ahead_s": "float",
             "guardrail_reason": "str",
             "lap_number": "int",
@@ -389,7 +412,6 @@ GOLDEN_SHAPE = {
         },
         "start": {
             "driver": "str",
-            "driver2": "str",
             "gp": "str",
             "lap_end": "int",
             "lap_start": "int",
@@ -924,10 +946,10 @@ def test_every_recommendation_field_the_wire_drops_was_decided_about():
     dto = _dataclass_field_names("src/arcade/strategy.py", "LapDecisionDTO")
 
     assert recommendation - dto == {
-        # Decision content, held back only because adding it is a schema change;
-        # rides with #1048's bump rather than migrating a frozen contract twice.
-        "contingencies",
-        "key_risks",
+        # `contingencies` and `key_risks` used to sit here. They landed with
+        # #1048's schema bump, which is what holding them back was for, and their
+        # absence from this set is now the record that they did.
+        #
         # The PLAN timeline already draws the stint boundary from `pit_lap_target`.
         # A second source for one number on one surface is the twin shape.
         "expected_stint_end",
@@ -942,6 +964,110 @@ def test_every_recommendation_field_the_wire_drops_was_decided_about():
     # And the other direction, so the frozen set cannot be satisfied by the DTO
     # quietly losing a field it is supposed to carry.
     assert {"action", "confidence", "reasoning", "scenario_scores"} <= dto
+
+
+def test_the_producer_really_copies_the_contingencies_it_was_handed():
+    """`_build_decision` is what fills the wire, and nothing executed it (#1046).
+
+    Every other guard for these two fields reads a hand-built `LapDecisionDTO`:
+    the golden's `_decision()` writes them directly, and the dev producer writes
+    dicts straight into the DTO. So the extraction itself was uncovered, and the
+    exit gate measured what that costs: replacing the real copy with
+    `contingencies=[]` leaves all 277 tests green while every rich lap ships the
+    field empty.
+
+    It cannot be closed by running the pipeline. The rich profile spends LLM
+    calls, and on the free profile `no_llm.py` builds `contingencies=[]` by
+    design, so no affordable run reds it. A stand-in recommendation does.
+
+    The four keys are checked against `Contingency`'s own declaration rather than
+    against this file's idea of them: hardcoded on both sides, a rename would ship
+    four empty strings on every lap and stay green - the same drift the situation
+    filter's guard below is written to stop.
+    """
+    from src.arcade.strategy import _build_decision
+
+    declared = _dataclass_field_names("src/agents/strategy_orchestrator.py", "Contingency")
+    assert declared, "Contingency has no annotated fields; the flattener guards nothing"
+
+    class _Contingency:
+        def __init__(self, **values):
+            for key, value in values.items():
+                setattr(self, key, value)
+
+    payload = {name: f"{name}-value" for name in sorted(declared)}
+    rec = SimpleNamespace(
+        action="PIT_NOW",
+        confidence=0.71,
+        reasoning="undercut window open",
+        scenario_scores={"PIT_NOW": 0.71},
+        contingencies=[_Contingency(**payload), dict(payload)],
+        key_risks=["rejoin into traffic", "the cliff arrives first"],
+    )
+    race_state = SimpleNamespace(
+        lap=12, compound="MEDIUM", tyre_life=9, position=4, gap_ahead_s=1.42
+    )
+
+    decision = _build_decision(rec, race_state, 81.2, {})
+
+    assert decision.key_risks == ["rejoin into traffic", "the cliff arrives first"]
+    assert len(decision.contingencies) == 2, "an item shape was dropped on the floor"
+    # Both item shapes, because the orchestrator's list can hold either, and both
+    # must survive with every declared key carrying its value rather than "".
+    for item in decision.contingencies:
+        assert set(item) == declared, f"the wire dict does not match Contingency: {item}"
+        assert all(item[name] == f"{name}-value" for name in declared), (
+            f"a declared field was flattened to an empty string: {item}"
+        )
+
+
+def test_the_two_neutralisation_booleans_are_filtered_out_of_the_situation_dump():
+    """N27 still computes them; the wire stops carrying them (#1043).
+
+    The golden cannot assert this. Its `situation` block is a hand-written dict
+    that never carried the pair, so it would stay green whether the filter
+    existed or not - a guard about the empty set. This runs the real
+    `_build_per_agent` over an object that DOES carry them.
+
+    Both halves are checked, because filtering a field nobody produces is the
+    same nothing: the `ast` half asserts `RaceSituationOutput` still declares
+    the pair, so the day N27 drops them this test says the filter is now
+    pointless rather than quietly passing forever.
+
+    Why filtered rather than deleted from the agent: the pair is read across
+    `src/agents/` - N27's own `sc_active`, N28's routing, and the orchestrator's
+    safety-car handling including the rail that nulls `target_lap_time_s` under
+    Art. 55.7. What the wire carries instead is `track_status_label`, decoded
+    once by the arcade from FastF1 TrackStatus, which both windows render.
+    """
+    from dataclasses import dataclass
+    from dataclasses import field as dc_field
+
+    from src.arcade.strategy import _SITUATION_FIELDS_OFF_THE_WIRE, _build_per_agent
+
+    declared = _dataclass_field_names("src/agents/race_situation_agent.py", "RaceSituationOutput")
+    assert set(_SITUATION_FIELDS_OFF_THE_WIRE) <= declared, (
+        "the filter names fields N27 no longer produces, so it guards nothing"
+    )
+
+    @dataclass
+    class _SituationLike:
+        threat_level: str = "MEDIUM"
+        sc_prob_3lap: float = 0.08
+        sc_currently_active: bool = True
+        vsc_active: bool = True
+        reasoning: str = "the field is neutralised"
+        alerts: list = dc_field(default_factory=list)
+
+    per_agent = _build_per_agent({"situation_out": _SituationLike()})
+
+    assert per_agent.situation is not None
+    for name in _SITUATION_FIELDS_OFF_THE_WIRE:
+        assert name not in per_agent.situation, f"{name} still reaches the wire"
+    # And the filter took only what it was aimed at.
+    assert per_agent.situation["threat_level"] == "MEDIUM"
+    assert per_agent.situation["sc_prob_3lap"] == 0.08
+    assert per_agent.situation["reasoning"] == "the field is neutralised"
 
 
 def test_the_pipeline_delegate_no_longer_throws_the_stage_timings_away():

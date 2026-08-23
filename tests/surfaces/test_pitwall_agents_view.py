@@ -656,12 +656,13 @@ def test_the_tooltips_return_data_and_never_markup():
 def test_the_agents_header_takes_the_neutralisation_off_the_tick():
     """One source for the race's most decision-changing fact, and an absence stays one.
 
-    The situation agent publishes `sc_currently_active` and `vsc_active` on the
-    same payload. Rendering those would put two sources for one fact on a desk
-    where both windows are open: one is FastF1's TrackStatus for the lap on
-    screen, decoded once by the producer so nobody re-derives it, and the other is
-    a boolean N27 computed for the lap it was asked about. This asserts the header
-    reads the decoded one.
+    The situation agent computes `sc_currently_active` and `vsc_active`, and it
+    used to publish them on this same payload. Rendering those would put two
+    sources for one fact on a desk where both windows are open: one is FastF1's
+    TrackStatus for the lap on screen, decoded once by the producer so nobody
+    re-derives it, and the other is a boolean N27 computed for the lap it was
+    asked about. This asserts the header reads the decoded one, and that the
+    other one is no longer on the wire to be read (#1043).
 
     The second half is the part that costs if it is wrong. The producer sends
     `None` when the loader has no entry for the lap, and that is NOT a green
@@ -684,9 +685,17 @@ def test_the_agents_header_takes_the_neutralisation_off_the_tick():
     assert unknown["track_status"] is None, "an absent status became a claim"
     assert unknown["track_status_colour"] is None
 
-    # And the agent's own pair is NOT what the header reads, which is the whole
-    # point: a payload whose agent says the safety car is out while the tick says
-    # green renders green, because the tick is the source.
+    # The pair no longer reaches the wire at all: it is filtered at the DTO
+    # boundary (#1043), and that absence is guarded against the REAL producer in
+    # `test_arcade_wire_contract.py`, not here - `_payload` is a hand-built dict,
+    # so an absence assertion against it would only say what this file chose to
+    # write.
+    #
+    # The injection below is therefore a key no producer sends any more, and the
+    # test is deliberately kept that way: what it pins is the VIEW BUILDER, which
+    # must not grow a second reader of neutralisation whatever arrives. A payload
+    # whose agent says the safety car is out while the tick says green renders
+    # green, because the tick is the source.
     disagreeing = _payload()
     disagreeing["strategy"]["latest"]["per_agent"]["situation"]["sc_currently_active"] = True
     still = _host(disagreeing).get_agents_view(-1)["header"]
@@ -880,7 +889,7 @@ def _payload(
     seq: int = 7, lap: int = 23, latest: dict | None = None, tail: list | None = None
 ) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "seq": seq,
         "arcade": {
             "gp_name": "Melbourne",

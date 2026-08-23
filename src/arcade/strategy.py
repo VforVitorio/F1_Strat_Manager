@@ -65,10 +65,19 @@ class SimulateRequestDTO:
 
 @dataclass(frozen=True)
 class StartEventDTO:
+    """The run's fixed metadata, emitted once before the first lap.
+
+    ``driver2`` used to sit here, carrying the launch rival's code onto the
+    wire, and nothing on either window rendered it (#1052). The rival identity
+    a consumer needs is `arcade.driver_rival` on every tick, which since
+    schema v2 names one of twenty spans rather than one of two roles. The
+    request still carries a `driver2`: that is the arcade's own pick, an input
+    rather than a published fact.
+    """
+
     gp: str = ""
     year: int = 0
     driver: str = ""
-    driver2: str | None = None
     team: str = ""
     lap_start: int = 1
     lap_end: int = 0
@@ -115,12 +124,13 @@ class LapDecisionDTO:
     it leaves behind used to stop here silently, which reads as an oversight
     rather than a decision:
 
-    - ``contingencies`` and ``key_risks`` are decision CONTENT and have a claim on
-      the window. They are held back only because adding them is a schema change,
-      so they ride with #1048's bump rather than being a second migration of a
-      frozen contract. ``contingencies`` is the one the orchestrator memory audit
-      calls load-bearing, and it is invisible in ``reasoning``, which is why it was
-      given its own field instead of being left to the model's prose.
+    - ``contingencies`` and ``key_risks`` ARRIVED with #1048's schema bump, which is
+      what this paragraph used to promise. ``contingencies`` is the one the
+      orchestrator memory audit calls load-bearing, and it is invisible in
+      ``reasoning``, which is why it was given its own field instead of being left
+      to the model's prose. They are carried as plain dicts and strings rather than
+      as the orchestrator's ``Contingency`` model: the wire is JSON and the DTO is
+      what ``asdict`` walks.
     - ``expected_stint_end`` stays out. The PLAN timeline already draws the stint
       boundary from ``pit_lap_target``, and a second source for one number on one
       surface is the twin shape this repo pays for most.
@@ -129,6 +139,11 @@ class LapDecisionDTO:
       target above the delta sends the driver at a penalty. A field whose absence
       is the load-bearing case needs a designed rendering before it is worth
       carrying, and nothing on either window asks for it.
+
+    **And what it stopped carrying.** ``agent_alerts`` was a list of intent
+    strings flattened out of ``radio_out.alerts`` for a Qt dashboard retired in
+    ``7ea6a7a6``; it was a lossy copy of ``per_agent.radio.alerts``, which the same
+    tick carries in full and which the RADIO console actually renders (#1040).
     """
 
     lap_number: int = 0
@@ -147,7 +162,12 @@ class LapDecisionDTO:
     pit_lap_target: int | None = None
     compound_next: str | None = None
     undercut_target: str | None = None
-    agent_alerts: list[str] = field(default_factory=list)
+    # Conditional branches the orchestrator planned for upcoming laps, as plain
+    # dicts (`trigger`, `switch_to`, `priority`, `rationale`), plus the risks it
+    # chose to flag. Both are decision content that stopped at this boundary
+    # until schema v2 (#1046).
+    contingencies: list[dict[str, Any]] = field(default_factory=list)
+    key_risks: list[str] = field(default_factory=list)
     guardrail_reason: str | None = None
     # Raw per-agent outputs (populated by the arcade-local pipeline so the
     # dashboard can render predicted vs actual, CI bounds, cliff percentiles
@@ -561,7 +581,6 @@ class SimConnector(threading.Thread):
                 gp=self._request.gp,
                 year=self._request.year,
                 driver=self._request.driver,
-                driver2=self._request.driver2,
                 team=self._request.team,
                 lap_start=lap_start,
                 lap_end=lap_end,
@@ -750,19 +769,76 @@ def _dump_dataclass(obj: Any) -> dict[str, Any] | None:
     return obj if isinstance(obj, dict) else None
 
 
+# N27 computes these two from the RCM stream for the lap it was asked about.
+# The tick already carries `track_status_label`, decoded from FastF1 TrackStatus
+# for the lap on screen by the arcade's own priority rule, and BOTH windows
+# render that one. Publishing the agent's pair as well would put two sources for
+# one fact on one desk, free to disagree, which is the shape this repo pays for
+# most - so the wire carries the decoded signal and the agent keeps its own
+# copy for its own reasoning (#1043).
+#
+# They are filtered HERE rather than deleted from `RaceSituationOutput`, because
+# the pair is read across `src/agents/`: N27's own `sc_active` property, N28's
+# routing branches, and the orchestrator's safety-car handling including the
+# rail that nulls `target_lap_time_s` under Art. 55.7.
+_SITUATION_FIELDS_OFF_THE_WIRE = ("sc_currently_active", "vsc_active")
+
+
+def _situation_for_the_wire(situation_out: Any) -> dict[str, Any] | None:
+    """Dump N27's output minus the neutralisation booleans the tick decodes itself."""
+    dumped = _dump_dataclass(situation_out)
+    if dumped is None:
+        return None
+    return {k: v for k, v in dumped.items() if k not in _SITUATION_FIELDS_OFF_THE_WIRE}
+
+
 def _build_per_agent(agent_outputs: dict[str, Any]) -> PerAgentOutputsDTO:
     """Package the pipeline's intermediate outputs into a DTO the
     ``StrategyState`` can broadcast to the dashboard."""
     return PerAgentOutputsDTO(
         pace=_dump_dataclass(agent_outputs.get("pace_out")),
         tire=_dump_dataclass(agent_outputs.get("tire_out")),
-        situation=_dump_dataclass(agent_outputs.get("situation_out")),
+        situation=_situation_for_the_wire(agent_outputs.get("situation_out")),
         radio=_dump_dataclass(agent_outputs.get("radio_out")),
         pit=_dump_dataclass(agent_outputs.get("pit_out")),
         regulation_context=str(agent_outputs.get("regulation_context") or ""),
         rag=agent_outputs.get("rag"),
         active=list(agent_outputs.get("active") or []),
     )
+
+
+def _contingency_dicts(contingencies: Any) -> list[dict[str, Any]]:
+    """Flatten the orchestrator's ``Contingency`` models into wire dicts.
+
+    Four keys each: ``trigger``, ``switch_to``, ``priority``, ``rationale``.
+
+    Both ITEM shapes are handled because the list can hold either, and a
+    comprehension that assumed one would produce a payload of empty objects on
+    the other without failing anywhere.
+
+    **The fork that matters is one level up and it is the caller's**, not this
+    function's. ``_build_decision`` reads every optional field with ``getattr``,
+    so a dict-shaped ``rec`` would yield ``None`` for all of them, silently. That
+    shape does not reach the arcade today - ``run_lap``'s contract is a real
+    ``StrategyRecommendation`` on both the rich and the no-llm paths - and the
+    day one does, the hole is at the call site rather than here.
+    """
+    packed: list[dict[str, Any]] = []
+    for item in contingencies or []:
+        if isinstance(item, dict):
+            source = item
+        else:
+            source = {
+                key: getattr(item, key, None)
+                for key in ("trigger", "switch_to", "priority", "rationale")
+            }
+        packed.append(
+            {
+                key: str(source.get(key) or "")
+                for key in ("trigger", "switch_to", "priority", "rationale")
+            }
+        )
+    return packed
 
 
 def _build_decision(
@@ -776,24 +852,14 @@ def _build_decision(
     """Merge the synthesised ``StrategyRecommendation`` + raw agent outputs
     into the DTO consumed by ``StrategyState.history`` / the dashboard.
 
-    ``agent_alerts`` is rebuilt from ``radio_out.alerts`` the same way
-    ``simulator._parse_lap_decision`` does it (string-or-dict tolerant)
-    so the dashboard's alerts feed stays schema-stable across paths.
+    ``contingencies`` is flattened to plain dicts because the wire is JSON and
+    ``asdict`` walks this DTO: the orchestrator holds them as ``Contingency``
+    models, which would not survive the trip typed anyway.
 
     ``memory_block`` / ``plan_changed`` come from ``DecisionMemory`` and are
     just carried onto the DTO here; the caller (``_step_once``) is the one
     that decides when each is captured relative to ``record()``.
     """
-    radio_out = agent_outputs.get("radio_out")
-    agent_alerts: list[str] = []
-    if radio_out is not None:
-        raw_alerts = getattr(radio_out, "alerts", []) or []
-        for a in raw_alerts:
-            if isinstance(a, dict):
-                agent_alerts.append(str(a.get("intent") or a.get("event_type") or "alert"))
-            else:
-                agent_alerts.append(str(a))
-
     return LapDecisionDTO(
         lap_number=race_state.lap,
         compound=str(race_state.compound),
@@ -815,7 +881,8 @@ def _build_decision(
         pit_lap_target=getattr(rec, "pit_lap_target", None),
         compound_next=getattr(rec, "compound_next", None),
         undercut_target=getattr(rec, "undercut_target", None),
-        agent_alerts=agent_alerts,
+        contingencies=_contingency_dicts(getattr(rec, "contingencies", None)),
+        key_risks=[str(risk) for risk in (getattr(rec, "key_risks", None) or [])],
         guardrail_reason=None,
         per_agent=_build_per_agent(agent_outputs),
         memory_block=memory_block,
