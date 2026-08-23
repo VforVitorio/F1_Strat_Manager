@@ -97,6 +97,42 @@ scratchpad.
 Deferred beyond this plan, unchanged: #282 (observability contract, independent and also feeds the
 Rival Agent), #286 (rival intent, gated on the Rival Agent), #287 (the parity gate).
 
+### The rival selector — the programme after sprint 9
+
+Scoped 2026-08-21 by a feasibility gate, delivered as three sprints:
+
+| | sprint | issues | what landed |
+|---|---|---|---|
+| **R1** | the wire | #1048, #1049 | twenty telemetry spans a tick instead of two, encoded off the render thread |
+| **R2** | the DATA selector | #1050, #1051, #1060 | per-driver trace accumulation, the tower row pins the rival, the eviction signals survive a discarded tick |
+| **R3** | the re-based delta, and this record | #1066, #1052 | band 4 compares two laps rather than two instants |
+
+**The AGENTS window is deliberately OUT of this programme (#1052).** It is recorded here rather
+than only in the issue because the next person to scope a rival selector will open this plan, and
+the evidence is easy to re-derive wrongly.
+
+Everything rival-flavoured on that surface is computed producer-side, and none of it reads the
+broadcast rival:
+
+- `undercut_target` is the argmax over `P(undercut_success)` across the pit agent's
+  `score_undercut_tool` calls (`src/agents/pit_strategy_agent.py:526-532`), over a candidate set
+  the system prompt defines positionally, "each rival within 5 positions ahead" (`:657`).
+  **It is NOT the positional `rival_ahead` at `:1492`** — assembling it from that was the bug #432
+  fixed, and the fix is documented at `:483-499`.
+- the situation card's gap is the car ahead ON TRACK, paired positionally
+  (`src/agents/race_situation_agent.py:1162`);
+- the reasoning prose is the LLM's, over those same positional inputs;
+- `strategy.start.driver2` carried the launch rival's code onto the wire and rendered nowhere, so
+  R1 deleted it.
+
+A client-side pin therefore changes nothing there, by construction. Producer-side selection is the
+only mechanism that could, and `build_race_state(rival=...)` (`src/agents/race_state_builder.py:283`)
+recomputes `gap_ahead_s` and `pace_delta_s` against a named car but lands them only in the
+orchestrator's synthesis prompt: N27 derives its own pair gap from `laps_df` and N28's candidate
+set is positional, so neither analysis moves. **Selecting a rival there reframes the prose, not the
+analysis.** Making the agents genuinely analyse a chosen rival is `v2.8.0` Rival Agent work in
+`src/agents/`, which is a different thing from a selector and should not be folded in.
+
 ---
 
 ## 2. Sprint 1 — the wire
@@ -568,9 +604,20 @@ over a threshold that could never fire.
   the reveal withholds that driver's later parquet laps. Data-honest - the replay has no telemetry
   to place them - and unreachable on Melbourne, where all twenty run to the line. Written down so
   it is not filed as a reveal bug.
-- **A latent P2 for whoever writes any trace reader**: the arcade's `lap` channel is interpolated,
-  so it can label ~2,000 frames as a lap that has no telemetry behind it. Gate A reproduced the
-  mechanism by executing the code path but could not show it firing on real data.
+- **The latent P2 for trace readers FIRES on real data, and the mechanism named here was wrong.**
+  This entry used to say the arcade's `lap` channel "is interpolated, so it can label ~2,000 frames
+  as a lap that has no telemetry behind it", and that Gate A could reproduce the mechanism by
+  executing the code path but not show it firing. Measured on 621 real Melbourne ticks during R3:
+  **70 events a race across 17 of the 20 drivers.** One frame carries the PREVIOUS lap number with
+  a mid-lap distance, between two correct frames 40 ms apart. HAM at the lap-24 crossing reads lap
+  23 at 2586.2 m, half a lap from where the car is.
+  The channel is not interpolated: `data.py:404` writes a per-lap CONSTANT into each lap's array,
+  `408-411` concatenates every lap and sorts the whole thing by `t`, and FastF1's padded lap
+  windows overlap, so a stale row sorts in between two live ones. The bad `dist` comes from
+  `_lap_fraction_from_distance` opening a spurious few-metre segment around it.
+  It reaches every consumer of `rel_dist`, not only the trace buffer. Band 4 defends itself by
+  skipping a sample whose lap goes backwards (`traceBuffer.ts`, #1066); the producer-side fix is
+  tracked separately.
 - **#199 Phase D.3 gains weight.** `snapshot_dict` re-runs a recursive `asdict` over the 30-entry
   tail ten times a second with a blocking `sendall`, so one stalled subscriber can hitch the pyglet
   frame loop. Inherited, not introduced, but the wire is now load-bearing.

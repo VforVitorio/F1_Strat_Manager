@@ -604,12 +604,26 @@ td.col-drv {
   padding: 0 2px;
 }
 
+/* The lap label plus every note the header can append.
+ *
+ * `nowrap` is not decoration: the header is a flex row sharing its line with the
+ * two driver chips, and a note long enough to push them wraps the row, which
+ * takes its height out of the CHART below. Measured at 1265x593 with one note
+ * showing, the six lanes lose about 2 px each and the delta lane falls from 72 px
+ * to 71, which drops its 10 px labels below the 12 px pitch they need to stay
+ * apart. The exposure is not new - `NO POSITION DATA (X, Y)` is longer than any
+ * note added since - it had simply never been measured with a note up. Clipping
+ * the tail of a note is the right trade against shrinking the payload. */
 .traces-lap {
   color: var(--qt-fg-1);
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 1px;
   margin-right: 10px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .traces-vs {

@@ -117,9 +117,24 @@ const LANES: Lane[] = [
     key: "delta",
     label: "Δ TIME",
     unit: "s",
-    // Generous for one lap, and it clips when the series wanders - the Qt range,
-    // kept deliberately: no autorange churn at 10 Hz, and the tower's GAP column
-    // carries the number while the trace is off the top.
+    // The Qt range, kept deliberately: no autorange churn at 10 Hz.
+    //
+    // **Its old justification died with #1066 and this replaces it.** The comment
+    // used to add "and the tower's GAP column carries the number while the trace
+    // is off the top". GAP and INT report an ON-TRACK gap; this lane now reports a
+    // lap-time difference, and no other panel on the window carries that. The
+    // escape hatch is the lane's OWN readout, which prints the value whether or
+    // not the line is inside the axis.
+    //
+    // It is off the top more often than "wanders" suggests, and the number is
+    // measured rather than felt. Over Melbourne 2025, 6,451 same-lap driver pairs:
+    // the end-of-lap difference exceeds 3 s on 27.7 % of them, a lap with a pit
+    // stop costs a median 16.47 s, a neutralised lap puts 57.6 % outside, and the
+    // worst pairing in the race is 50.97 s, seventeen lane-heights. Widening to
+    // [-6, 6] would buy 83.9 % coverage for half the resolution near zero, which
+    // is where two cars actually racing live; autoranging per lap would fit
+    // everything and make a quiet lap's noise look like drama. Locked, clipped and
+    // read off the number is the deliberate choice.
     range: [-3, 3],
     colour: INFO,
     weight: 3,
