@@ -31,6 +31,7 @@ import { driverStatus, type DriverStatus } from "../../lib/driverStatus";
 import { formatSeconds } from "../../lib/format";
 import { formatGapCell, gapCell } from "../../lib/gapCell";
 import { sessionBests, type BestField, type SessionBests } from "../../lib/sessionBests";
+import { driverColour } from "../../lib/driverColour";
 
 interface TimingTowerProps {
   arcade: ArcadeState;
@@ -272,7 +273,7 @@ function TowerRow({
        * colour the arcade never sent, on a window whose whole colour discipline is
        * that `driver_colors` crosses the wire so no consumer invents one. */}
       <td className="col-drv">
-        <span className="drv-swatch" style={{ background: driverColour(arcade, code) }} />
+        <span className="drv-swatch" style={{ background: driverColour(arcade.driver_colors, code, NO_COLOUR) }} />
         {code}
       </td>
       <td className="col-gap">{formatGapCell(gap)}</td>
@@ -402,16 +403,8 @@ function tyreCell(last: LapRow | null): string {
 
 
 /**
- * The driver's own colour, from the arcade's palette on the wire.
- *
- * Never a table here: `driver_colors` rides on every tick precisely so no
- * consumer keeps a second copy of a palette this repo has already found five
- * copies of.
+ * `--qt-border` for a car the wire has no colour for, not `--qt-fg-1`: as a
+ * swatch the old fallback painted a bright white bar, which reads as a team
+ * colour rather than as the absence of one.
  */
-function driverColour(arcade: ArcadeState, code: string): string {
-  const rgb = arcade.driver_colors[code];
-  // `--qt-border` for a car the wire has no colour for, not `--qt-fg-1`: as a
-  // swatch the old fallback painted a bright white bar, which reads as a team
-  // colour rather than as the absence of one.
-  return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "var(--qt-border)";
-}
+const NO_COLOUR = "var(--qt-border)";

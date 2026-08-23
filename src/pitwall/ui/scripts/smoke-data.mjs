@@ -550,13 +550,20 @@ check(
   laneColours["throttle-main"] !== laneColours["brake-main"],
   `throttle and brake are told apart by colour (${laneColours["throttle-main"]} vs ${laneColours["brake-main"]})`,
 );
-// And every rival trace is the broadcast tier's amber, on all six lanes.
+// And every rival trace is the RIVAL'S OWN team colour, on all six lanes.
+//
+// This used to read `declared.RIVAL`, a fixed palette.WARNING amber parsed out of
+// `TraceStack`'s constants. #1070 deleted that constant: the rival takes the
+// pinned driver's colour off the wire now. The expected value therefore comes
+// from the FIXTURE's `driver_colors`, keyed by the car being charted, so the
+// assertion cannot drift back to a literal.
+const RIVAL_RGB = "rgb(255, 128, 0)";
 const rivalWrong = Object.entries(laneColours).filter(
-  ([series, colour]) => series.endsWith("-rival") && colour !== declared.RIVAL,
+  ([series, colour]) => series.endsWith("-rival") && colour !== RIVAL_RGB,
 );
 check(
-  rivalWrong.length === 6 - 6 && rivalWrong.length === 0,
-  `and every rival trace is the broadcast amber (${rivalWrong.map(([s, c]) => `${s}=${c}`).join("; ") || "all six"})`,
+  rivalWrong.length === 0,
+  `and every rival trace is the rival's own colour (${rivalWrong.map(([s, c]) => `${s}=${c}`).join("; ") || "all six"})`,
 );
 
 // And the lane ORDER itself, asserted once rather than assumed by every lookup.
@@ -4743,6 +4750,115 @@ check(
     );
     await ctx.close();
   }
+}
+
+// --- The rival is drawn in ITS OWN team colour (#1070) -----------------------
+//
+// Band 4 drew every rival series, on all six lanes, in a fixed palette.WARNING
+// amber, and the header chip matched it. That came 1:1 from the Qt panel, which
+// fixes the rival to WARNING whoever it is. It stopped being right when the tower
+// could pin any car: the amber sits an RGB distance of 33.5 from McLaren papaya,
+// the closest pair in the whole team palette, so a McLaren rival looked correct
+// and every other car looked like the colour had gone stale.
+//
+// **A palette-membership check cannot fail on this**, which is why there is no
+// Python token guard for it: the amber IS in the palette, and so is any wrong
+// driver's colour. This reads the SERVED value and compares it to the pinned
+// car's own entry in the same fed tick, never to a hex literal.
+{
+  const LAP = 30;
+  const PAIR = ["NOR", "PIA", "VER"];
+  // Papaya for both McLarens, Red Bull blue for VER. **The pinned car must not be
+  // a teammate of the producer's rival**: with PIA pinned over a NOR/PIA pairing,
+  // a version that looked the colour up under the wrong key would find the same
+  // papaya and pass.
+  const COLOURS = { NOR: [255, 128, 0], PIA: [255, 128, 0], VER: [6, 0, 239] };
+  const rgbOf = (code) => `rgb(${COLOURS[code].join(", ")})`;
+  const span = (code) =>
+    [0, 100, 200, 300].map((dist, i) => ({
+      lap: LAP,
+      t: 10 + PAIR.indexOf(code) + dist / 100,
+      dist,
+      speed: (PAIR.indexOf(code) + 3) * 100 + i,
+      throttle: 50,
+      brake: 0,
+      gear: 6,
+      drs: 8,
+    }));
+
+  const ctx = await browser.newContext({ viewport: CLIENT });
+  const page = await ctx.newPage();
+  watchPage(page, failures, "rival colour");
+  const payload = tick(1, {
+    rival: "PIA",
+    drivers: Object.fromEntries(PAIR.map((code) => [code, driver({ lap: LAP })])),
+    spans: Object.fromEntries(PAIR.map((code) => [code, span(code)])),
+    order: PAIR,
+    colors: COLOURS,
+  });
+  await page.addInitScript((one) => {
+    window.pywebview = {
+      api: {
+        get_tick: async () => one,
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, payload);
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  await page.waitForTimeout(400);
+
+  const readColours = () =>
+    page.evaluate(() => {
+      const chart = document.querySelector(".trace-stack-plot").__pitwallChart;
+      const chip = document.querySelector(".driver-chip-rival");
+      return {
+        series: chart
+          .getOption()
+          .series.filter((s) => s.name.endsWith("-rival"))
+          .map((s) => s.lineStyle?.color),
+        chip: chip ? getComputedStyle(chip).color : null,
+      };
+    });
+
+  const before = await readColours();
+  check(
+    before.series.length === 6 && before.series.every((c) => c === rgbOf("PIA")),
+    `every rival lane is the producer rival's own colour (${JSON.stringify(before.series)})`,
+  );
+  check(
+    before.chip === rgbOf("PIA"),
+    `and so is the chip, so the two cannot be fixed apart (${before.chip})`,
+  );
+
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll(".tower-row")].find(
+      (r) => r.querySelector(".col-drv")?.textContent.trim() === "VER",
+    );
+    row?.click();
+  });
+  await page.waitForTimeout(400);
+
+  const after = await readColours();
+  check(
+    after.series.length === 6 && after.series.every((c) => c === rgbOf("VER")),
+    `pinning VER repaints all six lanes in Red Bull blue (${JSON.stringify(after.series)})`,
+  );
+  check(
+    after.chip === rgbOf("VER"),
+    `and the chip follows it (${after.chip})`,
+  );
+  // The assertion that fails against the fixed amber, and against any future
+  // memo staleness: the value has to have MOVED across the click. Both readings
+  // above could be satisfied by a constant if that constant happened to equal
+  // one of the two cars' colours.
+  check(
+    before.series[0] !== after.series[0] && before.chip !== after.chip,
+    `and the colour actually changed across the pin (${before.series[0]} -> ${after.series[0]})`,
+  );
+  await ctx.close();
 }
 
 await browser.close();

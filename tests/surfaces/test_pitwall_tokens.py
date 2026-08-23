@@ -263,11 +263,17 @@ ECHART_SITES = (("TEXT_SECONDARY", 1), ("BORDER_COLOR", 1), ("TEXT_TERTIARY", 1)
 # lane table in `TraceStack`, whose colours are the four palette names it uses plus
 # the two the new lanes add - ACCENT for gear (its own channel, a staircase) and INFO
 # reused for DRS (a bit, in the thinnest lane).
+# No RIVAL slot any more (#1070). Band 4's rival used to draw in a fixed
+# palette.WARNING on all six lanes, inherited from the Qt panel, and it now takes
+# the pinned driver's own colour off `driver_colors`. There is no constant left
+# to pin, and the property that replaced it - the served colour equals the pinned
+# car's - is not a palette question at all: it is asserted through the built
+# bundle in `smoke-data.mjs`, because a palette-membership check can never fail
+# on it.
 TRACE_SLOTS = {
     "INFO": "INFO",
     "SUCCESS": "SUCCESS",
     "DANGER": "DANGER",
-    "RIVAL": "WARNING",
     "ACCENT": "ACCENT",
 }
 
@@ -340,9 +346,12 @@ def test_the_trace_colours_are_in_the_right_slots():
     """Copy number six: band 4's six lanes, one palette name each.
 
     A DIFFERENT colour per channel - INFO for speed and the delta baseline, SUCCESS
-    for throttle, DANGER for brake, ACCENT for gear, WARNING for the rival on every
-    lane. A membership test cannot see brake and throttle swapping places; both
-    hexes stay in the palette and the window is simply wrong.
+    for throttle, DANGER for brake, ACCENT for gear. A membership test cannot see
+    brake and throttle swapping places; both hexes stay in the palette and the
+    window is simply wrong.
+
+    The rival is NOT in this map. It used to be, as WARNING on every lane, and
+    #1070 replaced that constant with the pinned driver's own colour.
 
     Read from `TraceStack`, which is where the lane table lives now. The file this
     used to read (`OwnCarTraces`) kept four `<metric>_main` constants for the 2x2;
@@ -396,8 +405,8 @@ def test_the_data_stylesheets_raw_hexes_are_guarded_too():
     )
     assert raw[3] == _rgb_to_hex(palette.DANGER), "band 1's Disconnected chip copies DANGER"
     assert raw[4] == _rgb_to_hex(palette.WARNING), (
-        "the rival chip, band 1's PROVISIONAL chip, a slower-than-own-best sector, the "
-        "neutralised-lap rail and the radio's SC / flag category chips copy WARNING"
+        "band 1's PROVISIONAL chip, a slower-than-own-best sector, the neutralised-lap "
+        "rail and the radio's SC / flag category chips copy WARNING"
     )
 
 
