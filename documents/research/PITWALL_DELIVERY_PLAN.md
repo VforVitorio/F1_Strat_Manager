@@ -611,10 +611,10 @@ over a threshold that could never fire.
   **70 events a race across 17 of the 20 drivers.** One frame carries the PREVIOUS lap number with
   a mid-lap distance, between two correct frames 40 ms apart. HAM at the lap-24 crossing reads lap
   23 at 2586.2 m, half a lap from where the car is.
-  The channel is not interpolated: `data.py:404` writes a per-lap CONSTANT into each lap's array,
-  `408-411` concatenates every lap and sorts the whole thing by `t`, and FastF1's padded lap
-  windows overlap, so a stale row sorts in between two live ones. The bad `dist` comes from
-  `_lap_fraction_from_distance` opening a spurious few-metre segment around it.
+  The channel is not interpolated: `data.py:402` writes a per-lap CONSTANT into each lap's array,
+  `410-411` concatenates every lap and sorts the whole thing by `t`, and FastF1's padded lap
+  windows overlap, so a stale row sorts in between two live ones and carries its own lap's
+  `dist` with it.
   It reaches every consumer of `rel_dist`, not only the trace buffer. Band 4 defends itself by
   skipping a sample whose lap goes backwards (`traceBuffer.ts`, #1066); the producer-side fix is
   tracked separately.
