@@ -60,7 +60,15 @@ export function DataWindow() {
   // the wire carries only the span since the last tick and cannot backfill. This
   // component sees every tick whichever tab is showing, so ingestion continues
   // while the panel is away.
-  const traceFrame = useTraceFrame(tick, discontinuity);
+  // **Resolved ONCE, here, and passed down.** The rival has four consumers on
+  // this window - this hook's selection, the header chip, the BROADCAST tag's
+  // blind-note, and the ring's label placement - and each used to read
+  // `tick.arcade.driver_rival` for itself. Four independent reads agree only
+  // while there is one possible answer; the moment the tower can pin a car
+  // (#1051) any consumer left reading the tick shows a different rival from the
+  // rest, inside one window. One value passed down cannot disagree with itself.
+  const rival = tick?.arcade.driver_rival ?? null;
+  const traceFrame = useTraceFrame(tick, discontinuity, rival);
   const connection = useConnection();
   const bulk = useBulk();
   const liveLap = useLiveLap();
@@ -134,10 +142,10 @@ export function DataWindow() {
               {tab === "traces" && (
                 <div className="band4">
                   {traceFrame && (
-                    <OwnCarTraces tick={tick} frame={traceFrame} frozen={frozen} />
+                    <OwnCarTraces tick={tick} frame={traceFrame} rival={rival} frozen={frozen} />
                   )}
                   <div className="side-column">
-                    <TrackRing arcade={tick.arcade} />
+                    <TrackRing arcade={tick.arcade} rival={rival} />
                     <RadioFeed bulk={bulk} driverMain={tick.arcade.driver_main} />
                   </div>
                 </div>
