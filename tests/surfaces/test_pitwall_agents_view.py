@@ -15,6 +15,8 @@ import textwrap
 
 import pytest
 
+from tests.surfaces.fake_stream_client import FakeStreamClient as _FakeClient
+
 # The AGENTS window's content layer, which moved OUT of the Qt package in
 # sprint 7 rather than dying with it: PITWALL renders by calling these, which
 # is what made the port 1:1 by construction instead of by inspection.
@@ -911,21 +913,6 @@ def _payload(
             "error": None,
         },
     }
-
-
-class _FakeClient:
-    """Stands in for the socket, so the host's own logic is what is tested."""
-
-    def __init__(self, payload=None, connected=True):
-        self.latest = payload
-        self.connected = connected
-        self.stopped = False
-
-    def start(self):
-        pass
-
-    def stop(self):
-        self.stopped = True
 
 
 def _host(payload=None, connected=True):

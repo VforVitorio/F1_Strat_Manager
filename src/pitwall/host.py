@@ -27,9 +27,77 @@ from src.pitwall.agents_view.panels import CONNECTION_COLOURS
 from src.pitwall.radio_feed import RadioCorpus
 from src.pitwall.radio_feed import unavailable as radio_unavailable
 from src.pitwall.session_data import SessionLaps, unavailable
-from src.pitwall.stream_client import ArcadeStreamClient
+from src.pitwall.stream_client import ArcadeStreamClient, TickSignals
 
 logger = logging.getLogger(__name__)
+
+
+def with_missed_signals(payload: dict, signals: tuple[TickSignals, ...], since_seq: int) -> dict:
+    """Return `payload` carrying the eviction signals of the ticks the caller missed.
+
+    `rewound` and `dropped` describe the gap between two ticks, not the state of
+    one, so a tick the latest-payload slot overwrote before a window polled took
+    its signal with it. Folding the missed range forward is what makes the signal
+    survive the discard (#1060).
+
+    **The fold lands on a COPY, three levels deep.** `get_tick` hands every caller
+    the same dict object, so folding in place lets one window rewrite the block
+    another is still holding: window A folds `dropped=5`, window B polls with a
+    different cursor and rewrites the block to its own range, and A's payload now
+    reads 0 before it is ever serialised. Copying the three containers the fold
+    touches costs three shallow dicts a poll and makes the answer the caller's own.
+
+    **The range is expressed in ARRIVAL order, never in `seq`.** `seq` restarts at
+    1 when the arcade relaunches - the case this module's own comparison exists for
+    - so a range keyed on it either excludes every entry of the new run or, once
+    two runs' numbers collide, matches twice.
+
+    A cursor the log cannot place is served UNMERGED: a window polling for the
+    first time, or one asleep past the log's 6.4 s, has no knowable range, and
+    inventing a `dropped` for it would be a fabricated number in the one field
+    whose whole job is to say something real happened.
+
+    --- WHERE TO CHANGE IF THE WIRE'S CONTINUITY FIELDS CHANGE ---
+    `src/arcade/app.py:_telemetry_span_bounds` produces them, `_signals_of` in
+    `stream_client.py` reads them off the payload, and `lib/frameClock.ts` plus
+    `features/data/useTraceFrame.ts` consume them. A third continuity field has to
+    land in all four.
+    """
+    missed = _missed_after(signals, since_seq)
+    if not missed:
+        return payload
+    rewound = any(entry.rewound for entry in missed)
+    dropped = sum(entry.dropped for entry in missed)
+    arcade = payload.get("arcade")
+    telemetry = (arcade or {}).get("telemetry")
+    if not isinstance(arcade, dict) or not isinstance(telemetry, dict):
+        return payload  # a producer that sends no telemetry block has none to fold
+    # `missed` always ends with the served payload's own entry, so these two are
+    # already the merged answer; when they equal what the payload says, nothing
+    # was discarded and the caller keeps the original object.
+    if rewound == bool(telemetry.get("rewound")) and dropped == telemetry.get("dropped"):
+        return payload
+    merged_telemetry = {**telemetry, "rewound": rewound, "dropped": dropped}
+    return {**payload, "arcade": {**arcade, "telemetry": merged_telemetry}}
+
+
+def _missed_after(signals: tuple[TickSignals, ...], since_seq: int) -> list[TickSignals]:
+    """The log entries after the caller's cursor, up to and including the newest.
+
+    The newest entry always describes the payload being served, because
+    `snapshot()` reads the slot and the log under one lock.
+
+    When `since_seq` appears more than once - only reachable if a relaunched
+    producer's numbering reaches an old entry that the reconnect did not clear -
+    the NEWEST match wins. It yields the smaller range, and over-reporting
+    `dropped` costs a spurious eviction of the very buffer this protects.
+    """
+    if not signals:
+        return []
+    for index in range(len(signals) - 1, -1, -1):
+        if signals[index].seq == since_seq:
+            return list(signals[index + 1 :])
+    return []
 
 
 class PitwallHost:
@@ -99,13 +167,21 @@ class PitwallHost:
         A payload with no `seq` is returned unconditionally. That only
         happens against a producer older than the one in this repo, where
         there is nothing to compare and the honest answer is the data.
+
+        **The payload carries the eviction signals of the ticks this caller
+        never saw**, folded in by `with_missed_signals`. `rewound` and
+        `dropped` describe what happened BETWEEN two ticks rather than the
+        state of one, so a tick the slot overwrote before this window polled
+        used to take its signal with it - and `FrameClock` then reported
+        `continuous` across the hole while the trace buffer kept appending
+        samples from unrelated parts of the race (#1060).
         """
-        payload = self._client.latest
+        payload, signals = self._client.snapshot()
         if payload is None:
             return None
         seq = payload.get("seq")
         if seq is None or seq != since_seq:
-            return payload
+            return with_missed_signals(payload, signals, since_seq)
         return None
 
     def _connection_label(self) -> str:
