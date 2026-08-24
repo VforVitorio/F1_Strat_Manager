@@ -311,8 +311,20 @@ export function RacePaceGrid({
                 // A lap nobody has driven yet. It carries its number and nothing
                 // else, so the panel shows how much race is left without pretending
                 // to know anything about it.
+                // **`is-newest` is the tint, and the class MOVING is what fires
+                // it.** A CSS animation starts when its element gains the
+                // animation, so marking whichever row is the newest revealed lap
+                // runs the decay once on that row and never again until the mark
+                // moves on. The row itself is keyed by lap and persists across
+                // the reveal, so a mount animation would never fire here; and the
+                // ten renders a second that do not advance the reveal leave the
+                // class where it is, which is what keeps this off the data path.
                 className={
-                  grid.laps[index] > grid.revealedTo ? "is-future" : undefined
+                  grid.laps[index] > grid.revealedTo
+                    ? "is-future"
+                    : grid.laps[index] === grid.revealedTo
+                      ? "is-newest"
+                      : undefined
                 }
               >
                 {/* The rail on the lap number is the whole marker: on a

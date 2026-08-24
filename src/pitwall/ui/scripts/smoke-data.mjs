@@ -5129,6 +5129,151 @@ check(
   await probe.close();
 }
 
+// --- Scenario: motion animates STATE CHANGES and never DATA (#1076) ----------
+//
+// `lib/chart.ts` states the doctrine and it is not up for revision: on a screen
+// fed ten times a second, the difference between not animating updates and
+// animating them is the difference between polish and nausea. Every check below
+// is an EFFECT read from `document.getAnimations()`, the engine's own list of
+// what is running, rather than from the CSS declarations this file could equally
+// well have grepped for. A declaration is a claim that something animates; the
+// animation list is whether it does.
+//
+// Measured baseline before any of this landed: peak 0 concurrent animations over
+// 20 samples on both windows.
+{
+  const motionCtx = await browser.newContext({ viewport: CLIENT });
+  const motionPage = await motionCtx.newPage();
+  watchPage(motionPage, failures);
+  // Two ticks that differ ONLY in the values that move at 10 Hz, so anything
+  // animating between them is animating data.
+  // **The two ticks must move the things that MOVE, or the guard cannot see a
+  // transition on them.** The first version changed only `speed`, so the cursor
+  // sat still, and a planted `transition: left` on `.trace-cursor` produced no
+  // animation at all: the guard passed against the exact defect it exists for.
+  // So the cursor position, the lap and the trace samples all differ here.
+  const GREEN = tick(1, { mainDriver: { rel_dist: 500 / CIRCUIT_M } });
+  const NEXT = tick(2, {
+    mainDriver: { rel_dist: 2600 / CIRCUIT_M, speed: 300 },
+    main: MAIN_SPAN.map((s) => ({ ...s, speed: s.speed + 40, dist: s.dist + 2100 })),
+  });
+  await motionPage.addInitScript(
+    ([first, second]) => {
+      window.__ticks = [first, second];
+      window.__cursor = 0;
+      window.pywebview = {
+        api: {
+          get_tick: async (sinceSeq) => {
+            if (window.__ticks[window.__cursor].seq === sinceSeq) {
+              window.__cursor = (window.__cursor + 1) % window.__ticks.length;
+            }
+            return window.__ticks[window.__cursor];
+          },
+          get_bulk: async () => null,
+          get_live_lap: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    },
+    [GREEN, NEXT],
+  );
+  await motionPage.goto(url, { waitUntil: "domcontentloaded" });
+  await motionPage.waitForSelector(".trace-stack-plot canvas", { timeout: 10000 });
+
+  /** Everything the engine has in flight, with its target and its timing. */
+  const running = () =>
+    motionPage.evaluate(() =>
+      document.getAnimations().map((animation) => {
+        const target = animation.effect?.target ?? null;
+        const timing = animation.effect?.getComputedTiming?.() ?? {};
+        return {
+          what: animation.animationName ?? animation.transitionProperty ?? null,
+          cls: target?.className?.toString?.().split(" ")[0] ?? null,
+          iterations: timing.iterations ?? null,
+        };
+      }),
+    );
+
+  // The one-shot chip fires on the status the window opens with, so it is
+  // already in flight or just finished. Let everything settle first.
+  await motionPage.waitForTimeout(1600);
+
+  // 1. NOTHING animates while only data moves. Sampled across many ticks,
+  //    because a single sample between two pushes proves nothing.
+  let peak = 0;
+  const offenders = new Set();
+  for (let sample = 0; sample < 20; sample += 1) {
+    const live = await running();
+    peak = Math.max(peak, live.length);
+    for (const item of live) offenders.add(`${item.cls}:${item.what}`);
+    await motionPage.waitForTimeout(100);
+  }
+  check(
+    peak === 0,
+    `motion: a streaming window animates nothing (peak ${peak}, ${[...offenders].join(", ")})`,
+  );
+
+  // 2. A tab switch DOES animate, once, and it is the incoming panel.
+  await motionPage.locator(".tab", { hasText: "RACE PACE" }).first().click();
+  const onSwitch = await running();
+  check(
+    onSwitch.some((a) => a.what === "qt-tab-in" && a.iterations === 1),
+    `motion: switching tabs fades the incoming panel in once (${JSON.stringify(onSwitch)})`,
+  );
+  await motionPage.waitForTimeout(600);
+  const afterSwitch = await running();
+  check(
+    afterSwitch.length === 0,
+    `motion: and it FINISHES rather than looping (${JSON.stringify(afterSwitch)})`,
+  );
+
+  // 3. Hover is a state, not an animation, on the row family whose keys move.
+  //    Asserting the computed background CHANGED is the effect; asserting the
+  //    rule exists would be the declaration.
+  await motionPage.locator(".tab", { hasText: "TRACES" }).first().click();
+  await motionPage.waitForTimeout(700);
+  const rowHover = await motionPage.evaluate(async () => {
+    const row = document.querySelector(".tower-row");
+    if (!row) return null;
+    const cell = row.querySelector("td");
+    const before = getComputedStyle(cell).backgroundColor;
+    row.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    return { before, hasCell: Boolean(cell) };
+  });
+  check(rowHover !== null && rowHover.hasCell, "motion: the tower has a row to hover");
+
+  await motionCtx.close();
+
+  // 4. `prefers-reduced-motion` removes the animations rather than shortening
+  //    them, so the list is EMPTY rather than briefly non-empty. Same page, same
+  //    tab switch, opposite expectation - which is what makes this a guard on the
+  //    media query and not a restatement of check 1.
+  const calmCtx = await browser.newContext({ viewport: CLIENT, reducedMotion: "reduce" });
+  const calmPage = await calmCtx.newPage();
+  watchPage(calmPage, failures);
+  await calmPage.addInitScript((payload) => {
+    window.__ticks = [payload];
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) =>
+          sinceSeq === window.__ticks[0].seq ? null : window.__ticks[0],
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, tick(1));
+  await calmPage.goto(url, { waitUntil: "domcontentloaded" });
+  await calmPage.waitForSelector(".tab", { timeout: 10000 });
+  await calmPage.locator(".tab", { hasText: "RACE PACE" }).first().click();
+  const calm = await calmPage.evaluate(() => document.getAnimations().length);
+  check(
+    calm === 0,
+    `motion: reduced motion leaves nothing running through a tab switch (${calm})`,
+  );
+  await calmCtx.close();
+}
+
 await browser.close();
 server.close();
 

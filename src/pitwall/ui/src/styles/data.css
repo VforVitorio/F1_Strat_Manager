@@ -88,6 +88,33 @@
  * Unknown is DIM, never a colour that means something. A missing track status
  * is an absence, and an absence that borrows the green or the amber is a
  * made-up answer. */
+/* **The track status is the most important state change on this window, and
+ * until now it only swapped colour between two frames.** A strategist looking
+ * at the tower when a safety car is deployed had nothing in peripheral vision
+ * to catch: the chip was a different colour on the next frame and that was all.
+ *
+ * One shot, never a loop. A looping pulse on a live wall becomes furniture
+ * within a lap and then competes with the data for attention, which is the
+ * consumer-dashboard failure this window exists not to be. It fires when the
+ * chip is created, and `StatusStrip` keys the chip on its text, so "created"
+ * means "the status changed".
+ *
+ * `box-shadow` rather than a transform: it takes no layout, so a 1465 px strip
+ * does not reflow, and the chip is a ~90 x 18 px surface, which is the "small
+ * and isolated" case where paint-triggering motion is the right trade. */
+@keyframes qt-track-chip-pulse {
+  from {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  to {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+
+.strip-chip-track {
+  animation: qt-track-chip-pulse var(--motion-decay) var(--motion-ease) 1;
+}
+
 .strip-chip.is-unknown {
   color: var(--qt-fg-3);
 }
@@ -1171,6 +1198,131 @@ td.col-drv {
   color: var(--qt-fg-1);
 }
 
+/* --- The controls acknowledge a hand -------------------------------------
+ *
+ * Nothing on either window reacted to the mouse at all: no hover, no press, no
+ * transition anywhere in the four stylesheets. A control that does not change
+ * under the cursor reads as a label, and a click that produces no immediate
+ * feedback reads as a click that missed, which on a surface whose job is to be
+ * believed is worse than plain.
+ *
+ * `background` and `color` only, both paint on a ~70 x 26 px target, and the
+ * press is INSTANT: `transition: none` on `:active` so the acknowledgement
+ * arrives on the same frame as the click, and the release eases back. A
+ * transition on the way in would delay the one thing this exists to provide. */
+.tab,
+.ref {
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.tab:hover,
+.ref:hover {
+  border-color: var(--qt-fg-3);
+  color: var(--qt-fg-2);
+}
+
+.tab:active,
+.ref:active {
+  background: var(--qt-elevated);
+  transition: none;
+}
+
+/* The tower row is a control too, and it has been since #1051 made it the
+ * rival selector. It carried `:focus` and nothing for the pointer, so the only
+ * clue that twenty rows were clickable was the cursor shape. */
+.tower-row {
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.tower-row:hover td {
+  background: var(--qt-elevated);
+}
+
+.tower-row:active td {
+  background: var(--qt-elevated);
+  transition: none;
+}
+
+/* **A record announces itself, once.** The purple leader used to change between
+ * two frames with nothing to catch, on a panel a strategist glances at rather
+ * than watches.
+ *
+ * It is the same decay as the pace grid's landing tint and deliberately so: two
+ * different fades for "this just happened" would read as two different kinds of
+ * event. What differs is the surface, a ~60 x 18 px number rather than a row, so
+ * this one can afford to touch the text colour as well as the ground.
+ *
+ * Fired by React remounting the value span when its number changes, which is why
+ * only the LEADER's value carries a key. The forty rows below it change with
+ * every re-rank and flashing those would make the panel strobe. */
+@keyframes qt-best-flash {
+  from {
+    background-color: color-mix(in srgb, #a78bfa 38%, transparent);
+    color: var(--qt-fg-1);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.bests-row.is-purple .bests-value,
+.bests-leader .bests-value {
+  animation: qt-best-flash var(--motion-decay) var(--motion-ease) 1;
+  border-radius: 2px;
+}
+
+/* --- The tab switch ------------------------------------------------------
+ *
+ * Three whole worlds swap instantly today and the change reads as a jolt: the
+ * right column is more than half the window and every pixel of it is different
+ * on the next frame.
+ *
+ * **Fade IN only, never a crossfade.** A true crossfade needs both worlds
+ * mounted at once, and the tabs are conditional renders, so it would mean a
+ * second live ECharts instance during every switch. The cost of that is not
+ * priced and the benefit is small: what jolts is the arrival, not the departure.
+ *
+ * On the three tab roots rather than on a wrapper, because each one mounts
+ * fresh on a switch and a CSS animation starts when an element is created. That
+ * also means the fade runs once when the window opens, which is correct: the
+ * panel is arriving then too.
+ *
+ * Opacity is composite work, so fading a 556 x 750 px panel costs the
+ * compositor a layer and the main thread nothing, which is what makes it safe
+ * on the one surface here big enough to matter. */
+@keyframes qt-tab-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.band4,
+.pace,
+.trace-band {
+  animation: qt-tab-in var(--motion-fast) var(--motion-ease) 1;
+}
+
+/* The radio and RCM rows are not clickable and this hover does not pretend they
+ * are: it is a READING aid on a 10 px, 13 px-line list where the eye loses its
+ * place between the lap column and the message. Cheap, and measured: the live
+ * page runs 240 frames at p95 16.7 ms with zero long tasks, so a background
+ * swap on one row is noise against that budget.
+ *
+ * **No transition on this one, on purpose.** `RadioFeed` keys its rows by index
+ * into a newest-first list, so a new event remounts every row; a transition
+ * would restart mid-hover each time an event lands. A plain hover has no
+ * restart to show. Removing that constraint is the keying decision #1075
+ * records, and this rule can gain its transition when that lands. */
+.radio-row:hover {
+  background: var(--qt-elevated);
+}
+
 /* **The card fills the column, and the LAP AXIS is what stops the newest row moving.**
  *
  * ⚠️ This comment described `align-self: end` - a card grown upward from the bottom of
@@ -1379,6 +1531,39 @@ td.col-drv {
   background: #f59e0b;
   vertical-align: baseline;
   margin-right: 3px;
+}
+
+/* **A lap landing is the panel's own heartbeat and it had no cue at all.** One
+ * row crosses from the grey skeleton into real times about every 4.5 s, and on
+ * a 57-row grid whose newest row is somewhere in the middle of a scroller,
+ * nothing said which one had just changed.
+ *
+ * A tint that DECAYS rather than a state that stays: after a second the lap is
+ * just a lap, and a persistent highlight would be a second thing competing with
+ * the colour thirds, which are the panel's actual ranking. It ends at
+ * transparent, so there is nothing to clean up and no JavaScript involved.
+ *
+ * Under a second on purpose. The product plays at up to 4x, where reveals
+ * arrive about every 1.1 s, so a longer decay would stack one lap's tint on the
+ * next and read as a permanently lit grid. It is `background-color` on a
+ * ~556 x 12 px row, which is the small isolated surface where paint-triggering
+ * motion is the right trade, and the cells above colour their TEXT rather than
+ * their ground, so the tint is visible underneath all of them.
+ *
+ * If the reader has scrolled away from the tail the tint decays off screen,
+ * which is correct: the follow-tail break exists precisely so the panel stops
+ * pulling a reader who has gone looking somewhere else. */
+@keyframes qt-pace-landed {
+  from {
+    background-color: color-mix(in srgb, var(--qt-accent) 26%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.pace-table tr.is-newest {
+  animation: qt-pace-landed var(--motion-decay) var(--motion-ease) 1;
 }
 
 /* Purple is the session's outright fastest lap, the same rule and the same

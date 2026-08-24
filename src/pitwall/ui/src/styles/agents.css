@@ -435,6 +435,37 @@
 .agent-card:has(.agent-tooltip) {
   cursor: help;
 }
+
+/* **The cursor was the only tell that a card carried a transcript.** `cursor:
+ * help` says so once the pointer is already on it and says nothing to a reader
+ * scanning the window, and this card is the whole replacement for the reasoning
+ * tabs the Qt window had. A border that lifts under the pointer is the smallest
+ * thing that makes the affordance visible without adding a glyph the ported
+ * window never had, which is the trade the comment above already refused once.
+ *
+ * Border colour only: no size, no shadow, nothing that moves a neighbour. The
+ * six cards sit in a grid and a card that grows on hover would shift the five
+ * beside it. */
+.agent-card {
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.agent-card:has(.agent-tooltip):hover {
+  border-color: var(--qt-fg-3);
+}
+
+/* The popup itself mounts and unmounts, so a mount animation runs exactly once
+ * per opening with no state to track. It fades and does not travel: the box is
+ * already positioned from the hovered card's rect, and sliding it would mean
+ * the text starts somewhere it does not belong. */
+@keyframes qt-tooltip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 .agent-tooltip {
   /* `fixed`, in the body, via a portal: nothing in the window tree can
    * clip it. Two earlier fixes kept it inside the card and only moved
@@ -443,6 +474,7 @@
    * unmounts the popup. */
   position: fixed;
   z-index: 10;
+  animation: qt-tooltip-in var(--motion-fast) var(--motion-ease) 1;
   /* Sized to its content rather than a flat 30rem. A two-line tooltip used to
    * be the same 502 px box as a twelve-line one, which reads as a panel that
    * failed to fill rather than as a popup. */
