@@ -173,7 +173,7 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # not written because rebuilding a session costs 254 s. Until it is, the obligation lives
 # here: if the bytes a rebuild would produce differ from the bytes on disk, this string moves
 # in the SAME commit, or the fix reaches nobody who already has a pickle.
-CACHE_VERSION: Final[str] = "v13"  # + the discrete channels stop being interpolated (#1002)
+CACHE_VERSION: Final[str] = "v14"  # + the shared lap-boundary sample sorts stably (#1069)
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial by default — Windows spawn + pickling a loaded session across 8

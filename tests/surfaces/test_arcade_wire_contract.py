@@ -876,7 +876,9 @@ def test_the_reveal_carrier_is_per_driver_and_not_the_main_driver_lap():
     field spans two or three different laps at 96 % of instants - so masking
     everyone at one lap lags the leaders and leaks look-ahead for the cars
     behind, at the same time. `laps_completed` reads the crossing map, so it
-    is per driver and monotone forward, unlike the interpolated `lap`.
+    is per driver and monotone forward. `lap` is not interpolated (it has been
+    nearest-sample since #1002) and it is monotone since #1069, but it is still
+    one driver's number on a tick that has to mask twenty.
     """
     snapshot = _order_snapshot(FAST=_drift_frames(12000, 52.0), SLOW=_drift_frames(12000, 30.0))
     fast = snapshot["drivers"]["FAST"]

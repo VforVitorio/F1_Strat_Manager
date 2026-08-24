@@ -748,6 +748,64 @@ def test_a_tyre_age_is_a_whole_number_of_laps():
     assert not fractional, f"{len(fractional)} frames carry a fractional tyre age"
 
 
+# --- #1069: the shared lap-boundary sample is ordered stably --------------------
+
+
+def test_no_served_frame_takes_the_lap_number_backwards():
+    """FastF1's per-lap windows share their boundary sample, so every crossing is
+    concatenated twice at the same instant and an unstable sort put the OLD copy
+    second. Melbourne 2025 shipped **70 such frames across 17 of the 20 drivers**.
+
+    `tyre` and `tyre_life` are asserted in the same breath because they are the same
+    defect: all three are per-lap CONSTANTS, and a constant is discontinuous exactly
+    at the boundary the tie sits on. `tyre_life` was the worst of them at 105 frames,
+    reading a 34-lap-old INTERMEDIATE one frame after a fresh MEDIUM went on. A
+    per-sample channel cannot be hurt by the swap, which is why gear and DRS are not
+    here.
+    """
+    session = _melbourne_or_skip()
+    offenders = []
+    for code, frames in session.frames_by_driver.items():
+        for previous, current in zip(frames, frames[1:]):
+            if not current.active:
+                continue
+            if current.lap < previous.lap:
+                offenders.append(f"{code} lap {previous.lap}->{current.lap}")
+            # A tyre age may only fall onto a FRESH tyre, which is a pit stop and
+            # correct. Melbourne has 35 of those and they must survive.
+            if current.tyre_life < previous.tyre_life and current.tyre_life > 2:
+                offenders.append(f"{code} life {previous.tyre_life}->{current.tyre_life}")
+    assert not offenders, f"{len(offenders)} backwards frames, first few: {offenders[:5]}"
+
+
+def test_no_driver_is_parked_on_the_line_for_a_whole_lap():
+    """The glitch's largest effect, and the one nobody had noticed (#1069).
+
+    `_lap_fraction_from_distance` lengths each lap by the distance to the next lap
+    start. A doubled crossing leaves a segment two to four frames long, and on a
+    driver's FINAL crossing the last lap borrows that as `previous_length`, so the
+    whole lap is normalised by about 10 m instead of 5220 and `rel_dist` saturates.
+    On the v13 pickle **HAM and LEC sat at `rel_dist >= 0.999` for 2308 and 2267
+    consecutive active frames, 92.3 s and 90.7 s**, the entirety of lap 57, while
+    their speed and gear kept moving. The TrackRing and the pyglet renderer both
+    place a car from `rel_dist`, so both drew them stopped on the line.
+
+    A car really is at the line for a few frames per crossing, so the threshold is a
+    run LENGTH rather than the value. The worst legitimate run measured across the
+    field is 10 frames; 100 is four seconds and cannot be a real approach.
+    """
+    session = _melbourne_or_skip()
+    parked = {}
+    for code, frames in session.frames_by_driver.items():
+        longest = run = 0
+        for frame in frames:
+            run = run + 1 if (frame.active and frame.rel_dist >= 0.999) else 0
+            longest = max(longest, run)
+        if longest > 100:
+            parked[code] = f"{longest} frames ({longest * DT:.1f} s)"
+    assert not parked, f"drivers pinned at the start line: {parked}"
+
+
 # --- the same rules on a hand-built driver, so CI can see them ------------------
 #
 # Every guard above reads the cached 382 MB pickle, which no CI runner has, so all of
@@ -862,3 +920,63 @@ def test_a_channel_that_is_entirely_impossible_is_left_as_published():
 
     published = np.array([128.0, 128.0])
     assert list(_drop_impossible_gears(published)) == [128.0, 128.0]
+
+
+def _windows_sharing_their_boundary(laps: int = 56, per_lap: int = 20) -> dict:
+    """Per-lap arrays shaped the way FastF1 hands them over: each lap's window ENDS
+    on the instant the next one begins, so the concatenation carries every crossing
+    twice at the same `t`.
+
+    **The size is load-bearing and must not be shrunk.** numpy's default sort is an
+    introsort whose leaf is insertion sort, which IS stable, so below about 17
+    elements the duplicate keeps its order under the broken code too and the guard
+    would assert about a condition it cannot create. WHICH ties flip is also
+    position-dependent: only 158 of Melbourne's 907 do. At 56 laps of 20 samples,
+    the shape of a real driver, the default sort misorders 15 of the 55 boundaries.
+    """
+    import numpy as np
+
+    arrays: dict[str, list] = {"t": [], "lap": [], "tyre": [], "tyre_life": []}
+    clock = 0.0
+    for lap_number in range(1, laps + 1):
+        window = np.arange(per_lap, dtype=float) * DT + clock
+        clock = float(window[-1])
+        arrays["t"].append(window)
+        arrays["lap"].append(np.full(per_lap, float(lap_number)))
+        # One stop on lap 31, so the tyre age resets the way a real one does and a
+        # backwards step can be told apart from a pit stop.
+        fresh = lap_number > 30
+        arrays["tyre"].append(np.full(per_lap, 2.0 if fresh else 1.0))
+        arrays["tyre_life"].append(
+            np.full(per_lap, float(lap_number - 30 if fresh else lap_number))
+        )
+    return arrays
+
+
+def test_a_shared_lap_boundary_sample_comes_out_lap_ascending():
+    """The mechanism of #1069, on hand-built arrays, so CI sees it without the pickle.
+
+    The two guards above read the cached 382 MB session and skip everywhere else.
+    This one runs the ordering itself, and it is what goes red if `kind="stable"`
+    is dropped from `_concat_sorted_by_time`: on this fixture the default sort puts
+    the old lap's copy second at 15 of the 55 boundaries.
+    """
+    import numpy as np
+
+    from src.arcade.data import _concat_sorted_by_time
+
+    arrays = _windows_sharing_their_boundary()
+    concat = _concat_sorted_by_time(arrays)
+
+    # The fixture must actually contain the tie, or everything below is vacuous.
+    duplicated = int(np.count_nonzero(np.diff(concat["t"]) == 0.0))
+    assert duplicated == 55, f"the fixture carries {duplicated} shared boundaries, not 55"
+
+    assert np.all(np.diff(concat["lap"]) >= 0), "the lap number goes backwards"
+    # Nothing may be dropped: this orders rows, it does not filter them.
+    assert len(concat["lap"]) == 56 * 20
+    # A tyre age falls only onto the fresh tyre fitted on lap 31.
+    falls = np.flatnonzero(np.diff(concat["tyre_life"]) < 0)
+    assert list(concat["tyre_life"][falls + 1]) == [1.0], "a tyre aged backwards mid-stint"
+    # And the compound changes once, rather than flickering back and forth.
+    assert int(np.count_nonzero(np.diff(concat["tyre"]) != 0)) == 1

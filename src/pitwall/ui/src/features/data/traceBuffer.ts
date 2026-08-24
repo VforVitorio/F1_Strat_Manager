@@ -164,13 +164,22 @@ export class TraceAccumulator {
       this.entries.set(code, { lap, rows: new Map() });
     } else if (lap < entry.lap) {
       // A lap number that goes BACKWARDS is a glitch, not a rewind - a rewind
-      // arrives as `rewound` and evicts everything. Measured on Melbourne 2025:
-      // 70 of these a race across 17 of the 20 drivers, one frame each, and the
-      // glitch frame carries a stale lap with a mid-lap `dist` (HAM reads lap 23
-      // at 2586.2 m one frame after crossing into 24). Storing it would put a
+      // arrives as `rewound` and evicts everything. Storing it would put a
       // foreign lap in the map; clearing on it, which `lap !== currentLap` used
-      // to do, would throw the lap away twice per crossing. It is a producer-side
-      // defect and it reaches every consumer of `rel_dist`, not just this buffer.
+      // to do, would throw the lap away twice per crossing.
+      //
+      // The producer emitted 70 of these a race across 17 of the 20 drivers on
+      // Melbourne 2025, fixed in #1069. **The mechanism this comment used to name
+      // was wrong** and is worth correcting rather than deleting, because it is
+      // what would stop the next reader checking: the stale frame does NOT carry
+      // a mid-lap `dist` of its own. Its distance sits a median 0.1 m from its
+      // neighbour. The half-lap reading came from the producer's lap-fraction
+      // helper dividing one frame of travel by a two-frame segment, which is 0.5
+      // by construction for every car at every crossing.
+      //
+      // Kept after the producer fix, not dead code: it guards against an older
+      // producer on the other end of the socket and against the next member of
+      // this family. Against a current producer it simply never fires.
       return;
     }
     store(this.entries.get(code)!.rows, sample);
