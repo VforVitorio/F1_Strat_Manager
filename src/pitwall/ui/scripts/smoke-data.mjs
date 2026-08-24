@@ -5094,6 +5094,7 @@ check(
     // Heights `place()` produces, plus the interior of the band the floor of
     // three left dead. 641 is the 1366x768 client, which stays compact by
     // design: its room fits no ranked card at all.
+    let decided = 0;
     for (const h of [593, 620, 641, 650, 660, 673, 700, 740, 833]) {
       await bestsPage.setViewportSize({ width: 1486, height: h });
       // **Settled, not slept.** The fit runs off a ResizeObserver, so a fixed
@@ -5106,15 +5107,31 @@ check(
         check(false, `BESTS at h=${h}: the card is missing`);
         continue;
       }
-      // Half a row of slack: `FONT_GUARD` and sub-pixel rounding both live in
-      // the panel's own arithmetic and neither is worth reproducing here.
-      const roomForRanked = fit.room >= floorCardH - deep.rowH / 2;
-      check(
-        fit.ranked === roomForRanked,
-        `BESTS at h=${h}: ranked exactly when a ranked card fits ` +
-          `(room ${fit.room.toFixed(0)}, floor card ${floorCardH.toFixed(0)}, ` +
-          `rendered ${fit.ranked ? `ranked ${fit.depth}` : "compact"})`,
-      );
+      // **Asserted only where a DERIVED height can decide.** The panel ranks iff
+      // `room >= atFloor`, with no slack, and `floorCardH` here is derived from
+      // another client's card rather than read from the panel's own latch, so it
+      // carries a little error. Within a few pixels of the boundary the two can
+      // legitimately disagree: CI measured room 109 against a derived 113 and the
+      // panel chose compact, correctly, on a build with no defect in it.
+      //
+      // An earlier version allowed HALF A ROW of slack in one direction only,
+      // which is not a tolerance, it is a different rule: it demanded ranked at
+      // room 109 for a card needing 113. The band below is symmetric and narrow,
+      // and the defect this guard exists for sits 9 to 200 px clear of it.
+      const BOUNDARY = 6;
+      const clearlyFits = fit.room >= floorCardH + BOUNDARY;
+      const clearlyDoesNot = fit.room <= floorCardH - BOUNDARY;
+      if (clearlyFits || clearlyDoesNot) {
+        check(
+          fit.ranked === clearlyFits,
+          `BESTS at h=${h}: ranked exactly when a ranked card fits ` +
+            `(room ${fit.room.toFixed(0)}, floor card ${floorCardH.toFixed(0)}, ` +
+            `rendered ${fit.ranked ? `ranked ${fit.depth}` : "compact"})`,
+        );
+      } else {
+        decided += 0;
+      }
+      if (clearlyFits || clearlyDoesNot) decided += 1;
       // The depth is SAID, at every depth, including one. Two readers comparing
       // panels at different clients must not be comparing silently different
       // lists.
@@ -5125,6 +5142,13 @@ check(
         );
       }
     }
+    // The sweep must actually decide most of its heights. Without this the
+    // boundary band above could widen under a future layout until the loop
+    // asserted about almost nothing and still reported green.
+    check(
+      decided >= 7,
+      `BESTS: the sweep reaches a verdict at most heights (${decided} of 9)`,
+    );
   }
   await probe.close();
 }

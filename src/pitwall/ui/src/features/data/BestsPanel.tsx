@@ -361,13 +361,7 @@ function BestsLeaders({
             ) : (
               <>
                 <span className="bests-code">{leader.code}</span>
-                {/* The compact form shows nothing BUT leaders, so the same flash
-                 * belongs here. Without it the item would be desktop-only and the
-                 * two clients that degrade to this form would be the ones with no
-                 * cue at all. */}
-                <span className="bests-value" key={leader.value}>
-                  {formatTime(leader.value)}
-                </span>
+                <span className="bests-value">{formatTime(leader.value)}</span>
               </>
             )}
           </span>
@@ -405,19 +399,7 @@ function BestsSection({
           >
             <span className="bests-rank">{index + 1}</span>
             <span className="bests-code">{entry.code}</span>
-            {/* **Keyed on the VALUE, and only on the leader.** A record deserves
-             * to announce itself, and the purple row is what "a new session
-             * best" means here. Keying the number rather than the row means the
-             * flash lands on the thing that changed while the row keeps its
-             * identity through a re-rank; keying only the leader means the four
-             * section leaders flash and the forty rows below them do not, which
-             * is the difference between an announcement and a busy panel. */}
-            <span
-              className="bests-value"
-              key={index === 0 ? entry.value : undefined}
-            >
-              {formatTime(entry.value)}
-            </span>
+            <span className="bests-value">{formatTime(entry.value)}</span>
             <span className="bests-delta">
               {index === 0 ? "" : formatDelta(entry.value, leader.value)}
             </span>
