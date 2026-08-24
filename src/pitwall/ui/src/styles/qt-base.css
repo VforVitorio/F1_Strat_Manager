@@ -25,6 +25,44 @@
   --qt-mono: "FiraCode Nerd Font Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
 }
 
+/* --- Motion: state changes only, never data -------------------------------
+ *
+ * The doctrine is `lib/chart.ts`'s and it is not up for revision: on a screen
+ * fed ten times a second, the difference between not animating updates and
+ * animating them is the difference between polish and nausea. So nothing that
+ * moves at 10 Hz carries a transition - not the six trace lanes, the tower's
+ * numbers, the cursor, the ring's dots or the pace cells' colours. Everything
+ * that does is a STATE CHANGE and happens at most about once a lap, or when a
+ * hand moves.
+ *
+ * Two durations, because two things are being said. `--motion-fast` is an
+ * acknowledgement: a press, a hover, a panel arriving. `--motion-decay` is a
+ * mark that fades: this landed just now. It is under a second on purpose,
+ * because reveals arrive every 4.5 s at 1x and the product plays at up to 4x,
+ * so a longer decay would stack tints on top of each other at speed.
+ */
+:root {
+  --motion-fast: 120ms;
+  --motion-decay: 900ms;
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* **`none`, not the usual `0.01ms` idiom.** That idiom exists so `transitionend`
+ * and `animationend` still fire for scripts that depend on them; nothing here
+ * does, every item is pure CSS that ends in its own resting state. `none` is
+ * what makes the guard deterministic: `document.getAnimations()` is empty
+ * rather than briefly non-empty, so the assertion is a fact rather than a race.
+ * A future item that needs an end event has to revisit this block, not work
+ * around it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 body {
   margin: 0;
   background: var(--qt-bg);

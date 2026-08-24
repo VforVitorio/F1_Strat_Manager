@@ -4861,6 +4861,443 @@ check(
   await ctx.close();
 }
 
+// --- Scenario: a long header note must not size the WINDOW (#1073) -----------
+//
+// `.traces-lap` is `nowrap`, so its min-content is its whole text, and band 4's
+// first grid track carried an `auto` minimum. Between them, one line of
+// race-state prose set the minimum width of the window: measured at a FIXED
+// 1266x593 client, changing only the note, 6 characters overflowed the document
+// by 0 px, 42 by 199 and the longest note the header can build, 66, by 389. At
+// the 1920x1080 client the same note overflowed by 169. What went off screen was
+// the track ring and every radio message body, and `qt-base.css` hides every
+// scrollbar, so nothing said so.
+//
+// The guard is driven by the LONGEST note the component can actually render,
+// not by the longest string that fits in it. `offLine` needs `delta.length >= 2`
+// and `noDelta` needs `< 2` (`OwnCarTraces.tsx:191,204`), so those two notes are
+// mutually exclusive, and `blind` is at most `[driver_main, rivalCode]`. The
+// reachable maximum is therefore the own car being blind: the blind list plus
+// `NO DELTA WITHOUT THE OWN CAR`.
+//
+// It asserts the note is LONG before asserting the window does not overflow.
+// Without that, a run in which the note failed to render is indistinguishable
+// from a run in which the containment worked, which is this repo's dominant
+// guard defect.
+{
+  // The own car has no position, so: `blind` holds NOR, `mainBlind` is true, and
+  // `noDelta` follows because a delta cannot be built without the main car.
+  const BLIND_MAIN = tick(1, {
+    mainDriver: { has_position: false },
+    main: [],
+    rivalSpan: RIVAL_SPAN,
+  });
+
+  // Every client `WindowSpec.place` produces on a real screen, narrowest first.
+  // The narrow ones are the point: the reference client alone passed before the
+  // fix for the 42-character note and would have signed the defect off.
+  const FLEET = [
+    { w: 1266, h: 593, screen: "1280x720" },
+    { w: 1312, h: 593, screen: "1280x720, AGENTS stagger" },
+    { w: 1352, h: 641, screen: "1366x768" },
+    { w: 1426, h: 773, screen: "1440x900" },
+    { w: 1486, h: 833, screen: "1920x1080" },
+  ];
+
+  for (const { w, h, screen } of FLEET) {
+    const narrow = await browser.newContext({ viewport: { width: w, height: h } });
+    const client = await narrow.newPage();
+    watchPage(client, failures);
+    await client.addInitScript((payload) => {
+      window.__ticks = [payload];
+      window.pywebview = {
+        api: {
+          get_tick: async (sinceSeq) =>
+            sinceSeq === window.__ticks[0].seq ? null : window.__ticks[0],
+          get_bulk: async () => null,
+          get_live_lap: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    }, BLIND_MAIN);
+    await client.goto(url, { waitUntil: "domcontentloaded" });
+    await client.waitForSelector(".traces-lap", { timeout: 10000 });
+    await client.waitForTimeout(600);
+
+    const measured = await client.evaluate(() => {
+      const lap = document.querySelector(".traces-lap");
+      const doc = document.documentElement;
+      return {
+        note: lap ? lap.textContent.trim() : null,
+        // The note's own ellipsis: the degradation #1068 designed and the one
+        // that has to absorb the overflow instead of the window.
+        noteClipped: lap ? lap.scrollWidth - lap.clientWidth : null,
+        overflowX: doc.scrollWidth - window.innerWidth,
+        // The ring is the surface that actually went off screen. Asserting the
+        // document alone would pass if the ring were merely hidden.
+        ringRight: (() => {
+          const ring = document.querySelector(".side-column");
+          return ring ? Math.round(ring.getBoundingClientRect().right) : null;
+        })(),
+      };
+    });
+
+    // FIRST: the fixture reached the state. A short note proves nothing.
+    check(
+      measured.note !== null && measured.note.length >= 40,
+      `${screen}: the blind-main fixture renders a long note (got ${JSON.stringify(measured.note)})`,
+    );
+    check(
+      measured.note !== null && /NO DELTA WITHOUT THE OWN CAR/.test(measured.note),
+      `${screen}: and it is the reachable longest one, the own car being blind (${measured.note})`,
+    );
+    // THEN: the window contains it. A relation, never a pixel count, because the
+    // CI runner has no JetBrains Mono and measures different text widths.
+    check(
+      measured.overflowX === 0,
+      `${screen} (${w}x${h}): the long note does not widen the document (overflow-X ${measured.overflowX})`,
+    );
+    check(
+      measured.ringRight !== null && measured.ringRight <= w,
+      `${screen} (${w}x${h}): the ring column ends inside the window (right edge ${measured.ringRight})`,
+    );
+    // And the note absorbs it, rather than the note simply being short enough.
+    check(
+      measured.noteClipped > 0,
+      `${screen}: the note itself takes the truncation (ellipsis by ${measured.noteClipped} px)`,
+    );
+    await narrow.close();
+  }
+}
+
+// --- Scenario: BESTS shows the deepest ranked form that FITS (#1074) ---------
+//
+// The card's height is linear in depth, so a floor of three meant the panel
+// jumped from a 153 px ranked card straight to the 62 px compact one with
+// nothing between. Measured across the heights `WindowSpec.place` produces, the
+// 16:10 laptop client has 143 px of room: enough for a depth-2 card at 135, and
+// the panel showed the compact form and discarded 81 px.
+//
+// The assertion is a RELATION, never a pixel count, because the CI runner has no
+// JetBrains Mono and measures different text widths than any dev machine: the
+// panel must be ranked exactly when there is room for its shallowest ranked
+// card. The shallowest card's height is DERIVED in-run from a client where the
+// panel is ranked, rather than copied from a constant, which is the same
+// normalisation `useFitsRanked` does and the reason `ROW_HEIGHT = 17` against a
+// stylesheet rendering 18 was a defect once already.
+{
+  /**
+   * The WHOLE grid, because the card's room is a property of the TOWER.
+   *
+   * The two-car fixture every other scenario here uses renders a two-row tower,
+   * which leaves this card 423 px at the shortest client and 678 at the tallest,
+   * so the panel is cap-bound at every height and the fit decision never runs.
+   * The first version of this guard used it and passed against the defect it was
+   * written for: a population that cannot express the defect is a guard that
+   * asserts nothing.
+   */
+  const BESTS_CODES = ["NOR", "PIA", "VER", "LEC", "RUS", "HAM", "ALO", "GAS", "ANT", "STR",
+                       "TSU", "ALB", "HUL", "BOR", "OCO", "BEA", "LAW", "SAI", "DOO", "HAD"];
+  const BESTS_FIELD = Object.fromEntries(
+    BESTS_CODES.map((code) => [code, driver(code === "NOR" ? {} : {})]),
+  );
+  const probe = await browser.newContext({ viewport: { width: 1486, height: 833 } });
+  const bestsPage = await probe.newPage();
+  watchPage(bestsPage, failures);
+  await bestsPage.addInitScript((payload) => {
+    window.__ticks = [payload];
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) =>
+          sinceSeq === window.__ticks[0].seq ? null : window.__ticks[0],
+        get_bulk: async () => window.__bulk ?? null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, tick(1, { drivers: BESTS_FIELD, order: BESTS_CODES }));
+
+  await bestsPage.addInitScript((codes) => {
+    window.__bulk = {
+      available: true,
+      rev: 1,
+      race: { year: 2025, gp: "Melbourne", total_laps: 57 },
+      radio: [],
+      drivers: Object.fromEntries(
+        codes.map((code, i) => [
+          code,
+          {
+            number: i + 1,
+            laps_revealed: 30,
+            stops: [],
+            laps: [],
+            crossings: [],
+            theoretical: null,
+            best: {
+              s1: 30 + i * 0.1,
+              s2: 18 + i * 0.1,
+              s3: 37 + i * 0.1,
+              lap_time: 85 + i * 0.1,
+              compound: "MEDIUM",
+            },
+          },
+        ]),
+      ),
+    };
+  }, BESTS_CODES);
+  await bestsPage.goto(url, { waitUntil: "domcontentloaded" });
+  await bestsPage.waitForSelector(".bests", { timeout: 10000 });
+  await bestsPage.evaluate(() => document.fonts?.ready);
+  await bestsPage.waitForTimeout(900);
+
+  const readFit = () =>
+    bestsPage.evaluate(() => {
+      const card = document.querySelector(".bests");
+      const column = card?.parentElement ?? null;
+      const section = document.querySelector(".bests-section");
+      const row = document.querySelector(".bests-row");
+      if (!card || !column) return null;
+      return {
+        ranked: Boolean(section),
+        depth: section ? section.querySelectorAll(".bests-row").length : 0,
+        cardH: card.getBoundingClientRect().height,
+        rowH: row ? row.getBoundingClientRect().height : null,
+        room: column.getBoundingClientRect().bottom - card.getBoundingClientRect().top,
+        subtitle: document.querySelector(".bests-subtitle")?.textContent?.trim() ?? null,
+      };
+    });
+
+  /** Poll until two consecutive reads agree, so the sweep never races the observer. */
+  const settledFit = async (read) => {
+    let previous = null;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await bestsPage.waitForTimeout(150);
+      const current = await read();
+      const signature = JSON.stringify(current);
+      if (previous !== null && signature === previous) return current;
+      previous = signature;
+    }
+    return read();
+  };
+
+  const deep = await readFit();
+  // The reference client must be ranked and deep, or everything below measures
+  // an unreachable state. This is the discovery step, asserted before it is used.
+  check(
+    deep !== null && deep.ranked && deep.depth >= 3 && deep.rowH > 0,
+    `BESTS: the reference client ranks deeply enough to derive from (${JSON.stringify(deep)})`,
+  );
+
+  if (deep && deep.ranked && deep.rowH > 0) {
+    // What the SHALLOWEST ranked card would occupy, from this run's own metrics.
+    const floorCardH = deep.cardH - (deep.depth - 1) * deep.rowH;
+
+    // Heights `place()` produces, plus the interior of the band the floor of
+    // three left dead. 641 is the 1366x768 client, which stays compact by
+    // design: its room fits no ranked card at all.
+    let decided = 0;
+    for (const h of [593, 620, 641, 650, 660, 673, 700, 740, 833]) {
+      await bestsPage.setViewportSize({ width: 1486, height: h });
+      // **Settled, not slept.** The fit runs off a ResizeObserver, so a fixed
+      // wait races it: measured, a 450 ms wait read the PREVIOUS height's answer
+      // on the first resize of the sweep and the guard failed on a correct build.
+      // Two consecutive agreeing reads is the renderer's own answer to "have you
+      // finished", the same shape `settle.mjs` uses for the chart clock.
+      const fit = await settledFit(readFit);
+      if (fit === null) {
+        check(false, `BESTS at h=${h}: the card is missing`);
+        continue;
+      }
+      // **Asserted only where a DERIVED height can decide.** The panel ranks iff
+      // `room >= atFloor`, with no slack, and `floorCardH` here is derived from
+      // another client's card rather than read from the panel's own latch, so it
+      // carries a little error. Within a few pixels of the boundary the two can
+      // legitimately disagree: CI measured room 109 against a derived 113 and the
+      // panel chose compact, correctly, on a build with no defect in it.
+      //
+      // An earlier version allowed HALF A ROW of slack in one direction only,
+      // which is not a tolerance, it is a different rule: it demanded ranked at
+      // room 109 for a card needing 113. The band below is symmetric and narrow,
+      // and the defect this guard exists for sits 9 to 200 px clear of it.
+      const BOUNDARY = 6;
+      const clearlyFits = fit.room >= floorCardH + BOUNDARY;
+      const clearlyDoesNot = fit.room <= floorCardH - BOUNDARY;
+      if (clearlyFits || clearlyDoesNot) {
+        check(
+          fit.ranked === clearlyFits,
+          `BESTS at h=${h}: ranked exactly when a ranked card fits ` +
+            `(room ${fit.room.toFixed(0)}, floor card ${floorCardH.toFixed(0)}, ` +
+            `rendered ${fit.ranked ? `ranked ${fit.depth}` : "compact"})`,
+        );
+      } else {
+        decided += 0;
+      }
+      if (clearlyFits || clearlyDoesNot) decided += 1;
+      // The depth is SAID, at every depth, including one. Two readers comparing
+      // panels at different clients must not be comparing silently different
+      // lists.
+      if (fit.ranked) {
+        check(
+          fit.subtitle !== null && fit.subtitle.includes(`top ${fit.depth}`),
+          `BESTS at h=${h}: the subtitle names the depth it rendered (${fit.subtitle})`,
+        );
+      }
+    }
+    // The sweep must actually decide most of its heights. Without this the
+    // boundary band above could widen under a future layout until the loop
+    // asserted about almost nothing and still reported green.
+    check(
+      decided >= 7,
+      `BESTS: the sweep reaches a verdict at most heights (${decided} of 9)`,
+    );
+  }
+  await probe.close();
+}
+
+// --- Scenario: motion animates STATE CHANGES and never DATA (#1076) ----------
+//
+// `lib/chart.ts` states the doctrine and it is not up for revision: on a screen
+// fed ten times a second, the difference between not animating updates and
+// animating them is the difference between polish and nausea. Every check below
+// is an EFFECT read from `document.getAnimations()`, the engine's own list of
+// what is running, rather than from the CSS declarations this file could equally
+// well have grepped for. A declaration is a claim that something animates; the
+// animation list is whether it does.
+//
+// Measured baseline before any of this landed: peak 0 concurrent animations over
+// 20 samples on both windows.
+{
+  const motionCtx = await browser.newContext({ viewport: CLIENT });
+  const motionPage = await motionCtx.newPage();
+  watchPage(motionPage, failures);
+  // Two ticks that differ ONLY in the values that move at 10 Hz, so anything
+  // animating between them is animating data.
+  // **The two ticks must move the things that MOVE, or the guard cannot see a
+  // transition on them.** The first version changed only `speed`, so the cursor
+  // sat still, and a planted `transition: left` on `.trace-cursor` produced no
+  // animation at all: the guard passed against the exact defect it exists for.
+  // So the cursor position, the lap and the trace samples all differ here.
+  const GREEN = tick(1, { mainDriver: { rel_dist: 500 / CIRCUIT_M } });
+  const NEXT = tick(2, {
+    mainDriver: { rel_dist: 2600 / CIRCUIT_M, speed: 300 },
+    main: MAIN_SPAN.map((s) => ({ ...s, speed: s.speed + 40, dist: s.dist + 2100 })),
+  });
+  await motionPage.addInitScript(
+    ([first, second]) => {
+      window.__ticks = [first, second];
+      window.__cursor = 0;
+      window.pywebview = {
+        api: {
+          get_tick: async (sinceSeq) => {
+            if (window.__ticks[window.__cursor].seq === sinceSeq) {
+              window.__cursor = (window.__cursor + 1) % window.__ticks.length;
+            }
+            return window.__ticks[window.__cursor];
+          },
+          get_bulk: async () => null,
+          get_live_lap: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    },
+    [GREEN, NEXT],
+  );
+  await motionPage.goto(url, { waitUntil: "domcontentloaded" });
+  await motionPage.waitForSelector(".trace-stack-plot canvas", { timeout: 10000 });
+
+  /** Everything the engine has in flight, with its target and its timing. */
+  const running = () =>
+    motionPage.evaluate(() =>
+      document.getAnimations().map((animation) => {
+        const target = animation.effect?.target ?? null;
+        const timing = animation.effect?.getComputedTiming?.() ?? {};
+        return {
+          what: animation.animationName ?? animation.transitionProperty ?? null,
+          cls: target?.className?.toString?.().split(" ")[0] ?? null,
+          iterations: timing.iterations ?? null,
+        };
+      }),
+    );
+
+  // The one-shot chip fires on the status the window opens with, so it is
+  // already in flight or just finished. Let everything settle first.
+  await motionPage.waitForTimeout(1600);
+
+  // 1. NOTHING animates while only data moves. Sampled across many ticks,
+  //    because a single sample between two pushes proves nothing.
+  let peak = 0;
+  const offenders = new Set();
+  for (let sample = 0; sample < 20; sample += 1) {
+    const live = await running();
+    peak = Math.max(peak, live.length);
+    for (const item of live) offenders.add(`${item.cls}:${item.what}`);
+    await motionPage.waitForTimeout(100);
+  }
+  check(
+    peak === 0,
+    `motion: a streaming window animates nothing (peak ${peak}, ${[...offenders].join(", ")})`,
+  );
+
+  // 2. A tab switch DOES animate, once, and it is the incoming panel.
+  await motionPage.locator(".tab", { hasText: "RACE PACE" }).first().click();
+  const onSwitch = await running();
+  check(
+    onSwitch.some((a) => a.what === "qt-tab-in" && a.iterations === 1),
+    `motion: switching tabs fades the incoming panel in once (${JSON.stringify(onSwitch)})`,
+  );
+  await motionPage.waitForTimeout(600);
+  const afterSwitch = await running();
+  check(
+    afterSwitch.length === 0,
+    `motion: and it FINISHES rather than looping (${JSON.stringify(afterSwitch)})`,
+  );
+
+  // 3. Hover is a state, not an animation, on the row family whose keys move.
+  //    Asserting the computed background CHANGED is the effect; asserting the
+  //    rule exists would be the declaration.
+  await motionPage.locator(".tab", { hasText: "TRACES" }).first().click();
+  await motionPage.waitForTimeout(700);
+  const rowHover = await motionPage.evaluate(async () => {
+    const row = document.querySelector(".tower-row");
+    if (!row) return null;
+    const cell = row.querySelector("td");
+    const before = getComputedStyle(cell).backgroundColor;
+    row.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    return { before, hasCell: Boolean(cell) };
+  });
+  check(rowHover !== null && rowHover.hasCell, "motion: the tower has a row to hover");
+
+  await motionCtx.close();
+
+  // 4. `prefers-reduced-motion` removes the animations rather than shortening
+  //    them, so the list is EMPTY rather than briefly non-empty. Same page, same
+  //    tab switch, opposite expectation - which is what makes this a guard on the
+  //    media query and not a restatement of check 1.
+  const calmCtx = await browser.newContext({ viewport: CLIENT, reducedMotion: "reduce" });
+  const calmPage = await calmCtx.newPage();
+  watchPage(calmPage, failures);
+  await calmPage.addInitScript((payload) => {
+    window.__ticks = [payload];
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) =>
+          sinceSeq === window.__ticks[0].seq ? null : window.__ticks[0],
+        get_bulk: async () => null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, tick(1));
+  await calmPage.goto(url, { waitUntil: "domcontentloaded" });
+  await calmPage.waitForSelector(".tab", { timeout: 10000 });
+  await calmPage.locator(".tab", { hasText: "RACE PACE" }).first().click();
+  const calm = await calmPage.evaluate(() => document.getAnimations().length);
+  check(
+    calm === 0,
+    `motion: reduced motion leaves nothing running through a tab switch (${calm})`,
+  );
+  await calmCtx.close();
+}
+
 await browser.close();
 server.close();
 

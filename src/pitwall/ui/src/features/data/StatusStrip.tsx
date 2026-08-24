@@ -125,8 +125,19 @@ function TrackStatusChip({
   const worn = trackStatusTreatment(label, colour, frozen);
   if (worn.kind === "unknown") return <span className="strip-chip is-unknown">{worn.text}</span>;
   return (
+    // **`key` is the pulse.** A CSS animation starts when an element is created,
+    // so keying this chip on the text it wears makes the animation fire exactly
+    // when the status CHANGES and never on the ten renders a second that do not
+    // change it. No state, no effect, and nothing to clean up. The alternative,
+    // an effect comparing the previous label, would be a second copy of a fact
+    // React already has.
     <span
-      className={worn.kind === "filled" ? "strip-chip is-filled" : "strip-chip"}
+      key={worn.text}
+      className={
+        worn.kind === "filled"
+          ? "strip-chip strip-chip-track is-filled"
+          : "strip-chip strip-chip-track"
+      }
       style={
         worn.kind === "filled"
           ? { background: worn.rgb, borderColor: worn.rgb }

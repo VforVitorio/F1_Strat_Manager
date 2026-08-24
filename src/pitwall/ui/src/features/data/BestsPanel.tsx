@@ -49,8 +49,24 @@ import {
  * Twenty is the whole grid, so the panel now runs out of DATA before it runs out of
  * room, and the leftover then means "there is no more", which explains itself. The
  * subtitle still names the depth, so nothing is claimed that is not shown.
+ *
+ * **The FLOOR is one, and three was the other half of the same mistake as the cap.**
+ * Raising the cap fixed the wide client and left the narrow one degrading
+ * all-or-nothing: the card's height is linear in depth at 99 + 18k px, so a
+ * floor of three meant the panel jumped straight from a 153 px ranked card to
+ * the 62 px compact one with nothing in between. Measured across the client
+ * heights `WindowSpec.place` produces, the 16:10 laptops land at 143 px of room:
+ * enough for a depth-2 card at 135 and eight pixels to spare, and the panel
+ * discarded all of it, showing four leader values where it had room for eight
+ * ranked ones. A rank-1 list is still the four best holders plus THEORETICAL,
+ * which is the panel's whole job; nothing about it needed a floor of three.
+ *
+ * What this does NOT reach is the 1366x768 client, whose 111 px of room fits
+ * neither the 117 px depth-1 card nor anything above the compact form. That band
+ * is 49 px of waste on one screen class, and a third form to serve it would be
+ * more form than defect.
  */
-const RANKED_FLOOR = 3;
+const RANKED_FLOOR = 1;
 const RANKED_CAP = 20;
 /**
  * Rounding tolerance, and no longer a stand-in for a font that has not landed.
@@ -109,6 +125,8 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
   });
   /** The card's height at the FLOOR depth, latched while it is showing exactly that. */
   const floorHeight = useRef<number | null>(null);
+  /** The last row height actually rendered, so the compact form can still decide. */
+  const lastRowHeight = useRef<number | null>(null);
 
   const fit = useCallback(() => {
     const column = card?.parentElement;
@@ -133,8 +151,23 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
     // a fit into a clip. The pace grid's own row-height comment already demands this
     // ("nothing in TSX may copy this number - a consumer reads it with getComputedStyle");
     // this panel had the copy anyway.
-    const rowHeight =
+    // **Latched as well as read, because the compact form has no row to read.**
+    //
+    // `.bests-row` only exists while the panel is ranked, so in the compact form
+    // this measured 0 and the early return below fired before any decision was
+    // made. That made the degradation ONE-WAY: measured on the real page, a
+    // window opened at 833 ranked 11 deep, shrank to 593 and went compact, and
+    // then grew back to 833 - room 303, the same room it had ranked in a moment
+    // earlier - and stayed compact for the rest of the session. Every later
+    // resize was decided by an early return rather than by the room.
+    //
+    // The row height is a stylesheet constant at a given client, so carrying the
+    // last ranked measurement across is honest rather than a guess, and it is
+    // still READ rather than copied from a number in this file.
+    const measuredRow =
       card.querySelector(".bests-row")?.getBoundingClientRect().height ?? 0;
+    if (measuredRow > 0) lastRowHeight.current = measuredRow;
+    const rowHeight = measuredRow > 0 ? measuredRow : (lastRowHeight.current ?? 0);
     if (rowHeight <= 0) return;
     if (fitState.ranked) {
       const extraRows = Math.max(0, fitState.depth - RANKED_FLOOR);
