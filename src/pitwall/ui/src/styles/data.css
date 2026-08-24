@@ -574,11 +574,21 @@ td.col-drv {
 /* Band 4 is the traces plus the ring in its corner. The ring is a fixed
  * column because it is a circle: giving it a fraction of the width makes it
  * shrink as the traces grow, which is backwards - the traces are the thing
- * that wants the room. */
+ * that wants the room.
+ *
+ * **`minmax(0, 1fr)` and not `1fr`, because a `1fr` track carries an `auto`
+ * minimum and one line of prose was setting the window's minimum width.**
+ * `.traces-lap` is `nowrap`, so its min-content is its entire text, and with
+ * nothing on the way up stopping the contribution it reached this track.
+ * Measured at a FIXED 1266x593 client, changing only the note: 6 characters
+ * overflowed the document by 0 px, 42 by 199, and the longest note the header
+ * can render, 66 characters, by 389. It reached the desktop too, 169 px at
+ * 1486x833. What went off screen was the ring and every radio message body,
+ * with scrollbars hidden globally so nothing said so. See #1073. */
 .band4 {
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 260px;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 10px;
 }
 
@@ -589,6 +599,10 @@ td.col-drv {
 .traces {
   flex: 1 1 auto;
   min-height: 0;
+  /* The width half of `min-height: 0`, and it is load-bearing rather than
+   * symmetric: without it the header note's min-content travels up to band 4's
+   * grid track. #1073. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -602,6 +616,9 @@ td.col-drv {
   align-items: center;
   gap: 10px;
   padding: 0 2px;
+  /* Same reason as `.traces` above: this row is the last stop before the note
+   * reaches the grid track. #1073. */
+  min-width: 0;
 }
 
 /* The lap label plus every note the header can append.
@@ -613,7 +630,17 @@ td.col-drv {
  * to 71, which drops its 10 px labels below the 12 px pitch they need to stay
  * apart. The exposure is not new - `NO POSITION DATA (X, Y)` is longer than any
  * note added since - it had simply never been measured with a note up. Clipping
- * the tail of a note is the right trade against shrinking the payload. */
+ * the tail of a note is the right trade against shrinking the payload.
+ *
+ * **The paragraph above stood alone for one sprint and it was half the story.**
+ * `nowrap` makes a line's min-content its whole text, and until #1073 nothing
+ * between here and band 4's grid track set `min-width: 0`, so the note sized the
+ * WINDOW: 389 px of ring and radio off screen at the 720p client, 169 px at the
+ * 1920x1080 one. The trade this comment describes is still the right one, but it
+ * only holds because the containment is now in place; the `text-overflow` below
+ * is what does the clipping the paragraph promises. Do not remove the
+ * `min-width: 0` on `.traces` or `.traces-header` on the grounds that this
+ * element already has one. */
 .traces-lap {
   color: var(--qt-fg-1);
   font-size: 13px;

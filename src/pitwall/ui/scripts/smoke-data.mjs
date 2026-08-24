@@ -4861,6 +4861,114 @@ check(
   await ctx.close();
 }
 
+// --- Scenario: a long header note must not size the WINDOW (#1073) -----------
+//
+// `.traces-lap` is `nowrap`, so its min-content is its whole text, and band 4's
+// first grid track carried an `auto` minimum. Between them, one line of
+// race-state prose set the minimum width of the window: measured at a FIXED
+// 1266x593 client, changing only the note, 6 characters overflowed the document
+// by 0 px, 42 by 199 and the longest note the header can build, 66, by 389. At
+// the 1920x1080 client the same note overflowed by 169. What went off screen was
+// the track ring and every radio message body, and `qt-base.css` hides every
+// scrollbar, so nothing said so.
+//
+// The guard is driven by the LONGEST note the component can actually render,
+// not by the longest string that fits in it. `offLine` needs `delta.length >= 2`
+// and `noDelta` needs `< 2` (`OwnCarTraces.tsx:191,204`), so those two notes are
+// mutually exclusive, and `blind` is at most `[driver_main, rivalCode]`. The
+// reachable maximum is therefore the own car being blind: the blind list plus
+// `NO DELTA WITHOUT THE OWN CAR`.
+//
+// It asserts the note is LONG before asserting the window does not overflow.
+// Without that, a run in which the note failed to render is indistinguishable
+// from a run in which the containment worked, which is this repo's dominant
+// guard defect.
+{
+  // The own car has no position, so: `blind` holds NOR, `mainBlind` is true, and
+  // `noDelta` follows because a delta cannot be built without the main car.
+  const BLIND_MAIN = tick(1, {
+    mainDriver: { has_position: false },
+    main: [],
+    rivalSpan: RIVAL_SPAN,
+  });
+
+  // Every client `WindowSpec.place` produces on a real screen, narrowest first.
+  // The narrow ones are the point: the reference client alone passed before the
+  // fix for the 42-character note and would have signed the defect off.
+  const FLEET = [
+    { w: 1266, h: 593, screen: "1280x720" },
+    { w: 1312, h: 593, screen: "1280x720, AGENTS stagger" },
+    { w: 1352, h: 641, screen: "1366x768" },
+    { w: 1426, h: 773, screen: "1440x900" },
+    { w: 1486, h: 833, screen: "1920x1080" },
+  ];
+
+  for (const { w, h, screen } of FLEET) {
+    const narrow = await browser.newContext({ viewport: { width: w, height: h } });
+    const client = await narrow.newPage();
+    watchPage(client, failures);
+    await client.addInitScript((payload) => {
+      window.__ticks = [payload];
+      window.pywebview = {
+        api: {
+          get_tick: async (sinceSeq) =>
+            sinceSeq === window.__ticks[0].seq ? null : window.__ticks[0],
+          get_bulk: async () => null,
+          get_live_lap: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    }, BLIND_MAIN);
+    await client.goto(url, { waitUntil: "domcontentloaded" });
+    await client.waitForSelector(".traces-lap", { timeout: 10000 });
+    await client.waitForTimeout(600);
+
+    const measured = await client.evaluate(() => {
+      const lap = document.querySelector(".traces-lap");
+      const doc = document.documentElement;
+      return {
+        note: lap ? lap.textContent.trim() : null,
+        // The note's own ellipsis: the degradation #1068 designed and the one
+        // that has to absorb the overflow instead of the window.
+        noteClipped: lap ? lap.scrollWidth - lap.clientWidth : null,
+        overflowX: doc.scrollWidth - window.innerWidth,
+        // The ring is the surface that actually went off screen. Asserting the
+        // document alone would pass if the ring were merely hidden.
+        ringRight: (() => {
+          const ring = document.querySelector(".side-column");
+          return ring ? Math.round(ring.getBoundingClientRect().right) : null;
+        })(),
+      };
+    });
+
+    // FIRST: the fixture reached the state. A short note proves nothing.
+    check(
+      measured.note !== null && measured.note.length >= 40,
+      `${screen}: the blind-main fixture renders a long note (got ${JSON.stringify(measured.note)})`,
+    );
+    check(
+      measured.note !== null && /NO DELTA WITHOUT THE OWN CAR/.test(measured.note),
+      `${screen}: and it is the reachable longest one, the own car being blind (${measured.note})`,
+    );
+    // THEN: the window contains it. A relation, never a pixel count, because the
+    // CI runner has no JetBrains Mono and measures different text widths.
+    check(
+      measured.overflowX === 0,
+      `${screen} (${w}x${h}): the long note does not widen the document (overflow-X ${measured.overflowX})`,
+    );
+    check(
+      measured.ringRight !== null && measured.ringRight <= w,
+      `${screen} (${w}x${h}): the ring column ends inside the window (right edge ${measured.ringRight})`,
+    );
+    // And the note absorbs it, rather than the note simply being short enough.
+    check(
+      measured.noteClipped > 0,
+      `${screen}: the note itself takes the truncation (ellipsis by ${measured.noteClipped} px)`,
+    );
+    await narrow.close();
+  }
+}
+
 await browser.close();
 server.close();
 
