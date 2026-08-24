@@ -604,20 +604,29 @@ over a threshold that could never fire.
   the reveal withholds that driver's later parquet laps. Data-honest - the replay has no telemetry
   to place them - and unreachable on Melbourne, where all twenty run to the line. Written down so
   it is not filed as a reveal bug.
-- **The latent P2 for trace readers FIRES on real data, and the mechanism named here was wrong.**
-  This entry used to say the arcade's `lap` channel "is interpolated, so it can label ~2,000 frames
-  as a lap that has no telemetry behind it", and that Gate A could reproduce the mechanism by
-  executing the code path but not show it firing. Measured on 621 real Melbourne ticks during R3:
-  **70 events a race across 17 of the 20 drivers.** One frame carries the PREVIOUS lap number with
-  a mid-lap distance, between two correct frames 40 ms apart. HAM at the lap-24 crossing reads lap
-  23 at 2586.2 m, half a lap from where the car is.
-  The channel is not interpolated: `data.py:402` writes a per-lap CONSTANT into each lap's array,
-  `410-411` concatenates every lap and sorts the whole thing by `t`, and FastF1's padded lap
-  windows overlap, so a stale row sorts in between two live ones and carries its own lap's
-  `dist` with it.
-  It reaches every consumer of `rel_dist`, not only the trace buffer. Band 4 defends itself by
-  skipping a sample whose lap goes backwards (`traceBuffer.ts`, #1066); the producer-side fix is
-  tracked separately.
+- **The latent P2 for trace readers FIRED on real data. Fixed in #1069, and the mechanism this
+  entry named was wrong twice before it was measured.**
+  It first said the arcade's `lap` channel "is interpolated, so it can label ~2,000 frames as a lap
+  that has no telemetry behind it". The correction that replaced it said FastF1's padded lap
+  windows overlap so a stale row sorts in between two live ones carrying its own `dist`. Both are
+  refuted by the census in #1069: across 2,820 lap boundaries on three races, every boundary shares
+  **exactly one** sample with the previous lap at **exactly the same `t`**, every gap zero to the
+  bit, no multi-row overlap and no near-tie. There is nothing to interleave.
+  The real mechanism: FastF1's per-lap windows SHARE their boundary sample, so the concatenation
+  carries every crossing twice at one instant, and `np.argsort` defaulted to quicksort, which is
+  not stable. The tie broke arbitrarily and flipped 158 of Melbourne's 907 boundaries, 190 of Las
+  Vegas's 866 and 256 of Qatar's 1,047. What it corrupted is the three per-lap CONSTANTS: `lap`,
+  `tyre` and `tyre_life`. Per-sample channels are bitwise identical in both copies and cannot move.
+  **The measurement was also mislabelled.** The "70 events a race across 17 of the 20 drivers" is
+  the FULL-RACE served count, not something a 124-second capture over laps 22 to 24 could hold;
+  that window contains about three. Served, Melbourne 2025: `lap` backwards on 70 frames,
+  `tyre_life` on 105, `tyre` flicker on 2, out of 3,083,460.
+  **And the worst effect was never noticed.** A glitched FINAL crossing makes
+  `_lap_fraction_from_distance` normalise the whole last lap by the two-to-four-frame phantom
+  segment, so `rel_dist` saturates: HAM and LEC shipped their entire lap 57 pinned at the
+  start/finish line, 92.3 s and 90.7 s of active frames, while speed and gear kept moving. About
+  two drivers a race. `kind="stable"` takes all of it to zero.
+  Band 4's own defence stays (`traceBuffer.ts`, #1066): it guards against an older producer.
 - **#199 Phase D.3 gains weight.** `snapshot_dict` re-runs a recursive `asdict` over the 30-entry
   tail ten times a second with a blocking `sendall`, so one stalled subscriber can hitch the pyglet
   frame loop. Inherited, not introduced, but the wire is now load-bearing.

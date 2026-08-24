@@ -259,7 +259,11 @@ def _nearest_sample(t: np.ndarray, timeline: np.ndarray) -> np.ndarray:
 
     Ties go to the EARLIER sample, which matters because the raw stream carries
     907 duplicate-`t` pairs on this race: `<=` makes the pick deterministic
-    instead of dependent on floating-point noise.
+    instead of dependent on floating-point noise. Those 907 all have one cause,
+    found in #1069: FastF1's per-lap windows share their boundary sample, so
+    every crossing is concatenated twice at the same instant. `<=` settles which
+    of the pair a timeline instant reads; `_concat_sorted_by_time` settles which
+    of them comes first, and until #1069 that half was left to quicksort.
 
     Leans on `len(t) >= 2`, which `_process_driver_data` guarantees - it skips
     any lap with fewer than two samples and returns None when a driver has no
@@ -273,6 +277,51 @@ def _nearest_sample(t: np.ndarray, timeline: np.ndarray) -> np.ndarray:
 # The eight forward gears plus neutral. 0 is a REAL reading - 1,400 raw samples
 # on Melbourne 2025, and the PITWALL GEAR lane's [0, 9] range renders it - so the
 # validity test is one-sided.
+def _concat_sorted_by_time(arrays: dict[str, list[np.ndarray]]) -> dict[str, np.ndarray]:
+    """Flatten the per-lap arrays into one time-ordered block per channel.
+
+    **The sort has to be STABLE, and that is why this is a function** (#1069).
+    FastF1's per-lap telemetry windows SHARE their boundary sample rather than
+    abutting, so the concatenation carries every lap crossing twice at the same
+    `SessionTime`: 907 duplicate pairs on Melbourne 2025, 866 on Las Vegas, 1047
+    on Qatar, all 2820 of them a lap boundary and none anywhere else, every gap
+    zero to the bit. `np.argsort` defaults to quicksort, which is not stable, so
+    the tie broke arbitrarily and put the OLD lap's copy second on 158 rows of
+    Melbourne, 190 of Las Vegas and 256 of Qatar.
+
+    What that corrupted is the three channels written as per-lap CONSTANTS in
+    `_process_driver_data`: `lap`, `tyre` and `tyre_life`. A per-SAMPLE reading
+    cannot be hurt by the swap, because both copies are the same instant and hold
+    bitwise-identical values - `gear`, `drs`, `brake`, `throttle` and `speed`
+    moved by zero on all 2820 pairs. A per-lap constant is discontinuous at
+    exactly that boundary, so it moved on every flipped one. `tyre_life` was the
+    worst, reading a 34-lap-old INTERMEDIATE one frame after a fresh MEDIUM went
+    on.
+
+    **The consequence was not one frame.** `_lap_fraction_from_distance` finds
+    lap starts with `np.diff(lap) > 0`, which fires twice on `23, 24, 23, 24`,
+    leaving a segment two to four frames long. Mid-race that publishes a stale
+    frame at half a lap. On a driver's FINAL crossing the last segment borrows
+    that length as `previous_length`, so the whole last lap is normalised by
+    about 10 m instead of 5220 and `rel_dist` saturates at 1.0: on the shipped
+    Melbourne replay HAM and LEC sat on the start/finish line for 92.3 s and
+    90.7 s of active frames while their speed and gear kept moving. Roughly two
+    drivers a race.
+
+    Stability keeps the concatenation order for equal times, and the
+    concatenation follows `iterlaps()`, which is ascending for every driver on
+    all three of those races. `np.lexsort((concat["lap"], concat["t"]))` would
+    decide the tie explicitly rather than inherit it; it is not used because the
+    ordering already holds and one keyword is smaller. Dropping the duplicate row
+    instead was measured and rejected: it advances the lap counter early on about
+    1100 frames a race, where keeping both copies reads the old lap right up to
+    the crossing, which is the correct reading.
+    """
+    concat = {k: np.concatenate(v) for k, v in arrays.items()}
+    order = np.argsort(concat["t"], kind="stable")
+    return {k: v[order] for k, v in concat.items()}
+
+
 _MAX_GEAR = 8
 
 
@@ -407,10 +456,7 @@ def _process_driver_data(args: tuple) -> dict | None:
     if not arrays["t"]:
         return None
 
-    concat = {k: np.concatenate(v) for k, v in arrays.items()}
-    order = np.argsort(concat["t"])
-    for k in concat:
-        concat[k] = concat[k][order]
+    concat = _concat_sorted_by_time(arrays)
     # After the sort, because the fill carries a gear FORWARD in time and the
     # per-lap arrays are concatenated in lap order but the samples inside them
     # are only sorted here.
