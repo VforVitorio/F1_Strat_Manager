@@ -4969,6 +4969,166 @@ check(
   }
 }
 
+// --- Scenario: BESTS shows the deepest ranked form that FITS (#1074) ---------
+//
+// The card's height is linear in depth, so a floor of three meant the panel
+// jumped from a 153 px ranked card straight to the 62 px compact one with
+// nothing between. Measured across the heights `WindowSpec.place` produces, the
+// 16:10 laptop client has 143 px of room: enough for a depth-2 card at 135, and
+// the panel showed the compact form and discarded 81 px.
+//
+// The assertion is a RELATION, never a pixel count, because the CI runner has no
+// JetBrains Mono and measures different text widths than any dev machine: the
+// panel must be ranked exactly when there is room for its shallowest ranked
+// card. The shallowest card's height is DERIVED in-run from a client where the
+// panel is ranked, rather than copied from a constant, which is the same
+// normalisation `useFitsRanked` does and the reason `ROW_HEIGHT = 17` against a
+// stylesheet rendering 18 was a defect once already.
+{
+  /**
+   * The WHOLE grid, because the card's room is a property of the TOWER.
+   *
+   * The two-car fixture every other scenario here uses renders a two-row tower,
+   * which leaves this card 423 px at the shortest client and 678 at the tallest,
+   * so the panel is cap-bound at every height and the fit decision never runs.
+   * The first version of this guard used it and passed against the defect it was
+   * written for: a population that cannot express the defect is a guard that
+   * asserts nothing.
+   */
+  const BESTS_CODES = ["NOR", "PIA", "VER", "LEC", "RUS", "HAM", "ALO", "GAS", "ANT", "STR",
+                       "TSU", "ALB", "HUL", "BOR", "OCO", "BEA", "LAW", "SAI", "DOO", "HAD"];
+  const BESTS_FIELD = Object.fromEntries(
+    BESTS_CODES.map((code) => [code, driver(code === "NOR" ? {} : {})]),
+  );
+  const probe = await browser.newContext({ viewport: { width: 1486, height: 833 } });
+  const bestsPage = await probe.newPage();
+  watchPage(bestsPage, failures);
+  await bestsPage.addInitScript((payload) => {
+    window.__ticks = [payload];
+    window.pywebview = {
+      api: {
+        get_tick: async (sinceSeq) =>
+          sinceSeq === window.__ticks[0].seq ? null : window.__ticks[0],
+        get_bulk: async () => window.__bulk ?? null,
+        get_live_lap: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, tick(1, { drivers: BESTS_FIELD, order: BESTS_CODES }));
+
+  await bestsPage.addInitScript((codes) => {
+    window.__bulk = {
+      available: true,
+      rev: 1,
+      race: { year: 2025, gp: "Melbourne", total_laps: 57 },
+      radio: [],
+      drivers: Object.fromEntries(
+        codes.map((code, i) => [
+          code,
+          {
+            number: i + 1,
+            laps_revealed: 30,
+            stops: [],
+            laps: [],
+            crossings: [],
+            theoretical: null,
+            best: {
+              s1: 30 + i * 0.1,
+              s2: 18 + i * 0.1,
+              s3: 37 + i * 0.1,
+              lap_time: 85 + i * 0.1,
+              compound: "MEDIUM",
+            },
+          },
+        ]),
+      ),
+    };
+  }, BESTS_CODES);
+  await bestsPage.goto(url, { waitUntil: "domcontentloaded" });
+  await bestsPage.waitForSelector(".bests", { timeout: 10000 });
+  await bestsPage.evaluate(() => document.fonts?.ready);
+  await bestsPage.waitForTimeout(900);
+
+  const readFit = () =>
+    bestsPage.evaluate(() => {
+      const card = document.querySelector(".bests");
+      const column = card?.parentElement ?? null;
+      const section = document.querySelector(".bests-section");
+      const row = document.querySelector(".bests-row");
+      if (!card || !column) return null;
+      return {
+        ranked: Boolean(section),
+        depth: section ? section.querySelectorAll(".bests-row").length : 0,
+        cardH: card.getBoundingClientRect().height,
+        rowH: row ? row.getBoundingClientRect().height : null,
+        room: column.getBoundingClientRect().bottom - card.getBoundingClientRect().top,
+        subtitle: document.querySelector(".bests-subtitle")?.textContent?.trim() ?? null,
+      };
+    });
+
+  /** Poll until two consecutive reads agree, so the sweep never races the observer. */
+  const settledFit = async (read) => {
+    let previous = null;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await bestsPage.waitForTimeout(150);
+      const current = await read();
+      const signature = JSON.stringify(current);
+      if (previous !== null && signature === previous) return current;
+      previous = signature;
+    }
+    return read();
+  };
+
+  const deep = await readFit();
+  // The reference client must be ranked and deep, or everything below measures
+  // an unreachable state. This is the discovery step, asserted before it is used.
+  check(
+    deep !== null && deep.ranked && deep.depth >= 3 && deep.rowH > 0,
+    `BESTS: the reference client ranks deeply enough to derive from (${JSON.stringify(deep)})`,
+  );
+
+  if (deep && deep.ranked && deep.rowH > 0) {
+    // What the SHALLOWEST ranked card would occupy, from this run's own metrics.
+    const floorCardH = deep.cardH - (deep.depth - 1) * deep.rowH;
+
+    // Heights `place()` produces, plus the interior of the band the floor of
+    // three left dead. 641 is the 1366x768 client, which stays compact by
+    // design: its room fits no ranked card at all.
+    for (const h of [593, 620, 641, 650, 660, 673, 700, 740, 833]) {
+      await bestsPage.setViewportSize({ width: 1486, height: h });
+      // **Settled, not slept.** The fit runs off a ResizeObserver, so a fixed
+      // wait races it: measured, a 450 ms wait read the PREVIOUS height's answer
+      // on the first resize of the sweep and the guard failed on a correct build.
+      // Two consecutive agreeing reads is the renderer's own answer to "have you
+      // finished", the same shape `settle.mjs` uses for the chart clock.
+      const fit = await settledFit(readFit);
+      if (fit === null) {
+        check(false, `BESTS at h=${h}: the card is missing`);
+        continue;
+      }
+      // Half a row of slack: `FONT_GUARD` and sub-pixel rounding both live in
+      // the panel's own arithmetic and neither is worth reproducing here.
+      const roomForRanked = fit.room >= floorCardH - deep.rowH / 2;
+      check(
+        fit.ranked === roomForRanked,
+        `BESTS at h=${h}: ranked exactly when a ranked card fits ` +
+          `(room ${fit.room.toFixed(0)}, floor card ${floorCardH.toFixed(0)}, ` +
+          `rendered ${fit.ranked ? `ranked ${fit.depth}` : "compact"})`,
+      );
+      // The depth is SAID, at every depth, including one. Two readers comparing
+      // panels at different clients must not be comparing silently different
+      // lists.
+      if (fit.ranked) {
+        check(
+          fit.subtitle !== null && fit.subtitle.includes(`top ${fit.depth}`),
+          `BESTS at h=${h}: the subtitle names the depth it rendered (${fit.subtitle})`,
+        );
+      }
+    }
+  }
+  await probe.close();
+}
+
 await browser.close();
 server.close();
 
