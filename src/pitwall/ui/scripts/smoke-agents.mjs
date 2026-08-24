@@ -1064,6 +1064,72 @@ check(
   "an absence does not borrow the alarm's weight",
 );
 
+// --- Scenario: a card that scrolls SAYS so (#1077) ---------------------------
+//
+// `agent-card-body` has always been `overflow: auto`, and `qt-base.css` hides
+// every scrollbar on purpose - that rule's own comment ends by naming this as
+// the debt it leaves. Measured at the 1226 x 593 client a 1280x720 screen gives
+// this window, the PACE and TIRE cards each hide 51 px, which is their whole Lap
+// axis, and SITUATION and PIT cut a line through the middle of its glyphs.
+//
+// The assertion is the EFFECT: a body with content beyond its box carries the
+// mask, and a body that fits carries none. Reading the CSS rule would pass on a
+// build that applied the fade unconditionally, which is the opposite defect and
+// just as wrong: a permanent fade on a card that fits says there is more when
+// there is not.
+{
+  const narrow = await browser.newContext({ viewport: { width: 1226, height: 593 } });
+  const narrowPage = await narrow.newPage();
+  watchPage(narrowPage, failures, "scroll-affordance");
+  await narrowPage.addInitScript((view) => {
+    window.pywebview = {
+      api: {
+        get_agents_view: async (sinceSeq) => (sinceSeq >= view.seq ? null : view),
+        get_tick: async () => null,
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, VIEW);
+  await narrowPage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await narrowPage.waitForSelector(".agent-card-body", { timeout: 10000 });
+  await narrowPage.evaluate(() => document.fonts?.ready);
+  await narrowPage.waitForTimeout(1200);
+
+  const bodies = await narrowPage.evaluate(() =>
+    [...document.querySelectorAll(".agent-card-body")].map((node) => ({
+      title: node.parentElement?.querySelector(".agent-title")?.textContent?.trim() ?? "?",
+      hidden: node.scrollHeight - node.clientHeight,
+      masked: getComputedStyle(node).maskImage !== "none",
+      reachable: getComputedStyle(node).overflowY !== "hidden",
+    })),
+  );
+
+  // The discovery step first: this client must actually produce an overflowing
+  // card, or every assertion below is about the empty set.
+  const overflowing = bodies.filter((b) => b.hidden > 1);
+  check(
+    overflowing.length > 0,
+    `affordance: the 1226x593 client overflows at least one card (${JSON.stringify(bodies)})`,
+  );
+  for (const body of bodies) {
+    check(
+      body.masked === body.hidden > 1,
+      `affordance: ${body.title} fades exactly when it has more below ` +
+        `(hidden ${body.hidden}, masked ${body.masked})`,
+    );
+    // The mask is a signal, never a substitute for reaching the content. Qt
+    // CLIPPED here and the migration README records that as a defect of the
+    // window being replaced.
+    check(
+      body.reachable,
+      `affordance: ${body.title} stays scrollable rather than clipped`,
+    );
+  }
+  await narrow.close();
+}
+
 await browser.close();
 server.close();
 

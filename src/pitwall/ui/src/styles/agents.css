@@ -392,6 +392,35 @@
   flex-direction: column;
   gap: 6px;
 }
+
+/* **The body scrolls and nothing said so.** Scrollbars are hidden globally and
+ * that rule's own comment ends by naming this as the debt it leaves. Measured at
+ * the 1226 x 593 client a 1280x720 screen gives this window, the PACE and TIRE
+ * cards each hide 51 px, which is their entire Lap axis, and SITUATION and PIT
+ * cut a line through the middle of its glyphs. A chart with no axis reads as a
+ * chart, not as a chart with more below.
+ *
+ * The same mask the pace grid uses, for the same reason and in the same shape:
+ * a mask rather than an overlay leaves the content its own colours and puts
+ * nothing new in the hit-testing path, and the classes come from measured
+ * overflow rather than a breakpoint, so a card that fits shows nothing. */
+.agent-card-body.has-below {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent 100%);
+}
+
+.agent-card-body.has-above {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.agent-card-body.has-above.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
 .agent-card-head {
   display: flex;
   align-items: center;
