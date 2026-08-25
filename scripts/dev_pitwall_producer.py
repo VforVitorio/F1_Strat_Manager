@@ -83,15 +83,50 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
         # fixture that omits a field the real producer sends is the drift #853
         # was about: the window gets developed against a payload thinner than
         # the one it will receive.
+        # **FOUR branches and FIVE risks, which is what a real lap emits.**
+        # Measured on an LLM run of Melbourne laps 20-22: every lap came back
+        # with the orchestrator's maximum of both (`max_length=4` and five
+        # bullets). This carried ONE branch and two risks, so the card was
+        # developed against a payload a quarter the size of the one it receives,
+        # and the empty space under it read as a design problem rather than as a
+        # thin fixture.
+        #
+        # The rationales are about a hundred characters because the
+        # orchestrator's own prompt asks for that ("kept short, ideally under
+        # 100 chars, so the UI can render a full contingency list").
         contingencies=[
+            {
+                "trigger": "if a Safety Car is confirmed before lap 30",
+                "switch_to": "PIT_NOW",
+                "priority": "HIGH",
+                "rationale": "the neutralised pit loss is 11 s cheaper and the stop is due inside three laps",
+            },
             {
                 "trigger": "if RUS pits within two laps",
                 "switch_to": "PIT_NOW",
                 "priority": "HIGH",
-                "rationale": "the undercut window shuts once he clears traffic",
-            }
+                "rationale": "the undercut window shuts once he clears traffic and the gap is inside the pit loss",
+            },
+            {
+                "trigger": "if the front-left graining does not clear by lap 26",
+                "switch_to": "PIT_NOW",
+                "priority": "MEDIUM",
+                "rationale": "N26 puts the cliff at lap 28 P50 and the degradation slope has doubled since lap 18",
+            },
+            {
+                "trigger": "if rain reaches the circuit before the stop",
+                "switch_to": "STAY_OUT",
+                "priority": "LOW",
+                "rationale": "a dry stop into a wet track wastes the set, and the intermediates window opens later",
+            },
         ],
-        key_risks=["rejoin into traffic", "the cliff arrives before the stop"],
+        key_risks=[
+            "SC probability is elevated and a stop under green loses eleven seconds more",
+            "rejoin into traffic behind the two-stoppers",
+            "the cliff arrives before the stop if the graining does not clear",
+            "the undercut from RUS lands first if he pits on the next lap",
+            "no second set of this compound left for a late neutralisation",
+        ],
         # `None`, not the STRING "none". A non-empty string is truthy, so the
         # window rendered `⚠ Guardrail: none` in the alarm colour on every lap
         # of every dev run - a red warning whose content is that there is
@@ -202,7 +237,14 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
             # The routing layer emits agent IDs, not block names
             # (`_decide_agents_to_call` in strategy_orchestrator.py), and the
             # cards gate on exactly these two tokens.
-            active=["N28", "N30"],
+            #
+            # **It VARIES per lap, and a constant here would misrepresent the
+            # real producer.** N30 is consulted every lap; N28 only routes when
+            # a stop is live, which is what the routing strip exists to show. A
+            # fixture that sent both on every lap would render a solid block and
+            # nothing on that strip could be judged by eye - the same drift a
+            # dev fixture caused in #853.
+            active=["N30"] + (["N28"] if lap % 3 else []),
         ),
         memory_block=(
             f"lap {lap - 1}: {fixture_call(lap - 1)[0]} "
@@ -256,9 +298,27 @@ view = SimpleNamespace(
 )
 view._build_arcade_snapshot = partial(F1ArcadeView._build_arcade_snapshot, view)
 
+# How long a lap lasts here, in wall-clock seconds at this playback speed.
+#
+# **The decision LAP advances, and it did not use to.** `state.latest` was
+# pinned to lap 23 for the whole run while only the frame index moved, so every
+# lap-keyed accumulator in the AGENTS window saw exactly one lap forever: the
+# routing strip rendered a single column and nothing about it could be judged by
+# eye. The real producer advances, so a fixture that does not is the drift #853
+# is about.
+#
+# Forty-five seconds is one Melbourne lap at the 2x playback above, which keeps
+# the fixture's own clock and its decisions telling the same story.
+LAP_SECONDS = 45.0
+
 print(f"producing {SECONDS:.0f}s with a POPULATED strategy block", flush=True)
-deadline = time.perf_counter() + SECONDS
+started = time.perf_counter()
+deadline = started + SECONDS
 while time.perf_counter() < deadline:
+    lap = min(23 + int((time.perf_counter() - started) / LAP_SECONDS), state.start.lap_end)
+    if lap != state.latest.lap_number:
+        state.history.append(state.latest)
+        state.latest = decision(lap, *fixture_call(lap))
     view._frame_index += (1.0 / ON_UPDATE_HZ) * FPS * view.playback_speed
     F1ArcadeView._broadcast_if_due(view)
     time.sleep(1.0 / ON_UPDATE_HZ)

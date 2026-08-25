@@ -629,7 +629,18 @@ def test_the_dev_producer_uses_the_same_real_field_names():
         assert not unknown, f"the dev producer invents {sorted(unknown)} in {block}"
 
     active = next(keyword for keyword in call.keywords if keyword.arg == "active")
-    tokens = [element.value for element in active.value.elts]
+    # **Every string constant under the expression, whatever its shape.** This
+    # used to read `.elts` off a plain list literal, which stopped parsing the
+    # day the producer began VARYING its routing per lap - a change made so the
+    # AGENTS routing strip would not render a solid block. The assertion is
+    # unchanged and the reachable set is now strictly larger: every token the
+    # producer can emit has to be an agent id, not merely the ones in the first
+    # branch.
+    tokens = [
+        node.value
+        for node in ast.walk(active.value)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
     assert tokens and all(t.startswith("N") and t[1:].isdigit() for t in tokens), tokens
 
 

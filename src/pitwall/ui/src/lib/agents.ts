@@ -229,6 +229,56 @@ export interface PlanTimelineView {
   caption: string;
 }
 
+/**
+ * One branch plan: what the orchestrator does INSTEAD, and when.
+ *
+ * Every string is LLM free text and every one of them is rendered as a React
+ * text node. Nothing here is markup and nothing here is escaped, which is the
+ * same contract the tooltips already carry.
+ */
+export interface ContingencyRow {
+  /** The condition that activates the branch, in the orchestrator's words. */
+  trigger: string;
+  /**
+   * The replacement action through `classify_action`'s own label table, so it
+   * reads `PIT NOW` exactly as the badge one card up does.
+   *
+   * It carries NO colour, deliberately: this branch is not the call, and a
+   * hypothetical wearing the live decision's identity colours reads as an
+   * announcement.
+   */
+  switch_to: string;
+  /** `HIGH` / `MEDIUM` / `LOW`. The word carries it; there is no alarm hue. */
+  priority: string;
+  /** One line of why, clamped to two lines on the glass. */
+  rationale: string;
+  /**
+   * The whole of the row, one hover or one keypress away. `null` when the row
+   * has nothing to expand, which is also what keeps it out of the tab order
+   * rather than offering an empty popup.
+   */
+  detail: TooltipView | null;
+}
+
+export interface ContingenciesView {
+  rows: ContingencyRow[];
+  /**
+   * The orchestrator's risk bullets, rendered in the BODY beside the branches.
+   *
+   * Empty when it flagged none, and the card then shows no risks block at all
+   * rather than an empty heading. They began behind a hover on the title, which
+   * made them content nobody would find.
+   */
+  risks: string[];
+  /**
+   * What to print instead of rows, and `null` when there ARE rows so a renderer
+   * cannot show both. The two sentences differ on purpose: no call has been made
+   * yet, versus a call that planned no branches, which is the ordinary state on
+   * the no-LLM profile.
+   */
+  empty: string | null;
+}
+
 export interface AgentsView {
   view_version: number;
   seq: number | null;
@@ -239,6 +289,7 @@ export interface AgentsView {
   cards: Record<string, AgentCardView>;
   charts: { pace: PaceSeries; tire: TireSeries };
   plan_timeline: PlanTimelineView;
+  contingencies: ContingenciesView;
   history: { pace: PaceHistoryRow[]; tire: TireHistoryRow[] };
   status_bar: { text: string; transient: boolean };
 }

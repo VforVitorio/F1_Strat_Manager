@@ -37,6 +37,7 @@ import { AgentCard } from "./AgentCard";
 import { OrchestratorCard } from "./OrchestratorCard";
 import { WhyPanel } from "./WhyPanel";
 import { ScenarioBars } from "./ScenarioBars";
+import { ContingenciesCard } from "./ContingenciesCard";
 import { PlanPanel } from "./PlanPanel";
 import { HeaderBar } from "./HeaderBar";
 import { PaceChart } from "./PaceChart";
@@ -179,6 +180,10 @@ const IDLE_VIEW: AgentsView = {
     current_pct: null,
     caption: "Pit: — · Next: — · UCUT: —",
   },
+  // Before the first tick there is no call, so the card's own "no call yet"
+  // sentence is the honest one - not "no branch plans", which asserts that a
+  // decision was made and planned none.
+  contingencies: { rows: [], risks: [], empty: "— no call yet —" },
   history: { pace: [], tire: [] },
   // Replaced by `waitingStatus(connection)` while `view` is null: the idle
   // view cannot know whether the socket is up, and this window has no other
@@ -317,6 +322,12 @@ export function AgentsWindow() {
           <div className="agents-side">
             <Console slot="situation" title="Situation" card={shown.cards.situation ?? IDLE_CARD} />
             <Console slot="pit" title="Pit" card={shown.cards.pit ?? IDLE_CARD} />
+            {/* The branch plans, filling what was window background under PIT.
+                The `??` is the stale-bundle guard the cards already carry: a
+                new bundle served an old view would otherwise throw on
+                `.rows.map`, which is what makes it safe not to bump
+                `AGENTS_VIEW_VERSION` for an added key. */}
+            <ContingenciesCard view={shown.contingencies ?? IDLE_VIEW.contingencies} />
           </div>
           <Console slot="radio" title="Radio" card={shown.cards.radio ?? IDLE_CARD} />
           <Console slot="rag" title="RAG" card={shown.cards.rag ?? IDLE_CARD} />

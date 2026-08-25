@@ -19,7 +19,11 @@ import logging
 from typing import Any
 
 from src.pitwall.agents_view.charts import build_pace_series, build_tire_series, own_car_colour
-from src.pitwall.agents_view.decision import build_orchestrator, build_scenarios
+from src.pitwall.agents_view.decision import (
+    build_contingencies,
+    build_orchestrator,
+    build_scenarios,
+)
 from src.pitwall.agents_view.history import LapHistory
 from src.pitwall.agents_view.panels import build_cards, build_header, build_status_bar
 from src.pitwall.agents_view.reasoning import build_reasoning
@@ -112,6 +116,12 @@ class AgentsViewBuilder:
                 latest.get("scenario_scores") if latest else None,
                 latest.get("action") if latest else None,
             ),
+            # The branch plans, filling the side column's empty region. The
+            # risks ride as the card TITLE's tooltip rather than as rows of
+            # their own: they answer a different question from "what do we do
+            # instead", and a card-level target would nest with the per-row
+            # ones and open two popups at once.
+            "contingencies": build_contingencies(latest or None),
             "reasoning": build_reasoning(latest or None),
             "cards": build_cards(latest or None),
             "charts": charts,
