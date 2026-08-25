@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -85,7 +86,6 @@ def _qt_token(name: str) -> str:
     which is the whole subject of `test_pitwall_tokens.py` next door.
     """
     import re
-    from pathlib import Path
 
     css = (
         Path(__file__).resolve().parents[2]
@@ -842,6 +842,25 @@ def _latest(lap: int = 23) -> dict:
         "undercut_target": "RUS",
         "memory_block": f"lap {lap - 1}: STAY_OUT (0.58)",
         "plan_changed": True,
+        # **Two branches and two risks, without which every contingency assertion
+        # below is about the empty set.** The first carries a `switch_to` whose
+        # wire form differs from its label, which is what makes the label
+        # assertion able to fail.
+        "contingencies": [
+            {
+                "trigger": "if RUS pits within two laps",
+                "switch_to": "PIT_NOW",
+                "priority": "HIGH",
+                "rationale": "the undercut window shuts once he clears traffic",
+            },
+            {
+                "trigger": "if the safety car is deployed before L28",
+                "switch_to": "STAY_OUT",
+                "priority": "MEDIUM",
+                "rationale": "track position beats the tyre delta under neutralisation",
+            },
+        ],
+        "key_risks": ["rejoin into traffic", "the cliff arrives before the stop"],
         "per_agent": {
             "pace": {
                 "lap_time_pred": 81.0,
@@ -2064,3 +2083,85 @@ def test_the_pace_chart_degrades_when_the_wire_has_no_colour_for_the_car():
     for name, payload in (("driver absent", absent), ("empty map", empty), ("no key", _payload())):
         colour = _host(payload).get_agents_view(-1)["charts"]["pace"]["actual_colour"]
         assert colour == ACTUAL_COLOUR, f"{name} must degrade, not raise or invent: {colour}"
+
+
+def test_a_contingency_reaches_the_window_with_the_orchestrators_own_action_label():
+    """`PIT_NOW` on the wire must read `PIT NOW` on the glass, as the badge does.
+
+    Through `classify_action`, never a hand-written table: a second copy of the
+    action labels is the twin this file's own module docstring warns about. The
+    COLOUR is deliberately not taken from it - a branch that is not happening
+    must not wear the live call's identity.
+    """
+    view = _host(_payload()).get_agents_view(-1)
+    rows = view["contingencies"]["rows"]
+
+    assert len(rows) == 2, f"the fixture's two branches must both arrive: {rows}"
+    assert rows[0]["switch_to"] == "PIT NOW", (
+        f"the wire's enum must reach the glass as the orchestrator's own label: {rows[0]}"
+    )
+    assert rows[1]["switch_to"] == "STAY OUT"
+    assert rows[0]["priority"] == "HIGH"
+    # Producer order, not sorted: the orchestrator owns the ordering signal.
+    assert [row["priority"] for row in rows] == ["HIGH", "MEDIUM"]
+    assert view["contingencies"]["empty"] is None, "rows and an empty sentence cannot coexist"
+    assert view["contingencies"]["risks"] is not None
+
+
+def test_a_contingency_reaches_the_window_as_text_and_never_as_markup():
+    """LLM free text, rendered as a React text node, so nothing is escaped here.
+
+    Both halves matter and each catches the opposite mistake. Escaping in the
+    builder would put the characters `&lt;img` on the glass; a
+    `dangerouslySetInnerHTML` in the card would execute the tag. The card is
+    checked as SOURCE because no Python test can see the TSX.
+    """
+    hostile = _latest()
+    hostile["contingencies"] = [
+        {
+            "trigger": _HOSTILE,
+            "switch_to": "PIT_NOW",
+            "priority": "HIGH",
+            "rationale": _HOSTILE,
+        }
+    ]
+    hostile["key_risks"] = [_HOSTILE]
+
+    row = _host(_payload(latest=hostile)).get_agents_view(-1)["contingencies"]["rows"][0]
+
+    assert "<img" in row["trigger"], "the text arrives verbatim, as data"
+    assert "&lt;" not in row["trigger"], (
+        "escaped here it would render as the characters &lt;img on the glass"
+    )
+    assert "&lt;" not in row["rationale"]
+
+    card = (
+        Path(__file__).resolve().parents[2]
+        / "src/pitwall/ui/src/features/agents/ContingenciesCard.tsx"
+    ).read_text("utf-8")
+    assert "dangerouslySetInnerHTML" not in card, (
+        "the card renders text nodes; raw HTML here would execute what the LLM wrote"
+    )
+
+
+def test_two_kinds_of_empty_are_two_different_sentences():
+    """No call at all and a call that planned no branches are different facts.
+
+    The no-LLM profile emits `contingencies=[]` by construction, so the second is
+    routine rather than an error. Both branches carry the SAME key set, which is
+    the house empty-state rule: a renderer must never have to test for a missing
+    key.
+    """
+    no_call = _host(_payload(latest={})).get_agents_view(-1)["contingencies"]
+    no_branches = _latest()
+    no_branches["contingencies"] = []
+    no_branches["key_risks"] = []
+    planned_none = _host(_payload(latest=no_branches)).get_agents_view(-1)["contingencies"]
+
+    assert set(no_call) == set(planned_none) == {"rows", "risks", "empty"}
+    assert no_call["rows"] == planned_none["rows"] == []
+    assert no_call["empty"] and planned_none["empty"], "both branches say something"
+    assert no_call["empty"] != planned_none["empty"], (
+        f"one sentence for two facts: {no_call['empty']!r}"
+    )
+    assert planned_none["risks"] is None, "no risks means no popup on a title that looks live"

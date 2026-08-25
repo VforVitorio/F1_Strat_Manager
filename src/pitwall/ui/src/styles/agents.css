@@ -404,15 +404,18 @@
  * a mask rather than an overlay leaves the content its own colours and puts
  * nothing new in the hit-testing path, and the classes come from measured
  * overflow rather than a breakpoint, so a card that fits shows nothing. */
-.agent-card-body.has-below {
+.agent-card-body.has-below,
+.cty-body.has-below {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent 100%);
 }
 
-.agent-card-body.has-above {
+.agent-card-body.has-above,
+.cty-body.has-above {
   mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
 }
 
-.agent-card-body.has-above.has-below {
+.agent-card-body.has-above.has-below,
+.cty-body.has-above.has-below {
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -762,7 +765,10 @@
 /* Both tooltip targets are keyboard targets now, so both need a focus ring.
  * `:focus-visible` rather than `:focus`, so a mouse click does not paint one. */
 .why-panel:focus-visible,
-.agent-card:focus-visible {
+.agent-card:focus-visible,
+.cty-title:focus-visible,
+.cty-row:focus-visible,
+.cty-body:focus-visible {
   outline: 2px solid var(--qt-accent);
   outline-offset: 2px;
 }
@@ -846,4 +852,146 @@
 }
 .agent-tooltip::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* ---- CONTINGENCIES (the side column's empty region) ----------------------
+ *
+ * **`flex: 1 1 0` is what makes the collapse decision loop-free.** A flex basis
+ * of zero keeps this card's CONTENTS out of the sizing calculation, so its used
+ * height is exactly the column's free space, `column - situation - pit - gaps`,
+ * and nothing it renders can move the number it measures itself against. The
+ * DATA window's BESTS panel is the counter-example: its decision changes its own
+ * height and #1083 is open because of it.
+ *
+ * `min-height: 0` removes the automatic content minimum that would put the
+ * contents back into that calculation. `box-sizing: border-box` is NOT global in
+ * this stylesheet, so it is declared: without it the padding and border land
+ * outside the residual and the card overflows the column, and it is also what
+ * keeps the measured height identical whether the border is drawn or not.
+ *
+ * This is its own rule rather than a comma added to `.agents-side > .agent-card`
+ * above. That rule means "a content-height console must be allowed to shrink";
+ * this one means "fill the residual and ignore your content". Two intents that
+ * happen to share a declaration. */
+.contingencies {
+  flex: 1 1 0;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Below the floor the element keeps its place in the flow and stops looking like
+ * a panel. Window background reads as nothing; an empty bordered box reads as
+ * content that failed to arrive. */
+.contingencies.is-collapsed {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.cty-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* The count is the TOTAL, so a body that scrolls still says how many there are. */
+.cty-count {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-weight: 400;
+}
+
+.cty-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cty-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+}
+
+/* **Gated on a class the component sets, never on `:has(.agent-tooltip)`.** That
+ * selector drives the six consoles' hover and has never matched anything: the
+ * popup is portaled to `<body>`, so it is not a descendant of the card it was
+ * meant to describe.
+ *
+ * Background only. This card sits in a flex column under PIT, so anything that
+ * changes its box moves a neighbour - the same reason the consoles' own hover is
+ * a border and not a size. */
+.cty-row.has-detail,
+.cty-title.has-detail {
+  cursor: help;
+}
+
+.cty-row.has-detail {
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.cty-row.has-detail:hover {
+  background: var(--qt-elevated);
+}
+
+.cty-trigger {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--qt-fg-1);
+  font-size: 11px;
+}
+
+/* The WORD carries the priority. No alarm hue: red on this window belongs to the
+ * live call's action, and a branch that is not happening must not wear it. */
+.cty-priority {
+  flex: none;
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.cty-switch {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Two lines, and the rest one hover away. The full text is never only here. */
+.cty-rationale {
+  margin: 0;
+  color: var(--qt-fg-3);
+  font-size: 10px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.cty-empty {
+  margin: auto 0;
+  color: var(--qt-fg-3);
+  font-size: 11px;
 }

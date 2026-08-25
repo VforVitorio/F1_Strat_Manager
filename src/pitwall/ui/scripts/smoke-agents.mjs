@@ -236,6 +236,66 @@ const VIEW = {
       cursor_colour: "#9ca3af",
     },
   },
+  // Two branches, and they are not interchangeable. The first's `switch_to`
+  // differs from its label so the label assertion can fail; the second carries
+  // NO rationale, which is the row whose `detail` is null - the fixture that
+  // makes "an unexpandable row is not a tab stop" able to fail. The first's
+  // rationale is long enough to exceed two lines at this client, without which
+  // the clamp assertion is about text that already fits.
+  contingencies: {
+    rows: [
+      {
+        trigger: "if RUS pits within two laps",
+        switch_to: "PIT NOW",
+        priority: "HIGH",
+        rationale:
+          "the undercut window shuts once he clears traffic and the gap to the car " +
+          "behind is inside the pit loss, so the stop has to happen on this lap or " +
+          "the position is gone until the second stint and the tyre delta stops " +
+          "paying for the track position it cost to build",
+        detail: {
+          sections: [
+            {
+              title: "Contingency",
+              rows: [
+                { lead: "When", text: "if RUS pits within two laps" },
+                { lead: "Then", text: "PIT NOW" },
+                {
+                  lead: "Why",
+                  text:
+                    "the undercut window shuts once he clears traffic and the gap to " +
+                    "the car behind is inside the pit loss, so the stop has to happen " +
+                    "on this lap or the position is gone until the second stint and " +
+                    "the tyre delta stops paying for the track position it cost to build",
+                },
+              ],
+            },
+          ],
+          footer: null,
+        },
+      },
+      {
+        trigger: "if the safety car is deployed before L28",
+        switch_to: "STAY OUT",
+        priority: "MEDIUM",
+        rationale: "",
+        detail: null,
+      },
+    ],
+    risks: {
+      sections: [
+        {
+          title: "Key risks",
+          rows: [
+            { lead: "", text: "rejoin into traffic" },
+            { lead: "", text: "the cliff arrives before the stop" },
+          ],
+        },
+      ],
+      footer: null,
+    },
+    empty: null,
+  },
   plan_timeline: {
     total_laps: 57,
     first_known_lap: 11,
@@ -1293,6 +1353,219 @@ check(
   );
 
   await hoverCtx.close();
+}
+
+
+// ---------------------------------------------------------------------------
+// The CONTINGENCIES card, filling the side column's empty region.
+//
+// The fixture's two rows are not interchangeable: one has a rationale long
+// enough to exceed two lines at this client and a `detail` to expand, the other
+// has neither. Without the long one the clamp assertion is about text that
+// already fits; without the empty one, "an unexpandable row is not a tab stop"
+// cannot fail.
+// ---------------------------------------------------------------------------
+// **PIT is trimmed for this block, and that is not a convenience.** The shared
+// fixture gives PIT 40 body lines deliberately, to guarantee the scroll check
+// an overflow - and 40 lines eat the whole side column, so the contingencies
+// card correctly collapses and none of its own rendering can be asserted. The
+// full-PIT view is kept for the phantom-box block below, where that overfull
+// card is exactly what creates the small residual worth testing.
+const CTY_VIEW = {
+  ...structuredClone(VIEW),
+  cards: {
+    ...structuredClone(VIEW.cards),
+    pit: { ...structuredClone(VIEW.cards.pit), lines: VIEW.cards.pit.lines.slice(0, 2) },
+  },
+};
+{
+  const ctyCtx = await browser.newContext({ viewport: CLIENT });
+  const ctyPage = await ctyCtx.newPage();
+  watchPage(ctyPage, failures, "contingencies");
+  await ctyPage.addInitScript((view) => {
+    window.pywebview = {
+      api: {
+        get_agents_view: async (since) => (since >= view.seq ? null : view),
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, CTY_VIEW);
+  await ctyPage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  // `attached`, never `visible`: a collapsed card is an empty `aria-hidden`
+  // section, and a build that wrongly collapses it must FAIL a named check
+  // rather than hang this waiter for ten seconds and kill the run.
+  await ctyPage.waitForSelector(".contingencies", { state: "attached", timeout: 10000 });
+  await ctyPage.waitForTimeout(400);
+
+  // --- it renders, and it is a real card at this client ---------------------
+  // Presence FIRST, named, and everything after it is gated on the answer.
+  // Playwright's `hover` and `innerText` WAIT, so a card that renders nothing
+  // becomes a 30-second timeout that kills the run before the failure above is
+  // ever printed - a crash reported as a mutation result rather than a finding.
+  const hasRows = (await ctyPage.locator(".cty-row").count()) > 0;
+  check(hasRows, "contingencies: the card renders its rows at all");
+  const shape = await ctyPage.evaluate(() => {
+    const card = document.querySelector(".contingencies");
+    const style = getComputedStyle(card);
+    return {
+      collapsed: card.classList.contains("is-collapsed"),
+      border: Math.round(parseFloat(style.borderTopWidth)),
+      rows: document.querySelectorAll(".cty-row").length,
+      count: document.querySelector(".cty-count")?.innerText ?? null,
+      switchTo: [...document.querySelectorAll(".cty-switch")].map((n) => n.innerText.trim()),
+    };
+  });
+  check(
+    !shape.collapsed && shape.border === 1,
+    `contingencies: a real bordered card at the wide client (${JSON.stringify(shape)})`,
+  );
+  check(
+    shape.rows === CTY_VIEW.contingencies.rows.length,
+    `contingencies: every branch on the wire is drawn (${shape.rows})`,
+  );
+  check(
+    shape.count === String(CTY_VIEW.contingencies.rows.length),
+    `contingencies: the header states the TOTAL, so a scrolled body still says how many (${shape.count})`,
+  );
+  // The label, not the enum. A row printing PIT_NOW would disagree with the
+  // badge two cards up about the same vocabulary.
+  check(
+    shape.switchTo[0] === "PIT NOW" && !shape.switchTo[0].includes("_"),
+    `contingencies: the action reads as the orchestrator's own label (${shape.switchTo[0]})`,
+  );
+
+  // --- the clamped copy is not the ONLY copy --------------------------------
+  // **`scrollHeight` cannot see this.** `-webkit-line-clamp` sizes the box to the
+  // clamped lines, so the scroll height equals the client height and a check on
+  // their difference reads 0 whether the text overflows or not. The honest
+  // measurement is the same text, same width, same font, WITHOUT the clamp.
+  const clamp = await ctyPage.evaluate(() => {
+    const el = document.querySelector(".cty-rationale");
+    if (!el) return { clamp: "NONE", clipped: -1 };
+    const style = getComputedStyle(el);
+    const probe = el.cloneNode(true);
+    probe.style.webkitLineClamp = "unset";
+    probe.style.display = "block";
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.width = `${el.clientWidth}px`;
+    el.parentElement.appendChild(probe);
+    const full = probe.getBoundingClientRect().height;
+    const shown = el.getBoundingClientRect().height;
+    probe.remove();
+    return { clamp: style.webkitLineClamp, clipped: Math.round(full - shown) };
+  });
+  check(clamp.clamp === "2", `contingencies: the rationale is clamped to two lines (${clamp.clamp})`);
+  check(
+    clamp.clipped > 0,
+    `contingencies: and the fixture's text actually EXCEEDS two lines, or the clamp asserts nothing (${clamp.clipped} px hidden)`,
+  );
+  if (hasRows) await ctyPage.locator(".cty-row").first().hover();
+  await ctyPage.waitForTimeout(250);
+  const popup = await ctyPage.evaluate(() => {
+    const tips = [...document.querySelectorAll(".agent-tooltip")];
+    return { n: tips.length, text: (tips[0]?.innerText ?? "").replace(/\s+/g, " ") };
+  });
+  check(popup.n === 1, `contingencies: hovering a row opens exactly one popup (${popup.n})`);
+  check(
+    popup.text.includes("the position is gone until the second stint"),
+    `contingencies: and it carries the WHOLE rationale, not the clamped half (${popup.text.slice(-60)})`,
+  );
+
+  // --- no empty tab stops ---------------------------------------------------
+  const stops = await ctyPage.evaluate(() =>
+    [...document.querySelectorAll(".cty-row")].map((r) => r.tabIndex),
+  );
+  check(
+    stops[0] === 0 && stops[1] === -1,
+    `contingencies: a row with nothing to expand is not a tab stop (${JSON.stringify(stops)})`,
+  );
+
+  // --- ⭐ the fit cannot move what it measures ------------------------------
+  // The card is `flex: 1 1 0`, so its contents are outside its own sizing
+  // calculation and its height is the column's residual. Hiding everything
+  // inside it must therefore change nothing. This is the property #1083 does
+  // NOT have: the BESTS panel's decision changes the height it re-measures.
+  const before = await ctyPage.evaluate(
+    () => document.querySelector(".contingencies").getBoundingClientRect().height,
+  );
+  await ctyPage.addStyleTag({ content: ".cty-body, .cty-title { display: none !important }" });
+  await ctyPage.waitForTimeout(250);
+  const after = await ctyPage.evaluate(
+    () => document.querySelector(".contingencies").getBoundingClientRect().height,
+  );
+  check(
+    Math.abs(before - after) < 0.5,
+    `contingencies: emptying the card does not change the height it measures itself by (${before} -> ${after})`,
+  );
+  await ctyCtx.close();
+}
+
+// --- the phantom box: the card exists iff there is room for it ---------------
+//
+// **Asserted as the RULE, not as a client size.** The first version of this
+// expected the laptop client to collapse, and it did with the shared fixture's
+// deliberately overfull 40-line PIT card - but with a SHORT pit the same laptop
+// has 106 px and correctly shows the card. The thing being tested is the room,
+// so the sweep varies both the client and the column's own weight, asserts the
+// implication at each point, and then asserts that it actually reached BOTH
+// outcomes. Without that last line a build that never rendered the card, or one
+// that always did, would pass whichever arm it happened to satisfy.
+//
+// It deliberately does not read `MIN_ROOM`: a copy of that constant here is the
+// twin this project produces most. The implication holds without knowing it.
+{
+  const shownAt = [];
+  for (const [w, h, view, label] of [
+    [1485, 913, CTY_VIEW, "1080p, short pit"],
+    [1311, 641, CTY_VIEW, "laptop, short pit"],
+    [1311, 641, VIEW, "laptop, the overfull pit the product really renders"],
+  ]) {
+    const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+    const page = await ctx.newPage();
+    watchPage(page, failures, `contingencies ${label}`);
+    await page.addInitScript((fixture) => {
+      window.pywebview = {
+        api: {
+          get_agents_view: async (since) => (since >= fixture.seq ? null : fixture),
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    }, view);
+    await page.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+      waitUntil: "domcontentloaded",
+    });
+    // `attached`, never the default `visible`: a collapsed card is deliberately
+    // an empty `aria-hidden` section, and Playwright is right to call that
+    // invisible. Waiting for visible would time out on the very behaviour this
+    // block exists to assert.
+    await page.waitForSelector(".contingencies", { state: "attached", timeout: 10000 });
+    await page.waitForTimeout(500);
+    const seen = await page.evaluate(() => {
+      const card = document.querySelector(".contingencies");
+      const style = getComputedStyle(card);
+      return {
+        room: Math.round(card.getBoundingClientRect().height),
+        rows: document.querySelectorAll(".cty-row").length,
+        border: Math.round(parseFloat(style.borderTopWidth)),
+        padding: Math.round(parseFloat(style.paddingTop)),
+      };
+    });
+    const drawn = seen.rows > 0;
+    shownAt.push(drawn);
+    check(
+      drawn ? seen.border === 1 : seen.border === 0 && seen.padding === 0,
+      `contingencies (${label}): a card with rows has its chrome, one without has NONE - ` +
+        `not a heading over a cut-off row (${JSON.stringify(seen)})`,
+    );
+  }
+  check(
+    shownAt.some(Boolean) && shownAt.some((drawn) => !drawn),
+    `contingencies: the sweep reached BOTH outcomes, so neither arm passed by never ` +
+      `running (${JSON.stringify(shownAt)})`,
+  );
 }
 
 await browser.close();

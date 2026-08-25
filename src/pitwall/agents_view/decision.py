@@ -216,6 +216,100 @@ def _why_detail(latest: dict[str, Any]) -> dict[str, Any] | None:
     return {"sections": sections, "footer": None}
 
 
+def _contingency_detail(row: dict[str, Any]) -> dict[str, Any] | None:
+    """One branch's whole text as a tooltip, or None when there is none to expand.
+
+    The row on the glass clamps the rationale to two lines; this is where the
+    rest of it lives. `None` when the row carries nothing beyond what is already
+    printed, which is also what keeps it out of the tab order rather than
+    offering a keyboard user an empty popup.
+    """
+    rows = [
+        {"lead": lead, "text": text}
+        for lead, text in (
+            ("When", row["trigger"]),
+            ("Then", row["switch_to"]),
+            ("Why", row["rationale"]),
+        )
+        if text and text != "--"
+    ]
+    if not rows:
+        return None
+    return {"sections": [{"title": "Contingency", "rows": rows}], "footer": None}
+
+
+def _risks_detail(latest: dict[str, Any]) -> dict[str, Any] | None:
+    """The orchestrator's risk bullets, as the CARD TITLE's popup.
+
+    They hang off the title rather than off the card, and that is not a
+    placement preference: a card-level target would nest with the per-row
+    targets inside it, so one hover would open two portaled popups at once.
+    The title is a sibling of the rows, so it cannot.
+    """
+    risks = [clean(risk) for risk in (latest.get("key_risks") or [])]
+    kept = [risk for risk in risks if risk]
+    if not kept:
+        return None
+    return {
+        "sections": [{"title": "Key risks", "rows": [{"lead": "", "text": risk} for risk in kept]}],
+        "footer": None,
+    }
+
+
+def build_contingencies(latest: dict[str, Any] | None) -> dict[str, Any]:
+    """The orchestrator's branch plans: what it does IF, rather than what it does.
+
+    `contingencies` and `key_risks` arrived with #1048's schema bump and rode the
+    wire unrendered ever since. They are the if-then logic a strategist keeps in
+    their head, and the band this card sits in stops at PLAN - what happens next -
+    without ever saying what happens instead.
+
+    **Data, never markup.** Every string here is LLM free text and every one of
+    them reaches the window as a React text node, so nothing is escaped: this is
+    `_why_detail`'s shape, and the reason `reasoning.py` gives for preferring it
+    is that an escaped `<` renders as the characters `&lt;` on the glass.
+    `clean` is length discipline, not a security control.
+
+    **The action label comes from `classify_action`; its COLOUR does not.** The
+    label has to be the orchestrator's own word, so `PIT_NOW` reads `PIT NOW`
+    here exactly as it does on the badge one card up. The colour must not follow
+    it: this branch is not happening, and dressing a hypothetical in the live
+    call's identity colours makes the card look like it is announcing a decision.
+    The enumeration above this file's constants lists who owns DANGER; nothing
+    here becomes the next one. `priority` is carried by the WORD for the same
+    reason.
+
+    **Two empties, two sentences.** No decision at all and a decision that
+    planned no branches are different facts, and the no-LLM profile makes the
+    second one routine rather than exceptional.
+    """
+    if not latest:
+        return {"rows": [], "risks": None, "empty": "— no call yet —"}
+
+    rows: list[dict[str, Any]] = []
+    for item in latest.get("contingencies") or []:
+        if not isinstance(item, dict):
+            continue
+        # No cap. The orchestrator already caps the list at four, and the card's
+        # body scrolls, so a fifth branch would be amputated here rather than
+        # merely pushed out of sight.
+        _, switch_label = classify_action(str(item.get("switch_to") or "--"))
+        row = {
+            "trigger": clean(item.get("trigger")),
+            "switch_to": switch_label,
+            "priority": str(item.get("priority") or "--").upper(),
+            "rationale": clean(item.get("rationale")),
+        }
+        row["detail"] = _contingency_detail(row)
+        rows.append(row)
+
+    return {
+        "rows": rows,
+        "risks": _risks_detail(latest),
+        "empty": None if rows else "no branch plans this lap",
+    }
+
+
 def build_orchestrator(
     latest: dict[str, Any] | None, history_tail: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
