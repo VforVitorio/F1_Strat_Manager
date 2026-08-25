@@ -77,6 +77,8 @@ interface OwnCarTracesProps {
    * disagree in the first place.
    */
   rivalColour: string;
+  /** The own car's team colour, resolved from the same map (#1070's twin). */
+  mainColour: string;
   /** The producer is gone; these buffers will not fill. */
   frozen?: boolean;
 }
@@ -86,6 +88,7 @@ export function OwnCarTraces({
   frame,
   rival,
   rivalColour,
+  mainColour,
   frozen = false,
 }: OwnCarTracesProps) {
   const { arcade } = tick;
@@ -122,7 +125,13 @@ export function OwnCarTraces({
 
   return (
     <section className="traces card">
-      <TracesHeader tick={tick} rival={rival} rivalColour={rivalColour} frame={frame} />
+      <TracesHeader
+          tick={tick}
+          rival={rival}
+          rivalColour={rivalColour}
+          mainColour={mainColour}
+          frame={frame}
+        />
       <TraceStack
         main={frame.main}
         rival={frame.rival}
@@ -148,12 +157,16 @@ function TracesHeader({
   tick,
   rival: rivalCode,
   rivalColour,
+  mainColour,
   frame,
 }: {
   tick: Tick;
   rival: string | null;
   /** The chip paints in the rival's own team colour; the border follows it. */
   rivalColour: string;
+  /** And the own car's, from the same map. Both chips take their colour from the
+   * wire, so neither can disagree with the tower about a car. */
+  mainColour: string;
   /** The buffers themselves: every note below is about what the DELTA lane has. */
   frame: TraceFrame;
 }) {
@@ -216,7 +229,9 @@ function TracesHeader({
           ? `  ·  NO TRACK IN COMMON WITH ${rivalCode} YET`
           : ""}
       </span>
-      <span className="driver-chip driver-chip-main">{arcade.driver_main || "—"}</span>
+      <span className="driver-chip driver-chip-main" style={{ color: mainColour }}>
+        {arcade.driver_main || "—"}
+      </span>
       {rivalCode ? (
         <>
           <span className="traces-vs">vs</span>

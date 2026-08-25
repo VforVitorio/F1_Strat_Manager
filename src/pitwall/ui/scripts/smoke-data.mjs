@@ -4814,12 +4814,14 @@ check(
     page.evaluate(() => {
       const chart = document.querySelector(".trace-stack-plot").__pitwallChart;
       const chip = document.querySelector(".driver-chip-rival");
+      const own = document.querySelector(".driver-chip-main");
       return {
         series: chart
           .getOption()
           .series.filter((s) => s.name.endsWith("-rival"))
           .map((s) => s.lineStyle?.color),
         chip: chip ? getComputedStyle(chip).color : null,
+        own: own ? getComputedStyle(own).color : null,
       };
     });
 
@@ -4857,6 +4859,29 @@ check(
   check(
     before.series[0] !== after.series[0] && before.chip !== after.chip,
     `and the colour actually changed across the pin (${before.series[0]} -> ${after.series[0]})`,
+  );
+
+  // **The OWN car's chip, and it can only be checked HERE.** #1070 fixed the
+  // rival chip and left this one carrying palette.INFO in the stylesheet, five
+  // lines above its own explanatory comment, on a window whose tower, ring and
+  // race trace all paint that same car in its team colour.
+  //
+  // Before the pin the fixture cannot express the defect: the producer's rival
+  // is the TEAM-MATE, so main and rival are both papaya at an RGB distance of
+  // 0.0 and a chip reading either car's colour looks right. After pinning VER
+  // the two differ, so this is the reading that fails against a main chip which
+  // is a constant, and against one that resolves the wrong car.
+  check(
+    before.own === rgbOf("NOR"),
+    `the own chip is the main driver's own team colour (${before.own})`,
+  );
+  check(
+    after.own === rgbOf("NOR"),
+    `and it stays the MAIN car's colour when the rival changes (${after.own})`,
+  );
+  check(
+    after.own !== after.chip,
+    `so the two chips disagree once the cars do (own ${after.own} vs rival ${after.chip})`,
   );
   await ctx.close();
 }

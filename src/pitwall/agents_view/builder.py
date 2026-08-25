@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from src.pitwall.agents_view.charts import build_pace_series, build_tire_series
+from src.pitwall.agents_view.charts import build_pace_series, build_tire_series, own_car_colour
 from src.pitwall.agents_view.decision import build_orchestrator, build_scenarios
 from src.pitwall.agents_view.history import LapHistory
 from src.pitwall.agents_view.panels import build_cards, build_header, build_status_bar
@@ -76,7 +76,12 @@ class AgentsViewBuilder:
             (latest.get("per_agent") or {}).get("tire") if latest else None,
         )
         charts = {
-            "pace": build_pace_series(self._history.pace, tire["x_range"], current_lap),
+            "pace": build_pace_series(
+                self._history.pace,
+                tire["x_range"],
+                current_lap,
+                own_car_colour(payload.get("arcade") or {}),
+            ),
             "tire": tire,
         }
 

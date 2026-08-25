@@ -35,7 +35,42 @@ SANE_LAP_TIME_S: tuple[float, float] = (30.0, 200.0)
 # thousands of laps.
 CLIFF_MAX_SANE_LAPS: float = 100.0
 
+# The own car's actual lap time, when the wire has not said which car it is.
+#
+# **A DEGRADE, not the colour.** The car's own team colour is what identifies it,
+# and `driver_colors` carries it on every tick; this is what the chart draws
+# before the first tick lands and for a driver the colour map has no entry for.
+# It is also the boot view's value, so there is one no-wire colour rather than
+# two.
+#
+# INFO is kept as that value rather than a neutral grey because it has to be a
+# sentinel a reader cannot mistake for a real answer: it sits an RGB distance of
+# 70.8 from the nearest team colour on the wire, which is Williams blue, and that
+# is the largest separation any candidate gets. The tower's border grey would sit
+# 37.4 from Haas, inside look-alike range.
 ACTUAL_COLOUR = hex_str(INFO)
+
+
+def own_car_colour(arcade: dict[str, Any]) -> str:
+    """The main driver's team colour from one tick, or the no-wire degrade.
+
+    Both halves come from the same block, so a tick that names a driver it has
+    no colour for degrades rather than raising, and a tick with neither reads
+    as "not known yet" instead of as a car.
+
+    The colour is a TEAM colour, so it is shared by exactly two drivers and
+    cannot identify one of them on its own. That is fine here and it is why the
+    lookup lives on this chart alone: the pace card draws ONE car, named in the
+    window header, so the colour agrees with the tower rather than identifying
+    anything by itself.
+    """
+    colours = arcade.get("driver_colors") or {}
+    rgb = colours.get(arcade.get("driver_main") or "")
+    if not isinstance(rgb, (list, tuple)) or len(rgb) != 3:
+        return ACTUAL_COLOUR
+    return hex_str((int(rgb[0]), int(rgb[1]), int(rgb[2])))
+
+
 PRED_COLOUR = hex_str(ACCENT)
 BAND_COLOUR = hex_str(ACCENT)
 TREND_COLOUR = hex_str(TEXT_PRIMARY)
@@ -88,6 +123,7 @@ def build_pace_series(
     history: dict[int, dict[str, Any]],
     x_range: list[float] | None = None,
     current_lap: int | None = None,
+    actual_colour: str = ACTUAL_COLOUR,
 ) -> dict[str, Any]:
     """Actual, predicted and the P10-P90 band, each skipping what it lacks.
 
@@ -95,6 +131,23 @@ def build_pace_series(
     the window connected carry only an actual, and the predicted line has
     to start where the per-agent payload first arrived rather than draw a
     line through zero.
+
+    Args:
+        actual_colour: the OWN car's team colour, resolved by the caller from
+            `driver_colors[driver_main]`. A parameter rather than the module
+            constant it defaults to, because this series is the one mark on
+            this window that identifies a CAR: everything else here is the
+            model's identity (the prediction and its band) or the tyre's (the
+            stints and the plan strip), and none of those belong to a driver.
+
+            The tower, the track ring and the race trace already take the
+            colour from the wire. This chart did not, so one window rendered
+            the same car in two colours at once.
+
+    --- WHERE TO CHANGE IF THE OWN-CAR COLOUR MOVES ---
+    `AgentsViewBuilder` resolves it; `src/arcade/app.py` puts `driver_colors`
+    and `driver_main` on the wire; the DATA window's own chip resolves the same
+    pair client-side through `driverColour`.
     """
     actual: list[list[float]] = []
     pred: list[list[float]] = []
@@ -117,7 +170,7 @@ def build_pace_series(
         "actual": actual,
         "pred": pred,
         "band": band,
-        "actual_colour": ACTUAL_COLOUR,
+        "actual_colour": actual_colour,
         "pred_colour": PRED_COLOUR,
         "band_colour": BAND_COLOUR,
         # The SAME lap axis the tyre chart draws, and the same current-lap

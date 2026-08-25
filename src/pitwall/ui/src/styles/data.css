@@ -696,11 +696,15 @@ td.col-drv {
   padding: 2px 8px;
 }
 
-/* palette.INFO, the own car's chip colour `TelemetryPanel` constructs with.
- * Guarded by `test_pitwall_tokens.py`. */
-.driver-chip-main {
-  color: #3b82f6;
-}
+/* **The main chip has no colour here either, for the same reason as the rival's
+ * below.** It carried palette.INFO, the blue `TelemetryPanel` builds its own-car
+ * pen from, on a window whose tower, ring and race trace all paint that same car
+ * in its team colour - so one window rendered NOR blue in one corner and papaya
+ * in three others. A stylesheet cannot know which car is main any more than it
+ * can know which is pinned; `DataWindow` resolves both from `driver_colors` and
+ * passes them down.
+ *
+ * #1070 fixed the rival and left this one, five lines above its own comment. */
 
 /* **The rival chip has no colour here, and that is the fix for #1070.** It used
  * to carry palette.WARNING beside the rule above, matching the fixed amber the
