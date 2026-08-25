@@ -282,18 +282,7 @@ const VIEW = {
         detail: null,
       },
     ],
-    risks: {
-      sections: [
-        {
-          title: "Key risks",
-          rows: [
-            { lead: "", text: "rejoin into traffic" },
-            { lead: "", text: "the cliff arrives before the stop" },
-          ],
-        },
-      ],
-      footer: null,
-    },
+    risks: ["rejoin into traffic", "the cliff arrives before the stop"],
     empty: null,
   },
   plan_timeline: {
@@ -1474,6 +1463,33 @@ const CTY_VIEW = {
     `contingencies: and it carries the WHOLE rationale, not the clamped half (${popup.text.slice(-60)})`,
   );
 
+  // --- the risks are IN THE BODY, not behind a hover ------------------------
+  // They started as the title's tooltip, which made them content nobody would
+  // find. Asserted against the wire's own list, never against a count: a block
+  // that rendered the right NUMBER of wrong lines would pass a count.
+  const risks = await ctyPage.locator(".cty-risk").allInnerTexts();
+  check(
+    JSON.stringify(risks) === JSON.stringify(CTY_VIEW.contingencies.risks),
+    `contingencies: every risk on the wire is a line in the body (${JSON.stringify(risks)})`,
+  );
+  check(
+    await ctyPage.evaluate(() => {
+      const block = document.querySelector(".cty-risks");
+      return Boolean(block) && Boolean(block.closest(".cty-body"));
+    }),
+    "contingencies: and the block sits in the scrolling body beside the branches",
+  );
+  // The title stopped being a tooltip target when they moved, so it must have
+  // stopped being a tab stop too - an empty stop is the defect the row check
+  // below guards on the other side.
+  const titleTab = hasRows
+    ? await ctyPage.locator(".cty-title").getAttribute("tabindex")
+    : null;
+  check(
+    titleTab === null,
+    `contingencies: the title is not a tab stop now that it expands nothing (${titleTab})`,
+  );
+
   // --- no empty tab stops ---------------------------------------------------
   const stops = await ctyPage.evaluate(() =>
     [...document.querySelectorAll(".cty-row")].map((r) => r.tabIndex),
@@ -1567,6 +1583,7 @@ const CTY_VIEW = {
       `running (${JSON.stringify(shownAt)})`,
   );
 }
+
 
 await browser.close();
 server.close();

@@ -183,7 +183,7 @@ const IDLE_VIEW: AgentsView = {
   // Before the first tick there is no call, so the card's own "no call yet"
   // sentence is the honest one - not "no branch plans", which asserts that a
   // decision was made and planned none.
-  contingencies: { rows: [], risks: null, empty: "— no call yet —" },
+  contingencies: { rows: [], risks: [], empty: "— no call yet —" },
   history: { pace: [], tire: [] },
   // Replaced by `waitingStatus(connection)` while `view` is null: the idle
   // view cannot know whether the socket is up, and this window has no other

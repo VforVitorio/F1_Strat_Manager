@@ -202,7 +202,14 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
             # The routing layer emits agent IDs, not block names
             # (`_decide_agents_to_call` in strategy_orchestrator.py), and the
             # cards gate on exactly these two tokens.
-            active=["N28", "N30"],
+            #
+            # **It VARIES per lap, and a constant here would misrepresent the
+            # real producer.** N30 is consulted every lap; N28 only routes when
+            # a stop is live, which is what the routing strip exists to show. A
+            # fixture that sent both on every lap would render a solid block and
+            # nothing on that strip could be judged by eye - the same drift a
+            # dev fixture caused in #853.
+            active=["N30"] + (["N28"] if lap % 3 else []),
         ),
         memory_block=(
             f"lap {lap - 1}: {fixture_call(lap - 1)[0]} "
@@ -256,9 +263,27 @@ view = SimpleNamespace(
 )
 view._build_arcade_snapshot = partial(F1ArcadeView._build_arcade_snapshot, view)
 
+# How long a lap lasts here, in wall-clock seconds at this playback speed.
+#
+# **The decision LAP advances, and it did not use to.** `state.latest` was
+# pinned to lap 23 for the whole run while only the frame index moved, so every
+# lap-keyed accumulator in the AGENTS window saw exactly one lap forever: the
+# routing strip rendered a single column and nothing about it could be judged by
+# eye. The real producer advances, so a fixture that does not is the drift #853
+# is about.
+#
+# Forty-five seconds is one Melbourne lap at the 2x playback above, which keeps
+# the fixture's own clock and its decisions telling the same story.
+LAP_SECONDS = 45.0
+
 print(f"producing {SECONDS:.0f}s with a POPULATED strategy block", flush=True)
-deadline = time.perf_counter() + SECONDS
+started = time.perf_counter()
+deadline = started + SECONDS
 while time.perf_counter() < deadline:
+    lap = min(23 + int((time.perf_counter() - started) / LAP_SECONDS), state.start.lap_end)
+    if lap != state.latest.lap_number:
+        state.history.append(state.latest)
+        state.latest = decision(lap, *fixture_call(lap))
     view._frame_index += (1.0 / ON_UPDATE_HZ) * FPS * view.playback_speed
     F1ArcadeView._broadcast_if_due(view)
     time.sleep(1.0 / ON_UPDATE_HZ)

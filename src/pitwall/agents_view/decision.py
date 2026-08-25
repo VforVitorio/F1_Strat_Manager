@@ -238,22 +238,16 @@ def _contingency_detail(row: dict[str, Any]) -> dict[str, Any] | None:
     return {"sections": [{"title": "Contingency", "rows": rows}], "footer": None}
 
 
-def _risks_detail(latest: dict[str, Any]) -> dict[str, Any] | None:
-    """The orchestrator's risk bullets, as the CARD TITLE's popup.
+def _risks(latest: dict[str, Any]) -> list[str]:
+    """The orchestrator's risk bullets, for the card BODY.
 
-    They hang off the title rather than off the card, and that is not a
-    placement preference: a card-level target would nest with the per-row
-    targets inside it, so one hover would open two portaled popups at once.
-    The title is a sibling of the rows, so it cannot.
+    In the body beside the branches rather than behind a hover on the title,
+    which is where these started. Hidden there they were content nobody would
+    go looking for, and on the fixture that ships - one branch - the card had a
+    void under it. Two blocks of real text read better than one block and a
+    tooltip.
     """
-    risks = [clean(risk) for risk in (latest.get("key_risks") or [])]
-    kept = [risk for risk in risks if risk]
-    if not kept:
-        return None
-    return {
-        "sections": [{"title": "Key risks", "rows": [{"lead": "", "text": risk} for risk in kept]}],
-        "footer": None,
-    }
+    return [risk for risk in (clean(item) for item in (latest.get("key_risks") or [])) if risk]
 
 
 def build_contingencies(latest: dict[str, Any] | None) -> dict[str, Any]:
@@ -284,7 +278,7 @@ def build_contingencies(latest: dict[str, Any] | None) -> dict[str, Any]:
     second one routine rather than exceptional.
     """
     if not latest:
-        return {"rows": [], "risks": None, "empty": "— no call yet —"}
+        return {"rows": [], "risks": [], "empty": "— no call yet —"}
 
     rows: list[dict[str, Any]] = []
     for item in latest.get("contingencies") or []:
@@ -305,7 +299,7 @@ def build_contingencies(latest: dict[str, Any] | None) -> dict[str, Any]:
 
     return {
         "rows": rows,
-        "risks": _risks_detail(latest),
+        "risks": _risks(latest),
         "empty": None if rows else "no branch plans this lap",
     }
 

@@ -42,8 +42,6 @@ import { Tooltip, useTooltipTarget } from "./Tooltip";
  */
 const MIN_ROOM = 86;
 
-const TOOLTIP_ID = "tip-contingencies";
-
 /**
  * How much room the column left this card, and whether that is enough.
  *
@@ -86,7 +84,6 @@ export function ContingenciesCard({ view }: { view: ContingenciesView }) {
   const [body, setBody] = useState<HTMLElement | null>(null);
   const room = useRoom(host);
   const { edges, measure } = useScrollEdges(body);
-  const { anchor, props, hold } = useTooltipTarget(TOOLTIP_ID, view.risks !== null);
 
   // Below the floor the element stays in the flow, holding the residual, and
   // drops everything that makes it look like a panel. Window background reads
@@ -101,13 +98,10 @@ export function ContingenciesCard({ view }: { view: ContingenciesView }) {
     >
       {shown ? (
         <>
-          <h2 className={`cty-title${view.risks ? " has-detail" : ""}`} {...props}>
+          <h2 className="cty-title">
             CONTINGENCIES
             {view.rows.length ? <span className="cty-count">{view.rows.length}</span> : null}
           </h2>
-          {view.risks && anchor ? (
-            <Tooltip view={view.risks} anchor={anchor} id={TOOLTIP_ID} hold={hold} />
-          ) : null}
           <div
             ref={setBody}
             className={`cty-body${edges.above ? " has-above" : ""}${
@@ -125,6 +119,19 @@ export function ContingenciesCard({ view }: { view: ContingenciesView }) {
                 <ContingencyRowView key={`${row.trigger}-${index}`} row={row} index={index} />
               ))
             )}
+            {/* Beside the branches, not behind a hover on the title. A risk the
+                orchestrator flagged is content, and content a reader has to go
+                hunting for may as well not be on the wire. */}
+            {view.risks.length ? (
+              <section className="cty-risks">
+                <h3 className="cty-risks-title">RISKS</h3>
+                {view.risks.map((risk) => (
+                  <p key={risk} className="cty-risk">
+                    {risk}
+                  </p>
+                ))}
+              </section>
+            ) : null}
           </div>
         </>
       ) : null}

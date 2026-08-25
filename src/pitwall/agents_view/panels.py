@@ -41,6 +41,7 @@ from src.pitwall.agent_formatters import (
     rag_tooltip,
     with_model_detail,
 )
+from src.pitwall.agents_view.routing import ROUTING_LANES
 
 # The three socket states and their colours, for BOTH windows.
 #
@@ -174,7 +175,11 @@ def build_cards(latest: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     # `rag` is the structured payload; `regulation_context` stays as a
     # legacy fallback for producers that have not been updated.
     rag_block = per.get("rag") or per.get("regulation_context")
-    rag_active = "N30" in active
+    # The ids come from the router's own roster, not from literals here. A
+    # second place that knows "N28 means pit" is the twin this repository
+    # produces most, and the strip below the contingencies reads the same table.
+    pit_id, rag_id = (agent_id for agent_id, _ in ROUTING_LANES)
+    rag_active = rag_id in active
 
     # **Every card carries its model detail now, and four of them had no
     # tooltip at all.** The band's WHY module replaces the reasoning tabs, and
@@ -197,7 +202,7 @@ def build_cards(latest: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
             with_model_detail(None, "situation", per.get("situation")),
         ),
         "pit": _card(
-            format_pit(per.get("pit"), active="N28" in active),
+            format_pit(per.get("pit"), active=pit_id in active),
             with_model_detail(None, "pit", per.get("pit")),
         ),
         "radio": _card(

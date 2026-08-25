@@ -263,10 +263,13 @@ export interface ContingencyRow {
 export interface ContingenciesView {
   rows: ContingencyRow[];
   /**
-   * The orchestrator's risk bullets, as the card TITLE's popup. `null` when it
-   * flagged none, so a title that cannot be expanded does not look as if it can.
+   * The orchestrator's risk bullets, rendered in the BODY beside the branches.
+   *
+   * Empty when it flagged none, and the card then shows no risks block at all
+   * rather than an empty heading. They began behind a hover on the title, which
+   * made them content nobody would find.
    */
-  risks: TooltipView | null;
+  risks: string[];
   /**
    * What to print instead of rows, and `null` when there ARE rows so a renderer
    * cannot show both. The two sentences differ on purpose: no call has been made

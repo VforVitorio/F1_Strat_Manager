@@ -766,7 +766,6 @@
  * `:focus-visible` rather than `:focus`, so a mouse click does not paint one. */
 .why-panel:focus-visible,
 .agent-card:focus-visible,
-.cty-title:focus-visible,
 .cty-row:focus-visible,
 .cty-body:focus-visible {
   outline: 2px solid var(--qt-accent);
@@ -937,8 +936,7 @@
  * Background only. This card sits in a flex column under PIT, so anything that
  * changes its box moves a neighbour - the same reason the consoles' own hover is
  * a border and not a size. */
-.cty-row.has-detail,
-.cty-title.has-detail {
+.cty-row.has-detail {
   cursor: help;
 }
 
@@ -994,4 +992,29 @@
   margin: auto 0;
   color: var(--qt-fg-3);
   font-size: 11px;
+}
+
+/* The risks, in the body under the branches. A heading and dim lines, so the
+ * block reads as a second kind of content rather than as more branches. */
+.cty-risks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--qt-border);
+}
+
+.cty-risks-title {
+  margin: 0 0 2px;
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.cty-risk {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-size: 10px;
+  line-height: 1.35;
 }

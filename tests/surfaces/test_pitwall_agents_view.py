@@ -2105,7 +2105,10 @@ def test_a_contingency_reaches_the_window_with_the_orchestrators_own_action_labe
     # Producer order, not sorted: the orchestrator owns the ordering signal.
     assert [row["priority"] for row in rows] == ["HIGH", "MEDIUM"]
     assert view["contingencies"]["empty"] is None, "rows and an empty sentence cannot coexist"
-    assert view["contingencies"]["risks"] is not None
+    assert view["contingencies"]["risks"] == [
+        "rejoin into traffic",
+        "the cliff arrives before the stop",
+    ], "the risks reach the body as plain lines, not as a popup"
 
 
 def test_a_contingency_reaches_the_window_as_text_and_never_as_markup():
@@ -2164,4 +2167,77 @@ def test_two_kinds_of_empty_are_two_different_sentences():
     assert no_call["empty"] != planned_none["empty"], (
         f"one sentence for two facts: {no_call['empty']!r}"
     )
-    assert planned_none["risks"] is None, "no risks means no popup on a title that looks live"
+    assert planned_none["risks"] == [], "no risks means no block, not an empty heading"
+
+
+def test_every_rolling_per_lap_store_is_trimmed():
+    """The trim iterates a hardcoded tuple, so a new store is silently unbounded.
+
+    Introspected rather than listed, so the NEXT store cannot be forgotten
+    either. `_compound_by_lap` is the one named exception and it is exempt for a
+    reason the class docstring gives: the PLAN lane draws the whole race, so a
+    lap-1 stint must still be describable on lap 57.
+    """
+    from src.pitwall.agents_view.history import KEEP_LAPS, LapHistory
+
+    history = LapHistory()
+    for lap in range(1, KEEP_LAPS + 11):
+        history.ingest_latest(
+            {
+                "lap_number": lap,
+                "lap_time_s": 81.0,
+                "compound": "MEDIUM",
+            }
+        )
+
+    rolling = {
+        name: store
+        for name, store in vars(history).items()
+        if isinstance(store, dict) and store and all(isinstance(key, int) for key in store)
+    }
+    assert len(rolling) >= 3, f"the introspection found no stores to check: {list(rolling)}"
+    for name, store in rolling.items():
+        if name == "_compound_by_lap":
+            assert len(store) > KEEP_LAPS, "the compound map is deliberately unbounded"
+            continue
+        assert len(store) == KEEP_LAPS, (
+            f"{name} is a rolling store and is not being trimmed: {len(store)} laps"
+        )
+
+
+def test_the_routing_roster_is_the_routers_own_conditional_agents():
+    """`ROUTING_LANES` and the router's `activate.add(...)` must be one list.
+
+    `build_cards` gates the PIT and RAG cards on these ids and used to carry its
+    own copies of the strings. Parsed with `ast` rather than imported: importing
+    the orchestrator pulls the whole LLM stack, which is why the wire-contract
+    tests next door use the same technique. A router that learns a third
+    conditional agent must not leave a card permanently idle.
+    """
+    import ast
+
+    source = (
+        Path(__file__).resolve().parents[2] / "src/agents/strategy_orchestrator.py"
+    ).read_text("utf-8")
+    tree = ast.parse(source)
+    router = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_decide_agents_to_call"
+    )
+    added = {
+        call.args[0].value
+        for call in ast.walk(router)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "add"
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+    }
+    assert added, "the ast walk found no `activate.add(...)`; the router moved"
+
+    from src.pitwall.agents_view.routing import ROUTING_LANES
+
+    assert {agent_id for agent_id, _ in ROUTING_LANES} == added, (
+        f"the roster and the router disagree: {ROUTING_LANES} vs {sorted(added)}"
+    )
