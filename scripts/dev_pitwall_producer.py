@@ -83,15 +83,50 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
         # fixture that omits a field the real producer sends is the drift #853
         # was about: the window gets developed against a payload thinner than
         # the one it will receive.
+        # **FOUR branches and FIVE risks, which is what a real lap emits.**
+        # Measured on an LLM run of Melbourne laps 20-22: every lap came back
+        # with the orchestrator's maximum of both (`max_length=4` and five
+        # bullets). This carried ONE branch and two risks, so the card was
+        # developed against a payload a quarter the size of the one it receives,
+        # and the empty space under it read as a design problem rather than as a
+        # thin fixture.
+        #
+        # The rationales are about a hundred characters because the
+        # orchestrator's own prompt asks for that ("kept short, ideally under
+        # 100 chars, so the UI can render a full contingency list").
         contingencies=[
+            {
+                "trigger": "if a Safety Car is confirmed before lap 30",
+                "switch_to": "PIT_NOW",
+                "priority": "HIGH",
+                "rationale": "the neutralised pit loss is 11 s cheaper and the stop is due inside three laps",
+            },
             {
                 "trigger": "if RUS pits within two laps",
                 "switch_to": "PIT_NOW",
                 "priority": "HIGH",
-                "rationale": "the undercut window shuts once he clears traffic",
-            }
+                "rationale": "the undercut window shuts once he clears traffic and the gap is inside the pit loss",
+            },
+            {
+                "trigger": "if the front-left graining does not clear by lap 26",
+                "switch_to": "PIT_NOW",
+                "priority": "MEDIUM",
+                "rationale": "N26 puts the cliff at lap 28 P50 and the degradation slope has doubled since lap 18",
+            },
+            {
+                "trigger": "if rain reaches the circuit before the stop",
+                "switch_to": "STAY_OUT",
+                "priority": "LOW",
+                "rationale": "a dry stop into a wet track wastes the set, and the intermediates window opens later",
+            },
         ],
-        key_risks=["rejoin into traffic", "the cliff arrives before the stop"],
+        key_risks=[
+            "SC probability is elevated and a stop under green loses eleven seconds more",
+            "rejoin into traffic behind the two-stoppers",
+            "the cliff arrives before the stop if the graining does not clear",
+            "the undercut from RUS lands first if he pits on the next lap",
+            "no second set of this compound left for a late neutralisation",
+        ],
         # `None`, not the STRING "none". A non-empty string is truthy, so the
         # window rendered `⚠ Guardrail: none` in the alarm colour on every lap
         # of every dev run - a red warning whose content is that there is

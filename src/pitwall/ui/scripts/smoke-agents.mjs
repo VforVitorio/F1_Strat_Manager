@@ -236,7 +236,13 @@ const VIEW = {
       cursor_colour: "#9ca3af",
     },
   },
-  // Two branches, and they are not interchangeable. The first's `switch_to`
+  // FOUR branches and FIVE risks, which is what a real LLM lap returns:
+  // measured on Melbourne 20-22, every lap came back with the orchestrator's
+  // maximum of both. A thinner fixture develops the card against a payload a
+  // quarter the size of the one it receives, and its empty space then reads as
+  // a design problem rather than as a thin stub.
+  //
+  // They are not interchangeable. The first's `switch_to`
   // differs from its label so the label assertion can fail; the second carries
   // NO rationale, which is the row whose `detail` is null - the fixture that
   // makes "an unexpandable row is not a tab stop" able to fail. The first's
@@ -281,8 +287,44 @@ const VIEW = {
         rationale: "",
         detail: null,
       },
+      {
+        trigger: "if the front-left graining does not clear by L26",
+        switch_to: "PIT NOW",
+        priority: "MEDIUM",
+        rationale: "the cliff P50 sits at L28 and the degradation slope has doubled since L18",
+        detail: {
+          sections: [
+            {
+              title: "Contingency",
+              rows: [{ lead: "When", text: "if the front-left graining does not clear by L26" }],
+            },
+          ],
+          footer: null,
+        },
+      },
+      {
+        trigger: "if rain reaches the circuit before the stop",
+        switch_to: "STAY OUT",
+        priority: "LOW",
+        rationale: "a dry stop into a wet track wastes the set and the inters window opens later",
+        detail: {
+          sections: [
+            {
+              title: "Contingency",
+              rows: [{ lead: "When", text: "if rain reaches the circuit before the stop" }],
+            },
+          ],
+          footer: null,
+        },
+      },
     ],
-    risks: ["rejoin into traffic", "the cliff arrives before the stop"],
+    risks: [
+      "SC probability is elevated and a green stop loses eleven seconds more",
+      "rejoin into traffic behind the two-stoppers",
+      "the cliff arrives before the stop if the graining does not clear",
+      "the undercut from RUS lands first if he pits next lap",
+      "no second set of this compound left for a late neutralisation",
+    ],
     empty: null,
   },
   plan_timeline: {
@@ -1498,6 +1540,44 @@ const CTY_VIEW = {
     stops[0] === 0 && stops[1] === -1,
     `contingencies: a row with nothing to expand is not a tab stop (${JSON.stringify(stops)})`,
   );
+
+  // --- what is below the fold SAYS so --------------------------------------
+  // A real lap returns more branches and risks than the reference client's 214
+  // px can hold, so the body scrolls - that is the shipped answer rather than a
+  // shortfall. What makes it acceptable is the affordance: this window hides
+  // every scrollbar, so without the fade the hidden half is simply lost, which
+  // is the defect #1077 fixed on the consoles one card over.
+  const fold = await ctyPage.evaluate(() => {
+    const body = document.querySelector(".cty-body");
+    if (!body) return null;
+    return {
+      hidden: Math.round(body.scrollHeight - body.clientHeight),
+      below: body.classList.contains("has-below"),
+      above: body.classList.contains("has-above"),
+    };
+  });
+  check(
+    fold !== null && fold.hidden > 0,
+    `contingencies: the fixture actually OVERFLOWS, or the affordance below asserts ` +
+      `nothing (${JSON.stringify(fold)})`,
+  );
+  check(
+    fold !== null && fold.below && !fold.above,
+    `contingencies: and the bottom fade says there is more, with no top fade at ` +
+      `the start of the list (${JSON.stringify(fold)})`,
+  );
+  if (fold && fold.hidden > 0) {
+    await ctyPage.locator(".cty-body").evaluate((node) => node.scrollTo(0, node.scrollHeight));
+    await ctyPage.waitForTimeout(250);
+    const bottom = await ctyPage.evaluate(() => {
+      const body = document.querySelector(".cty-body");
+      return { below: body.classList.contains("has-below"), above: body.classList.contains("has-above") };
+    });
+    check(
+      bottom.above && !bottom.below,
+      `contingencies: scrolled to the end, the fade flips to the top (${JSON.stringify(bottom)})`,
+    );
+  }
 
   // --- ⭐ the fit cannot move what it measures ------------------------------
   // The card is `flex: 1 1 0`, so its contents are outside its own sizing
