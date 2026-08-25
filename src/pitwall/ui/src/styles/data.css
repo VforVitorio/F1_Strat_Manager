@@ -1475,7 +1475,27 @@ td.col-drv {
    * fallback in the two declarations below - a token nothing ever set, so the
    * fallback always applied and the literal was written TWICE, one more copy
    * than the tower's single `height: 20px`, under a comment claiming the
-   * opposite. */
+   * opposite.
+   *
+   * **Twelve is a DECISION, kept deliberately, and no source supports it as a
+   * row height.** Material specifies 52, enterprise "condensed" 40, and trading
+   * terminals, whose users explicitly want maximum density, stop at 32 to 36;
+   * 12 px appears in the literature only as a minimum FONT size. What buys it
+   * is the whole-race fit, 57 rows without scrolling, and the responsive audit
+   * priced exactly who gets that: only a client 900 px tall or more, which is
+   * the 1920x1080 screen class alone. Every laptop the product opens on already
+   * scrolls this grid, with the wheel and the edge fade shipped for it.
+   *
+   * It is knife-edge even there. At a 913 px client the scroller leaves room
+   * for 13.0 px rows and at 900 for 12.8, so 12 is the only integer that serves
+   * both, and the 1707x960 reference machine already misses the fit by 22 px.
+   *
+   * Raising it would make every client more legible and cost the desktop the
+   * one place the race is visible at a glance. That trade was put to Víctor on
+   * 2026-08-24 and he kept the fit. Recorded so the next reader finds a
+   * decision rather than an unjustified constant, and so that changing it is a
+   * deliberate reversal rather than a tidy-up. It must NOT be allowed to veto
+   * responsive work on the clients where the fit does not exist. */
   --pace-row-h: 12px;
 }
 
