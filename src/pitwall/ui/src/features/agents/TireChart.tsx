@@ -18,6 +18,8 @@ import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { TireSeries } from "../../lib/agents";
 import { useEChart } from "../../lib/chart";
+import { useChartHover } from "../../lib/chartHover";
+import { ChartReadout, at } from "./ChartReadout";
 import { CHART_BASE, lapAxis, secondsAxis } from "./useEChart";
 
 export function TireChart({ series }: { series: TireSeries }) {
@@ -104,5 +106,57 @@ export function TireChart({ series }: { series: TireSeries }) {
     };
   }, [series]);
 
-  return <div className="chart" ref={useEChart(option)} />;
+  const [ref, instance] = useEChart(option);
+  const [hover, hoverProps] = useChartHover(instance, series.x_range);
+  const lap = hover === null ? null : Math.round(hover.dataX);
+  const cliff = series.cliff;
+
+  return (
+    <div className="chart-hover">
+      <div className="chart" ref={ref} {...hoverProps} />
+      {hover !== null && lap !== null ? (
+        <>
+          <div className="chart-hover-cursor" style={{ left: hover.pixelX }} />
+          <ChartReadout
+            hover={hover}
+            lap={lap}
+            rows={[
+              // The observed value comes from whichever STINT covers this lap.
+              // One series per stint is the chart's own shape - the break IS the
+              // compound change - so the lookup asks every stint and takes the
+              // one that has the lap, rather than assuming a single line.
+              {
+                label: "observed",
+                value: stintValue(series.stints, lap),
+                colour: series.stints.find((s) => at(s.points, lap) !== null)?.colour ?? "",
+              },
+              { label: "trend", value: at(series.trend, lap), colour: series.trend_colour },
+              {
+                label: "cliff",
+                // The band is a lap RANGE, not a value at this lap, so it prints
+                // whole and identically wherever the pointer is. Suppressed with
+                // its own bounds, which the host already nulls outside the sane
+                // horizon because the TCN emits tens of thousands of laps early
+                // in a stint.
+                value:
+                  cliff && cliff.lo !== null && cliff.hi !== null
+                    ? `L${Math.round(cliff.lo)}-${Math.round(cliff.hi)}`
+                    : null,
+                colour: series.cliff_colour,
+              },
+            ]}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** The lap's observed time from whichever stint covers it. Null between stints. */
+function stintValue(stints: TireSeries["stints"], lap: number): string | null {
+  for (const stint of stints) {
+    const found = at(stint.points, lap);
+    if (found !== null) return found;
+  }
+  return null;
 }

@@ -778,10 +778,59 @@
  * column now: the two chart consoles stretch to their grid row (`agents.css`'s
  * `.agents-grid > .slot-pace`) and the chart fills what the headline and body
  * do not take. */
+/* The wrapper is the positioning context for the hover readout (#999); the
+ * chart fills it. Absolute, never fixed: the agents body takes a `filter` when
+ * the feed freezes, and a filter becomes the containing block for fixed
+ * descendants, so a fixed box would jump the moment the feed stopped. */
+.chart-hover {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 140px;
+}
 .chart {
   width: 100%;
   height: 100%;
   min-height: 140px;
+}
+.chart-hover-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--qt-fg-1);
+  pointer-events: none;
+}
+/* Small on purpose: these two cards plot three or four quantities at a lap, not
+ * twenty, so the box is a lap and a short list. The field's whole list is the
+ * race trace's shape and lives with that panel. */
+.chart-readout {
+  position: absolute;
+  top: 6px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  background: var(--qt-elevated);
+  border: 1px solid var(--qt-border);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.chart-readout-lap {
+  margin-bottom: 3px;
+  color: var(--qt-fg-1);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.chart-readout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.chart-readout-value {
+  color: var(--qt-fg-2);
 }
 
 /* Opting the tooltip back INTO a scrollbar, against `qt-base.css`'s blanket

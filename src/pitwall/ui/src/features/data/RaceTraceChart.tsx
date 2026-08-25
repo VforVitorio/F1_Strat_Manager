@@ -40,10 +40,11 @@ import { useMemo, useState } from "react";
 import type { EChartsOption } from "echarts";
 
 import { AXIS_TEXT, CURSOR_LINE, NEUTRALISED_BAND, useEChart, valueAxis } from "../../lib/chart";
+import { useChartHover } from "../../lib/chartHover";
 import { driverStatus } from "../../lib/driverStatus";
 import { neutralisedLaps, neutralisedRanges } from "../../lib/neutralised";
 import { raceTrace } from "../../lib/raceTrace";
-import type { TraceReference } from "../../lib/raceTrace";
+import type { RaceTrace, TraceReference } from "../../lib/raceTrace";
 import type { ArcadeState, Bulk } from "../../lib/bridge";
 import { driverColour } from "../../lib/driverColour";
 
@@ -62,6 +63,45 @@ const NO_COLOUR = AXIS_TEXT;
 /** `+12.3` / `-4.5` - the sign is the whole reading, so it is always printed. */
 function signedSeconds(value: number): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)}`;
+}
+
+/** One line's value at the hovered lap. `null` means that car has none there. */
+interface ReadoutRow {
+  code: string;
+  value: number | null;
+}
+
+/**
+ * Every car's gap at one lap, which is the vertical cut this panel exists for.
+ *
+ * **Sorted DESCENDING, because higher on this chart is further up the road.**
+ * That holds under all three references and is what makes the list read front
+ * to back like a timing tower: in LEADER mode the car in front sits on zero and
+ * the rest hang below it at negative values, so ascending would have put the
+ * leader last and the tail-ender first. The first version did exactly that and
+ * only the screenshot said so - the numbers were all correct and the order was
+ * upside down.
+ *
+ * A car with no value at that lap - retired before it, or the reveal has not
+ * reached it - goes to the BOTTOM with an em dash rather than being left out: a
+ * car that vanishes from the list reads as a car that is not in the race, and
+ * this panel is where a reader counts the field.
+ *
+ * Laps are integers on this axis, so the pointer's continuous x is rounded to
+ * the nearest one and the row is looked up by exact lap. No interpolation: a
+ * gap "at lap 23.4" is not a quantity the race has.
+ */
+function traceReadout(trace: RaceTrace, x: number): { lap: number; rows: ReadoutRow[] } | null {
+  const lap = Math.round(x);
+  if (!trace.laps.includes(lap)) return null;
+  const rows = trace.lines.map((line) => ({
+    code: line.code,
+    value: line.points.find(([pointLap]) => pointLap === lap)?.[1] ?? null,
+  }));
+  const known = rows.filter((row) => row.value !== null);
+  const missing = rows.filter((row) => row.value === null);
+  known.sort((a, b) => (b.value as number) - (a.value as number));
+  return { lap, rows: [...known, ...missing] };
 }
 
 export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: ArcadeState }) {
@@ -218,7 +258,12 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trace, own]);
 
-  const host = useEChart(trace.lines.length ? option : null);
+  const [host, instance] = useEChart(trace.lines.length ? option : null);
+  const lapDomain: [number, number] | null = trace.laps.length
+    ? [trace.laps[0], trace.laps[trace.laps.length - 1]]
+    : null;
+  const [hover, hoverProps] = useChartHover(instance, lapDomain);
+  const readout = hover === null ? null : traceReadout(trace, hover.dataX);
 
   return (
     <section className="card trace-band">
@@ -249,7 +294,45 @@ export function RaceTraceChart({ bulk, arcade }: { bulk: Bulk | null; arcade: Ar
         </nav>
       </header>
       {trace.lines.length ? (
-        <div className="trace-band-plot" ref={host} />
+        <div className="trace-band-hover">
+          <div className="trace-band-plot" ref={host} {...hoverProps} />
+          {/* The vertical cut, made with the mouse. Twenty lines is the one case
+              on either window where a floating list is the right shape: the
+              values are spread over the whole plot height and no per-line label
+              could hold them.
+
+              It opens on whichever side of the cursor has room, and it is
+              absolutely positioned inside the card - never fixed, because
+              `.data-main.is-frozen`'s filter would become its containing block
+              and move it 50 px the moment the feed froze. */}
+          {hover !== null && readout !== null ? (
+            <>
+              <div className="trace-band-cursor" style={{ left: hover.pixelX }} />
+              <div
+                className="trace-band-box"
+                style={
+                  hover.pixelX > hover.hostWidth / 2
+                    ? { right: hover.hostWidth - hover.pixelX + 8 }
+                    : { left: hover.pixelX + 8 }
+                }
+              >
+                <span className="trace-band-box-lap">LAP {readout.lap}</span>
+                {readout.rows.map((row) => (
+                  <span key={row.code} className="trace-band-box-row">
+                    {/* The CODE identifies the car, not the colour: ten team
+                        colours cover twenty drivers, so every hue here is shared
+                        by exactly two of them. The same reason the end labels
+                        are drawn in the axis grey. */}
+                    <span className="trace-band-box-code">{row.code}</span>
+                    <span className="trace-band-box-value">
+                      {row.value === null ? "—" : signedSeconds(row.value)}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
       ) : (
         // A trace with nothing to draw SAYS so. An empty plot and a race whose
         // field has not yet completed a common lap are the same pixels

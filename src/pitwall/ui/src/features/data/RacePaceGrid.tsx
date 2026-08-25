@@ -35,7 +35,7 @@
  * hides them globally.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { racePaceGrid } from "../../lib/racePace";
 import type { Bulk } from "../../lib/bridge";
@@ -255,6 +255,33 @@ export function RacePaceGrid({
     measure();
   }, [grid.revealedTo, grid.laps.length, measure]);
 
+  const [cell, setCell] = useState<{ row: number; column: number } | null>(null);
+  /**
+   * Which body cell the pointer is in, from the event's own target.
+   *
+   * `cellIndex` and `rowIndex` come from the DOM's table model rather than from
+   * a `data-` attribute per cell, so nothing has to be rendered onto 1,140
+   * elements to make them addressable. Column 0 is the lap header, so a
+   * `cellIndex` of 0 means the pointer is on the lap number itself: that still
+   * lights the row, and lights no column, which is the honest answer.
+   */
+  const onCellOver = useCallback((event: MouseEvent<HTMLTableElement>) => {
+    const target = (event.target as HTMLElement).closest("td, th");
+    const row = target?.parentElement as HTMLTableRowElement | undefined;
+    if (!target || !row || row.parentElement?.tagName !== "TBODY") {
+      setCell(null);
+      return;
+    }
+    const next = { row: row.rowIndex, column: (target as HTMLTableCellElement).cellIndex };
+    // Only when it actually moved. `mouseover` already fires per element rather
+    // than per pixel, and this drops the re-render for the bubbled events a
+    // single cell can produce.
+    setCell((held) =>
+      held && held.row === next.row && held.column === next.column ? held : next,
+    );
+  }, []);
+  const clearCell = useCallback(() => setCell(null), []);
+
   const total = bulk?.race.total_laps ?? grid.laps.length;
   const [first, last] = visible ?? [
     grid.laps[0],
@@ -295,12 +322,29 @@ export function RacePaceGrid({
         role="region"
         aria-label="Race pace by lap, scrollable"
       >
-        <table className="pace-table">
+        {/* **The grid's readout is a cross, not a box, because its axes are
+            already labelled.** The lap is in the row's own `th` and the driver
+            in the head; what a reader loses over 21 columns is which row and
+            column a cell belongs to, so lighting those two answers it, and a
+            floating box would only repeat what is already on screen.
+
+            ONE delegated listener on the table, not a handler per cell: there
+            are 1,140 of them. `mouseover` fires when the pointer crosses into a
+            new element rather than on every move, and `remember` drops the write
+            when the cell has not changed, so this is a state update per cell
+            entered - human-paced - and never one per mousemove. */}
+        <table className="pace-table" onMouseOver={onCellOver} onMouseLeave={clearCell}>
           <thead>
             <tr>
               <th className="pace-lapcol" />
-              {grid.columns.map((code) => (
-                <th key={code}>{code}</th>
+              {grid.columns.map((code, column) => (
+                // `column + 1` throughout: the lap header is cell 0, so a driver
+                // column's DOM index is one past its index in `grid.columns`.
+                // That off-by-one is the natural mutant here, which is why the
+                // guard hovers a cell that is not in the first column.
+                <th key={code} className={cell?.column === column + 1 ? "is-cross" : undefined}>
+                  {code}
+                </th>
               ))}
             </tr>
           </thead>
@@ -336,14 +380,28 @@ export function RacePaceGrid({
                  * confused. The label rides in the title for the reader who
                  * wonders which neutralisation it was. */}
                 <th
-                  className={`pace-lapcol${grid.neutralised[index] ? " is-neutralised" : ""}`}
+                  className={
+                    `pace-lapcol${grid.neutralised[index] ? " is-neutralised" : ""}` +
+                    // The lap number lights for the hovered ROW. `rowIndex` counts
+                    // from the whole table, so the head row is 0 and body row `i`
+                    // is `i + 1`.
+                    (cell?.row === index + 1 ? " is-cross" : "")
+                  }
                   title={grid.neutralised[index] ?? undefined}
                 >
                   {grid.laps[index]}
                 </th>
-                {row.map((cell, column) => (
-                  <td key={grid.columns[column]} className={`is-${cell.tone}`}>
-                    {cell.text}
+                {row.map((value, column) => (
+                  <td
+                    key={grid.columns[column]}
+                    className={
+                      `is-${value.tone}` +
+                      (cell?.row === index + 1 && cell?.column === column + 1
+                        ? " is-crosshair"
+                        : "")
+                    }
+                  >
+                    {value.text}
                   </td>
                 ))}
               </tr>

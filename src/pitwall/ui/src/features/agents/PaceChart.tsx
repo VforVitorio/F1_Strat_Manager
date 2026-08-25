@@ -15,6 +15,8 @@ import { useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { PaceSeries } from "../../lib/agents";
 import { useEChart } from "../../lib/chart";
+import { useChartHover } from "../../lib/chartHover";
+import { ChartReadout, at } from "./ChartReadout";
 import { CHART_BASE, currentLapMark, lapAxis } from "./useEChart";
 
 export function PaceChart({ series }: { series: PaceSeries }) {
@@ -105,5 +107,36 @@ export function PaceChart({ series }: { series: PaceSeries }) {
     [series, stale],
   );
 
-  return <div className="chart" ref={useEChart(option)} />;
+  const [ref, instance] = useEChart(option);
+  const [hover, hoverProps] = useChartHover(instance, series.x_range);
+  const lap = hover === null ? null : Math.round(hover.dataX);
+  const band = lap === null ? undefined : series.band.find(([at]) => at === lap);
+
+  return (
+    <div className="chart-hover">
+      <div className="chart" ref={ref} {...hoverProps} />
+      {hover !== null && lap !== null ? (
+        <>
+          <div className="chart-hover-cursor" style={{ left: hover.pixelX }} />
+          <ChartReadout
+            hover={hover}
+            lap={lap}
+            rows={[
+              // Each field is independently absent at a lap: a tick can carry a
+              // lap time with no `per_agent` block, which is the whole reason
+              // this card dims and labels a stale prediction. So every row prints
+              // its own em dash rather than the box hiding when one is missing.
+              { label: "actual", value: at(series.actual, lap), colour: series.actual_colour },
+              { label: "pred", value: at(series.pred, lap), colour: series.pred_colour },
+              {
+                label: "P10-P90",
+                value: band ? `${band[1].toFixed(1)}-${band[2].toFixed(1)}` : null,
+                colour: series.band_colour,
+              },
+            ]}
+          />
+        </>
+      ) : null}
+    </div>
+  );
 }

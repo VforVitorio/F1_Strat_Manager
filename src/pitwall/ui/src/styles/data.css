@@ -783,6 +783,109 @@ td.col-drv {
   width: 1px;
   pointer-events: none;
 }
+/* The hover cursor (#999), brighter than the car's mark because it is only on
+ * screen while the reader is asking for it. `--qt-fg-1` is also the colour of
+ * the lane values it produces, so the mark and its numbers read as one thing.
+ *
+ * The colour is set here rather than inline, unlike `.trace-cursor`'s, because
+ * it has a token and the car's is `CURSOR_LINE` from the shared chart palette. */
+.trace-cursor.is-hover {
+  background: var(--qt-fg-1);
+}
+/* The hovered distance. `position: absolute`, never `fixed`: `.data-main.is-frozen`
+ * applies a `filter`, and a filter creates a containing block for fixed
+ * descendants, so a fixed overlay JUMPS by the header height the moment the feed
+ * freezes. Measured at 50 px. The same rule holds for every readout overlay on
+ * both windows. */
+.trace-hover-dist {
+  position: absolute;
+  padding: 1px 4px;
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* The rival's value beside our car's. A gap rather than a separator glyph: the
+ * two are already told apart by colour, and a slash would be a fourth thing to
+ * read in a 12 px row. */
+.trace-lane-rival {
+  margin-left: 6px;
+}
+
+/* ---- The race trace's hover readout (#999) ---------------------------------
+ * The wrapper only exists to be the positioning context: the plot fills it, and
+ * the cursor and the box are absolute inside it. Absolute, never fixed - a
+ * `filter` on an ancestor becomes the containing block for fixed descendants,
+ * and this window applies one when the feed freezes. */
+.trace-band-hover {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.trace-band-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--qt-fg-1);
+  pointer-events: none;
+}
+.trace-band-box {
+  position: absolute;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  background: var(--qt-elevated);
+  border: 1px solid var(--qt-border);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.trace-band-box-lap {
+  margin-bottom: 3px;
+  color: var(--qt-fg-1);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.trace-band-box-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.trace-band-box-code {
+  color: var(--qt-fg-3);
+}
+.trace-band-box-value {
+  color: var(--qt-fg-2);
+}
+
+/* ---- The pace grid's cross-highlight (#999) --------------------------------
+ * A background wash on the hovered cell's row header and column header, and a
+ * ring on the cell itself. No floating box: this panel's axes are already on
+ * screen, so the readout is knowing WHICH of them the cell belongs to.
+ *
+ * The wash is `--qt-elevated` rather than an accent because the cell colours
+ * already carry the ranking, and a hue here would be a fifth thing competing
+ * with the three tone thirds and the neutralised rail. */
+.pace-table th.is-cross {
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+}
+.pace-table td.is-crosshair {
+  outline: 1px solid var(--qt-fg-2);
+  outline-offset: -1px;
+}
+/* The row itself, which costs nothing and needs no state. */
+.pace-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
 
 /* `_delta_placeholder`, one lane deep. Centred, italic, tertiary - the Qt treatment,
  * scoped to the lane that actually has nothing to draw instead of to a whole cell.
@@ -1649,12 +1752,15 @@ td.col-drv {
   min-height: 0;
 }
 
-/* The plot takes whatever the header leaves, and `min-height: 0` is what makes
- * that true inside a flex column: without it the div takes its content height,
- * ECharts measures zero and renders a canvas nothing ever appears on. */
+/* The plot fills `.trace-band-hover`, which is the flex child that takes
+ * whatever the header leaves. It used to be that child itself, with `flex: 1`
+ * and the `min-height: 0` that makes a flex item shrinkable - without which the
+ * div takes its content height, ECharts measures zero, and renders a canvas
+ * nothing ever appears on. The wrapper carries both now, because the hover
+ * cursor and the readout box need a positioning context that is not the canvas. */
 .trace-band-plot {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
 
 .trace-band-empty {

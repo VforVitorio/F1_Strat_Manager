@@ -5298,6 +5298,424 @@ check(
   await calmCtx.close();
 }
 
+
+// ---------------------------------------------------------------------------
+// The hover readout (#999).
+//
+// **Every guard below PARKS the pointer and holds it.** A probe that drags the
+// pointer across the plot passes over a completely broken readout: the design's
+// own measurement found an ECharts tooltip visible on 14 of 14 samples while
+// moving and 0 of 25 while parked, because `notMerge: true` destroys it about
+// 190 ms after each `mousemove` re-creates it. Parking is the population that
+// matters, since a reader stops on a lap in order to read it.
+// ---------------------------------------------------------------------------
+{
+  /**
+   * A span whose STEP channels actually change, which the shared fixture's
+   * cannot express: `MAIN_SPAN` holds `gear: 6` for its whole length and never
+   * sets `drs_open` at all, so a readout that interpolated both would agree
+   * with one that held them and no assertion could tell the two apart.
+   *
+   * DRS steps in BOTH directions on purpose. A linear lookup lands on 0.5
+   * between two samples either way, and the lane's readout is
+   * `value > 0.5 ? "OPEN" : "CLOSED"`, so the rising leg would print CLOSED and
+   * be WRONG while the falling leg would print CLOSED and be RIGHT. Only the
+   * rising leg fails a linear mutant, and only the falling one proves the
+   * assertion is not just reading a constant.
+   */
+  const STEP_SPAN = [
+    { lap: 24, t: 10, dist: 0, speed: 200, throttle: 50, brake: 0, gear: 5, drs: 0, drs_open: false },
+    { lap: 24, t: 11, dist: 100, speed: 210, throttle: 60, brake: 0, gear: 6, drs: 8, drs_open: true },
+    { lap: 24, t: 12, dist: 200, speed: 220, throttle: 70, brake: 0, gear: 7, drs: 0, drs_open: false },
+  ];
+  const STEP_SPAN_LONG = [
+    ...STEP_SPAN,
+    { lap: 24, t: 13, dist: 300, speed: 300, throttle: 80, brake: 0, gear: 8, drs: 0, drs_open: false },
+  ];
+
+  /** Move onto a chart at a DATA x, in two steps so the enter lands first. */
+  const park = async (page, selector, dataX, offsetY = 40) => {
+    const hostBox = await page.locator(selector).boundingBox();
+    const px = await page.evaluate(
+      (args) =>
+        document
+          .querySelector(args[0])
+          .__pitwallChart.convertToPixel({ gridIndex: 0 }, [args[1], 0])[0],
+      [selector, dataX],
+    );
+    await page.mouse.move(hostBox.x + px - 1, hostBox.y + offsetY);
+    await page.waitForTimeout(60);
+    await page.mouse.move(hostBox.x + px, hostBox.y + offsetY);
+    await page.waitForTimeout(160);
+    return px;
+  };
+
+  const values = (page) => page.locator(".trace-lane-value").allInnerTexts();
+
+  const hoverCtx = await browser.newContext({ viewport: CLIENT });
+  const hoverPage = await hoverCtx.newPage();
+  watchPage(hoverPage, failures, "hover");
+  // The pace grid and the race trace are BULK-fed, so the fixture carries one:
+  // without it those two tabs render their empty states and their guards would
+  // be asserting about a panel that is not there.
+  await hoverPage.addInitScript(
+    (args) => {
+      const [payload, bulk] = args;
+      window.__ticks = [payload];
+      window.__cursor = 0;
+      window.pywebview = {
+        api: {
+          get_tick: async (since) => {
+            if (window.__ticks[window.__cursor].seq === since) {
+              if (window.__cursor + 1 >= window.__ticks.length) return null;
+              window.__cursor += 1;
+            }
+            return window.__ticks[window.__cursor];
+          },
+          get_bulk: async (rev) => (rev === bulk.rev ? null : bulk),
+          get_live_lap: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    },
+    [
+      tick(1, { main: STEP_SPAN, rivalSpan: STEP_SPAN, drivers: paceField(), order: TOWER_ORDER }),
+      paceBulk(),
+    ],
+  );
+  await hoverPage.goto(url, { waitUntil: "domcontentloaded" });
+  await hoverPage.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  await hoverPage.waitForTimeout(400);
+
+  // --- nothing before the pointer arrives ---------------------------------
+  check(
+    (await hoverPage.locator(".trace-cursor.is-hover").count()) === 0,
+    "hover: no hover cursor before the pointer enters",
+  );
+  const idle = await values(hoverPage);
+  check(
+    idle.length === 6 && idle[0] === "220",
+    `hover: idle, the lanes read the NEWEST sample (${idle[0]})`,
+  );
+
+  // --- GUARD 1: the step lanes hold, they do not interpolate ---------------
+  // 150 m sits strictly between the 100 m and 200 m samples, so a held gear is
+  // 6 and a held DRS is OPEN, while a linear lookup gives 6.5 -> "7" and
+  // 0.5 -> "CLOSED".
+  await park(hoverPage, ".trace-stack-plot", 150);
+  // Presence FIRST, and named. Without it a readout that never renders fails as
+  // a 30-second locator timeout with no check attached, which is a crash rather
+  // than a finding - and that is exactly how the \"cleared on every render\"
+  // mutant showed up before this line existed.
+  check(
+    (await hoverPage.locator(".trace-cursor.is-hover").count()) === 1 &&
+      (await hoverPage.locator(".trace-hover-dist").count()) === 1,
+    "hover: parking the pointer puts a cursor and a distance on the plot",
+  );
+  const held = await values(hoverPage);
+  check(
+    held[4].startsWith("6"),
+    `hover: GEAR holds its last sample between samples, not an interpolated one (${held[4]})`,
+  );
+  check(
+    held[5].startsWith("OPEN"),
+    `hover: DRS holds OPEN on the rising leg, where a linear lookup prints CLOSED (${held[5]})`,
+  );
+  // 50 m is strictly between the 0 m (closed) and 100 m (open) samples: the
+  // held answer is CLOSED and so is the interpolated one, which is why the
+  // rising leg above is the one that catches a linear mutant. Asserted anyway
+  // so the pair is complete and the rising case cannot be quietly deleted.
+  await park(hoverPage, ".trace-stack-plot", 50);
+  const early = await values(hoverPage);
+  check(
+    early[5].startsWith("CLOSED"),
+    `hover: DRS holds CLOSED before it opens (${early[5]})`,
+  );
+  check(
+    early[4].startsWith("5"),
+    `hover: GEAR holds 5 before the upshift (${early[4]})`,
+  );
+  // And the CURVES are still interpolated: speed at 50 m is halfway between 200
+  // and 210. A step rule applied to every lane would answer 200 here.
+  check(
+    early[0].startsWith("205"),
+    `hover: SPEED is still interpolated between samples (${early[0]})`,
+  );
+
+  // --- GUARD 3: the pixel mapping is this chart's own axis ------------------
+  await park(hoverPage, ".trace-stack-plot", 150);
+  // Read through `allInnerTexts`, never `innerText`: `innerText` WAITS, so a
+  // readout that never renders turns a failed check into a 30-second timeout
+  // that kills the run before any failure is printed. The presence check above
+  // has already recorded the real finding by then.
+  const chipTexts = await hoverPage.locator(".trace-hover-dist").allInnerTexts();
+  const chip = (chipTexts[0] ?? "").replace(/[^\d-]/g, "");
+  check(
+    Math.abs(Number(chip) - 150) <= 3,
+    `hover: the readout's distance is the pixel converted through THIS chart's axis (${chip} for 150)`,
+  );
+
+  // --- GUARD 2: it survives pushes with the pointer PARKED ------------------
+  // The whole point. The next tick moves the newest sample to 300 km/h, so
+  // `latest` and the hovered value diverge: without that this guard could not
+  // tell a live readout from one that never left `latest(...)`.
+  await hoverPage.evaluate(
+    (next) => window.__ticks.push(next),
+    tick(2, { ...{ main: STEP_SPAN_LONG, rivalSpan: STEP_SPAN }, drivers: paceField(), order: TOWER_ORDER }),
+  );
+  await park(hoverPage, ".trace-stack-plot", 150);
+  const before = await values(hoverPage);
+  await hoverPage.waitForTimeout(1200);
+  const after = await values(hoverPage);
+  const consumed = await hoverPage.evaluate(() => window.__cursor);
+  check(consumed >= 1, `hover: a real tick landed during the parked window (cursor ${consumed})`);
+  check(
+    after[0] === before[0] && after[0].startsWith("215"),
+    `hover: the parked readout still reads the HOVERED distance after a push (${before[0]} -> ${after[0]})`,
+  );
+  check(
+    (await hoverPage.locator(".trace-cursor.is-hover").count()) === 1,
+    "hover: the hover cursor survives a push with the pointer parked",
+  );
+  check(
+    !after[0].startsWith("300"),
+    `hover: and it is NOT the newest sample, which is now 300 (${after[0]})`,
+  );
+
+  // --- the cursor and the readout leave together ---------------------------
+  await hoverPage.mouse.move(2, 2);
+  await hoverPage.waitForTimeout(250);
+  check(
+    (await hoverPage.locator(".trace-cursor.is-hover").count()) === 0 &&
+      (await hoverPage.locator(".trace-hover-dist").count()) === 0,
+    "hover: cursor and distance chip both go when the pointer leaves",
+  );
+  const back = await values(hoverPage);
+  check(back[0] === "300", `hover: and the lanes go back to the newest sample (${back[0]})`);
+
+  // --- GUARD 6: hovering must never push an option -------------------------
+  await hoverPage.evaluate(() => {
+    const chart = document.querySelector(".trace-stack-plot").__pitwallChart;
+    window.__pushes = 0;
+    const real = chart.setOption.bind(chart);
+    chart.setOption = (...args) => {
+      window.__pushes += 1;
+      return real(...args);
+    };
+  });
+  const sweepBox = await hoverPage.locator(".trace-stack-plot").boundingBox();
+  for (let i = 0; i < 60; i += 1) {
+    await hoverPage.mouse.move(sweepBox.x + 60 + i * 3, sweepBox.y + 40);
+  }
+  await hoverPage.waitForTimeout(150);
+  const pushes = await hoverPage.evaluate(() => window.__pushes);
+  check(
+    pushes === 0,
+    `hover: 60 mousemoves push ZERO options, so hover state is not in the option memo (${pushes})`,
+  );
+  check(
+    (await hoverPage.evaluate(
+      () => document.querySelector(".trace-stack-plot").__pitwallChart.getOption().animation,
+    )) === false,
+    "hover: and `animation: false` still stands after the sweep",
+  );
+
+  // --- GUARD 5: frozen ------------------------------------------------------
+  // The overlays must not MOVE when the filter goes on. `.data-main.is-frozen`
+  // is a `filter`, and a filter is the containing block for `position: fixed`
+  // descendants, so a fixed overlay jumps by the header height - measured at
+  // 50 px on this window. An absolute one does not.
+  // Null-safe, so a readout that is not rendering at all fails the check above
+  // instead of throwing here and killing the run before any failure prints.
+  const chipBox = () =>
+    hoverPage.evaluate(() => {
+      const el = document.querySelector(".trace-hover-dist");
+      if (!el) return null;
+      const box = el.getBoundingClientRect();
+      return { x: Math.round(box.x), y: Math.round(box.y) };
+    });
+  await park(hoverPage, ".trace-stack-plot", 150);
+  const loose = await chipBox();
+  await hoverPage.evaluate(() => document.querySelector(".data-main").classList.add("is-frozen"));
+  await hoverPage.waitForTimeout(150);
+  const frozen = await chipBox();
+  check(
+    loose !== null && frozen !== null && loose.x === frozen.x && loose.y === frozen.y,
+    `hover: the readout does not move when the window freezes (${JSON.stringify(loose)} vs ${JSON.stringify(frozen)})`,
+  );
+  await hoverPage.evaluate(() =>
+    document.querySelector(".data-main").classList.remove("is-frozen"),
+  );
+
+  // --- GUARD 4: a rival that never reached this distance --------------------
+  // The #1066 state, on its OWN page, and that is the whole difficulty. The
+  // buffer ACCUMULATES: pushing a later tick whose rival span is shorter does
+  // not shorten the buffer, because `store` adds samples and never removes
+  // them. A first version of this guard did exactly that, and the rival read a
+  // real value at 150 m from the ticks before it - the fixture could not
+  // express the state it was written for.
+  //
+  // So the rival has to have been short from the FIRST tick.
+  const shortCtx = await browser.newContext({ viewport: CLIENT });
+  const shortPage = await shortCtx.newPage();
+  watchPage(shortPage, failures, "hover-rival");
+  await shortPage.addInitScript(
+    (args) => {
+      window.pywebview = {
+        api: {
+          get_tick: async (since) => (since === args[0].seq ? null : args[0]),
+          get_bulk: async (rev) => (rev === args[1].rev ? null : args[1]),
+          get_live_lap: async () => null,
+          get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+        },
+      };
+    },
+    [
+      tick(3, {
+        main: STEP_SPAN,
+        rivalSpan: STEP_SPAN.slice(0, 2),
+        drivers: paceField(),
+        order: TOWER_ORDER,
+      }),
+      paceBulk(),
+    ],
+  );
+  await shortPage.goto(url, { waitUntil: "domcontentloaded" });
+  await shortPage.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  await shortPage.waitForTimeout(400);
+  // 50 m: BOTH cars have been there, so the rival prints a number. This is the
+  // control - without it the em dash below could be a rival series that is
+  // empty for some other reason entirely.
+  await park(shortPage, ".trace-stack-plot", 50);
+  const bothThere = await values(shortPage);
+  check(
+    bothThere[0].startsWith("205") && !bothThere[0].endsWith("—"),
+    `hover: inside the rival span, both cars read a number (${bothThere[0]})`,
+  );
+  await park(shortPage, ".trace-stack-plot", 150);
+  const short = await values(shortPage);
+  check(
+    short[0].startsWith("215") && short[0].endsWith("—"),
+    `hover: our car reads, the rival reads an em dash past the end of its span (${short[0]})`,
+  );
+  await shortCtx.close();
+
+  // --- GUARD 8: a tab switch takes the readout with it ----------------------
+  await hoverPage.locator(".tab", { hasText: "RACE PACE" }).first().click();
+  await hoverPage.waitForTimeout(400);
+  await hoverPage.locator(".tab", { hasText: "TRACES" }).first().click();
+  await hoverPage.waitForSelector(".trace-stack-plot canvas", { timeout: 5000 });
+  await hoverPage.waitForTimeout(400);
+  check(
+    (await hoverPage.locator(".trace-cursor.is-hover").count()) === 0,
+    "hover: a tab switch leaves no stale hover cursor on the remounted chart",
+  );
+
+
+  // --- GUARD: the race trace's list, and it must read FRONT TO BACK ---------
+  // The order is the one thing here a value assertion alone would miss: every
+  // number can be right and the list still upside down. It shipped that way for
+  // one build - sorted ascending, so in LEADER mode the leader sat on 0.0 at the
+  // BOTTOM and the tail-ender led the list - and only the screenshot said so.
+  await hoverPage.locator(".tab", { hasText: "RACE TRACE" }).first().click();
+  await hoverPage.waitForSelector(".trace-band-plot canvas", { timeout: 5000 });
+  await hoverPage.waitForTimeout(500);
+  const bandBox = await hoverPage.locator(".trace-band-hover").boundingBox();
+  await hoverPage.mouse.move(bandBox.x + bandBox.width * 0.5 - 1, bandBox.y + bandBox.height * 0.5);
+  await hoverPage.waitForTimeout(60);
+  await hoverPage.mouse.move(bandBox.x + bandBox.width * 0.5, bandBox.y + bandBox.height * 0.5);
+  await hoverPage.waitForTimeout(250);
+
+  const rows = await hoverPage.locator(".trace-band-box-row").allInnerTexts();
+  check(rows.length > 1, `hover: the race trace lists the field at the hovered lap (${rows.length})`);
+  const parsed = rows.map((row) => {
+    const [code, text] = row.split(/\s+/);
+    return { code, value: text === "—" ? null : Number(text) };
+  });
+  const known = parsed.filter((row) => row.value !== null).map((row) => row.value);
+  check(
+    known.length > 1 && known.every((value, i) => i === 0 || known[i - 1] >= value),
+    `hover: the list reads front to back, largest delta first (${known.slice(0, 4).join(", ")})`,
+  );
+  // Higher on this chart is further up the road, so the top of the list is the
+  // car nearest the reference. Asserted separately from the ordering above,
+  // because a list sorted the wrong way round is still monotonic.
+  check(
+    known[0] === Math.max(...known),
+    `hover: and the car at the top is the one furthest ahead (${known[0]} vs max ${Math.max(...known)})`,
+  );
+  const nulls = parsed.map((row, i) => (row.value === null ? i : -1)).filter((i) => i >= 0);
+  const lastKnown = parsed.map((row, i) => (row.value !== null ? i : -1)).filter((i) => i >= 0).pop();
+  check(
+    nulls.every((i) => i > lastKnown),
+    `hover: cars with no value at that lap sit BELOW every car that has one (${JSON.stringify(nulls)} after ${lastKnown})`,
+  );
+  const bandLap = (await hoverPage.locator(".trace-band-box-lap").allInnerTexts())[0] ?? "";
+  check(/^LAP \d+$/.test(bandLap), `hover: the box names the lap it is reading (${bandLap})`);
+  // It parks too. Same reason as the stack: this chart pushes on every reveal.
+  await hoverPage.waitForTimeout(1200);
+  check(
+    (await hoverPage.locator(".trace-band-box").count()) === 1,
+    "hover: the race trace box survives with the pointer parked",
+  );
+  await hoverPage.mouse.move(2, 2);
+  await hoverPage.waitForTimeout(250);
+  check(
+    (await hoverPage.locator(".trace-band-box").count()) === 0 &&
+      (await hoverPage.locator(".trace-band-cursor").count()) === 0,
+    "hover: the race trace box and cursor go together when the pointer leaves",
+  );
+
+  // --- GUARD 7: the pace grid's cross ---------------------------------------
+  // A cell that is NOT in the first row or the first column, because the lap
+  // header is cell 0 and the head row is row 0, so an off-by-one on either axis
+  // is the natural mutant and a corner cell hides both.
+  await hoverPage.locator(".tab", { hasText: "RACE PACE" }).first().click();
+  await hoverPage.waitForSelector(".pace-table", { timeout: 5000 });
+  await hoverPage.waitForTimeout(300);
+  const bodyRows = await hoverPage.locator(".pace-table tbody tr").count();
+  const headCells = await hoverPage.locator(".pace-table thead th").count();
+  check(
+    bodyRows >= 3 && headCells >= 3,
+    `hover: the pace fixture has a non-corner cell to hover (${bodyRows} rows, ${headCells} head cells)`,
+  );
+  const targetRow = 2;
+  const targetCol = 2;
+  await hoverPage
+    .locator(".pace-table tbody tr")
+    .nth(targetRow)
+    .locator("td")
+    .nth(targetCol - 1)
+    .hover();
+  await hoverPage.waitForTimeout(250);
+  const litHead = await hoverPage.locator(".pace-table thead th.is-cross").allInnerTexts();
+  const litLap = await hoverPage.locator(".pace-table th.pace-lapcol.is-cross").allInnerTexts();
+  const ring = await hoverPage.locator(".pace-table td.is-crosshair").count();
+  const expectHead = await hoverPage.locator(".pace-table thead th").nth(targetCol).innerText();
+  const expectLap = await hoverPage
+    .locator(".pace-table tbody tr")
+    .nth(targetRow)
+    .locator("th.pace-lapcol")
+    .innerText();
+  check(
+    litHead.length === 1 && litHead[0] === expectHead,
+    `hover: exactly the hovered driver's column header lights (${JSON.stringify(litHead)} vs ${expectHead})`,
+  );
+  check(
+    litLap.length === 1 && litLap[0] === expectLap,
+    `hover: exactly the hovered lap's row header lights (${JSON.stringify(litLap)} vs ${expectLap})`,
+  );
+  check(ring === 1, `hover: exactly one cell carries the crosshair ring (${ring})`);
+  await hoverPage.mouse.move(2, 2);
+  await hoverPage.waitForTimeout(250);
+  check(
+    (await hoverPage.locator(".pace-table th.is-cross").count()) === 0,
+    "hover: the cross clears when the pointer leaves the grid",
+  );
+
+  await hoverCtx.close();
+}
+
 await browser.close();
 server.close();
 

@@ -1130,6 +1130,171 @@ check(
   await narrow.close();
 }
 
+
+// ---------------------------------------------------------------------------
+// The hover readout on the two AGENTS cards (#999).
+//
+// The pointer PARKS, for the reason the DATA guards state at length: an ECharts
+// tooltip on these charts is visible 0 times out of 25 with the pointer still
+// and 14 out of 14 while it moves, because `notMerge: true` destroys it between
+// mousemoves. A sweeping probe passes over a readout that shows a reader
+// nothing.
+//
+// These are also the SECOND surface for the pixel mapping. The stack's grid
+// inset is not this one (44/10 here), so a mapping that hardwired one chart's
+// constants would answer this chart's laps wrong, and a stack-only guard could
+// never see it.
+// ---------------------------------------------------------------------------
+{
+  const hoverCtx = await browser.newContext({ viewport: CLIENT });
+  const hoverPage = await hoverCtx.newPage();
+  watchPage(hoverPage, failures, "agents-hover");
+  await hoverPage.addInitScript((view) => {
+    window.pywebview = {
+      api: {
+        get_agents_view: async (since) => (since >= view.seq ? null : view),
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, VIEW);
+  await hoverPage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await hoverPage.waitForSelector(".chart canvas", { timeout: 10000 });
+  await hoverPage.waitForTimeout(600);
+
+  check(
+    (await hoverPage.locator(".chart-hover").count()) === 2,
+    "agents hover: both cards carry a hover surface",
+  );
+  check(
+    (await hoverPage.locator(".chart-readout").count()) === 0,
+    "agents hover: nothing is shown before the pointer arrives",
+  );
+
+  /** Park on a chart at an exact LAP, converted through that chart's own axis. */
+  const parkLap = async (index, lap) => {
+    const host = hoverPage.locator(".chart").nth(index);
+    const hostBox = await host.boundingBox();
+    const px = await hoverPage.evaluate(
+      (args) =>
+        document
+          .querySelectorAll(".chart")
+          [args[0]].__pitwallChart.convertToPixel({ gridIndex: 0 }, [args[1], 0])[0],
+      [index, lap],
+    );
+    await hoverPage.mouse.move(hostBox.x + px - 1, hostBox.y + hostBox.height * 0.5);
+    await hoverPage.waitForTimeout(60);
+    await hoverPage.mouse.move(hostBox.x + px, hostBox.y + hostBox.height * 0.5);
+    await hoverPage.waitForTimeout(200);
+  };
+  const readout = async () =>
+    (await hoverPage.locator(".chart-readout").allInnerTexts()).map((text) =>
+      text.replace(/\s+/g, " ").trim(),
+    );
+
+  // --- the pace card, at a lap where EVERY field exists ---------------------
+  await parkLap(0, 22);
+  const full = await readout();
+  check(full.length === 1, `agents hover: exactly one readout is open (${full.length})`);
+  check(
+    full[0].startsWith("LAP 22"),
+    `agents hover: the lap comes from this chart's own axis, not the stack's inset (${full[0]})`,
+  );
+  check(
+    full[0].includes("81.4"),
+    `agents hover: the pace card reads the actual at the hovered lap (${full[0]})`,
+  );
+  check(
+    full[0].includes("81.1"),
+    `agents hover: and the prediction (${full[0]})`,
+  );
+  check(
+    full[0].includes("80.6-81.6"),
+    `agents hover: and the P10-P90 band whole, not one of its ends (${full[0]})`,
+  );
+
+  // --- the same card one lap earlier, where TWO of the three are absent ----
+  // The fixture's prediction starts at 22 and its actual at 21, so lap 21 is
+  // the state where a card that hid the whole box on one missing field, or
+  // printed a neighbouring lap's number, would be caught.
+  await parkLap(0, 21);
+  const partial = await readout();
+  check(
+    partial.length === 1 && partial[0].startsWith("LAP 21"),
+    `agents hover: the box stays open on a lap with missing fields (${partial[0]})`,
+  );
+  check(
+    partial[0].includes("81.2"),
+    `agents hover: the actual still reads at lap 21 (${partial[0]})`,
+  );
+  check(
+    (partial[0].match(/—/g) ?? []).length === 2,
+    `agents hover: the prediction and the band print an em dash each, not the previous lap's value (${partial[0]})`,
+  );
+
+  // --- the tyre card --------------------------------------------------------
+  await parkLap(1, 22);
+  const tyre = await readout();
+  check(
+    tyre.length === 1 && tyre[0].startsWith("LAP 22"),
+    `agents hover: the tyre card reads its own axis (${tyre[0]})`,
+  );
+  check(
+    tyre[0].includes("81.4"),
+    `agents hover: the observed value comes from the stint that covers the lap (${tyre[0]})`,
+  );
+  check(
+    tyre[0].includes("81.3"),
+    `agents hover: and the rolling trend (${tyre[0]})`,
+  );
+  check(
+    tyre[0].includes("L26-31"),
+    `agents hover: the cliff prints as the lap RANGE it is, not a value at this lap (${tyre[0]})`,
+  );
+
+  // --- it leaves ------------------------------------------------------------
+  await hoverPage.mouse.move(2, 2);
+  await hoverPage.waitForTimeout(250);
+  check(
+    (await hoverPage.locator(".chart-readout").count()) === 0 &&
+      (await hoverPage.locator(".chart-hover-cursor").count()) === 0,
+    "agents hover: box and cursor both go when the pointer leaves",
+  );
+
+  // --- hovering pushes no options -------------------------------------------
+  await hoverPage.evaluate(() => {
+    window.__pushes = 0;
+    document.querySelectorAll(".chart").forEach((host) => {
+      const chart = host.__pitwallChart;
+      const real = chart.setOption.bind(chart);
+      chart.setOption = (...args) => {
+        window.__pushes += 1;
+        return real(...args);
+      };
+    });
+  });
+  const sweep = await hoverPage.locator(".chart").first().boundingBox();
+  for (let i = 0; i < 60; i += 1) {
+    await hoverPage.mouse.move(sweep.x + 50 + i * 2, sweep.y + sweep.height * 0.5);
+  }
+  await hoverPage.waitForTimeout(150);
+  const pushes = await hoverPage.evaluate(() => window.__pushes);
+  check(
+    pushes === 0,
+    `agents hover: 60 mousemoves push ZERO options on either card (${pushes})`,
+  );
+  const stillOff = await hoverPage.evaluate(() =>
+    [...document.querySelectorAll(".chart")].map((h) => h.__pitwallChart.getOption().animation),
+  );
+  check(
+    stillOff.length === 2 && stillOff.every((value) => value === false),
+    `agents hover: and both cards still carry animation: false (${JSON.stringify(stillOff)})`,
+  );
+
+  await hoverCtx.close();
+}
+
 await browser.close();
 server.close();
 
