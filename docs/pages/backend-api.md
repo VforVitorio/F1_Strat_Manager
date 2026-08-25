@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend is a FastAPI application at `src/telemetry/backend/`. It serves telemetry data, driver comparisons, chat (LM Studio proxy), and the N25–N31 strategy agent pipeline. All endpoints are prefixed with `/api/v1`.
+The backend is a FastAPI application at `src/telemetry/backend/`. It serves telemetry data, driver comparisons, chat (LM Studio proxy), and the N25-N31 strategy agent pipeline. All endpoints are prefixed with `/api/v1`.
 
 Entry point: `backend/main.py`, creates the FastAPI app and registers all routers.
 
@@ -134,7 +134,7 @@ The frontend mints a UUID, sends it on every chat request via the `X-Request-Id`
 
 The `/api/v1/voice` router (STT, TTS and the STT to LLM to TTS pipeline) was retired in v2: it came from a course requirement and the web app ships without it. The implementation remains available in git history and in the `legacy_version` branch (the legacy Streamlit app was removed from the repo, #551).
 
-## Strategy endpoints (N25–N31)
+## Strategy endpoints (N25-N31)
 
 All strategy endpoints live under `/api/v1/strategy/`. They accept JSON bodies and return `StrategyResponse` envelopes.
 

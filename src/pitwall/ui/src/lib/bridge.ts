@@ -346,7 +346,7 @@ async function fetchJson<T>(
  *
  * `sinceSeq` is what makes two windows on independent timers read the same
  * frames: against a blind latest-payload slot they were measured disagreeing
- * on 58 % of polls, with duplicate reads and skips in equal measure.
+ * on 58% of polls, with duplicate reads and skips in equal measure.
  */
 export async function getTick(sinceSeq: number): Promise<Tick | null> {
   const api = window.pywebview?.api;

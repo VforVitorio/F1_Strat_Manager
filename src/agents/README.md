@@ -1,6 +1,6 @@
 # src/agents: Multi-Agent Strategy System
 
-LangGraph-based multi-agent system extracted from notebooks N25–N31.
+LangGraph-based multi-agent system extracted from notebooks N25-N31.
 Each module is importable without a FastF1 session via its `*_from_state` RSM adapter.
 
 ---
@@ -192,7 +192,7 @@ The legacy engine is not used. Do not import from it in new code.
 
 | Layer | Model |
 |---|---|
-| Sub-agents N25–N29 | `gpt-4.1-mini` |
+| Sub-agents N25-N29 | `gpt-4.1-mini` |
 | Orchestrator N31 | `gpt-5.4-mini` (`OrchestratorConfig.model_name`) |
 
 Notebooks default to `local-model` (LM Studio). Switch to the OpenAI model IDs above when deploying via FastAPI.

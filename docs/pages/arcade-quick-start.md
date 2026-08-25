@@ -17,7 +17,7 @@ One command launches everything. The arcade process owns the simulation loop and
 - **Python**: 3.10 or newer. The project pins dependencies with `uv`.
 - **Dependencies**: run `uv sync` from the repo root. The lockfile pulls `arcade`, `pywebview`, `fastf1`, `langchain-openai`, the model stack (`xgboost`, `lightgbm`, `torch`), and the NLP stack (`transformers`, `sentence-transformers`, `setfit`). No manual install steps required beyond `uv sync`.
 - **LLM credentials**: either set `OPENAI_API_KEY` in a repo-root `.env` (the canonical TFG setup) or run LM Studio locally on `http://localhost:1234/v1` and pass `--provider lmstudio` on the command line (the arcade's own flag; its default is `openai`, independent of the `F1_LLM_PROVIDER` env var the backend and CLI read). Only the wording of the orchestrator's reasoning changes.
-- **Race data cache**: the replay reads `data/raw/{year}/{Location}/laps.parquet` and optionally `weather.parquet`. The parquet files are produced by FastF1 on first run. Expect a 20–40 second delay on the first launch of a round.
+- **Race data cache**: the replay reads `data/raw/{year}/{Location}/laps.parquet` and optionally `weather.parquet`. The parquet files are produced by FastF1 on first run. Expect a 20-40 second delay on the first launch of a round.
 - **Vector store (optional)**: the N30 RAG agent reads a local Qdrant index under `data/rag/`. If missing, the orchestrator degrades gracefully, regulation lookups return an empty context. Run `python scripts/build_rag_index.py` once to build it.
 
 ## One-command launch
@@ -60,7 +60,7 @@ Drop the `--viewer` flag and the arcade opens `MenuView` first:
 python -m src.arcade.main --strategy
 ```
 
-`MenuView` is a pure-keyboard navigator (Arrow keys + Enter, Escape to go back). It lists years (2023–2025), rounds per year, drivers, and teams. The `--viewer` shortcut exists for regression testing and for the "I know what I want" path.
+`MenuView` is a pure-keyboard navigator (Arrow keys + Enter, Escape to go back). It lists years (2023-2025), rounds per year, drivers, and teams. The `--viewer` shortcut exists for regression testing and for the "I know what I want" path.
 
 ## Single-driver vs two-driver mode
 
@@ -114,4 +114,4 @@ you launched with `--viewer`.
 - [PITWALL windows](#/pitwall), the two React surfaces and the client they share.
 - [Arcade dashboard (legacy)](#/arcade-dashboard), the retired PySide6 package PITWALL replaced.
 - [Arcade strategy pipeline](#/arcade-strategy-pipeline), why the arcade delegates to the shared engine instead of keeping its own copy of the orchestrator.
-- [Multi-agent system](#/multi-agent): N25–N31 multi-agent pipeline reference.
+- [Multi-agent system](#/multi-agent): N25-N31 multi-agent pipeline reference.

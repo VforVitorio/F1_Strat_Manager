@@ -358,7 +358,7 @@ Two rules that must be written into the code, not assumed:
 > over. It is a separate reader because a sector opens somewhere in the field every **2.22 s**, and
 > a clock-driven mask over the whole bulk would re-send up to 342 KB at that cadence (#930).
 >
-> **The wire's order and the parquet's clock disagree at about 0.7 % of crossings, by one place.**
+> **The wire's order and the parquet's clock disagree at about 0.7% of crossings, by one place.**
 > Seen live on the tower: P11 read `+45.83s` above P12's `+42.79s`, and P12's INT rendered a dash
 > because the sign guard refused a negative interval. The tower renders the WIRE order because
 > only the wire can order mid-lap; the seconds come from the parquet because it is the official
@@ -373,7 +373,7 @@ Two rules that must be written into the code, not assumed:
 > keeps events across a rewind, starts empty on a mid-race attach, holes at 8x and dies without
 > `--strategy`. It is read from disk and masked by the same reveal instead - the shape
 > `session_data.py` already argued for - and rides IN the bulk payload, because it is a pure
-> function of that channel's own signature. Measured: +9 % on a payload of 337 KB at full reveal.
+> function of that channel's own signature. Measured: +9% on a payload of 337 KB at full reveal.
 >
 > **Band 3 kept the real client's orientation, and the measurement is why.** Transposed gives cells
 > 13.5 px wide against 19-22 px of text; with the ring still mounted the grid gets 555 px and 1,101
@@ -381,8 +381,8 @@ Two rules that must be written into the code, not assumed:
 > real payload the moment a cell carries a pixel of padding. The ring and the radio feed hide on
 > that tab.
 >
-> **The heat colour ranks each lap AGAINST ITSELF.** On the real payload the median lap is +13.79 %
-> off the session best and 82.4 % of the race sits past +10 %, because Melbourne 2025 was wet and
+> **The heat colour ranks each lap AGAINST ITSELF.** On the real payload the median lap is +13.79%
+> off the session best and 82.4% of the race sits past +10%, because Melbourne 2025 was wet and
 > ran safety cars - any fixed percentage band paints four fifths of the grid one colour.
 >
 > **The screenshot found two defects that "0 cells clipped" could not:** at 10 px nothing clips and
@@ -499,7 +499,7 @@ makes about what it is showing.
 > Still open: **#951** (the arcade skips `repair_tyre_stints`, so its tyre age disagrees with the
 > tower) is **blocked on data** — the repair changes 0 of Melbourne's 927 rows, and Melbourne is the
 > only race a curated install carries. Sprint 9 keeps the width axis (863 of 1,140 cells clip on a
-> 1080p laptop at 150 %) and the safety-car ranking semantics.
+> 1080p laptop at 150%) and the safety-car ranking semantics.
 
 
 ⛔ **Two modules under `src/arcade/dashboard/` MOVE, they do not get deleted.** Sprint 3 made

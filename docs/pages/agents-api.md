@@ -2,7 +2,7 @@
 
 ## Module location
 
-All agents live in `src/agents/`. Each file is extracted from its corresponding notebook (N25–N31).
+All agents live in `src/agents/`. Each file is extracted from its corresponding notebook (N25-N31).
 
 ## Entry points
 
@@ -59,8 +59,8 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 
 | Field | Type | Description |
 |---|---|---|
-| `overtake_prob` | float \| None | Probability that **our car passes the car ahead** (0–1). `None` when that car is farther away than the 2.5 s gap N11 was trained on — the model has no labelled example out there, so it declines rather than extrapolating. `None` is not `0.0`: zero is what the regulation asserts under a Safety Car (Art. 55.8). |
-| `sc_prob_3lap` | float | Safety car probability within 3 laps (0–1) |
+| `overtake_prob` | float \| None | Probability that **our car passes the car ahead** (0-1). `None` when that car is farther away than the 2.5 s gap N11 was trained on — the model has no labelled example out there, so it declines rather than extrapolating. `None` is not `0.0`: zero is what the regulation asserts under a Safety Car (Art. 55.8). |
+| `sc_prob_3lap` | float | Safety car probability within 3 laps (0-1) |
 | `sc_currently_active` | bool | Any neutralisation (full Safety Car **or** Virtual Safety Car) is deployed **right now**. Not a prediction: it is read from the lap's RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces the regulatory facts (`sc_prob_3lap = 1.0`, `overtake_prob = 0` per Art. 55.8/56.6, `drs_window = 0` per Art. 22.1(c)) and activates N28. It does **not** force the action: whether to pit under a neutralisation is race state, not a rule. See [Multi-agent system](#/multi-agent). |
 | `vsc_active` | bool | The active neutralisation is specifically a **Virtual** Safety Car (Art. 56), only meaningful when `sc_currently_active` is true. Split out (#471) because a VSC and a full SC differ in pit-time saving, and the Monte Carlo / N28 prompt need to tell them apart, the single `sc_currently_active` flag could not. `sc_active` (a derived property, not a stored field) is true only under a full SC: `sc_currently_active and not vsc_active`. |
 | `threat_level` | str | LOW, MEDIUM, HIGH |
@@ -78,7 +78,7 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 | `stop_duration_p05` | float | 5th percentile stop duration (s) |
 | `stop_duration_p50` | float | Median stop duration (s) |
 | `stop_duration_p95` | float | 95th percentile stop duration (s) |
-| `undercut_prob` | float or None | Undercut success probability (0–1) |
+| `undercut_prob` | float or None | Undercut success probability (0-1) |
 | `undercut_target` | str or None | Target driver for undercut |
 | `sc_reactive` | bool | Whether recommendation is SC-reactive |
 | `reasoning` | str | LLM-generated reasoning text |
@@ -111,7 +111,7 @@ The v2 schema (frozen at 14 fields) surrounds the primary `action` with executio
 |---|---|---|
 | `action` | str | STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, ALERT, the primary decision |
 | `reasoning` | str | Multi-sentence LLM synthesis of all sub-agent inputs, MC scores and regulation constraints |
-| `confidence` | float | 0–1 LLM self-assessed certainty; treat as qualitative, not calibrated |
+| `confidence` | float | 0-1 LLM self-assessed certainty; treat as qualitative, not calibrated |
 | `pit_lap_target` | int or None | Absolute lap of the planned stop. Populated for PIT_NOW/UNDERCUT/OVERCUT, optionally for a forward-looking STAY_OUT plan |
 | `compound_next` | str or None | Compound (SOFT/MEDIUM/HARD) chosen for the next stint; None for STAY_OUT |
 | `undercut_target` | str or None | Rival code targeted by an UNDERCUT/OVERCUT (e.g. "SAI") |

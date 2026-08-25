@@ -166,8 +166,8 @@ def _pedal_multiplier(results: list[dict], channel: str) -> float:
     value *= 100`. That cannot tell "0-1 scale, full throttle" from
     "0-100 scale, barely lifting", and it resolves the ambiguity the wrong
     way for a lifting car. Measured on Melbourne 2025, where the throttle
-    channel is 0-100 (max 104): **72,104 frames, 2.34 % of the race**, were
-    genuine sub-1 % openings published as 80-odd per cent.
+    channel is 0-100 (max 104): **72,104 frames, 2.34% of the race**, were
+    genuine sub-1% openings published as 80-odd per cent.
 
     The session maximum has no such ambiguity: a 0-100 channel exceeds 1.0
     somewhere in a race and a 0-1 channel never does. One look at the whole
@@ -176,7 +176,7 @@ def _pedal_multiplier(results: list[dict], channel: str) -> float:
     # `max()` keeps a NaN when the NaN comes FIRST, because every later
     # `x > nan` is False. One driver whose whole channel is NaN and who
     # happens to sort first would then flip the multiplier for the entire
-    # session - every throttle above 1 % published as 100.0, for all twenty
+    # session - every throttle above 1% published as 100.0, for all twenty
     # cars, depending on nothing but driver order. Filtering the peaks makes
     # an all-NaN channel contribute nothing instead of deciding the answer.
     peaks: list[float] = []
@@ -250,7 +250,7 @@ def _nearest_sample(t: np.ndarray, timeline: np.ndarray) -> np.ndarray:
     which manufactures labels nobody measured. Melbourne 2025, 2,491,006 served
     frames: **1,775 DRS frames** carried 4, 5, 6, 7, 9, 11 or 13, codes the raw
     stream never contains and `DRS_OPEN_CODES` reads as closed, so an open wing
-    drew as a flicker; and **86,925 brake frames (3.49 %)** sat strictly between
+    drew as a flicker; and **86,925 brake frames (3.49%)** sat strictly between
     2 and 98 on a channel whose raw form is BOOLEAN. Both go to zero here.
 
     `fastf1.core.Telemetry._CHANNELS` marks `DRS`, `nGear` and `Brake` as

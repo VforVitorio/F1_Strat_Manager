@@ -31,7 +31,7 @@ _UI_DIR: Final[Path] = Path(__file__).resolve().parent / "ui"
 _UI_DIST: Final[Path] = _UI_DIR / "dist"
 
 # Room the OS keeps for itself, in the same logical pixels pywebview sizes
-# windows in. Measured on the machine this was found on (2560x1440 at 150 %,
+# windows in. Measured on the machine this was found on (2560x1440 at 150%,
 # so 1707x960 logical): the taskbar takes 48 and the window's own title bar
 # another 37. 90 covers both with a little slack.
 #

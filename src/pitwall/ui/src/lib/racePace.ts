@@ -8,10 +8,10 @@
  * **The colour is a RANK within the lap, not a percentage off a session best,
  * and the difference is the whole design.** Measured on the real Melbourne
  * 2025 payload, over the 776 rows this grid actually RANKS: against the
- * session's fastest lap the median lap is +13.03 % and 80.7 % of the race falls
- * past +10 %, because the race was wet and ran safety cars - so any fixed
+ * session's fastest lap the median lap is +13.03% and 80.7% of the race falls
+ * past +10%, because the race was wet and ran safety cars - so any fixed
  * percentage band paints four fifths of the grid in one colour and says
- * nothing. (This pair used to read +13.79 % / 82.4 %, which is the same
+ * nothing. (This pair used to read +13.79% / 82.4%, which is the same
  * arithmetic over 858 rows including the 82 pit laps and 6 deleted times the
  * ranking EXCLUDES and the grid never colours - a figure describing a
  * population the sentence is not about. An earlier gate certified it as "exact"
@@ -173,7 +173,7 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
  * downloadable here to test it.
  *
  * **`coarse` drops the tenths, and it exists because the column does not always
- * have room for them.** On a 1080p laptop at 150 % scaling - Windows' own
+ * have room for them.** On a 1080p laptop at 150% scaling - Windows' own
  * recommended scaling for a 13-14" screen - this window's client area is
  * 1265 x 593, the grid's twenty columns fall to 27.75 px, and the six-glyph form
  * measures 35: `1:59.4` rendered `1:59.`, `IN PIT` rendered `IN PI`, on 495 of

@@ -243,7 +243,7 @@ def test_the_plan_timeline_invents_nothing_it_was_not_told():
 def test_the_last_lap_lands_on_the_flag():
     """Off-by-one, and it is the one everybody writes.
 
-    Dividing by `total_laps` puts lap 57 of 57 at 98.2 % and leaves a sliver of
+    Dividing by `total_laps` puts lap 57 of 57 at 98.2% and leaves a sliver of
     track after the chequered flag; the span is `total_laps - 1`. And a stint's
     bar runs to the END of its last lap, so a one-lap stint has width rather
     than none.
@@ -1625,7 +1625,7 @@ def test_a_tie_has_no_winner_and_invents_no_veto():
     Two equal scores are not a leader and a loser. The arbitrary winner
     then marked the other `NOT TAKEN` - a claim about a decision nobody
     made - and min-max, with nothing to spread, floored BOTH of the joint
-    best to 6 %, which says the opposite of what a tie means.
+    best to 6%, which says the opposite of what a tie means.
     """
     from src.pitwall.agents_view.decision import build_scenarios
 

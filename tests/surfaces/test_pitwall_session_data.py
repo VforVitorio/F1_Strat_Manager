@@ -66,7 +66,7 @@ def _tick(reveal: dict[str, int], year: int = 2025, location: str = "Melbourne")
 def test_the_reveal_is_per_driver_not_one_shared_cut():
     """A single cut at the main driver's lap is wrong in both directions at once.
 
-    At 96 % of instants the running field spans two or three different laps.
+    At 96% of instants the running field spans two or three different laps.
     Masking everyone at one number therefore lags the leaders by a lap AND
     leaks one to two laps of look-ahead for the cars behind, simultaneously.
     """
@@ -719,7 +719,7 @@ def test_every_sector_column_actually_shows_numbers_over_the_race():
     The first version of `live_lap` served only the lap in progress, which is
     right for S1 and S2 and impossible for S3: S3's crossing IS the end of the
     lap. Measured over all 920 real rows, `Sector3SessionTime` lands a median
-    55 ms AFTER the lap's own crossing `Time`, and after it on 94.1 % of laps -
+    55 ms AFTER the lap's own crossing `Time`, and after it on 94.1% of laps -
     so S1 was visible for 60.3 s of its lap, S2 for 40.8 s and S3 for
     -0.055 s. One of three columns was a dash for the entire race.
 

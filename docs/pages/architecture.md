@@ -34,7 +34,7 @@ The same loop runs in three places: the CLI consumes it in batch, the Arcade ren
 
 Six layers, six pages, each linked from the agent graph and from this page.
 
-- **[Multi-agent system](#/multi-agent)**: N25–N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.
+- **[Multi-agent system](#/multi-agent)**: N25-N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.
 - **[Simulation engine](#/simulation)**: `RaceReplayEngine`, `RaceStateManager`, the `lap_state` schema every layer agrees on.
 - **[Agents API reference](#/agents-api)**, per-agent input / output schemas, model artefacts and entry-point signatures.
 - **[Backend API](#/backend-api)**: FastAPI routers, the SSE simulation endpoint, the contract the web app and the Arcade speak.

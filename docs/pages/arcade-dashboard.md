@@ -65,7 +65,7 @@ The flagship card. Four visual elements:
 
 ### `agent_card.py`
 
-Reusable widget: headline label, body `QLabel` (rich text with small monospace), and a reserved chart slot. The Pace and Tire cards slot in their `pyqtgraph` plots via `card.set_chart(widget)`. The Pit and RAG cards dim to 60 % opacity when the conditional agent did not fire on the current lap.
+Reusable widget: headline label, body `QLabel` (rich text with small monospace), and a reserved chart slot. The Pace and Tire cards slot in their `pyqtgraph` plots via `card.set_chart(widget)`. The Pit and RAG cards dim to 60% opacity when the conditional agent did not fire on the current lap.
 
 ### `agent_formatters.py`
 
@@ -147,7 +147,7 @@ Every one of these is additive — the Qt dashboard ignores them and is unaffect
 | `arcade.drivers.<code>.active` / `.rel_dist` / `.has_position` | on track, fraction of the current lap, and whether the car was ever placed at all |
 | `arcade.driver_colors` | per-driver RGB from the arcade's own palette, published so no consumer hardcodes a sixth copy of it |
 | `arcade.track_status` | FastF1 TrackStatus digits for the lap on screen |
-| `arcade.telemetry.drivers` | a **span** of samples since the last tick, oldest first, per driver code — not one point, and not just the pinned pair. At 8x, one point per tick discarded 95 % of the trace. Schema v2 replaced the role keys `main`/`rival` with the whole grid so a consumer can chart any car without asking the producer to publish it; read the old pair as `drivers[driver_main]` and `drivers[driver_rival]` |
+| `arcade.telemetry.drivers` | a **span** of samples since the last tick, oldest first, per driver code — not one point, and not just the pinned pair. At 8x, one point per tick discarded 95% of the trace. Schema v2 replaced the role keys `main`/`rival` with the whole grid so a consumer can chart any car without asking the producer to publish it; read the old pair as `drivers[driver_main]` and `drivers[driver_rival]` |
 | `arcade.telemetry.rewound` / `.dropped` | the eviction signals: a backwards seek, and frames a forward jump could not carry |
 | `arcade.global_t_min` / `.location` | the session-time origin, and FastF1's authoritative Location for resolving the race directory |
 | `schema_version` / `seq` | the payload version, and a strictly increasing sequence per message SENT — which is what lets two consumers on independent timers agree on a frame |

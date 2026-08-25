@@ -138,7 +138,7 @@ def legible_fill(
     fill = background
     text = readable_on(fill)
     away = TEXT_PRIMARY if text == BG_COLOR else BG_COLOR
-    # Twelve 8 % steps reach either ground; the loop exits on the first
+    # Twelve 8% steps reach either ground; the loop exits on the first
     # that clears, so a colour already passing is returned unchanged.
     for _ in range(12):
         if contrast_ratio(text, fill) >= _AA_SMALL_TEXT:

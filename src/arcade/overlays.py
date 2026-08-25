@@ -600,10 +600,10 @@ class LeaderboardPanel:
         different numbers and the drift reaches 1877 m on a 5220 m
         circuit. Measured under the convention stated at the top of
         `gaps.py` — do not restate figures here under a different one,
-        which is how this docstring and that one came to publish 0.7 % and
-        2.0 % for the same quantity — a descending `dist` sort puts the
-        wrong car in the lead on 37 % of sampled frames; this key gets it
-        wrong on 1.7 % and reproduces the whole running order exactly on
+        which is how this docstring and that one came to publish 0.7% and
+        2.0% for the same quantity — a descending `dist` sort puts the
+        wrong car in the lead on 37% of sampled frames; this key gets it
+        wrong on 1.7% and reproduces the whole running order exactly on
         236 of 300.
 
         A car whose progress is unknown sorts last and carries `None`

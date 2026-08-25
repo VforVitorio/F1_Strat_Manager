@@ -1,6 +1,6 @@
-# Multi-Agent Strategy Architecture (N25–N31)
+# Multi-Agent Strategy Architecture (N25-N31)
 
-**The F1 StratLab multi-agent system is a LangGraph pipeline of six sub-agents (N25–N30) and one orchestrator (N31) that turns a per-lap `lap_state` into a typed `StrategyRecommendation`**, fusing ML model inference, Monte Carlo simulation and LLM synthesis across three layers.
+**The F1 StratLab multi-agent system is a LangGraph pipeline of six sub-agents (N25-N30) and one orchestrator (N31) that turns a per-lap `lap_state` into a typed `StrategyRecommendation`**, fusing ML model inference, Monte Carlo simulation and LLM synthesis across three layers.
 
 ## Purpose
 
@@ -91,7 +91,7 @@ Four properties are load-bearing:
 
 1. **The arcade owns the `TelemetryStreamServer`.** `src/arcade/stream.py` exposes the merged arcade + strategy snapshot; every other window is a subscriber, never the source of truth.
 2. **One subprocess hosts both windows.** The arcade spawns a single `subprocess.Popen`. Two windows in one process is cheaper than two, and it is what lets them share a single stream reader.
-3. **The two windows share ONE stream reader.** `PitwallHost` owns a single `ArcadeStreamClient` and both windows poll it by sequence number, so they cannot disagree about which frame they are showing - a blind latest-payload slot had them differing on 58 % of polls. Closing one window only decrements a count; it does not blind the other.
+3. **The two windows share ONE stream reader.** `PitwallHost` owns a single `ArcadeStreamClient` and both windows poll it by sequence number, so they cannot disagree about which frame they are showing - a blind latest-payload slot had them differing on 58% of polls. Closing one window only decrements a count; it does not blind the other.
 4. **Arcade runs the strategy pipeline in-process.** `src/arcade/strategy_pipeline.py` delegates to the shared engine (`src/strategy/inference/engine.py::run_lap`), so the arcade does not depend on the FastAPI backend at runtime and does not carry its own copy of the orchestrator. It used to; that copy drifted and crashed (#166), which is why the engine exists.
 
 See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the shared engine and its profiles, and [PITWALL windows](#/pitwall) for the follower architecture.
@@ -102,7 +102,7 @@ See [Arcade strategy pipeline](#/arcade-strategy-pipeline) for the shared engine
 
 Wraps the N06 XGBoost delta-lap-time model. Returns predicted lap time, delta signals against previous lap and session median, and bootstrap confidence intervals (N=200 draws with 2% Gaussian noise on continuous features).
 
-- **Model**: XGBoost fitted on 2023–2024 lap data, with **2025 held out**. This line used to read "2023–2025", which quietly folded the test season into the training set: the feature manifest's own row counts are 22,106 train and 23,256 validation, exactly the 2023 and 2024 featured parquets, and every operating bound below is measured on those two seasons for the same reason.
+- **Model**: XGBoost fitted on 2023-2024 lap data, with **2025 held out**. This line used to read "2023-2025", which quietly folded the test season into the training set: the feature manifest's own row counts are 22,106 train and 23,256 validation, exactly the 2023 and 2024 featured parquets, and every operating bound below is measured on those two seasons for the same reason.
 - **Output**: `PaceOutput` (lap_time_pred, delta_vs_prev, delta_vs_median, ci_p10, ci_p90)
 - **Circuit feature**: `mean_sector_speed` is a property of the track, one value per GP, looked up from the featured parquet. It used to be substituted with the speed trap on every call through the `RaceStateManager` path; see the operating-envelope section under N28 for how that surfaced.
 - **No LLM step**: unlike its tire/pit/race-situation siblings below, pace calls the XGBoost model directly — `reasoning` is a deterministic f-string, not LLM output. Pace is the one always-on agent with no qualitative judgment to make (no `warning_level`/`action`/`threat_level` category alongside its numbers), so a `pace_agent.py` once carried a complete but never-wired LangGraph ReAct scaffold; it was formally retired in #781 after the #778/#779/#780 archaeology and decision. See [agents-api.md](#/agents-api) for the full record.
@@ -393,7 +393,7 @@ One consequence worth knowing before debugging a call: **the effect does not sho
 
 | Layer | Model | Provider |
 |---|---|---|
-| Sub-agents N26–N29 | gpt-4.1-mini | OpenAI or LM Studio |
+| Sub-agents N26-N29 | gpt-4.1-mini | OpenAI or LM Studio |
 | Orchestrator N31 | gpt-5.4-mini | OpenAI or LM Studio |
 
 N25 (pace) is not in this table — it never calls an LLM, see the "No LLM step" note under [N25: Pace Agent](#/multi-agent#n25-pace-agent-paceagentpy) above.

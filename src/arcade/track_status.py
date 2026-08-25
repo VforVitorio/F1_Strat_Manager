@@ -78,7 +78,7 @@ def neutralised_label(code: str | None) -> str | None:
     ranks every timed lap into thirds and paints the thirds green / grey / amber,
     and under a safety car those thirds are the accordion's queue order, not
     pace. Measured on Melbourne 2025, 22 of 57 laps carry a safety-car digit and
-    **213 of the 776 cells the grid ranks (27.4 %)** sit on one, with lap times
+    **213 of the 776 cells the grid ranks (27.4%)** sit on one, with lap times
     running 86.4-148.2 s (median 131.6) against a green median of 91.9.
 
     A single yellow returns None on purpose. It is sector-local: the cars that

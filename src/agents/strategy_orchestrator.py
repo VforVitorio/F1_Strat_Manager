@@ -2,7 +2,7 @@
 
 Strategy Orchestrator — extraction from N31_strategy_orchestrator.ipynb.
 
-End-to-end multi-agent supervisor that integrates N25–N30 sub-agents through
+End-to-end multi-agent supervisor that integrates N25-N30 sub-agents through
 three processing layers:
 
   Layer 1 — MoE routing: deterministic if-else rules decide which conditional

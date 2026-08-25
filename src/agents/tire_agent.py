@@ -1714,7 +1714,7 @@ class TireAgent:
         Returns:
             Fully populated TireOutput.
         """
-        # TCN bundles only exist for dry compounds (C1–C6). For wet/intermediate
+        # TCN bundles only exist for dry compounds (C1-C6). For wet/intermediate
         # compounds return a stub with conservative defaults — no TCN inference.
         if compound_id not in self.bundles:
             return self._conservative_stub(

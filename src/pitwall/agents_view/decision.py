@@ -372,7 +372,7 @@ def build_orchestrator(
         # `_ACTION_STYLE`'s colours plus the ACCENT fallback clear AA.
         "action_colour": hex_str(badge_colour),
         "confidence": confidence,
-        # The bar's width, to the 0.1 % Qt's gradient stop resolves to
+        # The bar's width, to the 0.1% Qt's gradient stop resolves to
         # (`orchestrator_card.py::_bar_style` rounds the stop to 3 dp).
         # The client used to do this with `Math.round`, which is both
         # coarser and the exact kind of arithmetic the view exists to
@@ -390,7 +390,7 @@ def build_orchestrator(
         "risk_colour": hex_str(_RISK_COLOURS.get(str(risk_posture or "").upper(), TEXT_TERTIARY)),
         "plan": _plan_line(latest, action),
         # The band's WHY module: one sentence on the glass, the rest a keypress
-        # away. The panel that used to hold the whole narrative measured 1.9 %
+        # away. The panel that used to hold the whole narrative measured 1.9%
         # ink, so the trade is a line that is always read against a block that
         # mostly was not.
         "why": first_sentence(latest.get("reasoning")),
@@ -480,7 +480,7 @@ def build_scenarios(
         present = key in raw
         value = raw.get(key, lo)
         # Every scored candidate FULL when they are all equal: min-max has
-        # nothing to spread and flooring them all to 6 % said the opposite of
+        # nothing to spread and flooring them all to 6% said the opposite of
         # what a tie means.
         scaled = 1.0 if span == 0 else min(1.0, max(0.0, (value - lo) / span))
         fill = max(scaled, _SCORED_FLOOR) if present else 0.0
@@ -500,7 +500,7 @@ def build_scenarios(
                 "key": key,
                 "label": SCENARIO_LABELS[key],
                 "fill": fill,
-                # The bar's width in per cent, to the 0.1 % Qt's gradient
+                # The bar's width in per cent, to the 0.1% Qt's gradient
                 # stop resolves to. Its twin one card up already came from
                 # here; this one was still scaling 0-1 in the renderer,
                 # unrounded, which is the arithmetic the view exists to

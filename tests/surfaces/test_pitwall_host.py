@@ -36,7 +36,7 @@ def test_a_window_only_gets_a_tick_it_has_not_seen():
     """The whole reason `since_seq` exists.
 
     Two windows polling one latest-payload slot on independent 10 Hz timers
-    were measured reading a different frame on 58 % of polls, with 15
+    were measured reading a different frame on 58% of polls, with 15
     duplicate reads and 15 skips out of 54. The parameter removes both.
     """
     client = _FakeClient(_tick(7))
@@ -112,7 +112,7 @@ def test_a_payload_with_no_sequence_is_returned_rather_than_withheld():
 # `rewound` and `dropped` describe the gap BETWEEN two ticks rather than the
 # state of one, so the latest-payload slot - which is right to keep only the
 # newest snapshot - is wrong to drop them with the tick that carried them.
-# Measured before the fix: 6 of 905 published ticks (0.7 %) were never served to
+# Measured before the fix: 6 of 905 published ticks (0.7%) were never served to
 # a window polling the way `useTick` polls.
 
 
@@ -253,7 +253,7 @@ def test_the_signal_log_and_the_slot_are_read_as_ONE_snapshot():
     picks up ticks NEWER than the payload being served while the caller's cursor
     only advances to that payload - so the same entries are folded again on the
     next poll. Measured against a live producer, that over-counts `dropped` by
-    66 %, and every phantom count is a spurious eviction of the buffer this fix
+    66%, and every phantom count is a spurious eviction of the buffer this fix
     exists to protect.
 
     The observable invariant: whatever `snapshot` returns, its last log entry
@@ -476,7 +476,7 @@ def test_shutdown_stops_the_client_whatever_is_open(window_count):
 # A window bigger than the desktop is not scrolled, it is CLIPPED, and the part
 # that goes missing is the bottom - where both PITWALL windows keep their
 # status bar. Found by opening the real windows on a 2560x1440 display at
-# 150 %, which is 1707x960 logical with a 912-pixel work area: DATA asks for
+# 150%, which is 1707x960 logical with a 912-pixel work area: DATA asks for
 # 950 and its status bar rendered under the taskbar, with the bottom row's
 # "Distance (m)" axis label sliced in half.
 #
@@ -487,7 +487,7 @@ def test_shutdown_stops_the_client_whatever_is_open(window_count):
 def test_every_window_opens_fully_inside_the_work_area():
     """The measured case: both windows on Victor's own display.
 
-    1707x960 logical is a 2560x1440 panel at 150 %, and its work area is 912
+    1707x960 logical is a 2560x1440 panel at 150%, and its work area is 912
     tall. DATA asks for 950, so its status bar rendered under the taskbar and
     the bottom row's "Distance (m)" label was sliced in half.
 
@@ -554,7 +554,7 @@ def test_the_second_window_is_still_grabbable(screen):
 
 
 # The desktop every placement number in this section is measured on: a 2560x1440
-# panel at 150 %, which is 1707x960 logical.
+# panel at 150%, which is 1707x960 logical.
 _REFERENCE_SCREEN = (1707, 960)
 
 # What the OS keeps for itself BETWEEN a placed window and the page inside it,

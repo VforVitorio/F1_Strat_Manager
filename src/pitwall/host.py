@@ -8,7 +8,7 @@ traps before a line was written:
 
 1. **`get_tick` is sequenced, never a blind slot.** Two windows polling one
    latest-payload slot on independent 10 Hz timers were measured reading a
-   different frame on 58 % of polls - 15 duplicate reads and 15 skips out of
+   different frame on 58% of polls - 15 duplicate reads and 15 skips out of
    54. Passing the last sequence a window saw removes both, and the sequence
    is not invented here: the producer already stamps `seq` on every message.
 2. **Closing one window must not stop the shared client.** The client is
@@ -453,7 +453,7 @@ class PitwallHost:
         # is the defect #934 cost a sprint. Measured cost of carrying it: the
         # bulk is 66,991 / 152,657 / 337,289 bytes at reveal L10 / L24 / L57 on
         # the real Melbourne payload, and the largest feed in the whole corpus
-        # (Monaco, 210 events) is about 31 KB - 9 %.
+        # (Monaco, 210 events) is about 31 KB - 9%.
         view["radio"] = (
             radio_unavailable() if self._radio is None else self._radio.masked_view(reveal)
         )

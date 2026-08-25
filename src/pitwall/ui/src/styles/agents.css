@@ -333,7 +333,7 @@
 
 /* **Size the CARD, not the cell.** A grid cell stretches its item by default,
  * so the four text consoles took whatever height their row was handed and
- * carried the difference as dead strip inside a bordered panel - 44-57 % of
+ * carried the difference as dead strip inside a bordered panel - 44-57% of
  * the card on the layout this replaces, and the reason sprint 8 made the rows
  * content-sized in the first place. An empty bordered panel reads as content
  * missing; window background does not read as anything.
@@ -736,7 +736,7 @@
 /* --- WHY (band module 2) --------------------------------------------------
  *
  * What stood here was a `QTabWidget` port: six tabs and a monospace pane, the
- * largest bordered surface on the window carrying five short lines at 1.9 %
+ * largest bordered surface on the window carrying five short lines at 1.9%
  * ink with 318 px of it empty. The tabs are gone; the module holds the one
  * sentence that earned the glass and points at the rest. */
 

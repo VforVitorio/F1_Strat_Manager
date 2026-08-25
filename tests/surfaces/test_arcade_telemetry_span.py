@@ -78,8 +78,8 @@ def _collect_spans(speeds_and_ticks, start_frame: float = 0.0):
 def test_every_frame_the_clock_crosses_is_sent_exactly_once(speed):
     """No gaps and no duplicates, at 0.25x through 8x.
 
-    Before the span this failed in both directions: 60 % of frames never
-    left the process at 1x and 95 % at 8x, while at 0.25x the same frame
+    Before the span this failed in both directions: 60% of frames never
+    left the process at 1x and 95% at 8x, while at 0.25x the same frame
     was re-sent because the broadcast outran the clock.
     """
     sent, _ = _collect_spans([(speed, 60)])
@@ -726,7 +726,7 @@ def test_the_brake_channel_is_the_boolean_it_was_measured_as():
     """`Brake` is `{'type': 'discrete'}` to FastF1 and False/True in the raw stream.
 
     It lived in the resampler's CONTINUOUS set and was multiplied by 100, so
-    **86,925 served frames (3.49 %) sat strictly between 2 and 98** across 10,976
+    **86,925 served frames (3.49%) sat strictly between 2 and 98** across 10,976
     distinct values, none of which any car ever published.
     """
     frames = _active_frames(_melbourne_or_skip())

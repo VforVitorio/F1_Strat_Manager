@@ -89,7 +89,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 N_BOOTSTRAP: int = 200
-_NOISE_PCT: float = 0.02  # 2 % Gaussian noise on continuous features
+_NOISE_PCT: float = 0.02  # 2% Gaussian noise on continuous features
 
 # Seconds of lap time recovered per lap as fuel burns off. N04 builds the training
 # feature as (TyreLife - min(TyreLife of the stint)) * 0.055 — verified exactly against
@@ -274,9 +274,9 @@ class PaceAgent:
 
     Args:
         models_dir: Directory containing xgb_laptime_delta_final.json and
-            the feature name JSON. Defaults to the repo-root–relative path.
+            the feature name JSON. Defaults to the repo-root-relative path.
         processed_dir: Directory containing circuit clusters, laps_featured,
-            and feature manifest. Defaults to the repo-root–relative path.
+            and feature manifest. Defaults to the repo-root-relative path.
     """
 
     def __init__(

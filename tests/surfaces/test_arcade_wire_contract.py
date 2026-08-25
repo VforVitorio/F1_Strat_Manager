@@ -804,7 +804,7 @@ def _drift_frames(n: int, speed_mps: float, drift_per_lap_m: float = 0.0) -> lis
     `dist` is race-cumulative metres, so it looks like a progress axis and
     is not one: each car accumulates the distance IT drove. On the real race
     that drift reaches 1877 m on a 5220 m circuit, and sorting on it put the
-    wrong car in the lead on 37 % of sampled frames.
+    wrong car in the lead on 37% of sampled frames.
     """
     circuit = 5000.0
     lap_length = circuit + drift_per_lap_m
@@ -884,7 +884,7 @@ def test_the_reveal_carrier_is_per_driver_and_not_the_main_driver_lap():
     """Band 1-2 reveals lap L for driver d iff `L <= laps_completed`.
 
     The tick carries only the MAIN driver's lap, and on the real race the
-    field spans two or three different laps at 96 % of instants - so masking
+    field spans two or three different laps at 96% of instants - so masking
     everyone at one lap lags the leaders and leaks look-ahead for the cars
     behind, at the same time. `laps_completed` reads the crossing map, so it
     is per driver and monotone forward. `lap` is not interpolated (it has been

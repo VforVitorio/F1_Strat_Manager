@@ -25,7 +25,7 @@ design intent.
 
 F1 driver lineups change every season. A driver may switch teams between years,
 so the colour associated with a driver abbreviation must be season-specific.
-This module provides a year-aware palette covering the 2023–2025 seasons.
+This module provides a year-aware palette covering the 2023-2025 seasons.
 
 ## Design
 

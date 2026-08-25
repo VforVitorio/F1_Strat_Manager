@@ -9,7 +9,7 @@ Two quantities live here and they share one coordinate:
 
 What this replaces was a distance difference divided by a hardcoded
 55.56 m/s (200 km/h) for every car, everywhere on track, in every condition:
-about 13 % too large on a fastest lap and about 57 % too small under a
+about 13% too large on a fastest lap and about 57% too small under a
 Safety Car, on a project whose stated thesis is data fidelity.
 
 Why `dist` is not the coordinate, despite being the obvious one
@@ -19,7 +19,7 @@ progress axis and the old code sorted on it. It is not one: **each car
 accumulates the distance IT drove**, so two cars at the same corner hold
 different numbers, and the difference grows all race. Measured on
 Melbourne 2025, the drift reaches **1877 m for a single car and 1469 m
-between two cars on a 5220 m circuit** — 28 % of a lap, not the "tens of
+between two cars on a 5220 m circuit** — 28% of a lap, not the "tens of
 metres" an earlier version of this docstring claimed.
 
 Everything measured below uses ONE convention, stated here because three
@@ -36,8 +36,8 @@ two docstrings and a session log:
 
 Under it, the form this code replaced — `(lap - 1) * circuit_length` added
 to a `dist` that already contains the completed laps — puts **the wrong
-car in the lead on 37 %** of those frames, and so does a plain descending
-`dist` sort. The coordinate below gets the leader wrong on **1.7 %**
+car in the lead on 37%** of those frames, and so does a plain descending
+`dist` sort. The coordinate below gets the leader wrong on **1.7%**
 (5 of 300) and reproduces the whole running order exactly on **236 of
 300**. Every one of the five is a pair racing within a tenth of a lap,
 where "leader" legitimately differs between on-track order and the
@@ -48,11 +48,11 @@ is normalising it per car, by the true length of the lap that car is on,
 so the drift cancels instead of accumulating. See `progress`.
 
 The same drift is why `laps_down` cannot be a `dist` difference over a
-circuit length: over 4,934 same-corner pairs (within 2 % of a lap of each
-other) it disagrees with the positional answer on **3.4 %** — 169 pairs,
+circuit length: over 4,934 same-corner pairs (within 2% of a lap of each
+other) it disagrees with the positional answer on **3.4%** — 169 pairs,
 measured as `int((d_front - d_back) / L)`, truncation toward zero, which
 is the convention this sentence used to leave unstated (a `//` floor
-gives 34.1 %). **Not "always"**: 148 of the 169 run in the direction that
+gives 34.1%). **Not "always"**: 148 of the 169 run in the direction that
 makes a lapped car read as a same-lap car, and 21 run the other way.
 
 Why the interval is at the line and not live
@@ -78,7 +78,7 @@ That row is 7,017 distinct pairs. Three honest caveats on it:
    comes out at 0.880 s against an official 0.895 s and NOR-RUS at 8.480 s
    against an official 8.481 s.
 2. **The error budget is not "one frame".** Per crossing (n=921) the error
-   is median 22 ms, p95 67 ms and worst 486 ms, and **9.8 % land more than
+   is median 22 ms, p95 67 ms and worst 486 ms, and **9.8% land more than
    one 40 ms frame from the parquet time**, because the `lap` field is a
    resampled step function rather than a true line detector: the crossing
    lands on whichever resampled frame first carries the new lap, never on
@@ -94,7 +94,7 @@ That row is 7,017 distinct pairs. Three honest caveats on it:
 
 It costs one property: the interval updates once a lap and steps at the
 line. That is what a real timing screen does, it is labelled `(L)` on
-screen, and it beats a live number that is right 90 % of the time and
+screen, and it beats a live number that is right 90% of the time and
 300 s out for the rest.
 """
 
@@ -241,7 +241,7 @@ def _derived_flag_frames(
     1. *A race whose leader retires on the final lap.* The retiree anchors,
        is credited the full race distance, is drawn P1 above the actual
        winner, and every car still moving past its stop - later genuine
-       retirees included - reads as a finisher. A leader stopping at 40 %
+       retirees included - reads as a finisher. A leader stopping at 40%
        of the final lap still anchors.
     2. *A clean winner, whenever adjacent-lap noise exceeds the flag gap.*
        At its own end a car's fraction is its final-lap distance over the

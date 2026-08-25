@@ -82,7 +82,7 @@ def test_a_browser_gets_the_same_sequenced_payload_a_window_gets(served: str):
     """The sequencing is the whole reason two consumers do not disagree.
 
     Gate A measured two pollers against a blind latest-payload slot reading a
-    different frame on 58 % of polls. Adding a transport that ignored `since`
+    different frame on 58% of polls. Adding a transport that ignored `since`
     would put that back for the browser.
     """
     status, content_type, body = _get(served + "/api/tick?since=-1")

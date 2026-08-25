@@ -3,7 +3,7 @@
  *
  * **It replaces the reasoning tab panel, which is retired here.** That panel
  * was the largest bordered surface on the window and carried five short lines
- * at 1.9 % ink, with 318 px of it empty; its glance-value content was one line
+ * at 1.9% ink, with 318 px of it empty; its glance-value content was one line
  * of orchestrator prose. So the line is promoted onto the glass and the rest
  * goes one keypress away, into the same popup the agent consoles use for their
  * model detail.

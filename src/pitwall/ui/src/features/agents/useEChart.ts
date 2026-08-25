@@ -28,7 +28,7 @@ import { valueAxis } from "../../lib/chart";
  *
  * ⚠️ This block previously argued the opposite, that the two AGENTS charts
  * were "correct by accident" because their axis extent is constant across
- * 97.7 % of ticks. That reasoning is refuted: a constant extent decides where
+ * 97.7% of ticks. That reasoning is refuted: a constant extent decides where
  * the animation ENDS, not whether it gets there, and it never gets there.
  * Víctor reported the flicker; the measurement above is what settled it.
  * `animation: false` is also the 1:1 answer, since pyqtgraph does not animate.
@@ -67,8 +67,8 @@ export function secondsAxis(range: readonly [number, number]) {
  *
  * SOLID and in the dimmest text colour. A dashed vertical already means a
  * compound boundary on the tyre chart, and the two charts previously shared
- * a quantity without sharing a landmark: "now" sat at 95 % of one plot and
- * 47 % of the other with nothing naming it on either.
+ * a quantity without sharing a landmark: "now" sat at 95% of one plot and
+ * 47% of the other with nothing naming it on either.
  */
 export function currentLapMark(lap: number | null | undefined, colour: string) {
   // `== null` on purpose, covering undefined too. A view built before this

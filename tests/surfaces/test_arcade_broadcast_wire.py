@@ -213,7 +213,7 @@ def test_a_car_with_no_position_data_is_unknown_rather_than_at_the_line():
     the loader derives the fraction from the driver's own distance, and a
     car that never moves comes out finite **0.0** — which is not a clamp
     but is still a position, "at the line", and on Melbourne 2025 it rides
-    the wire on 100 % of HAD's frames with `active` true for 2,935 of them.
+    the wire on 100% of HAD's frames with `active` true for 2,935 of them.
 
     The fixture is built by the real derivation, so this asserts about a
     state production can actually reach.
@@ -287,7 +287,7 @@ def test_the_pedal_scale_is_not_decided_by_which_driver_sorts_first():
 
     One driver whose whole throttle channel is NaN, sorting ahead of the
     others, therefore flipped the session multiplier from 1.0 to 100.0 —
-    every pedal reading above 1 % published as 100.0, for all twenty cars,
+    every pedal reading above 1% published as 100.0, for all twenty cars,
     on nothing but driver order. Not triggered on Melbourne 2025, where
     HAD's pedal channels are real; silent and global when it is.
     """

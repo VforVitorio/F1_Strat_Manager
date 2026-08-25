@@ -409,7 +409,7 @@ class PitStrategyOutput:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _compound_to_id(compound: str, gp_name: str, year: int) -> int:
-    """Convert SOFT/MEDIUM/HARD to Pirelli compound number (C1–C5/C6).
+    """Convert SOFT/MEDIUM/HARD to Pirelli compound number (C1-C5/C6).
 
     Uses the nested TIRE_COMPOUNDS structure {year_str: {gp_name: {compound: Cx}}}.
     The Cx string (e.g. 'C3') is stripped to its integer (3). Falls back to
@@ -421,7 +421,7 @@ def _compound_to_id(compound: str, gp_name: str, year: int) -> int:
         year: Race year as int.
 
     Returns:
-        Integer compound number (1–6).
+        Integer compound number (1-6).
     """
     # The keyspace trap: queried with the metadata name ('Miami Gardens') this missed and
     # returned _COMPOUND_FALLBACK, which for 2025 Miami is 1 where the answer is 3 (HARD)

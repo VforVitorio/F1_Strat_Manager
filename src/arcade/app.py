@@ -153,7 +153,7 @@ def _lap_fraction(rel_dist: float) -> float | None:
     - ``json.dumps`` writes a bare ``NaN``, which Python's own parser
       accepts and ``JSON.parse`` rejects, so a single unknown value took
       the whole payload down for a web consumer. FastF1 used to leave
-      ``RelativeDistance`` NaN for 100 % of one driver's frames.
+      ``RelativeDistance`` NaN for 100% of one driver's frames.
     - clamping is worse than dropping: ``min(1.0, nan)`` is ``1.0``, and
       1.0 means "at the line", so the car with no position data would be
       drawn exactly on the lap boundary rather than nowhere.
@@ -180,7 +180,7 @@ def _frame_to_telemetry(frame, circuit_length_m: float, has_position: bool = Tru
     scale is decided ONCE per session in `data.py` (`_pedal_multiplier`),
     not guessed per frame here. The guess used to be `if value <= 1.0:
     value *= 100`, which cannot tell "0-1 scale, full throttle" from
-    "0-100 scale, barely lifting" and published 72,104 sub-1 % openings as
+    "0-100 scale, barely lifting" and published 72,104 sub-1% openings as
     80-odd per cent on Melbourne 2025 alone. ``t`` is included so the
     delta-time chart can interpolate rival vs main."""
     if frame is None:
@@ -721,7 +721,7 @@ class F1ArcadeView(arcade.View):
             }
         # --- Race order and the reveal coordinates (#857) -------------------
         # Published by the producer so no consumer re-derives the order from
-        # `dist` (race-cumulative: the wrong leader on 37 % of sampled frames)
+        # `dist` (race-cumulative: the wrong leader on 37% of sampled frames)
         # or from `lap` (a rounded interpolation that flickers +-1 at the
         # line). `_rank_drivers` is the SAME code the arcade leaderboard ranks
         # with, so the wire and the panel cannot drift apart.
@@ -731,13 +731,13 @@ class F1ArcadeView(arcade.View):
         #   reveal (reveal lap L iff L <= laps_completed). It reads the
         #   crossing map, so it is monotone while playing forward - swept
         #   over 20 drivers x 154,173 frames, no counter-example. It is NOT
-        #   exact against the parquet: 76 of 921 crossings (8.3 %) open
+        #   exact against the parquet: 76 of 921 crossings (8.3%) open
         #   before the parquet's `Time` by more than HALF A FRAME (0.02 s),
         #   worst case 0.463 s, because the `lap` field these crossings are
         #   detected from is an interpolation rather than a line detector.
         #   The half-frame threshold is the convention, and stating it is the
-        #   point: strictly greater than zero the count is 110 (11.9 %) and
-        #   beyond a full 40 ms frame it is 49 (5.3 %). Sub-half-frame is
+        #   point: strictly greater than zero the count is 110 (11.9%) and
+        #   beyond a full 40 ms frame it is 49 (5.3%). Sub-half-frame is
         #   rounding noise, but a reader cannot know that from the number.
         #   Monotone and per driver, not frame-accurate.
         # - `progress` is the ordering coordinate, laps plus fraction of the
@@ -764,7 +764,7 @@ class F1ArcadeView(arcade.View):
         #
         # The clock advances `delta_time * FPS * speed` indices per second
         # over 25 Hz data while the broadcast fires at ~10 Hz, so sending one
-        # point per tick discarded 60 % of the trace at 1x and 95 % at 8x: a
+        # point per tick discarded 60% of the trace at 1x and 95% at 8x: a
         # speed trace went from a point every 8 metres to one every 170. The
         # producer already holds the whole array, so the span costs a slice
         # and no disk read.
@@ -782,8 +782,8 @@ class F1ArcadeView(arcade.View):
         #
         # **A retired car still carries a span**, because its frame array runs
         # the full length of the race and the values simply stop changing. On
-        # Melbourne 2025 that is three lap-1 retirements, 14.5 % of the arcade
-        # block on a seek tick and about 13.8 % of the whole message once the
+        # Melbourne 2025 that is three lap-1 retirements, 14.5% of the arcade
+        # block on a seek tick and about 13.8% of the whole message once the
         # strategy block rides along. What each of them costs per tick moves with
         # playback: a span is `FPS x speed / 10 Hz` samples, so 2-3 at 1x and 20
         # at 8x, not a fixed handful. They stay: `active` and `has_position` are published beside

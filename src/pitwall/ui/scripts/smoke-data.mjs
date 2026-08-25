@@ -2197,7 +2197,7 @@ const PACE_LAPPED = { code: "LAW", laps: 55 };
  * A car that RACED and then stopped, unlike `RETIRED_CODES` who never started.
  *
  * The existing retirees carry zero crossings, so removing them from a reference
- * average changes nothing - which is exactly why the fixture was 100 % blind to
+ * average changes nothing - which is exactly why the fixture was 100% blind to
  * a reference computed over CURRENT status moving the drawn history under the
  * reader. This one has 30 real laps behind him and then nothing.
  */
@@ -2280,8 +2280,8 @@ function paceBulk() {
       // tenths are rounded - a non-time that the cell regex below accepts.
       const onBoundary = code === TOWER_ORDER[2] && lap === 50;
       // Laps 2-6 are the safety car, and they are in this fixture because the
-      // REAL race has them: measured on Melbourne 2025, 82.4 % of laps sit
-      // past +10 % of the session best, so a heat scale anchored on that best
+      // REAL race has them: measured on Melbourne 2025, 82.4% of laps sit
+      // past +10% of the session best, so a heat scale anchored on that best
       // paints four fifths of the grid one colour. A tidy fixture cannot tell
       // the two scales apart - this one can.
       // Laps 2-6 are one range; lap 30 is a SECOND, ONE lap long. A live safety
@@ -2679,7 +2679,7 @@ check(
 );
 
 // The reason the colour ranks each lap against ITSELF. Anchored on the session
-// best with fixed percentage bands, 82.4 % of the real Melbourne payload lands
+// best with fixed percentage bands, 82.4% of the real Melbourne payload lands
 // in one colour, because the race was wet and ran safety cars.
 const spread = [paceCells.t1, paceCells.t2, paceCells.t3];
 check(
@@ -2692,7 +2692,7 @@ check(
 // does - the tidy laps look the same under both. Under a neutralisation the
 // whole field is bunched, so any fixed percentage band collapses it into one
 // or two tones and stops discriminating at exactly the moment a strategist is
-// reading the grid. Measured on a mutated copy that banded at 1.5 % / 4 %:
+// reading the grid. Measured on a mutated copy that banded at 1.5% / 4%:
 // 40 / 45 / 0, the slowest tone empty across all five laps. Ranking inside the
 // lap splits the field whatever the spread.
 const scLaps = await pacePage.evaluate(() => {
@@ -2767,7 +2767,7 @@ check(
 //
 // `paceCells.clipped === 0` is asserted at 1485 x 833, the largest client in the
 // fleet, where the columns are 38.75 px and nothing clips. It passed all the way
-// through the P0: on a 1080p laptop at 150 % scaling - Windows' own recommended
+// through the P0: on a 1080p laptop at 150% scaling - Windows' own recommended
 // scaling for a 13-14" screen - the client is 1265 x 593, the columns fall to
 // 27.75 px, and 495 of 514 populated cells lost their last glyph in silence.
 //

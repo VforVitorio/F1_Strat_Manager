@@ -43,14 +43,14 @@ export const SPLIT_LINE = "rgba(255,255,255,0.06)";
  */
 export const CURSOR_LINE = "#9ca3af";
 /**
- * `palette.WARNING` at 12 % - the shaded lap range the field was neutralised on.
+ * `palette.WARNING` at 12% - the shaded lap range the field was neutralised on.
  *
  * A translucent FILL rather than a stroke, and that is the constraint rather
  * than a preference: on this window a dashed line already means broadcast-tier
  * data and a solid thin vertical is the current-lap cursor, so a band needed a
  * channel of its own.
  *
- * **8 %, and 12 % was measurably too much.** The alpha is the one number in this
+ * **8%, and 12% was measurably too much.** The alpha is the one number in this
  * file chosen for how it looks, so it is the one that needed arithmetic rather
  * than an eye. Composited over the panel - rgb(24,22,51) under rgb(245,158,11) -
  * the red channel overtakes the blue at alpha 0.1034: past that the surface stops

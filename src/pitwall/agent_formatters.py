@@ -260,7 +260,7 @@ def format_situation(s: dict[str, Any] | None) -> Formatted:
     by the same status mapping used for the other agent cards. Body rows
     expand into the underlying numerics: the calibrated overtake
     probability, the 3-lap safety-car probability (highlighted in WARNING
-    when above 15 % so the user notices an imminent SC risk), and a
+    when above 15% so the user notices an imminent SC risk), and a
     composite line that pairs the gap to the car ahead with the 3-lap
     rolling pace delta. The pace delta uses the project's signed-number
     convention so a faster driver reads as a negative value, matching the

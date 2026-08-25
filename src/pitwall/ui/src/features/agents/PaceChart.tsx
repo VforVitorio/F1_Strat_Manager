@@ -55,8 +55,8 @@ export function PaceChart({ series }: { series: PaceSeries }) {
           ]
         : [],
       // The tyre chart's lap axis, borrowed. Two charts of the same quantity
-      // side by side used to autorange independently, so lap 23 sat at 95 %
-      // of this plot and 47 % of its neighbour — a comparison a reader
+      // side by side used to autorange independently, so lap 23 sat at 95%
+      // of this plot and 47% of its neighbour — a comparison a reader
       // cannot make, on the one screen where they are meant to make it.
       xAxis: lapAxis(series.x_range),
       series: [

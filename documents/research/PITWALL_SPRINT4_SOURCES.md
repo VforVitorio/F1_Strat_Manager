@@ -17,14 +17,14 @@ Everything here is published by the producer so no consumer re-derives it. Types
 | Field | Where it comes from | What it means, and the catch |
 |---|---|---|
 | `race_order` | `LeaderboardPanel._rank_drivers` — **the arcade panel's own code**, so the wire and the panel cannot drift apart | Best first. **Meaningless until every car has completed a lap**: on frame 0 the field is ordered by millimetres (measured: 6 mm), and through lap 1 each fraction is normalised by that car's OWN first-lap length, reading a P7 start as P2. Render the tower provisional until `laps_completed >= 1` |
-| `drivers.<code>.laps_completed` | the crossing map in `gaps.py` | **The reveal carrier**: reveal lap *L* iff `L <= laps_completed`. Monotone forward (swept 20 × 154,173 frames, no counter-example) but **not frame-exact**: 76 of 921 crossings (8.3 %) open before the parquet's `Time`, worst 0.463 s. A **rewind un-reveals** — a cache keyed on "seen once" leaks the whole future after one seek to the end |
+| `drivers.<code>.laps_completed` | the crossing map in `gaps.py` | **The reveal carrier**: reveal lap *L* iff `L <= laps_completed`. Monotone forward (swept 20 × 154,173 frames, no counter-example) but **not frame-exact**: 76 of 921 crossings (8.3%) open before the parquet's `Time`, worst 0.463 s. A **rewind un-reveals** — a cache keyed on "seen once" leaks the whole future after one seek to the end |
 | `drivers.<code>.progress` | `gaps.progress` | Laps + fraction, the ordering coordinate. **`null` = the telemetry never placed the car** (#886). Never `0.0` for that case any more |
 | `drivers.<code>.has_finished` | `gaps.has_finished` ← FastF1's official `Status` (#879) | Chequered flag vs retirement. **OUT is the pair `!active && !has_finished`** — `active` alone reads the winner as OUT. Silent path: a driver missing from the official table falls back to the derived rule with **no** warning |
 | `track_status` | `SessionData.track_status_by_lap`, the same source the arcade's own pill reads | **This is the band-1 status strip**: FastF1 TrackStatus digits → SC / VSC / yellow / red. `""` when the loader has no entry, rendered as clear |
 | `driver_colors` | `_color_for` ← `src/arcade/palette.py` | RGB per driver. Published precisely so the tower does not hardcode a sixth copy of the palette — five copies have already been found in this repo |
 | `drivers.<code>.active`, `.lap`, `.dist`, `.rel_dist`, `.has_position` | the resampled frames | `lap` is an interpolation of a step function; `dist` is race-cumulative and per-car. **Neither is a race-progress axis** — that is what `progress` and `laps_completed` are for |
 
-Cost of the whole addition: **+1.3 KB/tick**, producer compute p95 **126 µs** — 0.1 % of the tick.
+Cost of the whole addition: **+1.3 KB/tick**, producer compute p95 **126 µs** — 0.1% of the tick.
 
 ## 2. What the BULK reader carries (`laps.parquet`, read directly, not over the wire)
 
@@ -75,7 +75,7 @@ the AGENTS window. If the DATA window wants its own ticker, it needs `rcm_events
 | `SessionData.events` | **Always empty. Nothing populates it.** This is the field that made the plan claim race control had no producer. The RCM live in `rcm_events`, from `radio_runner` |
 | `get_rival_states` | A **simulation-layer** method. PITWALL cannot reach it |
 | `overlays._gap_value` | **Deleted by #844.** It was the hardcoded-55.56-m/s gap |
-| `FrameData.dist` for ordering | Race-cumulative and per-car: puts the wrong car in the lead on **37 %** of sampled frames |
+| `FrameData.dist` for ordering | Race-cumulative and per-car: puts the wrong car in the lead on **37%** of sampled frames |
 | `FrameData.lap` for the reveal | A rounded interpolation of a step function: non-monotone on 101 of 2.49 M frames, and it never opens a finisher's final lap |
 | `FrameData.rel_dist` for progress | FastF1 leaves it NaN for a whole driver, and the resampler clamps it past a car's last sample — it drew a crashed car as the leader for 68 s |
 | `active` alone for OUT | Reads the winner as OUT (#855) |

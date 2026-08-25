@@ -149,7 +149,7 @@ class ArcadeStreamClient:
         between them: the caller then folds signals belonging to ticks NEWER than
         the payload it is about to serve, while its cursor only advances to that
         payload - so the same entries are folded again on the next poll. Measured
-        on a live producer, that over-counts `dropped` by 66 %, and every phantom
+        on a live producer, that over-counts `dropped` by 66%, and every phantom
         count is a spurious full-buffer eviction in the panel this exists to
         protect.
 

@@ -251,7 +251,7 @@ def test_a_crossing_is_the_first_frame_of_the_increment_and_not_the_last():
 def test_a_car_whose_rel_dist_is_missing_is_still_ranked():
     """The coordinate does not read `rel_dist`, so a NaN one cannot break it.
 
-    On Melbourne 2025 FastF1 leaves `RelativeDistance` NaN for 100 % of
+    On Melbourne 2025 FastF1 leaves `RelativeDistance` NaN for 100% of
     HAD's frames. Ranking on it would have dropped a whole car off the
     order; ranking on distance-since-the-last-crossing does not notice.
     """
@@ -290,7 +290,7 @@ def test_the_interval_is_the_difference_of_two_line_crossings():
     """Two cars at 50 m/s, a tenth of a lap apart, is a 10.0 s interval.
 
     The old formula divided the same 500 m by 55.56 and returned 9.00 s: a
-    10 % error on a case where both cars travel at very nearly the speed
+    10% error on a case where both cars travel at very nearly the speed
     the constant was chosen to approximate.
     """
     session = _session(FRONT=_car(50.0, head_start_laps=0.1), BACK=_car(50.0))
@@ -346,9 +346,9 @@ def test_no_assumed_speed_constant_survives_in_the_gap_path():
 def test_laps_down_is_positional_and_survives_the_accumulation_drift():
     """The case the `dist` form gets wrong.
 
-    The rate carried here used to be "4.9 % of same-corner pairs", which
+    The rate carried here used to be "4.9% of same-corner pairs", which
     is a number nothing in this repo measured: the figure #862 actually
-    published for same-corner disagreement is 3.4 % over n=4,934, under a
+    published for same-corner disagreement is 3.4% over n=4,934, under a
     convention this docstring never stated. An unsourced percentage in a
     test is how a wrong number gets quoted back as evidence, so it is gone
     rather than swapped for one whose population may differ.

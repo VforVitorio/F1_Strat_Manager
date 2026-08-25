@@ -46,7 +46,7 @@ on 2026-08-13.
   session the producer serves): `circuit_length_m = 5219.98`; 154,173 frames x 20 drivers; NOR's
   gear distribution spans **1-8, all eight values present** (gear 1: 1,309 frames); NOR's raw
   `drs` codes are dominated by 0/1/8 with the open set `{10, 12, 14}` totalling **555 frames,
-  0.4 % of the race** - Melbourne 2025 was safety-car-heavy and DRS was rarely enabled, so the
+  0.4% of the race** - Melbourne 2025 was safety-car-heavy and DRS was rarely enabled, so the
   DRS lane on the only race on disk is flat almost everywhere. That is the data, not a bug, and
   §5.2 designs for it.
 - The PITWALL window itself was NOT reopened for this spec; no pixel below claims otherwise.
@@ -260,7 +260,7 @@ does not change size** (§8 Q1 records the alternative that shrinks it).
 Checks against reality (executed on the real session pickle for this spec): gear spans 1-8 with
 all eight values present, so `[0, 9]` frames every step with half a step of air; the raw `drs`
 open set `{10, 12, 14}` occurs (555 frames) so the DRS lane is real, and it is rare on Melbourne
-2025 (0.4 % of frames) so the lane is flat most laps - the readout (§5.4) is what tells a reader
+2025 (0.4% of frames) so the lane is flat most laps - the readout (§5.4) is what tells a reader
 "closed" from "broken".
 
 ### 5.2 Every axis rule carried over, one rule new
@@ -393,9 +393,9 @@ same treatment `track_status_label` and #986's proposed `compound_name` already 
    Plus one positive case: a frame with `drs=14` packs `drs_open=True`, `drs=8` packs `False`
    (8 is "eligible, not open" and is the third-commonest code on the real session - 566 frames).
 6. Payload price: ~16 bytes per sample, ~2-3 samples per driver per tick at 1x, two spans ->
-   **~80 bytes on a 17,278-byte tick, under 0.5 %**. Nothing.
+   **~80 bytes on a 17,278-byte tick, under 0.5%**. Nothing.
 
-**The data honesty note**: on the only race on disk DRS is open 0.4 % of frames (measured for
+**The data honesty note**: on the only race on disk DRS is open 0.4% of frames (measured for
 this spec), so the lane will read CLOSED for whole laps. The label row's live readout
 (`DRS CLOSED` / `DRS OPEN`) is what makes a flat lane legible as a true state - the same
 dead-feed-must-look-dead doctrine, one lane down.
@@ -411,7 +411,7 @@ client, zero slack at the narrow one**. That asymmetry rules the options:
 | option | verdict |
 |---|---|
 | **(a) BESTS ranks deeper when the room exists** - RANKED becomes a depth derived from the slot | **RECOMMENDED.** The RaceX evidence is ranked lists ("four ranked lists (S1, S2, S3, Lap) plus Theoretical"); the shipped `RANKED = 3` was argued against the space then available, not against the drawing's 302. Elastic, so it is a no-op at 1265 where the compact ladder already owns the answer. |
-| (b) give the tower breathing (taller rows) | REJECTED: 20-px rows are a measured legibility floor for 150 % scaling, and +7 px of air per row buys no information. |
+| (b) give the tower breathing (taller rows) | REJECTED: 20-px rows are a measured legibility floor for 150% scaling, and +7 px of air per row buys no information. |
 | (c) move a panel in (e.g. the radio) | REJECTED: contradicts the agreed home ("under the ring"), and anything moved in must degrade to zero at 1265, where the slot is 63 px - only elastic content survives both clients. |
 
 **The depth rule.** One derived value replaces the constant:

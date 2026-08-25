@@ -95,7 +95,7 @@ Four details that are not cosmetic:
   exactly*.
 
 One consequence of taking the order from the replay and the seconds from the
-timing table: they disagree by one place at about 0.7 % of line crossings, both
+timing table: they disagree by one place at about 0.7% of line crossings, both
 times within a tenth of a second of each other. When they do, the interval cell
 shows a dash rather than a negative number. It is two measurements of the same
 moment, not an error in either.
@@ -125,7 +125,7 @@ arcade process                    pitwall process
 **One client, however many consumers.** Both windows and any browser tab read
 through the same `get_tick(since_seq)`, and the sequence is what makes them
 agree: against a blind latest-payload slot, two pollers on independent 10 Hz
-timers were measured reading a different frame on 58 % of polls.
+timers were measured reading a different frame on 58% of polls.
 
 **Closing one window does not blind the other.** The client belongs to the
 host, not to a window; a window closing only decrements a count, and the last

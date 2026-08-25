@@ -176,7 +176,7 @@ def build_pace_series(
         # The SAME lap axis the tyre chart draws, and the same current-lap
         # mark. They sit side by side measuring the same quantity, and they
         # used to disagree: this one autoranged to 12-24 while its neighbour
-        # locked 12.5-35, so "now" sat at 95 % of one plot and 47 % of the
+        # locked 12.5-35, so "now" sat at 95% of one plot and 47% of the
         # other and neither said which column it was.
         "x_range": x_range,
         "current_lap": None if current_lap is None else float(current_lap),
