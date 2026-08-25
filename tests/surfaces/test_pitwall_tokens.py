@@ -392,19 +392,25 @@ def test_the_data_stylesheets_raw_hexes_are_guarded_too():
         }
     )
 
-    assert raw == ["#10b981", "#3b82f6", "#a78bfa", "#ef4444", "#f59e0b"], (
+    # **Four, not five: INFO left with the main driver chip.** That chip carried
+    # `#3b82f6` while the same window's tower, ring and race trace painted the
+    # same car in its team colour, so `DataWindow` now resolves it from
+    # `driver_colors` and the stylesheet has no opinion about which car is main.
+    # The census shrinks with the defect rather than being widened to keep
+    # pinning it, exactly as #1070's amber assertions were deleted when the
+    # rival chip stopped having a constant to pin.
+    assert raw == ["#10b981", "#a78bfa", "#ef4444", "#f59e0b"], (
         f"a new raw hex entered the DATA stylesheet: {raw}. Either use a --qt-* token or add it "
         "here with the palette name it copies."
     )
     assert raw[0] == _rgb_to_hex(palette.SUCCESS), (
         "band 1's Connected chip and the tower's personal-best sector copy SUCCESS"
     )
-    assert raw[1] == _rgb_to_hex(palette.INFO), "the main driver chip copies INFO"
-    assert raw[2] == _rgb_to_hex(palette.ACCENT), (
+    assert raw[1] == _rgb_to_hex(palette.ACCENT), (
         "a session-best sector is purple, and purple here is the arcade's ACCENT"
     )
-    assert raw[3] == _rgb_to_hex(palette.DANGER), "band 1's Disconnected chip copies DANGER"
-    assert raw[4] == _rgb_to_hex(palette.WARNING), (
+    assert raw[2] == _rgb_to_hex(palette.DANGER), "band 1's Disconnected chip copies DANGER"
+    assert raw[3] == _rgb_to_hex(palette.WARNING), (
         "band 1's PROVISIONAL chip, a slower-than-own-best sector, the neutralised-lap "
         "rail and the radio's SC / flag category chips copy WARNING"
     )

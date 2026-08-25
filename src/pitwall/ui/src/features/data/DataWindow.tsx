@@ -85,6 +85,22 @@ export function DataWindow() {
   // of the consumers is an ECharts canvas, which cannot resolve a custom
   // property and would silently fall back to its own palette (#1070).
   const rivalColour = driverColour(tick?.arcade.driver_colors ?? {}, rival, AXIS_TEXT);
+  // **And the OWN car's, from the same map, for the same reason.** #1070 gave the
+  // rival its team colour and left the main chip on a palette blue in the
+  // stylesheet, five lines above its own explanatory comment - so this window
+  // painted NOR blue on the traces chip while its tower, its ring and its race
+  // trace all painted the same car papaya.
+  //
+  // The fallback is INFO rather than the axis grey the rival degrades to, and
+  // the two are deliberately different: an unknown RIVAL is one of nineteen and
+  // reads as "not identified", while the main car is always named right beside
+  // the chip, so its degrade only has to be a colour no team owns. Measured, INFO
+  // sits 70.8 from the nearest team colour on the wire.
+  const mainColour = driverColour(
+    tick?.arcade.driver_colors ?? {},
+    tick?.arcade.driver_main ?? null,
+    "#3b82f6",
+  );
 
   // The pin releases when its car retires, or when the code stops being on the
   // wire at all - a relaunched arcade pointed at another race is the second
@@ -180,6 +196,7 @@ export function DataWindow() {
               frame={traceFrame}
               rival={rival}
               rivalColour={rivalColour}
+              mainColour={mainColour}
               frozen={frozen}
             />
                   )}

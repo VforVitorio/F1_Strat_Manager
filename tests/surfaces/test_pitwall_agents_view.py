@@ -2016,3 +2016,51 @@ def test_the_stale_lap_that_setdefault_would_have_made_permanent():
     assert lap18 is not None and lap18["actual"] == 92.18, (
         f"lap 18 kept the dead race's number: {lap18}"
     )
+
+
+def test_the_pace_chart_paints_the_own_car_in_its_own_team_colour():
+    """The actual line identifies a CAR, so it takes the car's colour off the wire.
+
+    It used to be `palette.INFO` unconditionally, on a window whose sibling
+    already painted the same car in its team colour: the DATA tower, the track
+    ring and the race trace all render NOR papaya, and this chart rendered him
+    blue. `driver_colors` has been on every tick since the arcade published it;
+    nothing under `src/pitwall` read it.
+
+    Compared against the WIRE value rather than against membership of the
+    palette, because every team colour is in the palette and a membership check
+    cannot tell papaya from the blue it replaced.
+    """
+    payload = _payload()
+    payload["arcade"]["driver_colors"] = {"NOR": [255, 128, 0], "PIA": [255, 128, 0]}
+
+    view = _host(payload).get_agents_view(-1)
+
+    assert view["charts"]["pace"]["actual_colour"] == "#ff8000", (
+        "the actual line must be the main driver's team colour from the wire"
+    )
+    # The prediction is the MODEL's identity, not the car's, so it must not move
+    # with the driver. Asserted here rather than in its own test because the
+    # thing worth pinning is that the two did not become one colour.
+    assert view["charts"]["pace"]["pred_colour"] != "#ff8000"
+
+
+def test_the_pace_chart_degrades_when_the_wire_has_no_colour_for_the_car():
+    """Three absences, one answer, and it must not be a team's colour.
+
+    A driver missing from the map, an empty map, and a tick before the arcade
+    block carries either. The degrade is `palette.INFO`, which is also the boot
+    view's value, so the window has ONE no-wire colour rather than two - and it
+    sits far enough from every colour on the wire that a reader cannot mistake
+    it for a real answer.
+    """
+    from src.pitwall.agents_view.charts import ACTUAL_COLOUR
+
+    absent = _payload()
+    absent["arcade"]["driver_colors"] = {"PIA": [255, 128, 0]}
+    empty = _payload()
+    empty["arcade"]["driver_colors"] = {}
+
+    for name, payload in (("driver absent", absent), ("empty map", empty), ("no key", _payload())):
+        colour = _host(payload).get_agents_view(-1)["charts"]["pace"]["actual_colour"]
+        assert colour == ACTUAL_COLOUR, f"{name} must degrade, not raise or invent: {colour}"
