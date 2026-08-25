@@ -25,7 +25,7 @@
  * `tests/surfaces/test_pitwall_tokens.py`.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import * as echarts from "echarts";
 
 /** `palette.TEXT_SECONDARY` - axis names and tick labels. */
@@ -75,7 +75,9 @@ export const NEUTRALISED_BAND = "rgba(245, 158, 11, 0.08)";
  * swap the effect never re-ran, the instance pointed at a detached node, and
  * the chart was dead for the rest of the session with no error anywhere.
  */
-export function useEChart(option: echarts.EChartsOption | null) {
+export function useEChart(
+  option: echarts.EChartsOption | null,
+): [(node: HTMLDivElement | null) => void, RefObject<echarts.ECharts | null>] {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   const ref = useCallback((node: HTMLDivElement | null) => setHost(node), []);
@@ -90,6 +92,15 @@ export function useEChart(option: echarts.EChartsOption | null) {
     // the mechanism - and the sprint-3 exit gate's whole lesson was that a
     // check written against the mechanism passes over a broken effect. An
     // ECharts instance is not reachable from outside the module otherwise.
+    //
+    // **Smoke only. Production reads the instance from the ref this hook
+    // RETURNS.** The hover readout needs `convertFromPixel`, and reading it
+    // off the node here was the obvious way to get it. A gate refuted that:
+    // this handle is documented as a test seam, so using it in production
+    // makes it an undocumented API that a later cleanup deletes; and the
+    // instance is per-MOUNT, so a caller would have to re-read the node
+    // after every remount through a second ref, duplicating the lifecycle
+    // this hook already owns. The tuple return costs four call sites once.
     (host as HTMLDivElement & { __pitwallChart?: echarts.ECharts }).__pitwallChart = instance;
     const observer = new ResizeObserver(() => instance.resize());
     observer.observe(host);
@@ -108,7 +119,7 @@ export function useEChart(option: echarts.EChartsOption | null) {
     chart.current.setOption({ ...option, animationDurationUpdate: 0 }, { notMerge: true });
   }, [option, host]);
 
-  return ref;
+  return [ref, chart];
 }
 
 export interface AxisSpec {

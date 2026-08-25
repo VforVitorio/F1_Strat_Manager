@@ -43,7 +43,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { EChartsOption } from "echarts";
 
 import { CURSOR_LINE, useEChart, valueAxis } from "../../lib/chart";
-import type { SortedTrace } from "./traceBuffer";
+import { useChartHover } from "../../lib/chartHover";
+import { lerpSorted, stepSorted, type SortedTrace } from "./traceBuffer";
 
 /**
  * One lane: its label, its locked y range, its own-car colour, and its share of the
@@ -283,6 +284,45 @@ function channel(trace: SortedTrace, lane: Lane): [number, number][] {
   return trace.xs.map((x, i) => [x, trace.rows[i][key]]);
 }
 
+/**
+ * One lane's channel as a plain `ys` array, aligned to `trace.xs`.
+ *
+ * `channel` above builds `[x, y]` pairs because that is what ECharts eats; the
+ * two lookups want the y values on their own. Same source, one derivation, so
+ * a lane cannot be plotted from one array and read from another.
+ */
+function values(trace: SortedTrace, lane: Lane): number[] {
+  return channel(trace, lane).map(([, y]) => y);
+}
+
+/**
+ * What a lane reads at distance `x`, or null where the car has not been.
+ *
+ * The branch on `lane.step` is the whole point: `stepSorted` for the two
+ * staircases, `lerpSorted` for the four curves. Its reasoning is in
+ * `stepSorted`'s own docstring, where the DRS case is - an interpolated 0.5
+ * prints CLOSED through the lane's readout, so a linear lookup here does not
+ * report an unknown, it reports the wrong state.
+ *
+ * The delta lane has no per-sample rows of its own; it arrives already
+ * interpolated onto the main car's x, and it is a curve.
+ */
+function valueAt(
+  lane: Lane,
+  main: SortedTrace,
+  delta: [number, number][],
+  x: number,
+): number | null {
+  if (lane.key === "delta")
+    return lerpSorted(
+      delta.map(([dx]) => dx),
+      delta.map(([, dy]) => dy),
+      x,
+    );
+  const ys = values(main, lane);
+  return lane.step ? stepSorted(main.xs, ys, x) : lerpSorted(main.xs, ys, x);
+}
+
 /** The newest main-span value for a lane, for its label row. Null when starved. */
 function latest(
   lane: Lane,
@@ -446,7 +486,11 @@ export function TraceStack(props: TraceStackProps) {
     };
   }, [box, main, rival, delta, xMax, rivalCode, rivalColour]);
 
-  const chart = useEChart(box > 0 && !placeholder ? option : null);
+  const [chart, instance] = useEChart(box > 0 && !placeholder ? option : null);
+  // Grid 0's x axis, which every lane shares. The domain is the locked circuit
+  // length, so a pointer in the axis gutter converts out of range and the
+  // readout and its cursor disappear together.
+  const [hover, hoverProps] = useChartHover(instance, xMax > 0 ? [0, xMax] : null);
   const boxes = laneLayout(box);
   const stackBottom = boxes.length
     ? boxes[boxes.length - 1].top + boxes[boxes.length - 1].height
@@ -462,7 +506,7 @@ export function TraceStack(props: TraceStackProps) {
         <div className="trace-placeholder">{placeholder}</div>
       ) : (
         <>
-          <div className="trace-stack-plot" ref={chart} />
+          <div className="trace-stack-plot" ref={chart} {...hoverProps} />
           {/* The label rows and the cursor are HTML over the canvas, not ECharts
               graphics: `notMerge: true` would restart them ten times a second. */}
           {/* **Single-driver mode captions the Δ LANE, not the whole panel.** In the
@@ -499,11 +543,48 @@ export function TraceStack(props: TraceStackProps) {
                   <span className="trace-lane-unit"> {LANES[index].unit}</span>
                 ) : null}
               </span>
+              {/* **The readout IS this row.** No floating box: the six values
+                  are already where a reader looks for them, and a box tall
+                  enough for six labelled values would cover two or three of the
+                  38-145 px lanes it is reporting on.
+
+                  Hovering swaps what the number MEANS, from the newest sample
+                  to the sample under the cursor, which is the stacked-trace
+                  convention every client the spec surveyed uses. The hover
+                  cursor being on screen is what says which of the two is
+                  showing. */}
               <span className="trace-lane-value">
-                {(() => {
-                  const value = latest(LANES[index], main, delta);
-                  return value === null ? "—" : LANES[index].readout(value);
-                })()}
+                {hover === null ? (
+                  (() => {
+                    const value = latest(LANES[index], main, delta);
+                    return value === null ? "—" : LANES[index].readout(value);
+                  })()
+                ) : (
+                  <>
+                    {(() => {
+                      const value = valueAt(LANES[index], main, delta, hover.dataX);
+                      return value === null ? "—" : LANES[index].readout(value);
+                    })()}
+                    {/* The rival's own value at the SAME distance, which is the
+                        comparison the panel exists for, and in the rival's team
+                        colour so it cannot be confused with our car's.
+
+                        An em dash where the rival has not reached this distance
+                        - the ordinary state since #1066 let the tower pin any
+                        car, measured at 25.8 % of car-ticks - because
+                        `lerpSorted` and `stepSorted` both answer null outside
+                        their span rather than clamping to an edge value. The
+                        delta lane is skipped: it IS the comparison already. */}
+                    {rivalCode !== null && LANES[index].key !== "delta" ? (
+                      <span className="trace-lane-rival" style={{ color: rivalColour }}>
+                        {(() => {
+                          const value = valueAt(LANES[index], rival, delta, hover.dataX);
+                          return value === null ? "—" : LANES[index].readout(value);
+                        })()}
+                      </span>
+                    ) : null}
+                  </>
+                )}
               </span>
             </div>
           ))}
@@ -521,6 +602,52 @@ export function TraceStack(props: TraceStackProps) {
                 background: CURSOR_LINE,
               }}
             />
+          )}
+          {/* **The SECOND cursor, and it is a third stroke rather than a reuse.**
+              Both are on screen at once: moving the car's mark to the pointer
+              would delete "now" at exactly the moment a reader is comparing a
+              past point of the lap against it.
+
+              A third treatment was free. This window's strokes are already
+              spoken for - solid 1 px #9ca3af vertical is the car, dashed means
+              broadcast-tier data, solid 2 px blue horizontal is the delta zero
+              line - and nothing on either window draws a solid white vertical.
+              Brighter than the car's mark on purpose: it is only on screen
+              while the reader is asking for it, so it can afford to be the
+              thing the eye goes to, and it is the colour of the numbers it
+              produces one row over. */}
+          {hover === null ? null : (
+            <>
+              <div
+                className="trace-cursor is-hover"
+                style={{ left: hover.pixelX, top: 0, height: stackBottom }}
+              />
+              {/* WHERE on the lap the six values were read, which the lane rows
+                  cannot say.
+
+                  **Below the stack, over the distance axis, and NOT at the top.**
+                  At the top it shares a 12 px band with the lane name on the left
+                  and the two values on the right, so it reads clear only while the
+                  cursor is near the middle: carried to either end it lands on top
+                  of the very numbers it is captioning. The axis band below has
+                  nothing in it but tick labels, and the chip is opaque, so it
+                  covers one `2k` with the exact metre - strictly more than the
+                  tick it hides, and only while the pointer is down.
+
+                  It still opens to whichever side has room, because the chip is
+                  wider than the plot's right margin and would be cut in half at
+                  the end of the lap. */}
+              <div
+                className="trace-hover-dist"
+                style={
+                  hover.pixelX > hover.hostWidth / 2
+                    ? { right: hover.hostWidth - hover.pixelX, top: stackBottom }
+                    : { left: hover.pixelX, top: stackBottom }
+                }
+              >
+                {Math.round(hover.dataX)} m
+              </div>
+            </>
           )}
         </>
       )}

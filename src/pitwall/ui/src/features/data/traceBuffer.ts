@@ -237,6 +237,45 @@ export function lerpSorted(xs: number[], ys: number[], x: number): number | null
 }
 
 /**
+ * The value a STEP channel holds at `x`: the last sample at or before it.
+ *
+ * The sibling of `lerpSorted`, and it lives beside it rather than in the panel
+ * so there is one place that answers "what was this channel at x". Same
+ * contract: null outside `[xs[0], xs[last]]`, so a pointer past where the car
+ * has driven gets an honest absence rather than an edge value.
+ *
+ * **Two of the six trace lanes must NOT be interpolated, and one of them fails
+ * silently.** `gear` and `drs` are staircases - the lane table marks them
+ * `step: true` and the series draws them `step: "end"` - so a linear value
+ * between two samples is a state the channel cannot hold. Gear reads 5.4
+ * between fifth and sixth. Worse, DRS between a closed sample and an open one
+ * interpolates to exactly 0.5, and the lane's own readout is
+ * `value > 0.5 ? "OPEN" : "CLOSED"`, so the boundary value resolves to a REAL
+ * state rather than to an unknown one: the readout prints CLOSED over an
+ * opening. That is this repo's sentinel-collision class - a computed value
+ * landing on something the code also legitimately finds, with nothing
+ * downstream able to tell them apart.
+ *
+ * The rule applies only where `lane.step` is set. Samples are keyed per integer
+ * metre, so adjacent ones are about 6 m apart at racing speed and interpolating
+ * SPEED, THROTTLE or BRAKE between them is honest.
+ */
+export function stepSorted(xs: number[], ys: number[], x: number): number | null {
+  if (xs.length === 0 || x < xs[0] || x > xs[xs.length - 1]) return null;
+  // The last index whose x is at or before the pointer. `<=` rather than `<`
+  // is the whole difference from `lerpSorted`'s search: landing exactly on a
+  // sample must take THAT sample's value, not the one before it.
+  let lo = 0;
+  let hi = xs.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (xs[mid] <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return ys[lo - 1];
+}
+
+/**
  * The delta series along the main driver's x, RE-BASED to lap-relative time.
  *
  * Main is the flat reference at y=0, so a POSITIVE trace means the rival is
