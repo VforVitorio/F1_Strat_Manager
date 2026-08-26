@@ -9,8 +9,8 @@
  *
  * So this asserts EFFECTS in a real engine: the elements exist, the
  * layout the port claims is frozen actually computes to Qt's numbers, and
- * the status bar's 1.5 s auto-clear — typed, documented and read by
- * nothing until #871 — actually fires.
+ * the status bar's 1.5 s auto-clear (typed, documented and read by
+ * nothing until #871) actually fires.
  *
  * It is NOT a visual regression test. Pixels are the screenshot tool's
  * job (`shot-agents.mjs`) and a human's. This is the structural floor.
@@ -149,8 +149,8 @@ const VIEW = {
         status: "OK",
         glyph: "●",
         glyph_colour: "#10b981",
-        // Structured, not markup. Sprint 8 turned the two tooltip formatters
-        // into data, so a string here would be the stale-stub shape this file
+        // Structured, not markup. The two tooltip formatters return data now,
+        // so a string here would be the stale-stub shape this file
         // already carries one scar from.
         // Five of the six carry model detail now, which is where the reasoning
         // tabs' per-agent bodies went. RAG keeps `null` on purpose: it is the
@@ -664,7 +664,7 @@ check(
 // The tooltip must appear only where the host sent content, and NOTHING
 // may clip it. Two fixes failed here and the second was passed by a check
 // written right here: it asserted the card's `overflow` and the popup's
-// DOM placement — the MECHANISM — and never hovered or measured. The
+// DOM placement (the MECHANISM) and never hovered or measured. The
 // popup had escaped the card and was being amputated 130 px by
 // `.agents-right` instead. So this hovers and measures the rendered box
 // against every scrolling ancestor, which is the EFFECT and the only
@@ -736,8 +736,8 @@ await page.waitForTimeout(150);
 
 // Qt's `showMessage(text, 1500)` clears itself. The port typed a
 // `transient` flag and read it nowhere until #871.
-// The scrollbars are HIDDEN, not deleted. Víctor asked for the bars inside
-// the cards to go; the tempting wrong fix is `overflow: hidden`, which puts
+// The scrollbars are HIDDEN, not deleted: the bars inside the cards are gone
+// by design. The tempting wrong fix is `overflow: hidden`, which puts
 // back the clipping the migration README records as a defect of the Qt window
 // being replaced ("the right column clipped mid-card"). So this asserts the
 // content is still REACHABLE, which is the part that can regress silently -
@@ -989,13 +989,13 @@ check(
 // identical on every poll here - only `seq` moves - so any pixel that changes
 // between two captures is the chart redrawing itself, not new information.
 //
-// This is the check that was missing when Víctor reported the dashed cliff
-// marker flickering. `notMerge: true` makes each `setOption` look like a
+// This is the check that was missing while the dashed cliff marker
+// flickered. `notMerge: true` makes each `setOption` look like a
 // fresh series, so ECharts runs the ENTRANCE animation, which measured
 // ~1200 ms to settle against a ~100 ms push cadence: it never once finished.
 // Band 4 had the identical defect and was fixed a sprint earlier - one copy
 // fixed, its twin left, which is this repo's dominant defect.
-// BOTH cards, not just the one Víctor saw flicker: they share `CHART_BASE`,
+// BOTH cards, not just the one that flickered: they share `CHART_BASE`,
 // so a guard on one leaves the other free to regress.
 check(
   await staysStill(livePage, ".agent-chart .chart"),

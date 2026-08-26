@@ -4,12 +4,12 @@ card renders.
 **They outlived the widget they were written for.** These built the Qt
 ``AgentCard``; PITWALL's AGENTS window now renders by calling exactly the same
 functions, which is what makes that port 1:1 by construction rather than by
-inspection - so sprint 7 MOVED this module out of ``src/arcade/dashboard/``
-instead of deleting it with the rest of the package.
+inspection - so this module moved out of ``src/arcade/dashboard/`` instead of
+being deleted with the rest of the package.
 
 One function per sub-agent (Pace N25, Tire N26, Situation N27, Radio N29,
 Pit N28, RAG N30). The logic mirrors the CLI's six-row inference panel
-(``c:/tmp/arcade_analysis/06_cli_inference_panel.md`` §1.1–§1.6) so the
+(``c:/tmp/arcade_analysis/06_cli_inference_panel.md`` 1.1-1.6) so the
 dashboard reads as a visual extension of the CLI without divergent
 thresholds.
 
@@ -73,7 +73,7 @@ def _escaped(text: str | None, limit: int = 70) -> str:
     free text straight off the NLP pipeline: a `<` in a transcript stopped
     being a character and became a tag.
 
-    Escaping was never here. Sprint 8's tooltip change made that visible by
+    Escaping was never here. A tooltip change made that visible by
     removing the module's last `html.escape` and then claiming in a comment
     that every free-text field was escaped somewhere - a false sentence
     about a real hole, which is this repo's favourite disguise.
@@ -95,7 +95,7 @@ def _markup_safe(value: Any) -> str:
     **Every field that lands in a headline or a body line needs one of the
     two.** Those still reach the window through `dangerouslySetInnerHTML`
     because they can carry the compound pill and the flag chips, so the WHOLE
-    line is markup, and the exit gate found the free-text ones riding
+    line is markup, and the free-text ones were found riding
     unescaped: the orchestrator's `undercut_target` is an unconstrained
     `Optional[str]` filled by an LLM, and it reached the PLAN caption verbatim.
     `test_no_agent_string_can_become_markup` feeds a hostile string through
@@ -107,17 +107,16 @@ def _markup_safe(value: Any) -> str:
 def _truncate(text: str | None, limit: int = 70) -> str:
     """Collapse a free-text string to ``limit`` visible characters with an ellipsis suffix.
 
-    Used by the radio/RAG tickers and tooltips to keep transcript snippets
-    inside the body QLabel width budget (the cards are ~280-340 px wide and
-    the body labels render at 11 px, so 70 chars fits without forcing a
-    second wrapped line at typical zoom). Treats ``None`` as the empty
-    string at the boundary so callers do not need to guard before calling.
+    Used by ``_escaped`` to keep transcript snippets inside the card body's
+    width budget (the cards are ~280-340 px wide and the body lines render
+    at 11 px, so 70 chars fits without forcing a second wrapped line at
+    typical zoom). Treats ``None`` as the empty string at the boundary so
+    callers do not need to guard before calling.
 
-    The ``limit`` is exposed as a parameter so the tooltip path can request
-    a longer cap (chunk text in regulation snippets) without spawning a
-    near-duplicate helper. The literal ``"..."`` suffix (three ASCII dots)
-    is preferred over the unicode ellipsis to keep the project ASCII-only
-    in dashboard text and avoid font-fallback artefacts.
+    The ``limit`` parameter is a seam rather than an active choice today:
+    every caller uses the default. The literal ``"..."`` suffix (three ASCII
+    dots) is preferred over the unicode ellipsis to keep the project
+    ASCII-only in dashboard text and avoid font-fallback artefacts.
     """
     s = (text or "").strip().replace("\n", " ")
     if len(s) <= limit:
@@ -130,7 +129,7 @@ def _truncate(text: str | None, limit: int = 70) -> str:
 
 # --- What an idle console says -----------------------------------------------
 #
-# **"no prediction — stub" was a word about the CODE on a surface a race
+# **"no prediction - stub" was a word about the CODE on a surface a race
 # engineer reads.** A stub is a thing a developer knows about; what the reader
 # needs to know is that this agent has no reading for this lap, which is a fact
 # about the race. Same for "no radio/rcm pipeline output", which names a
@@ -144,7 +143,7 @@ def _truncate(text: str | None, limit: int = 70) -> str:
 
 
 def format_pace(p: dict[str, Any] | None) -> Formatted:
-    """CLI §1.1: pace delta to next predicted lap, with absolute predicted lap time.
+    """CLI 1.1: pace delta to next predicted lap, with absolute predicted lap time.
 
     The headline pairs the signed delta vs the previous lap with the
     absolute predicted lap time in parentheses. The delta is the actionable
@@ -187,11 +186,11 @@ def format_pace(p: dict[str, Any] | None) -> Formatted:
 # --- N26 Tire -----------------------------------------------------------
 
 
-_TIRE_CLIFF_MAX_SANE: float = 100.0  # laps — anything above this is early-stint TCN noise
+_TIRE_CLIFF_MAX_SANE: float = 100.0  # laps - anything above this is early-stint TCN noise
 
 
 def format_tire(t: dict[str, Any] | None) -> Formatted:
-    """CLI §1.2: cliff p50, range p10-p90, deg rate, warning_level, and stint length.
+    """CLI 1.2: cliff p50, range p10-p90, deg rate, warning_level, and stint length.
 
     The headline pairs the cliff projection (median laps remaining before
     the compound falls off) with the laps already run on the current set,
@@ -254,7 +253,7 @@ def format_tire(t: dict[str, Any] | None) -> Formatted:
 
 
 def format_situation(s: dict[str, Any] | None) -> Formatted:
-    """CLI §1.3: threat level headline, with overtake / SC probabilities and gap-plus-pace context.
+    """CLI 1.3: threat level headline, with overtake / SC probabilities and gap-plus-pace context.
 
     The headline carries the categorical threat level and is colour-coded
     by the same status mapping used for the other agent cards. Body rows
@@ -375,8 +374,8 @@ def radio_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
     **It used to return Qt rich text** (`<b>`, `<br>`, `&nbsp;`, and
     nothing else, because that is the subset `QToolTip` parses) and the
     React side rendered it through `dangerouslySetInnerHTML`. Qt was
-    retired in sprint 7; the dialect outlived the toolkit that required
-    it. Under the hybrid this decides WHAT is said and the TSX decides how
+    retired; the dialect outlived the toolkit that required it. Under the
+    hybrid this decides WHAT is said and the TSX decides how
     it looks, so there is no markup here and no escaping either - a React
     text node is not a parser.
 
@@ -537,7 +536,7 @@ def _radios_worth_the_room(
 
 
 def format_radio(r: dict[str, Any] | None) -> Formatted:
-    """CLI §1.4: alert intents headline, plus a per-lap transcript ticker.
+    """CLI 1.4: alert intents headline, plus a per-lap transcript ticker.
 
     The headline branches the same way as the CLI: chip row when the
     deterministic alert filter fires (PROBLEM / WARNING radios or
@@ -546,14 +545,13 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
     silent. Body rows replace the previous count-only display with a
     three-tier ticker that surfaces the actual transcripts the strategist
     cares about: a counter line (always present), the most recent RCM
-    (present only when ``rcm_events`` is non-empty) and the most recent
-    driver radio (present only when ``radio_events`` is non-empty).
+    (present only when ``rcm_events`` is non-empty) and up to two radios,
+    severity-first (``_radios_worth_the_room``).
 
     Each transcript line is truncated to 70 characters so the body
-    QLabel renders on a single visual row at the current card width.
-    The full lap transcript is exposed via ``radio_tooltip_html`` and
-    wired by the window onto the card's ``setToolTip`` so a hover gives
-    the engineer the unabridged content.
+    renders on a single visual row at the current card width. The full
+    lap transcript lives in the tooltip (``radio_tooltip``), which the
+    React window renders itself.
     """
     if r is None:
         return (
@@ -622,7 +620,7 @@ _PIT_ACTIONS_NOW: frozenset[str] = frozenset({"PIT_NOW", "REACTIVE_SC"})
 
 
 def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
-    """CLI §1.5: active shows pit p50 → compound; idle shows trigger hint.
+    """CLI 1.5: active shows pit p50 → compound; idle shows trigger hint.
 
     When the upstream ``PitDecision`` flags ``sc_reactive=True`` the
     headline is suffixed with ``" · SC"`` to disclose to the engineer
@@ -631,9 +629,9 @@ def format_pit(p: dict[str, Any] | None, active: bool) -> Formatted:
     at-a-glance distinction between proactive cliff-driven stops and
     reactive SC-window opportunism, which carry different risk profiles
     (an SC stop saves around ten seconds but only pays off if the SC
-    actually deploys within the window). The headline colour stays
-    ``WARNING`` in both active sub-cases: the suffix alone communicates
-    SC reactivity, preserving non-SC active rendering exactly as before.
+    actually deploys within the window). The headline colour and status
+    follow the agent's own verdict on whether a stop is pressing now, not
+    the SC suffix; see the comment above ``pressing`` for the rule.
     """
     if not active or not p:
         return (
@@ -779,7 +777,7 @@ def rag_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def format_rag(rag: dict[str, Any] | str | None, active: bool) -> Formatted:
-    """CLI §1.6: answer snippet plus article references for the active branch.
+    """CLI 1.6: answer snippet plus article references for the active branch.
 
     The active branch surfaces a 70-character snippet of the LLM answer
     on body line 1 and the first three deduplicated article references
@@ -791,7 +789,7 @@ def format_rag(rag: dict[str, Any] | str | None, active: bool) -> Formatted:
     tooltip carried the question and the chunks and never the answer, so an
     answer longer than 70 characters existed nowhere the reader could get to
     it - and the function that says otherwise is this one. It also named
-    ``rag_tooltip_html``, which has not existed since sprint 8.
+    ``rag_tooltip_html``, which no longer exists.
 
     The parameter is typed permissively (``dict | str | None``) because
     the upstream wire historically carried only the answer string; when

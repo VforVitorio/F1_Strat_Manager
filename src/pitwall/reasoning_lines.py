@@ -1,6 +1,6 @@
 """The reasoning tabs' second formatting layer, with no toolkit attached.
 
-Written for the Qt reasoning tabs and moved here in sprint 7 when that package
+Written for the Qt reasoning tabs and moved here when that package
 was retired: PITWALL renders the same tabs by calling these, so the layer had a
 consumer that outlived the widget.
 

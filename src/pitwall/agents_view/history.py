@@ -54,14 +54,15 @@ class LapHistory:
         self._keep = keep
         self._pace: dict[int, dict[str, Any]] = {}
         self._tire: dict[int, dict[str, Any]] = {}
-        # **Never trimmed, and that is the point.** The two stores above are a
-        # rolling 40-lap window because the charts draw one; the PLAN timeline
-        # draws the WHOLE race, so a stint that started on lap 1 has to still
-        # be describable on lap 57. Reading stint structure out of `_tire`
-        # would have made the opening bar shrink from the left from lap 41 and
-        # then vanish - and it would have worn the costume this window uses for
-        # "opened mid-race", so one rendering would have covered two truths
-        # with the boundary between them moving during the race.
+        # **Never trimmed, because the PLAN timeline needs the whole race.** The
+        # two stores above are a rolling 40-lap window because the charts draw
+        # one; the PLAN timeline draws the WHOLE race, so a stint that started
+        # on lap 1 has to still be describable on lap 57. Reading stint
+        # structure out of `_tire` would have made the opening bar shrink from
+        # the left from lap 41 and then vanish - and it would have worn the
+        # costume this window uses for "opened mid-race", so one rendering
+        # would have covered two truths with the boundary between them moving
+        # during the race.
         #
         # One short string per lap: about 60 entries for a grand prix, against
         # the two dicts' 40 rows of floats.

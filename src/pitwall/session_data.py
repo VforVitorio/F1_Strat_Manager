@@ -245,8 +245,8 @@ def _tyre_stops(revealed: list[dict[str, Any]]) -> int:
     `Stint` is not the answer either: FastF1 opens a new one on each of those
     passes, and at Miami 2025 the column is a 446-row NaN block.
 
-    So the evidence is the SET: the compound changed, or the published age
-    dropped. Both ride the bulk already, so this costs one pass and no new field.
+    Therefore, the evidence is the SET: the compound changed, or the published
+    age dropped. Both ride the bulk already, so this costs one pass and no new field.
 
     Generated rows are dropped BEFORE pairing rather than skipped inside the
     loop - a car that did not finish a lap has no compound and no age, and

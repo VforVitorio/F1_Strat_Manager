@@ -114,8 +114,8 @@ class RadioCorpus:
 
     Immutable after construction. Each event is held beside the driver code
     whose lap counter gates it - `None` meaning the leader's - so the reveal is
-    DATA rather than a branch that has to stay in step with `kind`. Sprint 5's
-    most expensive defect was a guard that looked like the reveal rule and
+    DATA rather than a branch that has to stay in step with `kind`. The most
+    expensive defect here was a guard that looked like the reveal rule and
     checked something adjacent to it.
     """
 
@@ -147,7 +147,7 @@ class RadioCorpus:
                 year=year,
                 gp_name=directory.name,
                 # Deliberately EMPTY, and typed so the runner's own mapper
-                # answers `{}` quietly instead of logging a failure. It builds
+                # answers `{}` instead of logging a failure. It builds
                 # `{number: code}` by slicing on `GP_Name`, a column only the
                 # FEATURED parquet carries, so handing it the raw table would
                 # log "Could not build driver code map" on every race switch

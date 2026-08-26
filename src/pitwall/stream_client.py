@@ -6,10 +6,10 @@ overwrites the latest payload; everything above it reads that slot.
 
 **Why one client for two windows.** Two would double the parse cost and put
 the sequence in two places, and the whole point of the sequence is that
-there is exactly one authority on what "the latest tick" is. Measured
-during the design gate, two independent sockets against the real server do
-NOT drift (200/200 identical sequences), so this is not a correctness fix -
-it is one place to hold the state rather than two.
+there is exactly one authority on what "the latest tick" is. Two independent
+sockets against the real server do NOT drift, measured at 200/200 identical
+sequences, so this is not a correctness fix - it is one place to hold the
+state rather than two.
 
 This is deliberately NOT the Qt client renamed. That one is a `QThread`
 emitting Qt signals, and Qt is leaving.

@@ -37,7 +37,7 @@ from src.pitwall.reasoning_lines import clean
 # The two posture chips are FACTS, not warnings, so they wear text colour and
 # the word carries the meaning (#964).
 #
-# They used to be a severity scale, and it put `Risk: AGGRESSIVE` - a setting
+# A severity scale would put `Risk: AGGRESSIVE` - a setting
 # somebody chose - in the same DANGER red as `⚠ Guardrail: minimum stint
 # length not met`, a constraint violation, one line below it. Counting the
 # window's reds found six different meanings on one colour: imperative action,
@@ -45,8 +45,8 @@ from src.pitwall.reasoning_lines import clean
 # point of an alarm colour is pre-attentive triage, and six semantics deny the
 # reader exactly that at the moment they need it.
 #
-# DANGER's owners now, enumerated rather than described - the exit gate found
-# this comment claiming two while the file gave it four: the ALERT glyph, a dead
+# DANGER's owners now, enumerated rather than described, since this comment
+# once named two while the file carries four: the ALERT glyph, a dead
 # connection, the imperative ACTION text (`classify_action` paints PIT_NOW and
 # ERROR red, and the band renders that as the word plus its 4 px rule), and the
 # confidence floor below 0.33. A HIGH threat headline is a fifth site one module
@@ -105,8 +105,8 @@ def _plan_line(latest: dict[str, Any], action: str) -> str:
     # **Escaped, because this whole string is MARKUP.** It carries the compound
     # pill, so `PlanTimeline` renders it through `dangerouslySetInnerHTML` - and
     # `undercut_target` is an unconstrained `Optional[str]` the orchestrator LLM
-    # fills. The exit gate fed it `<img src=x onerror=...>` and watched it reach
-    # the caption verbatim, beside a comment of mine claiming the escaped pill
+    # fills. Feeding it `<img src=x onerror=...>` reaches the caption verbatim,
+    # beside a comment of mine claiming the escaped pill
     # was "the last markup sink on this window's decision surface". The pill was;
     # the field next to it was not.
     bits = [
@@ -322,8 +322,8 @@ def build_orchestrator(
     - `src/arcade/strategy_pipeline.py:48` hardcodes `profile="rich"`, and
       `src/arcade/app.py` builds its request with a literal `no_llm=False`.
 
-    So on every arcade path the value is None by construction, and the line
-    was permanently blank.
+    Therefore, on every arcade path the value is None by construction, and the
+    line was permanently blank.
 
     --- WHERE TO CHANGE IF THE ARCADE LEARNS TO RUN WITHOUT AN LLM ---
     Restore the field here, the `guardrail` key on `OrchestratorView`
@@ -436,7 +436,7 @@ def build_scenarios(
     the "why" panel read as the opposite of the call. The enacted row now
     takes the highlight; the vetoed winner KEEPS ITS FILL, because the
     Monte Carlo really did score it highest and that is true, and loses
-    only the regalia, gaining a `VETOED` mark instead.
+    only the regalia, gaining a `NOT TAKEN` mark instead.
     """
     raw: dict[str, float] = {}
     for key, value in (scores or {}).items():

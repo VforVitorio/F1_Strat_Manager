@@ -468,10 +468,11 @@ check(
 );
 
 // **The own car paints ON TOP, on every chart.** ECharts paints in declaration
-// order, and the rival's coarse broadcast dashes used to be last: wherever the
-// two cars run comparable numbers - which is when the comparison matters - the
-// solid pit-wall-grade line was underneath. The race trace one tab away builds
-// the opposite rule deliberately, so this is the twin that had it inverted.
+// order, so whichever car is declared last paints on top. Wherever the two
+// cars run comparable numbers - which is when the comparison matters - an
+// inverted order would leave the solid pit-wall-grade line underneath the
+// rival's coarse broadcast dashes. The race trace one tab away builds the
+// opposite rule deliberately, so this is the twin that can end up inverted.
 const paintOrder = await page.evaluate(() => {
   const el = document.querySelector(".trace-stack-plot");
   const names = el.__pitwallChart.getOption().series.map((s) => s.name);
@@ -575,12 +576,11 @@ check(
 
 // **The cursor, in pixels, against what ECharts says the same distance is.**
 //
-// It used to be a per-chart `markLine` and this check scanned canvas columns for a
-// grey pixel run. The stack draws ONE div across all six lanes instead - a markLine
-// per grid would be six fragments with five gaps, and the panel exists to be read
-// with an unbroken vertical cut - so the assertion moved with the mechanism: the
-// div's left edge must be where `convertToPixel` puts the car's distance, and the
-// div must be tall enough to cross every lane.
+// The stack draws ONE div across all six lanes: a markLine per grid would be six
+// fragments with five gaps, and the panel exists to be read with an unbroken
+// vertical cut. So the assertion follows the mechanism: the div's left edge must
+// be where `convertToPixel` puts the car's distance, and the div must be tall
+// enough to cross every lane.
 //
 // This is still the EFFECT and not the mechanism: it asks "is the line at the car's
 // position on the axis", which is the claim, and it would fail on an off-by-`left`
@@ -1047,7 +1047,7 @@ await ring.close();
 // `TraceChart` is what stopped the delta baseline reaching 1328 m of a 5220 m
 // axis and restarting forever, and 42 checks stayed green either way - so
 // deleting that line would have been invisible. Its twin in the AGENTS charts
-// shipped the same defect a sprint later and Víctor is the one who saw it.
+// shipped the same defect a sprint later.
 const stillCtx = await browser.newContext({
   viewport: CLIENT,
 });
@@ -1549,8 +1549,8 @@ check(
 // The cap was then 10, for "P10 is the last point-scoring position" - a real argument
 // about relevance and the wrong one for a CAP, which only bites when there is room to
 // spare. Measured at 1485 px wide: the ramp works to 833 px tall and then the depth
-// sticks while the hole grows, 91 px at 900 and 271 at 1600x1080. Víctor saw it on his
-// own screen. Twenty is the field, so the panel runs out of DATA before room.
+// sticks while the hole grows, 91 px at 900 and 271 at 1600x1080. Twenty is the
+// field, so the panel runs out of DATA before room.
 //
 // So the assertion is the RULE: never below the floor, never past the whole grid, and
 // whatever it picks it must SAY.
@@ -1749,7 +1749,7 @@ check(
 // The minute boundary `paceLabel` documented and its two siblings did not have.
 // Evaluated against the real module rather than a copy of its arithmetic.
 //
-// **This ran in the browser until sprint 10 and it never executed once.** It
+// **This ran in the browser and never executed once.** It
 // asked for `/src/lib/format.ts` from a server that holds the BUILT bundle, so
 // the import 404'd, `.catch(() => null)` turned that into `null`, and the `if`
 // below skipped the whole assertion - a guard about the empty set, and the one
@@ -2899,8 +2899,8 @@ check(
 //
 // The grid used to stop at the last revealed lap, so the table grew downward and the
 // card had to be anchored to the column's bottom to hold the newest row at a stable
-// height - which left a 382 px void above it for two thirds of a race, and Victor
-// called it out on the shipped window. Drawing the full lap axis is the motorsport
+// height - which left a 382 px void above it for two thirds of a race.
+// Drawing the full lap axis is the motorsport
 // convention (a tyre-strategy chart plots laps 1..N and lets the stints fill in) and
 // it is deliberately NOT the web's loading-skeleton idiom, which signals a fetch.
 //
@@ -3122,10 +3122,9 @@ for (const [width, height] of [
   await ctx.close();
 }
 
-// --- The wheel scroll Víctor asked for, and whether it survives a reveal ------
+// --- The wheel scroll, and whether it survives a reveal ----------------------
 //
-// > *"yo veo esqueleto que si sobrepasa, tenga un mini scroll que se pueda hacer para
-// > bajar con la rueda del raton"*
+// The requirement: when the skeleton overflows, the mouse wheel has to scroll it.
 //
 // Three separate things have to be true and only one of them was: the wheel has to move
 // the panel (it always did - hiding a scrollbar disables nothing), the panel has to SAY
@@ -3606,7 +3605,7 @@ if (bands === null) {
 //
 // `state-dead.png` is why: the board held a full set of confident numbers, the lap
 // counter still said L 28/57, the track chip still asserted GREEN and PLAYBACK
-// still said 2x, with one 77 x 18 chip and a status bar that had quietly gone
+// still said 2x, with one 77 x 18 chip and a status bar that had gone
 // BLANK as the only tells. The socket label is the only thing that still moves
 // once the ticks stop, so the state is known client-side.
 //
@@ -3828,7 +3827,7 @@ check(
   `and the header says what the zero line is (${traceOwn?.zero})`,
 );
 // The other lines are NOT all zero, which is the guard that separates a real
-// reference switch from a chart that quietly zeroed everything.
+// reference switch from a chart that zeroed everything.
 check(
   (traceOwn?.points.VER ?? []).some(([, y]) => y !== 0),
   "while the rest of the field is measured against it",
@@ -3866,12 +3865,12 @@ check(
 );
 
 // **A car that RACED and then stopped stays in the reference for the laps he
-// drove.** The reference used to be averaged over the CURRENT population, so
-// the moment a car retired he left it and every point of every line - back to
-// lap 1 - was recomputed without him: measured on the real payload, all 45 of
-// NOR's historical points moved by up to 7.6 s at one retirement. It is the
-// twin of the lap-axis bound this module already had. Computed here from the
-// fixture's own bulk rather than asserted about the mechanism.
+// drove.** Averaging the reference over the CURRENT population instead
+// recomputes every point of every line - back to lap 1 - the moment a car
+// retires: measured on the real payload, all 45 of NOR's historical points
+// moved by up to 7.6 s at one retirement. It is the twin of the lap-axis bound
+// this module already had. Computed here from the fixture's own bulk rather
+// than asserted about the mechanism.
 const historyStable = await pacePage.evaluate(
   ([bulk, probeLap, code, retired]) => {
     const chart = document.querySelector(".trace-band-plot")?.__pitwallChart;
@@ -3919,9 +3918,9 @@ await paceCtx.close();
 //
 // The producer takes about 11 s to reach its first tick because it unpickles a
 // 382 MB session, and the socket is accepted at about 8 s of that. So a blank
-// window is two different situations, measured on the real path, and the copy
-// used to be one sentence across both: "Start a replay with --strategy", which
-// is an instruction to do the thing that has already been running for 3 s.
+// window is two different situations, measured on the real path: a single
+// copy across both, "Start a replay with --strategy", would tell a user to
+// start the thing that has already been running for 3 s.
 //
 // Asserted as an EFFECT and as a DIFFERENCE. Reading one string would pass on a
 // build that hardcoded it; requiring the two to differ cannot.
@@ -4099,7 +4098,8 @@ check(
   const SECOND = [400, 500, 600];
   const mainT = (dist) => 10 + (dist - 100) / 100;
   /**
-   * PIA is QUICKER than the main car and VER is slower, and that is the point.
+   * PIA is QUICKER than the main car and VER is slower, so the two checks below
+   * can tell the cars apart.
    *
    * These were `mainT + 2` and `mainT + 5`: pure offsets at identical pace. A
    * re-based delta (#1066) subtracts the value at the anchor, so both collapsed
@@ -4239,9 +4239,10 @@ check(
   /**
    * A car that is RUNNING, sending plenty, and sharing NO TRACK with the main car.
    *
-   * This used to be a car with an empty span, on the premise that a pinned car
-   * "sends nothing on this lap", measured at five of seven. #1066 abolishes that
-   * premise: every car now keeps its own lap, so those five draw. What survives
+   * Before #1066, an empty span modeled this well enough, on the premise that a
+   * pinned car "sends nothing on this lap" (true for five of seven). #1066
+   * abolishes that premise: every car now keeps its own lap, so those five
+   * draw. What survives
    * is the state per-driver laps CREATE, which is the opposite shape - hundreds of
    * samples, none of them at a distance the main car has also covered, measured
    * at 2,564 of 9,936 car-ticks on the Melbourne capture.
@@ -4257,11 +4258,11 @@ check(
   /**
    * Each car gets its own LAP START and its own PACE, and both are required.
    *
-   * The times here used to be `10 + (dist - 100) / 100 + index`: one shared pace,
-   * a constant per-car offset. Under a re-based delta (#1066) that offset is
-   * exactly what gets subtracted, so every car produced an identical flat-zero
-   * series and any delta assertion built on this fixture would have been born
-   * unable to tell one car from another.
+   * Sharing one pace with a constant per-car offset, as in
+   * `10 + (dist - 100) / 100 + index`, fails under a re-based delta (#1066):
+   * that offset is exactly what gets subtracted, so every car would produce an
+   * identical flat-zero series and any delta assertion built on this fixture
+   * would be born unable to tell one car from another.
    *
    * Now car `i` starts its lap `i` seconds after the main car and takes
    * `1 + i/10` seconds per 100 m, so its anchored delta against NOR climbs by
@@ -4396,10 +4397,10 @@ check(
   // **Start from a KNOWN candidate, and never from the last row.** The handler
   // moves the CANDIDATE, not whatever row happens to hold focus, and the
   // enumeration loop above left RUS pinned - the last selectable row, where
-  // ArrowDown clamps to itself. An earlier version of this block focused LEC and
-  // asserted the arrows landed on RUS and back; both checks passed against a
-  // mutant that moved the candidate by ZERO, because the candidate was already
-  // where the assertions expected it to end up.
+  // ArrowDown clamps to itself. Focusing LEC and asserting the arrows land on
+  // RUS and back would let a mutant that moves the candidate by ZERO pass,
+  // because the candidate would already be where the assertions expect it to
+  // end up.
   await rowFor("PIA").click();
   await page.waitForTimeout(250);
   const stops = await page.evaluate(
@@ -5449,7 +5450,8 @@ check(
   // 50 m is strictly between the 0 m (closed) and 100 m (open) samples: the
   // held answer is CLOSED and so is the interpolated one, which is why the
   // rising leg above is the one that catches a linear mutant. Asserted anyway
-  // so the pair is complete and the rising case cannot be quietly deleted.
+  // so the pair is complete, and dropping the rising case would not go
+  // unnoticed.
   await park(hoverPage, ".trace-stack-plot", 50);
   const early = await values(hoverPage);
   check(

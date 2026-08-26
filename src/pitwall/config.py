@@ -1,8 +1,8 @@
 """Window geometry, stream endpoint and asset resolution for PITWALL.
 
-Everything here is a constant or a path. Nothing in this module imports
-pywebview, so the tests and every other surface can read it on a machine
-with no system webview.
+Constants, paths, and the pure window-placement rules. Nothing in this module
+imports pywebview, so the tests and every other surface can read it on a
+machine with no system webview.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ class WindowSpec:
 # and the two harness families have one number to point at rather than two to
 # drift apart.
 #
-# AGENTS was 1320 x 900 until sprint 10, and the number had an argument behind
+# AGENTS was 1320 x 900, and the number had an argument behind
 # it: it mirrored the Qt strategy window's 540 + 740 px columns plus the frame.
 # The layout elevation deletes that split, so the argument went with it, and
 # what was left was a decision band budgeted 180 px wider than the window it
@@ -171,8 +171,8 @@ def window_arguments(
     shown it - the same verified-through-the-page-and-not-the-window gap this sprint
     had to confess to once already.
 
-    So the assembly lives here, where a test can read it without importing
-    pywebview, and `main()` unpacks it.
+    Therefore, the assembly lives here, where a test can read it without
+    importing pywebview, and `main()` unpacks it.
 
     Returns the toolkit's own keyword names rather than a project-shaped record:
     this is the boundary with pywebview, and translating twice would be a second

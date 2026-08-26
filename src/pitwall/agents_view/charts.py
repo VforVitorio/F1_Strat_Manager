@@ -361,7 +361,7 @@ def _x_range(
     stops three laps past whichever is further, the last observed lap or
     the band's own upper edge, which bounds it for the same reason
     without the unreadable result. Flagged rather than smuggled: it is a
-    visible difference and the exit gate should see it named.
+    visible difference worth naming.
     """
     laps = [point[0] for point in points]
     if current_lap is not None:

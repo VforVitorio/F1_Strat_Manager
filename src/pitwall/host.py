@@ -115,12 +115,11 @@ class PitwallHost:
         self._client = client
         self._windows_open = window_count
         self._agents = AgentsViewBuilder()
-        # The last label AGENTS was served, so that view can return on a
         # Has the socket EVER been up? This is what separates "Connecting..."
         # from "Disconnected", and it belongs to the host because both windows
-        # ask. It used to be inferred from `_agents_connection`, which made the
-        # answer depend on whether the AGENTS window had polled: with only the
-        # DATA window open, a producer that died read "Connecting..." forever.
+        # ask. Inferring it from `_agents_connection` made the answer depend on
+        # whether the AGENTS window had polled: with only the DATA window open,
+        # a producer that died read "Connecting..." forever.
         self._ever_connected = False
         # The BULK channel's state. `_bulk_signature` is (year, location,
         # reveal map) - everything the payload is a function of - so the
@@ -218,7 +217,7 @@ class PitwallHost:
         grey on the other, for one socket, on two windows a reader has open
         side by side. A word plus a colour from the same lookup cannot do that.
 
-        And the AGENTS window could not paint the word at all before its first
+        Also, the AGENTS window could not paint the word at all before its first
         tick: its boot literal hardcoded "Connecting..." in amber, so a socket
         that came up and had not yet delivered a lap read as still connecting,
         in the wrong colour, for the whole startup.
@@ -244,9 +243,9 @@ class PitwallHost:
         the last frame of a dead race with a green "Connected" chip.
 
         **`since_connection` is what the CALLER last rendered, and that is the
-        whole point (#950).** It used to be a single host field, so with two
-        consumers the first to notice the producer had died consumed the
-        transition and the second never learned about it: measured over 50
+        whole point (#950).** A single host field left two consumers racing for
+        it: the first to notice the producer had died consumed the transition
+        and the second never learned about it. Measured over 50
         polls, a browser on `/agents.html` kept a green chip on a dead race
         forever while the window beside it had already gone red. The loopback
         server is not hypothetical - `__main__` starts it unconditionally.
