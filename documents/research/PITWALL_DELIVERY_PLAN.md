@@ -22,16 +22,16 @@ Same shape every time, because the value is in the repetition:
    optional: `gh` puts the PR title in the merge-commit body and release-please parses it, which is
    how the CHANGELOG got duplicated twice before.
 5. **CI green on every PR**, not just at the end of the sprint.
-6. **NOTHING reaches `main` until PITWALL is finished** (Víctor, 2026-08-07), and **"finished" now
-   means after sprint 9, not sprint 7** (Víctor, 2026-08-16: *"seguimos dev hasta acabar todos los
-   sprints"*). Every sprint lands on `dev` and stops there; there is exactly one `dev -> main`
+6. **NOTHING reaches `main` until PITWALL is finished** (decided 2026-08-07), and **"finished" now
+   means after sprint 9, not sprint 7** (revised 2026-08-16: every sprint runs on `dev` until all
+   of them are done). Every sprint lands on `dev` and stops there; there is exactly one `dev -> main`
    promotion and it comes after the LAST sprint's exit gate.
 
    Consequence, accepted deliberately and now larger than it was: because issues stay open until the
    work is on `main`, **#841-#844, the rewritten #281/#284/#285, #921-#940, #944, #949, #950 and
    #951 all stay open for the whole programme**, and sprints 8 and 9 will add to that list rather
    than shrink it. The open list will not go down for nine sprints. That is the rule working, not a
-   backlog leak — and the reason to say so twice is that a growing open list is exactly what
+   backlog leak, and the reason to say so twice is that a growing open list is exactly what
    pressure to promote early looks like.
 
    Sprint 7's exit gate ran anyway, on Fable, and found that sprint's worst defect. **Deferring the
@@ -41,7 +41,7 @@ Same shape every time, because the value is in the repetition:
    handoff prompt (task, compact, memory pointers).
 
 Commands handed over are PowerShell, one command per physical line, starting with an absolute
-`cd` and then the branch checkout. Víctor runs every commit, push and merge himself.
+`cd` and then the branch checkout. Every commit, push and merge is run by hand.
 
 ---
 
@@ -52,29 +52,29 @@ Commands handed over are PowerShell, one command per physical line, starting wit
 | **1** | **The wire** | #841, #842, #843, #844 | none (verifiable by running) |
 | 2 | PITWALL skeleton: the vertical slice | new | adversarial: does the chain really work end to end |
 | 3 | AGENTS window, 1:1 | rewritten #285 | adversarial: is it ACTUALLY 1:1, field by field |
-| 4 | **DATA band 4: own-car traces + the ring** (REORDERED 2026-08-09, see §5) | rewritten #284 (c) | none |
+| 4 | **DATA band 4: own-car traces + the ring** (REORDERED 2026-08-09, see section 5) | rewritten #284 (c) | none |
 | 5 | DATA bands 1-2: status, timing table, bests | rewritten #284 (a) | none |
 | 6 | DATA band 3: race pace grid | rewritten #284 (b) | adversarial: tier discipline and fidelity claims |
-| 7 | **DATA band 3: race trace** (#944, the half sprint 6 did not build) · retire Qt · package · fix the prose | rewritten #285, #944, new | **exit gate** (the `dev -> main` promotion is deferred: Víctor, 2026-08-15) |
+| 7 | **DATA band 3: race trace** (#944, the half sprint 6 did not build) · retire Qt · package · fix the prose | rewritten #285, #944, new | **exit gate** (the `dev -> main` promotion is deferred, decided 2026-08-15) |
 | **8** | **AGENTS: the elevate pass** | new | Fable as senior dashboard designer, P0-P3 with file:line |
 | **9** | **DATA: the elevate pass** | new | same, **then the ONE `dev -> main` of the whole programme** |
 
 ### Sprints 8 and 9: where the 1:1 constraint is LIFTED
 
-Added 2026-08-08 by Víctor, deliberately at the END. Sprints 2-7 deliver a faithful port; these
+Added 2026-08-08, deliberately at the END. Sprints 2-7 deliver a faithful port; these
 two are the second half of "1:1 first, improve later", one per window, and neither starts until
 the window it covers is on `dev` rendering real data.
 
 Same shape both times: a **Fable agent framed as a senior dashboard-analytics designer**
 (`~/.claude/projects/.../feedback_tab_migration_flow`, step 7) is handed (1) the before-and-after
 screenshots in the states that matter, (2) the files that render the window, (3) the backend
-wiring — `host.py`, `stream_client.py` and the golden payload, so no proposal can ask for a field
-the tick does not carry — and (4) `tokens.css`, so proposals speak the design system. It returns
+wiring (`host.py`, `stream_client.py` and the golden payload, so no proposal can ask for a field
+the tick does not carry) and (4) `tokens.css`, so proposals speak the design system. It returns
 prioritised P0-P3 findings with `file:line` and a concrete fix, covering **layout** (hierarchy,
 density, what earns the top-left) and **surgical** changes (a colour semantic, a truncation, a
 chart baseline, an undesigned state).
 
-**Where the skills come from, decided by Víctor 2026-08-10: the catalogue, not improvisation.**
+**Where the skills come from, decided 2026-08-10: the catalogue, not improvisation.**
 Before either elevate sprint runs its audit, install from `npx ui-skills` and from `nutlope/hallmark`
 per `~/.claude/FRONTEND_TOOLKIT.md`, which is the standing directive for all frontend work in every
 project and names the flow: `hallmark` **Audit** for the anti-AI-look dimension, `baseline-ui` for
@@ -87,7 +87,7 @@ skills alongside the screenshots, so its findings speak the same vocabulary the 
 Qt's restricted rich-text dialect because the Python formatters are reused as-is, and whether the
 formatters get a TypeScript reimplementation at all is this sprint's call.
 
-**Sprint 9 (DATA)** starts differently — its bands were designed fresh, not ported, so the
+**Sprint 9 (DATA)** starts differently, because its bands were designed fresh, not ported, so the
 question is less "did we lose something" than "does a strategist trust this at a glance".
 
 **Retiring Qt in sprint 7 does not destroy the baseline**: the captures are committed under
@@ -97,7 +97,7 @@ scratchpad.
 Deferred beyond this plan, unchanged: #282 (observability contract, independent and also feeds the
 Rival Agent), #286 (rival intent, gated on the Rival Agent), #287 (the parity gate).
 
-### The rival selector — the programme after sprint 9
+### The rival selector, the programme after sprint 9
 
 Scoped 2026-08-21 by a feasibility gate, delivered as three sprints:
 
@@ -117,7 +117,7 @@ broadcast rival:
 - `undercut_target` is the argmax over `P(undercut_success)` across the pit agent's
   `score_undercut_tool` calls (`src/agents/pit_strategy_agent.py:526-532`), over a candidate set
   the system prompt defines positionally, "each rival within 5 positions ahead" (`:657`).
-  **It is NOT the positional `rival_ahead` at `:1492`** — assembling it from that was the bug #432
+  **It is NOT the positional `rival_ahead` at `:1492`**, because assembling it from that was the bug #432
   fixed, and the fix is documented at `:483-499`.
 - the situation card's gap is the car ahead ON TRACK, paired positionally
   (`src/agents/race_situation_agent.py:1162`);
@@ -130,12 +130,12 @@ only mechanism that could, and `build_race_state(rival=...)` (`src/agents/race_s
 recomputes `gap_ahead_s` and `pace_delta_s` against a named car but lands them only in the
 orchestrator's synthesis prompt: N27 derives its own pair gap from `laps_df` and N28's candidate
 set is positional, so neither analysis moves. **Selecting a rival there reframes the prose, not the
-analysis.** Making the agents genuinely analyse a chosen rival is `v2.8.0` Rival Agent work in
+analysis.** Making the agents analyse a chosen rival is `v2.8.0` Rival Agent work in
 `src/agents/`, which is a different thing from a selector and should not be folded in.
 
 ---
 
-## 2. Sprint 1 — the wire
+## 2. Sprint 1, the wire
 
 **Why it is first and separate.** It is the producer, not PITWALL. All of it is verifiable **today**
 against the existing PySide6 telemetry window, which simply receives better data. Landing it first
@@ -164,7 +164,7 @@ GP after PR 1 pays a full reload. Say so in the PR body; do not let it be mistak
 
 ---
 
-## 3. Sprint 2 — the vertical slice
+## 3. Sprint 2, the vertical slice
 
 The thinnest thing that proves the whole chain: `f1-arcade` spawns `python -m src.pitwall`, two
 pywebview windows open, and both render the live lap number and playback state from the real
@@ -194,7 +194,7 @@ drift test is red-then-green on a deliberate token change.
 
 ---
 
-## 4. Sprint 3 — the AGENTS window, 1:1
+## 4. Sprint 3, the AGENTS window at 1:1
 
 **The checklist already exists.** Gate B produced the field-by-field inventory of
 `src/arcade/dashboard/window.py:141-207` and its widgets. Use that as the acceptance list; do not
@@ -224,21 +224,21 @@ window*, with the two rendered side by side.
 
 ---
 
-## 5. Sprints 4 to 6 — the DATA window
+## 5. Sprints 4 to 6, the DATA window
 
-> **⇄ ORDER CHANGED 2026-08-09 (Víctor).** Band 4 goes FIRST, then bands 1-2, then band 3. The
+> **ORDER CHANGED 2026-08-09.** Band 4 goes FIRST, then bands 1-2, then band 3. The
 > sections below keep their original band numbering; only the sprint each lands in moved.
 >
-> **The sprint labels below were renumbered on 2026-08-11 to match** — they had been left at the
+> **The sprint labels below were renumbered on 2026-08-11 to match**, because they had been left at the
 > pre-reorder values, so the same file said *"Sprint 4, bands 1-2"* two screens under a note saying
 > the BULK reader arrives with *"the sprint-5 selector"*. **The band is the stable identifier and
 > the sprint number is not**; cite bands when the two could be confused.
 >
 > **Why.** Band 4 is the one band with an EXISTING ORIGINAL to port: the Qt telemetry window
 > (`src/arcade/dashboard/telemetry_window.py` + `telemetry_panel.py`, whose docstring carries the
-> 2x2 layout — Delta Time / Speed over Brake / Throttle, locked axes, a per-trace legend). That is
+> 2x2 layout of Delta Time / Speed over Brake / Throttle, locked axes, a per-trace legend). That is
 > exactly the setup that made sprint 3 work: a reference to compare against field by field, so
-> fidelity is checkable instead of being a matter of taste. Bands 1-3 have no original at all —
+> fidelity is checkable instead of being a matter of taste. Bands 1-3 have no original at all,
 > they are new design, and the 1:1 discipline cannot apply to them.
 >
 > **Its dependencies are already met.** Band 4 was scheduled last because the traces needed the
@@ -246,11 +246,11 @@ window*, with the two rendered side by side.
 > blocks it today; it was last only because of the order this plan happened to be written in.
 >
 > **What the reorder costs.** Bands are panels inside one window, so "each sprint ends with
-> something on screen" survives — band 1 being the frame the others sit in is a container
+> something on screen" survives, since band 1 being the frame the others sit in is a container
 > question, not a dependency.
 >
 > ✅ **ASKED AND ANSWERED, 2026-08-10: the wire carries everything band 4 needs, with zero
-> blocking producer changes** — the opposite of band 1's answer. A Fable design gate measured it
+> blocking producer changes**, the opposite of band 1's answer. A Fable design gate measured it
 > on the real Melbourne 2025 session (154,173 frames × 20 drivers) by driving
 > `_build_arcade_snapshot`'s own functions; the report and its field-by-field implementation
 > contract are at `~/.claude/plans/pitwall-sprint4/wire-band4-design.md`. Not luck: #841's span,
@@ -269,9 +269,9 @@ window*, with the two rendered side by side.
 >   pit lap) from its true circuit position. An outline ring is a new host capability, not a tweak.
 >
 > **And one thing band 4 will NOT chart: gear and DRS.** They are on the wire and they carry real
-> values, but the Qt original charts neither, `§3.5` of the realism doc describes the *elevated*
+> values, but the Qt original charts neither, section 3.5 of the realism doc describes the *elevated*
 > surface rather than this port, and `drs` is the raw FastF1 code whose open set `{10, 12, 14}`
-> lives only in `src/arcade/track.py:40` — a TypeScript copy would be a cross-language twin of the
+> lives only in `src/arcade/track.py:40`, so a TypeScript copy would be a cross-language twin of the
 > exact kind `driver_colors` is on the wire to prevent. If they are wanted, the producer publishes
 > a decoded `drs_open` first, in sprint 9.
 
@@ -283,7 +283,7 @@ Built band by band so each sprint ends with something on screen.
 bests need.
 
 > ✅ **THE BULK READER IS BUILT** (2026-08-11, ahead of the sprint): `src/pitwall/session_data.py`
-> + `PitwallHost.get_bulk` + `/api/bulk` + `bridge.ts::getBulk`. **Band 1 needs nothing from it** —
+> + `PitwallHost.get_bulk` + `/api/bulk` + `bridge.ts::getBulk`. **Band 1 needs nothing from it**,
 > its four items are all on the tick already; only the connection label is missing and that is
 > five lines when the strip is drawn.
 >
@@ -299,9 +299,9 @@ bests need.
 Two rules that must be written into the code, not assumed:
 
 - **The reveal is per driver and strict**: reveal driver *d*'s lap *L* iff
-  `L <= wire.drivers[d].laps_completed`. **This used to be written against `lap`**, which is a
-  rounded interpolation of a step function: measured non-monotone on 101 frames of 2.49 M, so it
-  flickers a lap open a tick early at the line, and it never opens a finisher's final lap.
+  `L <= wire.drivers[d].laps_completed`. **Not `lap`**, which is a rounded interpolation of a
+  step function: measured non-monotone on 101 frames of 2.49 M, so it flickers a lap open a tick
+  early at the line, and it never opens a finisher's final lap.
   `laps_completed` is read off the crossing map and published per driver since #857.
   Gate A measured that at **96% of instants the running field spans 2 or 3 different laps**, and the
   tick carries only the main driver's lap. Masking everyone at the main driver's lap lags the
@@ -323,13 +323,13 @@ Two rules that must be written into the code, not assumed:
   open must close again; a reveal cache keyed only on "seen once" leaks the whole future after
   one seek to the end.
 - **The bests panel RECOMPUTES from the revealed subset; it does not trust `IsPersonalBest`.**
-  **This rule used to sit in the sprint-6 paragraph below**, which owns band 3 — but the bests
+  **This rule used to sit in the sprint-6 paragraph below**, which owns band 3, but the bests
   panel is band 2, so sprint 5 either applies it or ships trusting the flag and sprint 6
   "corrects" a panel it does not build. The column is safe under masking (Gate A: a running flag,
   18-24 flagged laps per driver, not a session-final one) but the two sequences are **not**
   identical: measured on Melbourne 2025, they differ on **47 lap-flags across all 20 drivers**,
   in both directions, concentrated on the wet-start laps {1, 5, 6, 7}. They converge only at the
-  final frame — the last flagged lap is the session best for all 20 — and mid-race is the only
+  final frame (the last flagged lap is the session best for all 20), and mid-race is the only
   state a masked panel ever renders. Recompute over `lap_time is not None and not deleted and not
   generated`: a deleted time does not count, and a generated row has no time at all. The column
   also holds a literal `None` alongside True/False, so it never crosses the bridge as a third
@@ -394,7 +394,7 @@ Two rules that must be written into the code, not assumed:
 > band-3 design gate died twice mid-run and its deliverables 3-7 were completed by the orchestrator,
 > marked as such inside the report rather than passed off as an independent verdict.
 
-**Gate at the end of sprint 6 — RUN.** Eleven findings, one HIGH: a deleted lap was painted the
+**Gate at the end of sprint 6, RUN.** Eleven findings, one HIGH: a deleted lap was painted the
 FASTEST tone, because the ranking excludes deleted times and `indexOf`'s `-1` shared a branch with
 "top third". On the real race the slowest car on the lap wore the green the legend means as
 quickest. Two of its findings against the fixes were artefacts of it reading the working tree during
@@ -412,7 +412,7 @@ and the reason is a decision rather than an omission. The tick carries a telemet
 whole tick is 17,278 bytes and the telemetry block 1,161 of them, so all twenty carrying a span is
 **1.6x the tick, 271 KB/s at 10 Hz** - affordable. What is NOT affordable is the alternative: a
 control channel would end PITWALL's read-only-follower posture, which section 3.4 of the realism
-doc parks as a v2 question. Víctor's call (2026-08-14): take the option that breaks nothing, so
+doc parks as a v2 question. Settled 2026-08-14: take the option that breaks nothing, so
 the producer publishes all twenty spans - **and it lands with #199 phase D.3, never before it**,
 because `snapshot_dict` still re-runs a recursive `asdict` behind a blocking `sendall` ten times a
 second and 1.6x makes that worse inside the render loop. Filed as **#936**.
@@ -426,7 +426,7 @@ on a time anchor (its `date` is UTC; every clock here is SessionTime, so it need
 `t0_date` - the same shape as #842) and on the decision that it would put a THIRD clock on one
 column, covering 19 drivers of 20.
 
-**Sprint 4, band 4 — SHIPPED 2026-08-10** (#897, #898). The four own-car traces, the pinned rival
+**Sprint 4, band 4, SHIPPED 2026-08-10** (#897, #898). The four own-car traces, the pinned rival
 overlaid and labelled broadcast tier, and the ring.
 
 > ⚠️ **This paragraph used to read "traces stacked on one x axis with a shared vertical cursor",
@@ -444,7 +444,7 @@ producer's own `_rank_drivers` so the wire and the arcade panel cannot drift apa
 statement of the problem follows, for the record.
 
 ⛔ **Bands 1-2 had a prerequisite: #857.** The wire publishes only `lap`, `dist` and `rel_dist` per
-driver — the two coordinates #844 spent a sprint refuting, plus a fraction. It publishes no race
+driver, the two coordinates #844 spent a sprint refuting, plus a fraction. It publishes no race
 order, no `progress` and no interval, and a consumer that attaches mid-race cannot rebuild the
 crossing map from a 10 Hz snapshot stream. Decide what the timing band actually needs and publish
 it from the producer, which already owns `self._gaps`; otherwise the DATA window re-derives the
@@ -456,16 +456,16 @@ makes about what it is showing.
 
 ---
 
-## 6. Sprint 7 — the race trace, retire Qt, package, fix the prose
+## 6. Sprint 7, the race trace, retiring Qt, packaging and the prose
 
-> ### ✅ DONE, 2026-08-15/16 — on `dev`, and the promotion was DEFERRED
+> ### ✅ DONE, 2026-08-15/16, on `dev`, with the promotion DEFERRED
 >
 > Everything below was executed. What follows is what actually happened, so the section stops
 > reading as a plan for work that has shipped.
 >
 > | PR | What |
 > |---|---|
-> | #945 | **The race trace** (#944) — the half of band 3 sprint 6 was scoped for and did not build. Víctor's call: build it now rather than promote a half-built band. |
+> | #945 | **The race trace** (#944), the half of band 3 sprint 6 was scoped for and did not build. Built now rather than promoting a half-built band. |
 > | #946 | Qt retired: 13 modules, the two live formatters moved to `src/pitwall/`, `pyside6` + `pyqtgraph` out of `pyproject.toml` and `uv.lock`. |
 > | #952 | The five the Fable gates found in band 3. |
 > | #953 | Contributions paused until v3.0.0, and the Qt prose sweep this one's first pass missed. |
@@ -473,10 +473,10 @@ makes about what it is showing.
 > | #955 | Closing the replay window tears the companion down (#947). |
 > | #956 | The connection a caller holds (#950) and the laps it can actually see (#949). |
 >
-> **⛔ The single `dev -> main` promotion did NOT happen.** Víctor, 2026-08-15: everything lands on
+> **⛔ The single `dev -> main` promotion did NOT happen.** Decided 2026-08-15, everything lands on
 > `dev` with green CI and stops. So #841-#844, #281, #284, #285, #921-#940 and #944 all stay OPEN,
 > and release PR #712 stays held. **When to promote is now a scheduling decision, not a technical
-> one** — nothing blocks it.
+> one**, and nothing blocks it.
 >
 > **The exit gate ran on Fable, and so did four re-runs**, which settled the standing debt that
 > every gate run while Fable was out of quota was provisional. **None of them differed on a
@@ -487,7 +487,7 @@ makes about what it is showing.
 >
 > **Three things this sprint learned that outlive it:**
 >
-> 1. `src/pitwall/__main__`'s loopback server **snapshots `dist/` at startup** — confirming a build
+> 1. `src/pitwall/__main__`'s loopback server **snapshots `dist/` at startup**, so confirming a build
 >    landed is not confirming the server serves it, and four measurements in a row once described a
 >    bundle no longer in the tree.
 > 2. Node's `fs.rmSync` **returns normally and deletes nothing** on this tree, so the build's own
@@ -497,7 +497,7 @@ makes about what it is showing.
 >    against its own bug until it was made to prove the two hypotheses are distinguishable first.
 >
 > Still open: **#951** (the arcade skips `repair_tyre_stints`, so its tyre age disagrees with the
-> tower) is **blocked on data** — the repair changes 0 of Melbourne's 927 rows, and Melbourne is the
+> tower) is **blocked on data**: the repair changes 0 of Melbourne's 927 rows, and Melbourne is the
 > only race a curated install carries. Sprint 9 keeps the width axis (863 of 1,140 cells clip on a
 > 1080p laptop at 150%) and the safety-car ranking semantics.
 
@@ -535,16 +535,16 @@ PR and its own verification: build a wheel, install it in a clean venv, run it.
 
 **The exit gate, and then the single `dev -> main` of the whole programme.** Adversarial, per
 `~/.claude/ADVERSARIAL_AUDIT.md`. Never close a piece of work this size on "all the sub-issues
-merged" — and here that temptation is at its strongest, because seven sprints of commits promote at
+merged", and here that temptation is at its strongest, because seven sprints of commits promote at
 once. Only after that promotion do #841-#844, #281, #284 and #285 close.
 
-Note that this promotion is also what un-gates release PR #712 (`chore(main): release 2.6.0`), which
+This promotion is also what un-gates release PR #712 (`chore(main): release 2.6.0`), which
 has been held open waiting for PITWALL to exist. Do not merge it before this point.
 
 > **What happened instead:** the exit gate ran, on Fable, and found the sprint's worst defect. The
-> promotion did not. Víctor deferred it on 2026-08-15 and then settled it on 2026-08-16 — **the
+> promotion did not. It was deferred on 2026-08-15 and settled on 2026-08-16: **the
 > single promotion moves to the end of sprint 9**, so this is no longer "the promotion of the whole
-> programme" and §0.6 is where that rule now lives. Nothing technical was holding it: the gate was
+> programme" and section 0.6 is where that rule now lives. Nothing technical was holding it: the gate was
 > done and CI green on every PR. The temptation this paragraph warns about was avoided in the other
 > direction, by the gate rather than by the merge.
 
@@ -589,11 +589,10 @@ over a threshold that could never fire.
 
 ## 9. Carried forward, unresolved
 
-- **Race control messages: RESOLVED 2026-08-09 — they already exist, and an earlier note here was
-  wrong.** That note said they had no producer, on the strength of `SessionData.events` being
-  empty. `SessionData.events` is a dead field; the messages come from `src/nlp/radio_runner.py`
+- **Race control messages: RESOLVED 2026-08-09.** They already exist. `SessionData.events` is a
+  dead field and being empty says nothing about them; the messages come from `src/nlp/radio_runner.py`
   (out of `rcm.parquet`) as `RaceState.rcm_events`, and the **Radio card already renders them**
-  in its body and tooltip — so PITWALL's AGENTS window shows them today, alongside the radio
+  in its body and tooltip, so PITWALL's AGENTS window shows them today, alongside the radio
   transcriptions and N29's verdict. A real Melbourne run reports 90 of them.
   So the sprint-4 question is only WHERE they belong: the flag STATE is the status strip
   (`track_status`, already on the wire); the message TEXT already has a home. If the DATA window
