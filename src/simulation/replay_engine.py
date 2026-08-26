@@ -1,12 +1,12 @@
 """
-Race replay engine — loads a race directory and emits lap_state dicts one
+Race replay engine: loads a race directory and emits lap_state dicts one
 per lap at a configurable interval.
 
 This is the offline demo path for the strategy system. Usage::
 
     engine = RaceReplayEngine("data/raw/2025/Melbourne", "NOR", "McLaren")
     for lap_state in engine.replay():
-        recommendation = run_strategy_orchestrator(...)
+        recommendation = run_strategy_orchestrator_from_state(lap_state, laps_df)
         frame = engine.to_arcade_frame(lap_state, recommendation)
         await ws.send_json(frame)   # or process locally
 
@@ -128,7 +128,7 @@ class RaceReplayEngine:
         The yielded dict is the canonical ``lap_state`` format consumed by all
         agents (see ``RaceStateManager.get_lap_state`` for the full schema).
         When ``interval_seconds=0`` the generator runs as fast as the CPU
-        allows — useful for batch evaluation or unit tests.
+        allows, which is useful for batch evaluation or unit tests.
 
         Yields:
             ``lap_state`` dict for laps 1 through ``total_laps`` inclusive.
@@ -146,10 +146,12 @@ class RaceReplayEngine:
     ) -> dict[str, Any]:
         """Convert a ``lap_state`` + recommendation into an Arcade WebSocket frame.
 
-        This is the canonical JSON sent over ``/ws/replay`` to the Arcade UI.
-        The field names and nesting are stable — the frontend depends on this
-        exact shape. Our driver is always the first entry in ``cars`` with
-        ``is_our_driver: true``; rivals follow sorted by position.
+        Assembles a WebSocket-shaped frame for a ``/ws/replay`` endpoint that
+        does not exist in this repository. The Arcade UI consumes the raw TCP
+        broadcast built by ``src/arcade/stream.py`` instead, and no caller in
+        this repository invokes this method. Our driver is always the first
+        entry in ``cars`` with ``is_our_driver: true``; rivals follow sorted
+        by position.
 
         Args:
             lap_state:      Dict from ``RaceStateManager.get_lap_state()``.
