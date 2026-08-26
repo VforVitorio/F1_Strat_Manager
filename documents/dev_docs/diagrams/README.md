@@ -15,17 +15,17 @@ All of these were last edited on 2026-05-13, before two releases landed: v2.0.0 
 | `webapp_structure` | **new**: the React app's feature folders and how they reach the backend |
 | `frontend_pages_streamlit_legacy` | **renamed and marked retired**: it is the Streamlit page tree, kept as a record of a surface that no longer exists |
 | `arcade_3window_architecture_qt_legacy` | **renamed and marked retired**: it is the PySide6 pair PITWALL replaced in sprint 7. Not relabelled into the new topology, because that is not a relabel - the DATA window is not shaped like the Qt telemetry window. The live picture is the Mermaid graph in `docs/pages/multi-agent.md` |
-| `multi_agent_architecture` | updated 2026-08-02: N25's box no longer says "LangGraph ReAct" — pace's scaffold was formally retired in #781, N25 is now shown as a direct XGBoost call, same as the sub-agents header line |
-| `multi_agent_flow` | current, but predates the projection redesign |
-| `strategy_pipeline_flow` | predates the shared inference engine |
+| `multi_agent_architecture` | updated 2026-08-02: N25's box no longer says "LangGraph ReAct", because pace's scaffold was formally retired in #781, N25 is now shown as a direct XGBoost call, same as the sub-agents header line |
+| `multi_agent_flow` | current: its four checkable claims (500 Monte Carlo draws, the 0.30 safety-car routing threshold, `ThreadPoolExecutor` for the parallel layer, `gpt-5.4-mini` for the synthesis) each match the orchestrator source |
+| `strategy_pipeline_flow` | updated 2026-08-26: its Layer 3 said `gpt-4.1-mini`, which is what the SUB-AGENTS use, while the synthesis it labels is the orchestrator's own `gpt-5.4-mini` (`strategy_orchestrator.py:139`); and its pace MAE of 0.392 s is the notebook-era value the metrics registry marks `canonical: false`, superseded by 0.4104 s |
 | `subprocess_launch_sequence` | updated sprint 7: the sequence is unchanged, the follower it launches is `python -m src.pitwall` and the two windows share one reader |
 | `tcp_broadcast_dataflow` | updated sprint 7: the subscriber is PITWALL, and the 2x2 grid is ECharts |
 | `data_pipeline` | current on the surfaces; note the FastF1 cache is one directory now, not two |
 | `agents/` | one per sub-agent (N25 to N30) plus the `StrategyRecommendation` schema; `N25_pace_agent` updated 2026-08-02 to drop the ReAct-tool boxes it never actually used (#781) |
 
-Verified: every file parses as XML, and no label outside the file marked legacy names a retired surface.
+Verified 2026-08-26: all 20 files parse as XML, no label outside the two marked legacy names a retired surface, and no label, tab name or XML comment carries an em dash.
 
-**A note on how the previous version of this file got it wrong.** It reported six of twelve diagrams as stale, from a grep for "Streamlit" and "voice" across the raw XML. That counts matches inside style attributes and colour names, not labels, so it over-reported three files and under-reported `docker_deployment`, whose problem was a container named `f1_telemetry_frontend` with neither word in it. The audit above parses labels instead.
+**How this audit is made.** Labels are parsed out of the `value=` attributes and the tab names, never grepped from the raw XML. A grep counts matches inside style attributes and colour names, which both over-reports (a file whose only hit is a colour) and under-reports (`docker_deployment`, whose defect was a container named `f1_telemetry_frontend`, containing neither search word). Each figure is then checked against the code it describes rather than against a sibling diagram, because the drift runs in both directions.
 
 ## These are not what the docs site renders
 

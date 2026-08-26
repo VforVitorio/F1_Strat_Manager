@@ -6,7 +6,7 @@
         <mxCell id="1" parent="0"/>
 
         <!-- ============ TITLE ============ -->
-        <mxCell id="title" value="Multi-Agent Strategy System — Data Flow (N25-N31)" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="title" value="Multi-Agent Strategy System, Data Flow (N25-N31)" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="300" y="10" width="1000" height="40" as="geometry"/>
         </mxCell>
 
@@ -22,7 +22,7 @@
         <mxCell id="layer0_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f0f2e;strokeColor=#7c3aed;strokeWidth=1;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="290" y="70" width="440" height="570" as="geometry"/>
         </mxCell>
-        <mxCell id="layer0_label" value="LAYER 0 — Parallel Sub-Agent Execution (ThreadPoolExecutor)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#7c3aed;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="layer0_label" value="LAYER 0, Parallel Sub-Agent Execution (ThreadPoolExecutor)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#7c3aed;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="300" y="75" width="420" height="25" as="geometry"/>
         </mxCell>
 
@@ -102,7 +102,7 @@
         <mxCell id="layer2_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f0f2e;strokeColor=#22d3ee;strokeWidth=1;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="800" y="120" width="340" height="280" as="geometry"/>
         </mxCell>
-        <mxCell id="layer2_label" value="LAYER 2 — Monte Carlo Simulation (500 draws)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#22d3ee;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="layer2_label" value="LAYER 2, Monte Carlo Simulation (500 draws)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#22d3ee;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="810" y="125" width="320" height="25" as="geometry"/>
         </mxCell>
 
@@ -122,7 +122,7 @@
         <mxCell id="layer3_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f0f2e;strokeColor=#f59e0b;strokeWidth=1;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="800" y="440" width="340" height="200" as="geometry"/>
         </mxCell>
-        <mxCell id="layer3_label" value="LAYER 3 — LLM Synthesis (gpt-5.4-mini)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#f59e0b;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="layer3_label" value="LAYER 3, LLM Synthesis (gpt-5.4-mini)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#f59e0b;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="810" y="445" width="320" height="25" as="geometry"/>
         </mxCell>
 

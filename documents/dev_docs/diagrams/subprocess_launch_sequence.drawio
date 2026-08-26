@@ -10,10 +10,10 @@
         </mxCell>
 
         <!-- Title -->
-        <mxCell id="title" value="F1 StratLab &#8212; Digital Twin Multi-Agent System" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#E6E8EF;" vertex="1" parent="1">
+        <mxCell id="title" value="F1 StratLab, Digital Twin Multi-Agent System" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#E6E8EF;" vertex="1" parent="1">
           <mxGeometry x="360" y="20" width="1200" height="36" as="geometry"/>
         </mxCell>
-        <mxCell id="subtitle" value="Subprocess Launch Sequence &#8212; python -m src.arcade.main --viewer --strategy" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=2;fontColor=#8B5CF6;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="Subprocess Launch Sequence, python -m src.arcade.main --viewer --strategy" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=2;fontColor=#8B5CF6;" vertex="1" parent="1">
           <mxGeometry x="360" y="56" width="1200" height="24" as="geometry"/>
         </mxCell>
 
@@ -98,7 +98,7 @@
         </mxCell>
 
         <!-- Step 2: main -> loader -->
-        <mxCell id="m2" value="2. SessionLoader.load(year=2025, round=3, gp=&quot;Suzuka&quot;) &#8212; ~10s FastF1 load, Pool(8) resample" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m2" value="2. SessionLoader.load(year=2025, round=3, gp=&quot;Suzuka&quot;), ~10s FastF1 load, Pool(8) resample" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="420" y="310" as="sourcePoint"/>
             <mxPoint x="680" y="310" as="targetPoint"/>
@@ -112,7 +112,7 @@
         </mxCell>
 
         <!-- Step 3: main -> F1ArcadeView __init__ -->
-        <mxCell id="m3" value="3. F1ArcadeView.__init__(session_data) &#8212; track, leaderboard, weather, driver_info widgets allocated" style="endArrow=classic;html=1;strokeColor=#8B5CF6;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m3" value="3. F1ArcadeView.__init__(session_data), track, leaderboard, weather, driver_info widgets allocated" style="endArrow=classic;html=1;strokeColor=#8B5CF6;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="420" y="400" as="sourcePoint"/>
             <mxPoint x="940" y="400" as="targetPoint"/>
@@ -120,12 +120,12 @@
         </mxCell>
 
         <!-- INIT STRATEGY LAYER GROUP -->
-        <mxCell id="init-strat-box" value="_init_strategy_layer() &#8212; only if --strategy flag present" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#4ADE80;fontColor=#4ADE80;fontStyle=1;fontSize=11;verticalAlign=top;spacingTop=4;dashed=1;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="init-strat-box" value="_init_strategy_layer(), only if --strategy flag present" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#4ADE80;fontColor=#4ADE80;fontStyle=1;fontSize=11;verticalAlign=top;spacingTop=4;dashed=1;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="300" y="440" width="1540" height="280" as="geometry"/>
         </mxCell>
 
         <!-- Step 4: F1ArcadeView spawns SimConnector thread -->
-        <mxCell id="m4" value="4. Thread(SimConnector(request, state)).start() &#8212; daemon thread, writes StrategyState" style="endArrow=classic;html=1;strokeColor=#4ADE80;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m4" value="4. Thread(SimConnector(request, state)).start(), daemon thread, writes StrategyState" style="endArrow=classic;html=1;strokeColor=#4ADE80;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="940" y="480" as="sourcePoint"/>
             <mxPoint x="1200" y="480" as="targetPoint"/>
@@ -133,7 +133,7 @@
         </mxCell>
 
         <!-- Step 5: F1ArcadeView starts TelemetryStreamServer -->
-        <mxCell id="m5" value="5. TelemetryStreamServer.start() on 127.0.0.1:9998 &#8212; accept() loop in bg thread" style="endArrow=classic;html=1;strokeColor=#4ADE80;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m5" value="5. TelemetryStreamServer.start() on 127.0.0.1:9998, accept() loop in bg thread" style="endArrow=classic;html=1;strokeColor=#4ADE80;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="940" y="530" as="sourcePoint"/>
             <mxPoint x="940" y="555" as="targetPoint"/>
@@ -158,7 +158,7 @@
         </mxCell>
 
         <!-- Step 7: Dashboard process creates clients -->
-        <mxCell id="m7" value="7. QApplication + MainWindow &#183; TelemetryStreamClient(QThread).start() &#8212; connects to 127.0.0.1:9998" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m7" value="7. QApplication + MainWindow &#183; TelemetryStreamClient(QThread).start(), connects to 127.0.0.1:9998" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1460" y="690" as="sourcePoint"/>
             <mxPoint x="940" y="690" as="targetPoint"/>
@@ -176,7 +176,7 @@
             <mxPoint x="940" y="785" as="targetPoint"/>
           </mxGeometry>
         </mxCell>
-        <mxCell id="m9" value="9. import strategy_pipeline &#183; _get_default_*_agent() &#215; 4 &#8212; materialises weights (~15s)" style="endArrow=classic;html=1;strokeColor=#A855F7;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m9" value="9. import strategy_pipeline &#183; _get_default_*_agent() &#215; 4, materialises weights (~15s)" style="endArrow=classic;html=1;strokeColor=#A855F7;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1200" y="835" as="sourcePoint"/>
             <mxPoint x="1200" y="870" as="targetPoint"/>
@@ -187,7 +187,7 @@
         </mxCell>
 
         <!-- REPLAY LOOP GROUP -->
-        <mxCell id="loop-box" value="Replay loop &#8212; runs per lap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#EF4444;fontColor=#EF4444;fontStyle=1;fontSize=11;verticalAlign=top;spacingTop=4;dashed=1;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="loop-box" value="Replay loop, runs per lap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#EF4444;fontColor=#EF4444;fontStyle=1;fontSize=11;verticalAlign=top;spacingTop=4;dashed=1;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="300" y="920" width="1540" height="310" as="geometry"/>
         </mxCell>
 
@@ -242,22 +242,22 @@
         </mxCell>
 
         <!-- Footer / Legend -->
-        <mxCell id="legend" value="Legend &#8212; Actor columns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#4B5B82;fontColor=#E6E8EF;fontStyle=1;fontSize=12;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+        <mxCell id="legend" value="Legend, Actor columns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#4B5B82;fontColor=#E6E8EF;fontStyle=1;fontSize=12;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="80" y="1280" width="1760" height="180" as="geometry"/>
         </mxCell>
-        <mxCell id="leg-1" value="&#8212; Purple lines: main.py orchestrating boot (steps 1, 3, 12)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#8B5CF6;" vertex="1" parent="1">
+        <mxCell id="leg-1" value=",  Purple lines: main.py orchestrating boot (steps 1, 3, 12)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#8B5CF6;" vertex="1" parent="1">
           <mxGeometry x="100" y="1310" width="800" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="leg-2" value="&#8212; Orange (thick) &amp; cyan (thick) lines: subprocess.Popen spawns (steps 6a, 6b) + TCP broadcasts (steps 13, 14)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#F59E0B;" vertex="1" parent="1">
+        <mxCell id="leg-2" value=",  Orange (thick) &amp; cyan (thick) lines: subprocess.Popen spawns (steps 6a, 6b) + TCP broadcasts (steps 13, 14)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#F59E0B;" vertex="1" parent="1">
           <mxGeometry x="100" y="1338" width="1200" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="leg-3" value="&#8212; Green lines: SimConnector thread work &#8212; pipeline execution + state writes (steps 4, 5, 10, 11)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#4ADE80;" vertex="1" parent="1">
+        <mxCell id="leg-3" value=",  Green lines: SimConnector thread work, pipeline execution + state writes (steps 4, 5, 10, 11)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#4ADE80;" vertex="1" parent="1">
           <mxGeometry x="100" y="1366" width="1200" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="leg-4" value="&#8212; Violet lines: strategy-model warmup &#8212; torch weights materialise before first lap (steps 8, 9)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A855F7;" vertex="1" parent="1">
+        <mxCell id="leg-4" value=",  Violet lines: strategy-model warmup, torch weights materialise before first lap (steps 8, 9)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A855F7;" vertex="1" parent="1">
           <mxGeometry x="100" y="1394" width="1200" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="leg-5" value="&#8212; Dashed return arrow (step 2b): synchronous return from SessionLoader to main.py" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A0A5B8;" vertex="1" parent="1">
+        <mxCell id="leg-5" value=",  Dashed return arrow (step 2b): synchronous return from SessionLoader to main.py" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A0A5B8;" vertex="1" parent="1">
           <mxGeometry x="100" y="1422" width="1200" height="24" as="geometry"/>
         </mxCell>
 
