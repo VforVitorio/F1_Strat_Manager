@@ -633,7 +633,7 @@ def _decide_agents_to_call(
     # therefore unreachable on its PENALTY half. Route penalty/red-flag RCM
     # alerts on their real 'event_type' field instead, unioned with the
     # still-valid WARNING intent check so nothing that used to fire stops
-    # firing (NR-04, #398).
+    # firing (#398).
     alert_event_types = {a.get("event_type", "") for a in radio_alerts}
     if (alert_intents & {"WARNING"}) or (alert_event_types & _RCM_PENALTY_EVENT_TYPES):
         activate.add("N30")
@@ -1025,7 +1025,7 @@ def _lap_count_or_zero(reported) -> int:
 # (STAY_OUT is first, and conservative is the right default for a genuine tie) for
 # the wrong reason, invisibly: nothing would record that a tie had happened.
 #
-# It is not a rare corner either. Over 415 real laps the audit found six near-ties,
+# It is not a rare corner either. Over 415 real laps there were six near-ties,
 # ALL SIX on decision laps, three of them exact and falling on real pit stops (#645).
 # The margin is smallest exactly where the call is hardest, which is the opposite of
 # the usual case, so this list decides real races and deserves to be a decision.

@@ -217,7 +217,7 @@ class TelemetryStreamServer:
     def broadcast(self, build: Callable[[], dict]) -> None:
         """Queue one payload for every connected client, BUILT off this thread.
 
-        Takes a factory rather than a dict, and that is the whole point. The
+        Takes a factory rather than a dict, so the cost lands off the caller. The
         caller is the pyglet frame loop, and assembling a tick is not cheap:
         measured on the real Melbourne 2025 replay with two spans on the wire,
         `_broadcast_if_due` cost its caller 3.19 ms on a steady 8x tick and

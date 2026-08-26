@@ -832,8 +832,8 @@ class SessionLoader:
             # And the one that made this catch broad on purpose: reading
             # `session.weather_data` raises fastf1's DataNotLoadedError when the
             # weather channel is unavailable, and that subclasses Exception
-            # DIRECTLY, not any of the three above. An adversarial gate caught it
-            # by executing it: session.load() returns normally and the property
+            # DIRECTLY, not any of the three above. It shows up only on execution:
+            # session.load() returns normally and the property
             # raises afterwards, so a narrow tuple let it escape and killed the
             # entire arcade load, after the full cold path, for a session that
             # used to degrade silently to the panel's own constants.

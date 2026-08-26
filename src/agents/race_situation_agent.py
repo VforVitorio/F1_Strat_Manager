@@ -423,7 +423,7 @@ def _fmt_prob(value: Optional[float]) -> str:
 
     Exists because `f"{value:.2f}"` raises TypeError on None, and every place that renders
     this probability into prose (the RCM override note, the N31 prompt, the dashboards)
-    would otherwise have to remember that. One helper beats four remembering.
+    would otherwise have to guard against it separately.
     """
     return _OUT_OF_DOMAIN_MARKER if value is None else f"{value:.2f}"
 

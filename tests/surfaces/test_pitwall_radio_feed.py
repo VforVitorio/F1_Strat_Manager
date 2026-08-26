@@ -172,7 +172,7 @@ def test_race_control_messages_do_not_print_their_car_twice():
 def test_a_race_with_no_corpus_says_so_instead_of_going_quiet():
     """Absent data is a state, not a blank.
 
-    The twin F7 caught one sprint ago, on this same shape: `get_bulk` had an
+    The twin already found on this same shape: `get_bulk` had an
     explicit unavailable payload and `get_live_lap` did not, so pointing the
     arcade at a race with no parquet left the PREVIOUS race's numbers on screen.
     A feed that answered with an empty list would repeat it one channel over.

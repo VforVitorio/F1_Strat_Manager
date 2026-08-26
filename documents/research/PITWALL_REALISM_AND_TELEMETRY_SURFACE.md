@@ -154,7 +154,7 @@ lap: `driver`, `team`, `position`, `lap_time_s`, `compound`, `tyre_life`, `stint
 | `gap_to_leader_s`, `interval_to_driver_s` | (a) | Accurate; end-of-lap resolution only |
 | `is_pitting` (from `PitInTime`, `:277`) | (a) | Accurate; pit entry is publicly visible the moment it happens |
 
-**Direction 1: does the boundary leak hidden data? No, at the `lap_state` level.**
+**Direction 1, whether the boundary leaks hidden data. It does not, at the `lap_state` level.**
 The rival dict carries none of the driver-only fields: sector times, the I1/I2/FL speed
 readings, `fuel_load`, and the in/out-lap pair live only in `get_driver_state`
 (`race_state_manager.py:194-196, 207-212, 215-216`). Nothing in the rivals list is tier
@@ -178,7 +178,7 @@ privileged, so it is defensible; but it is UNLABELED today, and the module docst
 own framing ("timing-screen only", `race_state_manager.py:8-9`) would not predict it.
 The fix is labeling and tiering on screen (section 3.4), not deletion of data.
 
-**Direction 2: is the boundary too stingy? Yes, mildly, in five places.** A real wall
+**Direction 2, whether the boundary is too stingy. It is, mildly, in five places.** A real wall
 sees more than `get_rival_states` grants:
 
 | Withheld today | Reality | Evidence |

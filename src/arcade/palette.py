@@ -2,7 +2,7 @@
 
 Colours, the compound and flag maps, and the two HTML badge builders that
 turn a compound or an alert intent into a coloured pill. Nothing here
-imports Qt, pyglet or pandas, which is the whole point: **PITWALL renders
+imports Qt, pyglet or pandas, which is what lets it be shared: **PITWALL renders
 the AGENTS window from the same formatters that paint the Qt one**, and
 those formatters need six colour tuples and two badge builders, not a
 widget toolkit and a dataframe library.
@@ -97,7 +97,7 @@ def readable_on(background: tuple[int, int, int]) -> tuple[int, int, int]:
     180, and the threshold does not answer the question contrast asks: at
     the alert chip's own grey (#9ca3af) it scores 162 and takes white, and
     white on that grey measures **2.54:1** against the 4.5 the 10 px label
-    needs. The sprint-8 gate found the same 2.54 on the STAY OUT badge -
+    needs. The same 2.54 was measured on the STAY OUT badge -
     the two least legible things on the screen were the alarm and the
     decision.
 

@@ -556,7 +556,7 @@ def test_the_drs_open_set_has_exactly_one_home_in_the_source():
     decode it now", and left `overlays.py`'s `_drs_label` and `_drs_color` holding a
     literal `(10, 12, 14)` each. Three copies of a set whose entire purpose was to
     have one - the twin that never got the fix, which is this repo's most frequent
-    defect and the one an adversarial gate found here again.
+    defect, and it was found here again.
 
     Structural, not textual: the tree is parsed and every set / tuple / list of
     integer constants is compared as a SET, so a reordered `(14, 10, 12)`, a

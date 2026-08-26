@@ -379,7 +379,7 @@ def radio_tooltip(r: dict[str, Any] | None) -> dict[str, Any] | None:
     it looks, so there is no markup here and no escaping either - a React
     text node is not a parser.
 
-    **The 70-character cap is gone, and that is the point of the change.**
+    **The 70-character cap is gone.**
     It was the BODY's width budget - `_truncate`'s docstring says so, in
     terms of a 280-340 px QLabel at 11 px - applied to a popup that is not
     a card and is clipped by nothing. The tooltip truncated each message

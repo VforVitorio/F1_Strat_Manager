@@ -112,7 +112,7 @@ _SAFETY_FLAGS = {
     # A time-penalty ruling is strategically relevant whether it lands on us (we
     # serve it) or a rival (they lose track position, changing our undercut /
     # overcut calculus), so it is forwarded as an alert and routed to N30's
-    # regulation lookup. NR-04's _RCM_PENALTY_EVENT_TYPES already includes it;
+    # regulation lookup. The orchestrator's _RCM_PENALTY_EVENT_TYPES already includes it;
     # this is the upstream half that lets it actually reach the alert list
     # (#398 follow-up). Cost is bounded by the chat rate-limit + token cap.
     "TIME_PENALTY",

@@ -69,7 +69,7 @@ class RaceReplayEngine:
 
         # Guard the read so a missing/corrupt parquet fails with a sourced error
         # instead of a raw pyarrow/OS traceback; the required-column contract is
-        # then enforced in RaceStateManager. (F-02)
+        # then enforced in RaceStateManager.
         laps_path = race_dir / "laps.parquet"
         try:
             laps_df = pd.read_parquet(laps_path)
@@ -114,7 +114,7 @@ class RaceReplayEngine:
                 meta = json.load(f)
             return meta.get("gp_name", race_dir.name), int(meta.get("year", 2025))
         # No metadata.json: warn loudly instead of silently assuming 2025 - a
-        # wrong year mis-selects circuit-aware thresholds and season config. (F-02)
+        # wrong year mis-selects circuit-aware thresholds and season config.
         print(
             f"[warn] {meta_path} absent; falling back to gp_name={race_dir.name!r}, "
             "year=2025 (circuit thresholds + season may be wrong).",

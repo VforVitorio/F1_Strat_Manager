@@ -2,8 +2,8 @@
  * Does the built DATA bundle still render band 4, and render it RIGHT?
  *
  * The sibling of `smoke-agents.mjs`, and it exists for the reason that one
- * had to be written after the fact: the sprint-3 exit gate found render-layer
- * defects that sailed through 35 green Python tests, because those pin what
+ * had to be written after the fact. Render-layer defects sailed through 35
+ * green Python tests, because those pin what
  * the host SENDS and nothing loaded the bundle.
  *
  * So every check below is an EFFECT in a real engine:
@@ -1047,7 +1047,7 @@ await ring.close();
 // `TraceChart` is what stopped the delta baseline reaching 1328 m of a 5220 m
 // axis and restarting forever, and 42 checks stayed green either way - so
 // deleting that line would have been invisible. Its twin in the AGENTS charts
-// shipped the same defect a sprint later.
+// shipped the same defect.
 const stillCtx = await browser.newContext({
   viewport: CLIENT,
 });
@@ -2153,8 +2153,8 @@ check(
 await dupCtx.close();
 
 // A race with no corpus SAYS so. An empty list and a missing corpus are the
-// same pixel otherwise, which is the twin F7 caught one sprint ago between
-// get_bulk and get_live_lap.
+// same pixel otherwise, which is the twin already found between get_bulk and
+// get_live_lap.
 const [emptyCtx, emptyPage] = await radioPage({ available: false, events: [] });
 check(
   (await emptyPage.locator(".radio-row").count()) === 0,

@@ -36,7 +36,7 @@ This means `F1_API_KEY` and `F1_HOST` (see [Setup and deployment](#/setup)) are 
 
 ## Rate limiting
 
-Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`, Security C2 / S-7) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket. The four chat routes carry buckets too (capacity 10, 20/min), so the chat surface is metered as well.
+Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket. The four chat routes carry buckets too (capacity 10, 20/min), so the chat surface is metered as well.
 
 | Route | Burst capacity | Refill rate |
 |---|---|---|

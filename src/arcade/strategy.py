@@ -278,7 +278,7 @@ class SimConnector(threading.Thread):
         # corpus message is announced once (at the deploy lap), so without this
         # the per-lap RCM window is empty on laps 8-10 of the same neutralisation
         # and the SC override drops mid-stint. Persists the state across laps and
-        # re-asserts it in _build_race_state (NR-02, #305 → #398; same wiring the
+        # re-asserts it in _build_race_state (#305, #398; same wiring the
         # CLI uses).
         from src.nlp.rcm_state import RaceControlStateTracker
 
@@ -681,7 +681,7 @@ class SimConnector(threading.Thread):
         # Re-assert an active Safety Car on the laps whose RCM window carries no
         # fresh deploy message. Ingest only the laps actually processed here; a
         # release landing on a skipped (stale) lap is bounded by the tracker's
-        # safety valve rather than pinning the override (NR-02, #398, mirrors
+        # safety valve rather than pinning the override (#398, mirrors
         # the CLI wiring in run_simulation_cli).
         self._sc_tracker.ingest(lap_num, rcm_events)
         if self._sc_tracker.should_inject(lap_num):

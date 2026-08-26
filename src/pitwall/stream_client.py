@@ -36,8 +36,8 @@ SIGNAL_LOG_DEPTH = 64
 class TickSignals(NamedTuple):
     """What one received tick said about continuity, kept after the tick is gone.
 
-    `arrival` is a monotonic counter, NOT the producer's `seq`, and that is the
-    whole point: `seq` restarts at 1 when the arcade relaunches, so a range
+    `arrival` is a monotonic counter, NOT the producer's `seq`, because `seq`
+    restarts at 1 when the arcade relaunches, so a range
     expressed in `seq` either excludes the new run's entries (`30 > 400` is
     false) or becomes ambiguous when two runs' numbers collide inside one log.
     """

@@ -1239,7 +1239,7 @@ def test_a_rewind_keeps_the_laps_it_already_observed():
     killed it. The replay is deterministic, so those observations are not
     wrong, only early. And a forward jump past the evicted range never
     re-drives them, so the prediction is gone: `history_tail` strips
-    `per_agent`, which is exactly the loss Gate A's D-11 predicted.
+    `per_agent`, which is exactly the loss a frame-indexed truncate causes.
 
     The eviction also leaked. On a tick where the arcade clock goes back
     but `strategy.latest` still lags at the old lap, it removed the future

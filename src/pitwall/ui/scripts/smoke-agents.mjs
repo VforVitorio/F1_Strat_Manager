@@ -746,8 +746,8 @@ await page.waitForTimeout(150);
 // With a REAL WHEEL, not `el.scrollTop = 999`. An `overflow: hidden` element
 // is still scrollable from script - only the USER is blocked - so the
 // scripted version passed against the exact mutation it was written to
-// catch. Same mechanism-instead-of-effect trap the sprint-3 gate found in
-// this file's tooltip check.
+// catch. Same mechanism-instead-of-effect trap already found in this file's
+// tooltip check.
 const overflowing = await page.evaluate(() =>
   [...document.querySelectorAll(".agent-card-body")]
     .map((el, i) => ({ i, over: el.scrollHeight - el.clientHeight }))
@@ -993,8 +993,8 @@ check(
 // flickered. `notMerge: true` makes each `setOption` look like a
 // fresh series, so ECharts runs the ENTRANCE animation, which measured
 // ~1200 ms to settle against a ~100 ms push cadence: it never once finished.
-// Band 4 had the identical defect and was fixed a sprint earlier - one copy
-// fixed, its twin left, which is this repo's dominant defect.
+// Band 4 had the identical defect and was fixed first: one copy fixed and its
+// twin left is this repo's dominant defect.
 // BOTH cards, not just the one that flickered: they share `CHART_BASE`,
 // so a guard on one leaves the other free to regress.
 check(

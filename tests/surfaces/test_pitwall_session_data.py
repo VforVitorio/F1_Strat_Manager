@@ -884,7 +884,7 @@ def test_no_sector_is_served_before_its_own_crossing_even_on_an_early_wire():
     was true. On the wire it was not: the arcade's crossing map increments
     before that lap's own `Sector3SessionTime` on 837 of 921 laps (median
     39 ms, max 0.463 s), so the just-ended S3 went out before its official
-    moment (#933 gate finding F6).
+    moment (#933).
 
     The wire's lead is reproduced here by advancing `laps_completed` EARLY -
     by more than the measured worst case - which is exactly the shape of the

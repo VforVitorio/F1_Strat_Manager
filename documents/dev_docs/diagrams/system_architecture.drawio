@@ -118,7 +118,7 @@
         <mxCell id="llm-box" value="LLM Provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
           <mxGeometry x="970" y="630" width="360" height="220" as="geometry"/>
         </mxCell>
-        <mxCell id="llm-openai" value="OpenAI, default&#10;ChatOpenAI gpt-4.1-mini (sub-agents)&#10;5.4-mini candidate (N31 orchestrator)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="llm-openai" value="OpenAI, default&#10;ChatOpenAI gpt-4.1-mini (sub-agents)&#10;gpt-5.4-mini (N31 orchestrator)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="990" y="680" width="320" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="llm-lm" value="LM Studio, local fallback&#10;F1_LLM_PROVIDER=lmstudio env var&#10;NEVER Anthropic (TFG constraint)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#8B5CF6;fontColor=#D3B8E8;fontSize=10;" vertex="1" parent="1">

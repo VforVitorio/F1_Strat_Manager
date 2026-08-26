@@ -242,8 +242,8 @@ class PitwallHost:
         advancing and a purely sequence-driven view would keep rendering
         the last frame of a dead race with a green "Connected" chip.
 
-        **`since_connection` is what the CALLER last rendered, and that is the
-        whole point (#950).** A single host field left two consumers racing for
+        **`since_connection` is what the CALLER last rendered, not what the host
+        last saw (#950).** A single host field left two consumers racing for
         it: the first to notice the producer had died consumed the transition
         and the second never learned about it. Measured over 50
         polls, a browser on `/agents.html` kept a green chip on a dead race
@@ -403,11 +403,11 @@ class PitwallHost:
 
         **The radio corpus loads HERE, under the same key, not beside it.** Two
         caches on the same race with two invalidation points is how one of them
-        comes to serve the previous race - which is the twin this repo pays for
-        most often, and which F7 caught between these very two channels one
-        sprint ago.
+        comes to serve the previous race, which is the twin this repo pays for
+        most often, and which has already been caught between these very two
+        channels.
 
-        **And the malformed-tick return clears them, which it did not.** One
+        **The malformed-tick return clears them too, which it did not.** One
         invalidation point is not enough if there is an early return above it:
         a tick naming no race sent the TABLE to its unavailable payload while
         `_masked_view` went on serving the previous race's radio out of a

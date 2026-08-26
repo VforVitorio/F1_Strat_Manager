@@ -12,7 +12,7 @@ of the tick they arrived on. Nobody can rebuild them later, which is also
 why the rewind guard below **evicts the future and never truncates the
 past**.
 
-The store is keyed by LAP, not by frame. Gate A's D-11: a frame-indexed
+The store is keyed by LAP, not by frame, and a frame-indexed
 truncate cannot address a lap-keyed map, and re-ingesting the same tick
 must be idempotent, which a list would not be.
 """
@@ -43,7 +43,7 @@ class LapHistory:
     only early - re-driving the lap reproduces them. And a forward jump
     past the evicted range never re-drives anything, so the prediction is
     gone for good: `history_tail` strips `per_agent`, which is the exact
-    loss Gate A's D-11 warned a truncate would cause. Measured: a store
+    loss a truncate causes. Measured: a store
     holding laps 28-30, rewound to lap 10, ended up holding only lap 30 -
     it deleted the two it should have kept and kept the one it meant to
     evict, because `ingest_latest` re-added it on the same tick from a

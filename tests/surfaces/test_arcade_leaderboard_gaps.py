@@ -300,7 +300,7 @@ def test_the_interval_is_the_difference_of_two_line_crossings():
 
 
 def test_a_slow_field_reads_slow_and_a_fast_field_reads_fast():
-    """The interval follows the field's real speed, which is the whole point.
+    """The interval follows the field's real speed.
 
     A tenth of a lap is 20 s apart under a Safety Car at 25 m/s and 7.1 s
     at 70 m/s. A hardcoded 55.56 answers 9.0 s to both, over-reading the
@@ -847,7 +847,7 @@ def test_a_car_with_no_position_data_has_no_progress_rather_than_zero():
     frames with `dist`, `x` and `y` all at 0.0. `progress` computed 0.0 from
     that and returned it, so "we have no data for this car" and "this car is
     at the start line" were the same number - on the coordinate the entire
-    field is ordered by, one sprint before the wire starts publishing it.
+    field is ordered by, and before the wire started publishing it.
 
     The panel already partitions `None` out and appends it last. It simply
     never received one.

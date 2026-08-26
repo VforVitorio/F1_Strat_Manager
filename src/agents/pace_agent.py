@@ -111,7 +111,7 @@ FUEL_GAIN_PER_LAP_S: float = 0.055
 # owns (`_encode_categoricals` then `_add_lag_deg_features`), drop the rows N06 drops,
 # and take the min/max of each column over the resulting 42,957 rows.
 # `tests/agents/test_n06_envelope.py` re-runs that measurement and fails if any bound
-# below has drifted from it, so these cannot quietly become hand-typed numbers.
+# below has drifted from it, so a hand-typed number here fails that test.
 #
 # WHICH TEN OF THE TWENTY-FIVE, and why each of the other fifteen is out. A bound is a
 # claim that the value at inference is the same quantity, in the same units, as the

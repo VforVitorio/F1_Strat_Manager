@@ -118,7 +118,7 @@ class RaceStateManager:
 
         # Validate the schema contract here (not only in RaceReplayEngine) so a
         # missing required column fails loudly at construction from ANY caller -
-        # the backend simulator and tests build RaceStateManager directly. (F-02)
+        # the backend simulator and tests build RaceStateManager directly.
         validate_laps_df(laps_df, source=f"{gp_name or 'race'} {year} laps parquet")
 
         enriched = _compute_session_times(laps_df)
