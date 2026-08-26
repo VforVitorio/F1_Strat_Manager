@@ -72,7 +72,7 @@ build, and where each piece goes"*:
 > | gear and DRS on the traces | 9, and needs a decoded `drs_open` from the producer |
 > | the left column's slack under the bests card | 9 |
 
-and its closing sentence on the traces:
+Its closing sentence on the traces:
 
 > **The traces are not oversized; the right column is doing one job with room for two.** In
 > sprint 6 it gains a tab strip and band 3 shares it (the traces and the ring hide on that tab);
