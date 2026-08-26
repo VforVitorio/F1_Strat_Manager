@@ -1,18 +1,18 @@
-"""Race Situation Agent — src/agents/race_situation_agent.py
+"""Race Situation Agent: src/agents/race_situation_agent.py
 
 Extracted from N27_race_situation_agent.ipynb. Combines N12 (overtake LightGBM)
 and N14 (safety car LightGBM) into a single threat assessment per lap.
 
 Public API
 ----------
-run_race_situation_agent(lap_state)                       → RaceSituationOutput  (FastF1 session)
-run_race_situation_agent_from_state(lap_state, laps_df)   → RaceSituationOutput  (RSM adapter)
+run_race_situation_agent(lap_state)                       -> RaceSituationOutput  (FastF1 session)
+run_race_situation_agent_from_state(lap_state, laps_df)   -> RaceSituationOutput  (RSM adapter)
 
 Module-level singletons
 -----------------------
-CFG           — RaceSituationConfig: both model pairs + calibrators + feature lists.
+CFG           : RaceSituationConfig: both model pairs + calibrators + feature lists.
                 Kept at module level so RaceSituationOutput.__post_init__ can read thresholds.
-TIRE_COMPOUNDS — authoritative compound allocation from data/tire_compounds_by_race.json.
+TIRE_COMPOUNDS : authoritative compound allocation from data/tire_compounds_by_race.json.
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ _SC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"SAFETY_CAR_DEPLOYED"})
 _VSC_DEPLOY_EVENT_TYPES: frozenset[str] = frozenset({"VIRTUAL_SAFETY_CAR_DEPLOYED"})
 
 # ── N11's trained domain ──────────────────────────────────────────────────────
-# N11's pair builder DROPS every pair more than 2.5 s apart before labelling — "not an
+# N11's pair builder DROPS every pair more than 2.5 s apart before labelling: "not an
 # active battle" (`.nb_py/N11_overtake_eda.py:233-235`). The model therefore has no
 # labelled example beyond it, and a probability returned out there is whatever leaf the
 # extrapolation lands in, not an estimate.
@@ -119,7 +119,7 @@ _OUT_OF_DOMAIN_MARKER: str = "UNKNOWN"
 _UNKNOWN_CIRCUIT_CLUSTER: int = -1
 
 # SC release. Art. 55.15's "SAFETY CAR IN THIS LAP" (the real message, which classifies
-# to SAFETY_CAR_ENDING — verified on Qatar 2025 L10 and Spain 2025 L60) means the car
+# to SAFETY_CAR_ENDING, verified on Qatar 2025 L10 and Spain 2025 L60) means the car
 # enters the pits at the END of that lap, and Art. 55.8 forbids overtaking until the
 # driver passes the Line AFTER it has returned. So the announcement lap is still
 # neutralised: _neutralization_from_rcm keeps the flag active for it and it clears the
@@ -141,9 +141,9 @@ _VSC_RELEASE_EVENT_TYPES: frozenset[str] = frozenset({"VIRTUAL_SAFETY_CAR_ENDING
 class Neutralization(str, Enum):
     """Which on-track neutralisation the RCM feed confirms is in force this lap.
 
-    NONE — green-flag racing.
-    SC   — full Safety Car (FIA Sporting Regs Art. 55): field queued, large pit saving.
-    VSC  — Virtual Safety Car (Art. 56): no queue, gaps preserved, small pit saving.
+    NONE : green-flag racing.
+    SC   : full Safety Car (FIA Sporting Regs Art. 55): field queued, large pit saving.
+    VSC  : Virtual Safety Car (Art. 56): no queue, gaps preserved, small pit saving.
     """
 
     NONE = "NONE"
@@ -166,8 +166,8 @@ class RaceSituationConfig:
     save_model on Windows.
 
     Threat-level boundaries map the CALIBRATED probabilities to LOW/MEDIUM/HIGH
-    categorical signals for N31. They are pit-wall alert levels — a product
-    decision about how alarmed to be — and deliberately NOT the models' classifier
+    categorical signals for N31. They are pit-wall alert levels (a product
+    decision about how alarmed to be), and deliberately NOT the models' classifier
     operating points, which live on the raw scale (see __post_init__ and #665).
 
     Every band below was set on the served calibrated distribution, measured over
@@ -190,7 +190,7 @@ class RaceSituationConfig:
             target_comparison['3-lap']['baseline']); fires on 1.27% of laps
             (n=1420). The base rate is a class prevalence, not a value selected on
             the test set, so anchoring here does not reintroduce the contamination
-            hygiene.py found in best_threshold. Retraining N14 moves the baseline —
+            hygiene.py found in best_threshold. Retraining N14 moves the baseline:
             move this with it, which test_sc_bands_track_the_models_base_rate
             enforces.
         medium_sc: Calibrated P(SC within 3 laps) above which threat_level is MEDIUM.
@@ -238,14 +238,14 @@ class RaceSituationConfig:
         # `m.predict_proba(X_test)[:,1]`) and only calibrates afterwards in cell 32;
         # N12 does the same in cells 22/25/26 vs cell 36. Pushed through each Platt
         # calibrator, raw 0.2335 is calibrated 0.0158 and raw 0.7976 is calibrated
-        # 0.4183 — and the overtake calibrator's ceiling is 0.7659 at raw 1.0, so
+        # 0.4183, and the overtake calibrator's ceiling is 0.7659 at raw 1.0, so
         # comparing a calibrated probability against 0.7976 could never be True.
         # Measured on real 2025 laps: SC HIGH fired 0/1420, overtake HIGH 0/8171.
         #
         # There is a second, independent reason not to wire them: src/strategy/eval/
         # hygiene.py already ruled BOTH thresholds test-contaminated (selected on the
         # 2025 test set), and concluded N14 has no honest validation split for an
-        # operating threshold at all — the paper reports SC threshold-free. Promoting
+        # operating threshold at all: the paper reports SC threshold-free. Promoting
         # a leaked operating point into a runtime signal would put the contamination
         # back into the decisions the paper's numbers describe.
         #
@@ -263,7 +263,7 @@ class RaceSituationConfig:
         )
         # Re-key to the SLUG keyspace the replay path queries with. This table ships
         # keyed by FastF1 event names, which the FastF1 session path supplies but the
-        # replay path (CLI / arcade / webapp, all fed by RaceStateManager) does not —
+        # replay path (CLI / arcade / webapp, all fed by RaceStateManager) does not:
         # it passes session_meta.gp_name, a slug. The keyspaces do not overlap, so on
         # every replay lap this lookup missed and returned the 0.10 default: a trained
         # per-circuit feature frozen to a constant for every race (#448). Lookups go
@@ -282,7 +282,7 @@ class RaceSituationConfig:
         The two callers disagree: the FastF1 session path passes a full event name
         ('Qatar Grand Prix'), the replay path passes the parquet slug ('Lusail').
         `slug_from_event_name` is reentrant, so it normalises both. Falls back to the
-        0.10 training-set mean when a GP is genuinely unknown — the same default as
+        0.10 training-set mean when a GP is genuinely unknown, the same default as
         before, but now only for real misses instead of on every replay lap.
         """
         slug = slug_from_event_name(event_name) or event_name
@@ -327,7 +327,7 @@ class RaceSituationOutput:
         overtake_prob: Calibrated P(overtake in next few laps) from N12 LightGBM
             + Platt calibration. Above CFG.high_overtake (0.65) = strong
             opportunity. Compare only against the bands in RaceSituationConfig,
-            never against N12's optimal_threshold — that one lives on the raw
+            never against N12's optimal_threshold: that one lives on the raw
             scale and is unreachable here (#665).
         sc_prob_3lap: Calibrated P(SC within 3 laps) from N14 LightGBM + Platt
             calibration. Above CFG.high_sc (0.0864, twice the base rate) =
@@ -340,7 +340,7 @@ class RaceSituationOutput:
             same reason, because 0.0 is also what a genuinely side-by-side pair
             reports (#878).
         pace_delta_s: SINGLE-lap pace delta vs the car ahead (s/lap), this driver's
-            lap time minus theirs, so negative = we are faster. The rolling version is
+            lap time minus theirs, so negative means the driver is faster. The rolling version is
             the separate ``pace_delta_rolling3`` field; this docstring used to describe
             that one, and four surfaces fed a self-delta into this field partly because
             the contract they were reading named the wrong quantity (#750).
@@ -356,7 +356,7 @@ class RaceSituationOutput:
 
     # Optional because N11 has a domain and this says so. None means the pair sat farther
     # apart than any labelled example the model ever saw (43.1% of real adjacent pairs in
-    # 2025), so there is no probability to report — as opposed to 0.0, which under a
+    # 2025), so there is no probability to report, as opposed to 0.0, which under a
     # Safety Car is a REGULATION FACT (Art. 55.8) rather than an absence. Every consumer
     # has to tell those two apart, which is the point.
     overtake_prob: Optional[float]
@@ -373,7 +373,7 @@ class RaceSituationOutput:
 
         An unknown cannot RAISE the band: the alternative is to keep classifying on the
         extrapolated number, which is how a model's uninformed guess ends up presented to
-        N31 as a threat. It cannot lower it either — the SC terms and the live
+        N31 as a threat. It cannot lower it either: the SC terms and the live
         neutralisation flag are evaluated exactly as before.
         """
         overtake_known = self.overtake_prob is not None
@@ -402,7 +402,7 @@ class RaceSituationOutput:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Pure feature sub-helpers — accept all state as arguments, read no globals
+# Pure feature sub-helpers: accept all state as arguments, read no globals
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -422,7 +422,7 @@ def _fmt_prob(value: Optional[float]) -> str:
     """A probability for human text, or the out-of-domain marker when there is none.
 
     Exists because `f"{value:.2f}"` raises TypeError on None, and every place that renders
-    this probability into prose — the RCM override note, the N31 prompt, the dashboards —
+    this probability into prose (the RCM override note, the N31 prompt, the dashboards)
     would otherwise have to remember that. One helper beats four remembering.
     """
     return _OUT_OF_DOMAIN_MARKER if value is None else f"{value:.2f}"
@@ -456,10 +456,10 @@ def _pair_rolling_features(
     where the pair existed but was 4 s apart, or where they had swapped order, is simply
     NOT in the series N12 rolled over. Measured: 29.44% of in-domain 2025 pairs got a
     different window that way, moving the calibrated probability by up to 0.480 and pushing
-    81 pairs across the MEDIUM band. It bit hardest on battles that had just closed up —
+    81 pairs across the MEDIUM band. It bit hardest on battles that had just closed up:
     exactly the ones the domain gate makes interesting.
 
-    So this reconstructs N11's membership rule, not merely a shared-lap window.
+    This reconstructs N11's membership rule, not merely a shared-lap window.
 
     Without a ``Position`` column the membership cannot be reconstructed at all, and the
     honest answer is the one N12 gives for the first row of a series (`min_periods=1`): the
@@ -624,7 +624,7 @@ def _compute_laptime_features(all_laps: pd.DataFrame, lap_number: int) -> dict:
     Replicates the N13 aggregate_laps logic, but NOT the N14 training pipeline's
     normalisation: N14 was trained on z-scores computed non-causally over the WHOLE
     race (mean/std of lap_time drawn from every lap, past and future relative to the
-    labeled row). This function is deliberately causal instead — it z-scores only
+    labeled row). This function is deliberately causal instead: it z-scores only
     against laps up to lap_number, because a live agent has no future laps to read.
     That is a genuine train/serve skew (#450); retraining N14 causally is out of
     scope here, so this docstring names the mismatch rather than the previous
@@ -640,7 +640,7 @@ def _compute_laptime_features(all_laps: pd.DataFrame, lap_number: int) -> dict:
     """
     causal = all_laps[all_laps["LapNumber"] <= lap_number]
     if causal.empty:
-        # No prior lap data — return neutral defaults matching the N14 schema.
+        # No prior lap data: return neutral defaults matching the N14 schema.
         # Happens on lap 1 of every replay (no lap has finished yet) and also
         # when the race has been neutralised (all LapTimes NaN under red flag).
         return {
@@ -653,7 +653,7 @@ def _compute_laptime_features(all_laps: pd.DataFrame, lap_number: int) -> dict:
 
     per_lap = causal.groupby("LapNumber").apply(_agg)
     # apply() on an empty-after-filter group can return a DataFrame with no
-    # columns at all — guard before dropna so we don't KeyError on 'lt_mean'.
+    # columns at all: guard before dropna to avoid a KeyError on 'lt_mean'.
     if "lt_mean" not in per_lap.columns:
         return {
             "lap_time_mean_z": 0.0,
@@ -740,7 +740,7 @@ def _compute_track_status_features(all_laps: pd.DataFrame, lap_number: int) -> d
     """
     causal_laps = all_laps[all_laps["LapNumber"] <= lap_number]
     if causal_laps.empty:
-        # No lap data yet — return green-flag defaults. Matches N14's behaviour
+        # No lap data yet: return green-flag defaults. Matches N14's behaviour
         # when the model receives a pre-race or post-red-flag blank state.
         return {
             "_cur_code": "1",
@@ -783,7 +783,7 @@ def _compute_track_status_features(all_laps: pd.DataFrame, lap_number: int) -> d
     cur_sev = STATUS_SEVERITY.get(cur_code, 1)
     prev_sev = STATUS_SEVERITY.get(prev_code, 1)
 
-    # Force plain int dtype — FastF1 stores TrackStatus as a Categorical, and
+    # Force plain int dtype: FastF1 stores TrackStatus as a Categorical, and
     # .map() can preserve that dtype, which then blows up on .fillna(1) because
     # 1 is not in the original category set. Converting via pd.Series(..., dtype=int)
     # strips the Categorical wrapper so shift/fillna behave like plain numerics.
@@ -890,10 +890,9 @@ def _compute_rcm_features(
 
 def _compute_weather_features(session_meta: dict) -> dict:
     """Extract weather scalars from session_meta for the SC feature vector."""
-    # 38.0, not 35.0: matches the fallback run()/run_from_state() already use (grep this
-    # file for 'TrackTemp' to find both) when they build this same session_meta key, so a
-    # hand-built session_meta missing the key resolves to the same temperature this file
-    # uses everywhere else instead of silently disagreeing with itself.
+    # Uses the shared DEFAULT_TRACK_TEMP_C fallback (grep this file for 'TrackTemp' to
+    # find the other reads), so a hand-built session_meta missing the key resolves to the
+    # same temperature the entry points use, instead of silently disagreeing with itself.
     track_temp = float(session_meta.get("TrackTemp", DEFAULT_TRACK_TEMP_C))
     air_temp = float(session_meta.get("AirTemp", DEFAULT_AIR_TEMP_C))
     humidity = float(session_meta.get("Humidity", 50.0))
@@ -909,7 +908,7 @@ def _compute_weather_features(session_meta: dict) -> dict:
 def _ensure_timedelta_laps(laps_df: pd.DataFrame) -> pd.DataFrame:
     """Ensure LapTime column exists as pandas Timedelta, converting from float seconds if needed.
 
-    Feature builders call .dt.total_seconds() on LapTime — this helper normalises
+    Feature builders call .dt.total_seconds() on LapTime: this helper normalises
     the column so both FastF1-native DataFrames and replay-engine parquets work.
 
     Args:
@@ -1048,7 +1047,7 @@ except ImportError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt (module-level constant — interpolates CFG's loaded thresholds)
+# System prompt (module-level constant, interpolates CFG's loaded thresholds)
 # ─────────────────────────────────────────────────────────────────────────────
 
 # f-string, not a plain triple-quoted constant: the prompt must quote the SAME bands
@@ -1094,7 +1093,7 @@ Your job is to assess two dimensions of strategic threat per lap:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# RaceSituationAgent — encapsulated agent class
+# RaceSituationAgent: encapsulated agent class
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1162,8 +1161,8 @@ class RaceSituationAgent:
             gap_ahead_s = float((t_x - t_y).total_seconds())
         else:
             gap_ahead_s = float((driver_x_lap["LapTime"] - driver_y_lap["LapTime"]).total_seconds())
-        # NaN-preserving. `max(0.0, nan)` returns 0.0 in Python — the comparison is False,
-        # so the first argument wins — which turned an unmeasurable gap into the single
+        # NaN-preserving. `max(0.0, nan)` returns 0.0 in Python: the comparison is False,
+        # so the first argument wins, which turned an unmeasurable gap into the single
         # most aggressive reading available: zero seconds, inside the trained domain, DRS
         # window open. The clamp is for a negative gap, which end-of-lap order makes
         # unreachable for an adjacent pair anyway; it was never meant to absorb an absence.
@@ -1231,13 +1230,13 @@ class RaceSituationAgent:
 
         Replicates the N14 training feature pipeline (N13 aggregate_laps +
         track_status + RCM features). all_laps must contain all accurate laps from
-        lap 1 to the current lap — passing only recent laps breaks the causal
+        lap 1 to the current lap: passing only recent laps breaks the causal
         z-score normalisation that N14 was trained with.
 
         Args:
             all_laps: Accurate FastF1 laps from race start to current lap (inclusive).
                 Required: Driver, LapNumber, LapTime, TyreLife, Compound, TrackStatus.
-            lap_number: Current lap number (strictly causal — no future data used).
+            lap_number: Current lap number (strictly causal, no future data used).
             session_meta: Dict with: circuit_cluster, circuit_sc_rate, total_laps,
                 AirTemp, TrackTemp, Humidity, track_temp_start, and optionally 'session'
                 (FastF1 Session for RCM access; omit in replay engine context).
@@ -1321,7 +1320,7 @@ class RaceSituationAgent:
 
         Both LangChain tools take driver abbreviations as free LLM text, so a
         hallucinated or retired driver code would otherwise reach the feature
-        builders unchecked (#476) — mirrors pit_strategy_agent's score_undercut_tool
+        builders unchecked (#476), mirrors pit_strategy_agent's score_undercut_tool
         guard, same error shape (names the valid options instead of just failing).
 
         Args:
@@ -1510,7 +1509,7 @@ class RaceSituationAgent:
     ):
         """Return the LangGraph ReAct agent, creating it on the first call (lazy).
 
-        Avoids connecting to the LLM at import time — compiled only when N31 or
+        Avoids connecting to the LLM at import time: compiled only when N31 or
         a test actually invokes the agent.
 
         Args:
@@ -1520,7 +1519,7 @@ class RaceSituationAgent:
             api_key: API key; use 'lm-studio' for local server.
 
         Returns:
-            LangGraph CompiledGraph — invoke with {"messages": [HumanMessage(...)]}.
+            LangGraph CompiledGraph: invoke with {"messages": [HumanMessage(...)]}.
 
         Raises:
             ImportError: When LangGraph / LangChain are not installed.
@@ -1566,13 +1565,13 @@ class RaceSituationAgent:
 
         Args:
             lap_state: Dict with keys:
-                session      — Loaded FastF1 Session (laps + weather cached).
-                driver       — FastF1 driver abbreviation (e.g. 'NOR').
-                rival_ahead  — Abbreviation of the car directly ahead. None = skip overtake.
-                lap_number   — Current lap number (int).
-                gp_name      — GP name matching circuit_cluster_map keys (e.g. 'Sakhir').
-                event_name   — Event name matching circuit_sc_rate_map keys.
-                year         — Race year (int).
+                session      : Loaded FastF1 Session (laps + weather cached).
+                driver       : FastF1 driver abbreviation (e.g. 'NOR').
+                rival_ahead  : Abbreviation of the car directly ahead. None = skip overtake.
+                lap_number   : Current lap number (int).
+                gp_name      : GP name matching circuit_cluster_map keys (e.g. 'Sakhir').
+                event_name   : Event name matching circuit_sc_rate_map keys.
+                year         : Race year (int).
 
         Returns:
             RaceSituationOutput with overtake_prob, sc_prob_3lap, threat_level,
@@ -1593,8 +1592,8 @@ class RaceSituationAgent:
         # (not just laps up to lap_number), so without this a free-text driver_x/
         # driver_y from the LLM can name a car that already retired, or a lap the
         # driver never reached, and still get a confident-looking prediction back
-        # (#476) — mirrors pit_strategy_agent's `_live_drivers` (#462). Empty means
-        # we could not tell (e.g. lap_number outside the session), so the guard
+        # (#476), mirrors pit_strategy_agent's `_live_drivers` (#462). Empty means
+        # that could not be told (e.g. lap_number outside the session), so the guard
         # disables (None) rather than rejecting every target.
         _at_lap = self.laps_df.loc[self.laps_df["LapNumber"] == lap_number, "Driver"].dropna()
         self._live_drivers = set(_at_lap) | {driver} if len(_at_lap) else None
@@ -1606,11 +1605,11 @@ class RaceSituationAgent:
             "event_name": event_name,
             "year": lap_state.get("year", 2025),
             # N11's unknown-circuit code, not 0: 0 is a REAL cluster, so an unresolved
-            # circuit used to be scored as a specific kind of track. -1 is what N11's
-            # get_cluster returns (`.nb_py/N11_overtake_eda.py:210-212`), and since the
-            # booster's trained levels are [0,1,2,3] the Categorical cast in
+            # unresolved circuit to 0 would score it as a specific kind of track. -1 is
+            # what N11's get_cluster returns (`.nb_py/N11_overtake_eda.py:210-212`), and
+            # since the booster's trained levels are [0,1,2,3] the Categorical cast in
             # predict_overtake_tool turns it into the missing value LightGBM handles
-            # natively. Latent today — every race resolves — but the collision was real.
+            # natively. Latent today, since every race resolves, but the collision was real.
             "circuit_cluster": self.cfg.cluster_for(gp_name, _UNKNOWN_CIRCUIT_CLUSTER),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": int(session.total_laps),
@@ -1634,17 +1633,17 @@ class RaceSituationAgent:
         """RSM adapter: run the Race Situation Agent from a RaceStateManager lap_state.
 
         Translates the nested RSM lap_state dict into self.laps_df + self.session_meta.
-        Unlike run(), this does NOT require a FastF1 session object — it builds state
+        Unlike run(), this does NOT require a FastF1 session object: it builds state
         from laps_df and lap_state directly.
 
         RCM-based features (had_incident_msg, yellow_sectors_*) default to 0 when no
-        FastF1 session is available — the agent still produces valid SC probability
+        FastF1 session is available: the agent still produces valid SC probability
         estimates using track status and lap-time variance signals.
 
         The rival_ahead is derived from lap_state['rivals'] by looking for the car
         with position = driver_position - 1. When the driver's own position is
         unknown (missing from the telemetry dict), rival_ahead is None rather than
-        guessing a position — a guessed default is a searchable grid slot, so it
+        guessing a position: a guessed default is a searchable grid slot, so it
         would otherwise silently pair the driver with whoever is one place ahead of
         the DEFAULT, not the truth (#465).
 
@@ -1671,7 +1670,7 @@ class RaceSituationAgent:
         year = meta.get("year", 2025)
 
         # #465 (F6): a defaulted position (previously `.get('position', 20)`) is a
-        # SEARCHABLE value, not a safe placeholder — if the real grid has a car at
+        # SEARCHABLE value, not a safe placeholder: if the real grid has a car at
         # P19, "unknown position" and "genuinely P20" silently produce the same
         # rival_ahead lookup. An unknown position must propagate as "no rival
         # computable", not guess P20.
@@ -1686,12 +1685,12 @@ class RaceSituationAgent:
         event_name = meta.get("event_name", gp_name)
 
         # Who is actually on track this lap, from the RSM's `rivals` list (a car that
-        # retired simply is not in it — the same answer a timing screen gives). Used
+        # retired simply is not in it, the same answer a timing screen gives). Used
         # to refuse predict_overtake_tool/predict_sc_tool calls naming a driver who
         # isn't racing this lap (#476), mirroring pit_strategy_agent's `_live_drivers`
-        # (#462). An empty rivals list means the roster is unknown, not "only our car
+        # (#462). An empty rivals list means the roster is unknown, not "only the driver's car
         # is racing", so it disables the guard (None) rather than rejecting every
-        # target — same convention as pit_strategy_agent.run_from_state.
+        # target, same convention as pit_strategy_agent.run_from_state.
         on_track = {r["driver"] for r in rivals if r.get("driver")}
         self._live_drivers = on_track | {driver} if on_track else None
         self._current_lap = lap_number
@@ -1702,11 +1701,11 @@ class RaceSituationAgent:
             "event_name": event_name,
             "year": year,
             # N11's unknown-circuit code, not 0: 0 is a REAL cluster, so an unresolved
-            # circuit used to be scored as a specific kind of track. -1 is what N11's
-            # get_cluster returns (`.nb_py/N11_overtake_eda.py:210-212`), and since the
-            # booster's trained levels are [0,1,2,3] the Categorical cast in
+            # unresolved circuit to 0 would score it as a specific kind of track. -1 is
+            # what N11's get_cluster returns (`.nb_py/N11_overtake_eda.py:210-212`), and
+            # since the booster's trained levels are [0,1,2,3] the Categorical cast in
             # predict_overtake_tool turns it into the missing value LightGBM handles
-            # natively. Latent today — every race resolves — but the collision was real.
+            # natively. Latent today, since every race resolves, but the collision was real.
             "circuit_cluster": self.cfg.cluster_for(gp_name, _UNKNOWN_CIRCUIT_CLUSTER),
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": total_laps,
@@ -1716,12 +1715,12 @@ class RaceSituationAgent:
             # reading_or_default, not .get(key, default): the producers report an
             # unmeasured reading as the key PRESENT holding None, which .get's default
             # never catches, and _compute_weather_features' float() then raises. That
-            # 422'd /recommend on every 2025 lap (#788) — see the helper's docstring.
+            # 422'd /recommend on every 2025 lap (#788), see the helper's docstring.
             "AirTemp": reading_or_default(wx, "air_temp", DEFAULT_AIR_TEMP_C),
             "TrackTemp": reading_or_default(wx, "track_temp", DEFAULT_TRACK_TEMP_C),
             "Humidity": reading_or_default(wx, "humidity", 50.0),
             # The session's FIRST track temp, which the RSM now supplies. This used to
-            # read `track_temp` — the CURRENT one — so `track_temp_delta` came out 0.0 on
+            # read `track_temp` (the CURRENT one), so `track_temp_delta` came out 0.0 on
             # every lap of every race, on every shipping path (CLI, arcade, backend,
             # /recommend, no-llm). The FastF1 path never had the bug: it reads
             # `_wx['TrackTemp'].iloc[0]`, which is what this now mirrors.
@@ -1769,8 +1768,8 @@ class RaceSituationAgent:
             # NOT "no car is within overtaking range (gap > 2.5s)", which is what this
             # said. `rival_ahead` comes from a POSITION lookup with no gap filter at all
             # (see its derivation above), so it is None when the driver is leading, when
-            # the car ahead is missing from the timing feed, or when our own position is
-            # unknown — never because of a gap. The prompt was handing the LLM a reason
+            # the car ahead is missing from the timing feed, or when the driver's own
+            # position is unknown, never because of a gap. The prompt was handing the LLM a reason
             # that was not the reason, and one it could reason from. The gap-domain case
             # is the tool's own to report, and it now does.
             message = (
@@ -1800,7 +1799,7 @@ class RaceSituationAgent:
 
         # Art. 55.8 (SC) / 56.6 (VSC): no overtaking on track. N12 predicts a RACING
         # overtake, and under a neutralisation the only exception that yields a real
-        # position gain is 55.8(h) ("a car slows with an obvious problem") — a mechanism
+        # position gain is 55.8(h) ("a car slows with an obvious problem"), a mechanism
         # N12 has no feature for. Meanwhile every input it does use is regulation-
         # corrupted: DRS is disabled (Art. 22.1(c)), the gap compresses toward ten car
         # lengths (55.7/55.10) and pace_delta collapses to the FIA ECU delta. So the model
@@ -1810,7 +1809,7 @@ class RaceSituationAgent:
         # The override applies whether or not the model answered, and that ordering is the
         # point: under a neutralisation 0.0 is asserted by the REGULATION, so it holds even
         # for a pair the model declined to score. An unscored pair on a green lap keeps its
-        # None — "the rules forbid it" and "nobody knows" must not collapse into one number.
+        # None: "the rules forbid it" and "nobody knows" must not collapse into one number.
         raw_overtake_prob = (
             None if parsed["overtake_prob"] is None else round(parsed["overtake_prob"], 3)
         )
@@ -1910,7 +1909,7 @@ def _neutralization_from_rcm(rcm_events: list | None) -> Neutralization:
 
     Release beats deploy within one window (steps 1-2 before 3-4), matching the prior
     "release wins" ordering. The only change from the old single-flag helper is that an
-    SC release no longer clears the override on its own announcement lap — that lap is
+    SC release no longer clears the override on its own announcement lap: that lap is
     still neutralised by Art. 55.8, which is exactly the one-lap-early bug (#471).
     """
     classified = _classify_rcm_events(rcm_events)
@@ -1958,7 +1957,7 @@ def _get_default_situation_agent() -> RaceSituationAgent:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public entry points — backward-compatible signatures (unchanged)
+# Public entry points: backward-compatible signatures (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1987,7 +1986,7 @@ def run_race_situation_agent_from_state(
     """RSM adapter: run the Race Situation Agent from a RaceStateManager lap_state.
 
     Delegates to the process-level RaceSituationAgent singleton. No FastF1 session
-    required — all context is derived from laps_df and the lap_state dict.
+    required: all context is derived from laps_df and the lap_state dict.
 
     Args:
         lap_state: Dict from RaceStateManager.get_lap_state(). Expected keys:

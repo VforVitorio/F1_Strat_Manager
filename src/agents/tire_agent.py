@@ -1,4 +1,4 @@
-"""Tire Agent — src/agents/tire_agent.py
+"""Tire Agent: src/agents/tire_agent.py
 
 Extracted from N26_tire_agent.ipynb. Wraps the per-compound TireDegTCN models
 (N09/N10) in a LangGraph ReAct agent that answers: how many laps remain before
@@ -6,12 +6,12 @@ the degradation cliff?
 
 Public API
 ----------
-run_tire_agent(stint_state)                   → TireOutput  (FastF1 session in stint_state)
-run_tire_agent_from_state(lap_state, laps_df) → TireOutput  (RSM adapter, no FastF1 session)
+run_tire_agent(stint_state)                   -> TireOutput  (FastF1 session in stint_state)
+run_tire_agent_from_state(lap_state, laps_df) -> TireOutput  (RSM adapter, no FastF1 session)
 
 Module-level singletons
 -----------------------
-CFG — TireAgentConfig: loads routing, calibration, encoding maps, cliff thresholds.
+CFG : TireAgentConfig: loads routing, calibration, encoding maps, cliff thresholds.
       Kept at module level so TireOutput.__post_init__ can call CFG.get_cliff_thresholds.
       Model bundles (BUNDLES) are loaded lazily inside TireAgent.__init__ to avoid
       expensive I/O at import time.
@@ -42,7 +42,7 @@ from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE, normalise_compound
 from src.agents.tire_parsing import parse_tool_outputs
 
 # ── Repo root (module-relative) ───────────────────────────────────────────────
-# Walker with a root-stop guard so we don't spin forever when the module is
+# Walker with a root-stop guard to avoid spinning forever when the module is
 # imported from outside a git checkout (e.g. uv tool install).
 _REPO_ROOT = Path(__file__).resolve().parent
 while not (_REPO_ROOT / ".git").exists():
@@ -78,7 +78,7 @@ _AGENTS_DIR = _DATA_ROOT / "models" / "agents"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TireDegTCN — reproduced from N10 (different state dict layout from legacy N09)
+# TireDegTCN: reproduced from N10 (different state dict layout from legacy N09)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -86,7 +86,7 @@ class CausalConv1dBlock(nn.Module):
     """Single causal dilated convolution layer with left-side padding.
 
     Uses manual left-side padding instead of PyTorch's built-in padding to
-    guarantee strict causality — no future timestep information leaks into
+    guarantee strict causality: no future timestep information leaks into
     the current prediction. This is critical for tire degradation modelling
     because the model is used at inference time with partial stint sequences
     where future laps are not yet observed.
@@ -125,7 +125,7 @@ class TCNResidualBlock(nn.Module):
     the network to learn incremental refinements on top of the identity mapping.
 
     Args:
-        ch: Number of channels (equal for input and output — no projection).
+        ch: Number of channels (equal for input and output, no projection).
         kernel_size: Kernel size passed to both inner CausalConv1dBlocks.
         dilation: Dilation factor passed to both inner CausalConv1dBlocks.
         dropout: Dropout probability.
@@ -154,7 +154,7 @@ class TireDegTCN(nn.Module):
     src/strategy/models/tire_degradation_model.py.
 
     MC Dropout is enabled by calling model.train() before inference and running
-    N_MC forward passes — see TireAgent._build_tools.
+    N_MC forward passes, see TireAgent._build_tools.
 
     Args:
         n_features: Number of input features per timestep (42 in N10 exports).
@@ -195,7 +195,7 @@ class TireDegTCN(nn.Module):
 class TireAgentConfig:
     """Runtime configuration for the Tire Agent.
 
-    Resolves all model paths relative to the repo root and loads — once — the
+    Resolves all model paths relative to the repo root and loads (once) the
     three JSON artefacts produced by N10: routing config (compound → bundle file
     + window), MC Dropout calibration (per-compound uncertainty sigma), and
     encoding maps (label encodings for Team, Compound, AbsoluteCompound). Also
@@ -220,7 +220,7 @@ class TireAgentConfig:
             The rest of the layer already assumes this: the Monte Carlo seeds its
             own RNG at 42, shares draws across candidates, and is pinned by
             byte-identical goldens. Leaving one stochastic step upstream made the
-            whole chain non-reproducible — measured at 53/57 and 52/57 on two
+            whole chain non-reproducible: measured at 53/57 and 52/57 on two
             identical captures of the same commit.
 
             ``src/strategy/eval/tire_holdout.py`` made the same choice for the
@@ -241,13 +241,13 @@ class TireAgentConfig:
             whose ``lap_time_pct_of_race_fastest`` exceeds this ratio. ``track_status_
             clean`` (see ``_add_session_cols``) is supposed to be the signal for a
             Safety-Car- or red-flag-affected lap, but it is dead on the shipping
-            path — a constant 0 across every featured parquet, because N04's
+            path: a constant 0 across every featured parquet, because N04's
             ``IsAccurate`` gate does not catch every neutralised lap (measured
             counter-example: Mexico City 2023 car 4, lap 36, 137.8 s on a circuit
             whose green-flag pace is ~83 s, ``track_status_clean == 0`` regardless).
             When such a lap lands as the fresh reference, the model correctly
             predicts it as an outlier and every later lap in the stint reads as
-            tens of seconds "faster than fresh" — not tyre wear, an artefact of a
+            tens of seconds "faster than fresh", not tyre wear, an artefact of a
             contaminated zero point. ``lap_time_pct_of_race_fastest`` is already a
             TCN input feature, computed unconditionally and cheaply from
             ``session_meta['fastest_lap_s']``, so it is available at the same point
@@ -305,7 +305,7 @@ class TireAgentConfig:
         """Load MC Dropout calibration JSON and compute cross-compound sigma fallback.
 
         mc_dropout_calibration.json stores per-compound mean_sigma_s values fitted
-        in N10. The fallback sigma is the mean across all compounds — used when
+        in N10. The fallback sigma is the mean across all compounds: used when
         compound_id is absent from the dict (currently C1 and C3, whose sigmas are
         not yet fitted; C2/C4/C5/C6 are present). Regenerating them needs N09's MC
         Dropout calibration cell, so the cross-compound mean stands in until then.
@@ -360,7 +360,7 @@ class TireAgentConfig:
         """Load cluster-aware and GP-level cliff thresholds from tire_agent_config_v1.json.
 
         Falls back to empty dicts (global thresholds only) when the file does not
-        exist yet — this covers the case where N26 Step 6 has not been run.
+        exist yet: this covers the case where N26 Step 6 has not been run.
         """
         cfg_path = self.export_dir / "tire_agent_config_v1.json"
         if cfg_path.exists():
@@ -448,14 +448,14 @@ CFG = TireAgentConfig()
 
 # ── Per-compound cumulative degradation cliff thresholds (seconds) ────────────
 # p75 of last-stint-lap FuelAdjustedDegAbsolute in N10 training data (2023-2024).
-# 75% of stints had already pitted by this level — a practical proxy for the cliff.
+# 75% of stints had already pitted by this level: a practical proxy for the cliff.
 CLIFF_THRESHOLD: dict[str, int] = {
-    "C1": 3,  # p75 = 2.20 → ceil = 3
-    "C2": 2,  # p75 = 1.74 → ceil = 2
-    "C3": 2,  # p75 = 1.96 → ceil = 2
-    "C4": 2,  # p75 = 1.75 → ceil = 2
-    "C5": 2,  # p75 = 1.43 → ceil = 2
-    "C6": 2,  # p75 = 1.82 → ceil = 2
+    "C1": 3,  # p75 = 2.20 -> ceil = 3
+    "C2": 2,  # p75 = 1.74 -> ceil = 2
+    "C3": 2,  # p75 = 1.96 -> ceil = 2
+    "C4": 2,  # p75 = 1.75 -> ceil = 2
+    "C5": 2,  # p75 = 1.43 -> ceil = 2
+    "C6": 2,  # p75 = 1.82 -> ceil = 2
 }
 
 # Longest race on the current calendar (Monaco, 78 laps; max observed across
@@ -509,7 +509,7 @@ class TireOutput:
     """Structured output of the Tire Agent for one driver at one point in the race.
 
     The TCN produces a single scalar (predicted cumulative degradation) per forward
-    pass. From N_MC MC passes we derive deg_rate and the P10/P50/P90 interval for
+    pass. From N_MC MC passes, deg_rate and the P10/P50/P90 interval are derived for
     laps remaining before the cliff. warning_level is derived in __post_init__ so
     downstream agents (N28, N31) get a categorical signal without re-implementing thresholds.
 
@@ -524,11 +524,11 @@ class TireOutput:
             the RAW lap-to-lap derivative, not a fuel-corrected one, and fuel
             burn-off pushes lap times down at roughly the rate wear pushes them
             up. Measured over 110 real laps it has median +0.006 s/lap, is
-            negative on 43 of them, and correlates +0.115 with tyre life — its
+            negative on 43 of them, and correlates +0.115 with tyre life: its
             median by tyre-life band is not even monotonic. It does not separate
             a worn tyre from a fresh one. ``cumulative_deg_s`` is the field that
             does (#727).
-        cumulative_deg_s: The TCN's own prediction — seconds per lap this set is
+        cumulative_deg_s: The TCN's own prediction, seconds per lap this set is
             slower than it was when fresh, fuel-corrected (N04's
             ``FuelAdjustedDegAbsolute``). ``None`` when no TCN ran or the tool
             output did not parse.
@@ -536,12 +536,12 @@ class TireOutput:
             ``None`` and not ``0.0``, deliberately: 0.0 is a legitimate reading
             here (a tyre at its baseline pace), so a sentinel of 0.0 would be a
             value the code can also genuinely find. ``deg_rate`` already
-            demonstrates the collision — 12 of those 110 laps carry a parse miss
+            demonstrates the collision: 12 of those 110 laps carry a parse miss
             indistinguishable from a real zero.
 
             This is the scalar the whole tyre-degradation model family exists to
             produce, and until #727 it was computed on every call, printed into
-            the tool string, and dropped at the parser — so it reached neither
+            the tool string, and dropped at the parser, so it reached neither
             the Monte Carlo, nor the orchestrator prompt, nor any UI. Measured
             over the same 110 laps it correlates +0.369 with tyre life and swings
             0.411 s/lap across a stint.
@@ -553,8 +553,8 @@ class TireOutput:
         deg_cost_s: Seconds per lap staying out costs versus a fresh set, bounded.
             This is ``cumulative_deg_s`` minus the model's own prediction on this
             stint's early laps, which cancels N04's per-stint baseline instead of
-            approximating it — see ``TireAgent._fresh_reference`` for why a pooled
-            per-compound table was measured and refused.
+            approximating it (see ``TireAgent._fresh_reference`` for why a pooled
+            per-compound table was measured and refused).
 
             **This is the field the scorers consume**, not ``cumulative_deg_s``:
             the level carries a per-stint offset whose standard deviation across
@@ -565,7 +565,7 @@ class TireOutput:
             here, so the sentinel would collide with a real value. A ``None``
             leaves both scorers on the ``FRESH_GAIN`` fallback.
         laps_to_cliff_p10: Pessimistic estimate (P10) of laps before the cliff.
-            Drives PIT_SOON warning — conservative to avoid running too long.
+            Drives PIT_SOON warning: conservative to avoid running too long.
         laps_to_cliff_p50: Median estimate of laps before the cliff.
             Primary planning value used in strategy timelines.
         laps_to_cliff_p90: Optimistic estimate (P90) of laps before the cliff.
@@ -602,7 +602,7 @@ class TireOutput:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Feature pipeline helpers (must match N10 training order exactly)
-# Pure functions — receive all required state as arguments, read no globals.
+# Pure functions: receive all required state as arguments, read no globals.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -614,13 +614,14 @@ def _add_timing_cols(df: pd.DataFrame) -> pd.DataFrame:
     - Featured parquet: LapTime_s/Sector*_s are already plain floats
 
     LapsSincePitStop is left alone when the frame already carries it, which both
-    featured artefacts do. It used to be OVERWRITTEN with TyreLife unconditionally,
-    and the two are different quantities: TyreLife is the age of the tyre SET and
-    counts laps run before this race, so they coincide only when the set was fitted
-    at the last stop. The alias disagreed with the trained column on 15.8% of rows.
-    Same defect as #800 on the pace path; this is its twin on the tire path.
+    featured artefacts do. Overwriting it unconditionally with TyreLife is wrong:
+    the two are different quantities. TyreLife is the age of the tyre SET and
+    counts laps run before this race, so they coincide only when the set was
+    fitted at the last stop, and an unconditional alias disagreed with the
+    trained column on 15.8% of rows. Same defect as #800 on the pace path; this
+    is its twin on the tire path.
 
-    A frame that genuinely lacks the column still gets the alias, because a missing
+    A frame that lacks the column still gets the alias, because a missing
     feature would break the scaler outright, and the alias is right four rows in five.
     """
 
@@ -847,7 +848,7 @@ def _add_session_cols(df: pd.DataFrame, session_meta: dict) -> pd.DataFrame:
     the handed-in frame overwrites the trained constant with a per-frame quantity:
     the cluster-mean delta was off by up to 14.9 s per lap (Lusail) and the sector
     speed by up to 17.5 s. They are therefore guarded like FuelLoad and
-    track_status_clean — recomputed only when the frame does not already carry them
+    track_status_clean: recomputed only when the frame does not already carry them
     (the raw FastF1 path, which has no better source). The sibling
     lap_time_pct_of_race_fastest and laps_remaining are recomputed unconditionally
     because their per-frame recompute reproduces the shipped value exactly
@@ -891,7 +892,7 @@ def _compound_name_to_id(compound_name: str, gp_name: str, year: int) -> str:
 
     Loads data/tire_compounds_by_race.json (authoritative source) to resolve
     the Cx allocation for this GP/year. Falls back to C3/C2/C1 if the GP is
-    not found — these are the most common mid-season assignments.
+    not found: these are the most common mid-season assignments.
 
     Args:
         compound_name: Pirelli compound name string (e.g. 'SOFT', 'MEDIUM').
@@ -932,7 +933,7 @@ except ImportError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt (module-level constant — unchanged from N26)
+# System prompt (module-level constant, unchanged from N26)
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TIRE_SYSTEM_PROMPT = """You are a Formula 1 tyre degradation analyst embedded in a race strategy system.
@@ -974,7 +975,7 @@ stop becomes unavoidable.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TireAgent — encapsulated agent class
+# TireAgent: encapsulated agent class
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1001,7 +1002,7 @@ class TireAgent:
         self.laps_df: pd.DataFrame = pd.DataFrame()
         self.session_meta: dict = {}
         # Driver codes actually on track for the CURRENT loaded state (#476). Reset
-        # on every run()/run_from_state() call — this instance is a process-level
+        # on every run()/run_from_state() call: this instance is a process-level
         # singleton reused across many laps/drivers, so a stale set from a previous
         # call must never leak into the next one's tool-arg validation.
         self._live_drivers: Optional[set] = None
@@ -1073,12 +1074,12 @@ class TireAgent:
         (``scripts/measure_tyre_reference.py``, ``documents/audits/MEASURE_744a_*``).
 
         Returns ``None``, never 0.0, when the stint has no lap at the reference tyre
-        life — a replay that starts mid-stint. Zero is a legitimate reading of the
+        life: a replay that starts mid-stint. Zero is a legitimate reading of the
         wear it feeds, so collapsing "unknown" into it would be the same sentinel
         collision that #436 fixed for the cliff.
 
         Also drops any candidate lap slower than ``cfg.fresh_reference_max_pct_of_
-        fastest`` times the race's fastest lap — a Safety-Car or red-flag-affected
+        fastest`` times the race's fastest lap, a Safety-Car or red-flag-affected
         lap that ``track_status_clean`` should have flagged but does not (see the
         config docstring). Returns ``None`` rather than falling back to a
         contaminated lap when every candidate is rejected, for the same reason: a
@@ -1222,7 +1223,7 @@ class TireAgent:
         """Return driver codes on track for the currently loaded state, or None.
 
         run_from_state() sets self._live_drivers from the RSM's rivals list plus
-        our own driver — both are PRESENCE-based (a row exists for this lap), the
+        the driver's own car: both are PRESENCE-based (a row exists for this lap), the
         same signal race_state_manager.py and pit_strategy_agent.py rely on for
         their own retired-car guards (#470/#462): an age/lap-count cutoff cannot
         separate a retiree from a finisher because the ranges overlap (a finisher
@@ -1233,7 +1234,7 @@ class TireAgent:
         Returns:
             Set of driver codes, or None when there is nothing to validate against
             (callers treat None as "cannot tell" and skip the guard rather than
-            block every driver on missing data — the same convention
+            block every driver on missing data, the same convention
             pit_strategy_agent.py uses for its own `_live_drivers`, #470/#462).
         """
         if self._live_drivers is not None:
@@ -1249,7 +1250,7 @@ class TireAgent:
         Guards the two LLM-facing tools against a hallucinated or long-retired
         driver code. Reachable in production: laps_df carries the WHOLE race's
         history, so the stint filter in _get_driver_stint happily builds a
-        'stint' out of laps recorded before a car crashed — it never checks
+        'stint' out of laps recorded before a car crashed: it never checks
         whether the driver is still racing at the lap the agent is currently
         analysing. Example (#476): Austin 2024, HAM crashed on lap 2 of 56;
         asked about at a later lap, the tool used to return a confident
@@ -1281,7 +1282,7 @@ class TireAgent:
         """Build LangChain tools as closures over this TireAgent instance.
 
         Each tool reads self.laps_df, self.session_meta, self.bundles, and
-        self.cfg at call time — no module-level globals are accessed. Returns
+        self.cfg at call time: no module-level globals are accessed. Returns
         an empty list when LangGraph is not installed so the agent degrades
         gracefully.
 
@@ -1411,7 +1412,7 @@ class TireAgent:
             #
             # A cliff past the chequered flag is operationally "not this race", so the
             # race distance is the honest ceiling: it says the same thing without looking
-            # like a reading. Nothing is invented — the bound is the race itself.
+            # like a reading. Nothing is invented: the bound is the race itself.
             #
             # The fallback must stay at or below the shortest real race, otherwise a
             # missing total_laps lifts the ceiling above the race and the clamp stops
@@ -1455,7 +1456,7 @@ class TireAgent:
     ):
         """Return the LangGraph ReAct agent, creating it on the first call (lazy).
 
-        Avoids connecting to the LLM at import time — the graph is compiled only
+        Avoids connecting to the LLM at import time: the graph is compiled only
         when N31 or a test actually invokes the agent.
 
         Args:
@@ -1465,7 +1466,7 @@ class TireAgent:
             api_key: API key; use 'lm-studio' for local server.
 
         Returns:
-            LangGraph CompiledGraph — invoke with {"messages": [{"role": "user", "content": ...}]}.
+            LangGraph CompiledGraph: invoke with {"messages": [{"role": "user", "content": ...}]}.
 
         Raises:
             ImportError: When LangGraph / LangChain are not installed.
@@ -1510,18 +1511,18 @@ class TireAgent:
 
         Populates self.laps_df and self.session_meta from the FastF1 Session in
         stint_state, then invokes the ReAct agent. Numeric values are extracted
-        from tool call results in the message history — not from the LLM's
-        free-text answer — so the output is deterministic.
+        from tool call results in the message history, not from the LLM's
+        free-text answer, so the output is deterministic.
 
         Args:
             stint_state: Dict with keys:
-                session     — loaded FastF1 Session (laps + weather already cached).
-                driver      — FastF1 driver abbreviation (e.g. 'NOR').
-                compound_id — Pirelli compound ID (e.g. 'C2').
-                tyre_life   — Current laps on this tyre set.
-                gp_name     — GP name matching circuit_cluster_map keys (e.g. 'Sakhir').
-                team        — Team name matching team_id_map keys (e.g. 'McLaren').
-                year        — Race year (int).
+                session     : loaded FastF1 Session (laps + weather already cached).
+                driver      : FastF1 driver abbreviation (e.g. 'NOR').
+                compound_id : Pirelli compound ID (e.g. 'C2').
+                tyre_life   : Current laps on this tyre set.
+                gp_name     : GP name matching circuit_cluster_map keys (e.g. 'Sakhir').
+                team        : Team name matching team_id_map keys (e.g. 'McLaren').
+                year        : Race year (int).
 
         Returns:
             TireOutput with deg_rate, laps_to_cliff P10/P50/P90, gp_name,
@@ -1539,8 +1540,8 @@ class TireAgent:
 
         self.session_meta = {
             "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
-            # The TRAINED per-cluster constant, not this race's own mean lap time.
-            # It used to be `_clean["LapTime"].dt.total_seconds().mean()`, which is a
+            # The TRAINED per-cluster constant, not this race's own mean lap time
+            # (`_clean["LapTime"].dt.total_seconds().mean()`), which is a
             # different quantity: N04 subtracted one constant per CLUSTER (std 0.0
             # within a cluster), and a race's own mean is a per-race number that
             # happens to have the same units.
@@ -1555,14 +1556,14 @@ class TireAgent:
             "TrackTemp": float(_weather.get("TrackTemp", DEFAULT_TRACK_TEMP_C)),
             "Humidity": float(_weather.get("Humidity", 50.0)),
             # Was hardcoded 0.0 (#477) while run_from_state() correctly reads
-            # wx.get('rainfall', 0) from the RSM weather dict — mirror that here
+            # wx.get('rainfall', 0) from the RSM weather dict: mirror that here
             # from the session's own weather data instead of silently telling
             # every dry-model feature the race was rain-free regardless of what
             # actually happened.
             "Rainfall": float(_weather.get("Rainfall", 0.0)),
         }
         # No per-lap rivals list on this path (single-shot FastF1 query, not a live
-        # simulation lap) — _live_drivers_at_current_lap() falls back to laps_df.
+        # simulation lap): _live_drivers_at_current_lap() falls back to laps_df.
         self._live_drivers = None
 
         return self._run_core(driver, compound_id, tyre_life, gp_name)
@@ -1571,7 +1572,7 @@ class TireAgent:
         """RSM adapter: run the Tire Agent from a RaceStateManager lap_state dict.
 
         Translates the nested RSM lap_state into self.laps_df / self.session_meta.
-        No FastF1 session is required — all context is derived directly from laps_df
+        No FastF1 session is required: all context is derived directly from laps_df
         and the lap_state dict produced by RaceStateManager.
 
         Args:
@@ -1590,7 +1591,7 @@ class TireAgent:
 
         driver = meta["driver"]
         # This adapter reads the RAW lap_state, not the RaceState, so the canonical
-        # builder's normalisation does not reach it — it has to apply the same rules
+        # builder's normalisation does not reach it: it has to apply the same rules
         # itself or the unification stops at the object boundary (#784). Both of the
         # old two-arg defaults were also dead on the RSM path and wrong when they did
         # fire: the key is always present, so a stored NaN arrives as the STRING "nan"
@@ -1609,7 +1610,7 @@ class TireAgent:
 
         self.laps_df = laps_df.copy()
 
-        # Build session_meta from laps_df (FastF1 Timedelta → float if needed)
+        # Build session_meta from laps_df (FastF1 Timedelta -> float if needed)
         lt_col = "LapTime_s" if "LapTime_s" in self.laps_df.columns else "LapTime"
         if lt_col == "LapTime" and hasattr(self.laps_df[lt_col].iloc[0], "total_seconds"):
             lap_times = self.laps_df[lt_col].dropna().apply(lambda t: t.total_seconds())
@@ -1636,7 +1637,7 @@ class TireAgent:
             "year": year,
             # reading_or_default, not .get(key, default): the producers report an
             # unmeasured reading as the key PRESENT holding None, which .get's default
-            # never catches. These Nones do not crash here — they flow through
+            # never catches. These Nones do not crash here: they flow through
             # _add_weather_cols into the TCN's feature frame and moved the cliff estimate
             # 2.3 laps OPTIMISTIC on the 2025 reference lap, silently. Optimistic is the
             # dangerous direction: it delays the pit call. See the helper's docstring.
@@ -1645,7 +1646,7 @@ class TireAgent:
             "Humidity": reading_or_default(wx, "humidity", 50.0),
             "Rainfall": float(reading_or_default(wx, "rainfall", 0.0)),
             f"{driver}_compound": compound,
-            # The stint we are actually in, and the lap we are actually on. N10 trained
+            # The stint actually being run, and the lap actually being raced. N10 trained
             # on windows grouped by ['Year','GP_Name','DriverNumber','Stint'], and the
             # slice below had neither: it matched on Compound alone, so a later stint on
             # the same compound joined the window, and nothing bounded it to the past.
@@ -1657,10 +1658,10 @@ class TireAgent:
             "current_lap": lap_state.get("lap_number"),
         }
 
-        # Presence-based on-track set for this lap (#476): our own driver plus
+        # Presence-based on-track set for this lap (#476): the driver's own car plus
         # every rival the RSM actually emitted a row for. A driver who crashed
         # earlier in the race simply stops appearing in rivals from that lap on
-        # — the same signal race_state_manager.py itself relies on (#470) — so
+        # (the same signal race_state_manager.py itself relies on, #470), so
         # this catches an LLM tool call for a long-retired driver code without
         # reimplementing any retirement/lap-count heuristic.
         self._live_drivers = {driver} | {
@@ -1715,7 +1716,7 @@ class TireAgent:
             Fully populated TireOutput.
         """
         # TCN bundles only exist for dry compounds (C1-C6). For wet/intermediate
-        # compounds return a stub with conservative defaults — no TCN inference.
+        # compounds return a stub with conservative defaults: no TCN inference.
         if compound_id not in self.bundles:
             return self._conservative_stub(
                 compound_id,
@@ -1744,7 +1745,7 @@ class TireAgent:
 
         # A parse miss must NOT become 0.0 laps-to-cliff. `_parse_tool_outputs` only
         # writes a key when its regex matched, so an absent 'p10' means "the tool was
-        # skipped or its output did not parse" — whereas a PRESENT 0.0 legitimately
+        # skipped or its output did not parse", whereas a PRESENT 0.0 legitimately
         # means "the cliff is now". Defaulting the miss to 0.0 collapsed those two into
         # the alarming one: the MC read "cliff NOW" (penalising STAY_OUT by ~4 s) and
         # the warning level flipped to PIT_SOON, so a silent regex miss became a
@@ -1808,7 +1809,7 @@ def _get_default_tire_agent() -> TireAgent:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public entry points — backward-compatible signatures (unchanged)
+# Public entry points: backward-compatible signatures (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1818,7 +1819,7 @@ def run_tire_agent(stint_state: dict) -> TireOutput:
     Delegates to the process-level TireAgent singleton. Populates session state
     from the FastF1 Session object inside stint_state, then invokes the LangGraph
     ReAct agent. Numeric outputs are extracted from tool call results in the
-    message history — not from the LLM's free-text answer.
+    message history, not from the LLM's free-text answer.
 
     Args:
         stint_state: Dict with keys: session, driver, compound_id, tyre_life,
@@ -1833,7 +1834,7 @@ def run_tire_agent(stint_state: dict) -> TireOutput:
 def run_tire_agent_from_state(lap_state: dict, laps_df: pd.DataFrame) -> TireOutput:
     """RSM adapter: run the Tire Agent from a RaceStateManager lap_state dict.
 
-    Delegates to the process-level TireAgent singleton. No FastF1 session required —
+    Delegates to the process-level TireAgent singleton. No FastF1 session required:
     all context is derived from laps_df and the lap_state produced by RaceStateManager.
 
     Args:
