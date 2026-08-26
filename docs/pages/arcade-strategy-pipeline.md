@@ -76,11 +76,11 @@ The arcade needs the raw outputs and the CLI does not, but that is a difference 
 
 ## Why this replaced a duplicate
 
-This module used to be a body-copy of the orchestrator, and this page used to document a "how to stay in sync" ritual: open both files side by side and transcribe every edit by hand. That ritual was the bug. A copy kept in sync by discipline drifts the first time someone edits one file and not the other, and it did: an audit flagged it and the #166 crash proved it.
+This module was a body-copy of the orchestrator, kept in sync by a manual ritual: open both files side by side and transcribe every edit by hand. That ritual was the bug. A copy kept in sync by discipline drifts the first time someone edits one file and not the other, and it did: an audit flagged it and the #166 crash proved it.
 
 The lesson generalises beyond the arcade, and the strategy engine relearned it the hard way. `src/simulation/race_state_manager.py` had already solved a pile of race-data problems correctly (NaN never becomes a searchable number, gaps come from the elapsed-time column, retired cars fall out on their own). A second implementation was later written alongside it for the API path, and it reproduced every one of those bugs from scratch, silently, for months. Two implementations of the same idea do not stay equal because someone intends them to.
 
-So: **before writing a second path that shapes race data, check whether a clean one already exists.** If it does, call it.
+**Before writing a second path that shapes race data, check whether a clean one already exists.** If it does, call it.
 
 ## SimConnector threading
 

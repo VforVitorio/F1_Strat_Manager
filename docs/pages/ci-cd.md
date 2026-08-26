@@ -1,8 +1,8 @@
 # CI/CD pipeline
 
-Single source of truth for how F1 StratLab is built, tested, released and deployed. Read this once and you will know how a commit becomes a published release and the live docs site.
+Single source of truth for how F1 StratLab is built, tested, released and deployed. Reading it once explains how a commit becomes a published release and the live docs site.
 
-The pipeline is split across eight GitHub Actions workflows, a release-please bot for versioning, Dependabot for dependency hygiene, and a few repository-level toggles that quietly make everything work. Three of them carry the weight and get a section each below; the other five are the security scanners and the automation.
+The pipeline is split across eight GitHub Actions workflows, a release-please bot for versioning, Dependabot for dependency hygiene, and a few repository-level toggles that make everything work. Three of them carry the weight and get a section each below; the other five are the security scanners and the automation.
 
 ## Branching strategy
 
@@ -38,7 +38,7 @@ Eight workflows live under `.github/workflows/`. They run independently, on diff
 | `ci.yml` | test / lint / typecheck / pip-audit, plus the PITWALL UI job |
 | `release-please.yml` | version bumps, the CHANGELOG and the release PR |
 | `docs.yml` | builds and publishes this site |
-| `codeql.yml` | SAST over our own code |
+| `codeql.yml` | SAST over the project's own code |
 | `osv-scanner.yml` | cross-ecosystem vulnerability scan |
 | `gitleaks.yml` | secret scanning over the repo and its diffs |
 | `labeler.yml` | applies `area:` labels from the changed paths |

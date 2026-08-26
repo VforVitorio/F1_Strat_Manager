@@ -121,7 +121,7 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
 ```
 
 > Captured from a real run of the command above, on 2026-08-10. The block it
-> replaced had the same lap times and **pre-fix gaps** — it showed P2 at
+> replaced had the same lap times and **pre-fix gaps**: it showed P2 at
 > +13.836 s on lap 20 where the code now emits +2.623 s, because it predated
 > the `Time_s` correction the *Gap computation* section below describes. A
 > stale example that demonstrates the exact failure its own page warns about

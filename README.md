@@ -150,7 +150,7 @@ This project is part of a broader F1 AI suite:
 
 ## Cite this work
 
-If F1 StratLab is useful in your research, your writing or your own project, please cite it. GitHub's "Cite this repository" button reads the same [`CITATION.cff`](CITATION.cff), but here it is in full so it can be copied without leaving the page.
+When F1 StratLab is useful in research, in writing or in a project, please cite it. GitHub's "Cite this repository" button reads the same [`CITATION.cff`](CITATION.cff), but here it is in full so it can be copied without leaving the page.
 
 **BibTeX**
 
@@ -173,7 +173,7 @@ If F1 StratLab is useful in your research, your writing or your own project, ple
 
 > F1 StratLab by Víctor Vega Sobral, https://github.com/VforVitorio/F1-StratLab
 
-If you build on a specific part, citing the version you used helps: the strategy engine changes between releases, so the numbers in a v1 run are not the numbers in a v2 one. And if you do use it for something, an issue or a message saying so is genuinely welcome, it is the only way to find out where this ends up.
+When a project builds on a specific part, citing the version used helps: the strategy engine changes between releases, so the numbers in a v1 run are not the numbers in a v2 one. And using it for something is worth an issue or a message about it: that is the only way to find out where this ends up.
 
 ---
 

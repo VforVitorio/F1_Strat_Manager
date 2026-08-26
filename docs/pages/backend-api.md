@@ -180,7 +180,7 @@ Event stream: one `start` event, then one `lap` (or `error`) event per processed
 
 ### Where this `lap_state` differs from the replay engine's
 
-Both producers emit the same five top-level keys plus the two stint-history ones, and every agent accepts either. They are **not** field-identical, and it is worth knowing which way, because a producer that quietly diverged from this contract once made a whole strategy candidate permanently ineligible.
+Both producers emit the same five top-level keys plus the two stint-history ones, and every agent accepts either. They are **not** field-identical, and it is worth knowing which way, because a producer that diverged from this contract once made a whole strategy candidate permanently ineligible.
 
 Measured on Lusail 2025 lap 30:
 
@@ -191,7 +191,7 @@ Measured on Lusail 2025 lap 30:
 
 `weather.rainfall` also differs in type: this endpoint coerces it to `int`, the replay engine leaves it `None` when the reading is absent.
 
-None of these are read by the projection, which needs `interval_to_driver_s` and `is_pitting`, and both producers emit those. But if you are writing a new consumer, read this table rather than assuming the two are interchangeable.
+None of these are read by the projection, which needs `interval_to_driver_s` and `is_pitting`, and both producers emit those. A new consumer should read this table rather than assume the two are interchangeable.
 
 ### Agent endpoints (POST)
 

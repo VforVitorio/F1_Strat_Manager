@@ -4,7 +4,7 @@
 
 One command launches everything. The arcade process owns the simulation loop and broadcasts merged state on a local TCP port; the follower surfaces subscribe and render.
 
-**One follower stack, as of sprint 7.** PITWALL — two pywebview windows rendering React — is the whole strategy surface. The original PySide6 pair ran beside it through the migration so every PITWALL panel could be compared against the window it replaced while that window still existed; it has now been retired, along with the `PySide6` and `pyqtgraph` dependencies. The comparison baseline is not lost with it: the Qt windows' rendered output is committed as screenshots under `documents/dev_docs/migration/pitwall/`. The pyglet replay is unchanged either way.
+**One follower stack.** PITWALL (two pywebview windows rendering React) is the whole strategy surface. The original PySide6 pair ran beside it through the migration so every PITWALL panel could be compared against the window it replaced while that window still existed; it has now been retired, along with the `PySide6` and `pyqtgraph` dependencies. The comparison baseline is not lost with it: the Qt windows' rendered output is committed as screenshots under `documents/dev_docs/migration/pitwall/`. The pyglet replay is unchanged either way.
 
 <p align="center">
   <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab arcade replay in action"></video>
@@ -34,9 +34,9 @@ What happens:
 2. The `--viewer` flag skips the menu and goes straight to `F1ArcadeView`.
 3. The view loads the 2025 Round 3 (Suzuka) parquet for Verstappen.
 4. With `--strategy` set, the view starts a `TelemetryStreamServer` on `127.0.0.1:9998`, owns a `StrategyState`, and spawns `python -m src.pitwall`.
-5. PITWALL opens **PITWALL · DATA** and **PITWALL · AGENTS** — two pywebview windows rendering React against the same broadcast, through a single shared TCP client.
+5. PITWALL opens **PITWALL · DATA** and **PITWALL · AGENTS**, two pywebview windows rendering React against the same broadcast, through a single shared TCP client.
 
-The arcade window drives playback; every other window reacts to broadcasts. PITWALL additionally serves the same two pages over loopback, and prints the URL on startup, so you can open them in a browser (and get devtools) instead of, or as well as, the windows.
+The arcade window drives playback; every other window reacts to broadcasts. PITWALL additionally serves the same two pages over loopback, and prints the URL on startup, so they can be opened in a browser (and get devtools) instead of, or as well as, the windows.
 
 ## What each window shows
 
@@ -80,7 +80,7 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 | Key | What it does |
 |---|---|
 | `Space` | pause / resume |
-| `Left` / `Right` | **hold** to scrub backwards or forwards. Holding pauses playback; releasing restores whatever state you were in before. Not a one-lap step |
+| `Left` / `Right` | **hold** to scrub backwards or forwards. Holding pauses playback; releasing restores whatever state was active before. Not a one-lap step |
 | `Up` / `Down` | next / previous playback speed |
 | `1` `2` `3` `4` | jump straight to 0.5x, 1x, 2x, 4x |
 | `R` | restart: back to frame zero, default speed, playing |
@@ -90,7 +90,7 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 | `Escape` | close the window |
 
 `Escape` quits rather than returning to the menu, and it does so whether or not
-you launched with `--viewer`.
+`--viewer` was used at launch.
 
 ## Known limitations
 

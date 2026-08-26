@@ -37,7 +37,7 @@ module docstring). That thesis has two halves that have never been written down 
 model:
 
 - **The input half**: which rival signals are legitimately observable, which are
-  derivable, and which are genuinely hidden and must be modeled as uncertainty. This
+  derivable, and which are hidden and must be modeled as uncertainty. This
   decides the Rival Agent's feature space (TFM) and the honesty of the simulation.
 - **The output half**: what the product SHOWS. A pit-wall dashboard that renders hidden
   rival data as if it were real breaks the same thesis on screen that the boundary
@@ -46,7 +46,7 @@ model:
 The correction this document bakes in everywhere (2026-07-06): a rival's
 **tyre compound and tyre age (laps on the current set) ARE known to a real pit wall**.
 They are visible on TV, carried in the FIA timing feed, and trivially derivable from
-observed pit-in/pit-out laps. What is genuinely hidden for a rival is: raw car telemetry
+observed pit-in/pit-out laps. What is hidden for a rival is: raw car telemetry
 traces at professional fidelity (steering, brake pressures, ERS deployment), true tyre
 degradation / remaining grip, fuel load, engine and energy deployment modes, and the
 team's strategic intent. Verified against the code: `get_rival_states` already emits
@@ -410,7 +410,7 @@ the web stack; kill the Arcade telemetry window because the new all-drivers dash
 replaces it. Explicit opinions:
 
 **KEEP the circuit/track-map window in Arcade: agree, short-to-mid term.** It is the
-one window where native genuinely delivers today: the pyglet replay is shipped,
+one window where native delivers today: the pyglet replay is shipped,
 defended, and its known issues have cheap fixes already planned (P3 Phase C bakes the
 track tessellation; Phase B puts real weather and flag spans on it). Porting it now
 would be the most work for the least new capability. One honest qualifier: after
@@ -442,7 +442,7 @@ Killing it (rather than migrating it 1:1) is right because its 2-driver framing 
 artifact of the H2H mode, not a pit-wall concept; the replacement is designed from the
 Topic 1 taxonomy instead.
 
-**Is the resulting hybrid coherent, or a pain?** It is coherent, and, importantly, it is
+**Is the resulting hybrid coherent, or a pain?** It is coherent, and it is
 the SAME topology the system already runs: today the pyglet window broadcasts and a
 separate process (Qt) follows the stream as a one-directional consumer. The proposal
 replaces the Qt follower with a browser follower behind a backend relay; the sync model

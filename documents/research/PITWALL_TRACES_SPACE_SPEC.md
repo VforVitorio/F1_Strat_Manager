@@ -138,7 +138,7 @@ drawing's own geometry, and the transposed reading fits it exactly:
   settled at ~304, leaving 404. **Against the transposed reading the shipped feed is 13 px short,
   not 157 px narrow.**
 
-So the radio's real deviation is small and structural (the tab strip), and the cramped feel is a
+Therefore the radio's real deviation is small and structural (the tab strip), and the cramped feel is a
 DENSITY problem rather than a geometry one: 42 events with ~10 visible behind a fold,
 every long RCM row spending two clamped lines, four identical BLUE FLAG rows spending four slots.
 Section 7 fixes density, and section 8 Q4 offers the width restructure if the literal 417 was meant.
@@ -147,7 +147,7 @@ Section 7 fixes density, and section 8 Q4 offers the width restructure if the li
 
 ## 3. Research - how real telemetry clients draw a stacked trace
 
-What was found, with URLs, and what it implies. Where the convention disagrees with our drawing,
+What was found, with URLs, and what it implies. Where the convention disagrees with the drawing,
 it says so plainly.
 
 1. **MoTeC i2** - the reference analysis package. Its classic compare worksheet stacks
@@ -184,7 +184,7 @@ it says so plainly.
 5. **MultiViewer** (the live F1 fan client the project already cites) overlays
    **speed / throttle / brake / gear / RPM / DRS** as one onboard telemetry block -
    [multiviewer.app](https://multiviewer.app/). Implication: the six-channel set in section 5.1 is the
-   standard live set minus RPM (not on our wire) plus Δ (our two-car product).
+   standard live set minus RPM (not on the wire) plus Δ (this window's two-car product).
 6. **Cosworth Pi Toolbox / AiM Race Studio** - the user guides confirm the same waveform-strip
    model (channels as horizontal strips over one distance axis, cursor readout per strip) but the
    public docs carry no layout numbers worth citing beyond that:
@@ -193,19 +193,19 @@ it says so plainly.
    AiM's channel tags carry the value/average readout
    ([Rennlist thread on RS2 features](https://rennlist.com/forums/data-acquisition-and-analysis-for-racing-and-de/991767-new-aim-race-studio-2-features.html)).
 
-**Where the convention disagrees with our drawing:**
+**Where the convention disagrees with the drawing:**
 
-- Convention stacks **RPM**; our wire does not carry it (broadcast car data does - realism doc
+- Convention stacks **RPM**; the wire does not carry it (broadcast car data does - realism doc
   Section 2.1 row 3 - but `FrameData` does not resample it). Not added; it would be a producer + loader
   change for a channel the strategist does not act on.
 - Convention has **no Δ TIME lane** in the single-car worksheet - the delta is an overlay-mode
-  channel. Our window is permanently two-car (main + broadcast rival), and the Qt original's
+  channel. This window is permanently two-car (main + broadcast rival), and the Qt original's
   headline chart is the delta, so it stays: this is a pit wall, not a driver-coaching sheet.
-- The Field's shared cursor is **hover-driven** (analysis); ours is **the car's live position**
-  (a race in progress). The hover/inspection cursor is deliberately deferred (section 8, settled by me:
+- The Field's shared cursor is **hover-driven** (analysis); this window's is **the car's live
+  position** (a race in progress). The hover/inspection cursor is deliberately deferred (section 8:
   a live wall is not moused - and at 10 Hz `notMerge: true` would fight the axisPointer state).
-- Convention keeps a y-axis per lane. We keep ours (locked ranges, bounds unlabelled), which is
-  already the shipped `valueAxis` behaviour.
+- Convention keeps a y-axis per lane. This design keeps its own (locked ranges, bounds unlabelled),
+  which is already the shipped `valueAxis` behaviour.
 
 ---
 
@@ -459,8 +459,7 @@ owned by **#986** - build on it, do not re-spec it:
 2. **The fold announces itself.** The header count says how many EXIST (42); it does not say the
    panel is showing ~10. Add the shipped convention other panels use: the count becomes
    `10 / 42` (visible/total) or the list's last visible row fades under a 12-px
-   `+ 32 older ·  scroll` line. Scrollbars stay hidden; the AFFORDANCE is what was missing
-   (the same finding class as sprint 8's L6).
+   `+ 32 older ·  scroll` line. Scrollbars stay hidden; the AFFORDANCE is what was missing.
 3. **No geometry change.** The 13-px shortfall against the transposed drawing (404 vs 417) is the
    tab strip's structural cost and is not worth a move. If the literal 417-wide
    reading, that is a restructure of the whole tab (section 8 Q4, priced there) - not a patch to this
@@ -577,8 +576,8 @@ stack), with 4 and 5 interleaved anywhere.
 
 **Q1 - Does the stack keep the full card, or shrink to feed the radio?**
 The drawing says full height ("the traces are not oversized") and this spec follows it
-(**Option A, recommended**: stack fills 666/430, radio stays 260-wide, density-fixed). But his
-complaint read literally ("muy grandes" + "apretujado") supports **Option B**: render the 1265
+(**Option A, recommended**: stack fills 666/430, radio stays 260-wide, density-fixed). Read
+literally, though, "charts too large" plus "radio cramped" supports **Option B**: render the 1265
 lane heights at BOTH clients (stack region 430), which frees `718 - 478 - 10 = 230 px` at 1485
 for a full-width `825 x 230` radio band under the traces+ring row - single-line rows, no clamp,
 ~11 unwrapped events visible. Cost: the wide client shows the small stack (halved lane heights
@@ -604,7 +603,7 @@ shipped panel is 13 px off, not 157. This spec proceeds on that reading. If a li
 417-wide feed, that is Option B's band (Q1) or a tab-level restructure - name it and it gets
 specced; nothing in steps 1-5 blocks it.
 
-**Q5 - settled by me, recorded for visibility:** no hover/inspection cursor in v1 (live wall,
+**Q5, settled here and recorded for visibility:** no hover/inspection cursor in v1 (live wall,
 10 Hz `notMerge` fights axisPointer state); RPM stays off (not on the wire; a strategist does
 not act on it); the ring does not shrink to feed the radio (its lap-1 clumping is already
 borderline at 200 px).
@@ -630,4 +629,4 @@ borderline at 200 px).
 - **Decisions still open: Q1** (full-height stack per the drawing, recommended, vs
   compact stack + a full-width 825 x 230 radio band at the wide client) **and Q3** (BESTS fills
   its 302 with depth-10 ranks - recommended - vs a RaceX-style Bests-Speed block). Q2 (lane
-  order) and Q4 (the 417) are one-line follow-ups whichever way he reads them.
+  order) and Q4 (the 417) are one-line follow-ups either way.

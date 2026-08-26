@@ -8,13 +8,13 @@
 > year-aware palette was born in the Streamlit frontend at
 > `frontend/components/common/driver_colors.py`, and that whole tree was
 > deleted when the React web app replaced Streamlit in v2.0.0 (#551). The
-> *design* survived the move intact — it was ported one for one — so this page
+> *design* survived the move intact, ported one for one, so this page
 > now describes the TypeScript implementation that is actually running.
 
 **It is still not shared with the backend.** `src/telemetry/backend/core/driver_colors.py`
 is a separate, older implementation: a single flat `DRIVER_COLORS` dict labelled
 "F1 2024 Driver Colors", with its own (different) hex values and no `year`
-parameter at all. It predates the 2025 driver-swap handling described below — it
+parameter at all. It predates the 2025 driver-swap handling described below: it
 still maps `HAM` to a Mercedes-silver hex and has no entry for `ANT`, `BOR`,
 `HAD`, or the 2025 `SAI`-to-Williams move. Used by
 `backend/api/v1/endpoints/comparison.py` and `backend/services/telemetry_service.py`.

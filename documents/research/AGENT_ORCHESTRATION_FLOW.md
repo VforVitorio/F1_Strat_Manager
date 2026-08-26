@@ -15,7 +15,7 @@ Cross-references (not duplicated here):
   timeouts, L-2 model config, L-4 cache observability, prompt-cache restructuring.
 - `documents/audits/AUDIT_ML_AGENTS_EVAL.md` (epic #205): conformance battery, MC and
   routing evaluation, golden regression bed.
-- `documents/research/RIVAL_AGENT_DESIGN.md` §7: the Rival Agent as an additive node.
+- `documents/research/RIVAL_AGENT_DESIGN.md` section 7: the Rival Agent as an additive node.
 
 ---
 
@@ -38,7 +38,7 @@ so and the v2 graph preserves it.
 
 | Agent | Module | Pattern (shipped) | LLM in per-lap path | Cadence |
 |---|---|---|---|---|
-| N25 Pace | `src/agents/pace_agent.py` | Direct call — `PaceAgent.run()`, reasoning is a template string. (Written 2026-07-07 against a ReAct scaffold that existed but was idle; formally retired and deleted in #781 after the #778/#779/#780 archaeology confirmed it was never wired and had no stated future use — do not plan v2 work around resurrecting it.) | none | every lap |
+| N25 Pace | `src/agents/pace_agent.py` | Direct call: `PaceAgent.run()`, reasoning is a template string. (Written 2026-07-07 against a ReAct scaffold that existed but was idle; formally retired and deleted in #781 after the #778/#779/#780 archaeology confirmed it was never wired and had no stated future use. Do not plan v2 work around resurrecting it.) | none | every lap |
 | N26 Tire | `src/agents/tire_agent.py` | ReAct (`create_agent`, :997; invoke :1162), 2 tools | ~3 turns | every lap |
 | N27 Situation | `src/agents/race_situation_agent.py` | ReAct (:985; invoke :1145), 2 tools | ~3 turns | every lap |
 | N28 Pit | `src/agents/pit_strategy_agent.py` | ReAct (:837; invoke :996), 3 tools; output parsed from tool messages + final-message prose | up to 4 turns | conditional |
@@ -111,7 +111,7 @@ All agents stay agents. The findings below are about wiring and loop configurati
 change. What a LangGraph `StateGraph` adds is not intelligence but engineering: full
 fan-out, single wiring, checkpoints, streaming, per-node observability, and a clean slot
 for the Rival Agent. If live mode, the pit-wall surface, and the TFM were not on the
-roadmap, the plain pipeline would arguably be enough; since all three are, the graph
+roadmap, the plain pipeline would be enough; since all three are, the graph
 pays for itself.
 
 ## 4. Proposed v2: one StateGraph over the frozen agents
@@ -198,7 +198,7 @@ becomes the terminal event, so existing consumers keep working unchanged.
 
 ## 5. The Rival Agent slot (TFM)
 
-`RIVAL_AGENT_DESIGN.md` §7 already specifies the additive construction: a new sibling
+`RIVAL_AGENT_DESIGN.md` section 7 already specifies the additive construction: a new sibling
 agent module, an additive `lap_state` gap-history key, and a duplicated "anticipatory
 orchestrator" entry point. In the plain pipeline that means a third copy of the Layer
 1-3 wiring. In the v2 graph it collapses to:
@@ -207,10 +207,10 @@ orchestrator" entry point. In the plain pipeline that means a third copy of the 
   `lap_state["rivals"]` + the gap provider (single-driver boundary preserved by
   construction).
 - **One routing rule** as a conditional edge: skip the rival branch when no rival is
-  within a pit cycle (the MoE rule §7.1 already names).
+  within a pit cycle (the MoE rule section 7.1 already names).
 - **One MC variant**: the `monte_carlo` node gains the rival draws and the modified
-  STAY_OUT / UNDERCUT / OVERCUT scoring of §7.2, behind a flag.
-- **One prompt block**: `synthesize` injects RIVAL INTENT (§7.3) when `rival_out` is
+  STAY_OUT / UNDERCUT / OVERCUT scoring of section 7.2, behind a flag.
+- **One prompt block**: `synthesize` injects RIVAL INTENT (section 7.3) when `rival_out` is
   present. Output stays the frozen 14 fields.
 
 The TFM ablation becomes trivially clean: control arm = graph with the rival branch
@@ -233,7 +233,7 @@ the strongest single argument for building v2 before the TFM starts.
   probe path converge on one graph (P2b F10/F1).
 - **Live-mode and surface readiness:** checkpointing + streaming are the two primitives
   the SSE/pit-wall surfaces and the 2026 live ambition actually need.
-- **A first-class Rival slot** (§5).
+- **A first-class Rival slot** (section 5).
 
 **Costs and risks:**
 

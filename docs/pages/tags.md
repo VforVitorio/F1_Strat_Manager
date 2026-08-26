@@ -1,8 +1,8 @@
 # Tags
 
-Every documentation page declares topical tags so you can navigate by
+Every documentation page declares topical tags for navigating by
 concept instead of by file tree. The knowledge graph (see the home page)
-uses these same tags to draw clusters; the tables below give you a flat,
+uses these same tags to draw clusters; the tables below give a flat,
 scannable index of the same data.
 
 Tags that appear on a single page are listed under **Other** at the end.

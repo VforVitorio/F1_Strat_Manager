@@ -1,6 +1,6 @@
 # PITWALL v2 architecture (v2.6.0, "Arcade, modernized")
 
-**Status: design, agreed with Victor 2026-08-07 in a Socratic design session. NO code written.**
+**Status: design, agreed 2026-08-07. NO code written.**
 **This document SUPERSEDES `PITWALL_REALISM_AND_TELEMETRY_SURFACE.md` sections 3 to 6 and the
 phase decomposition of epic #281.** Its Topic 1 (the observability model, sections 1 to 2) stands
 and is unaffected.
@@ -19,18 +19,18 @@ decision followed from that one assumption:
 > "Browsers cannot open raw TCP sockets; a page can only speak HTTP(S), SSE, WebSocket, or WebRTC."
 > (section 3.2)
 
-and therefore, in the body of epic #281:
+Therefore, the body of epic #281 states:
 
 > "CONSUMING the Arcade TCP stream via a **FastAPI WebSocket relay** (browsers cannot open raw TCP)"
 
-**That sentence is true for a browser page and false for a desktop application.** Victor's decision
+**That sentence is true for a browser page and false for a desktop application.** The decision
 of 2026-08-07 is that PITWALL is a desktop surface built with web technology, not a web app. The
 host process is Python, so it opens the TCP socket itself. Consequences:
 
 - The FastAPI WebSocket relay is **not needed**. Issue #283 as written is void.
 - The FastAPI backend is **not a runtime dependency**. Arcade today makes zero HTTP calls (verified:
   no `requests`, no `httpx`, no live use of `BACKEND_URL`; `config.py:169-170` are dead constants
-  from the SSE era, P3 finding A15). PITWALL inherits that property.
+  from the SSE era). PITWALL inherits that property.
 - The bulk-prefetch endpoint is not needed either, for the same reason.
 
 The other decisions that moved:
@@ -73,9 +73,9 @@ The subprocess count does not change, the spawn mechanism does not change (`subp
 follower topology is the one already running and proven; only the follower's technology changes.**
 
 **One TCP client, not two.** It halves the receive-decode-parse cost and gives one place to own the
-tick sequence. It does **not** fix P3 finding A7 "by construction": Gate A measured today's two
+tick sequence. It does **not** fix the two-client drift concern "by construction": Gate A measured today's two
 clients against the real server and found `identical sequences: True`, 200/200, zero drops, so
-A7's drift clause is an overstatement. See 3.5 for the version of this that is actually correct.
+that concern is an overstatement. See 3.5 for the version of this that is actually correct.
 
 ---
 
@@ -115,14 +115,14 @@ arcade process reads. Bootstrap: the first tick carries `gp_name`, `year`, `driv
 > monolithic pickle (`src/arcade/data.py:334`, `<GP>_<year>_race.pkl`). A pickle has no random
 > access, so risk 3's own mitigation ("read lap slices, never the whole session") described an
 > access pattern the storage format does not offer. The only ways to honour it were an 8.0 s full
-> unpickle (P2 finding F-05) per lap change, or a second full FastF1 session load. Both unbudgeted.
+> unpickle per lap change, or a second full FastF1 session load. Both unbudgeted.
 
 **The original claim, for the record:** the own-car trace panel is fed from BULK, per lap, on
 demand, not from the tick.
 
 Recall the measured problem: `_build_arcade_snapshot` puts ONE telemetry sample per broadcast on the
 wire. At 1x the clock advances 25 samples per second and 10 are sent, so 60% never leaves the arcade
-process; at 8x, 95% is lost. A trace panel fed by that channel degrades as you speed up, which is
+process; at 8x, 95% is lost. A trace panel fed by that channel degrades as playback speeds up, which is
 exactly backwards from what a user expects.
 
 Fed from bulk instead, the panel requests `get_lap_trace(driver, lap)` when the lap changes and
@@ -167,7 +167,7 @@ About 12 bytes per car per tick.
 
 ### 3.4 The rewind guard, for what still accumulates
 
-Victor's decision: rewind is the cheap kind, "so you do not miss something", not a study tool.
+Decision: rewind is the cheap kind, meant to avoid missing something, not a study tool.
 Panels do NOT need to be pure functions of `frame_index`.
 
 One module, `lib/frameClock.ts`, holds the last seen `frame_index`. When an arriving tick carries a
@@ -188,7 +188,7 @@ nothing", and **Gate A partly refuted it (2 of 6 panels)**. The corrected list:
 | AGENTS PaceChart / TireChart | YES | `history_tail` strips `per_agent` (a deliberate wire-size trade-off, `window.py:171-174`), so the window owns those series |
 
 The deeper correction from Gate A (D-06): with no time anchor on the wire, "a function of (bulk,
-lap, frame_index)" was really "a function of (bulk, lap)". Anything genuinely instantaneous, above
+lap, frame_index)" was really "a function of (bulk, lap)". Anything instantaneous, above
 all **live gaps and intervals**, cannot be computed at all until `global_t_min` ships (3.3b).
 
 Today's behaviour for reference, verified: pause works by accident (`_broadcast_if_due()` is called
@@ -207,9 +207,9 @@ what the caller has not seen.
 > 58% of polls** (15 duplicates and 15 skips out of 54). The sequence parameter is what removes
 > both. Gate A also refuted the justification for the change: driving the real
 > `TelemetryStreamServer` with two sockets gave `identical sequences: True`, 200/200, zero drops,
-> so today's two clients do NOT drift. P3 finding A7's drift clause is an overstatement and this
+> so today's two clients do NOT drift. The drift clause was an overstatement and this
 > design promoted it into a rationale. **One client is still right** (it halves the parse cost and
-> gives one place to hold the sequence), but not "by construction" and not because A7 said so.
+> gives one place to hold the sequence), but not "by construction" and not because that clause said so.
 
 The original wording, kept because the reasoning below it still holds: the JS side calls
 `pywebview.api.get_tick()` on its own cadence; the Python host returns whatever is in the latest
@@ -222,7 +222,7 @@ payload slot, which the TCP client thread overwrites.
   twice per tick (two windows), 10 times a second.
 - **Rejected for v1, named as the upgrade path: an in-process WebSocket server** inside the PITWALL
   host. Cleanest data flow and an idiomatic `onmessage` on the JS side, but it adds a dependency and
-  a port to solve a problem we have not measured. Revisit only if the pull model is measured to hurt.
+  a port to solve a problem not yet measured. Revisit only if the pull model is measured to hurt.
 
 ---
 
@@ -291,7 +291,7 @@ is not the Qt client renamed: that one is a `QThread` emitting Qt signals, and Q
 **`session_data.py`** is the BULK reader and the one place that touches disk. It exposes
 `lap_table(year, gp)`, `lap_trace(year, gp, driver, lap)` and `circuit_meta(year, gp)`, memoised.
 **It must reuse the project's existing loaders rather than reading parquet directly** (see the
-duplication risk in section 8). **NOT WRITTEN YET** — see the note under `host.py`.
+duplication risk in section 8). **NOT WRITTEN YET.** See the note under `host.py`.
 
 **`host.py`** is the js_api surface and nothing else. It holds no rendering logic and no
 formatting. Each method is small enough to read in one screen.
@@ -301,12 +301,12 @@ formatting. Each method is small enough to read in one screen.
 | `get_tick(since_seq)` | shipped, sprint 2 |
 | `get_agents_view(since_seq)` | shipped, sprint 3. Not in the original plan: the AGENTS window is 1:1 by calling the Qt formatters host-side, so the whole view arrives already formatted |
 | `get_bulk()` | **not written.** Arrives with the timing table and the bests, which the 2026-08-09 reorder moved to sprint 5 |
-| `get_lap_trace(driver, lap)` | **not written**, and band 4 does not need it — the traces come off the wire's telemetry span, and the pinned rival is `driver_rival` until the sprint-5 selector exists |
+| `get_lap_trace(driver, lap)` | **not written**, and band 4 does not need it: the traces come off the wire's telemetry span, and the pinned rival is `driver_rival` until the sprint-5 selector exists |
 
 > **The two unwritten methods were listed here as though they existed**, and a design gate found
 > them while asking whether the wire feeds band 4. That is a silent trap rather than a stale
 > sentence: an implementer who reads this section and calls `pywebview.api.get_lap_trace(...)`
-> gets an `AttributeError` **across the bridge**, which this file's own §5 names as the worst kind
+> gets an `AttributeError` **across the bridge**, which this file's own section 5 names as the worst kind
 > of failure because nothing surfaces it. Anything added to `host.py` gets a row here in the same
 > PR.
 
@@ -340,9 +340,9 @@ Applies `~/.claude/CLEAN_CODE.md`. The project-specific points that matter here:
 **TypeScript side**
 - One component per file, file name matching the component.
 - **Chart data flows imperatively into ECharts instances through refs, never through per-frame React
-  state.** This is the web equivalent of P3 finding A6 (the Qt dashboard re-rendering six cards, six
+  state.** This is the web equivalent of the Qt dashboard re-rendering six cards, six
   syntax-highlighted text areas and a full chart rebuild 10 times a second for content that changes
-  once per lap), applied before it happens rather than after.
+  once per lap, applied before it happens rather than after.
 - React renders panel chrome and once-per-lap content. The tick loop touches refs.
 - **Animate the entrance, never the data update.** The repo already encodes this contract in
   `src/telemetry/webapp/src/charts/useFirstPaintAnimation.ts`; port it, do not reinvent it.
@@ -356,7 +356,7 @@ Applies `~/.claude/CLEAN_CODE.md`. The project-specific points that matter here:
 
 ## 7. Tests
 
-The Qt surface's test coverage today is one import-smoke file (P3 finding A18). Do better, cheaply:
+The Qt surface's test coverage today is one import-smoke file. Do better, cheaply:
 
 1. **Token drift test, covering ALL the copies and not just the new pair.** Gate B measured that the
    drift A16 warned about **has already happened**: `src/arcade/config.py` / `dashboard/theme.py`
@@ -387,8 +387,8 @@ The Qt surface's test coverage today is one import-smoke file (P3 finding A18). 
    `webkit2gtk` as a system package**, which `uv` cannot resolve. This is an install-note, not a
    blocker, but it must be written before someone hits it.
 3. **Two processes now read the same session data.** Arcade holds `frames_by_driver` in memory;
-   PITWALL reads lap slices from disk. If both trigger a cold load, the P2 finding F-05 cost (an
-   8.0 s AoS unpickle) could be paid twice. Mitigation to verify: PITWALL should only ever read the
+   PITWALL reads lap slices from disk. If both trigger a cold load, the 8.0 s AoS unpickle cost
+   could be paid twice. Mitigation to verify: PITWALL should only ever read the
    small lap table plus per-lap slices, never the whole session.
 4. **The `js_api` pull cadence is unmeasured.** 10 Hz across two windows is assumed cheap. If it is
    not, section 3.5 names the upgrade path.
@@ -398,7 +398,7 @@ The Qt surface's test coverage today is one import-smoke file (P3 finding A18). 
    (parquet, by lap) rather than from a widened wire. **A gate should check that assumption holds
    for gaps specifically**, because a gap is a function of the current instant, not of the lap.
 6. **Race control messages have no home** in either window, and none in Arcade (`SessionData.events`
-   is always empty, P3 finding A3). Unresolved.
+   is always empty). Unresolved.
 7. **Published prose will be wrong.** `ROADMAP.md` v2.6.0 and `docs/pages/roadmap.md:464` both say
    "the strategy and telemetry surfaces move to a **web-native view**". Web technology, yes; web
    app, no. Both need rewriting, and this repo has a history of stale published claims.
@@ -468,5 +468,5 @@ Decisions are levels rather than events, so the pull model drops nothing the des
 (this was Gate A's strongest expected hit and it missed). The lap table has no missing lap numbers.
 `get_rival_states` handles its sentinel correctly. Every file:line citation in section 3.4's
 description of today's pause, rewind and decimation behaviour reproduces exactly. On the repo-fit
-side: Arcade genuinely makes zero HTTP calls, and nothing outside the enumerated reference graph
+side: Arcade makes zero HTTP calls, and nothing outside the enumerated reference graph
 assumes the Qt dashboard exists.

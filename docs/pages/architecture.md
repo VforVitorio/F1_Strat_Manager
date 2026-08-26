@@ -4,7 +4,7 @@
 
 ## One lap, end to end
 
-The diagram below traces the lifecycle of a single lap. Every component is reified in `src/`, the names match the production modules so you can grep your way from this page into the source.
+The diagram below traces the lifecycle of a single lap. Every component is reified in `src/`, the names match the production modules, so a grep from this page reaches straight into the source.
 
 ```mermaid
 sequenceDiagram
@@ -45,7 +45,7 @@ Six layers, six pages, each linked from the agent graph and from this page.
 
 ## Key data contracts
 
-Three structures cross every boundary in the system. If you remember nothing else, remember these.
+Three structures cross every boundary in the system, and these are the ones that matter most.
 
 ### `lap_state`
 

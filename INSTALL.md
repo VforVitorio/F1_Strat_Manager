@@ -76,7 +76,7 @@ Three windows spawn from that one command:
 
 The two PITWALL windows are React built to static files and hosted in the
 platform webview, in one subprocess sharing a single stream client. They
-replaced a PySide6 pair in sprint 7.
+replaced a PySide6 pair.
 
 **Docker is NOT recommended for Arcade**: pyglet and the platform webview need a
 host OpenGL context and a native display. Cross-platform X forwarding from a
