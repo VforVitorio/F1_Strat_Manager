@@ -5,11 +5,10 @@
  * the shape the SBG/Catapult RaceX client uses: *four ranked lists plus
  * Theoretical, each row rank / driver / time / % delta / compound*.
  *
- * **Top three, and that is a structural limit rather than a preference.** A
- * fully ranked section is twenty rows, and four of those are 1,668 px of a
- * window whose whole body is 790. Three rows per section fit the space left
- * under the tower with room to spare, and the fourth-fastest S2 of the
- * afternoon is not a number anybody reads off a live wall.
+ * **Ranked as deep as the room allows.** Each section runs from a floor of
+ * one rank up to a cap of twenty, the whole grid; `RANKED_FLOOR` and
+ * `RANKED_CAP` below, with `useFitsRanked` deciding how many rows actually
+ * fit, carry the reasoning and its history.
  *
  * The delta is a PERCENTAGE, not seconds. Across the four sections the
  * absolute gaps differ by an order of magnitude - tenths in a sector,

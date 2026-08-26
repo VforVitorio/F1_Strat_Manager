@@ -1,4 +1,4 @@
-/* PITWALL · AGENTS — a decision band over six specialist consoles.
+/* PITWALL · AGENTS: a decision band over six specialist consoles.
  *
  * The chrome numbers are still the Qt window's, because they were never the
  * problem: the 44 px header (`HeaderBar.setFixedHeight`), the 10 px panel
@@ -13,7 +13,7 @@
  * from the `WindowSpec`.
  *
  * The `--qt-*` tokens and the `body` rule moved to `qt-base.css` when the
- * DATA window needed the same palette in sprint 4. Pasting them into a
+ * DATA window needed the same palette. Pasting them into a
  * second stylesheet would have been copy number six of a palette this repo
  * has already found five copies of.
  */
@@ -333,8 +333,8 @@
 
 /* **Size the CARD, not the cell.** A grid cell stretches its item by default,
  * so the four text consoles took whatever height their row was handed and
- * carried the difference as dead strip inside a bordered panel - 44-57 % of
- * the card on the layout this replaces, and the reason sprint 8 made the rows
+ * carried the difference as dead strip inside a bordered panel - 44-57% of
+ * the card on the layout this replaces, which is why the rows are
  * content-sized in the first place. An empty bordered panel reads as content
  * missing; window background does not read as anything.
  *
@@ -516,8 +516,8 @@
   max-height: 22rem;
   overflow-y: auto;
   /* The one place the hidden scrollbar has to come BACK. `qt-base.css` hides
-   * it everywhere, which is right for the persistent card chrome Víctor asked
-   * to clear - but this box has a hard height cap and a busy lap overruns it,
+   * it everywhere, which is right for the persistent card chrome - but this
+   * box has a hard height cap and a busy lap overruns it,
    * so without a bar the transcript is cut with nothing saying so. A popup is
    * transient, so its scrollbar is not clutter. */
   scrollbar-width: thin;
@@ -532,8 +532,8 @@
   line-height: 1.5;
 }
 
-/* The popup's own layout, which used to be `<br>` tags in a string Qt's
- * tooltip parser could digest. Truncation lives here too: the host stopped
+/* The popup's own layout is markup, not `<br>` tags in a string for Qt's
+ * tooltip parser to digest. Truncation lives here too: the host stopped
  * cutting messages at 70 characters, which was the CARD's width budget
  * applied to a popup clipped by nothing. */
 .tip-section {
@@ -709,7 +709,7 @@
   display: block;
   height: 100%;
 }
-/* `VETOED`, on a Monte Carlo winner the orchestrator overruled (#962). It
+/* `NOT TAKEN`, on a Monte Carlo winner the orchestrator overruled (#962). It
  * sits between the bar and the score because that is where the eye already
  * is when it asks why the widest bar is not the call. */
 .scenario-note {
@@ -736,7 +736,7 @@
 /* --- WHY (band module 2) --------------------------------------------------
  *
  * What stood here was a `QTabWidget` port: six tabs and a monospace pane, the
- * largest bordered surface on the window carrying five short lines at 1.9 %
+ * largest bordered surface on the window carrying five short lines at 1.9%
  * ink with 318 px of it empty. The tabs are gone; the module holds the one
  * sentence that earned the glass and points at the rest. */
 

@@ -107,8 +107,8 @@ python -m src.data_extraction.openf1.radio_dataset_builder
 
 This builds the radio + RCM tables for Bahrain 2025 in a temporary directory,
 runs the audio download stage against the same tmpdir, and prints `head(10)`
-for radios, RCMs, and the post-audio `audio_path` column so you can
-sanity-check the schema, the filter attrition, and the MP3 layout in one run.
+for radios, RCMs, and the post-audio `audio_path` column, so the schema, the
+filter attrition, and the MP3 layout can all be sanity-checked in one run.
 
 **Run the multi-GP build via the CLI wrapper:**
 
@@ -178,10 +178,9 @@ stays self-contained.
 ## Output layout
 
 All extractors write into the project's `data/` tree, which is **never**
-imported through Python, paths are relative to the working directory the
-caller invokes the script from. By convention you should run the scripts
-from the repo root so paths like `data/raw/...` and `data/processed/...`
-resolve correctly.
+imported through Python, so paths are relative to the working directory the
+caller invokes the script from. By convention, run the scripts from the repo
+root so paths like `data/raw/...` and `data/processed/...` resolve correctly.
 
 ```
 data/

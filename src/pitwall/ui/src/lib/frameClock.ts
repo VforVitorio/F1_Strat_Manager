@@ -5,7 +5,7 @@
  * not a study tool. Panels are therefore allowed to accumulate, and this is
  * what tells them when to throw the accumulation away.
  *
- * **Read before extending this in sprint 3.** The design originally specified
+ * **Read before extending this.** The design originally specified
  * the guard in FRAMES, and a gate refuted that: the AGENTS window's two
  * accumulators (pace and tyre history) are keyed by LAP, and a
  * frame-indexed truncate cannot address a lap-keyed map. Worse, truncating

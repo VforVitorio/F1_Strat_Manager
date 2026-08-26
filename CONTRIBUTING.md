@@ -13,8 +13,8 @@ plane is being rewired, and the sprints run against a sequenced plan where each
 one depends on the shape the previous one left. An incoming pull request, however
 good, lands in the middle of that and reorders it.
 
-So **pull requests are not being accepted for now**. Issues are welcome and
-genuinely useful — a well-described bug is worth more here than a patch, because
+Therefore, **pull requests are not being accepted for now**. Issues are welcome and
+useful. A well-described bug is worth more here than a patch, because
 it can be scheduled into the sprint that owns that code.
 
 **Once v3.0.0 is operational, contributions open up.** That is the milestone
@@ -26,7 +26,7 @@ everything else; after it, this section goes away.
 **`npm run build` FIRST, then `uv build`. The order is the whole procedure.**
 
 PITWALL's two windows ARE the Vite bundle. `src/pitwall/ui/dist/` is gitignored
-build output, so a clean checkout does not have it — and a wheel built in that
+build output, so a clean checkout does not have it, and a wheel built in that
 state installs an `f1-pitwall` that starts, finds no bundle, prints its build
 hint and exits 1. Measured on 2.5.1: the wheel carried three build-tool JSONs
 from the UI folder and **zero** files of the bundle.
@@ -151,7 +151,7 @@ only surface there:
 
 - **`soundfile` decode path** in
   [`src/nlp/radio_runner.py`](src/nlp/radio_runner.py)
-  `WhisperTranscriber.transcribe`. We avoid `librosa.load` because on
+  `WhisperTranscriber.transcribe`. It avoids `librosa.load` because on
   Windows it can fall back to the `audioread` backend, which spawns
   ffmpeg with the same cp1252 / utf-8 reader-thread issue. Decoding
   the OpenF1 MP3 corpus through libsndfile + `librosa.resample`
@@ -171,13 +171,13 @@ these safeguards trigger there. They are no-ops on POSIX.
       golden asserting a pit coverage of 0.7047 sat red for months after the
       holdout was regenerated to 0.7024, with every PR passing over it (#634).
       A green CI means these did not run, not that they passed.
-- [ ] If you touched `src/telemetry/*`, commit inside the submodule and
+- [ ] If `src/telemetry/*` changed, commit inside the submodule and
       bump the submodule pointer in the parent repo.
 - [ ] `ROADMAP.md` and the relevant `docs/` file updated when behaviour
       changes.
 - [ ] One logical change per commit; imperative subject line; **no
       `Co-Authored-By` or AI-attribution trailers, ever.**
-- [ ] If you added a new sub-agent output, update
+- [ ] If a new sub-agent output was added, update
       `docs/pages/agents-api.md`.
 
 ## CI pipeline
@@ -207,7 +207,7 @@ incremental runs only re-check files whose hash has changed.
 
 **On `uv.lock`:** the lockfile IS committed. Bumping a dependency
 manually means running `uv lock` locally (or letting `uv add` /
-Dependabot do it for you) and committing the updated lockfile
+Dependabot do it automatically) and committing the updated lockfile
 alongside the `pyproject.toml` change. CI runs `uv sync --frozen`,
 which fails when the lockfile and pyproject disagree, that is the
 intended early-warning when someone forgets to re-lock. Subsequent runs drop "Install dependencies" from ~60s to
@@ -250,12 +250,11 @@ non-existent labels.
 `dev` and rebases any open PR labelled `area: deps` or `area: ci-cd` on
 top of the new base commit. Combined with the branch-protection setting
 `required_status_checks.strict: true`, this removes the manual "Update
-branch" click that used to be needed every time a Dependabot PR fell
-out-of-date.
+branch" click a stale Dependabot PR would otherwise need.
 
 Human-authored PRs are deliberately excluded from the filter so the
 author keeps control of the merge order. Add the `do-not-rebase` label
-on any PR you want the workflow to skip.
+on any PR the workflow should skip.
 
 ### Dependency-bump safety net
 

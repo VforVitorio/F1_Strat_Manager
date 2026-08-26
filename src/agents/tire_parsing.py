@@ -1,8 +1,8 @@
-"""Pure parsing of the tyre tools' output strings — no models, no I/O, no weights.
+"""Pure parsing of the tyre tools' output strings: no models, no I/O, no weights.
 
 A leaf module so that reading a number the tools printed costs nothing. ``tire_agent``
 builds ``TireAgentConfig()`` at import time, which reads
-``data/models/tire_degradation/routing_config.json`` — a file that comes from Hugging
+``data/models/tire_degradation/routing_config.json``, a file that comes from Hugging
 Face and is not in git. So importing the parser from there requires the model bundles
 to be on disk, and ``tests/audit/test_tire_agent_hardening.py`` skips its **entire
 module** for that reason, taking its pure-parser test down with it.
@@ -14,7 +14,7 @@ reason: a value that is cheap to read should not be behind an import that is exp
 
 --- WHERE TO CHANGE IF A TOOL'S OUTPUT FORMAT CHANGES ---
 The patterns below are contracts with the f-strings in ``tire_agent``'s
-``_build_tools`` — ``predict_tire_deg_tool`` and ``estimate_laps_to_cliff_tool``.
+``_build_tools``: ``predict_tire_deg_tool`` and ``estimate_laps_to_cliff_tool``.
 Change a printed label there and the matching pattern here has to move with it, or the
 field silently reverts to "absent" and its consumer sees ``None``.
 """
@@ -26,8 +26,8 @@ import re
 # Ordered (pattern, key) pairs, applied to every ToolMessage in the history.
 #
 # `-?[\d.]+` rather than `[\d.]+` (#477): the bare digit class cannot match a leading
-# minus, so a negative degradation rate — real and expected per the tyre agent's own
-# system prompt ("track evolution or fuel load reduction") — silently failed to parse
+# minus, so a negative degradation rate (real and expected per the tyre agent's own
+# system prompt, "track evolution or fuel load reduction") silently failed to parse
 # and fell through to a 0.0 default.
 #
 # `Cumulative degradation` (#727) is the TCN's own scalar. predict_tire_deg_tool has

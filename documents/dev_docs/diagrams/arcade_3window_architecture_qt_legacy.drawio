@@ -11,15 +11,15 @@
         </mxCell>
 
         <!-- Title Header -->
-        <mxCell id="title" value="F1 StratLab &#8212; Digital Twin Multi-Agent System" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#E6E8EF;" vertex="1" parent="1">
+        <mxCell id="title" value="F1 StratLab, Digital Twin Multi-Agent System" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#E6E8EF;" vertex="1" parent="1">
           <mxGeometry x="360" y="20" width="1200" height="36" as="geometry"/>
         </mxCell>
-        <mxCell id="subtitle" value="RETIRED &#8212; Arcade MVP, Phase 3.5 Proceso B &#183; the PySide6 pair, replaced by PITWALL in sprint 7" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=2;fontColor=#8B5CF6;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="RETIRED, Arcade MVP, Phase 3.5 Proceso B &#183; the PySide6 pair, replaced by PITWALL in sprint 7" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=2;fontColor=#8B5CF6;" vertex="1" parent="1">
           <mxGeometry x="360" y="56" width="1200" height="24" as="geometry"/>
         </mxCell>
 
         <!-- ARCADE REPLAY WINDOW (pyglet) -->
-        <mxCell id="arcade-win" value="Arcade Replay Window &#8212; pyglet (F1ArcadeView)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="arcade-win" value="Arcade Replay Window, pyglet (F1ArcadeView)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="80" y="130" width="520" height="620" as="geometry"/>
         </mxCell>
         <mxCell id="arcade-track" value="Track Renderer&#10;gray outline + DRS zones (green)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#4B5B82;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
@@ -37,13 +37,13 @@
         <mxCell id="arcade-progress" value="Progress Bar&#10;lap N/total &#183; session time" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#4B5B82;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="110" y="360" width="460" height="50" as="geometry"/>
         </mxCell>
-        <mxCell id="arcade-ctrl" value="Controls &#8212; SPACE play/pause &#183; &#8592;/&#8594; seek &#183; 1-9 speed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#4B5B82;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="arcade-ctrl" value="Controls, SPACE play/pause &#183; &#8592;/&#8594; seek &#183; 1-9 speed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#4B5B82;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="110" y="430" width="460" height="40" as="geometry"/>
         </mxCell>
         <mxCell id="arcade-sim" value="SimConnector Thread&#10;RaceReplayEngine + run_strategy_pipeline&#10;writes StrategyState every lap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=11;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="110" y="490" width="460" height="70" as="geometry"/>
         </mxCell>
-        <mxCell id="arcade-stream" value="TelemetryStreamServer &#8212; 127.0.0.1:9998&#10;broadcast({arcade, strategy, playback}) @ 10 Hz" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D2E1E;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="arcade-stream" value="TelemetryStreamServer, 127.0.0.1:9998&#10;broadcast({arcade, strategy, playback}) @ 10 Hz" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D2E1E;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=12;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="110" y="580" width="460" height="60" as="geometry"/>
         </mxCell>
         <mxCell id="arcade-entry" value="entry: python -m src.arcade.main --viewer --strategy" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#A0A5B8;fontStyle=2;" vertex="1" parent="1">
@@ -51,10 +51,10 @@
         </mxCell>
 
         <!-- STRATEGY DASHBOARD WINDOW -->
-        <mxCell id="dash-win" value="Strategy Dashboard Window &#8212; PySide6 QMainWindow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#F59E0B;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="dash-win" value="Strategy Dashboard Window, PySide6 QMainWindow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#F59E0B;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="660" y="130" width="600" height="900" as="geometry"/>
         </mxCell>
-        <mxCell id="dash-header" value="Header Bar &#8212; driver &#183; team &#183; lap &#183; session status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#4B5B82;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="dash-header" value="Header Bar, driver &#183; team &#183; lap &#183; session status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#4B5B82;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="690" y="180" width="540" height="40" as="geometry"/>
         </mxCell>
         <mxCell id="dash-orch" value="Orchestrator Card (N31)&#10;action badge &#183; confidence bar &#183; plan strip &#183; guardrail" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3B1D1D;strokeColor=#EF4444;fontColor=#E6E8EF;fontSize=12;fontStyle=1;" vertex="1" parent="1">
@@ -75,13 +75,13 @@
         <mxCell id="dash-sit" value="Situation (N27)&#10;SC prob 3 lap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F2D1D;strokeColor=#F59E0B;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1060" y="410" width="170" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="dash-pit" value="Pit (N28) &#8212; routed&#10;UCUT / OCUT model" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="dash-pit" value="Pit (N28), routed&#10;UCUT / OCUT model" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="690" y="500" width="170" height="80" as="geometry"/>
         </mxCell>
         <mxCell id="dash-radio" value="Radio (N29)&#10;NLP pipeline &#183; intent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F1D2D;strokeColor=#EC4899;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="875" y="500" width="170" height="80" as="geometry"/>
         </mxCell>
-        <mxCell id="dash-rag" value="RAG (N30) &#8212; routed&#10;FIA rules retrieval" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F3F;strokeColor=#06B6D4;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="dash-rag" value="RAG (N30), routed&#10;FIA rules retrieval" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F3F;strokeColor=#06B6D4;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1060" y="500" width="170" height="80" as="geometry"/>
         </mxCell>
         <mxCell id="dash-tabs-label" value="Reasoning Tabs (6)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A0A5B8;fontStyle=2;" vertex="1" parent="1">
@@ -98,7 +98,7 @@
         </mxCell>
 
         <!-- LIVE TELEMETRY WINDOW -->
-        <mxCell id="tel-win" value="Live Telemetry Window &#8212; PySide6 QMainWindow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#06B6D4;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="tel-win" value="Live Telemetry Window, PySide6 QMainWindow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#06B6D4;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="1320" y="130" width="520" height="620" as="geometry"/>
         </mxCell>
         <mxCell id="tel-header" value="LAP Header &#183; Driver Chips (main + rival)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#4B5B82;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
@@ -166,16 +166,16 @@
         <mxCell id="legend" value="Legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#4B5B82;fontColor=#E6E8EF;fontStyle=1;fontSize=12;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="80" y="790" width="540" height="160" as="geometry"/>
         </mxCell>
-        <mxCell id="legend-tcp" value="&#8212; TCP broadcast (solid green, 3px)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#4ADE80;" vertex="1" parent="1">
+        <mxCell id="legend-tcp" value=",  TCP broadcast (solid green, 3px)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#4ADE80;" vertex="1" parent="1">
           <mxGeometry x="100" y="820" width="500" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="legend-sub" value="&#8212; subprocess.Popen spawn (dashed purple)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#8B5CF6;" vertex="1" parent="1">
+        <mxCell id="legend-sub" value=",  subprocess.Popen spawn (dashed purple)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#8B5CF6;" vertex="1" parent="1">
           <mxGeometry x="100" y="848" width="500" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="legend-proc" value="&#8212; each window runs in its own OS process &#183; pyglet vs Qt isolated" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A0A5B8;" vertex="1" parent="1">
+        <mxCell id="legend-proc" value=",  each window runs in its own OS process &#183; pyglet vs Qt isolated" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A0A5B8;" vertex="1" parent="1">
           <mxGeometry x="100" y="876" width="500" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="legend-rate" value="&#8212; broadcast rate: every 6th frame at 60 FPS &#8776; 10 Hz" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A0A5B8;" vertex="1" parent="1">
+        <mxCell id="legend-rate" value=",  broadcast rate: every 6th frame at 60 FPS &#8776; 10 Hz" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#A0A5B8;" vertex="1" parent="1">
           <mxGeometry x="100" y="904" width="500" height="24" as="geometry"/>
         </mxCell>
 

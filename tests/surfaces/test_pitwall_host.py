@@ -1,8 +1,8 @@
 """The PITWALL host and its stream client (`src/pitwall/`).
 
-Sprint 2 is the vertical slice, and the delivery plan named three things it
-had to get right because they are expensive to change later. Two of them are
-here; the third (design-token drift) is `test_pitwall_tokens.py`.
+The delivery plan named three things it had to get right because they are
+expensive to change later. Two of them are here; the third (design-token
+drift) is `test_pitwall_tokens.py`.
 
 Nothing in this file imports pywebview. Only `src/pitwall/__main__.py` does,
 so a machine with no system webview still runs the suite.
@@ -36,7 +36,7 @@ def test_a_window_only_gets_a_tick_it_has_not_seen():
     """The whole reason `since_seq` exists.
 
     Two windows polling one latest-payload slot on independent 10 Hz timers
-    were measured reading a different frame on 58 % of polls, with 15
+    were measured reading a different frame on 58% of polls, with 15
     duplicate reads and 15 skips out of 54. The parameter removes both.
     """
     client = _FakeClient(_tick(7))
@@ -112,7 +112,7 @@ def test_a_payload_with_no_sequence_is_returned_rather_than_withheld():
 # `rewound` and `dropped` describe the gap BETWEEN two ticks rather than the
 # state of one, so the latest-payload slot - which is right to keep only the
 # newest snapshot - is wrong to drop them with the tick that carried them.
-# Measured before the fix: 6 of 905 published ticks (0.7 %) were never served to
+# Measured before the fix: 6 of 905 published ticks (0.7%) were never served to
 # a window polling the way `useTick` polls.
 
 
@@ -253,17 +253,17 @@ def test_the_signal_log_and_the_slot_are_read_as_ONE_snapshot():
     picks up ticks NEWER than the payload being served while the caller's cursor
     only advances to that payload - so the same entries are folded again on the
     next poll. Measured against a live producer, that over-counts `dropped` by
-    66 %, and every phantom count is a spurious eviction of the buffer this fix
+    66%, and every phantom count is a spurious eviction of the buffer this fix
     exists to protect.
 
     The observable invariant: whatever `snapshot` returns, its last log entry
     describes the payload beside it.
 
-    **This has to run against a CONTENDING publisher.** An earlier version of this
-    guard read a client fed by the slow one-shot server and asserted the same
-    invariant; the two-lock mutant survived it, because nothing was publishing in
-    the window between the two acquisitions. A guard for a race that never runs
-    the race is the empty set wearing a thread.
+    **This has to run against a CONTENDING publisher.** A client fed by the slow
+    one-shot server asserts the same invariant, and the two-lock mutant survives
+    it, because nothing is publishing in the window between the two
+    acquisitions. A guard for a race that never runs the race is the empty set
+    wearing a thread.
     """
     client = ArcadeStreamClient("127.0.0.1", 0)  # never started: `_consume` is driven here
     lines = [json.dumps(_signalling_tick(i, dropped=1)).encode() + b"\n" for i in range(1, 400)]
@@ -476,18 +476,18 @@ def test_shutdown_stops_the_client_whatever_is_open(window_count):
 # A window bigger than the desktop is not scrolled, it is CLIPPED, and the part
 # that goes missing is the bottom - where both PITWALL windows keep their
 # status bar. Found by opening the real windows on a 2560x1440 display at
-# 150 %, which is 1707x960 logical with a 912-pixel work area: DATA asks for
+# 150%, which is 1707x960 logical with a 912-pixel work area: DATA asks for
 # 950 and its status bar rendered under the taskbar, with the bottom row's
 # "Distance (m)" axis label sliced in half.
 #
 # No headless screenshot can catch this. A Playwright viewport is exactly the
-# size you ask for and has no desktop to not fit on.
+# size requested and has no desktop to not fit on.
 
 
 def test_every_window_opens_fully_inside_the_work_area():
-    """The measured case: both windows on Victor's own display.
+    """The measured case: both windows on the reference desktop.
 
-    1707x960 logical is a 2560x1440 panel at 150 %, and its work area is 912
+    1707x960 logical is a 2560x1440 panel at 150%, and its work area is 912
     tall. DATA asks for 950, so its status bar rendered under the taskbar and
     the bottom row's "Distance (m)" label was sliced in half.
 
@@ -553,8 +553,8 @@ def test_the_second_window_is_still_grabbable(screen):
     )
 
 
-# The desktop every placement number in this section is measured on: a 2560x1440
-# panel at 150 %, which is 1707x960 logical.
+# The desktop every placement number here is measured on: a 2560x1440
+# panel at 150%, which is 1707x960 logical.
 _REFERENCE_SCREEN = (1707, 960)
 
 # What the OS keeps for itself BETWEEN a placed window and the page inside it,
@@ -566,7 +566,7 @@ _REFERENCE_SCREEN = (1707, 960)
 # desktop and asked with `evaluate_js`: `innerWidth`, `documentElement
 # .clientWidth` and `body.clientWidth` all report **1486x833** from a placed
 # 1500x870, twice, at `devicePixelRatio` 1.5 and with no overflow in either
-# axis. The figure carried in this programme's notes since sprint 9 was
+# axis. The earlier figure was
 # 1485 - one pixel short, and short in the direction that hides a clip.
 _WINDOW_FRAME_PX = 14
 _TITLE_BAR_PX = 37
@@ -636,7 +636,7 @@ def test_every_harness_page_is_watched_for_console_errors():
     missing a method throws nothing and fails no assertion: the window renders
     the unknown state and chromium logs one console error.
 
-    By sprint 10 four stubs had drifted that way and **18 of the 22 pages
+    Four stubs had drifted that way and **18 of the 22 pages
     across the four harnesses had no console listener**, so none of them could
     have reported it. Watching every page is what turns the whole class from
     silent into loud, which is why this asserts the listener rather than any
@@ -738,9 +738,9 @@ class _ConnectableClient(_FakeClient):
 def test_the_data_window_alone_still_learns_that_the_producer_died():
     """The memory behind "Disconnected" belongs to the host, not to a window.
 
-    It used to be inferred from the last label the AGENTS view had been
-    served, so with only the DATA window open - the case band 1 exists for -
-    a producer that had been up for an hour and then died read
+    Inferring it from the last label the AGENTS view was served would mean
+    that, with only the DATA window open - the case band 1 exists for -
+    a producer that had been up for an hour and then died reads
     "Connecting..." forever, which is a lie about which direction the
     session is going in.
     """
@@ -785,8 +785,8 @@ def test_a_second_agents_consumer_also_learns_the_producer_died():
 
     There are TWO consumers of this view in a shipped run: the AGENTS webview
     and `/agents.html` on the loopback server `__main__` starts unconditionally.
-    The transition used to be remembered in ONE host field, so whichever polled
-    first consumed it and the second was answered `None` forever - a green
+    Remembering the transition in ONE host field means whichever polled
+    first consumes it and the second is answered `None` forever - a green
     "Connected" chip on a race that had stopped, measured over 50 polls.
 
     Both callers here hold "Connected" and neither has a newer tick, which is

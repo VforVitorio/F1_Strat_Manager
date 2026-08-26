@@ -5,14 +5,14 @@
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
 
-        <mxCell id="title" value="React Web App &#8212; src/telemetry/webapp/src/" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="title" value="React Web App, src/telemetry/webapp/src/" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="360" y="20" width="680" height="40" as="geometry"/>
         </mxCell>
         <mxCell id="subtitle" value="Replaced the Streamlit frontend in v2.0.0. Vite + TypeScript + Tailwind + ECharts, served by nginx behind /api." style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontColor=#94a3b8;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="360" y="56" width="680" height="24" as="geometry"/>
         </mxCell>
 
-        <mxCell id="feat_box" value="features/ &#8212; one folder per tab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=13;fontStyle=1;verticalAlign=top;spacingTop=8;dashed=1;" vertex="1" parent="1">
+        <mxCell id="feat_box" value="features/, one folder per tab" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=13;fontStyle=1;verticalAlign=top;spacingTop=8;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="80" y="120" width="620" height="260" as="geometry"/>
         </mxCell>
         <mxCell id="f_home" value="home&#10;session launcher, recent sessions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e1b4b;strokeColor=#7c3aed;fontColor=#c4b5fd;fontSize=10;" vertex="1" parent="1">

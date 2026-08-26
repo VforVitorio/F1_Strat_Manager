@@ -82,7 +82,7 @@ def test_a_browser_gets_the_same_sequenced_payload_a_window_gets(served: str):
     """The sequencing is the whole reason two consumers do not disagree.
 
     Gate A measured two pollers against a blind latest-payload slot reading a
-    different frame on 58 % of polls. Adding a transport that ignored `since`
+    different frame on 58% of polls. Adding a transport that ignored `since`
     would put that back for the browser.
     """
     status, content_type, body = _get(served + "/api/tick?since=-1")
@@ -175,7 +175,7 @@ def test_a_window_points_at_the_server_that_is_running_and_not_at_a_file(served:
     `ui/dist`, `data.html` is 200 and `dist/data.html` is 404 "File does not exist.";
     rooted at `ui` it is the other way round.
 
-    So the assertion is not "the URL contains http". It is that the exact URL a
+    Therefore, the assertion is not "the URL contains http". It is that the exact URL a
     window is handed is **fetchable from the server the host actually started**,
     which is the only property that makes the window and a browser tab the same
     surface. `window_target` is pure so this needs no system webview.

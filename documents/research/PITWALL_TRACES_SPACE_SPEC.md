@@ -1,27 +1,26 @@
 # PITWALL · DATA - the traces, the slack, and the radio: the space spec
 
-**Status: SPEC, awaiting Víctor's sign-off on the questions in §8. Nothing here is built.**
+**Status: SPEC, awaiting sign-off on the questions in section 8. Nothing here is built.**
 
 Sprint 9's elevate pass shipped (#987-#996) and skipped the three items the agreed layout drawing
-had explicitly assigned to it. Víctor then looked at the shipped window and named two of them
-himself: *"en la segunda de telemetry veo un hueco abajo a la izquierda feo, los 4 graficos siguen
-estando muy grandes y lo de las radios un poco apretujado"*. This document is the implementation
-spec for those three items plus the radio squeeze, checked line by line against the drawing agreed
-on 2026-08-13.
+had explicitly assigned to it. Two of them are visible in the shipped window: an empty gap at the
+bottom left of the second telemetry tab, and four charts still sized too large. The radio feed
+reads as cramped alongside them. This document is the implementation spec for those three items
+plus the radio squeeze, checked line by line against the drawing agreed on 2026-08-13.
 
 ## 0. Provenance - what this spec is built from
 
 **Read (binding, in this order):**
 
-- `memory/project_pitwall_data_layout.md` - the DATA layout drawn in ASCII and agreed with Víctor
+- `memory/project_pitwall_data_layout.md` - the DATA layout drawn in ASCII and agreed
   2026-08-13, with the measured height budget. The ground truth this spec is checked against.
-- `memory/reference_pitwall_real_monitors.md` - the evidence base from Víctor's six photographs
+- `memory/reference_pitwall_real_monitors.md` - the evidence base from six photographs
   plus seven sources (2026-08-07).
 - `memory/project_pitwall_window.md` - the agreed two-window shape, including the band-4 line
-  quoted in §1.
+  quoted in section 1.
 - `memory/project_pitwall_sprint5/6/7/8/9.md`, `~/.claude/plans/pitwall-sprint9/MEASURED-BASELINE.md`
   and `~/.claude/plans/pitwall-sprint7/TODO.md` (the measured deferral list).
-- `documents/research/PITWALL_REALISM_AND_TELEMETRY_SURFACE.md` (§2.1-2.2 tiers, §3.1, §3.5),
+- `documents/research/PITWALL_REALISM_AND_TELEMETRY_SURFACE.md` (section 2.1-2.2 tiers, section 3.1, section 3.5),
   `PITWALL_V2_ARCHITECTURE.md`, `PITWALL_DELIVERY_PLAN.md` (the band-4 scope note at lines
   ~195-240 and the sprint-4 status line at ~393).
 - Shipped code: `src/pitwall/ui/src/features/data/OwnCarTraces.tsx`, `TraceChart.tsx`,
@@ -38,22 +37,22 @@ on 2026-08-13.
 
 - Live geometry at both clients is INHERITED from the sprint-9 probe baseline
   (`MEASURED-BASELINE.md`, measured on the real loopback server against the real Melbourne 2025
-  payload) plus the fresh live numbers in Víctor's report of the shipped TRACES tab (left column
+  payload) plus fresh live numbers measured on the shipped TRACES tab (left column
   750 with 150 empty; `.traces-grid` 533 x 666, cells 262 x 328; `.radio-feed` 260 x 404, 42
   events ~10 visible; ring SVG 200). Every one of those numbers was re-derived here from the
-  shipped CSS and matches to within 4 px; the derivations are shown inline in §4.
+  shipped CSS and matches to within 4 px; the derivations are shown inline in section 4.
 - **Executed fresh for this spec** on `data/cache/arcade/Melbourne_2025_race.pkl` (the real
   session the producer serves): `circuit_length_m = 5219.98`; 154,173 frames x 20 drivers; NOR's
   gear distribution spans **1-8, all eight values present** (gear 1: 1,309 frames); NOR's raw
   `drs` codes are dominated by 0/1/8 with the open set `{10, 12, 14}` totalling **555 frames,
-  0.4 % of the race** - Melbourne 2025 was safety-car-heavy and DRS was rarely enabled, so the
+  0.4% of the race** - Melbourne 2025 was safety-car-heavy and DRS was rarely enabled, so the
   DRS lane on the only race on disk is flat almost everywhere. That is the data, not a bug, and
-  §5.2 designs for it.
+  Section 5.2 designs for it.
 - The PITWALL window itself was NOT reopened for this spec; no pixel below claims otherwise.
 
-**Searched (Víctor asked for this explicitly):** MoTeC i2 worksheet conventions, Cosworth Pi
+**Searched:** MoTeC i2 worksheet conventions, Cosworth Pi
 Toolbox, AiM Race Studio, The Field's F1 chart documentation, MultiViewer, and the sim-racing
-engineering guides. Findings with URLs in §3.
+engineering guides. Findings with URLs in section 3.
 
 ---
 
@@ -73,14 +72,14 @@ build, and where each piece goes"*:
 > | gear and DRS on the traces | 9, and needs a decoded `drs_open` from the producer |
 > | the left column's slack under the bests card | 9 |
 
-and its closing sentence on the traces:
+Its closing sentence on the traces:
 
 > **The traces are not oversized; the right column is doing one job with room for two.** In
 > sprint 6 it gains a tab strip and band 3 shares it (the traces and the ring hide on that tab);
 > in sprint 9 the 2x2 becomes the stacked form.
 
 The sentence "the research calls the wrong shape" resolves to
-`reference_pitwall_real_monitors.md`, §"The own-car screen", verbatim:
+`reference_pitwall_real_monitors.md`, the section "The own-car screen", verbatim:
 
 > Stacked traces sharing ONE x axis with a shared vertical cursor: speed / throttle / brake /
 > RPM / gear / DRS. [...] **the stacking and the shared cursor are the transferable part**, and
@@ -96,31 +95,31 @@ The drawing's own boxes (agreed 2026-08-13, at the 1485 x 833 client):
 | BESTS | **620 x 302** |
 | OWN-CAR TRACES | 565 x 751 (2x2 cells 277 x 290 drawn as the sprint-5 interim) |
 | RING column | 260 wide |
-| RADIO / RCM | **"417 x 260"** (see §2.1 - the pair is internally inconsistent) |
+| RADIO / RCM | **"417 x 260"** (see section 2.1 - the pair is internally inconsistent) |
 | status bar | full width x 23 |
 
 ## 2. Deviation table - agreed vs shipped, both numbers
 
-Measured shipped values from the sprint-9 baseline + the live report; drawing values from §1.
+Measured shipped values from the sprint-9 baseline + the live report; drawing values from section 1.
 
 | # | element | agreed (drawing) | shipped (measured) | delta | verdict |
 |---|---|---|---|---|---|
 | 1 | left column width | 620 | 630 | +10 | **Deliberate, documented in the drawing memory itself**: the tower's natural width is 597 px and 620 landed one pixel clear of compression, so sprint 6 re-measured to 630. Not a defect. |
 | 2 | tower | 620 x 439 | 630 x 437 | -2 h | Rounding on the real border box. Not a defect. |
-| 3 | **BESTS** | 620 x **302** | 630 x **153** | **-149 h** | ⭐ Assigned to sprint 9, never built. The drawing already expected a taller bests panel. §6. |
+| 3 | **BESTS** | 620 x **302** | 630 x **153** | **-149 h** | ⭐ Assigned to sprint 9, never built. The drawing already expected a taller bests panel. Section 6. |
 | 4 | right column | 835 x 751 | 825 x 750 | -10 w | Consequence of #1. Not a defect. |
 | 5 | tab strip | anticipated ("the tab strip is born here") but drawn at zero height | 26 px + 6 gap = **32 px** | -32 from every tab panel | Evolution the drawing priced at 0; every column-height number below is 718, not 751, because of it. |
 | 6 | traces card | 565 x 751 | 555 x 718 | -10 w, -33 h | Consequence of #1 + #5. |
-| 7 | **traces FORM** | "stacked on ONE x axis with a shared cursor" | **the Qt 2x2**: four separate plots, cells 262 x 328, four x-axis bands, four title rows, one shared cursor VALUE drawn four times | - | ⭐ The headline deviation. §5. |
-| 8 | **gear + DRS** | on the stack ("speed/throttle/brake/gear/DRS") | absent, deliberately - `OwnCarTraces.tsx`'s docstring refuses to fork `{10,12,14}` into TypeScript | -2 channels | ⭐ Waiting on the producer's `drs_open`. §5.2. |
-| 9 | radio / RCM feed | "417 x 260" | 260 x 404 | see §2.1 | §7. |
+| 7 | **traces FORM** | "stacked on ONE x axis with a shared cursor" | **the Qt 2x2**: four separate plots, cells 262 x 328, four x-axis bands, four title rows, one shared cursor VALUE drawn four times | - | ⭐ The headline deviation. Section 5. |
+| 8 | **gear + DRS** | on the stack ("speed/throttle/brake/gear/DRS") | absent, deliberately - `OwnCarTraces.tsx`'s docstring refuses to fork `{10,12,14}` into TypeScript | -2 channels | ⭐ Waiting on the producer's `drs_open`. Section 5.2. |
+| 9 | radio / RCM feed | "417 x 260" | 260 x 404 | see section 2.1 | Section 7. |
 | 10 | tabs | 2 anticipated (TRACES / RACE PACE) | 3 (+ RACE TRACE) | +1 | Sprint-6 decision, measured (band 3 is two panels). Not a defect. |
 
 **One docs inconsistency found on the way**: `PITWALL_DELIVERY_PLAN.md:393` says sprint 4 shipped
 *"Own-car traces stacked on one x axis with a shared vertical cursor"*. What shipped is the 2x2
 with a shared cursor **value** repeated on four independent charts; the four x axes are locked to
 the same range but are four axes. The plan's line over-claims and should be corrected in the PR
-that builds §5 (the drawing memory states it correctly: "today they are the Qt 2x2").
+that builds section 5 (the drawing memory states it correctly: "today they are the Qt 2x2").
 
 ### 2.1 The radio's "417 x 260" - the pair is transposed in the drawing
 
@@ -139,16 +138,16 @@ drawing's own geometry, and the transposed reading fits it exactly:
   settled at ~304, leaving 404. **Against the transposed reading the shipped feed is 13 px short,
   not 157 px narrow.**
 
-So the radio's real deviation is small and structural (the tab strip), and the "apretujado" that
-Víctor sees is a DENSITY problem, not a geometry one: 42 events with ~10 visible behind a fold,
+Therefore the radio's real deviation is small and structural (the tab strip), and the cramped feel is a
+DENSITY problem rather than a geometry one: 42 events with ~10 visible behind a fold,
 every long RCM row spending two clamped lines, four identical BLUE FLAG rows spending four slots.
-§7 fixes density; §8 Q4 offers the width restructure if Víctor meant the literal 417.
+Section 7 fixes density, and section 8 Q4 offers the width restructure if the literal 417 was meant.
 
 ---
 
 ## 3. Research - how real telemetry clients draw a stacked trace
 
-What was found, with URLs, and what it implies. Where the convention disagrees with our drawing,
+What was found, with URLs, and what it implies. Where the convention disagrees with the drawing,
 it says so plainly.
 
 1. **MoTeC i2** - the reference analysis package. Its classic compare worksheet stacks
@@ -181,11 +180,11 @@ it says so plainly.
    [RacingMojo - finding speed with telemetry](https://www.racingmojo.com/blog/finding-more-speed-using-telemetry-data/),
    [Podium Prophets - reading F1 telemetry](https://podiumprophets.com/blog/reading-f1-telemetry-beginners-guide).
    Implication: Δ TIME earns a tall lane adjacent to speed; whether it sits above or below speed
-   is a coin the convention does not call (§8 Q2).
+   is a coin the convention does not call (section 8 Q2).
 5. **MultiViewer** (the live F1 fan client the project already cites) overlays
    **speed / throttle / brake / gear / RPM / DRS** as one onboard telemetry block -
-   [multiviewer.app](https://multiviewer.app/). Implication: the six-channel set in §5.1 is the
-   standard live set minus RPM (not on our wire) plus Δ (our two-car product).
+   [multiviewer.app](https://multiviewer.app/). Implication: the six-channel set in section 5.1 is the
+   standard live set minus RPM (not on the wire) plus Δ (this window's two-car product).
 6. **Cosworth Pi Toolbox / AiM Race Studio** - the user guides confirm the same waveform-strip
    model (channels as horizontal strips over one distance axis, cursor readout per strip) but the
    public docs carry no layout numbers worth citing beyond that:
@@ -194,19 +193,19 @@ it says so plainly.
    AiM's channel tags carry the value/average readout
    ([Rennlist thread on RS2 features](https://rennlist.com/forums/data-acquisition-and-analysis-for-racing-and-de/991767-new-aim-race-studio-2-features.html)).
 
-**Where the convention disagrees with our drawing:**
+**Where the convention disagrees with the drawing:**
 
-- Convention stacks **RPM**; our wire does not carry it (broadcast car data does - realism doc
-  §2.1 row 3 - but `FrameData` does not resample it). Not added; it would be a producer + loader
+- Convention stacks **RPM**; the wire does not carry it (broadcast car data does - realism doc
+  Section 2.1 row 3 - but `FrameData` does not resample it). Not added; it would be a producer + loader
   change for a channel the strategist does not act on.
 - Convention has **no Δ TIME lane** in the single-car worksheet - the delta is an overlay-mode
-  channel. Our window is permanently two-car (main + broadcast rival), and the Qt original's
+  channel. This window is permanently two-car (main + broadcast rival), and the Qt original's
   headline chart is the delta, so it stays: this is a pit wall, not a driver-coaching sheet.
-- The Field's shared cursor is **hover-driven** (analysis); ours is **the car's live position**
-  (a race in progress). The hover/inspection cursor is deliberately deferred (§8, settled by me:
+- The Field's shared cursor is **hover-driven** (analysis); this window's is **the car's live
+  position** (a race in progress). The hover/inspection cursor is deliberately deferred (section 8:
   a live wall is not moused - and at 10 Hz `notMerge: true` would fight the axisPointer state).
-- Convention keeps a y-axis per lane. We keep ours (locked ranges, bounds unlabelled), which is
-  already the shipped `valueAxis` behaviour.
+- Convention keeps a y-axis per lane. This design keeps its own (locked ranges, bounds unlabelled),
+  which is already the shipped `valueAxis` behaviour.
 
 ---
 
@@ -240,7 +239,7 @@ At 1265 the traces card interior is `478 - 48 = 430`, and its width `605 - 260 -
 **One ECharts instance, six horizontal lanes over ONE distance axis, one unbroken cursor.**
 Replaces the four independent `TraceChart` instances and the `.traces-grid` 2x2.
 
-Lane order, top to bottom (convention: speed first, per §3.1; the Δ-first alternative is §8 Q2):
+Lane order, top to bottom (convention: speed first, per section 3.1; the Δ-first alternative is section 8 Q2):
 
 | lane | channel | y range (locked) | own-car stroke | rival stroke | height 1485 | height 1265 |
 |---|---|---|---|---|---|---|
@@ -255,12 +254,12 @@ Lane order, top to bottom (convention: speed first, per §3.1; the Δ-first alte
 | | **total** | | | | **666** ✓ | **430** ✓ |
 
 666 is exactly the box `.traces-grid` occupies today at 1485; 430 is its box at 1265. **The card
-does not change size** (§8 Q1 records the alternative that shrinks it).
+does not change size** (section 8 Q1 records the alternative that shrinks it).
 
 Checks against reality (executed on the real session pickle for this spec): gear spans 1-8 with
 all eight values present, so `[0, 9]` frames every step with half a step of air; the raw `drs`
 open set `{10, 12, 14}` occurs (555 frames) so the DRS lane is real, and it is rare on Melbourne
-2025 (0.4 % of frames) so the lane is flat most laps - the readout (§5.4) is what tells a reader
+2025 (0.4% of frames) so the lane is flat most laps - the readout (section 5.4) is what tells a reader
 "closed" from "broken".
 
 ### 5.2 Every axis rule carried over, one rule new
@@ -293,7 +292,7 @@ Unchanged semantics, restated for the stacked form:
   around pit stops stays (settled: no autorange churn at 10 Hz; the tower's GAP column carries
   the number meanwhile - already noted in #986).
 
-### 5.4 The shared cursor, and the readout the research says it owes
+### 5.4 The shared cursor and its readout
 
 - **The cursor is the car's live lap position**: `drivers[driver_main].rel_dist * xMax`, exactly
   today's source (the DRIVERS block, never the span tail). Rendered as **ONE absolutely
@@ -303,13 +302,13 @@ Unchanged semantics, restated for the stacked form:
   across the gaps, and cannot shimmer (the solid-not-dashed lesson is inherited). The transform
   is linear against a locked axis, so the duplication risk is two constants (44, 12) already
   owned by the option builder.
-- **Per-lane readout** (MoTeC/AiM convention, §3.1/§3.6): each lane carries a 12-px label row
+- **Per-lane readout** (MoTeC/AiM convention, sections 3.1 and 3.6): each lane carries a 12-px label row
   inside its own height - left: the channel name + unit in the lane's colour
   (`SPEED km/h · Δ TIME s · THROTTLE % · BRAKE % · GEAR · DRS`); right: the current value from
   the newest main-span sample, 10 px mono (`287 · +0.42 · 100 · 0 · 7 · OPEN/CLOSED`). The
   ECharts grid for each lane starts 12 px down so data never collides with the row. HTML
   overlays, not ECharts graphics, so `notMerge: true` cannot restart them.
-- No hover/inspection cursor in v1 (§3, last bullet).
+- No hover/inspection cursor in v1 (section 3, last bullet).
 
 ### 5.5 Placeholders and the frozen board
 
@@ -342,7 +341,7 @@ AFTER (stack, same 533 x 666 box):
   **2.3x the x-resolution per channel** (206 -> 477 px; 25.3 -> 10.9 m per pixel). At the 1265
   client - where this sprint's P0 lived - the width gain is 152 -> 257 px per lane.
 - The honest cost, stated: the four original channels each lose drawing height (262 -> 145 for
-  speed/Δ, 262 -> 96 for throttle/brake). That is the stacked-lane convention (§3: lanes of
+  speed/Δ, 262 -> 96 for throttle/brake). That is the stacked-lane convention (section 3: lanes of
   ~90-150 px are the norm), and it is the direct answer to "los 4 graficos siguen estando muy
   grandes": the same pixels now carry six channels one cursor can cut through at a single point
   of track, instead of four charts a reader has to cross-reference by eye.
@@ -353,8 +352,8 @@ AFTER (stack, same 533 x 666 box):
 
 | file | change |
 |---|---|
-| `features/data/TraceStack.tsx` | NEW - one `useEChart` instance; `laneLayout(stackHeightPx)` computes each grid's `{top, height}` from the §5.1 weights (weights `3 / 3 / 2 / 2 / 1.7 / 0.8`, axis band 34, gaps 6); builds 6 grids / 6 x-axes / 6 y-axes / 12 series; the cursor overlay div; the 6 label+readout rows. |
-| `features/data/OwnCarTraces.tsx` | keeps the accumulator, header, frozen/starved logic; renders `<TraceStack>` instead of four `<TraceChart>`. Its "gear and DRS are deliberately absent" docstring block is DELETED by the PR that lands §5.2's producer change - the refusal it encodes is honoured, not overruled: the constant is decoded producer-side. |
+| `features/data/TraceStack.tsx` | NEW - one `useEChart` instance; `laneLayout(stackHeightPx)` computes each grid's `{top, height}` from the section 5.1 weights (weights `3 / 3 / 2 / 2 / 1.7 / 0.8`, axis band 34, gaps 6); builds 6 grids / 6 x-axes / 6 y-axes / 12 series; the cursor overlay div; the 6 label+readout rows. |
+| `features/data/OwnCarTraces.tsx` | keeps the accumulator, header, frozen/starved logic; renders `<TraceStack>` instead of four `<TraceChart>`. Its "gear and DRS are deliberately absent" docstring block is DELETED by the PR that lands section 5.2's producer change - the refusal it encodes is honoured, not overruled: the constant is decoded producer-side. |
 | `features/data/TraceChart.tsx` | RETIRED (its only consumer is the 2x2). |
 | `features/data/traceBuffer.ts` | `TraceRow` gains `gear: number; drsOpen: boolean`; `store()` copies them; `channel()` gains the two keys. Idempotence, eviction and the same-lap rival rule untouched. |
 | `lib/bridge.ts` | `TelemetrySample` gains `drs_open: boolean`. |
@@ -364,7 +363,7 @@ AFTER (stack, same 533 x 666 box):
 
 ## 5.2-bis SPEC B - gear and DRS, and the producer edit priced (deviation #8)
 
-**Lane shapes** are in the §5.1 table: gear is a step function (`step: "end"` - the value holds
+**Lane shapes** are in the section 5.1 table: gear is a step function (`step: "end"` - the value holds
 until the next sample; The Field: "a step chart"), range `[0, 9]` framing the measured 1-8;
 DRS is a two-level step in the thinnest lane, range `[-0.2, 1.2]`, no y labels.
 
@@ -393,9 +392,9 @@ same treatment `track_status_label` and #986's proposed `compound_name` already 
    Plus one positive case: a frame with `drs=14` packs `drs_open=True`, `drs=8` packs `False`
    (8 is "eligible, not open" and is the third-commonest code on the real session - 566 frames).
 6. Payload price: ~16 bytes per sample, ~2-3 samples per driver per tick at 1x, two spans ->
-   **~80 bytes on a 17,278-byte tick, under 0.5 %**. Nothing.
+   **~80 bytes on a 17,278-byte tick, under 0.5%**. Nothing.
 
-**The data honesty note**: on the only race on disk DRS is open 0.4 % of frames (measured for
+**The data honesty note**: on the only race on disk DRS is open 0.4% of frames (measured for
 this spec), so the lane will read CLOSED for whole laps. The label row's live readout
 (`DRS CLOSED` / `DRS OPEN`) is what makes a flat lane legible as a true state - the same
 dead-feed-must-look-dead doctrine, one lane down.
@@ -411,7 +410,7 @@ client, zero slack at the narrow one**. That asymmetry rules the options:
 | option | verdict |
 |---|---|
 | **(a) BESTS ranks deeper when the room exists** - RANKED becomes a depth derived from the slot | **RECOMMENDED.** The RaceX evidence is ranked lists ("four ranked lists (S1, S2, S3, Lap) plus Theoretical"); the shipped `RANKED = 3` was argued against the space then available, not against the drawing's 302. Elastic, so it is a no-op at 1265 where the compact ladder already owns the answer. |
-| (b) give the tower breathing (taller rows) | REJECTED: 20-px rows are a measured legibility floor for 150 % scaling, and +7 px of air per row buys no information. |
+| (b) give the tower breathing (taller rows) | REJECTED: 20-px rows are a measured legibility floor for 150% scaling, and +7 px of air per row buys no information. |
 | (c) move a panel in (e.g. the radio) | REJECTED: contradicts the agreed home ("under the ring"), and anything moved in must degrade to zero at 1265, where the slot is 63 px - only elastic content survives both clients. |
 
 **The depth rule.** One derived value replaces the constant:
@@ -442,14 +441,14 @@ depth = clamp( 3 + floor((room - H3 - FONT_GUARD) / ROW), 3, 10 )
 The alternative fill - a second block of **speed bests** (V1 / V2 / VFL / VST, RaceX's own
 `Bests - Time | Bests - Speed` tab strip; all four fields already ride the bulk in
 `DriverLaps.best`) - is real, wire-ready and NOT recommended as the default: it is new
-information architecture where option (a) is one derived constant. It is §8 Q3.
+information architecture where option (a) is one derived constant. It is section 8 Q3.
 
 ---
 
 ## 7. SPEC D - the radio feed (deviation #9)
 
 **Decision: the fix is the fold and the density, not the width.** The 260-px home under the ring
-stands (it is the drawing's internally consistent reading, §2.1). Three moves, two of them already
+stands (it is the drawing's internally consistent reading, section 2.1). Three moves, two of them already
 owned by **#986** - build on it, do not re-spec it:
 
 1. **#986 D8 as written**: category chips from the wire's `category`/`flag` (populated, read by
@@ -460,16 +459,15 @@ owned by **#986** - build on it, do not re-spec it:
 2. **The fold announces itself.** The header count says how many EXIST (42); it does not say the
    panel is showing ~10. Add the shipped convention other panels use: the count becomes
    `10 / 42` (visible/total) or the list's last visible row fades under a 12-px
-   `+ 32 older ·  scroll` line. Scrollbars stay hidden; the AFFORDANCE is what was missing
-   (the same finding class as sprint 8's L6).
+   `+ 32 older ·  scroll` line. Scrollbars stay hidden; the AFFORDANCE is what was missing.
 3. **No geometry change.** The 13-px shortfall against the transposed drawing (404 vs 417) is the
-   tab strip's structural cost and is not worth a move. If Víctor meant the literal 417-wide
-   reading, that is a restructure of the whole tab (§8 Q4, priced there) - not a patch to this
+   tab strip's structural cost and is not worth a move. If the literal 417-wide
+   reading, that is a restructure of the whole tab (section 8 Q4, priced there) - not a patch to this
    panel.
 
-Interaction with §5/§6: none at the wide client (different columns). The one geometry lever that
+Interaction with sections 5 and 6: none at the wide client (different columns). The one geometry lever that
 WOULD feed the radio - shrinking the stack and giving the freed band to a full-width feed - is
-Option B in §8 Q1, priced and not recommended.
+Option B in section 8 Q1, priced and not recommended.
 
 ---
 
@@ -553,7 +551,7 @@ Constraint 7's table: every element reads a field already on the wire, or is pri
 | SPEED / THROTTLE / BRAKE lanes | `telemetry.drivers[code][]` `.speed/.throttle/.brake` (was `.main[]`/`.rival[]` before schema v2, #1048) | none |
 | Δ TIME lane | computed from `.t` via `deltaSeries` (unchanged) | none |
 | **GEAR lane** | `telemetry.drivers[code][].gear` - on the wire since #841, read by nothing today | **none** |
-| **DRS lane** | NEW `telemetry.drivers[code][].drs_open` | **§5.2-bis, priced: 3 source files + 2 test files + bridge.ts, ~80 bytes/tick, no schema bump** |
+| **DRS lane** | NEW `telemetry.drivers[code][].drs_open` | **Section 5.2-bis, priced: 3 source files + 2 test files + bridge.ts, ~80 bytes/tick, no schema bump** |
 | cursor + readouts | `drivers[driver_main].rel_dist` x `circuit_length_m`; newest main-span sample | none |
 | lane colours | `palette.ACCENT` (gear, new site), `palette.INFO` (DRS, new site); rest existing | none (token-test counts move) |
 | BESTS depth | `bulk` (unchanged data); depth is client geometry | none |
@@ -564,22 +562,22 @@ Constraint 7's table: every element reads a field already on the wire, or is pri
 
 | step | what | depends on | worth |
 |---|---|---|---|
-| **1** | Producer `drs_open` (§5.2-bis): config.py + track.py + app.py + the two wire tests + bridge.ts | nothing | unblocks the DRS lane; deletes the last cross-language-constant refusal on this window |
-| **2** | `TraceStack` with the four existing channels (§5.1-5.7 minus the two new lanes): one instance, one axis, one cursor, readouts; retires `TraceChart`; fixes `PITWALL_DELIVERY_PLAN.md:393`'s over-claim in the same PR | nothing | 78 px of chrome -> data; x-resolution 206 -> 477 px/channel (152 -> 257 at 1265); 4 instances -> 1; **the drawing's headline item** |
-| **3** | GEAR + DRS lanes (§5.2-bis client side) | 1 (DRS), 2 (both) | +2 channels for the 120 px the chrome paid; completes the agreed five-channel line |
-| **4** | BESTS adaptive depth (§6) | nothing | fills 119 of the 150 empty px with ranks 4-10; 31 px stays as air; no-op at 1265 |
-| **5** | Radio density: #986 D8 + the fold affordance (§7) | nothing (already tracked in #986) | no geometry; the "apretujado" fix |
+| **1** | Producer `drs_open` (section 5.2-bis): config.py + track.py + app.py + the two wire tests + bridge.ts | nothing | unblocks the DRS lane; deletes the last cross-language-constant refusal on this window |
+| **2** | `TraceStack` with the four existing channels (section 5.1-5.7 minus the two new lanes): one instance, one axis, one cursor, readouts; retires `TraceChart`; fixes `PITWALL_DELIVERY_PLAN.md:393`'s over-claim in the same PR | nothing | 78 px of chrome -> data; x-resolution 206 -> 477 px/channel (152 -> 257 at 1265); 4 instances -> 1; **the drawing's headline item** |
+| **3** | GEAR + DRS lanes (section 5.2-bis client side) | 1 (DRS), 2 (both) | +2 channels for the 120 px the chrome paid; completes the agreed five-channel line |
+| **4** | BESTS adaptive depth (section 6) | nothing | fills 119 of the 150 empty px with ranks 4-10; 31 px stays as air; no-op at 1265 |
+| **5** | Radio density: #986 D8 + the fold affordance (section 7) | nothing (already tracked in #986) | no geometry; the "apretujado" fix |
 
 Steps **1, 2, 4, 5 are mutually independent** and can land in any order or in parallel; only
 step 3 waits (on 1 and 2). Suggested sequence for review sanity: 1 -> 2 -> 3 (one story: the
 stack), with 4 and 5 interleaved anywhere.
 
-## 11. What I could NOT settle - Víctor's calls
+## 11. What this spec could not settle
 
 **Q1 - Does the stack keep the full card, or shrink to feed the radio?**
 The drawing says full height ("the traces are not oversized") and this spec follows it
-(**Option A, recommended**: stack fills 666/430, radio stays 260-wide, density-fixed). But his
-complaint read literally ("muy grandes" + "apretujado") supports **Option B**: render the 1265
+(**Option A, recommended**: stack fills 666/430, radio stays 260-wide, density-fixed). Read
+literally, though, "charts too large" plus "radio cramped" supports **Option B**: render the 1265
 lane heights at BOTH clients (stack region 430), which frees `718 - 478 - 10 = 230 px` at 1485
 for a full-width `825 x 230` radio band under the traces+ring row - single-line rows, no clamp,
 ~11 unwrapped events visible. Cost: the wide client shows the small stack (halved lane heights
@@ -589,23 +587,23 @@ radio still feels squeezed after #986 + the fold affordance, B is a layout-only 
 
 **Q2 - Lane order: SPEED first (convention) or Δ TIME first (workflow)?**
 MoTeC and The Field put speed on top; the engineering reading order starts at the delta. This
-spec ships SPEED first. The flip is one array literal - if Víctor reads the window delta-first,
+spec ships SPEED first. The flip is one array literal, and if the window is read delta-first,
 say so and it moves.
 
 **Q3 - What fills the BESTS slot: depth (recommended) or a Bests-Speed block?**
-§6 recommends ranks 1-10 (RaceX's ranked lists; one derived constant). The alternative -
+Section 6 recommends ranks 1-10 (RaceX's ranked lists; one derived constant). The alternative -
 V1/V2/VFL/VST sections, RaceX's own `Bests - Speed` tab, all four fields already on the bulk -
 adds a different KIND of information for ~74 px + new `sessionBests` fields. They are not
 exclusive (depth to ~6 + the speed block also sums inside 303), but that combination should be
 chosen by the person who reads the wall, not by this spec.
 
 **Q4 - The radio's 417.**
-§2.1's arithmetic says the drawing's "417 x 260" is transposed (260 wide x 417 tall) and the
-shipped panel is 13 px off, not 157. This spec proceeds on that reading. If Víctor MEANT a
+Section 2.1's arithmetic says the drawing's "417 x 260" is transposed (260 wide x 417 tall) and the
+shipped panel is 13 px off, not 157. This spec proceeds on that reading. If a literal
 417-wide feed, that is Option B's band (Q1) or a tab-level restructure - name it and it gets
 specced; nothing in steps 1-5 blocks it.
 
-**Q5 - settled by me, recorded for visibility:** no hover/inspection cursor in v1 (live wall,
+**Q5, settled here and recorded for visibility:** no hover/inspection cursor in v1 (live wall,
 10 Hz `notMerge` fights axisPointer state); RPM stays off (not on the wire; a strategist does
 not act on it); the ring does not shrink to feed the radio (its lap-1 clumping is already
 borderline at 200 px).
@@ -628,7 +626,7 @@ borderline at 200 px).
 - **Producer change: one, priced**: `drs_open` decoded in `_frame_to_telemetry`
   (`src/arcade/app.py:162`) from a `DRS_OPEN_CODES` constant promoted to `src/arcade/config.py`,
   ~80 bytes/tick, no schema bump, two wire tests move with it.
-- **Decisions that need Víctor: Q1** (full-height stack per the drawing - recommended - vs
+- **Decisions still open: Q1** (full-height stack per the drawing, recommended, vs
   compact stack + a full-width 825 x 230 radio band at the wide client) **and Q3** (BESTS fills
   its 302 with depth-10 ranks - recommended - vs a RaceX-style Bests-Speed block). Q2 (lane
-  order) and Q4 (the 417) are one-line follow-ups whichever way he reads them.
+  order) and Q4 (the 417) are one-line follow-ups either way.

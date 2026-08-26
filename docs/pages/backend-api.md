@@ -2,7 +2,7 @@
 
 ## Overview
 
-The backend is a FastAPI application at `src/telemetry/backend/`. It serves telemetry data, driver comparisons, chat (LM Studio proxy), and the N25–N31 strategy agent pipeline. All endpoints are prefixed with `/api/v1`.
+The backend is a FastAPI application at `src/telemetry/backend/`. It serves telemetry data, driver comparisons, chat (LM Studio proxy), and the N25-N31 strategy agent pipeline. All endpoints are prefixed with `/api/v1`.
 
 Entry point: `backend/main.py`, creates the FastAPI app and registers all routers.
 
@@ -36,7 +36,7 @@ This means `F1_API_KEY` and `F1_HOST` (see [Setup and deployment](#/setup)) are 
 
 ## Rate limiting
 
-Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`, Security C2 / S-7) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket. The four chat routes carry buckets too (capacity 10, 20/min), so the chat surface is metered as well.
+Every prediction and strategy endpoint (and `/simulate`) sits behind an in-process token-bucket limiter (`backend/core/rate_limit.py`) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering `/pace` does not exhaust the `/recommend` bucket. The four chat routes carry buckets too (capacity 10, 20/min), so the chat surface is metered as well.
 
 | Route | Burst capacity | Refill rate |
 |---|---|---|
@@ -134,7 +134,7 @@ The frontend mints a UUID, sends it on every chat request via the `X-Request-Id`
 
 The `/api/v1/voice` router (STT, TTS and the STT to LLM to TTS pipeline) was retired in v2: it came from a course requirement and the web app ships without it. The implementation remains available in git history and in the `legacy_version` branch (the legacy Streamlit app was removed from the repo, #551).
 
-## Strategy endpoints (N25–N31)
+## Strategy endpoints (N25-N31)
 
 All strategy endpoints live under `/api/v1/strategy/`. They accept JSON bodies and return `StrategyResponse` envelopes.
 
@@ -180,7 +180,7 @@ Event stream: one `start` event, then one `lap` (or `error`) event per processed
 
 ### Where this `lap_state` differs from the replay engine's
 
-Both producers emit the same five top-level keys plus the two stint-history ones, and every agent accepts either. They are **not** field-identical, and it is worth knowing which way, because a producer that quietly diverged from this contract once made a whole strategy candidate permanently ineligible.
+Both producers emit the same five top-level keys plus the two stint-history ones, and every agent accepts either. They are **not** field-identical, and it is worth knowing which way, because a producer that diverged from this contract once made a whole strategy candidate permanently ineligible.
 
 Measured on Lusail 2025 lap 30:
 
@@ -191,7 +191,7 @@ Measured on Lusail 2025 lap 30:
 
 `weather.rainfall` also differs in type: this endpoint coerces it to `int`, the replay engine leaves it `None` when the reading is absent.
 
-None of these are read by the projection, which needs `interval_to_driver_s` and `is_pitting`, and both producers emit those. But if you are writing a new consumer, read this table rather than assuming the two are interchangeable.
+None of these are read by the projection, which needs `interval_to_driver_s` and `is_pitting`, and both producers emit those. A new consumer should read this table rather than assume the two are interchangeable.
 
 ### Agent endpoints (POST)
 

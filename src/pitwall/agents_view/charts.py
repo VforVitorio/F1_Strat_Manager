@@ -176,7 +176,7 @@ def build_pace_series(
         # The SAME lap axis the tyre chart draws, and the same current-lap
         # mark. They sit side by side measuring the same quantity, and they
         # used to disagree: this one autoranged to 12-24 while its neighbour
-        # locked 12.5-35, so "now" sat at 95 % of one plot and 47 % of the
+        # locked 12.5-35, so "now" sat at 95% of one plot and 47% of the
         # other and neither said which column it was.
         "x_range": x_range,
         "current_lap": None if current_lap is None else float(current_lap),
@@ -361,7 +361,7 @@ def _x_range(
     stops three laps past whichever is further, the last observed lap or
     the band's own upper edge, which bounds it for the same reason
     without the unreadable result. Flagged rather than smuggled: it is a
-    visible difference and the exit gate should see it named.
+    visible difference worth naming.
     """
     laps = [point[0] for point in points]
     if current_lap is not None:

@@ -96,7 +96,7 @@ def test_the_feed_carries_driver_radio_under_real_driver_codes():
 def test_a_radio_waits_for_its_own_driver_and_an_rcm_waits_for_the_leader():
     """The two reveal coordinates, on a RAGGED field - which is the normal one.
 
-    At 96 % of instants the running field spans two or three different laps, so
+    At 96% of instants the running field spans two or three different laps, so
     a feed cut at one shared lap leaks for the cars behind and lags the leaders
     at the same time. Here one driver is deep into the race and everyone else is
     at lap 5: his radio must be on screen and theirs must not, while race
@@ -172,7 +172,7 @@ def test_race_control_messages_do_not_print_their_car_twice():
 def test_a_race_with_no_corpus_says_so_instead_of_going_quiet():
     """Absent data is a state, not a blank.
 
-    The twin F7 caught one sprint ago, on this same shape: `get_bulk` had an
+    The twin already found on this same shape: `get_bulk` had an
     explicit unavailable payload and `get_live_lap` did not, so pointing the
     arcade at a race with no parquet left the PREVIOUS race's numbers on screen.
     A feed that answered with an empty list would repeat it one channel over.

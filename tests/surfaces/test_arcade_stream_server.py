@@ -75,7 +75,7 @@ def test_broadcast_does_not_BUILD_the_payload_on_the_caller_s_thread():
     A test that only compared the bytes before and after would pass with the
     build still inline, because moving work between threads does not change
     what it produces. So the factory records who called it, and the assertion
-    is that it was not the caller.
+    is that it ran on a different thread.
 
     The 3.19 ms a steady 8x tick used to cost the frame loop is the reason;
     a seek tick under schema v2 is 32 ms, about two dropped frames at 60 FPS.
@@ -207,7 +207,7 @@ def test_the_drop_log_does_not_blame_a_leaf_the_encoder_can_take():
     """A tuple encodes as an array, and blaming it hid the real culprit.
 
     The allowlist version answered `a=<tuple>` for a payload `json.dumps`
-    handles fine — and because the first blame wins, a payload carrying
+    handles fine, and because the first blame wins, a payload carrying
     both a tuple and a genuine culprit named the tuple and stopped. The
     drop log accused an innocent field while the tick that actually died
     went unexplained. The oracle is now the encoder itself.
@@ -224,7 +224,7 @@ def test_the_drop_log_does_not_blame_a_leaf_the_encoder_can_take():
 def test_the_drop_log_names_an_unencodable_dict_KEY_too():
     """The encoder rejects keys as well, and the walker only read values.
 
-    So the whole class came back on a different input: `{np.int64(lap):
+    Therefore, the whole class came back on a different input: `{np.int64(lap):
     prob}` is one comprehension away from a `per_agent` block, it kills
     the tick, and the log printed the same empty suffix the function was
     rewritten to stop printing.

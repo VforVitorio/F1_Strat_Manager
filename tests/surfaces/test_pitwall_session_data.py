@@ -66,7 +66,7 @@ def _tick(reveal: dict[str, int], year: int = 2025, location: str = "Melbourne")
 def test_the_reveal_is_per_driver_not_one_shared_cut():
     """A single cut at the main driver's lap is wrong in both directions at once.
 
-    At 96 % of instants the running field spans two or three different laps.
+    At 96% of instants the running field spans two or three different laps.
     Masking everyone at one number therefore lags the leaders by a lap AND
     leaks one to two laps of look-ahead for the cars behind, simultaneously.
     """
@@ -86,12 +86,11 @@ def test_the_reveal_is_per_driver_not_one_shared_cut():
 def test_the_reveal_is_strict_so_the_lap_in_progress_stays_hidden():
     """`L <= laps_completed`, never `<`, and never the lap being driven.
 
-    The carrier used to be the tick's `lap`, which was measured non-monotone
+    The carrier was the tick's `lap`, which was measured non-monotone
     and flickered a lap open a tick early at the line while never opening a
     finisher's last lap. The non-monotonicity is gone as of #1069 (an unstable
     sort over the boundary sample FastF1 delivers twice, 70 frames of 3.08 M on
-    Melbourne 2025, not the interpolation an earlier version of this docstring
-    blamed). `laps_completed` still comes off the crossing map, because a per
+    Melbourne 2025). `laps_completed` still comes off the crossing map, because a per
     driver carrier is what a twenty car mask needs.
     """
     session = _session_or_skip()
@@ -719,7 +718,7 @@ def test_every_sector_column_actually_shows_numbers_over_the_race():
     The first version of `live_lap` served only the lap in progress, which is
     right for S1 and S2 and impossible for S3: S3's crossing IS the end of the
     lap. Measured over all 920 real rows, `Sector3SessionTime` lands a median
-    55 ms AFTER the lap's own crossing `Time`, and after it on 94.1 % of laps -
+    55 ms AFTER the lap's own crossing `Time`, and after it on 94.1% of laps -
     so S1 was visible for 60.3 s of its lap, S2 for 40.8 s and S3 for
     -0.055 s. One of three columns was a dash for the entire race.
 
@@ -885,7 +884,7 @@ def test_no_sector_is_served_before_its_own_crossing_even_on_an_early_wire():
     was true. On the wire it was not: the arcade's crossing map increments
     before that lap's own `Sector3SessionTime` on 837 of 921 laps (median
     39 ms, max 0.463 s), so the just-ended S3 went out before its official
-    moment (#933 gate finding F6).
+    moment (#933).
 
     The wire's lead is reproduced here by advancing `laps_completed` EARLY -
     by more than the measured worst case - which is exactly the shape of the

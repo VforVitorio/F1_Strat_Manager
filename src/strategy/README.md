@@ -13,7 +13,7 @@
 
 These are the Jupytext `.py` exports left in `inference/` alongside the production files. They contain the
 model architectures and prediction utilities developed before the LightGBM-based
-strategy models (N06–N16) replaced the earlier TCN and XGBoost experiments.
+strategy models (N06-N16) replaced the earlier TCN and XGBoost experiments.
 
 ---
 

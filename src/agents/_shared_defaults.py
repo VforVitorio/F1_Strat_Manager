@@ -1,6 +1,6 @@
 """Fallbacks shared by the agent modules when session_meta or weather arrives incomplete.
 
-A leaf module — no other agent internals, no heavy imports — so pulling these in never
+A leaf module (no other agent internals, no heavy imports), so pulling these in never
 drags in model weights (same reasoning as ``tire_parsing.py``).
 """
 

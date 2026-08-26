@@ -1,5 +1,5 @@
 """
-Race state manager — enforces the single-driver data boundary.
+Race state manager: enforces the single-driver data boundary.
 
 Our driver  → full telemetry: LapTime, Sector1/2/3, TyreLife, Compound,
               CompoundID, Stint, Position, SpeedI1/I2/FL/ST, FuelLoad
@@ -9,7 +9,7 @@ Rivals      → timing-screen only: Position, LapTime, Compound, TyreLife,
               SpeedST, gap_to_leader_s, interval_to_driver_s, is_pitting.
 
 This mirrors what a real team strategy wall sees during a race and is the
-critical architectural constraint — agents must never be given data that
+critical architectural constraint: agents must never be given data that
 would not be available from live timing in a real scenario.
 
 Gap computation: uses the FastF1 ``Time`` column (session elapsed time at
@@ -118,7 +118,7 @@ class RaceStateManager:
 
         # Validate the schema contract here (not only in RaceReplayEngine) so a
         # missing required column fails loudly at construction from ANY caller -
-        # the backend simulator and tests build RaceStateManager directly. (F-02)
+        # the backend simulator and tests build RaceStateManager directly.
         validate_laps_df(laps_df, source=f"{gp_name or 'race'} {year} laps parquet")
 
         enriched = _compute_session_times(laps_df)
@@ -129,7 +129,7 @@ class RaceStateManager:
 
         self.total_laps: int = int(enriched["LapNumber"].max())
 
-        # Leader's cumulative time per lap — used as the reference for all gap
+        # Leader's cumulative time per lap: used as the reference for all gap
         # calculations. Computed once to avoid repeated group operations.
         self._leader_cum: dict[int, float] = self._precompute_leader_times()
 
@@ -203,8 +203,8 @@ class RaceStateManager:
         The featured parquet carries the column; the RAW per-race parquet this class
         is normally built from does not, and ``get_driver_state`` had no fallback.
         The pace agent then substituted ``90.0`` (``pace_agent.py``), and because
-        ``_predict`` uses that value as an ANCHOR — the prediction is
-        ``prev + delta``, with no NaN branch — every absolute lap-time prediction
+        ``_predict`` uses that value as an ANCHOR (the prediction is
+        ``prev + delta``, with no NaN branch), every absolute lap-time prediction
         was pinned to 90 s regardless of circuit. Measured, the fallback fired on
         100% of laps on the replay path (#728).
 
@@ -224,7 +224,7 @@ class RaceStateManager:
         That second point decides the whole helper. An out-lap is excluded by
         ``IsAccurate``, and it is not a rounding difference: measured at Lusail 2025,
         NOR's out-lap is 107.6 s against 85.3 s on the lap that follows it. Anchoring
-        the lap after a stop on the out-lap would be **22 s wrong** — worse than the
+        the lap after a stop on the out-lap would be **22 s wrong**, worse than the
         90.0 it replaces. The same filter is what keeps a Safety Car lap from
         becoming the anchor for a green one.
 
@@ -294,8 +294,8 @@ class RaceStateManager:
     def _precompute_stint_baselines(self) -> dict[int, int]:
         """Return our driver's TyreLife at the first lap of each stint.
 
-        N06 trains ``FuelEffect`` as ``(TyreLife - min(TyreLife of the stint)) * 0.055``
-        — the seconds of lap time recovered since the stint began. The pace agent has no
+        N06 trains ``FuelEffect`` as ``(TyreLife - min(TyreLife of the stint)) * 0.055``:
+        the seconds of lap time recovered since the stint began. The pace agent has no
         laps frame of its own (``run_pace_agent_from_state`` takes only the lap_state),
         so the baseline has to travel in the lap_state, and this is the producer that
         actually has the stint history. Without it the agent fell back to
@@ -359,7 +359,7 @@ class RaceStateManager:
 
         Returns an empty dict when the driver did not complete that lap
         (retirement, DNF, or lap_number out of range). Callers must handle
-        this gracefully — agents should treat an empty driver state as a
+        this gracefully: agents should treat an empty driver state as a
         race-ended signal.
 
         Args:
@@ -391,7 +391,7 @@ class RaceStateManager:
             # --- Timing ---
             "lap_time_s": _to_seconds(r.get("LapTime")),
             # The featured parquet's own previous-lap time (N04's Prev_LapTime
-            # column) — NOT this lap's lap_time_s reused as a stand-in. The pace
+            # column), NOT this lap's lap_time_s reused as a stand-in. The pace
             # agent used to default prev_lap_time to the CURRENT lap's time
             # (`d.get('lap_time_s') or 90.0`), which fed its own most recent
             # prediction back in as the "previous" lap and made pace
@@ -404,7 +404,7 @@ class RaceStateManager:
             # Falls back to the reconstruction when the column is absent OR its
             # value is NaN. Both, deliberately: `Series.get` returns a stored NaN
             # rather than the default, so a column-presence test alone would leave
-            # the RAW frame — which has no such column at all — on 90.0 forever,
+            # the RAW frame (which has no such column at all) on 90.0 forever,
             # and that is exactly the state #728 found (the fallback fired on 100%
             # of laps). See _precompute_prev_lap_times for why a reconstruction is
             # not simply `lap_number - 1`.
@@ -429,7 +429,7 @@ class RaceStateManager:
             # the set was fitted at the last stop (#800).
             "laps_since_pit": self.laps_since_pit(int(lap_number)),
             "stint": int(r["Stint"]) if pd.notna(r.get("Stint")) else None,
-            # TyreLife when this stint began — N06's FuelEffect is measured from it.
+            # TyreLife when this stint began: N06's FuelEffect is measured from it.
             # Driver-only on purpose: the pace model runs on our car, and rivals stay
             # timing-screen-only per the single-driver boundary (#446).
             "stint_baseline_tyre_life": (
@@ -452,7 +452,7 @@ class RaceStateManager:
             # N04's Prev_SpeedST, emitted for exactly the reason prev_lap_time above is:
             # the pace agent had no previous trap to read, so it served THIS lap's
             # (`d.get('speed_st') or 300.0`) into a feature trained on the preceding
-            # one. Same producer, same rule, same None-means-unknown convention — the
+            # one. Same producer, same rule, same None-means-unknown convention: the
             # first lap of a stint genuinely has no predecessor and says so.
             "prev_speed_st": (
                 float(r["Prev_SpeedST"])
@@ -551,7 +551,7 @@ class RaceStateManager:
         the second trial. Keeping a reference makes `is` a real identity test, and one
         slot rather than a growing dict means the cache cannot leak either. A frame
         MUTATED IN PLACE is still served stale; that is a precondition of any identity
-        cache and is why the contract is "hand back the same frame you built from".
+        cache and is why the contract is to hand back the same frame it was built from.
 
         WHEN THERE IS NO ROW FOR THIS LAP the four readings come back as NaN, so the
         caller emits None. The trigger is not a lap with no session time, which never
@@ -610,18 +610,18 @@ class RaceStateManager:
         columns: ``merge_asof(direction='nearest')`` of each lap's ``Time``
         against the weather samples' ``Time``.
 
-        It used to be picked by mapping the lap fraction onto ``weather_df``'s
-        row index, a proportional lookup that ignores session time entirely, on
-        the reasoning that weather changes slowly enough for a replay demo. The
-        reasoning was wrong twice over. Weather samples are not evenly spaced in
-        time, and neither are laps: a Safety Car or a red flag stretches the gap
-        between two laps while the samples keep their own cadence, so the two
-        indices drift apart exactly when conditions are changing.
+        A proportional lookup, mapping the lap fraction onto ``weather_df``'s row
+        index and ignoring session time entirely, is not used here: it reasons that
+        weather changes slowly enough for a replay demo, and that reasoning fails
+        twice over. Weather samples are not evenly spaced in time, and neither are
+        laps: a Safety Car or a red flag stretches the gap between two laps while
+        the samples keep their own cadence, so the two indices drift apart exactly
+        when conditions are changing.
 
         Measured across 26,692 driver-laps of 24 races: the proportional lookup
-        disagreed with N04's join on **92.6%** of laps, mean 1.11 C and up to
-        11.8 C on TrackTemp, and **flipped the rain flag on 1,279 laps**. N06's
-        weather block is 39.7% of that model's gain, and its predictions moved
+        disagrees with N04's join on **92.6%** of laps, mean 1.11 C and up to
+        11.8 C on TrackTemp, and **flips the rain flag on 1,279 laps**. N06's
+        weather block is 39.7% of that model's gain, and its predictions move
         on 26.8% of laps, mean 0.037 s and up to 8.28 s.
 
         The four trained columns come from ``weather_restore.weather_for_race``,
@@ -712,7 +712,7 @@ class RaceStateManager:
         # No row for that lap: the featured frame drops laps run under a Safety
         # Car, so read the most recent earlier lap instead of reporting nothing.
         # Compound history only ever grows, so the last known state is still the
-        # truth about what has been used — it just may be missing a newer stint.
+        # truth about what has been used. It just may be missing a newer stint.
         earlier = [lap for lap in timeline if lap < lap_number]
         if earlier:
             return timeline[max(earlier)]
@@ -738,10 +738,10 @@ class RaceStateManager:
         """Merged dict consumed by all agents for ``lap_number``.
 
         This is the canonical format passed into every agent's
-        ``run_*_agent()`` call. The schema is always stable: the four
+        ``run_*_agent()`` call. The schema is always stable: the six
         top-level keys (``driver``, ``rivals``, ``weather``,
-        ``session_meta``) are always present, even if some contain empty
-        dicts or empty lists (e.g. after a DNF).
+        ``session_meta``, ``stint_flags``, ``rival_stop_pending``) are always
+        present, even if some contain empty dicts or empty lists (e.g. after a DNF).
 
         Args:
             lap_number:  1-indexed lap number to emit (1 … total_laps).
@@ -754,10 +754,12 @@ class RaceStateManager:
 
                 {
                     "lap_number":   int,
-                    "driver":       dict,   # full telemetry — see get_driver_state
-                    "rivals":       list,   # timing-only — see get_rival_states
+                    "driver":       dict,   # full telemetry: see get_driver_state
+                    "rivals":       list,   # timing-only: see get_rival_states
                     "weather":      dict,   # see get_weather_state
                     "session_meta": dict,   # see get_session_meta
+                    "stint_flags":  dict,   # Art. 30.5(m) facts for our driver
+                    "rival_stop_pending": dict,  # {driver: bool|None} per rival
                 }
         """
         rivals = self.get_rival_states(lap_number)

@@ -27,7 +27,7 @@ export interface AgentCardView {
   status: "OK" | "WATCH" | "ALERT" | "IDLE";
   glyph: string;
   glyph_colour: string;
-  /** `null` means no tooltip. Structured, never markup — see `agent_formatters.py`. */
+  /** `null` means no tooltip. Structured, never markup. See `agent_formatters.py`. */
   tooltip: TooltipView | null;
 }
 
@@ -117,7 +117,7 @@ export interface ScenarioRow {
   is_enacted: boolean;
   /** Whether this scenario was scored at all. An unscored row draws no track. */
   is_scored: boolean;
-  /** `VETOED` on a winner the enacted action overruled, empty otherwise. */
+  /** `NOT TAKEN` on a winner the enacted action overruled, empty otherwise. */
   note: string;
   bar_colour: string;
   label_colour: string;

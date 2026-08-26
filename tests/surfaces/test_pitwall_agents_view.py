@@ -18,8 +18,8 @@ import pytest
 
 from tests.surfaces.fake_stream_client import FakeStreamClient as _FakeClient
 
-# The AGENTS window's content layer, which moved OUT of the Qt package in
-# sprint 7 rather than dying with it: PITWALL renders by calling these, which
+# The AGENTS window's content layer, which moved OUT of the Qt package
+# rather than dying with it: PITWALL renders by calling these, which
 # is what made the port 1:1 by construction instead of by inspection.
 REUSED_BY_PITWALL = (
     "src.pitwall.agent_formatters",
@@ -50,8 +50,8 @@ def test_the_reused_formatters_need_no_display_stack_and_no_dataframes():
     """PITWALL's host runs in a process with no Qt, and should not pay for pandas.
 
     Both were true before the palette split: `agent_formatters` imported
-    `dashboard.theme`, which imports PySide6 and — through
-    `classify_action` — `src.arcade.strategy`, measured at 0.410 s and
+    `dashboard.theme`, which imports PySide6 and (through
+    `classify_action`) `src.arcade.strategy`, measured at 0.410 s and
     pandas. Six colour tuples and two badge builders should cost neither.
 
     This is also what un-skipped the palette-mirror test below: reading
@@ -147,9 +147,8 @@ def test_every_pill_and_badge_is_legible_against_its_own_fill():
         assert ratio >= 4.5, f"{name}: {foreground} on {background} is {ratio:.2f}:1"
 
     # The action takes the same treatment, against the ground it is now drawn
-    # on. It used to be a fill with an ink chosen against it; the band renders
-    # it as TEXT on `--qt-panel`, so the pair that has to contrast is the
-    # action colour and the card.
+    # on. The band renders it as TEXT on `--qt-panel`, so the pair that has
+    # to contrast is the action colour and the card.
     #
     # **Over `_ACTION_STYLE` itself, not a hand-written list.** The old version
     # named five actions; the map holds SEVEN (DNF and ERROR are display states
@@ -243,7 +242,7 @@ def test_the_plan_timeline_invents_nothing_it_was_not_told():
 def test_the_last_lap_lands_on_the_flag():
     """Off-by-one, and it is the one everybody writes.
 
-    Dividing by `total_laps` puts lap 57 of 57 at 98.2 % and leaves a sliver of
+    Dividing by `total_laps` puts lap 57 of 57 at 98.2% and leaves a sliver of
     track after the chequered flag; the span is `total_laps - 1`. And a stint's
     bar runs to the END of its last lap, so a one-lap stint has width rather
     than none.
@@ -424,7 +423,7 @@ def test_every_reasoning_tab_body_is_reachable_from_its_card_tooltip():
 
 
 def test_the_tyre_console_reports_what_the_wear_has_cost():
-    """`deg_cost_s` and `cumulative_deg_s` reach a pixel, and an absent one is not a zero.
+    """`deg_cost_s` and `cumulative_deg_s` reach a pixel, but an absent one is not a zero.
 
     Both ride the tick on every lap because the producer `asdict`s the whole
     `TireOutput`, and until now neither appeared anywhere in PITWALL. `deg_cost_s`
@@ -434,7 +433,7 @@ def test_the_tyre_console_reports_what_the_wear_has_cost():
 
     The second half is the one that matters more. Both fields are `None` rather
     than 0.0 when the TCN did not run, deliberately, because 0.0 is what a
-    genuinely fresh set reads - so a renderer that defaulted them to a number
+    fresh set reads - so a renderer that defaulted them to a number
     would print a real-looking measurement for a missing one. This asserts the
     absence renders AS an absence, which a test that only checked the populated
     case would never see.
@@ -480,12 +479,12 @@ def test_no_agent_string_can_become_markup():
     """Every formatter, every string-shaped field, one hostile value.
 
     **Written because the enumeration is what fails, not the escaping.** The
-    module has had `_escaped` since sprint 8 and a docstring claiming every
-    free-text field went through it; the exit gate found six that did not, one
-    of them reaching a `dangerouslySetInnerHTML` sink this very sprint added.
-    A test naming the six would be the same list one layer down.
+    module has had `_escaped` and a docstring claiming every free-text field
+    went through it. Six fields did not, one of them reaching a
+    `dangerouslySetInnerHTML` sink. A test naming the six would be the same
+    list one layer down.
 
-    So this feeds `<img src=x onerror=...>` into every string field the
+    Therefore, this feeds `<img src=x onerror=...>` into every string field the
     formatters accept and asserts no unescaped `<` survives into a headline or
     a body line. A new field lands in this test the day it lands in a payload,
     without anyone remembering to add it.
@@ -594,14 +593,14 @@ def test_the_tooltips_return_data_and_never_markup():
     formatters, which is what made the port 1:1 by construction. Two of
     them returned Qt's restricted rich-text dialect - `<b>`, `<br>`,
     `&nbsp;`, the subset `QToolTip` parses - and the React side rendered
-    it through `dangerouslySetInnerHTML`. Qt was retired in sprint 7; the
+    it through `dangerouslySetInnerHTML`. Qt was retired; the
     dialect outlived the toolkit that required it.
 
     The hybrid keeps Python deciding WHAT is said and hands the TSX HOW it
     looks. Content still comes from one place, **so only presentation can
     drift** - and this is what keeps that true: the structure is pinned
     here, so a sentence moving into the renderer fails a test rather than
-    quietly becoming a second source of truth.
+    silently becoming a second source of truth.
 
     It also pins the cap that went away. `radio_tooltip_html` truncated
     every message to 70 characters, the same 70 the card's body ticker
@@ -783,11 +782,11 @@ def test_the_radio_tooltip_carries_the_nlp_corrections():
 
 
 def test_the_two_charts_bound_their_axes_to_what_they_actually_draw():
-    """The headline chart fix of sprint 8, which shipped with no guard (#966).
+    """The headline chart fix, which shipped with no guard (#966).
 
     `y_range` could go back to `None`, the two lap axes could drift apart
     again and the current-lap mark could vanish, and 218 tests would stay
-    green - the exit gate's own finding about this sprint.
+    green.
 
     Three properties, each the one that broke:
 
@@ -989,7 +988,7 @@ def test_the_view_is_what_the_qt_window_renders_line_for_line():
 
 
 def test_the_situation_card_says_out_of_range_and_never_zero_per_cent():
-    """`None` and `0` are opposite readings and would prompt opposite calls.
+    """`None` and `0` are opposite readings, so they prompt opposite calls.
 
     N27 reports None when the car ahead is beyond the overtake model's
     trained gap. Rendering that as "overtake 0%" tells the wall the model
@@ -1009,7 +1008,7 @@ def test_the_pace_chart_says_where_its_prediction_stopped():
     A tick with no `per_agent` block still carries `lap_time_s`, so the actual
     keeps being plotted while the prediction and its band stay where the last
     one was - and nothing on the chart said so. The reader saw two lines, one
-    of which had quietly become history.
+    of which had silently become history.
 
     **Only the PACE chart.** The elevation spec dimmed the tyre chart's TREND
     too, and that is backwards: the trend is a rolling mean of OBSERVED lap
@@ -1240,12 +1239,12 @@ def test_a_rewind_keeps_the_laps_it_already_observed():
     killed it. The replay is deterministic, so those observations are not
     wrong, only early. And a forward jump past the evicted range never
     re-drives them, so the prediction is gone: `history_tail` strips
-    `per_agent`, which is exactly the loss Gate A's D-11 predicted.
+    `per_agent`, which is exactly the loss a frame-indexed truncate causes.
 
     The eviction also leaked. On a tick where the arcade clock goes back
     but `strategy.latest` still lags at the old lap, it removed the future
     and `ingest_latest` re-added the lagging lap on the same tick: a store
-    holding 28/29/30 rewound to 10 ended up holding **only lap 30** — it
+    holding 28/29/30 rewound to 10 ended up holding **only lap 30**. It
     deleted the two it should have kept and kept the one it meant to drop.
     """
     from src.pitwall.host import PitwallHost
@@ -1308,7 +1307,7 @@ def test_the_window_learns_the_arcade_died_even_though_no_tick_arrives():
 def test_before_the_first_connection_the_chip_says_connecting():
     """Retrying is not the same as having been dropped, and the colours differ.
 
-    **And retrying is not a state either.** It was WARNING amber here while the
+    Retrying is not a state either. It was WARNING amber here while the
     DATA window's own strip painted the same socket dim grey, with its argument
     written down beside its rule: "Connecting..." is an ABSENCE, and an absence
     that borrows the green or the amber is a made-up answer. One socket, two
@@ -1599,7 +1598,7 @@ def test_an_unenacted_winner_loses_the_crown_and_says_so():
 
 
 def test_an_action_outside_the_four_scenarios_crowns_none_of_them():
-    """The exit gate's P1, and the #962 misread walking back in.
+    """Guards against the #962 misread walking back in.
 
     `ALERT` is the fifth member of the orchestrator's own action Literal
     and it is not a scenario. The highlight fell back to the Monte Carlo
@@ -1620,12 +1619,12 @@ def test_an_action_outside_the_four_scenarios_crowns_none_of_them():
 
 
 def test_a_tie_has_no_winner_and_invents_no_veto():
-    """The exit gate's P2: `max` picked whichever key it met first.
+    """`max` picked whichever key it met first.
 
     Two equal scores are not a leader and a loser. The arbitrary winner
     then marked the other `NOT TAKEN` - a claim about a decision nobody
     made - and min-max, with nothing to spread, floored BOTH of the joint
-    best to 6 %, which says the opposite of what a tie means.
+    best to 6%, which says the opposite of what a tie means.
     """
     from src.pitwall.agents_view.decision import build_scenarios
 
@@ -2040,7 +2039,7 @@ def test_the_stale_lap_that_setdefault_would_have_made_permanent():
 def test_the_pace_chart_paints_the_own_car_in_its_own_team_colour():
     """The actual line identifies a CAR, so it takes the car's colour off the wire.
 
-    It used to be `palette.INFO` unconditionally, on a window whose sibling
+    The line was `palette.INFO` unconditionally, on a window whose sibling
     already painted the same car in its team colour: the DATA tower, the track
     ring and the race trace all render NOR papaya, and this chart rendered him
     blue. `driver_colors` has been on every tick since the arcade published it;
@@ -2206,7 +2205,7 @@ def test_every_rolling_per_lap_store_is_trimmed():
 
 
 def test_the_routing_roster_is_the_routers_own_conditional_agents():
-    """`ROUTING_LANES` and the router's `activate.add(...)` must be one list.
+    """`ROUTING_LANES` must name the same agents as the router's `activate.add(...)` calls.
 
     `build_cards` gates the PIT and RAG cards on these ids and used to carry its
     own copies of the strings. Parsed with `ast` rather than imported: importing

@@ -245,8 +245,8 @@ def _tyre_stops(revealed: list[dict[str, Any]]) -> int:
     `Stint` is not the answer either: FastF1 opens a new one on each of those
     passes, and at Miami 2025 the column is a 446-row NaN block.
 
-    So the evidence is the SET: the compound changed, or the published age
-    dropped. Both ride the bulk already, so this costs one pass and no new field.
+    Therefore, the evidence is the SET: the compound changed, or the published
+    age dropped. Both ride the bulk already, so this costs one pass and no new field.
 
     Generated rows are dropped BEFORE pairing rather than skipped inside the
     loop - a car that did not finish a lap has no compound and no age, and
@@ -358,7 +358,7 @@ class SessionLaps:
         """The race as of the clock: every driver's laps up to what they finished.
 
         The reveal is **per driver and strict** - driver *d*'s lap *L* shows
-        iff `L <= laps_completed[d]`. Not the main driver's lap: at 96 % of
+        iff `L <= laps_completed[d]`. Not the main driver's lap: at 96% of
         instants the running field spans two or three different laps, so one
         shared cut lags the leaders by a lap and leaks look-ahead for the cars
         behind, simultaneously.
@@ -401,7 +401,7 @@ class SessionLaps:
         made the S3 column permanently empty.** S3's crossing IS the end of
         the lap: measured over the 920 real rows of Melbourne 2025 carrying both stamps,
         `Sector3SessionTime` lands a median 55 ms AFTER the lap's own crossing
-        `Time` and after it on 94.1 % of laps. So S1 was visible for 60.3 s of
+        `Time` and after it on 94.1% of laps. So S1 was visible for 60.3 s of
         its lap, S2 for 40.8 s, and S3 for -0.055 s. One of three columns
         showed nothing for the entire race.
 

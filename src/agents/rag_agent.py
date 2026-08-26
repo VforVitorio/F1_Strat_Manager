@@ -1,6 +1,6 @@
 """src/agents/rag_agent.py
 
-RAG Agent — extraction from N30_rag_agent.ipynb.
+RAG Agent: extraction from N30_rag_agent.ipynb.
 
 Answers regulation questions by retrieving relevant FIA Sporting Regulation
 passages from the local Qdrant vector store (built by scripts/build_rag_index.py)
@@ -17,7 +17,7 @@ run_rag_agent(question)
     and returns a RegulationContext with the LLM answer + source chunks.
 
 run_rag_agent_from_state(lap_state)
-    RSM adapter — extracts the question from lap_state["question"] and
+    RSM adapter: extracts the question from lap_state["question"] and
     delegates to run_rag_agent(). laps_df is not used (RAG is stateless
     with respect to lap data).
 """
@@ -72,10 +72,10 @@ class RegulationContext:
         Stored so the orchestrator can log which queries were issued and
         detect duplicate lookups within a race lap.
     answer:
-        LLM-generated summary of the relevant regulation articles — one to
+        LLM-generated summary of the relevant regulation articles, one to
         three sentences, enough for the Strategy Orchestrator to decide
         whether a proposed action is legal without reading the full passage.
-        Do NOT use article numbers from this field for citations — the LLM
+        Do NOT use article numbers from this field for citations: the LLM
         may hallucinate them. Use the articles field instead.
     chunks:
         The raw RegulationChunk objects returned by the retriever. Kept
@@ -84,7 +84,7 @@ class RegulationContext:
     articles:
         Deduplicated list of article references extracted from chunk metadata
         (e.g. ["Article 48.3", "Article 55.1"]). Always use this field for
-        citations in strategy log entries — chunk metadata is reliable;
+        citations in strategy log entries: chunk metadata is reliable;
         LLM answer text may hallucinate article numbers.
     """
 
@@ -95,7 +95,7 @@ class RegulationContext:
 
     @property
     def reasoning(self) -> str:
-        """Alias for answer — interface consistency with N31.
+        """Alias for answer: interface consistency with N31.
 
         N31 reads .reasoning uniformly across all agent outputs (N25-N30).
         For N30 the regulatory answer IS the reasoning: it directly informs
@@ -112,7 +112,7 @@ class RegulationContext:
 
 
 # ==============================================================================
-# LangGraph ReAct agent — lazy singleton
+# LangGraph ReAct agent: lazy singleton
 # ==============================================================================
 
 # The CONDITION rule (rules 3 and 4) is the load-bearing one and it was added after
@@ -149,15 +149,16 @@ Regulations (2023–2025). When asked a regulation question:
 Always prefer the most recent regulation year (2025) unless the question specifies otherwise.
 """
 
-# Lazy singleton — created on first call to avoid LLM connection at import time
+# Lazy singleton: created on first call to avoid LLM connection at import time
 _rag_agent = None
 
 
 def get_rag_react_agent():
     """Return the cached LangGraph ReAct agent, creating it on first call.
 
-    Uses LM Studio at localhost:1234. The agent has one tool: query_rag_tool
-    from src/rag/retriever.py. Raises ImportError when langgraph or
+    Uses OpenAI (`gpt-4.1-mini`) when `F1_LLM_PROVIDER=openai`, otherwise LM
+    Studio at localhost:1234. The agent has one tool: query_rag_tool from
+    src/rag/retriever.py. Raises ImportError when langgraph or
     langchain_openai are not installed.
     """
     global _rag_agent
@@ -200,7 +201,7 @@ def run_rag_agent(question: str) -> "RegulationContext":
     from the last message, then re-queries the retriever directly to populate
     the RegulationContext with typed RegulationChunk objects.
 
-    The retriever is called twice — once by the agent (via query_rag_tool) to
+    The retriever is called twice: once by the agent (via query_rag_tool) to
     retrieve passages for the LLM, and once here to get typed chunk objects for
     the RegulationContext. This is intentional: the @tool wrapper returns a
     formatted string, not RegulationChunk instances, so a second retrieval is
@@ -212,7 +213,7 @@ def run_rag_agent(question: str) -> "RegulationContext":
         "What is the minimum pit stop time during a race?".
 
     Returns a RegulationContext with answer, chunks, and deduplicated articles.
-    Use ctx.articles for citations — not the article numbers in ctx.answer.
+    Use ctx.articles for citations, not the article numbers in ctx.answer.
     """
     agent  = get_rag_react_agent()
     result = agent.invoke({"messages": [HumanMessage(content=question)]})
@@ -234,7 +235,7 @@ def run_rag_agent_from_state(
     lap_state: dict,
     laps_df=None,
 ) -> "RegulationContext":
-    """RSM adapter — extract the question from lap_state and call run_rag_agent.
+    """RSM adapter: extract the question from lap_state and call run_rag_agent.
 
     The RAG agent is stateless with respect to lap data: it only needs the
     natural-language question. laps_df is accepted for interface consistency
@@ -242,7 +243,7 @@ def run_rag_agent_from_state(
 
     lap_state keys:
         question (str): Natural-language FIA regulation question. Required.
-        session_meta (dict, optional): Unused — kept for interface parity.
+        session_meta (dict, optional): Unused, kept for interface parity.
 
     laps_df:
         Ignored. Accepted so the orchestrator can call all RSM adapters with

@@ -96,7 +96,7 @@ export function Tooltip({
     setBox({ left, top });
   }, [anchor, view]);
 
-  // The markup is decided HERE, from data the host produced. It used to be a
+  // The markup is decided HERE, from data the host produced, not from a
   // string of Qt's restricted rich-text dialect pushed through
   // `dangerouslySetInnerHTML` - a dead toolkit's parser constraints shaping a
   // webview popup. The content still comes from one place, so only the

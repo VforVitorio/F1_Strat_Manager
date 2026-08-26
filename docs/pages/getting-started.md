@@ -2,7 +2,7 @@
 
 **F1 StratLab is an open-source (Apache-2.0) multi-agent AI system for real-time Formula 1 race strategy**, combining seven ML models, six LangGraph sub-agents and one orchestrator. This page covers installation, for what it does and how it is wired, see the [architecture overview](#/architecture).
 
-Three ways to get F1 StratLab running on your machine, from fastest to deepest.
+Three ways to get F1 StratLab running locally, from fastest to deepest.
 
 <p align="center">
   <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab Arcade replay in action"></video>
@@ -12,13 +12,13 @@ Three ways to get F1 StratLab running on your machine, from fastest to deepest.
 
 ## 1. Install the latest wheel
 
-The quickest path. Installs the latest release into your current environment without cloning the repo.
+The quickest path. Installs the latest release into the current environment without cloning the repo.
 
 ```bash
 uv pip install https://github.com/VforVitorio/F1-StratLab/releases/download/v__DOCS_VERSION__/f1_strat_manager-__DOCS_VERSION__-py3-none-any.whl
 ```
 
-After install you have five console entry points:
+After install, five console entry points are available:
 
 ```bash
 f1-strat       # interactive launcher (recommended starting point)
@@ -34,7 +34,7 @@ First boot triggers a one-time download of the cached models and reference data 
 
 ## 2. Clone the repo for development
 
-If you want to edit the code, run the notebooks or contribute back:
+To edit the code, run the notebooks or contribute back:
 
 ```bash
 git clone https://github.com/VforVitorio/F1-StratLab.git
@@ -50,7 +50,7 @@ Run the simulation against a saved race:
 uv run scripts/run_simulation_cli.py Sakhir NOR McLaren --no-llm
 ```
 
-Drop `--no-llm` once you have an LLM provider configured (LM Studio at `http://localhost:1234/v1` or `OPENAI_API_KEY` in `.env`).
+Drop `--no-llm` once an LLM provider is configured (LM Studio at `http://localhost:1234/v1` or `OPENAI_API_KEY` in `.env`).
 
 ## 3. Docker
 
@@ -60,7 +60,7 @@ For a reproducible all-in-one setup, see [Setup and deployment](#/setup) for the
 
 - New to the architecture? Start at [Architecture overview](#/architecture).
 - Want to see the agents in action? Open [Arcade quick start](#/arcade-quick-start).
-- Looking for an API to call from your own code? Jump to [Multi-agent system](#/agents-api).
+- Looking for an API to call from external code? Jump to [Multi-agent system](#/agents-api).
 - Curious about the numbers in the thesis? See [Thesis results](#/thesis).
 
 ## FAQ
@@ -79,4 +79,4 @@ OpenAI and LM Studio, the system is provider-agnostic and does not depend on a s
 
 ### Do I need an API key?
 
-Only for the LLM synthesis layer. Run with `--no-llm` and the ML models plus Monte Carlo simulation still produce a recommendation with no key required. With LM Studio you need no key; with OpenAI, put `OPENAI_API_KEY` in your `.env`.
+Only for the LLM synthesis layer. Run with `--no-llm` and the ML models plus Monte Carlo simulation still produce a recommendation with no key required. LM Studio needs no key; OpenAI needs `OPENAI_API_KEY` in `.env`.

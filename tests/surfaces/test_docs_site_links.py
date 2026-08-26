@@ -1,8 +1,8 @@
 """Nothing on the docs site may point at a page that is not there.
 
 Written when the changelog page was removed. Deleting a page touches four
-places — `docs/app/nav.js`, the markdown that links to it, `docs/llms.txt`,
-and the file itself — and missing one of them leaves a nav entry that loads
+places: `docs/app/nav.js`, the markdown that links to it, `docs/llms.txt`,
+and the file itself. Missing one of them leaves a nav entry that loads
 nothing or a link that 404s. Neither fails any build: the site is a SPA that
 fetches markdown at runtime, so a dangling entry is a blank pane and a
 dangling link is a dead click, both silent.
@@ -52,7 +52,7 @@ def test_every_page_is_reachable_from_the_nav():
 
 
 def test_no_internal_link_points_at_a_slug_that_does_not_exist():
-    """The failure removing a page actually causes, if you miss a caller."""
+    """The failure removing a page actually causes, when a caller is missed."""
     slugs = {slug for slug, _file in _nav_entries()}
     # Not a page, but a real route the app handles.
     slugs.add("graph")

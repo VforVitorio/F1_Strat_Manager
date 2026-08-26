@@ -7,13 +7,13 @@ re-decides.
 
 The formatters MOVED rather than died: PITWALL renders by calling them, which
 is what makes the port 1:1 by construction instead of by inspection.
-**`src/arcade/dashboard/` no longer exists** - sprint 7 retired it. It is readable in git history, and what it RENDERED is committed as screenshots under `documents/dev_docs/migration/pitwall/`, which is the baseline this port was checked against.
+**`src/arcade/dashboard/` no longer exists.** It is readable in git history, and what it RENDERED is committed as screenshots under `documents/dev_docs/migration/pitwall/`, which is the baseline this port was checked against.
 
 Colours leave as `#rrggbb` because that is what both a Qt stylesheet and
 a CSS declaration take, and because the AGENTS window renders in the QT
 palette rather than in `tokens.css`'s semantics: this is a 1:1 port, and
 the two palettes deliberately differ (`test_pitwall_tokens.py`). Choosing
-the web palette here would BE the redesign sprint 8 owns.
+the web palette here would be pre-empting the redesign that owns that decision.
 """
 
 from __future__ import annotations
@@ -71,8 +71,8 @@ CONNECTION_COLOURS: dict[str, str] = {
 # removed entirely.
 #
 # The map was transcribed from `agent_card.py::_GLYPH_FOR`, which could not be
-# imported because it lived in a QFrame subclass. **That file no longer exists**
-# - sprint 7 retired `src/arcade/dashboard/` - and the comment here went on
+# imported because it lived in a QFrame subclass. **That file no longer
+# exists.** `src/arcade/dashboard/` was retired, and the comment here went on
 # naming a `test_the_status_glyphs_match_the_qt_cards` that went with it,
 # promising a comparison "for as long as both exist" when only one did. What
 # guards the map now is `test_every_console_state_has_its_own_shape`, which
@@ -177,7 +177,8 @@ def build_cards(latest: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     rag_block = per.get("rag") or per.get("regulation_context")
     # The ids come from the router's own roster, not from literals here. A
     # second place that knows "N28 means pit" is the twin this repository
-    # produces most, and the strip below the contingencies reads the same table.
+    # produces most, and `test_pitwall_agents_view` pins this roster against
+    # the router's own set.
     pit_id, rag_id = (agent_id for agent_id, _ in ROUTING_LANES)
     rag_active = rag_id in active
 

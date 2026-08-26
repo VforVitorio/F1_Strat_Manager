@@ -6,10 +6,10 @@ overwrites the latest payload; everything above it reads that slot.
 
 **Why one client for two windows.** Two would double the parse cost and put
 the sequence in two places, and the whole point of the sequence is that
-there is exactly one authority on what "the latest tick" is. Measured
-during the design gate, two independent sockets against the real server do
-NOT drift (200/200 identical sequences), so this is not a correctness fix -
-it is one place to hold the state rather than two.
+there is exactly one authority on what "the latest tick" is. Two independent
+sockets against the real server do NOT drift, measured at 200/200 identical
+sequences, so this is not a correctness fix - it is one place to hold the
+state rather than two.
 
 This is deliberately NOT the Qt client renamed. That one is a `QThread`
 emitting Qt signals, and Qt is leaving.
@@ -36,8 +36,8 @@ SIGNAL_LOG_DEPTH = 64
 class TickSignals(NamedTuple):
     """What one received tick said about continuity, kept after the tick is gone.
 
-    `arrival` is a monotonic counter, NOT the producer's `seq`, and that is the
-    whole point: `seq` restarts at 1 when the arcade relaunches, so a range
+    `arrival` is a monotonic counter, NOT the producer's `seq`, because `seq`
+    restarts at 1 when the arcade relaunches, so a range
     expressed in `seq` either excludes the new run's entries (`30 > 400` is
     false) or becomes ambiguous when two runs' numbers collide inside one log.
     """
@@ -149,7 +149,7 @@ class ArcadeStreamClient:
         between them: the caller then folds signals belonging to ticks NEWER than
         the payload it is about to serve, while its cursor only advances to that
         payload - so the same entries are folded again on the next poll. Measured
-        on a live producer, that over-counts `dropped` by 66 %, and every phantom
+        on a live producer, that over-counts `dropped` by 66%, and every phantom
         count is a spurious full-buffer eviction in the panel this exists to
         protect.
 

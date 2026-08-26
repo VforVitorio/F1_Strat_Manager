@@ -13,8 +13,8 @@
  * **It uses `overflow: hidden`, which `.agent-card` deliberately does not.**
  * That card keeps `overflow: visible` under a comment about a scrolling
  * ancestor clipping its popup. `Tooltip` portals to `document.body` now, so no
- * ancestor can clip it, and the comment is describing a constraint that has
- * been gone since sprint 8. Do not "restore" `visible` here.
+ * ancestor can clip it, and the comment is describing a constraint that no
+ * longer applies. Do not "restore" `visible` here.
  *
  * The frozen-feed `filter: brightness(0.72)` reaches this card through
  * `.agents-body`, and that is correct: a contingency is exactly as stale as the

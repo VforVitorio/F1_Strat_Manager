@@ -1,16 +1,16 @@
 <mxfile host="app.diagrams.net">
-  <diagram id="n27" name="N27 — Race Situation Agent">
+  <diagram id="n27" name="N27, Race Situation Agent">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="title" value="N27 — Race Situation Agent" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="title" value="N27, Race Situation Agent" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="230" y="20" width="500" height="30" as="geometry" />
         </mxCell>
 
         <!-- INPUT -->
-        <mxCell id="input" value="&lt;b&gt;Input — context_slice&lt;/b&gt;&lt;br/&gt;lap · position · gap_ahead&lt;br/&gt;DRS window · track_status · SC history" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+        <mxCell id="input" value="&lt;b&gt;Input, context_slice&lt;/b&gt;&lt;br/&gt;lap · position · gap_ahead&lt;br/&gt;DRS window · track_status · SC history" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="295" y="70" width="310" height="60" as="geometry" />
         </mxCell>
 

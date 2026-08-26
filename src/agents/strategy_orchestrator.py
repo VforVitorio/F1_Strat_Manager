@@ -1,15 +1,15 @@
 """src/agents/strategy_orchestrator.py
 
-Strategy Orchestrator — extraction from N31_strategy_orchestrator.ipynb.
+Strategy Orchestrator: extraction from N31_strategy_orchestrator.ipynb.
 
-End-to-end multi-agent supervisor that integrates N25–N30 sub-agents through
+End-to-end multi-agent supervisor that integrates N25-N30 sub-agents through
 three processing layers:
 
-  Layer 1 — MoE routing: deterministic if-else rules decide which conditional
+  Layer 1 (MoE routing): deterministic if-else rules decide which conditional
              agents (N28, N30) to activate based on N26/N27/N29 outputs.
-  Layer 2 — Monte Carlo simulation: draws CFG.n_sim samples from sub-agent
+  Layer 2 (Monte Carlo simulation): draws CFG.n_sim samples from sub-agent
              probability distributions and evaluates four strategy candidates.
-  Layer 3 — LLM synthesis: structured-output LLM aggregates all reasoning strings
+  Layer 3 (LLM synthesis): structured-output LLM aggregates all reasoning strings
              and MC scores into a StrategyRecommendation.
 
 Entry points
@@ -17,7 +17,7 @@ Entry points
 run_strategy_orchestrator(race_state, lap_state)
     Primary entry point. Accepts a RaceState Pydantic model and a lap_state dict
     (compatible with the FastF1 entry points of the sub-agents). Every sub-agent
-    is self-contained through the arguments passed to it here — nothing needs to
+    is self-contained through the arguments passed to it here. Nothing needs to
     be set up on any sub-agent module beforehand.
 
 run_strategy_orchestrator_from_state(race_state, laps_df)
@@ -27,9 +27,9 @@ run_strategy_orchestrator_from_state(race_state, laps_df)
 
 References
 ----------
-Heilmeier et al. (2020) ApplSci 10/4229 — MC motorsport simulation
-Wang et al. (2024) arXiv:2406.04692 — MoA reasoning aggregation
-Liu et al. (2024) arXiv:2402.02392 — DeLLMa decision under uncertainty with LLM
+Heilmeier et al. (2020) ApplSci 10/4229: MC motorsport simulation
+Wang et al. (2024) arXiv:2406.04692: MoA reasoning aggregation
+Liu et al. (2024) arXiv:2402.02392: DeLLMa decision under uncertainty with LLM
 """
 
 import json
@@ -121,19 +121,18 @@ class OrchestratorCFG:
 
     temperature is REQUESTED, not guaranteed. Whether it survives depends on the
     model family: langchain_openai keeps it for gpt-4.1-mini (what the sub-agents
-    run) and silently discards it for the gpt-5.x family — the client attribute
+    run) and silently discards it for the gpt-5.x family. The client attribute
     comes back None and the key never reaches the request payload. So with the
     default model_name below, Layer 3 samples at the provider default and this
     value does nothing. Measured 2026-07-27 over 41 laps: two identical passes
     disagreed on confidence in 36, on pit_lap_target in 23, and produced opposite
-    actions on the one lap where the call actually changed. An earlier version of
-    this docstring promised the setting guaranteed determinism here, which was
-    false for every model this project has shipped with.
+    actions on the one lap where the call actually changed. The setting does not
+    guarantee determinism for any model this project has shipped with.
 
     _get_orchestrator_llm warns when the request is dropped rather than papering
     over it. Do NOT read a surviving temperature as a promise of determinism
-    either — it narrows sampling, it does not remove it.
-    See documents/audits/AUDIT_ORCHESTRATOR_MEMORY.md §1.1.
+    either: it narrows sampling, it does not remove it.
+    See documents/audits/AUDIT_ORCHESTRATOR_MEMORY.md, section 1.1.
     """
 
     model_name:             str   = "gpt-5.4-mini"
@@ -146,12 +145,12 @@ class OrchestratorCFG:
 
 CFG = OrchestratorCFG()
 
-# Lazy LLM singleton — created on first call to avoid connection at import time
+# Lazy LLM singleton, created on first call to avoid connection at import time
 _orchestrator_llm = None
 
 
 def _temperature_was_dropped(llm, requested: float | None) -> bool:
-    """True when the client did not keep the temperature we asked it for.
+    """True when the client did not keep the requested temperature.
 
     Split out from _get_orchestrator_llm so the check is testable without an API
     key, a network call or a provider: it only reads an attribute off whatever
@@ -159,7 +158,7 @@ def _temperature_was_dropped(llm, requested: float | None) -> bool:
 
     langchain_openai does not raise when a model family rejects the parameter, it
     nulls the attribute and omits the key from the payload. So `None` on a client
-    we explicitly gave a number is the signal, and it is the only one available
+    given an explicit number is the signal, and it is the only one available
     short of inspecting the request.
     """
     return requested is not None and getattr(llm, "temperature", None) is None
@@ -172,7 +171,7 @@ def _get_orchestrator_llm():
     (requires OPENAI_API_KEY); anything else defaults to LM Studio at CFG.base_url.
 
     Warns once, on creation, when CFG.temperature does not survive into the
-    client — see OrchestratorCFG. The warning is deliberately not a raise: the
+    client (see OrchestratorCFG). The warning is deliberately not a raise: the
     project ships on a model that drops it, so raising would take the whole
     orchestrator down over a setting Layer 3 has never actually had.
 
@@ -189,7 +188,7 @@ def _get_orchestrator_llm():
             )
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
         if provider == "openai":
-            # No parallel_tool_calls — OpenAI rejects it when no tools are specified
+            # No parallel_tool_calls: OpenAI rejects it when no tools are specified
             llm = ChatOpenAI(model=CFG.model_name, temperature=CFG.temperature, timeout=120, max_retries=1)
         else:
             llm = ChatOpenAI(
@@ -212,7 +211,7 @@ def _get_orchestrator_llm():
                 "See documents/audits/AUDIT_ORCHESTRATOR_MEMORY.md, section 1.1.",
                 CFG.temperature, CFG.model_name,
             )
-        # _LLMSynthesis only has the 3 fields the LLM actually fills —
+        # _LLMSynthesis only has the 3 fields the LLM actually fills.
         # scenario_scores (dict) and regulation_context are attached in code after.
         _orchestrator_llm = llm.with_structured_output(_LLMSynthesis)
     return _orchestrator_llm
@@ -225,7 +224,7 @@ def _get_orchestrator_llm():
 class RaceState(BaseModel):
     """Per-lap context slice passed to the Strategy Orchestrator.
 
-    driver identifies the driver whose strategy is being evaluated — all gap
+    driver identifies the driver whose strategy is being evaluated. All gap
     and pace features are relative to this driver.
 
     lap and total_laps enable race-percentage features used by N28 (lap_race_pct)
@@ -236,15 +235,15 @@ class RaceState(BaseModel):
     gap_ahead_s and pace_delta_s reach the LLM synthesis prompt's RACE CONTEXT
     block. They do NOT feed the overtake model: N27 computes its own pair gap
     from laps_df, and this line claimed otherwise for as long as it existed.
-    gap_ahead_s is None when there is no car directly ahead to measure - we
-    lead, or the pos-1 car is not classified this lap (#878). Render the
+    gap_ahead_s is None when there is no car directly ahead to measure: the
+    driver leads, or the pos-1 car is not classified this lap (#878). Render the
     absence; never substitute a number for it.
 
     weather fields (air_temp, track_temp, rainfall) are forwarded to N14 (SC model)
     as contextual features.
 
     radio_msgs and rcm_events are pre-filtered to the current lap ±1 window by the
-    caller before passing to N29 — the orchestrator does not filter them itself.
+    caller before passing to N29. The orchestrator does not filter them itself.
     Items may be RadioMessage/RCMEvent instances or dicts with matching fields;
     the orchestrator converts dicts automatically before passing to N29.
 
@@ -309,7 +308,7 @@ class Contingency(BaseModel):
         Plain-language description of the event that activates this branch.
         Examples: "SC deployed within 3 laps", "gap to SAI drops below 0.8 s",
         "rain intensity increases". Must be specific enough for a human to
-        recognise the trigger condition in live telemetry — vague triggers
+        recognise the trigger condition in live telemetry. Vague triggers
         ("things go wrong") are rejected implicitly by the LLM prompt.
     switch_to:
         The replacement action to execute when the trigger fires. Restricted
@@ -335,7 +334,7 @@ class Contingency(BaseModel):
 
 
 class _LLMSynthesis(BaseModel):
-    """Strict-schema model passed to with_structured_output — only the fields the LLM fills.
+    """Strict-schema model passed to with_structured_output: only the fields the LLM fills.
 
     OpenAI structured output requires additionalProperties=false on all objects,
     which free-form Dict fields violate. scenario_scores and regulation_context
@@ -350,7 +349,7 @@ class _LLMSynthesis(BaseModel):
     """
     model_config = ConfigDict(extra="forbid")
 
-    # ── Primary decision — kept for MC grounding + backward compatibility ─────
+    # ── Primary decision: kept for MC grounding + backward compatibility ─────
     action:             _ACTION_VALUES   = Field(
         description="STAY_OUT | PIT_NOW | UNDERCUT | OVERCUT | ALERT",
     )
@@ -362,7 +361,7 @@ class _LLMSynthesis(BaseModel):
         description="LLM self-assessed certainty",
     )
 
-    # ── Pit execution details — recovers N28 data that was previously discarded
+    # ── Pit execution details: recovers N28 data that was previously discarded
     pit_lap_target:     Optional[int]              = Field(
         default=None,
         description="Absolute lap number of the planned stop (None when STAY_OUT)",
@@ -376,7 +375,7 @@ class _LLMSynthesis(BaseModel):
         description="Three-letter code of the rival targeted by an undercut/overcut",
     )
 
-    # ── Driver-side instructions — new dimension for pace management ──────────
+    # ── Driver-side instructions: new dimension for pace management ──────────
     pace_mode:          _PACE_MODE_VALUES = Field(
         description="PUSH | NEUTRAL | MANAGE | LIFT_AND_COAST — what to tell the driver now",
     )
@@ -388,7 +387,7 @@ class _LLMSynthesis(BaseModel):
         description="AGGRESSIVE | BALANCED | DEFENSIVE — championship-aware risk stance",
     )
 
-    # ── Multi-lap planning — the big new reasoning surface ────────────────────
+    # ── Multi-lap planning: the big new reasoning surface ────────────────────
     contingencies:      list[Contingency] = Field(
         default_factory=list,
         max_length=4,
@@ -408,7 +407,7 @@ class _LLMSynthesis(BaseModel):
 class StrategyRecommendation(BaseModel):
     """Final structured output of the Strategy Orchestrator (N31).
 
-    v2 schema rationale — the v1 schema collapsed ~30 sub-agent fields into a
+    v2 schema rationale: the v1 schema collapsed ~30 sub-agent fields into a
     single five-value action, discarding rich execution detail from N28
     (recommended_lap, compound_recommendation, undercut_target) and leaving
     no room for multi-lap planning. v2 keeps the discrete action as the
@@ -419,7 +418,7 @@ class StrategyRecommendation(BaseModel):
     planner that communicates a genuine strategy.
 
     action:
-        Primary decision — one of five values. STAY_OUT defers the pit stop,
+        Primary decision: one of five values. STAY_OUT defers the pit stop,
         PIT_NOW calls an immediate box, UNDERCUT pits before the target rival
         to gain track position, OVERCUT stays out to exploit fresh-tyre pace
         later, and ALERT flags a critical event (radio PROBLEM, SC deployed)
@@ -428,12 +427,12 @@ class StrategyRecommendation(BaseModel):
         simulate_lap_window and to a colour badge in the UI.
     reasoning:
         The LLM's narrative synthesis of all sub-agent inputs, MC scores, and
-        regulation constraints — forwarded verbatim to the UI and post-race
+        regulation constraints, forwarded verbatim to the UI and post-race
         analysis. Use this for the human-readable "why", use the structured
         fields below for machine-readable decisions.
     confidence:
         The LLM's self-assessed certainty in [0, 1]. Treat it as a qualitative
-        signal rather than a calibrated probability — models tend to
+        signal rather than a calibrated probability. Models tend to
         over-report certainty on borderline decisions.
     pit_lap_target:
         Absolute lap number of the planned stop. Populated whenever action is
@@ -450,7 +449,7 @@ class StrategyRecommendation(BaseModel):
         (e.g. "SAI"). Non-None only for UNDERCUT / OVERCUT actions. Recovers
         N28.undercut_target which v1 silently discarded.
     pace_mode:
-        Driving instruction for the immediate next laps — PUSH, NEUTRAL,
+        Driving instruction for the immediate next laps: PUSH, NEUTRAL,
         MANAGE, or LIFT_AND_COAST. This is a new dimension introduced in v2:
         previously the orchestrator only answered "when to pit" without any
         signal on how to drive between pit stops. A neutral default keeps
@@ -461,7 +460,7 @@ class StrategyRecommendation(BaseModel):
         predicts. Rendered by the UI as a radio-style instruction. None when
         the LLM prefers not to commit to a precise number.
     risk_posture:
-        AGGRESSIVE / BALANCED / DEFENSIVE — captures the championship context
+        AGGRESSIVE / BALANCED / DEFENSIVE: captures the championship context
         the LLM is reasoning under. An AGGRESSIVE posture relaxes cliff risk
         tolerance and favours undercut attempts; DEFENSIVE prioritises track
         position over potential gain. Exposing this field makes the stance
@@ -473,7 +472,7 @@ class StrategyRecommendation(BaseModel):
         full list without scrolling. An empty list means the primary action
         is executed unconditionally.
     key_risks:
-        Short bullet list (max five) of the top risks the LLM wants to flag —
+        Short bullet list (max five) of the top risks the LLM wants to flag:
         e.g. "cliff P10 at lap 22 is uncomfortably close", "SC probability
         rising in the last three laps". Surfaces reasoning that would
         otherwise be buried inside the prose narrative.
@@ -483,7 +482,7 @@ class StrategyRecommendation(BaseModel):
         plan, stop on lap 32". Lets the UI render a stint-plan bar without
         parsing the reasoning string.
     scenario_scores:
-        Full MC output dict per strategy — {"STAY_OUT": {"E", "P10", "P90",
+        Full MC output dict per strategy: {"STAY_OUT": {"E", "P10", "P90",
         "score"}, ...}. Attached in code after the LLM call, not filled by
         the LLM itself. Downstream consumers can inspect the distribution
         without re-running the simulation.
@@ -560,7 +559,7 @@ class StrategyRecommendation(BaseModel):
 
 
 # ==============================================================================
-# Layer 1 — MoE routing
+# Layer 1: MoE routing
 # ==============================================================================
 
 # RCM event_type values (radio_agent._classify_rcm_event naming) that count as
@@ -570,7 +569,7 @@ class StrategyRecommendation(BaseModel):
 # 'event_type': 'RED_FLAG', ...}. TIME_PENALTY is listed for when an RCM event
 # actually reaches this set; as of writing, radio_agent._build_alerts only
 # forwards RCM events whose event_type is in _SAFETY_FLAGS, which excludes
-# TIME_PENALTY — so it currently never arrives in radio_alerts. That is a
+# TIME_PENALTY, so it currently never arrives in radio_alerts. That is a
 # separate, upstream gap in src/agents/radio_agent.py, not fixed here.
 _RCM_PENALTY_EVENT_TYPES = {"RED_FLAG", "TIME_PENALTY"}
 
@@ -581,34 +580,35 @@ def _decide_agents_to_call(
     radio_alerts:  list,
     sc_currently_active: bool = False,
 ) -> set:
-    """Layer 1 MoE routing — returns set of conditional agent keys to activate.
+    """Layer 1 MoE routing: returns set of conditional agent keys to activate.
 
     N25, N26, N27, N29 are always called by run_strategy_orchestrator and are
     not returned here. This function only decides N28 and N30.
 
     tire_warning is TireOutput.warning_level ("OK" | "MONITOR" | "PIT_SOON").
     sc_prob_3lap is RaceSituationOutput.sc_prob_3lap from N27.
-    radio_alerts is RadioOutput.alerts — each dict has keys 'source' and 'intent'
+    radio_alerts is RadioOutput.alerts: each dict has keys 'source' and 'intent'
     or 'event_type'.
 
-    **N28 — pit strategy agent** activates when the tyre is near the cliff
+    **N28 (pit strategy agent)** activates when the tyre is near the cliff
     (tire_warning == PIT_SOON) or when the radio signals a car problem that
     could force an unplanned stop (PROBLEM / WARNING intent). A firing N28 is
-    our proxy for "we are about to change compound", which is the canonical
+    the signal that a compound change is imminent, which is the canonical
     trigger for the regulation check.
 
-    **N30 — RAG regulation check** activates only when the upcoming decision
-    actually touches sporting-regulation territory, so we don't burn Qdrant
-    calls on quiet cruise laps where no rule is relevant:
+    **N30 (RAG regulation check)** activates only when the upcoming decision
+    actually touches sporting-regulation territory, so Qdrant is not queried
+    on quiet cruise laps where no rule is relevant:
 
-    * N28 is active  → imminent pit / compound change → query tyre-compound
-      and pit-lane rules (mandatory dry compound, unsafe release, pit window).
-    * sc_prob_3lap > threshold → SC deployment likely → query SC procedure
-      (delta lap time, pit-lane closure, double-yellow restart).
-    * Radio carries a FIA-facing alert — an RCM alert whose event_type is in
+    * N28 is active, meaning an imminent pit or compound change: query
+      tyre-compound and pit-lane rules (mandatory dry compound, unsafe
+      release, pit window).
+    * sc_prob_3lap > threshold, meaning SC deployment is likely: query SC
+      procedure (delta lap time, pit-lane closure, double-yellow restart).
+    * Radio carries a FIA-facing alert: an RCM alert whose event_type is in
       _RCM_PENALTY_EVENT_TYPES (e.g. RED_FLAG), or a radio-transcript alert
-      with a WARNING intent → regulation lookup for the infringement the
-      steward is flagging.
+      with a WARNING intent, triggers a regulation lookup for the
+      infringement the steward is flagging.
 
     Any of the three conditions independently activates N30. The orchestrator
     LLM then sees the retrieved regulation snippet in its prompt and must
@@ -626,14 +626,14 @@ def _decide_agents_to_call(
     if sc_prob_3lap > CFG.sc_prob_threshold:
         activate.add("N30")
 
-    # RCM-sourced alerts (source='rcm') carry no 'intent' key at all — only
+    # RCM-sourced alerts (source='rcm') carry no 'intent' key at all: only
     # radio-transcript alerts (source='radio') do, and radio_agent.CFG
     # .alert_intents is ("PROBLEM", "WARNING"); no producer ever emits
     # intent == "PENALTY". `alert_intents & {"PENALTY", "WARNING"}` was
     # therefore unreachable on its PENALTY half. Route penalty/red-flag RCM
     # alerts on their real 'event_type' field instead, unioned with the
     # still-valid WARNING intent check so nothing that used to fire stops
-    # firing (NR-04, #398).
+    # firing (#398).
     alert_event_types = {a.get("event_type", "") for a in radio_alerts}
     if (alert_intents & {"WARNING"}) or (alert_event_types & _RCM_PENALTY_EVENT_TYPES):
         activate.add("N30")
@@ -642,8 +642,8 @@ def _decide_agents_to_call(
         activate.add("N30")
 
     # SC physically deployed (confirmed by RCM, not just predicted): force
-    # N28 so the pit decision is re-evaluated, and N30 so we consult the
-    # sporting regulations covering pitting under SC and pit-lane closure.
+    # N28 so the pit decision is re-evaluated, and N30 so the sporting
+    # regulations covering pitting under SC and pit-lane closure are consulted.
     if sc_currently_active:
         activate.add("N28")
         activate.add("N30")
@@ -652,7 +652,7 @@ def _decide_agents_to_call(
 
 
 # ==============================================================================
-# Layer 2 — Monte Carlo simulation
+# Layer 2: Monte Carlo simulation
 # ==============================================================================
 
 # Simulation constants. Cite per constant, not as a block: the earlier blanket
@@ -672,7 +672,7 @@ CLIFF_LOSS   = 0.80  # s/lap lost when tyre passes the cliff.
                      # No counterpart in Heilmeier, who models degradation as linear
                      # (t_tire = k0 + k1*age) with no cliff term. About 14x the
                      # degradation rate measured on this repo's 70 races (HARD .052 /
-                     # MEDIUM .059 / SOFT .072 s/lap), so it stands as a cliff parameter,
+                     # MEDIUM .059 / SOFT .072 s/lap), so it is a cliff parameter,
                      # not a Heilmeier citation.
 POS_GAP_S    = 1.50  # seconds per position gap (midfield approximation).
                      # LEGACY PATH ONLY. The projection scoring counts the actual
@@ -711,7 +711,7 @@ def _tyre_term(deg_cost_s: float | None, old_laps: int, fresh_laps: int) -> floa
     fact rather than by a correction term.
 
     With a measured signal, charge the laps spent on the OLD set: a tyre 0.4 s off
-    the pace costs 0.4 s every lap you keep it, whether or not the cliff is near.
+    the pace costs 0.4 s every lap it is kept, whether or not the cliff is near.
     Without one, fall back to ``FRESH_GAIN``, the hardcoded 0.25 s/lap credit for
     the laps spent on the NEW set, which is the same quantity guessed at instead of
     read. Both are seconds, applied before the conversion to positions.
@@ -738,7 +738,7 @@ def simulate_lap_window(
     """Estimate position gain vs STAY_OUT baseline over a W-lap window.
 
     Returns a position-equivalent score (positive = positions gained).
-    STAY_OUT is the reference — all other strategies are scored relative to it.
+    STAY_OUT is the reference. All other strategies are scored relative to it.
 
     strategy:
         One of STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT.
@@ -824,14 +824,14 @@ def simulate_lap_window(
 # caller that knows the GP must pass its own figure through pit_context, because
 # a 7.9 s spread is the difference between a stop that costs a place and one that
 # does not. The 20.0 fallback is a traversal, so adding a ~2.6 s stop lands near
-# the 22.6 s pooled green pit loss measured over this repo's 70 races (n=1746) —
-# do NOT pass that 22.6 s figure in as traversal or the stop is counted twice.
+# the 22.6 s pooled green pit loss measured over this repo's 70 races (n=1746).
+# Do NOT pass that 22.6 s figure in as traversal or the stop is counted twice.
 DEFAULT_PIT_TRAVERSAL_S = 20.0
 
 # Physical-stop prior used for a RIVAL when the caller cannot supply one: the mode
 # of N15's conservative Triangular(2.2, 2.8, 3.8). A rival who is in the pit lane
-# has to lose the same kind of time we would, and defaulting that to zero made
-# their stop free — a car ahead could serve a stop and stay ahead, which is a
+# has to lose the same kind of time a real stop would cost, and defaulting that to zero made
+# their stop free: a car ahead could serve a stop and stay ahead, which is a
 # sentinel wearing a plausible number (the #428 lesson in a new place).
 RIVAL_STOP_PRIOR_S = 2.8
 
@@ -844,7 +844,7 @@ def _rival_states_from_lap_state(rivals: list[dict], pit_context: dict | None, t
     gap and the projection drops it from the count rather than inventing a zero.
 
     ``traversal_s`` is threaded in so a pitting rival is charged the same kind of
-    pit loss we charge ourselves. Callers can override per rival through
+    pit loss charged for the driver's own stop. Callers can override per rival through
     ``pit_context['rival_pit_loss_s']`` once that figure is available per car.
     """
     from src.agents.position_projection import RivalState
@@ -872,7 +872,7 @@ def race_context_from_lap_state(lap_state: dict | None, race_state=None) -> dict
     """Assemble the projection's race context from a lap_state, or an empty dict.
 
     Built here rather than at each surface so the CLI, the arcade and the backend
-    cannot drift on what "race context" means — three hand-mirrored copies of a
+    cannot drift on what "race context" means: three hand-mirrored copies of a
     payload is how this codebase acquired most of its cross-surface bugs.
 
     Everything is optional and everything degrades honestly: no rivals means the
@@ -921,9 +921,9 @@ def _has_usable_gaps(rivals: list[dict] | None) -> bool:
 
     A list of cars whose intervals are all unknown is truthy but carries no
     geometry: projecting from it counted zero rivals and reported P1 with no
-    uncertainty, which is a confident "you will finish first" assembled from no
-    information at all. Unknown is not zero, and a list of unknowns is not a
-    race state — those runs belong on the legacy path.
+    uncertainty, which is a confident "finishes first, guaranteed" assembled from
+    no information at all. Unknown is not zero, and a list of unknowns is not a
+    race state. Those runs belong on the legacy path.
 
     NaN counts as unknown, not as a number. A pandas frame yields NaN where a
     dict yields None, and a single NaN gap is not a small error: it propagates
@@ -956,7 +956,7 @@ def _ordered_by(choices: list[str], preference: list[str]) -> list[str]:
     """``choices`` sorted to follow ``preference``, keeping anything it omits.
 
     Used to put the nearest post-pit-cycle rival at the head of an eligibility
-    list, so ``target`` names the car we will actually be racing rather than
+    list, so ``target`` names the car actually being raced rather than
     whichever one the rivals list happened to mention first.
     """
     rank = {driver: index for index, driver in enumerate(preference)}
@@ -964,10 +964,10 @@ def _ordered_by(choices: list[str], preference: list[str]) -> list[str]:
 
 
 def _clean_air_available(rival_states: list, gp_name: str | None) -> float:
-    """This circuit's clean-air gain, but only if a car ahead is boxing from our wake.
+    """This circuit's clean-air gain, but only if a car ahead is boxing from the driver's wake.
 
     Two conditions, both necessary. Someone directly ahead has to be entering the
-    pit lane, because that is what vacates the road; and we have to be inside the
+    pit lane, because that is what vacates the road, and the driver has to be inside the
     band the measurement was taken at, because the number describes what a car
     within two seconds gains and says nothing about a car eight seconds back.
     Fail either and the gain is zero, which is what makes an overcut a real move
@@ -1000,7 +1000,7 @@ def _bounded_by_race_end(racing_laps: float, laps_remaining: int) -> float:
 def _position_or(reported, counted: int) -> int:
     """The reported classification position, or the one counted from the gaps.
 
-    Positions start at P1, so anything at or below zero is not a position — it is
+    Positions start at P1, so anything at or below zero is not a position: it is
     the NaN-coerced sentinel that once let a leader "find" the car that had just
     crashed (#428). Such a value falls through to the counted figure rather than
     being trusted.
@@ -1019,13 +1019,13 @@ def _lap_count_or_zero(reported) -> int:
     return int(number)
 
 
-# Which candidate wins when two score EXACTLY the same. This used to be decided by
-# `max`, which returns the first item it saw, so the answer came from the order
-# `_run_mc_simulation` happens to build its dict in. That produced the right answer
+# Which candidate wins when two score EXACTLY the same is decided by this stated
+# order, not by `max`, which would return whichever item happens to come first in
+# `_run_mc_simulation`'s dict. Relying on `max` would produce the right answer
 # (STAY_OUT is first, and conservative is the right default for a genuine tie) for
-# the wrong reason, and it was invisible: nothing recorded that a tie had happened.
+# the wrong reason, invisibly: nothing would record that a tie had happened.
 #
-# It is not a rare corner either. Over 415 real laps the audit found six near-ties,
+# It is not a rare corner either. Over 415 real laps there were six near-ties,
 # ALL SIX on decision laps, three of them exact and falling on real pit stops (#645).
 # The margin is smallest exactly where the call is hardest, which is the opposite of
 # the usual case, so this list decides real races and deserves to be a decision.
@@ -1054,7 +1054,7 @@ def mc_decision_margin(mc_results: dict) -> float | None:
     Exists because a caller could previously not tell "the model preferred this by
     a clear margin" from "two candidates scored identically and one was picked".
     Both arrive as the same bare string, and the second is a materially different
-    statement about the lap: a tie means the decision is genuinely balanced, which
+    statement about the lap: a tie means the decision is balanced, which
     is information a strategist wants rather than noise to hide.
 
     Returns None when fewer than two candidates are scoreable, because there is no
@@ -1072,7 +1072,7 @@ def best_mc_candidate(mc_results: dict) -> str:
     """The argmax over scored candidates, skipping the ones never offered.
 
     Four call sites used to do ``max(results, key=lambda s: results[s]["score"])``
-    directly, which raises the moment a score is None — and None is exactly what
+    directly, which raises the moment a score is None. None is exactly what
     the projection engine emits for a candidate with no valid target. Sharing one
     helper is also what stops the four from drifting apart, which is how this
     codebase acquired most of its duplicate-logic bugs.
@@ -1120,7 +1120,7 @@ def _format_mc_row(name: str, cell: dict) -> str:
 
     An ineligible candidate is stated as such rather than formatted: ``%+.3f``
     raises on None, and a candidate with no target is information the model
-    should have — "there is nobody to undercut" is a reason, not a gap.
+    should have: "there is nobody to undercut" is a reason, not a gap.
     """
     if cell.get("score") is None:
         reason = "no valid target" if cell.get("eligible") is False else "not scored"
@@ -1152,19 +1152,19 @@ def _run_projection_mc(
 
     Same draws, same window, same alpha·E + (1−alpha)·P10 as the legacy path; what
     changes is the currency. Each candidate is projected against the ACTUAL cars on
-    track (``position_projection``), so the pit lane, the traffic we rejoin into and
+    track (``position_projection``), so the pit lane, the traffic rejoined into and
     the still-owed stop all enter the score as cars rather than as constants.
 
     Draws are shared across candidates (common random numbers) and across the two
     neutralisation regimes: a draw that samples a Safety Car is scored with the
     measured racing-lap count for one, and the same draw under green with the full
-    window. That per-draw split is why the Art. 55.17 endgame needs no rail — with
+    window. That per-draw split is why the Art. 55.17 endgame needs no rail: with
     the race finishing behind the Safety Car there are no racing laps left, so a
     stop buys nothing and staying out wins on the numbers.
 
     Returns the usual four keys, each with E / P10 / P90 / score, plus ``eligible``
     and ``target``. A candidate with no valid target is ``eligible: false`` with a
-    ``score`` of None — never a numeric sentinel, which is the 0.5 coin-flip that
+    ``score`` of None, never a numeric sentinel, which is the 0.5 coin-flip that
     used to hand UNDERCUT a bonus with no target at all (#434).
     """
     import numpy as _np
@@ -1193,12 +1193,12 @@ def _run_projection_mc(
     # the rival really pays it too, and not otherwise.
     pit_loss_s = traversal_s + _np.asarray(pit_s, dtype=float)
 
-    # Our position, preferably as reported, otherwise counted from the same gaps
+    # The driver's position, preferably as reported, otherwise counted from the same gaps
     # the projection is about to use. It has to be derived rather than defaulted:
     # the featured parquet drops laps run under a Safety Car, so on exactly the
     # laps this layer matters most the driver row is missing and the position
-    # arrives as None. Defaulting that to 1 claimed we were leading the race.
-    # Counting rivals ahead is not a guess — it is the same arithmetic that
+    # arrives as None. Defaulting that to 1 claimed the driver was leading the race.
+    # Counting rivals ahead is not a guess: it is the same arithmetic that
     # produces the projected position, so both sides of the delta agree.
     counted_position = 1 + sum(1 for state in rival_states if state.is_ahead)
     current_position = _position_or(position, counted_position)
@@ -1215,13 +1215,13 @@ def _run_projection_mc(
         onset_rate = measured_neutralisation_rate(context.get("gp_name"))
     q_f = future_neutralisation_probability(float(onset_rate), remaining)
 
-    # ONE source for which neutralisation we are in: the saving passed by the
+    # ONE source for which neutralisation is active: the saving passed by the
     # caller already encodes it (VSC_PIT_BONUS vs SC_PIT_BONUS), so reading a
-    # separate `vsc_active` here as well let the two disagree — a VSC saving
+    # separate `vsc_active` here as well let the two disagree: a VSC saving
     # scored against a full-SC racing window.
     is_vsc = neutralisation_saving_s <= VSC_PIT_BONUS
-    # `is None`, not `or`: zero racing laps is the Art. 55.17 endgame — the race
-    # finishes behind the Safety Car — and it is the single most important value
+    # `is None`, not `or`: zero racing laps is the Art. 55.17 endgame (the race
+    # finishes behind the Safety Car), and it is the single most important value
     # a caller can pass here. Under `or` it was falsy and got replaced by the
     # measured average, so the case could not be expressed at all and a test that
     # passed 0.0 silently received 2.61 and went green for the wrong reason.
@@ -1233,7 +1233,7 @@ def _run_projection_mc(
 
     # The window cannot outlast the race. A decision three laps from the flag
     # cannot bank five laps of racing, and under a neutralisation that runs to
-    # the end it banks none at all — which is the Art. 55.17 endgame the docs
+    # the end it banks none at all, which is the Art. 55.17 endgame the docs
     # describe, and until this clamp existed the code could not express it: the
     # racing-lap count was always the measured average, so a stop always looked
     # as though it had laps left to pay itself back over.
@@ -1242,7 +1242,7 @@ def _run_projection_mc(
 
     # Clean air is worth something only to a car that was actually in the wake.
     # The measurement covers followers inside CLEAN_AIR_BAND_S of the car ahead,
-    # so a rival boxing eight seconds up the road earns nothing here — and the
+    # so a rival boxing eight seconds up the road earns nothing here, and the
     # gain is zero under a neutralisation, where everyone runs to a delta and
     # clear track buys no lap time at all.
     clean_air_s = _clean_air_available(rival_states, context.get("gp_name"))
@@ -1271,8 +1271,8 @@ def _run_projection_mc(
 
     # Eligible targets, ordered by where they will be once BOTH pit cycles have
     # played out rather than by where they sit on the timing screen now. That
-    # ordering is the whole point of the far-field ranker (#439): the car we end
-    # up racing is not always the car currently in front, and picking the first
+    # ordering is the whole point of the far-field ranker (#439): the car actually
+    # raced is not always the car currently in front, and picking the first
     # entry of an unordered list made "target" a coincidence of iteration order.
     ranking = rank_targets(rival_states, green_config, our_pit_loss_s=float(pit_loss_s.mean()))
     by_post_cycle_proximity = [target.driver for target in ranking]
@@ -1325,14 +1325,14 @@ def _run_projection_mc(
         if name == "UNDERCUT":
             # N16 answers the one question it was trained on: does the undercut
             # actually clear the target? A success is worth the place, and the
-            # projection supplies everything else. No new constant is introduced —
+            # projection supplies everything else. No new constant is introduced:
             # the alternative was inventing an out-lap delta nobody measured.
             #
             # Only on RACING draws. Under a neutralisation the move does not
             # exist: overtaking is prohibited (Art. 55.8), the field is queued
             # and everyone reaches the pit lane on the same delta, so there is no
             # advantage to arriving first. Granting it there was worth about half
-            # a position on a fully neutralised state — a place awarded for a
+            # a position on a fully neutralised state, a place awarded for a
             # manoeuvre the regulations forbid.
             landed = _np.asarray(ucut_s, dtype=float) * (~neutralised).astype(float)
             outcomes = outcomes + landed
@@ -1370,14 +1370,14 @@ def _run_mc_simulation(
     sub-agent outputs and evaluates each strategy over WINDOW_LAPS laps.
 
     pace_out:
-        PaceOutput from N25 — used to derive pace sigma from the bootstrap CI.
+        PaceOutput from N25, used to derive pace sigma from the bootstrap CI.
         σ = (ci_p90 − ci_p10) / (2 × 1.645). pace_i is sampled but not yet
-        used inside simulate_lap_window — available for future extensions.
+        used inside simulate_lap_window, available for future extensions.
     tire_out:
-        TireOutput from N26 — provides P10/P50/P90 of laps-to-cliff for the
+        TireOutput from N26, provides P10/P50/P90 of laps-to-cliff for the
         Triangular distribution.
     situation_out:
-        RaceSituationOutput from N27 — sc_prob_3lap drives the Bernoulli SC draw.
+        RaceSituationOutput from N27, sc_prob_3lap drives the Bernoulli SC draw.
     pit_out:
         PitStrategyOutput from N28, or None. When None, pit duration falls back
         to a conservative Triangular(2.2, 2.8, 3.8) prior and undercut_prob=0.5.
@@ -1387,8 +1387,8 @@ def _run_mc_simulation(
     rivals / position / laps_remaining / pit_context:
         Race-context state for the projection-based scoring (#550). A TRUTHY
         ``rivals`` list routes to ``_run_projection_mc``, which scores in
-        projected track position; a falsy value — None, or the ``[]`` the
-        default lap_state builders emit — means "no per-rival gap data" and
+        projected track position; a falsy value (None, or the ``[]`` the
+        default lap_state builders emit) means "no per-rival gap data" and
         keeps the legacy seconds-based body below, byte-identical (the strategy
         goldens pin it to the digit). None means unknown, never zero rivals.
     """
@@ -1440,7 +1440,7 @@ def _run_mc_simulation(
     sc_pit_bonus = VSC_PIT_BONUS if getattr(situation_out, "vsc_active", False) else SC_PIT_BONUS
 
     # A tool-parse failure inside N28 leaves the durations at 0.0 (its `or 0.0`
-    # defaults), and 0.0 is not a stop time — it means "unknown". Simulating it makes
+    # defaults), and 0.0 is not a stop time: it means "unknown". Simulating it makes
     # a pit stop FREE, so PIT_NOW (~+1.25 s) wins essentially every draw: a silent
     # parse miss becomes a confident recommendation to box. Treat a non-positive P50
     # as unavailable and fall through to the same prior the pit_out-is-None branch
@@ -1470,7 +1470,7 @@ def _run_mc_simulation(
 
     # Common random numbers: every candidate is scored on the SAME draw vectors, so
     # the comparison between them carries no sampling noise of its own. That is what
-    # an argmax over 500 draws needs — the variance that matters is the variance of
+    # an argmax over 500 draws needs: the variance that matters is the variance of
     # the DIFFERENCES, and sharing the draws collapses it.
     if _has_usable_gaps(rivals):
         return _run_projection_mc(
@@ -1511,7 +1511,7 @@ def _run_mc_simulation(
 
 
 # ==============================================================================
-# Layer 3 — LLM synthesis
+# Layer 3: LLM synthesis
 # ==============================================================================
 
 # Lock detection lives in `src/rag/store_lock.py`, not here, and moving it IS the
@@ -1607,7 +1607,7 @@ def _build_tire_block(tire_out) -> str:
     Extracted from the prompt builder when the wear term was added (#727), so the
     formatting decision below can be tested without assembling a whole prompt.
 
-    ``wear`` leads because it is the model's actual output — seconds per lap this
+    ``wear`` leads because it is the model's actual output: seconds per lap this
     set is slower than it was fresh, fuel-corrected. ``deg_rate`` stays because
     the LLM has cited it for two years and removing it silently would change the
     synthesis for reasons unrelated to this change; it is the raw, uncorrected
@@ -1615,7 +1615,7 @@ def _build_tire_block(tire_out) -> str:
     measured laps, negative on 43 of them).
 
     A missing prediction prints ``unknown``, never ``0.000``. Zero is a real
-    reading for this quantity — a set sitting at its fresh baseline — so printing
+    reading for this quantity (a set sitting at its fresh baseline), so printing
     it for an absent one would tell the LLM the tyre is pristine at the exact
     moment the model failed to say anything.
     """
@@ -1656,7 +1656,7 @@ def _build_orchestrator_prompt(
     data) so the LLM can fill the expanded StrategyRecommendation schema
     without having to reverse-engineer values from the reasoning strings.
 
-    N30 regulation context is injected as a hard constraint block — the LLM is
+    N30 regulation context is injected as a hard constraint block: the LLM is
     told explicitly which actions are regulation-compliant before it decides,
     so illegal options cannot appear in the output.
 
@@ -1687,12 +1687,12 @@ def _build_orchestrator_prompt(
         else "REGULATION CONSTRAINT: none flagged — all four actions are compliant."
     )
 
-    # Pace CI bounds rendered into the prompt guidance — keep a safe fallback
+    # Pace CI bounds rendered into the prompt guidance: keep a safe fallback
     # when pace_out is unavailable so the format string never crashes.
     pace_ci_lo = pace_out.ci_p10 if pace_out is not None else 0.0
     pace_ci_hi = pace_out.ci_p90 if pace_out is not None else 0.0
 
-    # ── Sub-agent numeric blocks — verbatim numbers so the LLM can cite them ─
+    # ── Sub-agent numeric blocks: verbatim numbers so the LLM can cite them ──
     if pace_out is not None:
         pace_block = (
             f"  [N25 Pace]      pred={pace_out.lap_time_pred:.3f}s  "
@@ -1709,7 +1709,7 @@ def _build_orchestrator_prompt(
     if situation_out is not None:
         # Spelled out rather than rendered as a number, because this line is read by the
         # LLM that writes the recommendation. N11 never saw a labelled pair beyond 2.5 s,
-        # so on those laps there is no probability to quote — and a synthesised one here
+        # so on those laps there is no probability to quote, and a synthesised one here
         # does not get averaged away, it gets ARGUED from. Saying "unknown, the cars are
         # too far apart for the model" is a fact the model can reason with; a fabricated
         # 0.07 is one it cannot tell from a measurement.
@@ -1919,7 +1919,7 @@ def _build_orchestrator_prompt(
 
 
 # ==============================================================================
-# Helpers — input coercion
+# Helpers: input coercion
 # ==============================================================================
 
 def _to_radio_message(item) -> RadioMessage:
@@ -1963,7 +1963,7 @@ def _to_rcm_event(item) -> RCMEvent:
 # ==============================================================================
 
 def _run_always_on_agents(race_state: "RaceState", lap_state: dict) -> tuple:
-    """Run N25, N26, N27, N29 — always activated regardless of race state.
+    """Run N25, N26, N27, N29: always activated regardless of race state.
 
     race_state:
         Current RaceState with all lap and session fields.
@@ -1972,7 +1972,7 @@ def _run_always_on_agents(race_state: "RaceState", lap_state: dict) -> tuple:
         Must contain: driver_number, stint, team, year, gp_name and optionally
         laps_since_pit, fuel_load, prev_lap_time, prev_speed_st, humidity.
 
-    Returns (pace_out, tire_out, situation_out, radio_out) — typed dataclass
+    Returns (pace_out, tire_out, situation_out, radio_out), typed dataclass
     outputs from N25, N26, N27, N29 respectively.
     """
     pace_out = run_pace_agent(
@@ -2008,7 +2008,7 @@ def _run_always_on_agents(race_state: "RaceState", lap_state: dict) -> tuple:
 
     tire_out = run_tire_agent(lap_state)
 
-    # Build the RCM list once so we can feed it to BOTH the radio agent
+    # Build the RCM list once so it can feed BOTH the radio agent
     # (its primary consumer) and the situation agent (so the SC override
     # in N27 can flip sc_currently_active when a SAFETY_CAR_DEPLOYED is
     # active in this lap window).
@@ -2132,7 +2132,7 @@ def _run_conditional_agents(
             # orchestrator a "hard regulation constraint" block describing the wrong
             # race. `sc_currently_active` is N27's observation of the RCM feed and it was
             # already in scope twelve lines above (`:1166`), passed to N28 and dropped
-            # here — the same restored-datum-with-an-unswitched-consumer shape as #447.
+            # here, the same restored-datum-with-an-unswitched-consumer shape as #447.
             #
             # Keep the forecast as well: an SC that is merely likely still changes which
             # articles matter.
@@ -2172,16 +2172,16 @@ def _run_conditional_agents(
 # ==============================================================================
 
 def _live_drivers_from(lap_state: dict | None) -> set | None:
-    """The cars on track this lap, or None when we cannot tell.
+    """The cars on track this lap, or None when that cannot be told.
 
     RaceStateManager builds ``rivals`` from the per-lap rows, so a car that has retired
     is simply absent: the same answer a timing screen gives, and the only sound one.
     No staleness threshold works, because the featured frame drops SC, pit and out laps,
     so a car that FINISHED can have its last known lap lag by 20 while a retirement shows
-    up at 9 — the ranges overlap (#462).
+    up at 9: the ranges overlap (#462).
 
     Returns None rather than an empty set when there is no lap_state, so callers can tell
-    "nobody is racing" from "we do not know" and fall through instead of rejecting all.
+    "nobody is racing" from "unknown" and fall through instead of rejecting all.
     """
     if not lap_state:
         return None
@@ -2248,22 +2248,22 @@ def _assemble_recommendation(
     v2 expansion fields). This helper builds the final StrategyRecommendation
     by combining that synthesis with:
 
-    * pit_out from N28 — used as a deterministic fallback whenever the LLM
+    * pit_out from N28: used as a deterministic fallback whenever the LLM
       leaves pit_lap_target, compound_next, or undercut_target as None but
       N28 actually produced a value. This guarantees that richer execution
       detail never silently disappears because the LLM was lazy on a given
       lap. The LLM's explicit choice always wins; N28 only backfills nulls.
-    * mc_results — attached as scenario_scores so downstream consumers can
+    * mc_results: attached as scenario_scores so downstream consumers can
       inspect the MC distribution without re-running the simulation. The LLM
       never writes this field directly (strict schema forbids dicts).
-    * regulation_context — attached verbatim from N30 so the UI can surface
+    * regulation_context: attached verbatim from N30 so the UI can surface
       the regulatory basis for the action without re-querying N30.
 
     --- WHERE TO CHANGE IF THE SC POLICY CHANGES ---
     **There is no action rail here, and there must not be one.** A rail may encode what
     the FIA regulation makes certain; it may never encode a strategy opinion. Whether to
     pit under a Safety Car depends on stops already made, laps remaining, gap behind and
-    compounds used — race state, none of it a rule — so it belongs to the model.
+    compounds used (race state, none of it a rule), so it belongs to the model.
 
     One forcing to a strategy opinion once lived here (STAY_OUT -> PIT_NOW on every SC
     lap, from the Qatar 2025 case). It was wrong: Art. 55.17 finishes the race behind a
@@ -2276,7 +2276,7 @@ def _assemble_recommendation(
     What `sc_currently_active` is for, then: the regulatory FACTS. Most live in N27, so
     every consumer inherits one number (overtake_prob = 0, Art. 55.8; drs_window = 0,
     Art. 22.1(c)). Only `target_lap_time_s` is forced here, because this is the layer
-    that emits it — see the note at its assignment below. Add a new fact only if the
+    that emits it (see the note at its assignment below). Add a new fact only if the
     regulation removes the field's SOURCE; if it merely makes a choice usually smart,
     it belongs in the prompt or the MC. See tests/mc/test_sc_regulatory_rails.py.
 
@@ -2284,17 +2284,17 @@ def _assemble_recommendation(
     behaviour rather than silently changing it.
 
     `live_drivers` carries the cars on track so the LLM's free-text undercut_target can
-    be checked. **None means "unknown", not "nobody"** — a caller without a lap_state
+    be checked. **None means "unknown", not "nobody"**: a caller without a lap_state
     cannot know, so its target passes rather than being silently discarded.
 
     `cliff_p50` (N26 TireOutput.laps_to_cliff_p50) and `total_laps` (RaceState.total_laps)
-    ground `expected_stint_end` — see the clamp below (#433). Both default to None so a
+    ground `expected_stint_end`, see the clamp below (#433). Both default to None so a
     caller that has not been updated to pass them keeps the previous unclamped behaviour
     rather than crashing.
 
     Returns a fully-populated StrategyRecommendation ready for the UI layer.
     """
-    # N28 fallbacks — only used when the LLM did not commit to a value
+    # N28 fallbacks: only used when the LLM did not commit to a value
     fallback_lap     = pit_out.recommended_lap        if pit_out else None
     fallback_cmpd    = pit_out.compound_recommendation if pit_out else None
     fallback_target  = pit_out.undercut_target        if pit_out else None
@@ -2311,7 +2311,7 @@ def _assemble_recommendation(
     elif synth.undercut_target is None:
         undercut_target = None
     elif live_drivers is None:
-        # We cannot tell who is racing (no lap_state: the FastF1 path). Rejecting here
+        # Who is racing cannot be told (no lap_state: the FastF1 path). Rejecting here
         # would silently discard every LLM target on that path, which is not the same
         # thing as knowing it is wrong. `None` means unknown; only a real roster may
         # reject. Collapsing it to an empty set is how a "do not know" turns into a "no".
@@ -2325,13 +2325,13 @@ def _assemble_recommendation(
         )
         undercut_target = None
 
-    # The action is the synthesis's, always. There used to be an SC rail here forcing
-    # STAY_OUT -> PIT_NOW, and it was an opinion wearing a rail's clothes: one race
+    # The action is the synthesis's, always. No SC rail forces STAY_OUT -> PIT_NOW
+    # here, because that would be an opinion wearing a rail's clothes: one race
     # (Qatar 2025) generalised into a universal law. Under a real SC, staying out is
-    # often right (you just pitted; you lead and the pack must stop anyway; you would
-    # rejoin into traffic), and Art. 55.17 makes forcing the stop provably wrong in the
-    # closing laps, where the race finishes behind the SC and the surrendered track
-    # position is unrecoverable by regulation.
+    # often right (having just pitted; leading while the pack must stop anyway; or
+    # rejoining into traffic), and Art. 55.17 makes forcing the stop provably wrong in
+    # the closing laps, where the race finishes behind the SC and the surrendered
+    # track position is unrecoverable by regulation.
     #
     # It also silenced the very computation built to weigh it: with an SC deployed
     # sc_prob_3lap is 1.0, so every Monte Carlo draw already receives the full
@@ -2346,8 +2346,8 @@ def _assemble_recommendation(
     # `target_lap_time_s` is grounded in N06's PaceOutput CI, and N06 predicts
     # GREEN-FLAG pace. Art. 55.7 requires drivers to stay ABOVE the FIA ECU minimum
     # time while the SC is out, so a green-flag target is below the delta by
-    # construction: the system would be instructing the driver to earn a penalty. We
-    # cannot source the real delta (it is not in the telemetry), so the field has no
+    # construction: the system would be instructing the driver to earn a penalty. The
+    # real delta cannot be sourced (it is not in the telemetry), so the field has no
     # valid value. None is forced by ABSENCE OF A SOURCE, not by a strategy view, and
     # the schema already documents None as "the LLM prefers not to commit".
     # Inventing a delta would only launder the breach into looking authoritative.
@@ -2355,7 +2355,7 @@ def _assemble_recommendation(
     action    = synth.action
     reasoning = synth.reasoning
 
-    # #433 — expected_stint_end is unvalidated LLM free text; clamp it against the
+    # #433: expected_stint_end is unvalidated LLM free text; clamp it against the
     # physical pit_lap + cliff/capacity anchor via the pure _clamp_expected_stint_end
     # helper (extracted so the clamp is CI-testable without loading any model).
     expected_stint_end = _clamp_expected_stint_end(
@@ -2393,7 +2393,7 @@ def run_strategy_orchestrator(
     Primary entry point. Uses the FastF1-dependent entry points of each sub-agent
     (run_pace_agent, run_tire_agent, run_race_situation_agent, run_radio_agent,
     run_pit_strategy_agent). Each one is self-contained through the lap_state
-    dict it receives here — no pre-populated globals or setup call is needed on
+    dict it receives here: no pre-populated globals or setup call is needed on
     any sub-agent module.
 
     race_state:
@@ -2401,20 +2401,23 @@ def run_strategy_orchestrator(
         compound, tyre_life, weather fields, and pre-filtered radio/RCM events.
     lap_state:
         Dict of scalar lap features forwarded to sub-agent entry points. Must
-        contain: driver_number, stint, team, year, gp_name. Optional keys:
-        laps_since_pit, fuel_load, prev_lap_time, prev_speed_st, humidity,
-        rivals (list of rival dicts for N27/N28).
+        contain: driver_number, stint, team, year, gp_name, session and driver
+        (both read by run_tire_agent and run_race_situation_agent), compound_id
+        and tyre_life (run_tire_agent), lap_number and event_name
+        (run_race_situation_agent). Optional keys: laps_since_pit, fuel_load,
+        prev_lap_time, prev_speed_st, humidity, rivals (list of rival dicts for
+        N27/N28).
 
     Returns a StrategyRecommendation with action, reasoning, confidence,
     scenario_scores, and regulation_context populated. scenario_scores and
     regulation_context are attached after the LLM call, not parsed from it.
     """
-    # Layer 1a — always-on agents
+    # Layer 1a: always-on agents
     pace_out, tire_out, situation_out, radio_out = _run_always_on_agents(
         race_state, lap_state
     )
 
-    # Layer 1b — routing
+    # Layer 1b: routing
     active = _decide_agents_to_call(
         tire_warning        = tire_out.warning_level,
         sc_prob_3lap        = situation_out.sc_prob_3lap,
@@ -2422,7 +2425,7 @@ def run_strategy_orchestrator(
         sc_currently_active = situation_out.sc_currently_active,
     )
 
-    # Layer 1c — conditional agents. The structured RAG dict is only used by
+    # Layer 1c: conditional agents. The structured RAG dict is only used by
     # the arcade dashboard; the orchestrator path keeps the answer string.
     pit_out, regulation_context, _rag_dict = _run_conditional_agents(
         active        = active,
@@ -2434,7 +2437,7 @@ def run_strategy_orchestrator(
     )
     regulation_context = regulation_context or ""
 
-    # Layer 2 — MC simulation. Race context is threaded so this entry point
+    # Layer 2: MC simulation. Race context is threaded so this entry point
     # projects like the shared engine does; without it /recommend and the MCP
     # chat scored in the legacy currency while every other surface had moved on,
     # and the raw max() below raised on the first ineligible candidate.
@@ -2452,7 +2455,7 @@ def run_strategy_orchestrator(
     )
     best_mc = best_mc_candidate(mc_results)
 
-    # Layer 3 — LLM synthesis
+    # Layer 3: LLM synthesis
     prompt = _build_orchestrator_prompt(
         race_state         = race_state,
         mc_results         = mc_results,
@@ -2484,10 +2487,10 @@ def _scope_laps_to_gp(
 
     Thin delegator to the canonical implementation in
     ``src/strategy/inference/engine.py``. That module imports FROM this one, so a
-    top-level ``import`` would be circular — the deferred import inside the body
+    top-level ``import`` would be circular: the deferred import inside the body
     breaks the cycle while keeping ONE source of truth. A hand-kept duplicate is
-    exactly the kind of drift the #429/#465 family of bugs came from, so we do not
-    keep two copies; the engine version also derives the GP from ``race_state`` when
+    exactly the kind of drift the #429/#465 family of bugs came from, so no two
+    copies are kept; the engine version also derives the GP from ``race_state`` when
     ``lap_state`` carries no ``gp_name`` yet.
     """
     from src.strategy.inference.engine import _scope_laps_to_gp as _engine_scope
@@ -2500,7 +2503,7 @@ def run_strategy_orchestrator_from_state(
     laps_df:    pd.DataFrame,
     lap_state:  dict | None = None,
 ) -> "StrategyRecommendation":
-    """RSM adapter — run the orchestrator without a live FastF1 session.
+    """RSM adapter: run the orchestrator without a live FastF1 session.
 
     Calls the *_from_state entry points of every sub-agent so the orchestrator
     can run from a pre-loaded laps DataFrame (e.g. from RaceStateManager replay
@@ -2512,7 +2515,7 @@ def run_strategy_orchestrator_from_state(
         Full lap DataFrame from RaceStateManager. Forwarded to each sub-agent's
         RSM adapter (run_pace_agent_from_state, run_tire_agent_from_state, etc.),
         each of which derives its own laps_df / session_meta state from the call
-        arguments — no shared globals involved.
+        arguments: no shared globals involved.
     lap_state:
         Optional supplementary scalar dict. When None, a minimal lap_state is
         derived automatically from race_state and laps_df. Provide it when
@@ -2527,7 +2530,7 @@ def run_strategy_orchestrator_from_state(
         year        = int(laps_df["Year"].iloc[0]) if "Year" in laps_df.columns else 2025
         # Derive the GP from the (driver, lap) row match, NOT laps_df.iloc[0] (the
         # first row of the whole-season frame): the latter blends one race's GP with
-        # another race's stint/team — the #465 wrong-GP bug engine._build_default_lap_state
+        # another race's stint/team: the #465 wrong-GP bug engine._build_default_lap_state
         # also has to avoid. Fall back to iloc[0] only when the row is absent.
         # Flattened from a nested ternary. The middle branch reads as redundant and
         # is not: lap_row can be non-empty and still lack GP_Name, which happens only
@@ -2587,18 +2590,18 @@ def run_strategy_orchestrator_from_state(
         }
 
     # Scope AFTER lap_state is resolved (built above or supplied by the caller),
-    # never before — see _scope_laps_to_gp's docstring for the #465 ordering bug
+    # never before: see _scope_laps_to_gp's docstring for the #465 ordering bug
     # this avoids. Passing race_state lets the canonical engine helper derive the GP
     # even when a caller supplies a lap_state without a gp_name. Every downstream use
     # of laps_df in this function (both agent calls below) sees the scoped frame.
     laps_df = _scope_laps_to_gp(laps_df, lap_state, race_state)
 
-    # Layer 1a — always-on agents (RSM variants)
+    # Layer 1a: always-on agents (RSM variants)
     pace_out, tire_out, situation_out, radio_out = _run_always_on_agents_from_state(
         race_state, laps_df, lap_state
     )
 
-    # Layer 1b — routing
+    # Layer 1b: routing
     active = _decide_agents_to_call(
         tire_warning        = tire_out.warning_level,
         sc_prob_3lap        = situation_out.sc_prob_3lap,
@@ -2606,7 +2609,7 @@ def run_strategy_orchestrator_from_state(
         sc_currently_active = situation_out.sc_currently_active,
     )
 
-    # Layer 1c — conditional agents (RSM variants). Same RAG-dict treatment
+    # Layer 1c: conditional agents (RSM variants). Same RAG-dict treatment
     # as the FastF1 entry point: discarded here, consumed only by the arcade.
     pit_out, regulation_context, _rag_dict = _run_conditional_agents(
         active        = active,
@@ -2618,7 +2621,7 @@ def run_strategy_orchestrator_from_state(
     )
     regulation_context = regulation_context or ""
 
-    # Layer 2 — MC simulation (same as primary entry point)
+    # Layer 2: MC simulation (same as primary entry point)
     _ctx = race_context_from_lap_state(lap_state, race_state)
     mc_results = _run_mc_simulation(
         pace_out      = pace_out,
@@ -2633,7 +2636,7 @@ def run_strategy_orchestrator_from_state(
     )
     best_mc = best_mc_candidate(mc_results)
 
-    # Layer 3 — LLM synthesis (same as primary entry point)
+    # Layer 3: LLM synthesis (same as primary entry point)
     prompt = _build_orchestrator_prompt(
         race_state         = race_state,
         mc_results         = mc_results,

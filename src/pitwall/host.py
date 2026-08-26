@@ -8,7 +8,7 @@ traps before a line was written:
 
 1. **`get_tick` is sequenced, never a blind slot.** Two windows polling one
    latest-payload slot on independent 10 Hz timers were measured reading a
-   different frame on 58 % of polls - 15 duplicate reads and 15 skips out of
+   different frame on 58% of polls - 15 duplicate reads and 15 skips out of
    54. Passing the last sequence a window saw removes both, and the sequence
    is not invented here: the producer already stamps `seq` on every message.
 2. **Closing one window must not stop the shared client.** The client is
@@ -115,12 +115,11 @@ class PitwallHost:
         self._client = client
         self._windows_open = window_count
         self._agents = AgentsViewBuilder()
-        # The last label AGENTS was served, so that view can return on a
         # Has the socket EVER been up? This is what separates "Connecting..."
         # from "Disconnected", and it belongs to the host because both windows
-        # ask. It used to be inferred from `_agents_connection`, which made the
-        # answer depend on whether the AGENTS window had polled: with only the
-        # DATA window open, a producer that died read "Connecting..." forever.
+        # ask. Inferring it from `_agents_connection` made the answer depend on
+        # whether the AGENTS window had polled: with only the DATA window open,
+        # a producer that died read "Connecting..." forever.
         self._ever_connected = False
         # The BULK channel's state. `_bulk_signature` is (year, location,
         # reveal map) - everything the payload is a function of - so the
@@ -218,7 +217,7 @@ class PitwallHost:
         grey on the other, for one socket, on two windows a reader has open
         side by side. A word plus a colour from the same lookup cannot do that.
 
-        And the AGENTS window could not paint the word at all before its first
+        Also, the AGENTS window could not paint the word at all before its first
         tick: its boot literal hardcoded "Connecting..." in amber, so a socket
         that came up and had not yet delivered a lap read as still connecting,
         in the wrong colour, for the whole startup.
@@ -243,10 +242,10 @@ class PitwallHost:
         advancing and a purely sequence-driven view would keep rendering
         the last frame of a dead race with a green "Connected" chip.
 
-        **`since_connection` is what the CALLER last rendered, and that is the
-        whole point (#950).** It used to be a single host field, so with two
-        consumers the first to notice the producer had died consumed the
-        transition and the second never learned about it: measured over 50
+        **`since_connection` is what the CALLER last rendered, not what the host
+        last saw (#950).** A single host field left two consumers racing for
+        it: the first to notice the producer had died consumed the transition
+        and the second never learned about it. Measured over 50
         polls, a browser on `/agents.html` kept a green chip on a dead race
         forever while the window beside it had already gone red. The loopback
         server is not hypothetical - `__main__` starts it unconditionally.
@@ -404,11 +403,11 @@ class PitwallHost:
 
         **The radio corpus loads HERE, under the same key, not beside it.** Two
         caches on the same race with two invalidation points is how one of them
-        comes to serve the previous race - which is the twin this repo pays for
-        most often, and which F7 caught between these very two channels one
-        sprint ago.
+        comes to serve the previous race, which is the twin this repo pays for
+        most often, and which has already been caught between these very two
+        channels.
 
-        **And the malformed-tick return clears them, which it did not.** One
+        **The malformed-tick return clears them too, which it did not.** One
         invalidation point is not enough if there is an early return above it:
         a tick naming no race sent the TABLE to its unavailable payload while
         `_masked_view` went on serving the previous race's radio out of a
@@ -453,7 +452,7 @@ class PitwallHost:
         # is the defect #934 cost a sprint. Measured cost of carrying it: the
         # bulk is 66,991 / 152,657 / 337,289 bytes at reveal L10 / L24 / L57 on
         # the real Melbourne payload, and the largest feed in the whole corpus
-        # (Monaco, 210 events) is about 31 KB - 9 %.
+        # (Monaco, 210 events) is about 31 KB - 9%.
         view["radio"] = (
             radio_unavailable() if self._radio is None else self._radio.masked_view(reveal)
         )

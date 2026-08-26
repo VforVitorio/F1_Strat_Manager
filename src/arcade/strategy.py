@@ -6,11 +6,12 @@ uses, and mutates a shared ``StrategyState`` so ``F1ArcadeView.on_draw``
 and the dashboard subprocess can pick up the latest ``LapDecision`` plus
 every raw sub-agent output without blocking. The arcade no longer depends
 on the FastAPI backend at runtime: it owns its own simulation loop, which
-keeps the TFG's CLI/Streamlit path isolated from any arcade change.
+keeps the backend's own SSE consumers (the webapp) isolated from any arcade
+change.
 
 Lap loop order matches ``backend/services/simulation/simulator.py::simulate_race``
 (the SSE producer). Kept separate so edits to the arcade path cannot
-regress the CLI/Streamlit consumers that still depend on the backend.
+regress the webapp consumers that still depend on the backend.
 """
 
 from __future__ import annotations
@@ -140,7 +141,7 @@ class LapDecisionDTO:
       is the load-bearing case needs a designed rendering before it is worth
       carrying, and nothing on either window asks for it.
 
-    **And what it stopped carrying.** ``agent_alerts`` was a list of intent
+    **What it stopped carrying.** ``agent_alerts`` was a list of intent
     strings flattened out of ``radio_out.alerts`` for a Qt dashboard retired in
     ``7ea6a7a6``; it was a lossy copy of ``per_agent.radio.alerts``, which the same
     tick carries in full and which the RADIO console actually renders (#1040).
@@ -263,21 +264,21 @@ class SimConnector(threading.Thread):
         self._stop_event = threading.Event()
         # Optional callback the arcade view supplies to publish the lap the
         # user is currently watching.  When set, the lap loop blocks until
-        # arcade catches up before kicking the agents — so pausing the
+        # arcade catches up before kicking the agents, so pausing the
         # replay also pauses the agentic flow.  When ``None`` (e.g. CLI
         # smoke tests) the loop runs as fast as the LLM allows, preserving
         # pre-existing behaviour.
         self._current_lap_provider = current_lap_provider
         # RadioPipelineRunner is materialised in _warmup_models after the
         # corpus is ensured on disk; ``None`` until then (graceful
-        # degrade path — the agents run with empty radio_msgs if the
+        # degrade path: the agents run with empty radio_msgs if the
         # corpus cannot be loaded).
         self._radio_runner: Any = None
         # One Safety-Car tracker for the whole replay: a "SAFETY CAR DEPLOYED"
         # corpus message is announced once (at the deploy lap), so without this
         # the per-lap RCM window is empty on laps 8-10 of the same neutralisation
         # and the SC override drops mid-stint. Persists the state across laps and
-        # re-asserts it in _build_race_state (NR-02, #305 → #398; same wiring the
+        # re-asserts it in _build_race_state (#305, #398; same wiring the
         # CLI uses).
         from src.nlp.rcm_state import RaceControlStateTracker
 
@@ -298,10 +299,10 @@ class SimConnector(threading.Thread):
 
         Returns ``True`` when the wait succeeded (arcade caught up or no
         provider was wired) and ``False`` when ``stop()`` was called while
-        we were waiting; the caller propagates that as a clean exit.
+        the loop was waiting; the caller propagates that as a clean exit.
         Polls instead of using a condition variable because the arcade
         view's frame index is read from a different thread without a lock
-        and we only need lap-level granularity, not frame-level.
+        and only lap-level granularity is needed, not frame-level.
         """
         if self._current_lap_provider is None:
             return True
@@ -311,7 +312,7 @@ class SimConnector(threading.Thread):
         return True
 
     # Number of laps the agent loop is allowed to lag behind the arcade
-    # before we consider the lap "stale" and skip the LLM call.  One lap
+    # before the lap counts as "stale" and the LLM call is skipped.  One lap
     # of buffer absorbs the natural drift between the ~5 s agent step and
     # the visual replay without making the dashboard miss the lap the
     # user is actively watching.
@@ -332,7 +333,7 @@ class SimConnector(threading.Thread):
         """Pull the real lap time out of a skipped lap_state, falling back.
 
         Keeps the next agent call's ``prev_lap_time`` baseline accurate
-        even when we skipped one or several intermediate laps; using the
+        even when one or several intermediate laps were skipped; using the
         actual recorded lap time is more truthful than carrying the last
         predicted value forward.
         """
@@ -500,7 +501,7 @@ class SimConnector(threading.Thread):
         with self._state._lock:
             self._state.error = "Warming up strategy models…"
         try:
-            import src.arcade.strategy_pipeline  # noqa: F401 — import-for-side-effects
+            import src.arcade.strategy_pipeline  # noqa: F401  (import for side effects)
             from src.agents.pace_agent import _get_default_pace_agent
             from src.agents.pit_strategy_agent import _get_default_pit_agent
             from src.agents.race_situation_agent import _get_default_situation_agent
@@ -529,8 +530,8 @@ class SimConnector(threading.Thread):
         the whole race and N28/N30 never fire on radio triggers.
 
         Graceful degrade: on any failure (corpus missing, Whisper
-        unavailable, transcript cache corrupt) we log a warning and
-        leave ``_radio_runner`` as ``None``; ``_build_race_state`` then
+        unavailable, transcript cache corrupt), a warning is logged and
+        ``_radio_runner`` is left as ``None``; ``_build_race_state`` then
         falls back to empty ``radio_msgs`` / ``rcm_events`` just like
         before.
         """
@@ -604,7 +605,7 @@ class SimConnector(threading.Thread):
         Never `read_parquet` this file raw. N04 drops `Time` and no published featured
         parquet carries a `Time_s`, which is the column N11 trains its overtake gap on,
         so a direct read silently degrades that gap to a lap-time delta: at Lusail the
-        model reads a 0.49 s mean gap where the truth is 3.29 s, and 90% of pairs look
+        model reads a 0.49 s mean gap where the actual gap is 3.29 s, and 90% of pairs look
         like they are in the DRS window when 20% are.
 
         The backend's loader had this fix and the CLI did not; the arcade did not either.
@@ -643,7 +644,7 @@ class SimConnector(threading.Thread):
 
         The lap_state -> RaceState mapping lives in
         ``src.agents.race_state_builder.build_race_state`` (#784): one
-        implementation shared by all three surfaces — this arcade, the CLI, and
+        implementation shared by all three surfaces: this arcade, the CLI, and
         the telemetry backend, which reaches it through a re-export shim (#786)
         rather than keeping the copy it used to carry. So the defaults the
         models receive no longer drift per surface.
@@ -656,7 +657,7 @@ class SimConnector(threading.Thread):
         re-injection. Both are passed to the builder as parameters.
 
         ``prev_lap_time`` is accepted but no longer read here: ``pace_delta_s``
-        used to be computed from it and that was the wrong axis (#750, now
+        was computed from it, and that was the wrong axis (#750, now
         enforced by the canonical builder). Left in the signature rather than
         removed, since the caller's per-lap bookkeeping that produces it
         (``_step_once`` / ``_lap_time_from_state``) serves no other purpose
@@ -673,14 +674,14 @@ class SimConnector(threading.Thread):
             except (KeyError, ValueError, TypeError) as exc:
                 # radios_for_lap does plain pandas row indexing + int/str
                 # casts (see RadioPipelineRunner._radio_row_to_dict /
-                # _rcm_row_to_dict) — a malformed lap_number or a missing
+                # _rcm_row_to_dict): a malformed lap_number or a missing
                 # column are the only realistic failure modes here.
                 logger.debug("radios_for_lap(%d) failed: %s", lap_num, exc)
 
         # Re-assert an active Safety Car on the laps whose RCM window carries no
         # fresh deploy message. Ingest only the laps actually processed here; a
         # release landing on a skipped (stale) lap is bounded by the tracker's
-        # safety valve rather than pinning the override (NR-02, #398 — mirrors
+        # safety valve rather than pinning the override (#398, mirrors
         # the CLI wiring in run_simulation_cli).
         self._sc_tracker.ingest(lap_num, rcm_events)
         if self._sc_tracker.should_inject(lap_num):
@@ -741,7 +742,7 @@ def _normalize_scores(raw: Any) -> dict[str, float]:
             v = v.get("score")
         # A candidate the projection engine declined to score arrives as None.
         # It used to become 0.0 here, which painted a full-height bar at the
-        # zero line for a strategy that was never on the table — a numeric
+        # zero line for a strategy that was never on the table: a numeric
         # sentinel by accident. Dropping the key instead leaves the dashboard
         # with three bars, and an absent bar cannot be misread as a score.
         if v is None:
@@ -757,7 +758,7 @@ def _dump_dataclass(obj: Any) -> dict[str, Any] | None:
     """Convert an agent-output dataclass to a plain dict, tolerating ``None``.
 
     ``dataclasses.asdict`` recurses into nested dataclasses, which is what
-    we want for the per-agent serialisation: ``PaceOutput``, ``TireOutput``,
+    the per-agent serialisation needs: ``PaceOutput``, ``TireOutput``,
     etc. turn into JSON-ready dicts without hand-written field mappings."""
     if obj is None:
         return None

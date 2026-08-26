@@ -4,7 +4,7 @@
 
 ## One lap, end to end
 
-The diagram below traces the lifecycle of a single lap. Every component is reified in `src/`, the names match the production modules so you can grep your way from this page into the source.
+The diagram below traces the lifecycle of a single lap. Every component is reified in `src/`, the names match the production modules, so a grep from this page reaches straight into the source.
 
 ```mermaid
 sequenceDiagram
@@ -34,7 +34,7 @@ The same loop runs in three places: the CLI consumes it in batch, the Arcade ren
 
 Six layers, six pages, each linked from the agent graph and from this page.
 
-- **[Multi-agent system](#/multi-agent)**: N25–N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.
+- **[Multi-agent system](#/multi-agent)**: N25-N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.
 - **[Simulation engine](#/simulation)**: `RaceReplayEngine`, `RaceStateManager`, the `lap_state` schema every layer agrees on.
 - **[Agents API reference](#/agents-api)**, per-agent input / output schemas, model artefacts and entry-point signatures.
 - **[Backend API](#/backend-api)**: FastAPI routers, the SSE simulation endpoint, the contract the web app and the Arcade speak.
@@ -45,7 +45,7 @@ Six layers, six pages, each linked from the agent graph and from this page.
 
 ## Key data contracts
 
-Three structures cross every boundary in the system. If you remember nothing else, remember these.
+Three structures cross every boundary in the system, and these are the ones that matter most.
 
 ### `lap_state`
 

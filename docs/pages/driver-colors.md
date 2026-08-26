@@ -4,17 +4,14 @@
 
 `src/telemetry/webapp/src/lib/drivers.ts`
 
-> **This page used to document a Python module that no longer exists.** The
-> year-aware palette was born in the Streamlit frontend at
-> `frontend/components/common/driver_colors.py`, and that whole tree was
-> deleted when the React web app replaced Streamlit in v2.0.0 (#551). The
-> *design* survived the move intact — it was ported one for one — so this page
-> now describes the TypeScript implementation that is actually running.
+> The year-aware palette came from the Streamlit frontend and was ported one
+> for one when the React web app replaced it in v2.0.0 (#551). The design is
+> unchanged; the implementation described here is the TypeScript one.
 
 **It is still not shared with the backend.** `src/telemetry/backend/core/driver_colors.py`
 is a separate, older implementation: a single flat `DRIVER_COLORS` dict labelled
 "F1 2024 Driver Colors", with its own (different) hex values and no `year`
-parameter at all. It predates the 2025 driver-swap handling described below — it
+parameter at all. It predates the 2025 driver-swap handling described below: it
 still maps `HAM` to a Mercedes-silver hex and has no entry for `ANT`, `BOR`,
 `HAD`, or the 2025 `SAI`-to-Williams move. Used by
 `backend/api/v1/endpoints/comparison.py` and `backend/services/telemetry_service.py`.
@@ -25,7 +22,7 @@ design intent.
 
 F1 driver lineups change every season. A driver may switch teams between years,
 so the colour associated with a driver abbreviation must be season-specific.
-This module provides a year-aware palette covering the 2023–2025 seasons.
+This module provides a year-aware palette covering the 2023-2025 seasons.
 
 ## Design
 

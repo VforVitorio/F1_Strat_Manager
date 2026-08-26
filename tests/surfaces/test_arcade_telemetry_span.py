@@ -6,10 +6,9 @@ over two integers, so it is tested as arithmetic: the tests below simulate
 the playback clock at each speed and assert the union of the spans is the
 frames the clock actually crossed, once each.
 
-The three cases that used to be accidents rather than branches -- pause,
-backwards seek, and a stalled process -- get a test apiece, because each
-one produced a specific wrong behaviour: repeated samples, a negative
-slice, and an unbounded payload.
+Pause, backwards seek, and a stalled process get a test apiece, because
+each was an accident rather than a branch, producing a specific wrong
+behaviour: repeated samples, a negative slice, and an unbounded payload.
 """
 
 from __future__ import annotations
@@ -78,8 +77,8 @@ def _collect_spans(speeds_and_ticks, start_frame: float = 0.0):
 def test_every_frame_the_clock_crosses_is_sent_exactly_once(speed):
     """No gaps and no duplicates, at 0.25x through 8x.
 
-    Before the span this failed in both directions: 60 % of frames never
-    left the process at 1x and 95 % at 8x, while at 0.25x the same frame
+    Before the span this failed in both directions: 60% of frames never
+    left the process at 1x and 95% at 8x, while at 0.25x the same frame
     was re-sent because the broadcast outran the clock.
     """
     sent, _ = _collect_spans([(speed, 60)])
@@ -104,7 +103,7 @@ def test_continuity_survives_a_speed_change():
     assert len(sent) == len(set(sent))
 
 
-# --- The three branches that used to be accidents ---------------------------
+# --- The three branches that were once accidental ---------------------------
 
 
 def test_pause_sends_no_new_samples_rather_than_repeating_the_last_one():
@@ -409,8 +408,8 @@ def test_every_frame_the_clock_crosses_reaches_EVERY_driver_exactly_once():
     the frame index from `t` cannot see a wrong-key defect at all, because `t` is
     the global clock and every driver's array carries the same value at the same
     index; and every fixture in this file used to hand all drivers byte-identical
-    arrays, so nothing else could see it either. Measured by the exit gate: a
-    producer serving every driver the FIRST driver's frames passed all 277 tests.
+    arrays, so nothing else could see it either. A producer serving every driver
+    the FIRST driver's frames passed all 277 tests.
     The speed signature and the `served_by` assertion are what close that.
     """
     sent, dropped, served_by = _sweep_the_served_spans([(1.0, 30), (2.0, 30), (8.0, 30)])
@@ -557,7 +556,7 @@ def test_the_drs_open_set_has_exactly_one_home_in_the_source():
     decode it now", and left `overlays.py`'s `_drs_label` and `_drs_color` holding a
     literal `(10, 12, 14)` each. Three copies of a set whose entire purpose was to
     have one - the twin that never got the fix, which is this repo's most frequent
-    defect and the one an adversarial gate found here again.
+    defect, and it was found here again.
 
     Structural, not textual: the tree is parsed and every set / tuple / list of
     integer constants is compared as a SET, so a reordered `(14, 10, 12)`, a
@@ -726,7 +725,7 @@ def test_the_brake_channel_is_the_boolean_it_was_measured_as():
     """`Brake` is `{'type': 'discrete'}` to FastF1 and False/True in the raw stream.
 
     It lived in the resampler's CONTINUOUS set and was multiplied by 100, so
-    **86,925 served frames (3.49 %) sat strictly between 2 and 98** across 10,976
+    **86,925 served frames (3.49%) sat strictly between 2 and 98** across 10,976
     distinct values, none of which any car ever published.
     """
     frames = _active_frames(_melbourne_or_skip())
@@ -753,7 +752,7 @@ def test_a_tyre_age_is_a_whole_number_of_laps():
 
 def test_no_served_frame_takes_the_lap_number_backwards():
     """FastF1's per-lap windows share their boundary sample, so every crossing is
-    concatenated twice at the same instant and an unstable sort put the OLD copy
+    concatenated twice at the same instant, so an unstable sort put the OLD copy
     second. Melbourne 2025 shipped **70 such frames across 17 of the 20 drivers**.
 
     `tyre` and `tyre_life` are asserted in the same breath because they are the same
@@ -874,7 +873,7 @@ def test_a_discrete_channel_only_ever_takes_a_value_the_car_published():
 def test_a_continuous_channel_still_interpolates():
     """The other half, or the fix could be 'resample nothing' and pass.
 
-    Speed, throttle and position are genuinely continuous and must still take the value
+    Speed, throttle and position are continuous and must still take the value
     between two samples: a stepped speed trace is the defect this change must not create.
     """
     midpoint = _resampled_midpoint()

@@ -6,7 +6,7 @@ opens three top-level windows: the arcade replay, **PITWALL · AGENTS**
 (orchestrator card + six sub-agent cards + reasoning tabs) and
 **PITWALL · DATA** (status strip, timing tower, bests, own-car traces,
 race pace and race trace). The PySide6 pair those two replaced was
-retired in sprint 7; `src/pitwall/` is where the followers live now.
+retired; `src/pitwall/` is where the followers live now.
 
 ## Run
 
@@ -24,7 +24,7 @@ f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing"
 ## Public docs
 
 - **End-user quick start:** [`docs/pages/arcade-quick-start.md`](../../docs/pages/arcade-quick-start.md)
-- **Dashboard architecture (developer deep dive):** [`docs/pages/arcade-dashboard.md`](../../docs/pages/arcade-dashboard.md)
+- **Dashboard architecture (developer reference):** [`docs/pages/arcade-dashboard.md`](../../docs/pages/arcade-dashboard.md)
 - **The shared `run_lap` engine the arcade delegates to:** [`docs/pages/arcade-strategy-pipeline.md`](../../docs/pages/arcade-strategy-pipeline.md)
 
 ## Layout

@@ -8,10 +8,10 @@
  * **The colour is a RANK within the lap, not a percentage off a session best,
  * and the difference is the whole design.** Measured on the real Melbourne
  * 2025 payload, over the 776 rows this grid actually RANKS: against the
- * session's fastest lap the median lap is +13.03 % and 80.7 % of the race falls
- * past +10 %, because the race was wet and ran safety cars - so any fixed
+ * session's fastest lap the median lap is +13.03% and 80.7% of the race falls
+ * past +10%, because the race was wet and ran safety cars - so any fixed
  * percentage band paints four fifths of the grid in one colour and says
- * nothing. (This pair used to read +13.79 % / 82.4 %, which is the same
+ * nothing. (This pair used to read +13.79% / 82.4%, which is the same
  * arithmetic over 858 rows including the 82 pit laps and 6 deleted times the
  * ranking EXCLUDES and the grid never colours - a figure describing a
  * population the sentence is not about. An earlier gate certified it as "exact"
@@ -154,15 +154,14 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
  * real built stylesheet at the right column's real width: twenty columns of
  * 38.75 px hold this form with room to spare, while the same cell in seconds
  * (`149.413`) clips **205 of 1,140 cells on the real Melbourne payload**, at
- * all three client heights the fleet produces. (An earlier version of this
- * sentence said 793, which was measured on a prototype whose synthetic times
- * were spread across the race's whole range rather than on the payload the
- * window serves - the wrong-distribution class, in a comment. The smoke's own
- * smoke's own fixture clips materially fewer than the real race, so an "it
- * fits" measured on the fixture is weaker evidence than one measured on the
- * payload. No count is quoted here on purpose: the last one was written four
- * minutes after a commit changed the fixture underneath it and was stale on
- * arrival.)
+ * all three client heights the fleet produces. (A prototype measurement
+ * counts differently here because its synthetic times spread across the
+ * race's whole range rather than matching the payload the window serves -
+ * the wrong-distribution class, in a comment. The smoke's own fixture also
+ * clips materially fewer cells than the real race, so an "it fits" measured
+ * on the fixture is weaker evidence than one measured on the payload. No
+ * count is quoted here on purpose: a fixture change makes any quoted count
+ * stale within minutes.)
  *
  * Tenths is also the resolution the grid needs, because the ranking colour
  * carries the ordering and the number carries the magnitude.
@@ -173,7 +172,7 @@ export function stableColumns(bulk: Bulk, order: string[]): string[] {
  * downloadable here to test it.
  *
  * **`coarse` drops the tenths, and it exists because the column does not always
- * have room for them.** On a 1080p laptop at 150 % scaling - Windows' own
+ * have room for them.** On a 1080p laptop at 150% scaling - Windows' own
  * recommended scaling for a 13-14" screen - this window's client area is
  * 1265 x 593, the grid's twenty columns fall to 27.75 px, and the six-glyph form
  * measures 35: `1:59.4` rendered `1:59.`, `IN PIT` rendered `IN PI`, on 495 of
@@ -305,7 +304,7 @@ export function racePaceGrid(
   // It used to stop at the last revealed lap, so the table grew downward and the
   // card had to be anchored to the column's bottom to keep the newest row at a
   // stable height - which left a 382 px void above it for the first two thirds of
-  // a race. Víctor called that out on the shipped window.
+  // a race.
   //
   // **⚠️ This said "drawing the full lap axis is the motorsport convention". Research
   // could not find that convention, so the sentence is replaced by what was found.**
@@ -324,8 +323,8 @@ export function racePaceGrid(
   // It is still deliberately NOT the web's "skeleton" idiom in the loading sense - these
   // rows are not waiting for a fetch, they are laps that have not been driven, so no
   // shimmer - and the cost is stated where it lands, in `RacePaceGrid`'s pin comment: the
-  // newest row no longer sits at a fixed height. Víctor chose this shape knowing the void
-  // was the alternative, and asked for the wheel scroll that makes the rest reachable.
+  // newest row no longer sits at a fixed height. This shape is deliberate: the void was
+  // accepted as the alternative, with the wheel scroll added so the rest stays reachable.
   //
   // Nothing about the reveal changes: a cell beyond `revealedTo` finds no row and
   // falls through to EMPTY exactly as an unrevealed cell always did, so this leaks

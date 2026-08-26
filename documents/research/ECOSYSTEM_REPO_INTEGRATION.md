@@ -24,7 +24,7 @@ Every ecosystem repo integrates through exactly ONE of:
    core's runtime: the core imports it, calls it in-process, and ships it as part of a
    core surface. The parent pins a gitlink SHA; bumps are explicit commits.
 2. **HF artifact / pip package**. For produced artifacts (a corpus, a LoRA, a dataset,
-   feature manifests) or genuinely shared library code. The core pulls it as a versioned
+   feature manifests) or shared library code. The core pulls it as a versioned
    dependency: `snapshot_download(..., revision=<hash or tag>)` for HF, a pinned version
    in `pyproject.toml` for pip. No repo mounting, no gitlink.
 3. **Downstream service / API**. For consumers of the core. They subscribe to the core's
@@ -151,7 +151,7 @@ mechanism differs per channel; the discipline is the same.
 
 **The P5 gap this must close first:** the data-engineering audit (epic #242) found the
 core downloads from HF with a **mutable `main` revision**, so today's "pin" is a moving
-target; the same audit found the `f1stratlab` org migration decided but unexecuted. Two
+target, and the `f1stratlab` org migration is decided but unexecuted. Two
 consequences for this design:
 
 1. Before any NEW HF artifact (radiogate corpus, gridmind LoRA) is consumed by the core,
@@ -211,7 +211,7 @@ Adding radiogate as a second submodule implies:
 ## 6. Checklist: adding a new ecosystem repo
 
 1. **Classify it.** Does the core import its code at runtime? If NO, it is not a
-   submodule, full stop. Is it a consumer of the core (bot, dashboard, notifier)? Then
+   submodule. Is it a consumer of the core (bot, dashboard, notifier)? Then
    it is a downstream service and the core must gain zero references to it. Does it
    produce an artifact (dataset, model, corpus)? Then the artifact ships on the
    `f1stratlab` HF org and the core pins a revision.
@@ -239,28 +239,28 @@ Adding radiogate as a second submodule implies:
 
 ---
 
-## 7. Open questions for Victor
+## 7. Open questions
 
 1. **radiogate submodule review gate.** The submodule mount is justified by the core
    importing the trust-signal inference in-process. If, when the Radio Agent hook is
    actually designed, the consumption shape turns out to be "HF model weights + a thin
-   in-core scorer" with no code import, do we drop the submodule and go HF-only? Propose
+   in-core scorer" with no code import, should the submodule be dropped for HF-only? Propose
    deciding at radiogate R3 (picaresca layer), not before.
 2. **Where does the trust-signal interface live?** Inside the radiogate submodule (core
    imports `radiogate.inference`), or as a minimal pip package published from the
    radiogate repo (core pins it in `pyproject.toml`, no submodule needed)? The package
    route weakens the case for the submodule entirely; worth an explicit call.
 3. **Pin manifest shape.** Single JSON next to `data_cache.py` versus constants in the
-   module: does Victor want the manifest human-editable (JSON, diff-friendly for PRs) or
+   module: should the manifest be human-editable (JSON, diff-friendly for PRs) or
    code (typed, import-checked)? Recommendation: JSON, validated at load.
 4. **Dependabot for submodules.** Enable the `gitsubmodule` ecosystem for
    `F1_Telemetry_Manager` now (its API is stable) and for radiogate later, or keep all
    submodule bumps manual? Recommendation: telemetry now, radiogate after R3.
 5. **box-bot contract formalization.** Is a versioned schema doc for the SSE/newline-JSON
-   stream (published in the core's docs site) enough, or do we want a machine-readable
-   schema (JSON Schema / Pydantic export) that box-bot's contract tests consume?
+   stream (published in the core's docs site) enough, or does box-bot's side need a
+   machine-readable schema (JSON Schema / Pydantic export) for its contract tests to consume?
    Recommendation: export the existing Pydantic models; it is nearly free.
 6. **pitlab future split.** If the Studio UI outgrows in-core (own release cadence, own
    contributors), the plan says "follow the telemetry submodule pattern". Confirm that
-   the trigger is organizational (separate contributors/cadence), not size, so we do not
-   split prematurely.
+   the trigger is organizational (separate contributors/cadence), not size, to avoid
+   splitting prematurely.

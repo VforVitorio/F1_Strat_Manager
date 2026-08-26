@@ -6,7 +6,7 @@
         <mxCell id="1" parent="0"/>
 
         <!-- TITLE -->
-        <mxCell id="title" value="Chat &amp; QueryRouter Flow — From User Message to Inline Plotly Charts" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="title" value="Chat &amp; QueryRouter Flow, From User Message to Inline Plotly Charts" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="300" y="10" width="1000" height="40" as="geometry"/>
         </mxCell>
         <mxCell id="subtitle" value="Phase 2 update: tool payload split (full → UI, trimmed → LLM) + CHART display type renders inline Plotly figures" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#94a3b8;fillColor=none;strokeColor=none;" vertex="1" parent="1">
@@ -215,7 +215,7 @@
         <mxCell id="p2_band" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#10172a;strokeColor=#ec4899;strokeWidth=2;dashed=1;opacity=70;" vertex="1" parent="1">
           <mxGeometry x="20" y="690" width="1560" height="470" as="geometry"/>
         </mxCell>
-        <mxCell id="p2_label" value="Phase 2 — StrategyHandler.handle_with_tools()  ·  Tool execution → Payload split → Inline Plotly rendering" style="text;html=1;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#ec4899;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="p2_label" value="Phase 2, StrategyHandler.handle_with_tools()  ·  Tool execution → Payload split → Inline Plotly rendering" style="text;html=1;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#ec4899;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="40" y="700" width="900" height="24" as="geometry"/>
         </mxCell>
 
@@ -285,7 +285,7 @@
         </mxCell>
 
         <!-- Note: bug fix -->
-        <mxCell id="bug_note" value="&lt;b&gt;Side-effect:&lt;/b&gt; compare_drivers &quot;N/A&quot; bug&lt;br&gt;is fixed by design — chart consumes&lt;br&gt;raw nested payload directly, no flattening" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f0f2e;strokeColor=#22c55e;strokeWidth=1;dashed=1;fontColor=#bbf7d0;fontSize=9;verticalAlign=middle;align=center;" vertex="1" parent="1">
+        <mxCell id="bug_note" value="&lt;b&gt;Side-effect:&lt;/b&gt; compare_drivers &quot;N/A&quot; bug&lt;br&gt;is fixed by design, chart consumes&lt;br&gt;raw nested payload directly, no flattening" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f0f2e;strokeColor=#22c55e;strokeWidth=1;dashed=1;fontColor=#bbf7d0;fontSize=9;verticalAlign=middle;align=center;" vertex="1" parent="1">
           <mxGeometry x="1000" y="1050" width="280" height="70" as="geometry"/>
         </mxCell>
 

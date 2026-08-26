@@ -29,7 +29,7 @@ Constraints inherited from the project:
 - LLM providers are OpenAI or LM Studio (local), or open-source models from the HF Hub.
   Never Anthropic. gridmind itself is the open-source path: a Gemma LoRA served locally
   through LM Studio behind the same OpenAI-compatible interface the code already uses.
-- Victor's chosen fine-tuning tool is **Unsloth**. This design centers on it. The only
+- The chosen fine-tuning tool is **Unsloth**. This design centers on it. The only
   fallback, noted once and not developed further: if Unsloth ever blocks (for example a
   temporary gap in Gemma 4 support), plain Hugging Face TRL + PEFT QLoRA reproduces the
   same recipe at roughly 2x the VRAM and wall-clock cost.
@@ -83,7 +83,7 @@ evaluation gate.
 
 ---
 
-## 2. Asset inventory: what already exists (build on it, do not reinvent)
+## 2. Asset inventory: what already exists (reused, not reinvented)
 
 Grounding for everything downstream. All paths are in the core repo.
 
@@ -202,8 +202,8 @@ Deliberately excluded, with reasons stated in the card: motorsport press (Autosp
 Race, official formula1.com content) because it is copyrighted editorial text with no
 redistribution rights; forum/Reddit content because licensing and quality are both
 unclear; books and paywalled analysis for the same reason. The project's thesis and
-IEEE paper text may be added as an owned `project-docs` subset if Victor wants the model
-to speak the system's own architecture language, but they are small and optional.
+IEEE paper text may be added as an owned `project-docs` subset if the model needs to
+speak the system's own architecture language, but they are small and optional.
 
 Two source notes:
 
@@ -609,7 +609,7 @@ measured from day one.
 
 ### 7.3 Structured output through LM Studio
 
-This is the one genuinely delicate integration point, so it is designed explicitly:
+This is the one delicate integration point, so it is designed explicitly:
 
 - The orchestrator wraps its LLM with LangChain structured output over `_LLMSynthesis`.
   LangChain's default method for `ChatOpenAI` is tool calling; small open models served
@@ -662,7 +662,7 @@ Recommendation, in order of increasing stakes:
 | Axis | Question | Instruments |
 |---|---|---|
 | Domain fluency | Does it speak F1 strategy better than base Gemma? | Perplexity on held-out domain text (holdout race reports, unseen regulation sections); terminology-usage spot rubric |
-| Synthesis quality | Are the N31 narrative fields good strategy prose? | Rubric-based LLM-as-judge (gpt-5.4-mini as judge, rubric = the prompt's own reasoning rubric: action-first, cites cliff P50 and pace delta, one situational signal, regulation article when present, MC never sole justification) + blinded human spot checks by Victor on a fixed sample |
+| Synthesis quality | Are the N31 narrative fields good strategy prose? | Rubric-based LLM-as-judge (gpt-5.4-mini as judge, rubric = the prompt's own reasoning rubric: action-first, cites cliff P50 and pace delta, one situational signal, regulation article when present, MC never sole justification) + blinded human spot checks on a fixed sample |
 | Grounding | Does it invent numbers? | The section 6.4 probe battery: fabrication rate, number-fidelity, abstention accuracy, citation accuracy |
 | Format discipline | Does structured output hold? | Schema-compliance and degenerate-compliance rates under LM Studio constrained decoding, on the shipping GGUF |
 | System non-regression | Does swapping the N31 model change decisions for the worse? | The #205 battery: guardrail conformance rate, decision agreement vs the incumbent model on the season-scale replay, golden-case suite (including the Qatar V7 RCM-SC regression case) |
@@ -735,7 +735,7 @@ Must contain:
   content, teacher identity for synthetic targets, checker version and rejection rate.
 - **Per-subset licensing** (the card-level license is "mixed, see subsets"):
   CC BY-SA 4.0 for wiki-derived subsets with the attribution list; owned subsets under
-  a permissive license of Victor's choice (CC BY 4.0 is the natural pick for data);
+  a permissive license yet to be chosen (CC BY 4.0 is the natural pick for data);
   the regulations subset's posture stated plainly (section 9.3); the radio subset
   deferring to radiogate's card.
 - The decontamination manifest and the never-train status of `eval-probes`.
@@ -877,7 +877,7 @@ artifacts, not dates (this is future work with no committed schedule).
 
 ---
 
-## 12. Open questions for Victor
+## 12. Open questions
 
 - **Q1. Training hardware.** What GPU (and VRAM) will the training run on? This alone
   decides 4B-only vs 4B+12B (section 5.1), and whether a one-off cloud run for the 12B
@@ -899,8 +899,8 @@ artifacts, not dates (this is future work with no committed schedule).
 - **Q6. DPO in v1.** Include the preference stage in the first training campaign, or
   hold it as the v1.1 lever if the SFT fabrication gate fails (recommended: hold)?
 - **Q7. Blinded human review budget.** The synthesis-quality and bot-voice evaluations
-  need a fixed sample of human judgments (realistically 50-100 items per round, Victor
-  as judge). Is that budget acceptable, or should the design lean harder on
+  need a fixed sample of human judgments (realistically 50-100 items per round). Is
+  that budget acceptable, or should the design lean harder on
   LLM-as-judge with periodic spot checks?
 - **Q8. Repo topology confirmation.** Independent public repo per the ecosystem rule
   (recommended and assumed here); confirm, since the same question was left open for

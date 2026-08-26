@@ -1,5 +1,5 @@
 /**
- * PITWALL · AGENTS — a decision band over six specialist consoles.
+ * PITWALL · AGENTS: a decision band over six specialist consoles.
  *
  * **The Qt lineage ends here for the LAYOUT, and only for the layout.** Every
  * string, colour and glyph below still comes out of `src/pitwall/agents_view/`,
@@ -9,7 +9,7 @@
  * geometry, faithfully. Faithful is what was wrong with it: the split made the
  * decision a PEER of the agent grid, two territories with no reading order, and
  * the most important content on the window shared its column with a reasoning
- * panel measured at 1.9 % ink.
+ * panel measured at 1.9% ink.
  *
  * Four strata now, top to bottom: header, the DECISION BAND, the agent grid,
  * status bar. The band answers one question per module, left to right, in the
@@ -19,11 +19,11 @@
  * Before the first view arrives the window renders what the Qt window
  * shows at startup, rather than a spinner. That is not the same as
  * `update_from(None)`: the badge is ACCENT purple and the plan line uses
- * em-dashes — `_render_idle` is what Qt paints once a tick with no
+ * em-dashes: `_render_idle` is what Qt paints once a tick with no
  * decision has arrived, a different moment. The scenario scores are the
  * one place that no longer follows Qt: they read `--` rather than the
  * "0%" it painted, because before the first tick nothing has been
- * simulated and 0 % is a measurement.
+ * simulated and 0% is a measurement.
  * The connection chip is the one field taken from Qt's FIRST PAINTED
  * FRAME rather than from its constructor, because the constructor's grey
  * lasts milliseconds and is not a state anybody sees.
@@ -79,7 +79,7 @@ const IDLE_VIEW: AgentsView = {
     lap: "L 0/0",
     playback: "-- × · --",
     // `null` before a view arrives, which renders the unknown chip. There is no
-    // tick yet, so the window genuinely does not know the track status, and
+    // tick yet, so the window does not know the track status, and
     // "GREEN" here would be a claim it cannot make.
     track_status: null,
     track_status_colour: null,
@@ -115,8 +115,8 @@ const IDLE_VIEW: AgentsView = {
     ["UNDERCUT", "UCUT"],
     ["OVERCUT", "OCUT"],
     // `--`, not the `0%` this used to claim. Before the first tick nothing
-    // has been simulated, and "0 %" is a measurement — in a unit the live
-    // view never uses, since a live absent scenario prints `--`. The same
+    // has been simulated, and "0%" is a measurement (in a unit the live
+    // view never uses), since a live absent scenario prints `--`. The same
     // window rendered "no data" three different ways.
   ].map(([key, label]) => ({
     key,

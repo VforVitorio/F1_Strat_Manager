@@ -14,17 +14,17 @@
  * measures intervals from crossings it detects by interpolating a step
  * function; the parquet's `Time` is FastF1's timing table. Measured over all
  * 7,018 at-line pairs of Melbourne 2025 they differ by a median 17 ms
- * (p95 105 ms, worst 568 ms), which is enough to change 83 % of the strings
+ * (p95 105 ms, worst 568 ms), which is enough to change 83% of the strings
  * a tower prints at two decimals, and one pair is sign-inverted outright.
  * `gaps.py` concedes the gap: its crossings sit a median 22 ms from the
- * parquet's and 9.8 % of them land more than a frame away. So the SECONDS
+ * parquet's and 9.8% of them land more than a frame away. So the SECONDS
  * come from the bulk (the official clock) while the ORDER, the status and
  * the laps-down all keep coming from the wire, which is the only side that
  * can answer them mid-lap.
  *
  * The accepted cost, so nobody files it as a bug while both windows are on
- * screen: PITWALL's hundredths differ from the arcade's on about 83 % of
- * pairs by at most a tenth, and on 0.1 % of labels PITWALL shows a dash
+ * screen: PITWALL's hundredths differ from the arcade's on about 83% of
+ * pairs by at most a tenth, and on 0.1% of labels PITWALL shows a dash
  * where the arcade shows a number. PITWALL is the one that matches official
  * timing.
  */

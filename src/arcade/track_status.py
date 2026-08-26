@@ -35,8 +35,8 @@ def track_status_banner(code: str) -> tuple[str, tuple[int, int, int]] | None:
     announces concurrent events: a red flag wins even if a yellow was
     already out in another sector.
 
-    Module level rather than a method because several surfaces read it. It used
-    to be ``RaceEventsPanel._status_for``, and a second consumer arriving in
+    Module level rather than a method because several surfaces read it: as
+    ``RaceEventsPanel._status_for``, a second consumer arriving in
     TypeScript would have forked the priority order and the four labels
     across two languages - the defect ``driver_colors`` rides on the wire to
     prevent.
@@ -78,7 +78,7 @@ def neutralised_label(code: str | None) -> str | None:
     ranks every timed lap into thirds and paints the thirds green / grey / amber,
     and under a safety car those thirds are the accordion's queue order, not
     pace. Measured on Melbourne 2025, 22 of 57 laps carry a safety-car digit and
-    **213 of the 776 cells the grid ranks (27.4 %)** sit on one, with lap times
+    **213 of the 776 cells the grid ranks (27.4%)** sit on one, with lap times
     running 86.4-148.2 s (median 131.6) against a green median of 91.9.
 
     A single yellow returns None on purpose. It is sector-local: the cars that

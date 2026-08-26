@@ -7,9 +7,9 @@
  * (`if (!response.ok) return null`), because in the product that is a server
  * restarting and null already means "keep what you have". So a harness stub
  * missing a method does not throw and does not fail an assertion: the window
- * quietly renders the unknown state and chromium logs one console error.
+ * renders the unknown state and chromium logs one console error.
  *
- * Four stubs had drifted that way by sprint 10 - `smoke-agents.mjs`'s live
+ * Four stubs had drifted that way: `smoke-agents.mjs`'s live
  * page and `shot-agents.mjs` had never gained `get_connection` after #1004
  * wired `useConnection` into the AGENTS window, and `shot-data.mjs` and one
  * `smoke-data.mjs` page carried `get_tick` alone. Only one page per file was

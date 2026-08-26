@@ -1,4 +1,4 @@
-"""Load-boundary validation for race data (F-02, #244).
+"""Load-boundary validation for race data (#244).
 
 Turns silent failure modes at the parquet-read boundary into loud, sourced
 errors before they reach the agents:

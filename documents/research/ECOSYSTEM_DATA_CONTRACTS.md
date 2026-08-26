@@ -313,7 +313,7 @@ How a downstream repo knows what it is building against and when a break lands.
 
 - **The mutable `main` pin is live today** (4). Until the pin manifest ships, every
   installed CLI and every downstream repo is exposed to silent Hub-side changes. This
-  is the highest-leverage single fix in this document.
+  is the single most valuable fix in this document.
 - **`lap_state` has no machine-readable schema yet** (P5 F-15): three consumers
   (`to_arcade_frame` in `replay_engine.py`, the SPA, the future live adapter) mirror it
   by hand. Drift is undetectable until the golden fixtures (L0 / R5) exist.

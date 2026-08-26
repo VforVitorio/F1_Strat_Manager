@@ -5,12 +5,11 @@ than extracting a publishable design package, which is the cheap answer and
 the right one - but a copy with no guard is how palettes drift, and in this
 repo that is not a hypothetical:
 
-> P3 finding A16 warned about exactly this. A gate then measured that the
-> drift had ALREADY happened: `src/arcade/config.py`'s Python palette
+> The drift had ALREADY happened: `src/arcade/config.py`'s Python palette
 > disagrees with the webapp on **every semantic colour**, and its own
 > comment cites a file that no longer exists.
 
-So this test covers all four copies, not just the pair PITWALL introduces.
+Therefore, this test covers all four copies, not just the pair PITWALL introduces.
 A test that guarded only the new pair would leave the broken one uncovered,
 which is this repo's most-repeated defect committed inside the fix for it.
 """
@@ -96,10 +95,9 @@ def test_the_two_python_palettes_still_mirror_each_other():
     a silent divergence would put the arcade HUD, the Qt dashboard and
     PITWALL's AGENTS window on different colours with nothing to catch it.
 
-    **This used to be skipped in CI.** The copy lived in
-    `dashboard/theme.py`, importing it needed libEGL on a headless runner,
-    and `importorskip` therefore skipped the only guard the pair had. The
-    Qt-free split is what made it run.
+    **The copy lived in `dashboard/theme.py`, and importing it needed libEGL
+    on a headless runner, so `importorskip` skipped the only guard the pair
+    had in CI.** The Qt-free split is what made it run.
     """
     from src.arcade import config, palette
 
@@ -160,7 +158,7 @@ def test_the_python_palettes_known_drift_has_not_moved():
 # --- The copies the two PITWALL windows introduced --------------------------
 
 UI_SRC = REPO_ROOT / "src" / "pitwall" / "ui" / "src"
-# Sprint 4 moved the `--qt-*` block out of `agents.css`: the DATA window needs
+# The `--qt-*` block moved out of `agents.css`: the DATA window needs
 # the same tokens, and pasting them into a second stylesheet would have been
 # copy number six. This guard follows the declarations, it does not follow the
 # AGENTS window.
@@ -209,7 +207,7 @@ def test_the_qt_base_palette_has_not_drifted_from_palette_py():
 # The boot state's colours, SLOT BY SLOT. Membership in the palette is not
 # enough: swapping the badge from ACCENT to DANGER keeps every hex inside
 # the palette and still boots the window in the wrong colour. Measured on a
-# mutated source before this map existed — the membership version passed.
+# mutated source before this map existed. The membership version passed.
 BOOT_SLOTS = {
     "action_colour": "ACCENT",
     "confidence_colour": "TEXT_TERTIARY",
@@ -232,7 +230,7 @@ BOOT_SLOTS = {
     "trend_colour": "TEXT_PRIMARY",
     "cliff_colour": "WARNING",
     "boundary_colour": "TEXT_TERTIARY",
-    # Sprint 8's addition. The map is a SUBSET assertion, so a new boot colour
+    # The map is a SUBSET assertion, so a new boot colour
     # it does not name is invisible to it - which is why every slot that exists
     # has to be listed here rather than only the interesting ones.
     #
@@ -247,7 +245,7 @@ BOOT_SLOTS = {
 
 # Copy number five, which had no detector at all: the ECharts axis styling
 # repeats the pens `pace_chart.py` and `telemetry_panel.py` build from the
-# same names. Sprint 4 collapsed it from four hard-coded axis blocks to one
+# same names. It was collapsed from four hard-coded axis blocks to one
 # `valueAxis()` helper both windows call, so the counts fell with it - one
 # site per colour instead of one per axis - and TEXT_TERTIARY joined for
 # band 4's shared cursor.
@@ -281,7 +279,7 @@ TRACE_SLOTS = {
 def test_the_boot_state_colours_are_in_the_right_slots():
     """Copy number four: the state the window paints before the first tick.
 
-    It cannot come from the host — there is no host answer yet — so the
+    It cannot come from the host (there is no host answer yet), so the
     colours are literals in TSX, and each one copies a specific palette
     name. Asserting only that a hex is SOMEWHERE in the palette lets a
     wrong-but-known colour through, which is the failure mode a membership
@@ -350,7 +348,7 @@ def test_the_trace_colours_are_in_the_right_slots():
     brake and throttle swapping places; both hexes stay in the palette and the
     window is simply wrong.
 
-    The rival is NOT in this map. It used to be, as WARNING on every lane, and
+    The rival is NOT in this map. It was WARNING on every lane until
     #1070 replaced that constant with the pinned driver's own colour.
 
     Read from `TraceStack`, which is where the lane table lives now. The file this
@@ -426,7 +424,7 @@ def test_the_radio_category_chips_are_pinned_PER_SITE_not_as_a_set():
     `test_the_data_stylesheets_raw_hexes_are_guarded_too` green while the panel says the
     opposite of what happened. A CLEAR flag painted amber reads as a new warning.
 
-    So this reads the rules themselves: each selector, and the exact value it declares.
+    Therefore, this reads the rules themselves: each selector, and the exact value it declares.
     The pairing is the claim - amber for anything that changes how the track is being
     driven, green for the all-clear - and it is the pairing a swap breaks.
     """
@@ -468,7 +466,7 @@ def test_the_radio_category_chips_are_pinned_PER_SITE_not_as_a_set():
 def test_the_two_raw_hexes_in_the_stylesheet_are_guarded_too():
     """The pair the `--qt-*` guard structurally cannot see.
 
-    `test_the_agents_css_palette_has_not_drifted_from_palette_py` reads
+    `test_the_qt_base_palette_has_not_drifted_from_palette_py` reads
     custom-property declarations, so a literal written straight into a
     rule is invisible to it. #876's wording -- "useEChart.ts stops being
     the ONE palette copy with no detector" -- was literally true and

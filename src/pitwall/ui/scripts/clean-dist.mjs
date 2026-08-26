@@ -7,19 +7,19 @@
  *
  * 1. Vite's `emptyOutDir: true` is set in `vite.config.ts` and does not empty it.
  * 2. `fs.rmSync(..., { force: true })` returns normally and deletes nothing on
- *    this tree — measured down to a single file, with `force` removed so an
+ *    this tree, measured down to a single file, with `force` removed so an
  *    error could not be swallowed: `existsSync` said true before AND after, and
  *    nothing was thrown. A filter driver on the path is the likely culprit;
  *    the cause matters less than the fact that the return value is worthless.
  *
  * What the silence cost: builds accumulate, and every orphan chunk ships inside
  * the wheel. Measured at 83 assets and 11 MB against the 6 and 1.4 MB a clean
- * build produces — seven copies of a 1.3 MB chunk with exactly one of them live.
+ * build produces: seven copies of a 1.3 MB chunk with exactly one of them live.
  * `tests/infra/test_wheel_ships_the_ui.py` is the guard that caught it.
  *
  * So: try Node, verify; fall back to the platform's own delete, verify again;
  * and only then stop the build with something a human can act on. A build that
- * halts is recoverable in seconds. A build that quietly grows the wheel is not
+ * halts is recoverable in seconds. A build that grows the wheel is not
  * noticed until someone weighs it.
  */
 import { spawnSync } from "node:child_process";

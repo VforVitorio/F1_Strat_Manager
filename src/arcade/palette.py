@@ -2,7 +2,7 @@
 
 Colours, the compound and flag maps, and the two HTML badge builders that
 turn a compound or an alert intent into a coloured pill. Nothing here
-imports Qt, pyglet or pandas, which is the whole point: **PITWALL renders
+imports Qt, pyglet or pandas, which is what lets it be shared: **PITWALL renders
 the AGENTS window from the same formatters that paint the Qt one**, and
 those formatters need six colour tuples and two badge builders, not a
 widget toolkit and a dataframe library.
@@ -14,9 +14,9 @@ pandas, against 0.025 s for `src.arcade.config`. A module that answers
 stack.
 
 It lived outside `src/arcade/dashboard/` deliberately, so that retiring
-the Qt windows would not take it with them. That happened in sprint 7:
-the package is gone and this is still here, read by the pyglet HUD and by
-PITWALL's own formatters.
+the Qt windows would not take it with them, and that is exactly what
+happened: the package is gone and this is still here, read by the pyglet
+HUD and by PITWALL's own formatters.
 
 **These values are still a deliberate copy of `src/arcade/config.py`'s**,
 kept separate because the two run in different processes and importing
@@ -97,7 +97,7 @@ def readable_on(background: tuple[int, int, int]) -> tuple[int, int, int]:
     180, and the threshold does not answer the question contrast asks: at
     the alert chip's own grey (#9ca3af) it scores 162 and takes white, and
     white on that grey measures **2.54:1** against the 4.5 the 10 px label
-    needs. The sprint-8 gate found the same 2.54 on the STAY OUT badge -
+    needs. The same 2.54 was measured on the STAY OUT badge -
     the two least legible things on the screen were the alarm and the
     decision.
 
@@ -138,7 +138,7 @@ def legible_fill(
     fill = background
     text = readable_on(fill)
     away = TEXT_PRIMARY if text == BG_COLOR else BG_COLOR
-    # Twelve 8 % steps reach either ground; the loop exits on the first
+    # Twelve 8% steps reach either ground; the loop exits on the first
     # that clears, so a colour already passing is returned unchanged.
     for _ in range(12):
         if contrast_ratio(text, fill) >= _AA_SMALL_TEXT:
@@ -161,7 +161,7 @@ MONO_FONT_STACK: Final[str] = (
 # --- Compound pill HTML (Pirelli-style badge) ---------------------------
 # Compound labels come through the pipeline in several shapes: the
 # friendly agent form ("SOFT", "MEDIUM", "HARD", "INTER", "WET") and the
-# raw Pirelli id ("C1"…"C6"). Both should paint the same pill colour —
+# raw Pirelli id ("C1"…"C6"). Both should paint the same pill colour:
 # red for soft, yellow for medium, white for hard, green for inter,
 # blue for wet. The function returns an HTML snippet that a QLabel can
 # render in rich-text mode, and that a browser renders identically.
@@ -178,7 +178,7 @@ _COMPOUND_COLOUR_BY_LABEL: Final[dict[str, tuple[int, int, int]]] = {
     "H": (230, 230, 230),
     "I": (60, 200, 60),
     "W": (60, 130, 230),
-    # Pirelli Cx mapping per the dry-race convention — hardest compounds
+    # Pirelli Cx mapping per the dry-race convention: hardest compounds
     # white, medium yellow, softest red.
     "C1": (230, 230, 230),
     "C2": (230, 230, 230),
@@ -225,7 +225,7 @@ def compound_pill_html(compound: str | None) -> str:
 
 # --- Alert flag chips ---------------------------------------------------
 # Radio / RCM intents collapse to a coloured chip matching the broadcast
-# flag semantics — red for red-flag / safety-car, amber for VSC / yellow,
+# flag semantics: red for red-flag / safety-car, amber for VSC / yellow,
 # blue for ops "PROBLEM" / "WARNING" radios. Anything unknown stays
 # neutral grey so the reader is never misled by an unstyled label.
 

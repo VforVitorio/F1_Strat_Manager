@@ -2,7 +2,7 @@
 
 - harness `ea9c319` · schema v1 · generated 2026-08-06T18:57:01+00:00
 - era 2022-2025 · dataset data/raw laps, stratified 6-race subset (RAW, not featured) · seed deterministic · llm none
-- artifacts: —
+- artifacts: none
 
 | Metric | Value | Meaning |
 | --- | --- | --- |
@@ -10,11 +10,11 @@
 | Exact lap | 21.2% | chose the lap the team chose |
 | Within 1 lap | 37.9% | same call, one lap either side |
 | Within 2 laps | 51.5% | same strategic window |
-| Mean signed error | -1.97 laps | negative = earlier than the team. **Do not quote as a system property** — still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 at w=3/5/10 on one race), because a wider window admits more distant, and therefore earlier, transitions |
+| Mean signed error | -1.97 laps | negative = earlier than the team. **Do not quote as a system property**, since it still moves with `DECISION_WINDOW_LAPS` (measured -0.33 / -1.29 / -2.50 at w=3/5/10 on one race), because a wider window admits more distant, and therefore earlier, transitions |
 | Mean absolute error | 2.42 laps | magnitude, same width caveat |
 | Coverage verdict | **masked** | `masked` when under 60% of eligible stops were scored |
 
-### Buckets
+## Buckets
 
 | Bucket | Stops |
 | --- | --- |
@@ -65,16 +65,14 @@ synthesis told on every lap that the car ahead sat exactly 2.0 s away and matche
 its pace. **Figures generated before 2026-08-06 are not comparable to these.**
 
 They do not reach N27, which derives its own pair gap from ``laps_df``, nor the
-Monte Carlo, which takes the rivals list from the lap state. An earlier wording
-here said they did.
+Monte Carlo, which takes the rivals list from the lap state.
 
 ### Scope
 
 - Sampled races (6 measured): 2025 Barcelona, 2025 Monaco, 2025 Silverstone, 2025 Marina_Bay, 2025 Lusail, 2025 Monza.
 - **All six are 2025, deliberately.** 2023 and 2024 are training seasons for
   every model in the stack, so a decision tier scored there is partly reading
-  back its own training data. An earlier version of this list took four of its
-  six races from those seasons; the archetypes are unchanged, only the year.
+  back its own training data.
 - A full sweep of the real-stop sample is roughly 11.5 h of wall clock at
   0.51 s per lap through the stack, so this is a stratified subset by circuit
   archetype and **not** full coverage. Read every figure above as conditional

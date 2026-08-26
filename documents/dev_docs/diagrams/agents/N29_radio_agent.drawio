@@ -1,39 +1,39 @@
 <mxfile host="app.diagrams.net">
-  <diagram id="n29" name="N29 — Radio Agent">
+  <diagram id="n29" name="N29, Radio Agent">
     <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1169" pageHeight="900" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="title" value="N29 — Radio Agent  (NLP-first synthesizer · N06 pattern + Pydantic v2)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="title" value="N29, Radio Agent  (NLP-first synthesizer · N06 pattern + Pydantic v2)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="150" y="18" width="700" height="30" as="geometry" />
         </mxCell>
 
         <!-- INPUT -->
-        <mxCell id="input" value="&lt;b&gt;Input — lap_state&lt;/b&gt;&lt;br/&gt;radio_msgs (RadioMessage[]) · rcm_events (RCMEvent[])" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+        <mxCell id="input" value="&lt;b&gt;Input, lap_state&lt;/b&gt;&lt;br/&gt;radio_msgs (RadioMessage[]) · rcm_events (RCMEvent[])" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="270" y="65" width="420" height="50" as="geometry" />
         </mxCell>
 
-        <!-- STAGE 1 — NLP Inference -->
-        <mxCell id="stage1_lbl" value="Stage 1 — NLP Inference (N24 models, run per-message)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=1;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
+        <!-- STAGE 1, NLP Inference -->
+        <mxCell id="stage1_lbl" value="Stage 1, NLP Inference (N24 models, run per-message)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=1;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
           <mxGeometry x="90" y="145" width="780" height="25" as="geometry" />
         </mxCell>
-        <mxCell id="nlp_box" value="&lt;b&gt;Sentiment — RoBERTa N20&lt;/b&gt; · neg/neu/pos&lt;br/&gt;&lt;b&gt;Intent — SetFit N21&lt;/b&gt; · INFORMATION / PROBLEM / ORDER / WARNING / QUESTION&lt;br/&gt;&lt;b&gt;NER — BERT-large N22&lt;/b&gt; · F1 entities (teams, drivers, car parts)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="nlp_box" value="&lt;b&gt;Sentiment, RoBERTa N20&lt;/b&gt; · neg/neu/pos&lt;br/&gt;&lt;b&gt;Intent, SetFit N21&lt;/b&gt; · INFORMATION / PROBLEM / ORDER / WARNING / QUESTION&lt;br/&gt;&lt;b&gt;NER, BERT-large N22&lt;/b&gt; · F1 entities (teams, drivers, car parts)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="100" y="175" width="760" height="80" as="geometry" />
         </mxCell>
 
-        <!-- STAGE 2 — RCM Parser -->
-        <mxCell id="stage2" value="&lt;b&gt;Stage 2 — RCM Parser&lt;/b&gt;&lt;br/&gt;run_rcm_pipeline() — deterministic rule-based · extracts event_type, flag, is_alert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+        <!-- STAGE 2, RCM Parser -->
+        <mxCell id="stage2" value="&lt;b&gt;Stage 2, RCM Parser&lt;/b&gt;&lt;br/&gt;run_rcm_pipeline(), deterministic rule-based · extracts event_type, flag, is_alert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="270" y="320" width="420" height="60" as="geometry" />
         </mxCell>
 
-        <!-- STAGE 3 — Build Alerts -->
-        <mxCell id="stage3" value="&lt;b&gt;Stage 3 — _build_alerts() — deterministic, no LLM&lt;/b&gt;&lt;br/&gt;Radio: intent ∈ {PROBLEM, WARNING} · RCM: is_alert=True&lt;br/&gt;Alerts are final — LLM cannot modify them" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
+        <!-- STAGE 3, Build Alerts -->
+        <mxCell id="stage3" value="&lt;b&gt;Stage 3, _build_alerts(), deterministic, no LLM&lt;/b&gt;&lt;br/&gt;Radio: intent ∈ {PROBLEM, WARNING} · RCM: is_alert=True&lt;br/&gt;Alerts are final, LLM cannot modify them" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="220" y="445" width="520" height="70" as="geometry" />
         </mxCell>
 
-        <!-- STAGE 4 — LLM Synthesis -->
-        <mxCell id="stage4" value="&lt;b&gt;Stage 4 — LLM Synthesis (Pydantic v2 structured output)&lt;/b&gt;&lt;br/&gt;structured_radio_llm.with_structured_output(RadioSynthesis)&lt;br/&gt;RadioSynthesis: reasoning · corrections (CorrectionEntry[] with trigger span)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+        <!-- STAGE 4, LLM Synthesis -->
+        <mxCell id="stage4" value="&lt;b&gt;Stage 4, LLM Synthesis (Pydantic v2 structured output)&lt;/b&gt;&lt;br/&gt;structured_radio_llm.with_structured_output(RadioSynthesis)&lt;br/&gt;RadioSynthesis: reasoning · corrections (CorrectionEntry[] with trigger span)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="185" y="580" width="590" height="75" as="geometry" />
         </mxCell>
 

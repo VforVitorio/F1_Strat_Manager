@@ -10,7 +10,7 @@
  * different fallback nobody notices.
  *
  * **The fallback is a parameter, not a default, because the three callers
- * genuinely need different ones and each reason is worth keeping:**
+ * need different ones and each reason is worth keeping:**
  *
  * - the tower wants `--qt-border`, because as a swatch a bright `--qt-fg-1`
  *   reads as a team colour rather than as the absence of one;

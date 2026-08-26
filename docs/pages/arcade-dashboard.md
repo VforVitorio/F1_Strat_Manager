@@ -13,7 +13,7 @@ Phase 3.5 Proceso B shipped the `src/arcade/dashboard/` package (fifteen modules
 - **Arcade replay**: `pyglet`-backed, owned by `F1ArcadeView`. Drives the simulation loop, owns the `StrategyState`, runs `TelemetryStreamServer` on `127.0.0.1:9998`, and renders the track.
 - **Strategy dashboard**: `PySide6` `MainWindow`. Orchestrator card, six sub-agent cards with embedded `pyqtgraph` charts, scenario bars, six-tab reasoning panel.
 - **Telemetry window**: `PySide6` `TelemetryWindow`. Standalone `QMainWindow` with a 2x2 grid of `pyqtgraph` plots (Delta, Speed, Brake, Throttle) in F1-broadcast style.
-- **PITWALL**: a third process, `python -m src.pitwall`, opening **PITWALL · DATA** and **PITWALL · AGENTS** — two pywebview windows rendering React over the same broadcast, through one shared TCP client. It also serves the same two pages on loopback and logs the URL.
+- **PITWALL**: a third process, `python -m src.pitwall`, opening **PITWALL · DATA** and **PITWALL · AGENTS**, two pywebview windows rendering React over the same broadcast, through one shared TCP client. It also serves the same two pages on loopback and logs the URL.
 
 The pyglet window runs in the arcade process. The two Qt windows live together inside one subprocess; PITWALL is another.
 
@@ -65,7 +65,7 @@ The flagship card. Four visual elements:
 
 ### `agent_card.py`
 
-Reusable widget: headline label, body `QLabel` (rich text with small monospace), and a reserved chart slot. The Pace and Tire cards slot in their `pyqtgraph` plots via `card.set_chart(widget)`. The Pit and RAG cards dim to 60 % opacity when the conditional agent did not fire on the current lap.
+Reusable widget: headline label, body `QLabel` (rich text with small monospace), and a reserved chart slot. The Pace and Tire cards slot in their `pyqtgraph` plots via `card.set_chart(widget)`. The Pit and RAG cards dim to 60% opacity when the conditional agent did not fire on the current lap.
 
 ### `agent_formatters.py`
 
@@ -136,7 +136,7 @@ Top-level keys: `arcade`, `strategy`, `playback`. The dashboard's fan-out router
 
 ### What the wire gained for PITWALL
 
-Every one of these is additive — the Qt dashboard ignores them and is unaffected — and each exists because a consumer would otherwise have to re-derive it and drift from the producer:
+Every one of these is additive (the Qt dashboard ignores them and is unaffected), and each exists because a consumer would otherwise have to re-derive it and drift from the producer:
 
 | Field | What it carries |
 |---|---|
@@ -147,10 +147,10 @@ Every one of these is additive — the Qt dashboard ignores them and is unaffect
 | `arcade.drivers.<code>.active` / `.rel_dist` / `.has_position` | on track, fraction of the current lap, and whether the car was ever placed at all |
 | `arcade.driver_colors` | per-driver RGB from the arcade's own palette, published so no consumer hardcodes a sixth copy of it |
 | `arcade.track_status` | FastF1 TrackStatus digits for the lap on screen |
-| `arcade.telemetry.drivers` | a **span** of samples since the last tick, oldest first, per driver code — not one point, and not just the pinned pair. At 8x, one point per tick discarded 95 % of the trace. Schema v2 replaced the role keys `main`/`rival` with the whole grid so a consumer can chart any car without asking the producer to publish it; read the old pair as `drivers[driver_main]` and `drivers[driver_rival]` |
+| `arcade.telemetry.drivers` | a **span** of samples since the last tick, oldest first, per driver code, not one point, and not just the pinned pair. At 8x, one point per tick discarded 95% of the trace. Schema v2 replaced the role keys `main`/`rival` with the whole grid so a consumer can chart any car without asking the producer to publish it; read the old pair as `drivers[driver_main]` and `drivers[driver_rival]` |
 | `arcade.telemetry.rewound` / `.dropped` | the eviction signals: a backwards seek, and frames a forward jump could not carry |
 | `arcade.global_t_min` / `.location` | the session-time origin, and FastF1's authoritative Location for resolving the race directory |
-| `schema_version` / `seq` | the payload version, and a strictly increasing sequence per message SENT — which is what lets two consumers on independent timers agree on a frame |
+| `schema_version` / `seq` | the payload version, and a strictly increasing sequence per message SENT, which is what lets two consumers on independent timers agree on a frame |
 
 Bumping `CACHE_VERSION` to v12 came with these; the first launch of a given GP after upgrading rebuilds its session pickle.
 

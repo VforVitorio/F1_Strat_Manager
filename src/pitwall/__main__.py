@@ -87,7 +87,7 @@ def main() -> int:
         # TWO windows it gets that wrong, racily. Reproduced both halves against the
         # installed bottle: with the server rooted at `ui/dist`, a request for
         # `data.html` is 200 and one for `dist/data.html` is 404 "File does not
-        # exist."; rooted at `ui` it is the other way round. Víctor saw both, on
+        # exist."; rooted at `ui` it is the other way round. Both were seen on
         # different runs of the same build - `…/6754/dist/data.html` and then
         # `…/52646/data.html`, each a bottle 404 - which is exactly a window
         # computing its URL against one base while the server holds another.

@@ -16,7 +16,7 @@ This project develops an intelligent multi-agent system for Formula 1 telemetry 
 
 ## Release Strategy
 
-Development follows an incremental approach. v0.1–v0.5 covered project setup and integration; v0.6 closed out the data engineering phase; v0.7–v0.8.2 built the ML and NLP foundations; v0.9–v0.11 delivered the multi-agent system, RAG, and CLI distribution.
+Development follows an incremental approach. v0.1-v0.5 covered project setup and integration; v0.6 closed out the data engineering phase; v0.7-v0.8.2 built the ML and NLP foundations; v0.9-v0.11 delivered the multi-agent system, RAG, and CLI distribution.
 
 **Three-release distribution model (v0.12+):** The project ships as three independent artifacts because each has different distribution mechanics:
 - **R1: CLI wheel** (`f1-strat`, `f1-sim`): pip-installable wheel on GitHub Releases, lazy HF data download
@@ -25,7 +25,7 @@ Development follows an incremental approach. v0.1–v0.5 covered project setup a
 
 ---
 
-## v0.1–v0.5 - Legacy Integration & Setup
+## v0.1-v0.5 - Legacy Integration & Setup
 
 - [X] **Status:** Completed (legacy phase, superseded by TFG development from v0.6 onwards)
 - [X] **Release Dates:** v0.1: May 9, 2025; v0.5: May 23, 2025
@@ -63,20 +63,20 @@ Closed out the full data engineering phase. From raw FastF1 telemetry to a clean
 
 - [X] Download and organize 2023-2025 seasons data (N01, extended to 2025, Miami/Barcelona alias fixes)
 - [X] Master EDA: data exploration, cleaning, validation
-- [X] Circuit clustering using K-Means k=4, fitted on 2023–2024, serialized with joblib; 2025 inference via `kmeans.predict()` without refit (N03)
+- [X] Circuit clustering using K-Means k=4, fitted on 2023-2024, serialized with joblib; 2025 inference via `kmeans.predict()` without refit (N03)
 - [X] Feature engineering: 48-column dataset, ~45k clean racing laps; fuel-corrected degradation, sequential lap features, rolling 3-lap degradation, race context, circuit cluster merge (N04)
 - [X] 2025 saved as held-out test set; it never touches training data
 
 **Deliverables:**
 
 - [X] Clean datasets in data/processed/ (2023, 2024, 2025 separate)
-- [X] Circuit clusters defined and validated (`circuit_clusters_k4.parquet`, 25 circuits, 0 unknowns on 2023–2025)
+- [X] Circuit clusters defined and validated (`circuit_clusters_k4.parquet`, 25 circuits, 0 unknowns on 2023-2025)
 - [X] notebooks/data_engineering/ with all EDA and pipeline notebooks
 - [X] Dataset published to HuggingFace Hub (`VforVitorio/f1-strategy-dataset`)
 
 **Success Metrics:**
 
-- [X] All GPs downloaded and validated (2023–2025)
+- [X] All GPs downloaded and validated (2023-2025)
 - [X] 4 circuit clusters identified with clear characteristics
 - [X] Data quality checks pass (no missing critical fields)
 - [X] Feature engineering pipeline reproducible
@@ -99,7 +99,7 @@ Developed and trained the first two ML models: lap time prediction (XGBoost) and
 - [X] Model exported to `data/models/lap_time/`
 - [X] Target: MAE <0.5s. **Achieved: MAE 0.4104s on 2025 test data** ✅
 
-**Tire Degradation Predictor (N07–N10):**
+**Tire Degradation Predictor (N07-N10):**
 
 - [X] EDA and degradation analysis (N07, N08)
 - [X] TCN (Temporal Convolutional Network) architecture in PyTorch (N09)
@@ -134,7 +134,7 @@ Expand ML capabilities with additional prediction models for overtake probabilit
 **Overtake Probability (N11 + N12):**
 
 - [X] EDA and overtake pattern analysis: `N11_overtake_eda.ipynb`
-- [X] 28,494 labeled pairs (2023–2025), gap ≤ 2.5s, 8.44% positive rate
+- [X] 28,494 labeled pairs (2023-2025), gap ≤ 2.5s, 8.44% positive rate
 - [X] LightGBM binary classifier, Optuna hyperparameter search
 - [X] Platt calibration on 2024 validation set
 - [X] Window simulation: P(overtake in N laps) = 1 − ∏(1 − Pₖ)
@@ -185,7 +185,7 @@ Additional predictive models extending the ML foundation: pit stop duration quan
 
 - [X] EDA integrated in same notebook
 - [X] **Model:** `sklearn.HistGradientBoostingRegressor(loss='quantile')` × 3 fits (P05/P50/P95)
-- [X] Target: `physical_stop_est` [2.0–4.5s], physical stop only, pit lane traversal subtracted per circuit
+- [X] Target: `physical_stop_est` [2.0-4.5s], physical stop only, pit lane traversal subtracted per circuit
 - [X] Features: team, year, tyre_life_in, lap_number, compound_id, compound_change, under_sc, tight_pit_box, team_year_median
 - [X] Notebook: `notebooks/strategy/pit_prediction/N15_pit_duration.ipynb`
 - [X] Export: `data/models/pit_prediction/hist_pit_p05/p50/p95_v1.pkl` + `model_config.json`
@@ -194,7 +194,7 @@ Additional predictive models extending the ML foundation: pit stop duration quan
 **Undercut Success Predictor (N16):**
 
 - [X] Label: driver X pits before rival Y (≤5 laps) → X gains position after pit sequence = success
-- [X] Dataset: 1,032 labeled pairs (2023–2025), DRY_COMPOUNDS only (SOFT/MEDIUM/HARD)
+- [X] Dataset: 1,032 labeled pairs (2023-2025), DRY_COMPOUNDS only (SOFT/MEDIUM/HARD)
 - [X] **Model:** LightGBM binary (same architecture as N12/N14) + Platt calibration
 - [X] Features (13): pos_gap_at_pit, pace_delta, tyre_life_diff, circuit_undercut_rate, lap_race_pct, compound_x/y_id, compound_delta, pit_duration_delta, circuit_undercut_rate (target enc), team_x_undercut_rate (target enc)
 - [X] SHAP top: pos_gap_at_pit > pace_delta > circuit_undercut_rate > tyre_life_diff
@@ -338,9 +338,9 @@ Extracted N25-N31 agent entry points to importable `src/agents/` modules. Built 
 - [X] **Status:** Completed
 - [X] **Release Date:** March 22, 2026
 
-LangGraph multi-agent architecture replacing the legacy Experta rule engine. Seven specialised sub-agents (N25–N30) coordinate under a Supervisor Orchestrator (N31). Each agent wraps one or more ML models as `@tool`-decorated LangChain tools and returns a typed dataclass output including a `reasoning` field forwarded to N31.
+LangGraph multi-agent architecture replacing the legacy Experta rule engine. Seven specialised sub-agents (N25-N30) coordinate under a Supervisor Orchestrator (N31). Each agent wraps one or more ML models as `@tool`-decorated LangChain tools and returns a typed dataclass output including a `reasoning` field forwarded to N31.
 
-N31 architecture has three layers: (1) dynamic MoE-style routing, which only activates the sub-agents relevant to the current race state; (2) Monte Carlo simulation, which samples from the probabilistic outputs of N25–N28 (bootstrap CI, MC Dropout P10/P50/P90, Platt-calibrated probabilities, quantile regression intervals) to rank strategy candidates by risk-adjusted expected outcome; (3) LLM synthesis, which aggregates all sub-agent reasoning texts plus MC scenario scores, with N30 regulation context acting as a hard constraint that eliminates illegal options before the LLM decides.
+N31 architecture has three layers: (1) dynamic MoE-style routing, which only activates the sub-agents relevant to the current race state; (2) Monte Carlo simulation, which samples from the probabilistic outputs of N25-N28 (bootstrap CI, MC Dropout P10/P50/P90, Platt-calibrated probabilities, quantile regression intervals) to rank strategy candidates by risk-adjusted expected outcome; (3) LLM synthesis, which aggregates all sub-agent reasoning texts plus MC scenario scores, with N30 regulation context acting as a hard constraint that eliminates illegal options before the LLM decides.
 
 **Sub-agents:**
 
@@ -365,7 +365,7 @@ N31 architecture has three layers: (1) dynamic MoE-style routing, which only act
 - [X] **Status:** Completed
 - [X] **Release Date:** March 30, 2026
 
-Retrieval-augmented generation over FIA Sporting Regulations (2023–2025). Provides normative support for strategic decision-making. Implemented as N30 (notebook) + `src/rag/retriever.py` (importable module for N31).
+Retrieval-augmented generation over FIA Sporting Regulations (2023-2025). Provides normative support for strategic decision-making. Implemented as N30 (notebook) + `src/rag/retriever.py` (importable module for N31).
 
 **Implementation:**
 
@@ -383,7 +383,7 @@ Retrieval-augmented generation over FIA Sporting Regulations (2023–2025). Prov
 
 **Success Metrics:**
 
-- [X] RAG retrieves relevant regulation passages (scores 0.62–0.76 on demo queries) ✅
+- [X] RAG retrieves relevant regulation passages (scores 0.62-0.76 on demo queries) ✅
 - [X] `query_rag_tool` importable by N31 via `from src.rag.retriever import query_rag_tool` ✅
 - [X] `RegulationContext.articles` provides reliable article citations from chunk metadata ✅
 
@@ -460,8 +460,8 @@ Wire the multi-agent system into the FastAPI backend, expose strategy tools via 
 **Step 12: Arcade simulation UI:** ✅ COMPLETE (Phase 3.5 Proceso B, 2026-04-18)
 
 - [X] Three windows from one command: pyglet race replay, PySide6 strategy dashboard,
-      PySide6 live telemetry (2x2 pyqtgraph grid) — the Qt pair was retired in sprint 7
-      and replaced by the two PITWALL windows. Single launcher:
+      PySide6 live telemetry (2x2 pyqtgraph grid). The Qt pair was retired and
+      replaced by the two PITWALL windows. Single launcher:
       `python -m src.arcade.main --viewer --strategy ...`
 - [X] Local strategy pipeline: `src/arcade/strategy_pipeline.py` duplicates the N31
       orchestrator body with verbose outputs. The arcade no longer calls the FastAPI
@@ -584,8 +584,8 @@ Code freeze of the TFG software. Consolidates the interfaces closed in v0.12.0 (
 | v0.7    | 2026-03-05   | Base Models Complete          | Lap Time MAE 0.4104s ✅ / Tire Deg TCN + MC Dropout ✅                              | ✅     |
 | v0.8.1  | 2026-03-13   | Extended ML Models            | Overtake ✅ / SC ✅ / N15 MAE 0.487s / N16 AUC-ROC 0.7708 / N12B archived           | ✅     |
 | v0.9    | 2026-03-17   | src/ Extraction + CLI + Radio | 7 agents extracted, CLI sim, radio corpus, HF lazy download, guard-rails           | ✅     |
-| v0.8.2  | 2026-03-22   | NLP Radio Pipeline            | N17–N24: RoBERTa 0.84 acc / SetFit intent / BERT NER / pipeline P95 59.4ms         | ✅     |
-| v0.10   | 2026-03-22   | Multi-Agent Operational       | N25–N31 all complete, Bahrain 2025 end-to-end demo ✅                              | ✅     |
+| v0.8.2  | 2026-03-22   | NLP Radio Pipeline            | N17-N24: RoBERTa 0.84 acc / SetFit intent / BERT NER / pipeline P95 59.4ms         | ✅     |
+| v0.10   | 2026-03-22   | Multi-Agent Operational       | N25-N31 all complete, Bahrain 2025 end-to-end demo ✅                              | ✅     |
 | v0.11   | 2026-03-30   | RAG Integrated                | 2,279 chunks indexed, BGE-M3, `src/rag/` module complete                           | ✅     |
 | v0.1.1  | 2026-04-09   | R1 CLI Wheel Release          | Tagged wheel on GitHub Releases, `uv tool install git+` works                      | ✅     |
 | v0.12   | 2026-04-15   | Interfaces + Distribution     | FastAPI endpoints, FastMCP tools, Streamlit pages, Arcade replay (3 windows)       | ✅     |
@@ -645,20 +645,20 @@ letting the roadmap contradict the CHANGELOG.
 
 | Version | Milestone | What it adds |
 |---|---|---|
-| **v2.6.0** | Arcade, modernized | A trackside frontend built in **web technology** for part of the live Arcade experience, running **alongside** the pyglet 2D replay rather than replacing it. **Desktop windows, not a web app**: the strategy and telemetry surfaces move to React hosted in the platform webview, reusing the React app's tab and URL-contract machinery from v2.0.0 — they open as OS windows and need no browser and no server. The `lap_state` contract and the agents stay unchanged. |
+| **v2.6.0** | Arcade, modernized | A trackside frontend built in **web technology** for part of the live Arcade experience, running **alongside** the pyglet 2D replay rather than replacing it. **Desktop windows, not a web app**: the strategy and telemetry surfaces move to React hosted in the platform webview, reusing the React app's tab and URL-contract machinery from v2.0.0. They open as OS windows and need no browser and no server. The `lap_state` contract and the agents stay unchanged. |
 | **v2.8.0** | Rival Agent | A new, additive LangGraph node that predicts each nearby rival's next strategic move (pit window, compound, undercut/overcut) and feeds it to the orchestrator. Recommendations move from reactive to anticipatory. The six existing agents are untouched. |
 | **v3.0.0** | Live race inference | Real-time ingestion over the OpenF1 WebSocket (the `lap_state` contract is unchanged, so agents and orchestrator don't change), plus adaptation to the 2026 technical/sporting regulation (re-cluster, re-label compounds, drift monitoring). |
 
-Why that order: v2.6.0 is *same data, better face* — low risk, and it reuses what v2.0.0 already
-built. v3.0.0 is *new data, in real time*, which depends on a live source and its reliability. It
-is worth polishing the modern surface before plugging the live feed into it, so that when live
-data arrives there is somewhere good to render it.
+Why that order: v2.6.0 is *same data, better face*. It carries low risk, and it reuses what v2.0.0
+already built. v3.0.0 is *new data, in real time*, which depends on a live source and its
+reliability. Polishing the modern surface before plugging in the live feed means there is
+somewhere good to render the data once it arrives.
 
 Superseded: "Modern frontend" was planned here as v1.6.0 and **shipped as v2.0.0** on 2026-07-21.
 
 ### Rival Agent: the anticipatory turn (v2.8.0)
 
-Today the system reasons about our own car and treats rivals as scenery; a good pit wall decides by anticipating the cars around it. The Rival Agent closes that gap. It reuses the existing two-driver mode (which already loads a rival's public telemetry next to ours), tire age, gap, track position and history to predict what the cars in our fight will do next. Ground truth is reconstructed from real 2024–2025 pit stops cross-referenced with telemetry; the agent is validated by ablation (with/without) against the real outcome and the actual pit-wall decision on the Grands Prix already validated in the thesis. Supporting building blocks: a rival next-move classifier, a lap-by-lap rival sequence model, situation/profile clustering with anomaly detection, a scaled pit-stop ground-truth pipeline, a neural surrogate of the Monte Carlo simulator, an RL pit-stop benchmark, and analogous-race-state retrieval.
+Today the system reasons about its own car and treats rivals as scenery; a good pit wall decides by anticipating the cars around it. The Rival Agent closes that gap. It reuses the existing two-driver mode (which already loads a rival's public telemetry next to ours), tire age, gap, track position and history to predict what the cars in our fight will do next. Ground truth is reconstructed from real 2024-2025 pit stops cross-referenced with telemetry; the agent is validated by ablation (with/without) against the real outcome and the actual pit-wall decision on the Grands Prix already validated in the thesis. Supporting building blocks: a rival next-move classifier, a lap-by-lap rival sequence model, situation/profile clustering with anomaly detection, a scaled pit-stop ground-truth pipeline, a neural surrogate of the Monte Carlo simulator, an RL pit-stop benchmark, and analogous-race-state retrieval.
 
 Beyond these core releases, the project grows into a multi-repo ecosystem:
 

@@ -146,14 +146,14 @@ def _lap_fraction(rel_dist: float) -> float | None:
 
     The loader now derives `rel_dist` from the driver's own distance
     (`data.py:_lap_fraction_from_distance`), so it is finite and inside
-    [0, 1] for every frame of every driver — this guard fires on nothing
+    [0, 1] for every frame of every driver, so this guard fires on nothing
     in the sessions measured. It stays because the two failure modes it
     exists for are both silent, and one of them was live:
 
     - ``json.dumps`` writes a bare ``NaN``, which Python's own parser
       accepts and ``JSON.parse`` rejects, so a single unknown value took
       the whole payload down for a web consumer. FastF1 used to leave
-      ``RelativeDistance`` NaN for 100 % of one driver's frames.
+      ``RelativeDistance`` NaN for 100% of one driver's frames.
     - clamping is worse than dropping: ``min(1.0, nan)`` is ``1.0``, and
       1.0 means "at the line", so the car with no position data would be
       drawn exactly on the lap boundary rather than nowhere.
@@ -178,9 +178,9 @@ def _frame_to_telemetry(frame, circuit_length_m: float, has_position: bool = Tru
 
     Throttle and brake arrive already on 0-100 and already clamped: the
     scale is decided ONCE per session in `data.py` (`_pedal_multiplier`),
-    not guessed per frame here. The guess used to be `if value <= 1.0:
+    not guessed per frame here. The guess was `if value <= 1.0:
     value *= 100`, which cannot tell "0-1 scale, full throttle" from
-    "0-100 scale, barely lifting" and published 72,104 sub-1 % openings as
+    "0-100 scale, barely lifting" and published 72,104 sub-1% openings as
     80-odd per cent on Melbourne 2025 alone. ``t`` is included so the
     delta-time chart can interpolate rival vs main."""
     if frame is None:
@@ -198,7 +198,7 @@ def _frame_to_telemetry(frame, circuit_length_m: float, has_position: bool = Tru
         "brake": round(brake, 1),
         "gear": int(frame.gear),
         "drs": int(frame.drs),
-        # **Decoded here, and that is the point.** The open set lives in
+        # **Decoded here, not forked into TypeScript.** The open set lives in
         # `config.DRS_OPEN_CODES`; `OwnCarTraces` refuses to fork it into
         # TypeScript, which is why its DRS lane could not exist until the producer
         # published the answer instead of the code - the same treatment
@@ -418,7 +418,7 @@ class F1ArcadeView(arcade.View):
 
         gp_name = self._resolve_gp_name()
         # Provider defaults to OpenAI (what the agents load with
-        # ``F1_LLM_PROVIDER=openai`` — ChatOpenAI model=gpt-4.1-mini for
+        # ``F1_LLM_PROVIDER=openai``, ChatOpenAI model=gpt-4.1-mini for
         # N25-N30 and the orchestrator model for N31). ``F1_LLM_PROVIDER``
         # env wins so a user running LM Studio locally (set it to
         # "lmstudio") keeps working without a code edit.
@@ -436,7 +436,7 @@ class F1ArcadeView(arcade.View):
         )
         self._strategy_state = StrategyState()
         # Pass the lap provider so SimConnector blocks at each lap until the
-        # arcade replay catches up — pausing the visor with SPACE in V2 now
+        # arcade replay catches up, so pausing the visor with SPACE in V2 now
         # also pauses the agentic flow instead of letting it storm ahead
         # through V3, V4, V5 …
         self._strategy_connector = SimConnector(
@@ -485,15 +485,15 @@ class F1ArcadeView(arcade.View):
         """Launch the PITWALL windows as a child process.
 
         The only companion window there is. It ran alongside the Qt dashboard
-        through sprints 2-6 so every PITWALL panel could be compared against
-        the window it replaces while that window still existed; sprint 7
-        retired the Qt one, and the captures that baseline stands on are
+        so every PITWALL panel could be compared against the window it
+        replaces while that window still existed. The Qt one has since been
+        retired, and the captures that baseline stands on are
         committed under `documents/dev_docs/migration/pitwall/` rather than
         living in a session scratchpad, precisely so retiring it destroys
         nothing.
 
         A failed spawn is logged and swallowed: the replay keeps playing
-        without its companion. The commonest failure is simply that the UI
+        without its companion. The commonest failure is that the UI
         bundle has not been built, which `src.pitwall.__main__` reports with
         the exact command."""
         try:
@@ -532,7 +532,7 @@ class F1ArcadeView(arcade.View):
         # Through the helper rather than inline. `_terminate`'s own docstring
         # says a second copy of its block would be the twin that stops getting
         # fixed, and an inline copy WAS that twin until the helper existed.
-        # One companion window survives sprint 7; the helper stays because the
+        # One companion window survives; the helper stays because the
         # reason it exists is about the block, not about the count.
         self._pitwall_proc = self._terminate(self._pitwall_proc, "Pitwall")
         # Pop the close handler with the rest. Leaving it pushed is how the NEXT
@@ -675,7 +675,7 @@ class F1ArcadeView(arcade.View):
 
         Lighter than the internal `_build_frame_dict` consumed by the
         panels: `throttle` and `brake` stay out of the 20-car block
-        because only the two featured cars chart them, and they ride in
+        because only the two featured cars chart them. They ride in
         `telemetry` instead.
 
         `active` and `rel_dist` are here on purpose and are NOT
@@ -683,7 +683,7 @@ class F1ArcadeView(arcade.View):
         from a running one: `np.interp` clamps past a driver's last
         sample, so a lap-1 DNF keeps broadcasting its crash-site `dist`,
         `speed` and `lap` for the rest of the race. Without `rel_dist`
-        there is no way to place a car around the current lap —
+        there is no way to place a car around the current lap.
         `dist % circuit_length_m` is not a substitute, because `dist`
         accumulates each lap as actually driven (an in-lap and an
         out-lap are neither the same length as each other nor as the
@@ -721,7 +721,7 @@ class F1ArcadeView(arcade.View):
             }
         # --- Race order and the reveal coordinates (#857) -------------------
         # Published by the producer so no consumer re-derives the order from
-        # `dist` (race-cumulative: the wrong leader on 37 % of sampled frames)
+        # `dist` (race-cumulative: the wrong leader on 37% of sampled frames)
         # or from `lap` (a rounded interpolation that flickers +-1 at the
         # line). `_rank_drivers` is the SAME code the arcade leaderboard ranks
         # with, so the wire and the panel cannot drift apart.
@@ -731,13 +731,13 @@ class F1ArcadeView(arcade.View):
         #   reveal (reveal lap L iff L <= laps_completed). It reads the
         #   crossing map, so it is monotone while playing forward - swept
         #   over 20 drivers x 154,173 frames, no counter-example. It is NOT
-        #   exact against the parquet: 76 of 921 crossings (8.3 %) open
+        #   exact against the parquet: 76 of 921 crossings (8.3%) open
         #   before the parquet's `Time` by more than HALF A FRAME (0.02 s),
         #   worst case 0.463 s, because the `lap` field these crossings are
         #   detected from is an interpolation rather than a line detector.
         #   The half-frame threshold is the convention, and stating it is the
-        #   point: strictly greater than zero the count is 110 (11.9 %) and
-        #   beyond a full 40 ms frame it is 49 (5.3 %). Sub-half-frame is
+        #   point: strictly greater than zero the count is 110 (11.9%) and
+        #   beyond a full 40 ms frame it is 49 (5.3%). Sub-half-frame is
         #   rounding noise, but a reader cannot know that from the number.
         #   Monotone and per driver, not frame-accurate.
         # - `progress` is the ordering coordinate, laps plus fraction of the
@@ -764,7 +764,7 @@ class F1ArcadeView(arcade.View):
         #
         # The clock advances `delta_time * FPS * speed` indices per second
         # over 25 Hz data while the broadcast fires at ~10 Hz, so sending one
-        # point per tick discarded 60 % of the trace at 1x and 95 % at 8x: a
+        # point per tick discarded 60% of the trace at 1x and 95% at 8x: a
         # speed trace went from a point every 8 metres to one every 170. The
         # producer already holds the whole array, so the span costs a slice
         # and no disk read.
@@ -781,9 +781,9 @@ class F1ArcadeView(arcade.View):
         # not need a fourth rule.
         #
         # **A retired car still carries a span**, because its frame array runs
-        # the full length of the race and the values simply stop changing. On
-        # Melbourne 2025 that is three lap-1 retirements, 14.5 % of the arcade
-        # block on a seek tick and about 13.8 % of the whole message once the
+        # the full length of the race and the values stop changing. On
+        # Melbourne 2025 that is three lap-1 retirements, 14.5% of the arcade
+        # block on a seek tick and about 13.8% of the whole message once the
         # strategy block rides along. What each of them costs per tick moves with
         # playback: a span is `FPS x speed / 10 Hz` samples, so 2-3 at 1x and 20
         # at 8x, not a fixed handful. They stay: `active` and `has_position` are published beside
@@ -867,7 +867,7 @@ class F1ArcadeView(arcade.View):
             "track_status_label": status_label[0] if status_label else None,
             "track_status_color": list(status_label[1]) if status_label else None,
             # Circuit length lets the telemetry window anchor the X axis
-            # once and forget — without it the charts would autorange to
+            # once and forget, because without it the charts would autorange to
             # the current sample's max and shift every broadcast.
             "circuit_length_m": round(self._session.circuit_length_m or 0.0, 1),
             "driver_main": self._driver_main,
@@ -896,8 +896,8 @@ class F1ArcadeView(arcade.View):
             frame, self._session.driver_colors, self._gaps, frame_idx, self._selected_drivers
         )
         # Anchor the race-events pill right under the leaderboard's bottom
-        # edge — the leaderboard's row count varies per session, so we read
-        # ``bottom_y`` (set during draw above) instead of hard-coding an offset.
+        # edge. The leaderboard's row count varies per session, so
+        # ``bottom_y`` (set during draw above) is read instead of hard-coding an offset.
         self._race_events.set_top(self._leaderboard.bottom_y - RaceEventsPanel.GAP_FROM_LEADERBOARD)
         self._race_events.draw()
         self._weather.draw(frame, self.window.height)

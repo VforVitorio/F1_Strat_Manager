@@ -8,12 +8,11 @@ Two defects lived here and compounded:
 2. the gap was that distance divided by a hardcoded 55.56 m/s, an assumed
    200 km/h for every car, everywhere, in every condition.
 
-**The fixture below carries per-car accumulation drift on purpose.** An
-earlier version of this file did not, and an adversarial gate showed that 8
-of its 14 tests passed with the fix reverted: `dist` and true progress were
-the same quantity by construction, which is the one property the real data
-does not have. `_car(drift_per_lap_m=...)` reproduces it, and the ranking
-tests below fail without the fix.
+**The fixture below carries per-car accumulation drift on purpose.** Without
+it, `dist` and true progress would be the same quantity by construction,
+which is the one property the real data does not have, and 8 of this
+file's 14 tests would pass with the fix reverted. `_car(drift_per_lap_m=...)`
+reproduces it, and the ranking tests below fail without the fix.
 
 Accuracy against real data is a separate question, measured on Melbourne
 2025 and recorded in `src/arcade/gaps.py` together with the coordinates
@@ -171,7 +170,7 @@ def test_the_order_is_right_when_dist_and_true_progress_disagree():
     """The test the old fixture could not express, because it had no drift.
 
     SLOW runs long per lap, so its `dist` exceeds FAST's while FAST is
-    genuinely ahead on track. Ranking on `dist` inverts them; ranking on
+    ahead on track. Ranking on `dist` inverts them; ranking on
     laps completed plus fraction of the lap does not.
     """
     session = _session(FAST=_car(52.0), SLOW=_car(50.0, drift_per_lap_m=400.0))
@@ -251,7 +250,7 @@ def test_a_crossing_is_the_first_frame_of_the_increment_and_not_the_last():
 def test_a_car_whose_rel_dist_is_missing_is_still_ranked():
     """The coordinate does not read `rel_dist`, so a NaN one cannot break it.
 
-    On Melbourne 2025 FastF1 leaves `RelativeDistance` NaN for 100 % of
+    On Melbourne 2025 FastF1 leaves `RelativeDistance` NaN for 100% of
     HAD's frames. Ranking on it would have dropped a whole car off the
     order; ranking on distance-since-the-last-crossing does not notice.
     """
@@ -290,7 +289,7 @@ def test_the_interval_is_the_difference_of_two_line_crossings():
     """Two cars at 50 m/s, a tenth of a lap apart, is a 10.0 s interval.
 
     The old formula divided the same 500 m by 55.56 and returned 9.00 s: a
-    10 % error on a case where both cars travel at very nearly the speed
+    10% error on a case where both cars travel at very nearly the speed
     the constant was chosen to approximate.
     """
     session = _session(FRONT=_car(50.0, head_start_laps=0.1), BACK=_car(50.0))
@@ -301,7 +300,7 @@ def test_the_interval_is_the_difference_of_two_line_crossings():
 
 
 def test_a_slow_field_reads_slow_and_a_fast_field_reads_fast():
-    """The interval follows the field's real speed, which is the whole point.
+    """The interval follows the field's real speed.
 
     A tenth of a lap is 20 s apart under a Safety Car at 25 m/s and 7.1 s
     at 70 m/s. A hardcoded 55.56 answers 9.0 s to both, over-reading the
@@ -346,9 +345,9 @@ def test_no_assumed_speed_constant_survives_in_the_gap_path():
 def test_laps_down_is_positional_and_survives_the_accumulation_drift():
     """The case the `dist` form gets wrong.
 
-    The rate carried here used to be "4.9 % of same-corner pairs", which
+    The rate carried here was "4.9% of same-corner pairs", which
     is a number nothing in this repo measured: the figure #862 actually
-    published for same-corner disagreement is 3.4 % over n=4,934, under a
+    published for same-corner disagreement is 3.4% over n=4,934, under a
     convention this docstring never stated. An unsourced percentage in a
     test is how a wrong number gets quoted back as evidence, so it is gone
     rather than swapped for one whose population may differ.
@@ -456,7 +455,7 @@ def test_an_inverted_call_is_none_and_never_a_plausible_zero():
     """Zero is a real answer for both methods, so it cannot double as "invalid".
 
     `laps_down` used to return 0 for an inverted pair, which is also what
-    it returns for "same lap" — the twin of a discipline `interval_at_line`
+    it returns for "same lap": the twin of a discipline `interval_at_line`
     spends five docstring lines defending twenty lines above it.
     """
     session = _session(FRONT=_car(50.0, head_start_laps=0.1), BACK=_car(50.0))
@@ -712,7 +711,7 @@ def _own_lengths_car(lap_lengths_m: list[float]) -> list[FrameData]:
     own-length deltas of median 9.2 m, up to 340 m): `dist` accumulates
     what the car actually drove, so at its own telemetry end a car's
     final-lap fraction is measured against the PREVIOUS lap's own length.
-    `_car` cannot express it — all its laps are the same length.
+    `_car` cannot express it: all its laps are the same length.
     """
     speed = 50.0
     frames: list[FrameData] = []
@@ -732,7 +731,7 @@ def test_the_wall_clock_winner_finishes_when_the_official_result_says_so():
     WIN's previous lap ran 100 m long, so at its own end its fraction reads
     5000/5100 < 1.0; P2's ran 50 m short, so P2 clamps to 1.0 while still
     short of its line. The derived anchor then crowns P2 and classifies the
-    wall-clock winner — who crossed 1.0 s earlier — as a retirement. The
+    wall-clock winner (who crossed 1.0 s earlier) as a retirement. The
     official result knows both finished, and it is on disk.
     """
     session = _session(
@@ -807,7 +806,7 @@ def test_a_disagreement_between_official_and_derived_is_logged(caplog):
     """Two code paths answering one question is this repo's own defect class.
 
     The official result wins, but a divergence from the derived rule must
-    become evidence in the log — it is the net that catches a vocabulary
+    become evidence in the log: it is the net that catches a vocabulary
     surprise (a DSQ spelling, a status FastF1 renames) instead of letting
     the replay and a future live feed drift apart silently.
     """
@@ -848,7 +847,7 @@ def test_a_car_with_no_position_data_has_no_progress_rather_than_zero():
     frames with `dist`, `x` and `y` all at 0.0. `progress` computed 0.0 from
     that and returned it, so "we have no data for this car" and "this car is
     at the start line" were the same number - on the coordinate the entire
-    field is ordered by, one sprint before the wire starts publishing it.
+    field is ordered by, and before the wire started publishing it.
 
     The panel already partitions `None` out and appends it last. It simply
     never received one.
