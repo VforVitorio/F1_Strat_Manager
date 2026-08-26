@@ -12,14 +12,14 @@ The multi-agent system replaces the legacy Experta rule engine (`base_agent.py`,
 graph TD
     RSM[RaceStateManager] -->|lap_state dict| ORCH[Strategy Orchestrator N31]
 
-    subgraph "Layer 1 — Always-On Agents"
+    subgraph "Layer 1: always-on agents"
         N25[N25 Pace Agent<br/>XGBoost + Bootstrap CI]
         N26[N26 Tire Agent<br/>TireDegTCN + MC Dropout]
         N27[N27 Race Situation Agent<br/>LightGBM Overtake + SC]
         N29[N29 Radio Agent<br/>RoBERTa + SetFit + BERT NER]
     end
 
-    subgraph "Layer 1 — Conditional Agents (MoE Routing)"
+    subgraph "Layer 1: conditional agents (MoE routing)"
         N28[N28 Pit Strategy Agent<br/>N15 Quantiles + N16 Undercut]
         N30[N30 RAG Agent<br/>Qdrant + BGE-M3]
     end
@@ -32,15 +32,16 @@ graph TD
     N26 -->|tire_warning == PIT_SOON| N28
     N29 -->|PROBLEM or WARNING alert| N28
     N27 -->|sc_prob > 0.30| N30
+    N29 -->|WARNING intent, or an RCM RED_FLAG / TIME_PENALTY| N30
     N28 -->|always when N28 active| N30
     N27 -->|sc_currently_active, overrides every threshold| N28
     N27 -->|sc_currently_active, overrides every threshold| N30
 
-    subgraph "Layer 2 — Monte Carlo Simulation"
+    subgraph "Layer 2: Monte Carlo simulation"
         MC[500 draws x 4 candidates<br/>STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT<br/>score = alpha * E + 1-alpha * P10]
     end
 
-    subgraph "Layer 3 — LLM Synthesis"
+    subgraph "Layer 3: LLM synthesis"
         LLM[ChatOpenAI.with_structured_output<br/>StrategyRecommendation]
     end
 
