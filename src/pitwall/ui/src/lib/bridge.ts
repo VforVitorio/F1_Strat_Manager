@@ -296,15 +296,16 @@ const BRIDGE_READY_TIMEOUT_MS = 250;
  * fails silently, which renders an empty window with nothing in any log - hence a
  * wait at all.
  *
- * **There used to be an `IN_A_WINDOW` constant here, defined as
- * `location.protocol === "file:"`, and #996 made it a lie.** The windows now load
- * over the host's own loopback server, so a real PITWALL window reports `http:`
- * exactly like a browser tab and the sniff answered "browser" inside the product.
- * It was benign - every getter below dispatches on the OBJECT, so a window used its
- * API as soon as one appeared - but the constant's name, its comment ("`file:` is
- * the giveaway a window ALWAYS has") and its five early-return guards all described
- * a world that no longer exists, and each guard skipped a `fetch` to a route that
- * is now always there.
+ * **A protocol sniff (`location.protocol === "file:"`) would be a lie here.**
+ * The windows load over the host's own loopback server, so a real PITWALL
+ * window reports `http:` exactly like a browser tab, and a sniff like that
+ * would read it as a browser inside the product. That would be benign in
+ * practice: every getter below dispatches on the OBJECT, so a window uses its
+ * API as soon as one appears. But naming a constant after the protocol, with
+ * a comment claiming `file:` is the giveaway a window ALWAYS has, and gating
+ * five early-return guards on it, would describe a world that does not
+ * exist, and each such guard would skip a `fetch` to a route that is always
+ * there.
  *
  * So the protocol is not consulted at all. The event is raced against a timeout: in
  * a window it resolves on the announcement, in a tab on the floor, and neither path
@@ -354,14 +355,6 @@ export async function getTick(sinceSeq: number): Promise<Tick | null> {
   return fetchJson<Tick>("/api/tick", sinceSeq);
 }
 
-/**
- * The whole AGENTS view, from whichever transport this page has.
- *
- * It lives here rather than in `agents.ts` for the same reason `getTick`
- * does: this module is the ONE place that knows how a payload arrives, and
- * the browser fallback would otherwise have to be written twice - which is
- * this repo's dominant defect, one copy fixed and its twin not.
- */
 /**
  * The revealed lap table, or null when this caller's revision is current.
  *
@@ -417,6 +410,11 @@ export async function getConnection(): Promise<Connection | null> {
 
 /**
  * The AGENTS view, or null when this caller's view is current.
+ *
+ * It lives here rather than in `agents.ts` for the same reason `getTick`
+ * does: this module is the ONE place that knows how a payload arrives, and
+ * the browser fallback would otherwise have to be written twice - which is
+ * this repo's dominant defect, one copy fixed and its twin not.
  *
  * **Two things the caller holds, not one.** The sequence says which tick it
  * rendered; `sinceConnection` says which connection LABEL it rendered. The

@@ -89,7 +89,7 @@ const EMPTY: RaceTrace = { laps: [], lines: [], zero: "", total: 0 };
  * The cars that BOUND the lap axis. Not the cars the reference averages over -
  * see `referenceTimes`, and see the defect below for why they are two lists.
  *
- * ⚠️ **They used to be one list, and it moved the drawn history under the
+ * ⚠️ **A single list would move the drawn history under the
  * reader.** This filter reads CURRENT status, so the moment a car retires it
  * leaves the set - and if the reference were averaged over the same set, every
  * point of every line, all the way back to lap 1, would be recomputed without
@@ -169,7 +169,7 @@ function lastCommonLap(bulk: Bulk, codes: string[]): number {
   let common = Infinity;
   for (const code of codes) {
     // Every code here is named by the bulk - `population` guarantees it - so
-    // an empty crossing map means "revealed nothing yet", which genuinely
+    // an empty crossing map means "revealed nothing yet", which
     // bounds the trace at zero and renders the empty state.
     //
     // The `?.` is nevertheless not decoration, and the cost asymmetry is why:

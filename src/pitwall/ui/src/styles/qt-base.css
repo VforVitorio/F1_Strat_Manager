@@ -7,10 +7,10 @@
  * for its type scale.
  *
  * **It is one file because it would otherwise be two.** The AGENTS window
- * declared these in its own stylesheet in sprint 3; when DATA needed the
- * same tokens in sprint 4 the cheap move was to paste them, which would
- * have been copy number six of a palette this repo has already found five
- * copies of. One declaration site, one drift guard.
+ * declared these in its own stylesheet; when DATA needed the same tokens the
+ * cheap move was to paste them, which would have been copy number six of a
+ * palette this repo has already found five copies of. One declaration site,
+ * one drift guard.
  */
 
 :root {
@@ -91,11 +91,10 @@ body {
 
 /* --- Scrollbars: reachable, invisible ------------------------------------
  *
- * Víctor, on seeing the AGENTS window: get rid of the bars that appear for
- * scrolling inside the cards. They are visual noise on a surface whose whole
- * job is to be read at a glance, and the overflow that summons them is
- * usually trivial - measured, four of the six card bodies overflow by
- * FOURTEEN pixels and each was drawing a full-height scrollbar for it.
+ * The bars that appear for scrolling inside the cards are visual noise on a
+ * surface whose whole job is to be read at a glance, and the overflow that
+ * summons them is usually trivial - measured, four of the six card bodies
+ * overflow by FOURTEEN pixels and each was drawing a full-height scrollbar for it.
  *
  * Hidden, not removed. The bodies stay `overflow: auto`, so a wheel, a
  * trackpad, a touch drag and the keyboard all still reach the content. What

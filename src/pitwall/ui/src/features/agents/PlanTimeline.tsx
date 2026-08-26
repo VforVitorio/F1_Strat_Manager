@@ -90,10 +90,8 @@ export function PlanTimeline({ view }: { view: PlanTimelineView }) {
           pill it can carry - an HTML span built and escaped in
           `src/arcade/palette.py`.
 
-          **This comment used to call that pill "the last markup sink on this
-          window's decision surface", and the exit gate found the hole one line
-          away from the sentence.** The pill was escaped; `undercut_target`
-          beside it was not, and it is an unconstrained `Optional[str]` the
+          The pill was escaped; `undercut_target` beside it was not, and it
+          is an unconstrained `Optional[str]` the
           orchestrator LLM fills - `<img src=x onerror=...>` reached this
           caption verbatim. `_plan_line` escapes every field it interpolates
           now, and `test_no_agent_string_can_become_markup` feeds a hostile

@@ -1,8 +1,8 @@
 /**
- * Running, finished, or out — the one place that predicate exists.
+ * Running, finished, or out: the one place that predicate exists.
  *
  * It is in `lib/` before its second caller exists, deliberately. Band 4's
- * ring needs it now and sprint 5's timing tower needs the identical
+ * ring needs it now and the timing tower needs the identical
  * predicate, and two components each writing `!active && !has_finished`
  * inline is this repo's dominant defect: one copy of a rule gets fixed and
  * its twin does not. The Qt telemetry panel shipped exactly that pair.
@@ -12,7 +12,7 @@
  * 20 cars as retired, the winner included, because a car that has taken the
  * chequered flag stops broadcasting just like a car that crashed. Only one
  * driver is still `active` at `t_max` (BEA, who owns it). Adding
- * `has_finished` — FastF1's official classification since #879 — recovers
+ * `has_finished` (FastF1's official classification since #879) recovers
  * the real 13 finished / 6 retired split, which is the official 14/6 once
  * BEA is counted.
  *

@@ -1,10 +1,10 @@
 /**
  * The ECharts primitives both windows share: the mount hook and the axis look.
  *
- * **Chart data never goes through React state.** That is the web form of
- * P3 finding A6 - the Qt dashboard rebuilt six cards, six highlighted text
- * areas and two whole charts ten times a second for content that changes
- * once a lap - applied before it happens rather than after.
+ * **Chart data never goes through React state.** That is the web form of a
+ * problem the Qt dashboard already paid for: it rebuilt six cards, six
+ * highlighted text areas and two whole charts ten times a second for content
+ * that changes once a lap - applied before it happens rather than after.
  *
  * `animationDurationUpdate: 0` is the contract `useFirstPaintAnimation.ts`
  * already encodes in the webapp: the entrance sweep plays once, on the first
@@ -43,7 +43,7 @@ export const SPLIT_LINE = "rgba(255,255,255,0.06)";
  */
 export const CURSOR_LINE = "#9ca3af";
 /**
- * `palette.WARNING` at 12% - the shaded lap range the field was neutralised on.
+ * `palette.WARNING` at 8% - the shaded lap range the field was neutralised on.
  *
  * A translucent FILL rather than a stroke, and that is the constraint rather
  * than a preference: on this window a dashed line already means broadcast-tier

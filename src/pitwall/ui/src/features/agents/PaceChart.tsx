@@ -2,7 +2,7 @@
  * Predicted lap time against actual, with the P10-P90 credible band.
  *
  * 1:1 with `pace_chart.py`: solid blue actual, dashed purple predicted,
- * translucent purple band. What may be plotted was decided host side —
+ * translucent purple band. What may be plotted was decided host side:
  * the 30-200 s sanity window, and three independent series so a lap that
  * has an actual but no prediction does not drag the dashed line to zero.
  *
@@ -26,7 +26,7 @@ export function PaceChart({ series }: { series: PaceSeries }) {
    * A tick with no `per_agent` block still carries the lap time, so the solid
    * line keeps advancing while the dashed one and its band stay where the last
    * prediction was. Nothing on the chart said so: the reader saw two lines,
-   * one of which had quietly become history.
+   * one of which had become history.
    *
    * Dimmed AND labelled, because dimming alone is ambiguous on a chart that
    * already draws a translucent band, and a label alone is easy to miss.
@@ -56,7 +56,7 @@ export function PaceChart({ series }: { series: PaceSeries }) {
         : [],
       // The tyre chart's lap axis, borrowed. Two charts of the same quantity
       // side by side used to autorange independently, so lap 23 sat at 95%
-      // of this plot and 47% of its neighbour — a comparison a reader
+      // of this plot and 47% of its neighbour. That is a comparison a reader
       // cannot make, on the one screen where they are meant to make it.
       xAxis: lapAxis(series.x_range),
       series: [

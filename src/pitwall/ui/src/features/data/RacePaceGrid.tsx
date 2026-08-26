@@ -330,7 +330,7 @@ export function RacePaceGrid({
 
             ONE delegated listener on the table, not a handler per cell: there
             are 1,140 of them. `mouseover` fires when the pointer crosses into a
-            new element rather than on every move, and `remember` drops the write
+            new element rather than on every move, and `onCellOver` drops the write
             when the cell has not changed, so this is a state update per cell
             entered - human-paced - and never one per mousemove. */}
         <table className="pace-table" onMouseOver={onCellOver} onMouseLeave={clearCell}>

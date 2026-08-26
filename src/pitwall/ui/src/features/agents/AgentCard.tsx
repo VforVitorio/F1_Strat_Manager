@@ -9,9 +9,9 @@
  * which can carry the compound pill and the flag chips - HTML spans built
  * in `src/arcade/palette.py`. Because those lines ARE markup, every other
  * field on them has to be escaped, and `agent_formatters._escaped` is what
- * does it: the messages are free text off the NLP pipeline, so a `<` in a
- * transcript was a tag until the exit gate said so.
- * **The tooltip no longer does**: sprint 8 turned the two tooltip
+ * does it: the messages are free text off the NLP pipeline, so an unescaped
+ * `<` in a transcript becomes a tag.
+ * **The tooltip no longer does**: the two tooltip
  * formatters into structured data, so the popup below is built from
  * fields rather than parsed out of a dead toolkit's dialect. The pills
  * are the same debt one layer down and are filed separately.

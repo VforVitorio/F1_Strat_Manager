@@ -15,7 +15,7 @@
  * version of this hook shipped it.
  *
  * An error or a waiting message is NOT transient: Qt gives those no timeout,
- * because they are the ones you must still be able to read.
+ * because those are the ones that must still be readable.
  *
  * It lives in `lib/` rather than beside the AGENTS window because the DATA
  * window's status bar is the same widget with the same timeout, and a second

@@ -1,4 +1,4 @@
-/* PITWALL · DATA — band 4's geometry, in CSS.
+/* PITWALL · DATA: band 4's geometry, in CSS.
  *
  * Every number here comes from a Qt call in the retired dashboard's
  * `telemetry_panel.py` or `telemetry_window.py`:
@@ -214,7 +214,7 @@
  *
  * 630 px for the left column, and the number is measured on THIS table rather
  * than inherited: its natural width is 597 px at 11 px mono, so the card needs
- * 619 before any column is compressed. The design gate's prototype measured
+ * 619 before any column is compressed. A prototype measurement put it at
  * 597.6 and recommended 620, which happens to land one pixel clear - close
  * enough that a font fallback would eat it. 630 leaves eleven pixels of air.
  */
@@ -917,7 +917,7 @@ td.col-drv {
   letter-spacing: 0.5px;
 }
 
-/* `_delta_placeholder`: centred, italic, tertiary, 12 px — and it REPLACES
+/* `_delta_placeholder`: centred, italic, tertiary, 12 px, and it REPLACES
  * the plot rather than sitting over it. */
 .trace-placeholder {
   flex: 1 1 auto;
@@ -1080,12 +1080,12 @@ td.col-drv {
   gap: 6px;
   padding: 10px;
   min-height: 0;
-  /* The CARD clips; the LIST below scrolls. Both used to be `overflow: hidden`,
-   * which made this the one panel in the window whose content was genuinely
-   * unreachable: measured on the live page, 10 of 46 events visible, 344 px of
-   * clientHeight against 1379 of scrollHeight, and no user input that could
-   * reach the other 36 - setting `scrollTop` from the console worked, so the
-   * content was there and only the reader had no path to it.
+  /* The CARD clips; the LIST below scrolls. Setting both to `overflow: hidden`
+   * makes this the one panel in the window whose content becomes unreachable:
+   * measured on the live page, 10 of 46 events visible, 344 px of clientHeight
+   * against 1379 of scrollHeight, with no user input able to reach the other
+   * 36 (setting `scrollTop` from the console still worked, so the content was
+   * there and only the reader had no path to it).
    *
    * That is not the window's hidden-scrollbar rule. `qt-base.css` hides the
    * CHROME and keeps bodies scrollable, in as many words: "a wheel, a trackpad,
@@ -1598,8 +1598,8 @@ td.col-drv {
    * both, and the 1707x960 reference machine already misses the fit by 22 px.
    *
    * Raising it would make every client more legible and cost the desktop the
-   * one place the race is visible at a glance. That trade was put to Víctor on
-   * 2026-08-24 and he kept the fit. Recorded so the next reader finds a
+   * one place the race is visible at a glance. This trade was decided on
+   * 2026-08-24, in favor of keeping the fit. Recorded so the next reader finds a
    * decision rather than an unjustified constant, and so that changing it is a
    * deliberate reversal rather than a tidy-up. It must NOT be allowed to veto
    * responsive work on the clients where the fit does not exist. */
@@ -1757,10 +1757,10 @@ td.col-drv {
 }
 
 /* The plot fills `.trace-band-hover`, which is the flex child that takes
- * whatever the header leaves. It used to be that child itself, with `flex: 1`
- * and the `min-height: 0` that makes a flex item shrinkable - without which the
- * div takes its content height, ECharts measures zero, and renders a canvas
- * nothing ever appears on. The wrapper carries both now, because the hover
+ * whatever the header leaves, carrying `flex: 1` and the `min-height: 0` that
+ * makes a flex item shrinkable, without which the div takes its content
+ * height, ECharts measures zero, and renders a canvas nothing ever appears
+ * on. The wrapper carries both instead of the plot itself, because the hover
  * cursor and the readout box need a positioning context that is not the canvas. */
 .trace-band-plot {
   position: absolute;
