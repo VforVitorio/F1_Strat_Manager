@@ -35,8 +35,8 @@ def track_status_banner(code: str) -> tuple[str, tuple[int, int, int]] | None:
     announces concurrent events: a red flag wins even if a yellow was
     already out in another sector.
 
-    Module level rather than a method because several surfaces read it. It used
-    to be ``RaceEventsPanel._status_for``, and a second consumer arriving in
+    Module level rather than a method because several surfaces read it: as
+    ``RaceEventsPanel._status_for``, a second consumer arriving in
     TypeScript would have forked the priority order and the four labels
     across two languages - the defect ``driver_colors`` rides on the wire to
     prevent.

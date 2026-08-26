@@ -83,7 +83,7 @@ class SessionData:
 
     version: str = CACHE_VERSION
     gp_name: str = ""
-    # FastF1 ``session.event['Location']`` — matches the per-race folder name
+    # FastF1 ``session.event['Location']``, matches the per-race folder name
     # under ``data/raw/<year>/`` (``Suzuka``, ``Melbourne``, …). Normally
     # identical to ``gp_name``, because both resolve from the same canonical
     # calendar. They diverge on one path: when
@@ -91,7 +91,7 @@ class SessionData:
     # ``get_gp_names`` falls back to a hardcoded 2024 table and 2025 round 3
     # comes back "Australia" when it is Suzuka. ``gp_name`` also names the
     # session pickle (``_cache_path``), so on that path the cache is
-    # mislabelled too — which is why this field exists and why every path
+    # mislabelled too, which is why this field exists and why every path
     # that touches disk must read it instead.
     location: str = ""
     year: int = 0
@@ -106,7 +106,7 @@ class SessionData:
     # Session-time origin of the frame clock, in seconds. `timeline` starts at
     # 0.0 by construction (`_build_timeline`), so a frame's `t` is an offset,
     # not a session time, and on its own it is just `frame_index * DT`. Adding
-    # this back recovers FastF1 `SessionTime` seconds — the clock that
+    # this back recovers FastF1 `SessionTime` seconds, the clock that
     # `laps.parquet` (`Time`, `LapStartTime`, `Sector*SessionTime`) and
     # `weather.parquet` are keyed on. Without it nothing on the broadcast can
     # be joined by time to anything on disk, which is why `intervals.parquet`
@@ -226,13 +226,13 @@ def _lap_fraction_from_distance(
 
 
 def _enable_fastf1_cache() -> None:
-    """Point FastF1 at our repo-local cache. Idempotent, safe across spawn."""
+    """Point FastF1 at the repo-local cache. Idempotent, safe across spawn."""
     FASTF1_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     fastf1.Cache.enable_cache(str(FASTF1_CACHE_DIR))
 
 
 def _compound_to_int(compound: Any) -> int:
-    """Map a FastF1 compound string to our int code, defaulting to MEDIUM on unknowns."""
+    """Map a FastF1 compound string to the int code, defaulting to MEDIUM on unknowns."""
     if compound is None or (isinstance(compound, float) and np.isnan(compound)):
         return 1
     return _COMPOUND_TO_INT.get(str(compound).upper(), 1)
@@ -703,7 +703,7 @@ class SessionLoader:
         their DRS wing in every activation zone because they are on a push
         lap, so a single quali telemetry has the full DRS picture. A race
         fastest lap only has DRS open where the driver had a car to catch,
-        producing the fragmented zones we saw earlier. Falls back to race
+        producing fragmented zones in practice. Falls back to race
         fastest if qualifying data cannot be loaded."""
         quali_result = self._try_quali_reference(year, round_)
         if quali_result is not None:
@@ -753,7 +753,7 @@ class SessionLoader:
         FastF1 stores the status as a multi-digit string (``"1"`` clear,
         ``"2"`` yellow, ``"4"`` Safety Car, ``"5"`` red flag, ``"6"`` /
         ``"7"`` VSC).  Because every driver in the same lap window sees
-        the same status we keep the first row per lap.  Missing /
+        the same status, only the first row per lap is kept.  Missing /
         malformed columns return an empty dict so the panel just stays
         hidden instead of raising at load time.
         """
@@ -836,7 +836,7 @@ class SessionLoader:
             # by executing it: session.load() returns normally and the property
             # raises afterwards, so a narrow tuple let it escape and killed the
             # entire arcade load, after the full cold path, for a session that
-            # used to degrade quietly to the panel's own constants.
+            # used to degrade silently to the panel's own constants.
             #
             # The docstring above promises exactly that degradation. Catching
             # narrowly here would have made the docstring a lie and turned a
@@ -911,7 +911,7 @@ class SessionLoader:
             return float(info.rotation)
         except Exception as exc:
             # session.get_circuit_info() fetches from the MultiViewer API
-            # (fastf1.mvapi.get_circuit_info) — genuine network I/O with an
+            # (fastf1.mvapi.get_circuit_info), genuine network I/O with an
             # undocumented exception surface (HTTP/connection/JSON errors),
             # so this stays broad. Logged so a real regression still leaves
             # a trace instead of silently flattening every rotation to 0.
@@ -919,7 +919,7 @@ class SessionLoader:
             return 0.0
 
     def _session_circuit_length(self, session, ref_x: np.ndarray, ref_y: np.ndarray) -> float:
-        """Pick the most trustworthy circuit length we can derive.
+        """Pick the most trustworthy circuit length available.
 
         Preferred path: the fastest lap's FastF1 ``add_distance()``
         telemetry: that column is cumulative metres within the lap, so

@@ -10,7 +10,7 @@ Pattern ported from Tom Shaw's `f1_replay/f1-race-replay/src/services/stream.py`
 and trimmed to stdlib-only. The reason survives the toolkit it was written
 for: the replay process must not import the consumer's UI stack, so the
 consumer is a subprocess and the client class lives with it. That was Qt
-until sprint 7 retired it; it is pywebview now, and the constraint is the
+until it was retired; it is pywebview now, and the constraint is the
 same one.
 
 The payload contract
@@ -96,7 +96,7 @@ def _json_safe(value):
     tick, and the paragraph above became false for exactly the container
     the sibling had just learned. `json.dumps` writes a tuple as an array,
     so returning a list changes no wire byte, and `dataclasses.asdict`
-    preserves tuples — the first tuple-typed model field arms it.
+    preserves tuples: the first tuple-typed model field arms it.
     """
     if isinstance(value, dict):
         return {key: _json_safe(item) for key, item in value.items()}
@@ -115,14 +115,14 @@ def _blame(value, path: str = "") -> str:
 
     Two kinds of leaf get named, because the sanitiser only handles the
     first: a non-finite float, which `_json_safe` would have turned into
-    None, and anything the encoder simply cannot take. `np.float32(nan)`,
+    None, and anything the encoder cannot take. `np.float32(nan)`,
     `np.int64` and `np.bool_` are not `float`/`int`/`bool` subclasses, so
     they slip past the sanitiser, kill the whole tick, and used to leave
     this function returning the empty string exactly when it was needed.
 
     **The oracle is the encoder, not an allowlist.** An allowlist of
     `str/int/float/bool/None` blames a tuple, which `json.dumps` encodes
-    perfectly well as an array — and because the first blame wins, a
+    perfectly well as an array, and because the first blame wins, a
     payload carrying both a tuple and a real culprit named the tuple and
     never reached the culprit. The drop log then pointed at an innocent
     field while the tick that died stayed unexplained.
@@ -201,7 +201,7 @@ class TelemetryStreamServer:
             try:
                 self._server_socket.close()
             except OSError:
-                # Already closed/broken (e.g. peer reset first) — nothing to undo.
+                # Already closed/broken (e.g. peer reset first), nothing to undo.
                 pass
             self._server_socket = None
         with self._clients_lock:
@@ -428,7 +428,7 @@ class TelemetryStreamServer:
                 try:
                     self._clients.remove(client)
                 except ValueError:
-                    # Another thread already pruned this socket first — fine.
+                    # Another thread already pruned this socket first, fine.
                     pass
         # Outside the lock: `close()` can block briefly and nothing else needs
         # the list to stay held while it does.

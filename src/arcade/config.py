@@ -2,8 +2,8 @@
 
 Centralises every magic number used across `data.py`, `track.py`, `overlays.py`
 and `app.py` so the visual design can be tuned from one place. Values are
-ported from the Tom Shaw f1-race-replay reference (cached audits in
-`c:/tmp/arcade_analysis/`) with TFG-specific overrides flagged inline.
+ported from the Tom Shaw f1-race-replay reference, with TFG-specific
+overrides flagged inline.
 """
 
 from __future__ import annotations
@@ -66,9 +66,11 @@ LEGEND_X: Final[int] = 20
 LEGEND_BOTTOM: Final[int] = 60
 
 # --- Theme palette (RGB tuples) ------------------------------------------
-# Mirrors src/telemetry/frontend/app/styles.py so the Arcade replay and the
-# Streamlit app read as the same product. The Streamlit file owns the
-# canonical hexes; duplicated here (not imported) to keep src/arcade/
+# This is the canonical Python palette: `palette.py` mirrors it, guarded by
+# `tests/surfaces/test_pitwall_tokens.py`. The webapp's `tokens.css` is a
+# separate, later palette that deliberately disagrees with these hexes on
+# every semantic colour (see `KNOWN_PYTHON_DRIFT` in that test file).
+# Duplicated as literals here (not imported) to keep src/arcade/
 # dependency-free from the backend package.
 BG_COLOR: Final[tuple[int, int, int]] = (18, 17, 39)  # #121127 PRIMARY_BG
 CONTENT_BG: Final[tuple[int, int, int]] = (24, 22, 51)  # #181633 CONTENT_BG (panels)
@@ -160,12 +162,10 @@ FASTF1_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "fastf1"
 ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # v11: the all-NaN pedal channel fix, which runs at BUILD time. A v10 cache
 # built before it has the wrong multiplier baked in and the fix cannot reach
-# it. That is the whole reason. (An earlier version of this comment added
-# "and rel_dist left the cached arrays" - false: `FrameData.rel_dist` is
-# still derived and pickled per frame. What #863 removed was the raw
+# it. That is the whole reason: `FrameData.rel_dist` was not affected, since
+# it is still derived and pickled per frame. What #863 removed was the raw
 # `RelativeDistance` extraction in the worker intermediate, which nothing
-# had consumed since v10 and which left the cached bytes identical. A
-# maintainer trusting the old sentence would have deleted its readers.)
+# had consumed since v10 and which left the cached bytes identical.
 # **The obvious guard cannot enforce this, and one tried.** `CACHE_VERSION != "v12"` is true
 # forever from the commit that writes it and can never see the NEXT change that forgets to
 # bump. A golden test keyed to the version COULD catch part of it (pin a small rebuilt
@@ -176,7 +176,7 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 CACHE_VERSION: Final[str] = "v14"  # + the shared lap-boundary sample sorts stably (#1069)
 
 # --- Multiprocessing pool -------------------------------------------------
-# Serial by default — Windows spawn + pickling a loaded session across 8
+# Serial by default: Windows spawn + pickling a loaded session across 8
 # workers has hung in cold-cache runs. Flip to >1 once FastF1 is warm.
 POOL_SIZE: Final[int] = 1
 
@@ -214,10 +214,9 @@ STREAM_BROADCAST_EVERY_N_FRAMES: Final[int] = 6
 # never reads cost the caller 0.98 ms at worst), so the replay cannot freeze;
 # the per-client send timeout is what prunes a subscriber that stops reading.
 # The cap bounds what one tick can carry, the timeout bounds what one client
-# can cost. An earlier version of this comment described the pre-#850
-# architecture, where `sendall` DID run on the pyglet thread.
+# can cost.
 STREAM_MAX_SPAN_FRAMES: Final[int] = 250
-# Cap how many LapDecision entries we keep in the broadcast history tail.
+# Cap how many LapDecision entries the broadcast history tail keeps.
 STREAM_HISTORY_TAIL: Final[int] = 30
 
 # --- Menu view ------------------------------------------------------------
@@ -232,8 +231,8 @@ STRATEGY_REQUIRED_YEAR: Final[int] = 2025
 # --- 2025 grid: driver code -> team --------------------------------------
 # Mirrors `data/processed/laps_featured_2025.parquet` (unique Driver/Team
 # pairs). Consumed by MenuView to auto-fill the team field when the user
-# types a driver code — same UX as the CLI where team is derived from the
-# driver argument. Mid-season moves (TSU Racing Bulls -> Red Bull, LAW the
+# types a driver code (the same UX as the CLI, where team is derived from
+# the driver argument). Mid-season moves (TSU Racing Bulls -> Red Bull, LAW the
 # opposite) resolved to each driver's end-of-season team.
 DRIVER_TO_TEAM_2025: Final[dict[str, str]] = {
     "VER": "Red Bull Racing",
@@ -315,7 +314,7 @@ def get_gp_names(year: int) -> dict[int, str]:
 
     Reads the canonical ``data/tire_compounds_by_race.json`` and assumes
     the insertion order of the keys matches the calendar order (the
-    builder writes them in round order — verified for 2023/2024/2025).
+    builder writes them in round order, verified for 2023/2024/2025).
     Falls back to the hardcoded ``GP_NAMES`` table (2024 layout) when the
     JSON is missing or the year is absent, so the arcade still boots
     without the data artifact.

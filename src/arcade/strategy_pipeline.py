@@ -5,7 +5,7 @@ SSE hop) so its dashboard subprocess can subscribe to the arcade TCP stream and
 receive both the synthesised ``StrategyRecommendation`` and the raw per-sub-agent
 outputs on the same wire.
 
-This module used to be a body-copy of
+This module was a body-copy of
 ``src.agents.strategy_orchestrator.run_strategy_orchestrator_from_state`` with a
 "mirror the change here" warning: the exact drift the audit (AUDIT_P2B_CORE_COMPUTE
 F10) flagged and the #166 crash proved real. It now delegates to the single shared
@@ -25,7 +25,7 @@ from src.strategy.inference.engine import run_lap
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:  # pragma: no cover — only for type hints
+if TYPE_CHECKING:  # pragma: no cover, only for type hints
     from src.agents.strategy_orchestrator import RaceState, StrategyRecommendation
     from src.strategy.inference.decision_memory import DecisionMemory
 

@@ -175,7 +175,7 @@ def test_a_window_points_at_the_server_that_is_running_and_not_at_a_file(served:
     `ui/dist`, `data.html` is 200 and `dist/data.html` is 404 "File does not exist.";
     rooted at `ui` it is the other way round.
 
-    So the assertion is not "the URL contains http". It is that the exact URL a
+    Therefore, the assertion is not "the URL contains http". It is that the exact URL a
     window is handed is **fetchable from the server the host actually started**,
     which is the only property that makes the window and a browser tab the same
     surface. `window_target` is pure so this needs no system webview.

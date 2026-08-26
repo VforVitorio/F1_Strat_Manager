@@ -7,7 +7,7 @@ other file failed on a method their fake did not have. That is this repo's domin
 defect wearing a test helper, so the copy is deleted rather than patched.
 
 What it has to be faithful about, because a stub that is not makes the guards pass
-against the fix and against the defect alike:
+whether the code has the fix or the defect:
 
 - `latest` and the signal log move TOGETHER. The real client appends to the log
   inside the same lock that assigns the slot, which is what makes `snapshot()` a

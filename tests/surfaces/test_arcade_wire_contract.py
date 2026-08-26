@@ -582,7 +582,7 @@ def test_the_per_agent_fixture_uses_the_producers_real_field_names():
     Before #853 it was not, and neither was the dev producer: both invented
     `predicted_lap_time_s`, `degradation_pct`, `sc_prob`, `pit_duration_s`.
     They agreed with each other, so this file stayed green while pinning a
-    contract no producer has ever emitted, and the Qt cards - sprint 3's
+    contract no producer has ever emitted, and the Qt cards - the
     acceptance reference - rendered `pred 0.00s` and `deg - s/lap` against
     the very rig built to populate them.
 
@@ -861,7 +861,7 @@ def test_the_wire_publishes_an_order_a_dist_sort_would_get_wrong():
     """`race_order` is the producer's answer, not something a consumer re-derives.
 
     The fixture makes the two coordinates disagree: SLOW runs long per lap,
-    so its published `dist` exceeds FAST's while FAST is genuinely ahead on
+    so its published `dist` exceeds FAST's while FAST is ahead on
     track. A consumer sorting `dist` inverts them; the published key does
     not, because it is `_rank_drivers` - the same code the arcade panel
     ranks with, so the wire and the panel cannot drift apart.
@@ -975,7 +975,7 @@ def test_every_recommendation_field_the_wire_drops_was_decided_about():
     }, "a recommendation field changed sides without a decision being recorded (#1046)"
 
     # And the other direction, so the frozen set cannot be satisfied by the DTO
-    # quietly losing a field it is supposed to carry.
+    # losing a field it is supposed to carry.
     assert {"action", "confidence", "reasoning", "scenario_scores"} <= dto
 
 
@@ -984,8 +984,8 @@ def test_the_producer_really_copies_the_contingencies_it_was_handed():
 
     Every other guard for these two fields reads a hand-built `LapDecisionDTO`:
     the golden's `_decision()` writes them directly, and the dev producer writes
-    dicts straight into the DTO. So the extraction itself was uncovered, and the
-    exit gate measured what that costs: replacing the real copy with
+    dicts straight into the DTO. So the extraction itself was uncovered:
+    replacing the real copy with
     `contingencies=[]` leaves all 277 tests green while every rich lap ships the
     field empty.
 
@@ -1045,7 +1045,7 @@ def test_the_two_neutralisation_booleans_are_filtered_out_of_the_situation_dump(
     Both halves are checked, because filtering a field nobody produces is the
     same nothing: the `ast` half asserts `RaceSituationOutput` still declares
     the pair, so the day N27 drops them this test says the filter is now
-    pointless rather than quietly passing forever.
+    pointless rather than passing forever.
 
     Why filtered rather than deleted from the agent: the pair is read across
     `src/agents/` - N27's own `sc_active`, N28's routing, and the orchestrator's
@@ -1086,7 +1086,7 @@ def test_the_two_neutralisation_booleans_are_filtered_out_of_the_situation_dump(
 def test_the_pipeline_delegate_no_longer_throws_the_stage_timings_away():
     """`run_lap`'s third value reaches a logger instead of the floor (#1045).
 
-    It used to be bound to `_timings` and dropped on the same line that computed
+    It was bound to `_timings` and dropped on the same line that computed
     it, under a docstring promising a future change would put it on the wire.
     Nothing consumed it at any of the three call sites.
 

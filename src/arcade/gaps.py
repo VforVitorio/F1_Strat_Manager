@@ -19,8 +19,7 @@ progress axis and the old code sorted on it. It is not one: **each car
 accumulates the distance IT drove**, so two cars at the same corner hold
 different numbers, and the difference grows all race. Measured on
 Melbourne 2025, the drift reaches **1877 m for a single car and 1469 m
-between two cars on a 5220 m circuit** — 28% of a lap, not the "tens of
-metres" an earlier version of this docstring claimed.
+between two cars on a 5220 m circuit**, 28% of a lap.
 
 Everything measured below uses ONE convention, stated here because three
 mutually inconsistent versions of these figures were once published in
@@ -34,8 +33,8 @@ two docstrings and a session log:
 > does not model. Sampling is every 500 frames, excluding the opening lap,
 > where no classification exists yet. Melbourne 2025, 300 sampled frames.
 
-Under it, the form this code replaced — `(lap - 1) * circuit_length` added
-to a `dist` that already contains the completed laps — puts **the wrong
+Under it, the form this code replaced (`(lap - 1) * circuit_length` added
+to a `dist` that already contains the completed laps) puts **the wrong
 car in the lead on 37%** of those frames, and so does a plain descending
 `dist` sort. The coordinate below gets the leader wrong on **1.7%**
 (5 of 300) and reproduces the whole running order exactly on **236 of
@@ -49,7 +48,7 @@ so the drift cancels instead of accumulating. See `progress`.
 
 The same drift is why `laps_down` cannot be a `dist` difference over a
 circuit length: over 4,934 same-corner pairs (within 2% of a lap of each
-other) it disagrees with the positional answer on **3.4%** — 169 pairs,
+other) it disagrees with the positional answer on **3.4%**, 169 pairs,
 measured as `int((d_front - d_back) / L)`, truncation toward zero, which
 is the convention this sentence used to leave unstated (a `//` floor
 gives 34.1%). **Not "always"**: 148 of the 169 run in the direction that

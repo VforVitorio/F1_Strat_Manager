@@ -12,7 +12,7 @@ context, which CI does not have. The payload builders read exactly four
 attributes off `self`, so the tests call them as plain functions with a
 namespace carrying those four. That is deliberate: if a builder starts
 reading a fifth attribute, these tests fail loudly with `AttributeError`
-rather than passing against a mock that quietly grew a new field.
+rather than passing against a mock that grew a new field.
 """
 
 from __future__ import annotations
@@ -87,14 +87,14 @@ def _retired_car(n_frames: int, last_live_index: int) -> list[FrameData]:
 def _car_without_position_data(n_frames: int) -> list[FrameData]:
     """A car FastF1 gives no position channel for, built the way the LOADER builds it.
 
-    Not hypothetical: on Melbourne 2025 this is HAD. An earlier version of
-    this fixture hand-set `rel_dist` to NaN, which is what FastF1 used to
-    deliver and what the loader can no longer produce: since the derivation
-    moved to `_lap_fraction_from_distance` over the driver's own distance,
-    a car that never moves comes out **finite 0.0** on every frame -
-    measured, one unique value across all 154,173 of his.
+    Not hypothetical: on Melbourne 2025 this is HAD. Hand-setting `rel_dist`
+    to NaN would test what FastF1 used to deliver, which the loader can no
+    longer produce: since the derivation moved to `_lap_fraction_from_distance`
+    over the driver's own distance, a car that never moves comes out
+    **finite 0.0** on every frame - measured, one unique value across all
+    154,173 of his.
 
-    So the fixture runs a flat distance through the real derivation. A
+    Therefore, the fixture runs a flat distance through the real derivation. A
     hand-set NaN would keep the guard green while asserting about an input
     production cannot emit, and the value that production DOES emit means
     "at the line" (#856).
@@ -183,7 +183,7 @@ def test_a_retired_car_is_flagged_while_its_other_fields_stay_frozen():
 
     assert live["active"] is True
     assert dead["active"] is False
-    # Everything else is indistinguishable — that is the whole point.
+    # Everything else is indistinguishable. That is the whole point.
     assert dead["lap"] == live["lap"]
     assert dead["dist"] == live["dist"]
     assert dead["speed"] == live["speed"]
@@ -211,7 +211,7 @@ def test_a_car_with_no_position_data_is_unknown_rather_than_at_the_line():
 
     The old guard was against `min(1.0, nan) == 1.0`. That input is gone:
     the loader derives the fraction from the driver's own distance, and a
-    car that never moves comes out finite **0.0** — which is not a clamp
+    car that never moves comes out finite **0.0**, which is not a clamp
     but is still a position, "at the line", and on Melbourne 2025 it rides
     the wire on 100% of HAD's frames with `active` true for 2,935 of them.
 
@@ -240,10 +240,10 @@ def test_a_car_with_no_position_data_is_unknown_rather_than_at_the_line():
 def test_the_arcade_block_carries_nothing_non_finite():
     """`json.dumps` writes a bare `NaN`, which no strict parser accepts.
 
-    Scoped to the `arcade` block on purpose, and named for it. An earlier
-    version of this test claimed to cover "the payload" while building
-    only this sub-dict, so it passed while the `strategy` block put NaN on
-    the wire unguarded. The whole-payload guarantee is enforced at the
+    Scoped to the `arcade` block on purpose, and named for it: claiming to
+    cover "the payload" while building only this sub-dict would pass while
+    the `strategy` block put NaN on the wire unguarded. The whole-payload
+    guarantee is enforced at the
     encoder and tested in `test_arcade_wire_contract.py`.
     """
     wire = _snapshot(_session(), frame_idx=3, rival="HAD")
@@ -262,9 +262,9 @@ def _reject_non_finite(token: str) -> float:
 def test_location_is_published_and_can_genuinely_disagree_with_the_label():
     """`location` exists because the label CAN name a different race.
 
-    An earlier version of this test hand-set the two fields to differ in
-    the fixture and then asserted they differed, which verifies that a
-    dict copy copies two keys. This one exercises the real resolver: on
+    Hand-setting the two fields to differ in the fixture and then asserting
+    they differed would only verify that a dict copy copies two keys. This
+    one exercises the real resolver: on
     the fallback path `get_gp_names` returns a hardcoded 2024 table, and a
     2025 round then carries the wrong race. That fallback also names the
     session pickle, so the divergence mislabels the cache too.
@@ -286,7 +286,7 @@ def test_the_pedal_scale_is_not_decided_by_which_driver_sorts_first():
     """`max()` keeps a NaN that arrives FIRST, because every `x > nan` is False.
 
     One driver whose whole throttle channel is NaN, sorting ahead of the
-    others, therefore flipped the session multiplier from 1.0 to 100.0 —
+    others, therefore flipped the session multiplier from 1.0 to 100.0:
     every pedal reading above 1% published as 100.0, for all twenty cars,
     on nothing but driver order. Not triggered on Melbourne 2025, where
     HAD's pedal channels are real; silent and global when it is.

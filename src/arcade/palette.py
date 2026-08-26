@@ -14,9 +14,9 @@ pandas, against 0.025 s for `src.arcade.config`. A module that answers
 stack.
 
 It lived outside `src/arcade/dashboard/` deliberately, so that retiring
-the Qt windows would not take it with them. That happened in sprint 7:
-the package is gone and this is still here, read by the pyglet HUD and by
-PITWALL's own formatters.
+the Qt windows would not take it with them, and that is exactly what
+happened: the package is gone and this is still here, read by the pyglet
+HUD and by PITWALL's own formatters.
 
 **These values are still a deliberate copy of `src/arcade/config.py`'s**,
 kept separate because the two run in different processes and importing
@@ -161,7 +161,7 @@ MONO_FONT_STACK: Final[str] = (
 # --- Compound pill HTML (Pirelli-style badge) ---------------------------
 # Compound labels come through the pipeline in several shapes: the
 # friendly agent form ("SOFT", "MEDIUM", "HARD", "INTER", "WET") and the
-# raw Pirelli id ("C1"…"C6"). Both should paint the same pill colour —
+# raw Pirelli id ("C1"…"C6"). Both should paint the same pill colour:
 # red for soft, yellow for medium, white for hard, green for inter,
 # blue for wet. The function returns an HTML snippet that a QLabel can
 # render in rich-text mode, and that a browser renders identically.
@@ -178,7 +178,7 @@ _COMPOUND_COLOUR_BY_LABEL: Final[dict[str, tuple[int, int, int]]] = {
     "H": (230, 230, 230),
     "I": (60, 200, 60),
     "W": (60, 130, 230),
-    # Pirelli Cx mapping per the dry-race convention — hardest compounds
+    # Pirelli Cx mapping per the dry-race convention: hardest compounds
     # white, medium yellow, softest red.
     "C1": (230, 230, 230),
     "C2": (230, 230, 230),
@@ -225,7 +225,7 @@ def compound_pill_html(compound: str | None) -> str:
 
 # --- Alert flag chips ---------------------------------------------------
 # Radio / RCM intents collapse to a coloured chip matching the broadcast
-# flag semantics — red for red-flag / safety-car, amber for VSC / yellow,
+# flag semantics: red for red-flag / safety-car, amber for VSC / yellow,
 # blue for ops "PROBLEM" / "WARNING" radios. Anything unknown stays
 # neutral grey so the reader is never misled by an unstyled label.
 

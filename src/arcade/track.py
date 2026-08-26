@@ -209,7 +209,7 @@ class Track:
         mag[mag < 1e-12] = 1.0
         nx = -dy / mag
         ny = dx / mag
-        # Shoelace signed area — flip sign so normals consistently point outward.
+        # Shoelace signed area: flip sign so normals consistently point outward.
         signed_area = 0.5 * float(np.sum(xs * np.roll(ys, -1) - np.roll(xs, -1) * ys))
         if signed_area > 0:
             nx = -nx
@@ -220,8 +220,8 @@ class Track:
         """Project the raw-lap DRS-active mask onto the resampled edge polyline.
 
         The reference draws DRS by slicing the unsampled outer polyline with
-        raw telemetry indices. We resample the edges to `edge_len`, so we map
-        each edge point to its nearest raw sample (same parametric t in
+        raw telemetry indices. The edges here are resampled to `edge_len`, so
+        each edge point maps to its nearest raw sample (same parametric t in
         [0, 1]) and scan for contiguous active runs there. Gives a clean
         start/end without the fragmentation the earlier index-rescale
         produced."""

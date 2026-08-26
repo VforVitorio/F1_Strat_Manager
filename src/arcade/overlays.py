@@ -5,7 +5,7 @@ leaderboard, driver info, progress bar, controls legend. Every `arcade.Text`
 is pre-allocated in each panel's `__init__` (which runs after the Window's
 GL context is active); `draw()` only mutates `.text / .x / .y / .color`.
 Creating `Text` inside `draw()` would leak glyph textures at 60 FPS × 20
-rows, a bug that bit both the reference and our earlier attempts.
+rows, a bug that bit both the reference and earlier attempts here.
 """
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ class WeatherPanel:
 
     Visual identity: translucent CONTENT_BG card with a 1 px BORDER outline and
     a 3 px ACCENT top-strip. Readings are Inter body text, label in TERTIARY
-    and value in PRIMARY, the same convention the Streamlit sidebar uses."""
+    and value in PRIMARY."""
 
     PANEL_PADDING: int = 12
     STRIP_H: int = 3
@@ -186,10 +186,9 @@ class WeatherPanel:
 class DriverInfoPanel:
     """Telemetry box for one driver: speed, gear, DRS, compound, gaps.
 
-    Redesigned vs f1_replay's filled team-colour header: we use a neutral
+    Redesigned vs f1_replay's filled team-colour header: a neutral
     CONTENT_BG card with a 3 px team-colour strip on top and the driver
-    code rendered in team colour, which reads as the same product as the
-    Streamlit pages instead of a clone of the reference app."""
+    code rendered in team colour, instead of a clone of the reference app."""
 
     STRIP_H: int = 3
     PAD_X: int = 12
@@ -599,9 +598,9 @@ class LeaderboardPanel:
         the distance IT drove, so two cars at the same corner hold
         different numbers and the drift reaches 1877 m on a 5220 m
         circuit. Measured under the convention stated at the top of
-        `gaps.py` — do not restate figures here under a different one,
+        `gaps.py` (do not restate figures here under a different one,
         which is how this docstring and that one came to publish 0.7% and
-        2.0% for the same quantity — a descending `dist` sort puts the
+        2.0% for the same quantity): a descending `dist` sort puts the
         wrong car in the lead on 37% of sampled frames; this key gets it
         wrong on 1.7% and reproduces the whole running order exactly on
         236 of 300.

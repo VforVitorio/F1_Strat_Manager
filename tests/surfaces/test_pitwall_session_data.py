@@ -86,12 +86,11 @@ def test_the_reveal_is_per_driver_not_one_shared_cut():
 def test_the_reveal_is_strict_so_the_lap_in_progress_stays_hidden():
     """`L <= laps_completed`, never `<`, and never the lap being driven.
 
-    The carrier used to be the tick's `lap`, which was measured non-monotone
+    The carrier was the tick's `lap`, which was measured non-monotone
     and flickered a lap open a tick early at the line while never opening a
     finisher's last lap. The non-monotonicity is gone as of #1069 (an unstable
     sort over the boundary sample FastF1 delivers twice, 70 frames of 3.08 M on
-    Melbourne 2025, not the interpolation an earlier version of this docstring
-    blamed). `laps_completed` still comes off the crossing map, because a per
+    Melbourne 2025). `laps_completed` still comes off the crossing map, because a per
     driver carrier is what a twenty car mask needs.
     """
     session = _session_or_skip()
