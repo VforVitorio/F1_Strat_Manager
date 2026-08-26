@@ -292,7 +292,7 @@ Unchanged semantics, restated for the stacked form:
   around pit stops stays (settled: no autorange churn at 10 Hz; the tower's GAP column carries
   the number meanwhile - already noted in #986).
 
-### 5.4 The shared cursor, and the readout the research says it owes
+### 5.4 The shared cursor and its readout
 
 - **The cursor is the car's live lap position**: `drivers[driver_main].rel_dist * xMax`, exactly
   today's source (the DRIVERS block, never the span tail). Rendered as **ONE absolutely

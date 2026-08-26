@@ -14,7 +14,7 @@
 | Mean absolute error | 2.42 laps | magnitude, same width caveat |
 | Coverage verdict | **masked** | `masked` when under 60% of eligible stops were scored |
 
-### Buckets
+## Buckets
 
 | Bucket | Stops |
 | --- | --- |

@@ -4,12 +4,9 @@
 
 `src/telemetry/webapp/src/lib/drivers.ts`
 
-> **This page used to document a Python module that no longer exists.** The
-> year-aware palette was born in the Streamlit frontend at
-> `frontend/components/common/driver_colors.py`, and that whole tree was
-> deleted when the React web app replaced Streamlit in v2.0.0 (#551). The
-> *design* survived the move intact, ported one for one, so this page
-> now describes the TypeScript implementation that is actually running.
+> The year-aware palette came from the Streamlit frontend and was ported one
+> for one when the React web app replaced it in v2.0.0 (#551). The design is
+> unchanged; the implementation described here is the TypeScript one.
 
 **It is still not shared with the backend.** `src/telemetry/backend/core/driver_colors.py`
 is a separate, older implementation: a single flat `DRIVER_COLORS` dict labelled

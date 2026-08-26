@@ -172,7 +172,7 @@ N25 Pace originally had an equivalent guard on its own `predict_pace_tool` (#476
 
 The refusal is a plain string return (e.g. `"error: 'HAM' is not on track at lap 12; valid: [...]"` or `"... REFUSED — {driver} is not on track ..."`), not an exception, the LLM sees a normal-looking tool result it can react to, rather than a traceback. `predict_pit_duration_tool` additionally cross-checks the LLM-supplied `under_sc` flag against the RCM-confirmed `sc_currently_active` ground truth when a real orchestrator run has set it, and trusts the confirmed value over the guess (logging a warning) rather than the other way round.
 
-"On track" is a **presence** check (the driver has a row in the live roster for this lap), the same convention `RaceStateManager` uses for `rivals`, see [Race replay engine → who counts as a rival](#/simulation). An age/lap-count cutoff cannot substitute for it: a finisher can go 20 laps without a row, and a retirement can surface as few as 9 laps in, so the ranges overlap.
+"On track" is a **presence** check (the driver has a row in the live roster for this lap), the same convention `RaceStateManager` uses for `rivals`, see [Race replay engine, who counts as a rival](#/simulation). An age/lap-count cutoff cannot substitute for it: a finisher can go 20 laps without a row, and a retirement can surface as few as 9 laps in, so the ranges overlap.
 
 The MCP-facing tools one layer up (`src/telemetry/backend/mcp_tools.py`, consumed by chat) apply an equivalent guard on `gp`/`driver`/`lap`/`year` before they even reach these agent-level tools, see [Backend API reference → Tool risk tiers and the chat allowlist](#/backend-api).
 

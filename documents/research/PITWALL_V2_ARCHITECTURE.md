@@ -11,7 +11,7 @@ reasoning chain in `~/.claude/plans/pitwall-design.md`.
 
 ---
 
-## 1. What changed, and why the old plan is void
+## 1. What changed
 
 The July design assumed the pit-wall surface would be **a page in a browser**. Every downstream
 decision followed from that one assumption:
