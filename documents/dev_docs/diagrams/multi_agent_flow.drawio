@@ -106,11 +106,11 @@
           <mxGeometry x="810" y="125" width="320" height="25" as="geometry"/>
         </mxCell>
 
-        <mxCell id="mc_candidates" value="&lt;b&gt;4 Strategy Candidates&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;1. STAY OUT&lt;br&gt;2. PIT NOW (same compound)&lt;br&gt;3. PIT NOW (harder)&lt;br&gt;4. PIT NOW (softer)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#164e63;strokeColor=#22d3ee;fontColor=#cffafe;fontSize=10;verticalAlign=top;spacingTop=4;" vertex="1" parent="1">
+        <mxCell id="mc_candidates" value="&lt;b&gt;4 Strategy Candidates&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;1. STAY_OUT&lt;br&gt;2. PIT_NOW&lt;br&gt;3. UNDERCUT&lt;br&gt;4. OVERCUT&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#164e63;strokeColor=#22d3ee;fontColor=#cffafe;fontSize=10;verticalAlign=top;spacingTop=4;" vertex="1" parent="1">
           <mxGeometry x="820" y="160" width="200" height="90" as="geometry"/>
         </mxCell>
 
-        <mxCell id="mc_sim" value="&lt;b&gt;MC Scoring&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;For each candidate:&lt;br&gt;score = alpha * E[S] + (1-alpha) * P10[S]&lt;br&gt;Samples from tire/pace/SC distributions&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#164e63;strokeColor=#22d3ee;fontColor=#cffafe;fontSize=10;verticalAlign=top;spacingTop=4;" vertex="1" parent="1">
+        <mxCell id="mc_sim" value="&lt;b&gt;MC Scoring&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;For each candidate:&lt;br&gt;score = alpha * E[S] + (1-alpha) * P10[S]&lt;br&gt;payoff(project_positions(rivals)) per draw,&lt;br&gt;green and neutralised branches&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#164e63;strokeColor=#22d3ee;fontColor=#cffafe;fontSize=10;verticalAlign=top;spacingTop=4;" vertex="1" parent="1">
           <mxGeometry x="820" y="270" width="300" height="80" as="geometry"/>
         </mxCell>
 

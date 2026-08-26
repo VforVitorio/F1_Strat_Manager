@@ -21,8 +21,8 @@
   /* ---------- FOREGROUND RAMP ---------- */
   --fg-1: #ffffff; /* primary text */
   --fg-2: rgba(255, 255, 255, 0.72); /* secondary text */
-  --fg-3: rgba(255, 255, 255, 0.6); /* tertiary / captions, WCAG AA (~5.2:1 on #111827) */
-  --fg-4: rgba(255, 255, 255, 0.42); /* disabled / hairline labels, WCAG AA (~4.6:1 on #111827) */
+  --fg-3: rgba(255, 255, 255, 0.6); /* tertiary / captions — WCAG AA (~5.2:1 on #111827) */
+  --fg-4: rgba(255, 255, 255, 0.42); /* disabled / hairline labels — WCAG AA (~4.6:1 on #111827) */
   --fg-inv: #0c0d14; /* on-primary text */
 
   /* ---------- BRAND / PURPLE (PRIMARY) ---------- */
@@ -59,7 +59,7 @@
   --tire-hard: #e6e6e6; /* white */
   --tire-inter: #2dd47a; /* green */
   --tire-wet: #2d8fff; /* blue */
-  --tire-ink: #0c0d14; /* fixed dark text for compound pills: tyre colours are
+  --tire-ink: #0c0d14; /* fixed dark text for compound pills — tyre colours are
     identity, not themeable, so this never flips in light theme (see below) */
 
   /* ---------- DIVIDERS / SURFACES ---------- */
@@ -111,16 +111,16 @@
 }
 
 /* =========================================================
-   LIGHT THEME (E1): a token swap, stamped via data-theme='light' on
+   LIGHT THEME (E1) — a token swap, stamped via data-theme='light' on
    <html> (see app/providers.tsx + the FOUC guard in index.html). Only the
    *semantic* ramp flips: the background/foreground ladders, dividers, shadows
    and the hero gradient. Identity colours (purple, blue, tyre compounds) and
-   chrome gradients stay put because they read on both themes. This block is more
+   chrome gradients stay put — they read on both themes. This block is more
    specific than `html { color-scheme: dark }`, so `color-scheme: light` wins
    here declaratively (no @media, single source of truth = the attribute).
 
    Not solved by a var swap: HARD's white chip (--tire-hard) would vanish on a
-   light card. Instead every compound pill carries a permanent border-hairline
+   light card — instead every compound pill carries a permanent border-hairline
    (invisible-ish in dark, load-bearing in light). Status colours are darkened
    to pass contrast on white. */
 :root[data-theme='light'] {
