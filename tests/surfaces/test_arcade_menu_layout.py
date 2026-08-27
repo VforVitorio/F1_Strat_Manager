@@ -15,8 +15,22 @@ from __future__ import annotations
 
 import pytest
 
-from src.arcade.config import MENU_FOCUS_PAD, MENU_GUTTER
-from src.arcade.views import menu_content_extents, menu_form_geometry
+from src.arcade.config import (
+    MENU_FOCUS_PAD,
+    MENU_GUTTER,
+    MENU_HINT_FONT,
+    MENU_ROW_HEIGHT,
+    MENU_SCALE_MAX,
+    MENU_SCALE_MIN,
+    MENU_SUBTITLE_FONT,
+    SCREEN_HEIGHT,
+)
+from src.arcade.views import (
+    menu_bands,
+    menu_content_extents,
+    menu_form_geometry,
+    menu_scale,
+)
 
 # (row, rendered label width, rendered value width), measured 2026-08-27 at
 # 1280x720 with the menu's default LaunchConfig, seven rows visible.
@@ -139,3 +153,137 @@ def test_a_symmetric_form_needs_no_axis_shift() -> None:
     """Equal columns leave the boundary on the window axis, where it started."""
     geometry = menu_form_geometry([60.0], [60.0])
     assert geometry.axis_offset == 0
+
+
+# --- The form scales with the window (#1100) -------------------------------
+
+# Heights a user can actually produce. The window is resizable with no minimum,
+# so the small ones are reached by dragging rather than hypothetical, and the
+# large ones are a maximised window on a 1440p and a 4K display.
+HEIGHTS = (480, 600, 720, 800, 900, 1080, 1400, 2160)
+
+# Above this, a gap between two bands is no longer breathing room. Measured
+# before the fix: 0.46 at 720 and 1.10 at 1080, from a form that never grew.
+MAX_GAP_RATIO = 0.9
+
+ROW_COUNT = len(ROW_WIDTHS)
+
+
+def _unclamped(height: int) -> bool:
+    """Whether the scale at this height is the raw ratio, neither clamp hit."""
+    return MENU_SCALE_MIN < height / SCREEN_HEIGHT < MENU_SCALE_MAX
+
+
+# Split rather than skipped inside the test. A skip reports as coverage while
+# running nothing, and this file would have carried three of them.
+UNCLAMPED_HEIGHTS = tuple(h for h in HEIGHTS if _unclamped(h))
+CLAMPED_HEIGHTS = tuple(h for h in HEIGHTS if not _unclamped(h))
+
+
+def test_the_default_window_is_left_exactly_as_it_was() -> None:
+    """At SCREEN_HEIGHT the scale is 1 and every anchor is its old constant.
+
+    The point of the fix is what happens AWAY from the default, so the default
+    itself has to come out unchanged. Rendered offscreen at 1280x720 before and
+    after, the two frames differ by zero pixels; these are the four numbers that
+    make that true.
+    """
+    bands = menu_bands(SCREEN_HEIGHT, ROW_COUNT)
+    assert bands.scale == 1.0
+    assert bands.title_y == SCREEN_HEIGHT - 80
+    assert bands.subtitle_y == SCREEN_HEIGHT - 112
+    assert bands.hint_y == 60
+    assert bands.row_pitch == 40
+    assert bands.form_top == 460, "the first row sat at 460 before the fix"
+
+
+@pytest.mark.parametrize("height", HEIGHTS)
+def test_no_band_collides_with_another(height: int) -> None:
+    """Title above subtitle above form above hint, at every reachable height.
+
+    Clearance is one full font size, which is twice what separating two
+    centre-anchored lines strictly needs, so this fails before anything touches.
+    """
+    bands = menu_bands(height, ROW_COUNT)
+    form_top_edge = bands.form_top + bands.row_pitch / 2
+    form_bottom_edge = bands.form_bottom - bands.row_pitch / 2
+
+    assert bands.title_y > bands.subtitle_y
+    assert bands.subtitle_y - form_top_edge >= MENU_SUBTITLE_FONT * bands.scale, (
+        f"h={height}: the subtitle sits on the form"
+    )
+    assert form_bottom_edge - bands.hint_y >= MENU_HINT_FONT * bands.scale, (
+        f"h={height}: the form sits on the hint"
+    )
+    assert bands.hint_y > 0
+
+
+@pytest.mark.parametrize("height", UNCLAMPED_HEIGHTS)
+def test_the_gaps_stay_proportional_to_the_form(height: int) -> None:
+    """Extra window height goes into the form, not only into the two gaps.
+
+    This is the assertion that is RED against the pre-#1100 layout, which pinned
+    the title, the hint and a 40 px row pitch to constants: at 1920x1080 the
+    form was still 280 px and the gap above it was 308, a ratio of 1.10.
+
+    Only over the heights where the scale is the raw ratio. Outside that range a
+    clamp holds the type at a readable size on purpose, and the height it
+    declines to use goes back into the gaps, which
+    `test_beyond_the_ceiling_the_void_returns_and_says_so` states outright.
+    """
+    bands = menu_bands(height, ROW_COUNT)
+    gap_above = bands.subtitle_y - (bands.form_top + bands.row_pitch / 2)
+    gap_below = (bands.form_bottom - bands.row_pitch / 2) - bands.hint_y
+
+    assert gap_above / bands.form_height <= MAX_GAP_RATIO
+    assert gap_below / bands.form_height <= MAX_GAP_RATIO
+
+
+def test_the_sweep_exercises_both_clamps_and_the_range_between() -> None:
+    """The split above is real: every one of the three regimes has a height."""
+    scales = {menu_bands(h, ROW_COUNT).scale for h in HEIGHTS}
+    assert MENU_SCALE_MIN in scales, "no swept height reaches the floor"
+    assert MENU_SCALE_MAX in scales, "no swept height reaches the ceiling"
+    assert UNCLAMPED_HEIGHTS, "the ratio guard would parametrize over nothing"
+    assert CLAMPED_HEIGHTS, "the clamps would never be exercised"
+
+
+@pytest.mark.parametrize("height", CLAMPED_HEIGHTS)
+def test_beyond_the_ceiling_the_void_returns_and_says_so(height: int) -> None:
+    """Naming the cost of the legibility cap rather than leaving it unmeasured.
+
+    A 4K window is past the ceiling, so the form stops growing while the window
+    does not, and the height goes back into the gaps. That is the same void the
+    scaling exists to remove, kept deliberately so the type stays a readable
+    size. The bands still may not collide, which the collision guard covers at
+    the same heights.
+    """
+    bands = menu_bands(height, ROW_COUNT)
+    assert bands.scale in (MENU_SCALE_MIN, MENU_SCALE_MAX)
+    assert bands.form_height == pytest.approx(ROW_COUNT * MENU_ROW_HEIGHT * bands.scale)
+
+
+def test_a_taller_window_gets_a_taller_form() -> None:
+    """The plain statement of the defect, which a constant pitch cannot satisfy."""
+    forms = [menu_bands(h, ROW_COUNT).form_height for h in UNCLAMPED_HEIGHTS]
+    assert forms == sorted(forms)
+    assert forms[-1] > forms[0]
+
+
+def test_the_scale_is_clamped_at_both_ends() -> None:
+    """A dragged-down window stops shrinking the type; a 4K one stops growing it."""
+    assert menu_scale(SCREEN_HEIGHT) == 1.0
+    assert menu_scale(100) == MENU_SCALE_MIN
+    assert menu_scale(10_000) == MENU_SCALE_MAX
+
+
+@pytest.mark.parametrize("rows", [1, 6, 7])
+def test_the_form_block_keeps_its_place_whatever_the_row_count(rows: int) -> None:
+    """One-driver mode hides the Rival row, so the count is not a constant.
+
+    The block sits half a row below the window's vertical centre at every count,
+    which is where it sat before the fix.
+    """
+    bands = menu_bands(SCREEN_HEIGHT, rows)
+    block_centre = (bands.form_top + bands.form_bottom) / 2
+    assert block_centre == SCREEN_HEIGHT / 2 - bands.row_pitch / 2

@@ -236,6 +236,28 @@ MENU_FOCUS_PAD: Final[int] = 24
 MENU_LABEL_FONT: Final[int] = 13
 MENU_VALUE_FONT: Final[int] = 15
 MENU_HINT_FONT: Final[int] = 11
+MENU_TITLE_FONT: Final[int] = 32
+MENU_SUBTITLE_FONT: Final[int] = 13
+MENU_STATUS_FONT: Final[int] = 13
+# Every length above is what the menu draws at SCREEN_HEIGHT, and the view
+# multiplies all of them by the window's height over that. Without it a taller
+# window bought nothing but two larger empty gaps: at 1920x1080 the form was the
+# same 280 px it is at 720, stranded between a title alone at the top and a hint
+# alone at the bottom.
+#
+# The bounds are what keeps the scaling useful at both ends. Below the floor the
+# type stops being readable, which is the opposite of the point; above the
+# ceiling the type would keep growing past any useful size. The ceiling sits at
+# 2.0 so that a maximised window on a 1440p display is still inside the range;
+# above it the window keeps growing and the form does not, which is the same
+# void this scaling exists to remove, deliberately traded for a legibility cap.
+MENU_SCALE_MIN: Final[float] = 0.85
+MENU_SCALE_MAX: Final[float] = 2.0
+# Distances from the window's own edges, at scale 1.0.
+MENU_TITLE_TOP: Final[int] = 80
+MENU_SUBTITLE_TOP: Final[int] = 112
+MENU_HINT_BOTTOM: Final[int] = 60
+MENU_STATUS_BOTTOM: Final[int] = 120
 STRATEGY_REQUIRED_YEAR: Final[int] = 2025
 
 # --- 2025 grid: driver code -> team --------------------------------------

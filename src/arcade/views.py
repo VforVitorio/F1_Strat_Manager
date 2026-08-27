@@ -25,11 +25,21 @@ from src.arcade.config import (
     FONT_TITLE,
     MENU_FOCUS_PAD,
     MENU_GUTTER,
+    MENU_HINT_BOTTOM,
     MENU_HINT_FONT,
     MENU_LABEL_FONT,
     MENU_ROW_HEIGHT,
+    MENU_SCALE_MAX,
+    MENU_SCALE_MIN,
+    MENU_STATUS_BOTTOM,
+    MENU_STATUS_FONT,
+    MENU_SUBTITLE_FONT,
+    MENU_SUBTITLE_TOP,
     MENU_TITLE,
+    MENU_TITLE_FONT,
+    MENU_TITLE_TOP,
     MENU_VALUE_FONT,
+    SCREEN_HEIGHT,
     STRATEGY_REQUIRED_YEAR,
     SUCCESS,
     TEXT_PRIMARY,
@@ -91,6 +101,71 @@ def menu_content_extents(
     return gutter + widest_label, gutter + widest_value
 
 
+class MenuBands(NamedTuple):
+    """The menu's vertical anchors and its type scale, for one window height.
+
+    Every y is where a centre-anchored line of text sits, not the edge of a
+    glyph box, because that is what the draw call is given. `form_top` and
+    `form_bottom` are the centres of the first and last rows.
+    """
+
+    scale: float
+    title_y: float
+    subtitle_y: float
+    form_top: float
+    form_bottom: float
+    row_pitch: float
+    hint_y: float
+    status_y: float
+
+    @property
+    def form_height(self) -> float:
+        """Centre to centre of the outermost rows, plus the two half-rows."""
+        return self.form_top - self.form_bottom + self.row_pitch
+
+
+def menu_scale(window_height: int) -> float:
+    """How much larger than the default the menu draws in this window.
+
+    Clamped at both ends: below the floor the type stops being readable, which
+    is the opposite of what scaling is for, and above the ceiling a 4K window
+    would render the labels at 40 pt.
+    """
+    return max(MENU_SCALE_MIN, min(MENU_SCALE_MAX, window_height / SCREEN_HEIGHT))
+
+
+def menu_bands(window_height: int, row_count: int) -> MenuBands:
+    """Place the title, the form and the hint for a window of this height.
+
+    **Pure on purpose**, the same reason `legend_mode` is (#1096): a check on
+    the drawn result needs a window and a check that needs a window does not run
+    in CI.
+
+    The three bands used to be pinned to constants, so a taller window only ever
+    grew the two gaps between them. Here every distance is a multiple of
+    `menu_scale`, which makes the gap-to-form ratio a property of the layout
+    rather than of the window: it was 0.46 at 720 and 1.10 at 1080, and it is
+    now 0.46 at both (#1100).
+
+    The form's block sits half a row below the window's vertical centre, which
+    is where it sat before and where it reads best against a title band that is
+    taller than the hint.
+    """
+    scale = menu_scale(window_height)
+    pitch = MENU_ROW_HEIGHT * scale
+    form_top = window_height / 2 + (row_count - 2) * pitch / 2
+    return MenuBands(
+        scale=scale,
+        title_y=window_height - MENU_TITLE_TOP * scale,
+        subtitle_y=window_height - MENU_SUBTITLE_TOP * scale,
+        form_top=form_top,
+        form_bottom=form_top - (row_count - 1) * pitch,
+        row_pitch=pitch,
+        hint_y=MENU_HINT_BOTTOM * scale,
+        status_y=MENU_STATUS_BOTTOM * scale,
+    )
+
+
 class MenuFormGeometry(NamedTuple):
     """Where the menu form sits, in offsets from the window's centre axis.
 
@@ -147,6 +222,8 @@ class MenuView(arcade.View):
         self._error: str = ""
         self._loading: bool = False
         self._focus_idx: int = 0
+        # Last scale pushed into the Text objects; see `_apply_scale`.
+        self._scale: float = 1.0
 
         self._fields: list[_FormField] = self._build_fields()
 
@@ -155,7 +232,7 @@ class MenuView(arcade.View):
             0,
             0,
             ACCENT,
-            32,
+            MENU_TITLE_FONT,
             bold=True,
             font_name=FONT_TITLE,
             anchor_x="center",
@@ -166,7 +243,7 @@ class MenuView(arcade.View):
             0,
             0,
             TEXT_TERTIARY,
-            13,
+            MENU_SUBTITLE_FONT,
             font_name=FONT_BODY,
             anchor_x="center",
             anchor_y="center",
@@ -186,7 +263,7 @@ class MenuView(arcade.View):
             0,
             0,
             DANGER,
-            12,
+            MENU_STATUS_FONT,
             bold=True,
             font_name=FONT_BODY,
             anchor_x="center",
@@ -197,7 +274,7 @@ class MenuView(arcade.View):
             0,
             0,
             ACCENT,
-            14,
+            MENU_STATUS_FONT,
             bold=True,
             font_name=FONT_BODY,
             anchor_x="center",
@@ -306,30 +383,54 @@ class MenuView(arcade.View):
     def on_draw(self) -> None:
         self.clear()
         w, h = self.window.width, self.window.height
+        visible_rows: list[int] = [i for i, f in enumerate(self._fields) if f.visible(self._cfg)]
+        bands = menu_bands(h, len(visible_rows))
+        self._apply_scale(bands.scale)
+
         self._title.x = w / 2
-        self._title.y = h - 80
+        self._title.y = bands.title_y
         self._title.draw()
         self._subtitle.x = w / 2
-        self._subtitle.y = h - 112
+        self._subtitle.y = bands.subtitle_y
         self._subtitle.draw()
 
-        self._draw_fields(w, h)
+        self._draw_fields(w, visible_rows, bands)
 
         if self._error:
             self._error_text.text = self._error
             self._error_text.x = w / 2
-            self._error_text.y = 120
+            self._error_text.y = bands.status_y
             self._error_text.draw()
 
         if self._loading:
             self._loading_text.text = "Loading session..."
             self._loading_text.x = w / 2
-            self._loading_text.y = 120
+            self._loading_text.y = bands.status_y
             self._loading_text.draw()
 
         self._hint.x = w / 2
-        self._hint.y = 60
+        self._hint.y = bands.hint_y
         self._hint.draw()
+
+    def _apply_scale(self, scale: float) -> None:
+        """Resize every string to the window, once per change rather than per frame.
+
+        Assigning `font_size` re-lays the glyph run out, and there are sixteen
+        Text objects here, so the guard is what keeps a resize from costing that
+        on every one of sixty frames a second.
+        """
+        if scale == self._scale:
+            return
+        self._scale = scale
+        self._title.font_size = MENU_TITLE_FONT * scale
+        self._subtitle.font_size = MENU_SUBTITLE_FONT * scale
+        self._hint.font_size = MENU_HINT_FONT * scale
+        self._error_text.font_size = MENU_STATUS_FONT * scale
+        self._loading_text.font_size = MENU_STATUS_FONT * scale
+        for text in self._label_texts:
+            text.font_size = MENU_LABEL_FONT * scale
+        for text in self._value_texts:
+            text.font_size = MENU_VALUE_FONT * scale
 
     def _set_row_texts(self, visible_rows: list[int]) -> None:
         """Push every visible row's current strings into its two Text objects.
@@ -343,16 +444,16 @@ class MenuView(arcade.View):
             self._label_texts[field_idx].text = f.label.upper()
             self._value_texts[field_idx].text = f.get_value(self._cfg)
 
-    def _draw_fields(self, w: int, h: int) -> None:
+    def _draw_fields(self, w: int, visible_rows: list[int], bands: MenuBands) -> None:
         cx = w // 2
-        visible_rows: list[int] = [i for i, f in enumerate(self._fields) if f.visible(self._cfg)]
-        total_h = len(visible_rows) * MENU_ROW_HEIGHT
-        start_y = (h + total_h) // 2 - 40
+        gutter = round(MENU_GUTTER * bands.scale)
 
         self._set_row_texts(visible_rows)
         geometry = menu_form_geometry(
             [self._label_texts[i].content_width for i in visible_rows],
             [self._value_texts[i].content_width for i in visible_rows],
+            gutter=gutter,
+            pad=round(MENU_FOCUS_PAD * bands.scale),
         )
         # The form's own axis, left of the window's whenever the value column is
         # the wider of the two, so the CONTENT is what ends up centred.
@@ -360,26 +461,26 @@ class MenuView(arcade.View):
 
         for draw_idx, field_idx in enumerate(visible_rows):
             f = self._fields[field_idx]
-            row_y = start_y - draw_idx * MENU_ROW_HEIGHT
+            row_y = bands.form_top - draw_idx * bands.row_pitch
             focused = field_idx == self._focus_idx
 
             if focused:
                 arcade.draw_rect_filled(
-                    arcade.XYWH(cx, row_y, geometry.band_half * 2, MENU_ROW_HEIGHT - 4),
+                    arcade.XYWH(cx, row_y, geometry.band_half * 2, bands.row_pitch - 4),
                     (*CONTENT_BG, 220),
                 )
                 arcade.draw_line(
                     cx - geometry.rule_half,
-                    row_y - 16,
+                    row_y - bands.row_pitch * 0.4,
                     cx + geometry.rule_half,
-                    row_y - 16,
+                    row_y - bands.row_pitch * 0.4,
                     ACCENT,
                     2,
                 )
 
             label = self._label_texts[field_idx]
             label.color = ACCENT if focused else TEXT_TERTIARY
-            label.x = axis - MENU_GUTTER
+            label.x = axis - gutter
             label.y = row_y
             label.draw()
 
@@ -387,7 +488,7 @@ class MenuView(arcade.View):
             val.color = TEXT_PRIMARY if focused else TEXT_SECONDARY
             if f.key == "strategy":
                 val.color = SUCCESS if self._cfg.strategy_mode else TEXT_TERTIARY
-            val.x = axis + MENU_GUTTER
+            val.x = axis + gutter
             val.y = row_y
             val.draw()
 
