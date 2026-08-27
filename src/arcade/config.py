@@ -31,14 +31,37 @@ SCREEN_HEIGHT: Final[int] = 720
 WINDOW_TITLE: Final[str] = "F1 StratLab - Race Replay"
 
 # --- Viewport margins (reserve UI space before fitting track) -------------
-MARGIN_LEFT: Final[int] = 340
+# The circuit's viewport, as insets from the window's edges. Each one is what a
+# panel actually occupies plus a small gap, not a round number: the left column
+# is LEFT_PANEL_X + DRIVER_BOX_WIDTH wide and the leaderboard reserves
+# LEADERBOARD_RIGHT_MARGIN, so anything more is space the circuit is denied for
+# nothing. `track_viewport` in `track.py` is where they are combined, and
+# `tests/surfaces/test_arcade_track_viewport.py` is what keeps them honest.
+MARGIN_LEFT: Final[int] = 330
 MARGIN_RIGHT: Final[int] = 260
 MARGIN_BOTTOM: Final[int] = 90
 MARGIN_TOP: Final[int] = 20
-TRACK_PADDING: Final[float] = 0.05
+# Fraction of the viewport left empty on each side, so the trace is not flush
+# against the panels. At 0.05 it cost 68 px of a 680 px viewport at 1280x720,
+# which is width the circuit is short of: the trace is limited by the viewport's
+# WIDTH at every window size, and every pixel of padding comes straight off it.
+TRACK_PADDING: Final[float] = 0.02
+# Floor under that fraction, in pixels. A car is drawn ON the trace with its
+# three-letter code centred above or below the dot, so the trace has to stop
+# short of the panels by more than the trace itself: the widest three-letter
+# label renders 42 px, which is 21 either side of the car. At 0.02 the fraction
+# alone gives 14 px in a 1280-wide window, so the floor is what stops a label
+# reaching the leaderboard there. The old 0.05 cleared it by accident.
+TRACK_MIN_CLEARANCE: Final[int] = 22
+# Half the widest three-letter driver label, measured on the real font at
+# CAR_LABEL_FONT_SIZE. Read by the guard that keeps the clearance above honest.
+CAR_LABEL_MAX_HALF_WIDTH: Final[int] = 21
 
 # --- Weather panel --------------------------------------------------------
-WEATHER_LEFT: Final[int] = 20
+# Left edge of every panel in the left column, weather card and driver table
+# alike. Named because the track's viewport is derived from it.
+LEFT_PANEL_X: Final[int] = 20
+WEATHER_LEFT: Final[int] = LEFT_PANEL_X
 WEATHER_TOP_OFFSET: Final[int] = 90
 WEATHER_WIDTH: Final[int] = 280
 WEATHER_ROW_GAP: Final[int] = 22
@@ -68,6 +91,10 @@ LEADERBOARD_N_SLOTS: Final[int] = 22
 # --- Progress bar ---------------------------------------------------------
 PROGRESS_BAR_BOTTOM: Final[int] = 30
 PROGRESS_BAR_HEIGHT: Final[int] = 24
+# Centre line of the playback readout, in the band between the progress bar's
+# top edge and MARGIN_BOTTOM. That band was empty while the speed multiplier and
+# PAUSED rode in the top-left corner under the lap counter (#1103).
+PLAYBACK_STATE_Y: Final[int] = 72
 
 # --- Controls legend ------------------------------------------------------
 LEGEND_X: Final[int] = 20
@@ -82,6 +109,10 @@ LEGEND_BOTTOM: Final[int] = 60
 # dependency-free from the backend package.
 BG_COLOR: Final[tuple[int, int, int]] = (18, 17, 39)  # #121127 PRIMARY_BG
 CONTENT_BG: Final[tuple[int, int, int]] = (24, 22, 51)  # #181633 CONTENT_BG (panels)
+# How opaque a panel's card is drawn over the background. Below full so the
+# panels read as surfaces laid on the scene rather than as holes cut in it, and
+# so the circuit is what the eye reaches first.
+PANEL_FILL_ALPHA: Final[int] = 205
 SECONDARY_BG: Final[tuple[int, int, int]] = (30, 27, 75)  # #1e1b4b SECONDARY_BG
 BORDER_COLOR: Final[tuple[int, int, int]] = (45, 45, 58)  # #2d2d3a BORDER
 TEXT_PRIMARY: Final[tuple[int, int, int]] = (255, 255, 255)  # #ffffff
@@ -98,8 +129,11 @@ FONT_BODY: Final[tuple[str, ...]] = ("Inter", "Segoe UI", "Arial")
 FONT_TITLE: Final[tuple[str, ...]] = ("Exo 2", "Inter", "Segoe UI", "Arial")
 
 # --- Track rendering ------------------------------------------------------
-TRACK_EDGE_COLOR: Final[tuple[int, int, int]] = (150, 150, 150)
-TRACK_EDGE_WIDTH: Final[int] = 4
+# The circuit is the reason the window exists, so it is the brightest thing
+# drawn on the background rather than the dimmest. It used to sit at 150 grey
+# against panels whose borders and team-colour strips were louder than it.
+TRACK_EDGE_COLOR: Final[tuple[int, int, int]] = (188, 188, 196)
+TRACK_EDGE_WIDTH: Final[int] = 5
 TRACK_FILL_COLOR: Final[tuple[int, int, int]] = (40, 40, 44)
 DRS_COLOR: Final[tuple[int, int, int]] = (0, 220, 0)
 DRS_WIDTH: Final[int] = 5

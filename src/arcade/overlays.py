@@ -35,6 +35,7 @@ from src.arcade.config import (
     LEADERBOARD_WIDTH,
     LEGEND_BOTTOM,
     LEGEND_X,
+    PANEL_FILL_ALPHA,
     PROGRESS_BAR_BOTTOM,
     PROGRESS_BAR_HEIGHT,
     TEXT_PRIMARY,
@@ -232,7 +233,9 @@ class WeatherPanel:
     def _draw_card(self, top_y: int, panel_h: int) -> None:
         cx = self.x + self.width / 2
         cy = top_y - panel_h / 2
-        arcade.draw_rect_filled(arcade.XYWH(cx, cy, self.width, panel_h), (*CONTENT_BG, 230))
+        arcade.draw_rect_filled(
+            arcade.XYWH(cx, cy, self.width, panel_h), (*CONTENT_BG, PANEL_FILL_ALPHA)
+        )
         arcade.draw_rect_outline(arcade.XYWH(cx, cy, self.width, panel_h), BORDER_COLOR, 1)
         strip_cy = top_y - self.STRIP_H / 2
         arcade.draw_rect_filled(arcade.XYWH(cx, strip_cy, self.width, self.STRIP_H), ACCENT)
@@ -445,7 +448,9 @@ class DriverInfoPanel:
         """The card body, its outline, and one strip segment per driver."""
         cx = self.x + self.width / 2
         cy = self.top_y - self.height / 2
-        arcade.draw_rect_filled(arcade.XYWH(cx, cy, self.width, self.height), (*CONTENT_BG, 230))
+        arcade.draw_rect_filled(
+            arcade.XYWH(cx, cy, self.width, self.height), (*CONTENT_BG, PANEL_FILL_ALPHA)
+        )
         arcade.draw_rect_outline(arcade.XYWH(cx, cy, self.width, self.height), BORDER_COLOR, 1)
 
         strip_cy = self.top_y - self.STRIP_H / 2
@@ -737,7 +742,9 @@ class LeaderboardPanel:
     def _draw_card(self, panel_h: int) -> None:
         cx = self.x + self.width / 2
         cy = self.top_y - panel_h / 2
-        arcade.draw_rect_filled(arcade.XYWH(cx, cy, self.width, panel_h), (*CONTENT_BG, 230))
+        arcade.draw_rect_filled(
+            arcade.XYWH(cx, cy, self.width, panel_h), (*CONTENT_BG, PANEL_FILL_ALPHA)
+        )
         arcade.draw_rect_outline(arcade.XYWH(cx, cy, self.width, panel_h), BORDER_COLOR, 1)
         strip_cy = self.top_y - self.STRIP_H / 2
         arcade.draw_rect_filled(arcade.XYWH(cx, strip_cy, self.width, self.STRIP_H), ACCENT)
