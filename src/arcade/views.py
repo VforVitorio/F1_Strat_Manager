@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, NamedTuple
 
 import arcade
 from src.arcade.config import (
@@ -23,10 +23,11 @@ from src.arcade.config import (
     DRIVER_TO_TEAM_2025,
     FONT_BODY,
     FONT_TITLE,
+    MENU_FOCUS_PAD,
+    MENU_GUTTER,
     MENU_HINT_FONT,
     MENU_LABEL_FONT,
     MENU_ROW_HEIGHT,
-    MENU_ROW_WIDTH,
     MENU_TITLE,
     MENU_VALUE_FONT,
     STRATEGY_REQUIRED_YEAR,
@@ -65,6 +66,74 @@ class _FormField:
     step_right: Callable[[LaunchConfig], None] | None = None
     visible: Callable[[LaunchConfig], bool] = field(default_factory=lambda: lambda _cfg: True)
     editable: bool = False  # text fields accept on_text
+
+
+def menu_content_extents(
+    label_widths: list[float],
+    value_widths: list[float],
+    *,
+    gutter: int = MENU_GUTTER,
+) -> tuple[float, float]:
+    """How far the form's content reaches left and right of its own axis.
+
+    Labels are right-aligned at `axis - gutter` and values left-aligned at
+    `axis + gutter`, so the two columns are as wide as the widest label and the
+    widest value rather than as anything a single row measures. The band is
+    sized off the whole form for that reason: fitting it to each row instead
+    would move both its edges on every focus change, which reads worse than a
+    band that is a little loose on the short rows.
+
+    The two extents are not equal. At 1280 the widest label is STRATEGY and the
+    widest value is the round's GP name, and those render at 83 and 131 pixels.
+    """
+    widest_label = max(label_widths) if label_widths else 0.0
+    widest_value = max(value_widths) if value_widths else 0.0
+    return gutter + widest_label, gutter + widest_value
+
+
+class MenuFormGeometry(NamedTuple):
+    """Where the menu form sits, in offsets from the window's centre axis.
+
+    `axis_offset` is negative whenever the value column is wider than the label
+    column, which is the normal case: it pulls the label/value boundary left so
+    that the CONTENT ends up centred in the window rather than the boundary.
+    """
+
+    axis_offset: float
+    band_half: float
+    rule_half: float
+
+
+def menu_form_geometry(
+    label_widths: list[float],
+    value_widths: list[float],
+    *,
+    gutter: int = MENU_GUTTER,
+    pad: int = MENU_FOCUS_PAD,
+) -> MenuFormGeometry:
+    """Place the form and size the focused row's band to what is drawn in it.
+
+    **Pure on purpose**, the same reason `legend_mode` is (#1096): this decision
+    is made between GL calls in `on_draw`, so a check on the drawn result needs
+    a window, and a check that needs a window does not run in CI.
+
+    Two things come out of it. The band replaces a fixed 540 px rectangle over a
+    form whose content spans 254, which is what made the accent rule read as a
+    line across the panel rather than an underline of the focused field (#1099).
+    The axis offset is the correction that tightening the band made visible: an
+    over-wide symmetric band had been hiding that the content itself sits right
+    of the window's centre.
+
+    The fill takes the padding and the rule does not, so the fill reads as a
+    band around the text and the rule as an underline of it.
+    """
+    extent_left, extent_right = menu_content_extents(label_widths, value_widths, gutter=gutter)
+    rule_half = (extent_left + extent_right) / 2
+    return MenuFormGeometry(
+        axis_offset=(extent_left - extent_right) / 2,
+        band_half=rule_half + pad,
+        rule_half=rule_half,
+    )
 
 
 class MenuView(arcade.View):
@@ -262,11 +331,32 @@ class MenuView(arcade.View):
         self._hint.y = 60
         self._hint.draw()
 
+    def _set_row_texts(self, visible_rows: list[int]) -> None:
+        """Push every visible row's current strings into its two Text objects.
+
+        Split from the draw loop because the focus band has to know how wide the
+        widest label and the widest value are BEFORE the first row is painted,
+        and a Text reports its rendered width only once it holds the string.
+        """
+        for field_idx in visible_rows:
+            f = self._fields[field_idx]
+            self._label_texts[field_idx].text = f.label.upper()
+            self._value_texts[field_idx].text = f.get_value(self._cfg)
+
     def _draw_fields(self, w: int, h: int) -> None:
         cx = w // 2
         visible_rows: list[int] = [i for i, f in enumerate(self._fields) if f.visible(self._cfg)]
         total_h = len(visible_rows) * MENU_ROW_HEIGHT
         start_y = (h + total_h) // 2 - 40
+
+        self._set_row_texts(visible_rows)
+        geometry = menu_form_geometry(
+            [self._label_texts[i].content_width for i in visible_rows],
+            [self._value_texts[i].content_width for i in visible_rows],
+        )
+        # The form's own axis, left of the window's whenever the value column is
+        # the wider of the two, so the CONTENT is what ends up centred.
+        axis = cx + geometry.axis_offset
 
         for draw_idx, field_idx in enumerate(visible_rows):
             f = self._fields[field_idx]
@@ -275,31 +365,29 @@ class MenuView(arcade.View):
 
             if focused:
                 arcade.draw_rect_filled(
-                    arcade.XYWH(cx, row_y, MENU_ROW_WIDTH, MENU_ROW_HEIGHT - 4),
+                    arcade.XYWH(cx, row_y, geometry.band_half * 2, MENU_ROW_HEIGHT - 4),
                     (*CONTENT_BG, 220),
                 )
                 arcade.draw_line(
-                    cx - MENU_ROW_WIDTH / 2 + 40,
+                    cx - geometry.rule_half,
                     row_y - 16,
-                    cx + MENU_ROW_WIDTH / 2 - 40,
+                    cx + geometry.rule_half,
                     row_y - 16,
                     ACCENT,
                     2,
                 )
 
             label = self._label_texts[field_idx]
-            label.text = f.label.upper()
             label.color = ACCENT if focused else TEXT_TERTIARY
-            label.x = cx - 20
+            label.x = axis - MENU_GUTTER
             label.y = row_y
             label.draw()
 
             val = self._value_texts[field_idx]
-            val.text = f.get_value(self._cfg)
             val.color = TEXT_PRIMARY if focused else TEXT_SECONDARY
             if f.key == "strategy":
                 val.color = SUCCESS if self._cfg.strategy_mode else TEXT_TERTIARY
-            val.x = cx + 20
+            val.x = axis + MENU_GUTTER
             val.y = row_y
             val.draw()
 

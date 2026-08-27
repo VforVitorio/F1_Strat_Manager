@@ -225,7 +225,14 @@ STREAM_HISTORY_TAIL: Final[int] = 30
 # --- Menu view ------------------------------------------------------------
 MENU_TITLE: Final[str] = "F1 STRATLAB"
 MENU_ROW_HEIGHT: Final[int] = 40
-MENU_ROW_WIDTH: Final[int] = 540
+# Half the space between the label column's right edge and the value column's
+# left edge. Both columns are anchored off the window's centre axis, so this is
+# what separates them.
+MENU_GUTTER: Final[int] = 20
+# Breathing room the focus fill adds beyond the form's own content. The accent
+# rule under the focused row takes the content extent with no padding, so the
+# fill reads as a band around the text and the rule as an underline of it.
+MENU_FOCUS_PAD: Final[int] = 24
 MENU_LABEL_FONT: Final[int] = 13
 MENU_VALUE_FONT: Final[int] = 15
 MENU_HINT_FONT: Final[int] = 11
