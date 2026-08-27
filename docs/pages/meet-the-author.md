@@ -39,8 +39,8 @@ and a plan for the next pit window.
 The same engine drives three operator surfaces: a React web app
 for analysts (backed by a FastAPI/MCP API for programmatic access and
 chat tool-calling), a CLI for headless replays, and a multi-window
-arcade (race replay, strategy dashboard, live telemetry) built in
-PySide6 + pyglet for the demo experience. The whole stack is open
+arcade (race replay plus the two PITWALL windows, agents and live
+telemetry) built in pyglet and React for the demo experience. The whole stack is open
 under Apache-2.0 and shipped as wheels and GitHub releases through
 release-please automation.
 
