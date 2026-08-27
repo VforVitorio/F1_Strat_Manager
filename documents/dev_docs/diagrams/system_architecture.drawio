@@ -39,16 +39,16 @@
         <mxCell id="arc-box" value="Surface 2, Arcade (MAIN FOCUS)&#10;python -m src.arcade.main --viewer --strategy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=3;" vertex="1" parent="1">
           <mxGeometry x="660" y="230" width="600" height="280" as="geometry"/>
         </mxCell>
-        <mxCell id="arc-desc" value="3-window live race replay, Phase 3.5 MVP&#10;local strategy pipeline, no FastAPI dependency&#10;pyglet Arcade + PySide6 dashboard + telemetry windows" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="arc-desc" value="3-window live race replay&#10;local strategy pipeline, no FastAPI dependency&#10;pyglet Arcade + the two PITWALL webview windows" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="690" y="280" width="540" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="arc-win1" value="Window 1&#10;Arcade Replay (pyglet)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#8B5CF6;fontColor=#D3B8E8;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="690" y="360" width="170" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="arc-win2" value="Window 2&#10;Dashboard (Qt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="arc-win2" value="Window 2&#10;PITWALL &#183; AGENTS (webview)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="875" y="360" width="170" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="arc-win3" value="Window 3&#10;Telemetry (Qt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#06B6D4;fontColor=#A6E0EC;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="arc-win3" value="Window 3&#10;PITWALL &#183; DATA (same process)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#06B6D4;fontColor=#A6E0EC;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1060" y="360" width="170" height="60" as="geometry"/>
         </mxCell>
         <mxCell id="arc-tcp" value="TCP localhost:9998 broadcast, newline JSON @ 10 Hz" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#BDEBCC;fontSize=10;fontStyle=1;" vertex="1" parent="1">

@@ -1038,9 +1038,10 @@ class F1ArcadeView(arcade.View):
             # Real per-lap FastF1 weather (#616), built once at session load
             # by SessionLoader._extract_weather_by_lap and cached on
             # SessionData.weather_by_lap. An older cache or a session with no
-            # weather data resolves to {}; WeatherPanel.draw already falls
-            # back to its own constants per missing key, so this degrades to
-            # exactly the old hardcoded display instead of raising.
+            # weather data resolves to {}, and WeatherPanel then renders "N/A"
+            # per field. A single NaN sample degrades the same way, because the
+            # loader stores it as None under the key and overlays._reading
+            # coalesces it there (#1087) rather than formatting it and raising.
             "weather": self._session.weather_by_lap.get(lap, {}),
         }
 

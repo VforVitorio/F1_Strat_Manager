@@ -1,9 +1,9 @@
 """Entry point: two windows, one host, one stream client.
 
-Spawned by the arcade as `python -m src.pitwall`, exactly the way the Qt
-dashboard is today. This is the ONLY module that imports pywebview, so a
-machine without a system webview still runs the tests and every other
-surface.
+Spawned by the arcade as `python -m src.pitwall` (`src/arcade/app.py:501`), the
+way the Qt dashboard used to be before this replaced it in sprint 7. This is the
+ONLY module that imports pywebview, so a machine without a system webview still
+runs the tests and every other surface.
 
 Run it directly to develop against a running arcade:
 

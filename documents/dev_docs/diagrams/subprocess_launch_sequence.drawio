@@ -150,15 +150,15 @@
             <mxPoint x="1460" y="595" as="targetPoint"/>
           </mxGeometry>
         </mxCell>
-        <mxCell id="m6b" value="6b. subprocess.Popen([sys.executable, &quot;-m&quot;, &quot;src.arcade.telemetry&quot;])" style="endArrow=classic;html=1;strokeColor=#06B6D4;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
+        <mxCell id="m6b" value="6b. the SAME process opens the second window &#183; webview.create_window() per config.WINDOWS" style="endArrow=classic;html=1;strokeColor=#06B6D4;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="940" y="645" as="sourcePoint"/>
+            <mxPoint x="1460" y="645" as="sourcePoint"/>
             <mxPoint x="1720" y="645" as="targetPoint"/>
           </mxGeometry>
         </mxCell>
 
         <!-- Step 7: Dashboard process creates clients -->
-        <mxCell id="m7" value="7. QApplication + MainWindow &#183; TelemetryStreamClient(QThread).start(), connects to 127.0.0.1:9998" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m7" value="7. PitwallHost(ArcadeStreamClient).start() &#183; ONE TCP client for both windows, connects to 127.0.0.1:9998" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1460" y="690" as="sourcePoint"/>
             <mxPoint x="940" y="690" as="targetPoint"/>
@@ -218,26 +218,26 @@
           <mxGeometry x="960" y="1058" width="280" height="30" as="geometry"/>
         </mxCell>
 
-        <mxCell id="m13" value="13. TCP send &#8594; PITWALL host (~10 Hz)" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
+        <mxCell id="m13" value="13. TCP send &#8594; ArcadeStreamClient (~10 Hz)" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="940" y="1125" as="sourcePoint"/>
             <mxPoint x="1460" y="1125" as="targetPoint"/>
           </mxGeometry>
         </mxCell>
-        <mxCell id="m14" value="14. TCP send &#8594; Telemetry (~10 Hz)" style="endArrow=classic;html=1;strokeColor=#06B6D4;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
+        <mxCell id="m14" value="14. the same tick, read by the second window &#183; one socket, one seq, no second connection" style="endArrow=classic;html=1;strokeColor=#06B6D4;strokeWidth=3;fontColor=#E6E8EF;fontSize=10;fontStyle=1;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="940" y="1165" as="sourcePoint"/>
+            <mxPoint x="1460" y="1165" as="sourcePoint"/>
             <mxPoint x="1720" y="1165" as="targetPoint"/>
           </mxGeometry>
         </mxCell>
 
-        <mxCell id="m15" value="15. Host parses newline-JSON &#8594; both windows poll it by seq &#8594; Orchestrator card, MC bars, 6 sub-agent cards, tabs" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
+        <mxCell id="m15" value="15. Host parses newline-JSON &#8594; both windows poll it by seq &#8594; decision band, MC bars, 6 sub-agent consoles" style="endArrow=classic;html=1;strokeColor=#F59E0B;strokeWidth=2;fontColor=#E6E8EF;fontSize=10;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1460" y="1200" as="sourcePoint"/>
             <mxPoint x="1460" y="1225" as="targetPoint"/>
           </mxGeometry>
         </mxCell>
-        <mxCell id="m15-self" value="self-call: pyqtSignal.emit(dict) &#8594; widgets update" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#F59E0B;" vertex="1" parent="1">
+        <mxCell id="m15-self" value="self-call: get_tick(seq) over the pywebview bridge &#8594; React re-render" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#F59E0B;" vertex="1" parent="1">
           <mxGeometry x="1480" y="1198" width="340" height="30" as="geometry"/>
         </mxCell>
 
@@ -248,7 +248,7 @@
         <mxCell id="leg-1" value=",  Purple lines: main.py orchestrating boot (steps 1, 3, 12)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#8B5CF6;" vertex="1" parent="1">
           <mxGeometry x="100" y="1310" width="800" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="leg-2" value=",  Orange (thick) &amp; cyan (thick) lines: subprocess.Popen spawns (steps 6a, 6b) + TCP broadcasts (steps 13, 14)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#F59E0B;" vertex="1" parent="1">
+        <mxCell id="leg-2" value=",  Orange (thick) &amp; cyan (thick) lines: subprocess.Popen spawns (step 6a) + TCP broadcast (step 13); the second window and its tick (6b, 14) are in-process" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#F59E0B;" vertex="1" parent="1">
           <mxGeometry x="100" y="1338" width="1200" height="24" as="geometry"/>
         </mxCell>
         <mxCell id="leg-3" value=",  Green lines: SimConnector thread work, pipeline execution + state writes (steps 4, 5, 10, 11)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#4ADE80;" vertex="1" parent="1">

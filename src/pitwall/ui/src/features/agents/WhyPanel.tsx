@@ -27,7 +27,16 @@ export function WhyPanel({ view }: { view: OrchestratorView }) {
   const { anchor, props, hold } = useTooltipTarget(TOOLTIP_ID, view.why_detail !== null);
 
   return (
-    <section className="card why-panel" {...props}>
+    // `has-tooltip` is the same class the agent consoles set and the same rule
+    // paints it, because this module is a card carrying a transcript exactly as
+    // they are. It had no affordance at all until #1092: the narrative is
+    // clamped to three lines and the rest, including the DecisionMemory block,
+    // is only reachable through the popup, so a reader with no tell has no way
+    // to know the rest exists.
+    <section
+      className={`card why-panel${view.why_detail ? " has-tooltip" : ""}`}
+      {...props}
+    >
       <h2 className="band-title">WHY THIS CALL</h2>
 
       {view.why_detail && anchor ? (

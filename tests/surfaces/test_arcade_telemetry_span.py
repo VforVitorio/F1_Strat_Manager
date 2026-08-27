@@ -693,16 +693,45 @@ def test_no_served_frame_carries_a_gear_the_car_cannot_select():
     128 and 1,840 above gear 8**. PITWALL's GEAR lane is locked to [0, 9], so each
     is a full-height spike.
 
-    Gear 0 is asserted PRESENT in the same breath. It is a real reading, and a
-    validity predicate written `g < 1 or g > 8` would erase 4,773 frames of a
-    stationary car while making the first assertion pass.
+    That the predicate stays ONE-SIDED is the other half, and it is asserted on
+    the function rather than on this race's frames. It used to be asserted here
+    as `neutral > 1000` served frames, which passed only against a cached pickle
+    that carried about 19 minutes of pre-race garage time. Melbourne 2025 puts
+    all 202,509 of its gear-0 samples OUTSIDE every lap window, so a correct
+    replay of it serves none, and the old assertion failed the moment the cache
+    was rebuilt (#1094). A test that can only pass against a stale artefact is
+    asserting the artefact, not the code.
     """
     frames = _active_frames(_melbourne_or_skip())
     gears = {frame.gear for frame in frames}
     assert max(gears) <= 8, f"gears above 8 are served: {sorted(g for g in gears if g > 8)}"
     assert min(gears) >= 0
-    neutral = sum(1 for frame in frames if frame.gear == 0)
-    assert neutral > 1000, f"only {neutral} neutral frames: is 0 being filtered as invalid?"
+
+
+def test_neutral_is_repaired_as_a_real_reading_not_as_an_impossible_one():
+    """A one-sided validity test, asserted on the repair itself.
+
+    This is what `neutral > 1000` was reaching for. Stated on the function it
+    guards, it needs no session, runs in CI where the pickle never exists, and
+    fails on the actual mistake: widening the predicate to `g < 1 or g > 8`,
+    which would erase a stationary car's reading while leaving every other
+    assertion in this file green.
+    """
+    import numpy as np
+
+    from src.arcade.data import _drop_impossible_gears
+
+    # 0 alongside a genuinely impossible 128, so the array takes the repair path
+    # rather than the untouched-return shortcut.
+    repaired = _drop_impossible_gears(np.array([0.0, 3.0, 128.0, 0.0, 5.0]))
+    assert list(repaired) == [0.0, 3.0, 3.0, 0.0, 5.0], (
+        f"neutral did not survive the repair: {list(repaired)}"
+    )
+
+    untouched = np.array([0.0, 0.0, 1.0])
+    assert list(_drop_impossible_gears(untouched)) == [0.0, 0.0, 1.0], (
+        "an all-valid array containing neutral was rewritten"
+    )
 
 
 def test_no_served_frame_carries_a_drs_code_the_feed_never_emits():

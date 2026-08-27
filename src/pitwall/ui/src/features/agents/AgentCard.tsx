@@ -56,6 +56,14 @@ export function AgentCard({
           "agent-card",
           idle ? "is-idle" : "",
           slot ? `slot-${slot}` : "",
+          // The hover affordance is gated on THIS, not on
+          // `:has(.agent-tooltip)`. The popup is portaled to `document.body`,
+          // so it is never a descendant of the card and that selector matched
+          // nothing for as long as it existed (#1089). `ContingenciesCard`
+          // already did it this way and the reason was written down in the
+          // stylesheet beside it; it was never carried back to the six
+          // consoles.
+          card.tooltip ? "has-tooltip" : "",
         ]
           .filter(Boolean)
           .join(" ")

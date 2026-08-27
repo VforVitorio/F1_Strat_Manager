@@ -87,7 +87,7 @@
           <mxGeometry x="80" y="640" width="40" height="40" as="geometry"/>
         </mxCell>
 
-        <mxCell id="dash-subs" value="Strategy Dashboard, MainWindow (QMainWindow)&#10;TelemetryStreamClient (QThread)&#10;socket.recv() &#8594; split by \n &#8594; pyqtSignal(dict)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#F59E0B;fontColor=#E6E8EF;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="dash-subs" value="PITWALL, one pywebview process for BOTH windows&#10;ArcadeStreamClient, one socket for both&#10;socket.recv() &#8594; split by \n &#8594; PitwallHost keeps the latest tick by seq" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#F59E0B;fontColor=#E6E8EF;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="140" y="640" width="560" height="100" as="geometry"/>
         </mxCell>
         <mxCell id="tel-subs" value="RETIRED (7ea6a7a6), Qt TelemetryWindow (QMainWindow)&#10;TelemetryStreamClient (QThread), separate socket connection&#10;consumed arcade.telemetry.{main, rival}, the shape schema v2 replaced&#10;with a span per driver under arcade.telemetry.drivers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#06B6D4;fontColor=#E6E8EF;fontSize=11;fontStyle=1;strokeWidth=2;" vertex="1" parent="1">
@@ -95,7 +95,7 @@
         </mxCell>
 
         <!-- Dashboard widgets -->
-        <mxCell id="dash-wid" value="Orchestrator Card &#183; MC Bars &#183; 6 Sub-Agent Cards &#183; Reasoning Tabs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="dash-wid" value="Decision band (CALL &#183; WHY &#183; MC bars &#183; PLAN) &#183; 6 sub-agent consoles" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="140" y="760" width="560" height="40" as="geometry"/>
         </mxCell>
         <mxCell id="tel-wid" value="Delta &#183; Speed &#183; Brake &#183; Throttle, 2&#215;2 ECharts grid" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#06B6D4;fontColor=#A6E0EC;fontSize=10;" vertex="1" parent="1">
@@ -143,7 +143,7 @@
         </mxCell>
 
         <!-- Footer note -->
-        <mxCell id="footer" value="Single producer (F1ArcadeView), multi-consumer (dashboard + telemetry windows). No FastAPI, no SSE. Localhost-only TCP socket." style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontColor=#A0A5B8;fontStyle=2;" vertex="1" parent="1">
+        <mxCell id="footer" value="Single producer (F1ArcadeView), ONE subscriber process serving two windows off one socket. No FastAPI, no SSE. Localhost-only TCP socket." style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontColor=#A0A5B8;fontStyle=2;" vertex="1" parent="1">
           <mxGeometry x="360" y="850" width="1200" height="30" as="geometry"/>
         </mxCell>
 

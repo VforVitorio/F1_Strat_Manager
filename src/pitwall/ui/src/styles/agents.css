@@ -463,8 +463,19 @@
  * anywhere over it opens the transcript and nothing extra is drawn. An
  * earlier version added a visible "i" glyph and made only those 14 px
  * hoverable: a new element with no counterpart in the window being
- * ported. */
-.agent-card:has(.agent-tooltip) {
+ * ported.
+ *
+ * **Gated on a class `AgentCard` sets, never on `:has(.agent-tooltip)`.** That
+ * selector was here first and matched nothing for as long as it existed: the
+ * popup is portaled to `<body>` (`Tooltip.tsx:105`), so it is not a descendant
+ * of the card whose hover it was meant to drive, and neither of the two rules
+ * below ever fired (#1089).
+ *
+ * **Keyed on `.card`, not on `.agent-card`, so one tell means one thing.** The
+ * WHY module is a card carrying a tooltip exactly as the six consoles are, and
+ * it had no affordance at all until #1092. Giving it a third bespoke treatment
+ * would say "there is something here" in three different ways on one window. */
+.card.has-tooltip {
   cursor: help;
 }
 
@@ -477,12 +488,13 @@
  *
  * Border colour only: no size, no shadow, nothing that moves a neighbour. The
  * six cards sit in a grid and a card that grows on hover would shift the five
- * beside it. */
-.agent-card {
+ * beside it, and the WHY module sits in the band beside three siblings with the
+ * same constraint. */
+.card.has-tooltip {
   transition: border-color var(--motion-fast) var(--motion-ease);
 }
 
-.agent-card:has(.agent-tooltip):hover {
+.card.has-tooltip:hover {
   border-color: var(--qt-fg-3);
 }
 
@@ -928,10 +940,10 @@
   border-radius: 4px;
 }
 
-/* **Gated on a class the component sets, never on `:has(.agent-tooltip)`.** That
- * selector drives the six consoles' hover and has never matched anything: the
- * popup is portaled to `<body>`, so it is not a descendant of the card it was
- * meant to describe.
+/* **Gated on a class the component sets**, for the reason spelled out beside
+ * `.agent-card.has-tooltip` above: a portaled popup is not a descendant of its
+ * own anchor, so `:has()` cannot reach it. This card had the right shape first
+ * and the six consoles were brought to it in #1089.
  *
  * Background only. This card sits in a flex column under PIT, so anything that
  * changes its box moves a neighbour - the same reason the consoles' own hover is
