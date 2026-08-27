@@ -11,9 +11,12 @@ that needs a display does not run in CI. `legend_mode` (#1096) and
 `_weather_rows` (#1087) were split out for the same reason.
 
 The numbers pinned in `test_the_usable_width_matches_what_was_measured_on_screen`
-were read off the projected polylines of the real Melbourne 2025 track on a
-hidden window, so if the arithmetic here drifts from what is drawn, it fails
-there rather than silently changing what everything else is about.
+were read off the projected polylines of a real track on a hidden window, so if
+the arithmetic here drifts from what is drawn, it fails there rather than
+silently changing what everything else is about. The track is SUZUKA 2025, round
+3; it was recorded as Melbourne because the probe asked for
+`(2025, 3, "Melbourne")` and the loader named its cache by label while fetching
+by round (#1119).
 """
 
 from __future__ import annotations

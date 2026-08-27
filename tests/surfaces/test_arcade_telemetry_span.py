@@ -656,20 +656,28 @@ def test_eligible_is_not_open_at_every_site_that_decodes_it():
 # --- #1002: the discrete channels stop being interpolated ----------------------
 
 
-def _melbourne_or_skip():
-    """The cached arcade session, or a skip. The pickle is not in git."""
-    from src.arcade.config import ARCADE_CACHE_DIR, CACHE_VERSION
+def _cached_session_or_skip():
+    """Any cached arcade session, or a skip. The pickles are not in git.
 
-    cached = ARCADE_CACHE_DIR / "Melbourne_2025_race.pkl"
-    if not cached.exists():
-        pytest.skip("the Melbourne 2025 arcade pickle is not on this install")
+    It used to open `Melbourne_2025_race.pkl` by name. That name was a lie: the
+    loader fetched by round and named the file by label, so the pickle called
+    Melbourne held Suzuka, and the assertions below were measured against a race
+    they did not name (#1119). The name is `{year}_r{round}_race.pkl` now, and
+    what these tests need is a real cached race rather than a particular one.
+    """
     import pickle
 
-    with cached.open("rb") as handle:
-        session = pickle.load(handle)
-    if session.version != CACHE_VERSION:
-        pytest.skip(f"the cached pickle is {session.version}, not {CACHE_VERSION}")
-    return session
+    from src.arcade.config import ARCADE_CACHE_DIR, CACHE_VERSION
+
+    candidates = sorted(ARCADE_CACHE_DIR.glob("*_race.pkl"))
+    if not candidates:
+        pytest.skip("no arcade session pickle on this install")
+    for cached in candidates:
+        with cached.open("rb") as handle:
+            session = pickle.load(handle)
+        if session.version == CACHE_VERSION:
+            return session
+    pytest.skip(f"no cached pickle is at {CACHE_VERSION}")
 
 
 def _active_frames(session) -> list:
@@ -702,7 +710,7 @@ def test_no_served_frame_carries_a_gear_the_car_cannot_select():
     was rebuilt (#1094). A test that can only pass against a stale artefact is
     asserting the artefact, not the code.
     """
-    frames = _active_frames(_melbourne_or_skip())
+    frames = _active_frames(_cached_session_or_skip())
     gears = {frame.gear for frame in frames}
     assert max(gears) <= 8, f"gears above 8 are served: {sorted(g for g in gears if g > 8)}"
     assert min(gears) >= 0
@@ -742,7 +750,7 @@ def test_no_served_frame_carries_a_drs_code_the_feed_never_emits():
     two open frames - so an open wing drew as a flicker. Measured before the fix:
     **1,775 served frames** on 4, 5, 6, 7, 9, 11 or 13.
     """
-    frames = _active_frames(_melbourne_or_skip())
+    frames = _active_frames(_cached_session_or_skip())
     served = {frame.drs for frame in frames}
     manufactured = served - {0, 1, 2, 3, 8, 10, 12, 14}
     assert not manufactured, f"codes FastF1 never emits are on the wire: {sorted(manufactured)}"
@@ -757,7 +765,7 @@ def test_the_brake_channel_is_the_boolean_it_was_measured_as():
     **86,925 served frames (3.49%) sat strictly between 2 and 98** across 10,976
     distinct values, none of which any car ever published.
     """
-    frames = _active_frames(_melbourne_or_skip())
+    frames = _active_frames(_cached_session_or_skip())
     served = {round(frame.brake, 6) for frame in frames}
     assert served <= {0.0, 100.0}, f"interpolated brake pressures are served: {sorted(served)[:8]}"
     assert served == {0.0, 100.0}, "both states must occur, or the channel is stuck"
@@ -771,7 +779,7 @@ def test_a_tyre_age_is_a_whole_number_of_laps():
     either neighbouring value, the worst 16.4 laps out**. The TimingTower renders this
     number, and a pit exit is exactly where it was wrong.
     """
-    frames = _active_frames(_melbourne_or_skip())
+    frames = _active_frames(_cached_session_or_skip())
     fractional = [f.tyre_life for f in frames if abs(f.tyre_life - round(f.tyre_life)) > 1e-9]
     assert not fractional, f"{len(fractional)} frames carry a fractional tyre age"
 
@@ -791,7 +799,7 @@ def test_no_served_frame_takes_the_lap_number_backwards():
     per-sample channel cannot be hurt by the swap, which is why gear and DRS are not
     here.
     """
-    session = _melbourne_or_skip()
+    session = _cached_session_or_skip()
     offenders = []
     for code, frames in session.frames_by_driver.items():
         for previous, current in zip(frames, frames[1:]):
@@ -822,7 +830,7 @@ def test_no_driver_is_parked_on_the_line_for_a_whole_lap():
     run LENGTH rather than the value. The worst legitimate run measured across the
     field is 10 frames; 100 is four seconds and cannot be a real approach.
     """
-    session = _melbourne_or_skip()
+    session = _cached_session_or_skip()
     parked = {}
     for code, frames in session.frames_by_driver.items():
         longest = run = 0

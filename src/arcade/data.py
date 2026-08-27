@@ -14,6 +14,7 @@ km/h for speed, seconds for time); conversion happens at render boundaries.
 
 from __future__ import annotations
 
+import gc
 import logging
 import pickle
 from dataclasses import dataclass, field
@@ -493,14 +494,27 @@ class SessionLoader:
     def load(self, year: int, round_: int, gp_name: str) -> SessionData:
         """Fetch a race session, resample every driver to 25 Hz, and cache."""
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_path = self._cache_path(gp_name, year)
+        cache_path = self._cache_path(year, round_)
 
         if cache_path.exists():
             try:
                 with cache_path.open("rb") as f:
-                    sd: SessionData = pickle.load(f)
+                    # The generational collector walks the container it is in
+                    # the middle of filling, and this one ends up holding ~2.5
+                    # million FrameData objects, so it walks them repeatedly for
+                    # nothing: none of them can be garbage while the load runs.
+                    gc.disable()
+                    try:
+                        sd: SessionData = pickle.load(f)
+                    finally:
+                        gc.enable()
                 if sd.version == CACHE_VERSION:
-                    logger.info("Loaded session from cache: %s", cache_path)
+                    logger.info(
+                        "Loaded session from cache: %s (%s %d)",
+                        cache_path,
+                        sd.location or sd.gp_name or "?",
+                        sd.year,
+                    )
                     return sd
                 logger.info(
                     "Cache version mismatch (got %s, want %s) — refetching",
@@ -590,9 +604,21 @@ class SessionLoader:
         )
         return sd
 
-    def _cache_path(self, gp_name: str, year: int) -> Path:
-        safe = gp_name.replace(" ", "_")
-        return self.cache_dir / f"{safe}_{year}_race.pkl"
+    def _cache_path(self, year: int, round_: int) -> Path:
+        """Where this session is cached, keyed on what DECIDES its contents.
+
+        It used to be keyed on `gp_name` while the session is fetched by
+        `(year, round_)`, so the file name and the data inside it came from
+        different things and the name could lie. It did: `data.py` line 86
+        documents the fallback where `get_gp_names` misses a year and returns
+        the 2024 table, and 2025 round 3 comes back "Australia" when it is
+        Suzuka. The pickle was then written as Melbourne with Suzuka inside it,
+        and the cache hit checked only the version, so every later load of that
+        name returned the wrong race and said nothing (#1119).
+
+        A year and a round cannot disagree with the session they fetch.
+        """
+        return self.cache_dir / f"{year}_r{round_:02d}_race.pkl"
 
     def _process_all_drivers(
         self, session: Any, driver_nums: list, driver_codes: dict
