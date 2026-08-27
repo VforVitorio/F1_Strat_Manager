@@ -883,12 +883,59 @@ class ProgressBar:
         arcade.draw_rect_filled(arcade.XYWH(sx + w / 2, self.bottom + self.height + 5, w, 5), color)
 
 
+# Row pitch and the header's own band, shared by the span helper and the draw
+# loop so the two cannot disagree about how tall the legend is.
+LEGEND_ROW_PITCH: Final[int] = 14
+LEGEND_HEADER_BAND: Final[int] = 18
+
+
+def legend_span(row_count: int) -> int:
+    """Pixels the legend occupies above its own bottom edge.
+
+    Data, not a drawing side effect, because the decision below has to be made
+    before anything is drawn and has to be checkable without a GL context.
+    """
+    return row_count * LEGEND_ROW_PITCH + LEGEND_HEADER_BAND
+
+
+def legend_mode(space_below: int | None, row_count: int, *, forced_open: bool = False) -> str:
+    """``"full"`` or ``"hint"``, from the room the column actually left.
+
+    **The whole point of this function is that it is pure** (#1096). The
+    geometry it decides on lives between GL calls in ``on_draw``, so a check on
+    the drawn result needs a window, and a check that needs a window does not
+    run in CI. `_weather_rows` was split out for the same reason.
+
+    ``space_below`` is the gap between the legend's bottom edge and the lowest
+    thing already drawn above it, or ``None`` when the caller has nothing above
+    to measure against. The full legend spans 154 px and the column leaves 146
+    at the default 720 with two drivers, so it cannot fit there at ANY anchor,
+    which is why clamping it under the lowest card was not the fix.
+
+    ``forced_open`` wins: a user who pressed the key asked for the panel and can
+    dismiss it again, so an overlap they summoned is theirs to make.
+    """
+    if forced_open:
+        return "full"
+    if space_below is None:
+        return "full"
+    return "full" if space_below >= legend_span(row_count) else "hint"
+
+
 class ControlsLegend:
-    """Static bottom-left cheat sheet for keyboard bindings.
+    """Bottom-left cheat sheet for keyboard bindings, collapsible.
 
     Uses the same ACCENT title / TERTIARY body convention as the other
     panels so the legend reads as part of the UI instead of a debug
-    overlay."""
+    overlay.
+
+    **It collapses to one line when the column above it has no room** rather
+    than drawing over the driver card, which is what it used to do at the
+    default window height with two drivers. The hint line names the key that
+    brings it back, so nothing is hidden without saying where it went."""
+
+    HINT_KEY: Final[str] = "C"
+    HINT_TEXT: Final[str] = "Controls"
 
     LINES: Final[tuple[tuple[str, str], ...]] = (
         ("SPACE", "Pause / Resume"),
@@ -899,12 +946,16 @@ class ControlsLegend:
         ("A", "Toggle all 20 cars"),
         ("D", "Toggle DRS zones"),
         ("B", "Toggle progress bar"),
+        ("C", "Toggle this list"),
         ("ESC", "Close"),
     )
 
     def __init__(self, x: int = LEGEND_X, bottom: int = LEGEND_BOTTOM) -> None:
         self.x = x
         self.bottom = bottom
+        # Set by the view's `C` branch. False means "decide from the room",
+        # which is the state the window opens in.
+        self.forced_open = False
         self._header = arcade.Text(
             "CONTROLS",
             x,
@@ -943,17 +994,58 @@ class ControlsLegend:
             )
             for _, desc in self.LINES
         ]
+        # Pre-allocated like every other Text in this module: creating one
+        # inside draw() leaks a glyph texture per frame.
+        self._hint_key = arcade.Text(
+            self.HINT_KEY,
+            0,
+            0,
+            TEXT_PRIMARY,
+            10,
+            bold=True,
+            font_name=FONT_BODY,
+            anchor_x="left",
+            anchor_y="bottom",
+        )
+        self._hint_desc = arcade.Text(
+            self.HINT_TEXT,
+            0,
+            0,
+            TEXT_TERTIARY,
+            10,
+            font_name=FONT_BODY,
+            anchor_x="left",
+            anchor_y="bottom",
+        )
 
-    def draw(self) -> None:
+    def toggle(self) -> None:
+        self.forced_open = not self.forced_open
+
+    def draw(self, space_below: int | None = None) -> None:
+        """Draw the full list, or the one-line hint when there is no room.
+
+        ``space_below`` is how much vertical room the column above left free.
+        ``None`` keeps the old unconditional behaviour, which is what a caller
+        with nothing above the legend wants.
+        """
+        if legend_mode(space_below, len(self.LINES), forced_open=self.forced_open) == "hint":
+            self._hint_key.x = self.x
+            self._hint_key.y = self.bottom
+            self._hint_key.draw()
+            self._hint_desc.x = self.x + 70
+            self._hint_desc.y = self.bottom
+            self._hint_desc.draw()
+            return
+
         y = self.bottom
         rows = list(zip(self._key_texts, self._desc_texts))
         for i, (key, desc) in enumerate(reversed(rows)):
             key.x = self.x
-            key.y = y + i * 14
+            key.y = y + i * LEGEND_ROW_PITCH
             key.draw()
             desc.x = self.x + 70
-            desc.y = y + i * 14
+            desc.y = y + i * LEGEND_ROW_PITCH
             desc.draw()
         self._header.x = self.x
-        self._header.y = self.bottom + len(self.LINES) * 14 + 6
+        self._header.y = self.bottom + len(self.LINES) * LEGEND_ROW_PITCH + 6
         self._header.draw()

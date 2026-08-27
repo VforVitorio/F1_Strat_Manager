@@ -914,11 +914,28 @@ class F1ArcadeView(arcade.View):
 
         if self._show_progress_bar:
             self._progress_bar.draw(self.window.width, frame_idx)
-        self._controls_legend.draw()
+        # The legend decides between the full list and a one-line hint from the
+        # room the cards above it actually left, because at the default 720 with
+        # two drivers the column leaves 146 px and the list needs 154, so it used
+        # to draw straight over the rival card (#1096). Measured from the LOWEST
+        # card rather than from a constant: the stack's depth depends on whether
+        # a rival was chosen.
+        lowest_card = self._driver_info_main.top_y - self._driver_info_main.height
+        if self._driver_info_rival is not None:
+            lowest_card = min(
+                lowest_card,
+                self._driver_info_rival.top_y - self._driver_info_rival.height,
+            )
+        self._controls_legend.draw(space_below=lowest_card - self._controls_legend.bottom)
         self._update_hud(frame)
 
     def on_key_press(self, symbol: int, modifiers: int) -> None:
-        if symbol == arcade.key.ESCAPE:
+        if symbol == arcade.key.C:
+            # Force-open overrides the room check, so a user who asks for the
+            # list gets it even where it overlaps: they summoned it and the same
+            # key dismisses it.
+            self._controls_legend.toggle()
+        elif symbol == arcade.key.ESCAPE:
             self.window.close()
         elif symbol == arcade.key.SPACE:
             self._is_paused = not self._is_paused
