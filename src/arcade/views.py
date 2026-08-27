@@ -11,6 +11,7 @@ inside the window instead of remembering CLI flags.
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Callable, Final, NamedTuple
@@ -50,6 +51,7 @@ from src.arcade.config import (
     TEXT_TERTIARY,
     get_gp_names,
 )
+from src.arcade.prepare import PrepareProgress, prepare_race
 
 logger = logging.getLogger(__name__)
 
@@ -401,6 +403,14 @@ class MenuView(arcade.View):
         self._cfg = LaunchConfig()
         self._error: str = ""
         self._loading: bool = False
+        # Written by the preparation worker, read by on_draw and on_update.
+        # A plain lock rather than a queue: there is one producer, one consumer,
+        # and the consumer only ever wants the LATEST value.
+        self._prep_lock = threading.Lock()
+        self._prep_progress: PrepareProgress | None = None
+        self._prep_result: object | None = None
+        self._prep_error: str = ""
+        self._prep_thread: threading.Thread | None = None
         self._focus_idx: int = 0
         # Last scale pushed into the Text objects, or None while nothing has
         # been. See `scale_changed` for why it cannot be a float.
@@ -525,14 +535,50 @@ class MenuView(arcade.View):
             self._error_text.draw()
 
         if self._loading:
-            self._loading_text.text = "Loading session..."
-            self._loading_text.x = w / 2
-            self._loading_text.y = bands.status_y
-            self._loading_text.draw()
+            self._draw_progress(w, bands)
 
         self._hint.x = w / 2
         self._hint.y = bands.hint_y
         self._hint.draw()
+
+    def _draw_progress(self, w: int, bands: MenuBands) -> None:
+        """The preparation's current stage, and a bar for how far through it is.
+
+        The bar counts STAGES, not bytes. Neither fetch exposes a byte callback
+        (`huggingface_hub` prints its own tqdm to stderr) and the telemetry build
+        reports nothing at all, so a byte-level bar would be invented. What is
+        honest is which of the three steps is running and how long it has been,
+        and the elapsed count is what tells a user the window is alive rather
+        than hung, which is the whole reason this is on a worker (#1115).
+        """
+        with self._prep_lock:
+            progress = self._prep_progress
+
+        if progress is None:
+            self._loading_text.text = "Preparing race..."
+        else:
+            self._loading_text.text = f"{progress.label}   {progress.elapsed_s:.0f}s"
+        self._loading_text.x = w / 2
+        self._loading_text.y = bands.status_y
+        self._loading_text.draw()
+
+        if progress is None:
+            return
+        # Sized to the form so the bar reads as part of the same panel.
+        half = (self._label_texts[0].content_width + 220) * bands.scale
+        bar_y = bands.status_y - MENU_ROW_HEIGHT * bands.scale * 0.55
+        height = max(3.0, 4.0 * bands.scale)
+        arcade.draw_rect_filled(arcade.XYWH(w / 2, bar_y, half * 2, height), (*CONTENT_BG, 220))
+        done = progress.index / progress.total
+        arcade.draw_rect_filled(
+            arcade.XYWH(
+                w / 2 - half + half * done,
+                bar_y,
+                half * 2 * done,
+                height,
+            ),
+            ACCENT,
+        )
 
     def _apply_scale(self, scale: float) -> None:
         """Resize every string to the window, once per change rather than per frame.
@@ -700,16 +746,85 @@ class MenuView(arcade.View):
     # --- Launch ---------------------------------------------------------
 
     def _try_launch(self) -> None:
+        """Validate, then hand the preparation to a worker and keep drawing.
+
+        It used to force one frame of "Loading session..." and then block the
+        pyglet thread for as long as the load took. That is measured at 349 s
+        for a race whose telemetry is not cached yet, plus the downloads, and a
+        window that does not pump events for six minutes is one the OS paints as
+        dead (#1115).
+        """
         err = self._validate(self._cfg)
         if err:
             self._error = err
             return
+        if self._prep_thread is not None and self._prep_thread.is_alive():
+            return
         self._error = ""
         self._loading = True
-        # Force a redraw so "Loading..." shows before the blocking load
-        self.on_draw()
-        self.window.flip()
-        self._spawn_replay()
+        with self._prep_lock:
+            self._prep_progress = None
+            self._prep_result = None
+            self._prep_error = ""
+
+        gp = get_gp_names(self._cfg.year).get(self._cfg.round_, f"Round{self._cfg.round_}")
+        logger.info("Menu: preparing %d round %d (%s)", self._cfg.year, self._cfg.round_, gp)
+        self._prep_thread = threading.Thread(
+            target=self._prepare_worker,
+            args=(self._cfg.year, self._cfg.round_, gp, self._cfg.strategy_mode),
+            name="arcade-prepare",
+            daemon=True,
+        )
+        self._prep_thread.start()
+
+    def _prepare_worker(self, year: int, round_: int, gp: str, strategy_enabled: bool) -> None:
+        """Fetch and load off the draw thread. Touches no GL object.
+
+        Everything it produces is plain data; `on_update` builds the view.
+        """
+
+        def publish(progress: PrepareProgress) -> None:
+            with self._prep_lock:
+                self._prep_progress = progress
+
+        try:
+            session_data = prepare_race(
+                year,
+                round_,
+                gp,
+                strategy_enabled=strategy_enabled,
+                on_progress=publish,
+            )
+        except Exception as exc:  # noqa: BLE001 - reported to the user verbatim
+            logger.exception("Race preparation failed")
+            with self._prep_lock:
+                self._prep_error = f"{type(exc).__name__}: {exc}"
+            return
+        with self._prep_lock:
+            self._prep_result = session_data
+
+    def on_update(self, delta_time: float) -> None:
+        """Pick up whatever the worker finished, on the thread that owns the GL.
+
+        `Track` and `F1ArcadeView` allocate `arcade.Text`, which needs the
+        context, so the worker hands back a `SessionData` and the swap happens
+        here.
+        """
+        del delta_time
+        if not self._loading:
+            return
+        with self._prep_lock:
+            result = self._prep_result
+            error = self._prep_error
+        if error:
+            self._loading = False
+            self._error = error
+            self._prep_thread = None
+            return
+        if result is not None:
+            self._prep_result = None
+            self._prep_thread = None
+            self._show_replay(result)
 
     @staticmethod
     def _validate(cfg: LaunchConfig) -> str:
@@ -724,21 +839,26 @@ class MenuView(arcade.View):
                 return "team required for strategy mode"
         return ""
 
-    def _spawn_replay(self) -> None:
+    def launch_with(self, cfg: LaunchConfig) -> None:
+        """Skip the form and prepare this configuration straight away.
+
+        The `--viewer` flag used to build the whole thing itself in
+        `main.py:_show_viewer_directly`: its own session load, its own driver
+        fallback, its own view construction. That second copy is why the flag
+        never gained the lazy fetch or the worker thread when the menu did, and
+        duplicated launch paths drifting apart is a scar this repo already
+        carries. One path now (#1115).
+        """
+        self._cfg = cfg
+        self._try_launch()
+
+    def _show_replay(self, session_data) -> None:
+        """Build the replay view from a prepared session and hand it the window.
+
+        Main thread only: everything below allocates GL resources.
+        """
         from src.arcade.app import F1ArcadeView
-        from src.arcade.data import SessionLoader
         from src.arcade.track import Track
-
-        gp = get_gp_names(self._cfg.year).get(self._cfg.round_, f"Round{self._cfg.round_}")
-        logger.info("Menu: loading %d round %d (%s)", self._cfg.year, self._cfg.round_, gp)
-
-        try:
-            session_data = SessionLoader().load(self._cfg.year, self._cfg.round_, gp)
-        except Exception as exc:
-            logger.exception("SessionLoader failed")
-            self._error = f"session load failed: {exc}"
-            self._loading = False
-            return
 
         ref_x, ref_y = session_data.ref_lap_xy
         track = Track(
