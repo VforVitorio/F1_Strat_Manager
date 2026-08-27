@@ -11,8 +11,9 @@ inside the window instead of remembering CLI flags.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Callable, NamedTuple
+from typing import Callable, Final, NamedTuple
 
 import arcade
 from src.arcade.config import (
@@ -23,7 +24,9 @@ from src.arcade.config import (
     DRIVER_TO_TEAM_2025,
     FONT_BODY,
     FONT_TITLE,
+    MENU_EMPHASIS,
     MENU_FOCUS_PAD,
+    MENU_GROUP_GAP,
     MENU_GUTTER,
     MENU_HINT_BOTTOM,
     MENU_HINT_FONT,
@@ -71,11 +74,18 @@ class _FormField:
     key: str
     label: str
     kind: str  # "int", "round", "mode", "text", "bool"
+    # Which of the three decisions this row belongs to: "race" picks the event,
+    # "cars" picks who is followed, "pipeline" decides whether the agents run.
+    # Rows are drawn in group order and a gap separates one group from the next.
+    group: str
     get_value: Callable[[LaunchConfig], str]
     step_left: Callable[[LaunchConfig], None] | None = None
     step_right: Callable[[LaunchConfig], None] | None = None
     visible: Callable[[LaunchConfig], bool] = field(default_factory=lambda: lambda _cfg: True)
     editable: bool = False  # text fields accept on_text
+    # Drawn a step larger than its siblings. Reserved for a choice that
+    # changes what the replay is rather than which race it shows.
+    emphasis: bool = False
 
 
 def menu_content_extents(
@@ -101,27 +111,89 @@ def menu_content_extents(
     return gutter + widest_label, gutter + widest_value
 
 
+# The keyboard contract, as pairs rather than as one string. It used to be a
+# single run-on separated by spaces, so "Type to edit ENTER launch" ran together
+# at the exact place a reader needs the boundary (#1101).
+MENU_HINTS: Final[tuple[tuple[str, str], ...]] = (
+    ("UP/DOWN", "focus"),
+    ("LEFT/RIGHT", "change"),
+    ("Type", "to edit"),
+    ("ENTER", "launch"),
+    ("ESC", "quit"),
+)
+MENU_HINT_SEPARATOR: Final[str] = "  ·  "
+
+
+def menu_hint_line(pairs: tuple[tuple[str, str], ...] = MENU_HINTS) -> str:
+    """The hint line, with a visible boundary between one binding and the next."""
+    return MENU_HINT_SEPARATOR.join(f"{key} {action}" for key, action in pairs)
+
+
+def round_label(year: int, round_: int) -> str:
+    """`3 Melbourne`: which round of the season, and where it was run.
+
+    The number used to be formatted `%2d`, which put a leading space on every
+    single-digit round. The value column is left-aligned, so rounds 1 to 9 were
+    indented one space further than the rest and the pair read as three tokens
+    rather than two (#1101).
+    """
+    return f"{round_} {get_gp_names(year).get(round_, '?')}"
+
+
+def menu_row_offsets(
+    groups: Sequence[str],
+    pitch: float,
+    group_gap: float,
+) -> tuple[float, ...]:
+    """How far below the first row each row's centre sits.
+
+    Pure, like its siblings here, and it is what makes the grouping a property
+    the tests can read: a gap appears wherever consecutive rows belong to
+    different groups, and nowhere else.
+    """
+    offsets: list[float] = []
+    y = 0.0
+    previous: str | None = None
+    for group in groups:
+        if previous is not None and group != previous:
+            y += group_gap
+        offsets.append(y)
+        y += pitch
+        previous = group
+    return tuple(offsets)
+
+
 class MenuBands(NamedTuple):
     """The menu's vertical anchors and its type scale, for one window height.
 
     Every y is where a centre-anchored line of text sits, not the edge of a
-    glyph box, because that is what the draw call is given. `form_top` and
-    `form_bottom` are the centres of the first and last rows.
+    glyph box, because that is what the draw call is given. `row_offsets` holds
+    each row's distance below `form_top`, which is not a constant multiple of
+    the pitch: a gap sits at every group boundary.
     """
 
     scale: float
     title_y: float
     subtitle_y: float
     form_top: float
-    form_bottom: float
     row_pitch: float
+    row_offsets: tuple[float, ...]
     hint_y: float
     status_y: float
+
+    @property
+    def form_bottom(self) -> float:
+        """Centre of the last row."""
+        return self.form_top - (self.row_offsets[-1] if self.row_offsets else 0.0)
 
     @property
     def form_height(self) -> float:
         """Centre to centre of the outermost rows, plus the two half-rows."""
         return self.form_top - self.form_bottom + self.row_pitch
+
+    def row_y(self, index: int) -> float:
+        """Centre of the row drawn at `index`, groups included."""
+        return self.form_top - self.row_offsets[index]
 
 
 def menu_scale(window_height: int) -> float:
@@ -134,7 +206,7 @@ def menu_scale(window_height: int) -> float:
     return max(MENU_SCALE_MIN, min(MENU_SCALE_MAX, window_height / SCREEN_HEIGHT))
 
 
-def menu_bands(window_height: int, row_count: int) -> MenuBands:
+def menu_bands(window_height: int, groups: Sequence[str]) -> MenuBands:
     """Place the title, the form and the hint for a window of this height.
 
     **Pure on purpose**, the same reason `legend_mode` is (#1096): a check on
@@ -147,20 +219,26 @@ def menu_bands(window_height: int, row_count: int) -> MenuBands:
     rather than of the window: it was 0.46 at 720 and 1.10 at 1080, and it is
     now 0.46 at both (#1100).
 
-    The form's block sits half a row below the window's vertical centre, which
-    is where it sat before and where it reads best against a title band that is
-    taller than the hint.
+    `groups` is one entry per VISIBLE row, in draw order, so the form's height
+    depends on how many group boundaries the rows cross as well as on how many
+    rows there are. One-driver mode hides the rival row without removing a
+    boundary, which is why the count alone is not enough.
+
+    The block sits half a row below the window's vertical centre, which is where
+    it sat before either change and where it reads best against a title band
+    that is taller than the hint.
     """
     scale = menu_scale(window_height)
     pitch = MENU_ROW_HEIGHT * scale
-    form_top = window_height / 2 + (row_count - 2) * pitch / 2
+    offsets = menu_row_offsets(groups, pitch, MENU_GROUP_GAP * scale)
+    span = offsets[-1] if offsets else 0.0
     return MenuBands(
         scale=scale,
         title_y=window_height - MENU_TITLE_TOP * scale,
         subtitle_y=window_height - MENU_SUBTITLE_TOP * scale,
-        form_top=form_top,
-        form_bottom=form_top - (row_count - 1) * pitch,
+        form_top=window_height / 2 - pitch / 2 + span / 2,
         row_pitch=pitch,
+        row_offsets=offsets,
         hint_y=MENU_HINT_BOTTOM * scale,
         status_y=MENU_STATUS_BOTTOM * scale,
     )
@@ -211,6 +289,85 @@ def menu_form_geometry(
     )
 
 
+def build_menu_fields(toggle_strategy: Callable[[], None]) -> list[_FormField]:
+    """The seven rows the menu draws, in draw order.
+
+    Module level rather than a method so the table can be read without a window
+    (`arcade.View.__init__` needs one), which is what lets the group assignment,
+    the emphasis flag and every rendered value string be checked in CI. The
+    strategy toggle is passed in because it mutates the view's own config and
+    then forces the year, which is view state rather than table data.
+    """
+    return [
+        _FormField(
+            key="year",
+            label="Year",
+            kind="int",
+            group="race",
+            get_value=lambda c: str(c.year),
+            step_left=lambda c: (
+                setattr(c, "year", max(2023, c.year - 1)) if not c.strategy_mode else None
+            ),
+            step_right=lambda c: (
+                setattr(c, "year", min(2025, c.year + 1)) if not c.strategy_mode else None
+            ),
+        ),
+        _FormField(
+            key="round",
+            label="Round",
+            kind="round",
+            group="race",
+            get_value=lambda c: round_label(c.year, c.round_),
+            step_left=lambda c: setattr(c, "round_", max(1, c.round_ - 1)),
+            step_right=lambda c: setattr(c, "round_", min(23, c.round_ + 1)),
+        ),
+        _FormField(
+            key="mode",
+            label="Mode",
+            kind="mode",
+            group="cars",
+            get_value=lambda c: "2 DRIVERS" if c.mode_two_drivers else "1 DRIVER",
+            step_left=lambda c: setattr(c, "mode_two_drivers", not c.mode_two_drivers),
+            step_right=lambda c: setattr(c, "mode_two_drivers", not c.mode_two_drivers),
+        ),
+        _FormField(
+            key="driver_main",
+            label="Driver",
+            kind="text",
+            group="cars",
+            get_value=lambda c: c.driver_main or "---",
+            editable=True,
+        ),
+        _FormField(
+            key="driver_rival",
+            label="Rival",
+            kind="text",
+            group="cars",
+            get_value=lambda c: c.driver_rival or "---",
+            editable=True,
+            visible=lambda c: c.mode_two_drivers,
+        ),
+        _FormField(
+            key="team",
+            label="Team",
+            kind="text",
+            group="cars",
+            get_value=lambda c: c.team or "---",
+            editable=True,
+        ),
+        _FormField(
+            key="strategy",
+            label="Strategy",
+            kind="bool",
+            group="pipeline",
+            get_value=lambda c: "ON" if c.strategy_mode else "OFF",
+            step_left=lambda c: toggle_strategy(),
+            step_right=lambda c: toggle_strategy(),
+            emphasis=True,
+        ),
+    ]
+
+
 class MenuView(arcade.View):
     """Pre-replay keyboard form. On ENTER it loads the session and swaps
     to `F1ArcadeView`. Any validation error surfaces inline in DANGER red."""
@@ -249,7 +406,7 @@ class MenuView(arcade.View):
             anchor_y="center",
         )
         self._hint = arcade.Text(
-            "UP/DOWN focus   LEFT/RIGHT change   Type to edit   ENTER launch   ESC quit",
+            menu_hint_line(),
             0,
             0,
             TEXT_TERTIARY,
@@ -312,66 +469,7 @@ class MenuView(arcade.View):
     # --- Field definitions ----------------------------------------------
 
     def _build_fields(self) -> list[_FormField]:
-        return [
-            _FormField(
-                key="year",
-                label="Year",
-                kind="int",
-                get_value=lambda c: str(c.year),
-                step_left=lambda c: (
-                    setattr(c, "year", max(2023, c.year - 1)) if not c.strategy_mode else None
-                ),
-                step_right=lambda c: (
-                    setattr(c, "year", min(2025, c.year + 1)) if not c.strategy_mode else None
-                ),
-            ),
-            _FormField(
-                key="round",
-                label="Round",
-                kind="round",
-                get_value=lambda c: f"{c.round_:2d}  {get_gp_names(c.year).get(c.round_, '?')}",
-                step_left=lambda c: setattr(c, "round_", max(1, c.round_ - 1)),
-                step_right=lambda c: setattr(c, "round_", min(23, c.round_ + 1)),
-            ),
-            _FormField(
-                key="mode",
-                label="Mode",
-                kind="mode",
-                get_value=lambda c: "2 DRIVERS" if c.mode_two_drivers else "1 DRIVER",
-                step_left=lambda c: setattr(c, "mode_two_drivers", not c.mode_two_drivers),
-                step_right=lambda c: setattr(c, "mode_two_drivers", not c.mode_two_drivers),
-            ),
-            _FormField(
-                key="driver_main",
-                label="Driver",
-                kind="text",
-                get_value=lambda c: c.driver_main or "---",
-                editable=True,
-            ),
-            _FormField(
-                key="driver_rival",
-                label="Rival",
-                kind="text",
-                get_value=lambda c: c.driver_rival or "---",
-                editable=True,
-                visible=lambda c: c.mode_two_drivers,
-            ),
-            _FormField(
-                key="team",
-                label="Team",
-                kind="text",
-                get_value=lambda c: c.team or "---",
-                editable=True,
-            ),
-            _FormField(
-                key="strategy",
-                label="Strategy",
-                kind="bool",
-                get_value=lambda c: "ON" if c.strategy_mode else "OFF",
-                step_left=lambda c: self._toggle_strategy(),
-                step_right=lambda c: self._toggle_strategy(),
-            ),
-        ]
+        return build_menu_fields(self._toggle_strategy)
 
     def _toggle_strategy(self) -> None:
         self._cfg.strategy_mode = not self._cfg.strategy_mode
@@ -384,7 +482,7 @@ class MenuView(arcade.View):
         self.clear()
         w, h = self.window.width, self.window.height
         visible_rows: list[int] = [i for i, f in enumerate(self._fields) if f.visible(self._cfg)]
-        bands = menu_bands(h, len(visible_rows))
+        bands = menu_bands(h, [self._fields[i].group for i in visible_rows])
         self._apply_scale(bands.scale)
 
         self._title.x = w / 2
@@ -427,10 +525,10 @@ class MenuView(arcade.View):
         self._hint.font_size = MENU_HINT_FONT * scale
         self._error_text.font_size = MENU_STATUS_FONT * scale
         self._loading_text.font_size = MENU_STATUS_FONT * scale
-        for text in self._label_texts:
-            text.font_size = MENU_LABEL_FONT * scale
-        for text in self._value_texts:
-            text.font_size = MENU_VALUE_FONT * scale
+        for f, label, value in zip(self._fields, self._label_texts, self._value_texts, strict=True):
+            step = MENU_EMPHASIS if f.emphasis else 1.0
+            label.font_size = MENU_LABEL_FONT * scale * step
+            value.font_size = MENU_VALUE_FONT * scale * step
 
     def _set_row_texts(self, visible_rows: list[int]) -> None:
         """Push every visible row's current strings into its two Text objects.
@@ -461,19 +559,20 @@ class MenuView(arcade.View):
 
         for draw_idx, field_idx in enumerate(visible_rows):
             f = self._fields[field_idx]
-            row_y = bands.form_top - draw_idx * bands.row_pitch
+            row_y = bands.row_y(draw_idx)
             focused = field_idx == self._focus_idx
 
             if focused:
+                row_height = bands.row_pitch * (MENU_EMPHASIS if f.emphasis else 1.0) - 4
                 arcade.draw_rect_filled(
-                    arcade.XYWH(cx, row_y, geometry.band_half * 2, bands.row_pitch - 4),
+                    arcade.XYWH(cx, row_y, geometry.band_half * 2, row_height),
                     (*CONTENT_BG, 220),
                 )
                 arcade.draw_line(
                     cx - geometry.rule_half,
-                    row_y - bands.row_pitch * 0.4,
+                    row_y - row_height * 0.44,
                     cx + geometry.rule_half,
-                    row_y - bands.row_pitch * 0.4,
+                    row_y - row_height * 0.44,
                     ACCENT,
                     2,
                 )
@@ -487,7 +586,7 @@ class MenuView(arcade.View):
             val = self._value_texts[field_idx]
             val.color = TEXT_PRIMARY if focused else TEXT_SECONDARY
             if f.key == "strategy":
-                val.color = SUCCESS if self._cfg.strategy_mode else TEXT_TERTIARY
+                val.color = SUCCESS if self._cfg.strategy_mode else TEXT_SECONDARY
             val.x = axis + gutter
             val.y = row_y
             val.draw()

@@ -253,6 +253,15 @@ MENU_STATUS_FONT: Final[int] = 13
 # void this scaling exists to remove, deliberately traded for a legibility cap.
 MENU_SCALE_MIN: Final[float] = 0.85
 MENU_SCALE_MAX: Final[float] = 2.0
+# Extra pitch inserted where one group of rows ends and the next begins. The
+# seven options are three different kinds of decision (which race, which cars,
+# whether the agent pipeline runs) and used to render as one undifferentiated
+# list.
+MENU_GROUP_GAP: Final[int] = 22
+# How much larger an emphasised row draws than its siblings. One row carries it:
+# the strategy toggle, which decides whether the multi-agent layer runs at all
+# and so is the only choice on the form that changes what the replay IS.
+MENU_EMPHASIS: Final[float] = 1.3
 # Distances from the window's own edges, at scale 1.0.
 MENU_TITLE_TOP: Final[int] = 80
 MENU_SUBTITLE_TOP: Final[int] = 112

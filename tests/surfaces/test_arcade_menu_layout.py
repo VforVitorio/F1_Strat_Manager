@@ -16,7 +16,9 @@ from __future__ import annotations
 import pytest
 
 from src.arcade.config import (
+    MENU_EMPHASIS,
     MENU_FOCUS_PAD,
+    MENU_GROUP_GAP,
     MENU_GUTTER,
     MENU_HINT_FONT,
     MENU_ROW_HEIGHT,
@@ -26,10 +28,17 @@ from src.arcade.config import (
     SCREEN_HEIGHT,
 )
 from src.arcade.views import (
+    MENU_HINT_SEPARATOR,
+    MENU_HINTS,
+    LaunchConfig,
+    build_menu_fields,
     menu_bands,
     menu_content_extents,
     menu_form_geometry,
+    menu_hint_line,
+    menu_row_offsets,
     menu_scale,
+    round_label,
 )
 
 # (row, rendered label width, rendered value width), measured 2026-08-27 at
@@ -157,6 +166,13 @@ def test_a_symmetric_form_needs_no_axis_shift() -> None:
 
 # --- The form scales with the window (#1100) -------------------------------
 
+# The real seven rows, read off the table the view draws rather than restated
+# here, so a group reassigned in views.py reaches every assertion below.
+FIELDS = build_menu_fields(lambda: None)
+GROUPS = tuple(f.group for f in FIELDS)
+ROW_COUNT = len(GROUPS)
+GROUP_BREAKS = sum(1 for a, b in zip(GROUPS, GROUPS[1:]) if a != b)
+
 # Heights a user can actually produce. The window is resizable with no minimum,
 # so the small ones are reached by dragging rather than hypothetical, and the
 # large ones are a maximised window on a 1440p and a 4K display.
@@ -165,8 +181,6 @@ HEIGHTS = (480, 600, 720, 800, 900, 1080, 1400, 2160)
 # Above this, a gap between two bands is no longer breathing room. Measured
 # before the fix: 0.46 at 720 and 1.10 at 1080, from a form that never grew.
 MAX_GAP_RATIO = 0.9
-
-ROW_COUNT = len(ROW_WIDTHS)
 
 
 def _unclamped(height: int) -> bool:
@@ -180,21 +194,33 @@ UNCLAMPED_HEIGHTS = tuple(h for h in HEIGHTS if _unclamped(h))
 CLAMPED_HEIGHTS = tuple(h for h in HEIGHTS if not _unclamped(h))
 
 
-def test_the_default_window_is_left_exactly_as_it_was() -> None:
-    """At SCREEN_HEIGHT the scale is 1 and every anchor is its old constant.
+def test_the_default_window_keeps_the_anchors_the_scaling_did_not_move() -> None:
+    """At SCREEN_HEIGHT the scale is 1, so the three edge bands are untouched.
 
-    The point of the fix is what happens AWAY from the default, so the default
-    itself has to come out unchanged. Rendered offscreen at 1280x720 before and
-    after, the two frames differ by zero pixels; these are the four numbers that
-    make that true.
+    The point of #1100 is what happens AWAY from the default, so the default's
+    own title, subtitle, hint and pitch have to come out at their old constants.
+    The form's block is the one thing that did move, and only because #1101 puts
+    a gap at each group boundary, so it is asserted separately below.
     """
-    bands = menu_bands(SCREEN_HEIGHT, ROW_COUNT)
+    bands = menu_bands(SCREEN_HEIGHT, GROUPS)
     assert bands.scale == 1.0
     assert bands.title_y == SCREEN_HEIGHT - 80
     assert bands.subtitle_y == SCREEN_HEIGHT - 112
     assert bands.hint_y == 60
     assert bands.row_pitch == 40
-    assert bands.form_top == 460, "the first row sat at 460 before the fix"
+
+
+def test_the_group_gaps_are_the_only_thing_that_moved_the_form() -> None:
+    """The block is taller by exactly the gaps, and still centred where it was.
+
+    Before either change the first row sat at 460 with a 280 px block. The block
+    grows by one `MENU_GROUP_GAP` per boundary and stays centred half a row below
+    the window's middle, so the first row rises by half of what was added.
+    """
+    bands = menu_bands(SCREEN_HEIGHT, GROUPS)
+    added = GROUP_BREAKS * MENU_GROUP_GAP
+    assert bands.form_height == ROW_COUNT * MENU_ROW_HEIGHT + added
+    assert bands.form_top == 460 + added / 2
 
 
 @pytest.mark.parametrize("height", HEIGHTS)
@@ -204,7 +230,7 @@ def test_no_band_collides_with_another(height: int) -> None:
     Clearance is one full font size, which is twice what separating two
     centre-anchored lines strictly needs, so this fails before anything touches.
     """
-    bands = menu_bands(height, ROW_COUNT)
+    bands = menu_bands(height, GROUPS)
     form_top_edge = bands.form_top + bands.row_pitch / 2
     form_bottom_edge = bands.form_bottom - bands.row_pitch / 2
 
@@ -231,7 +257,7 @@ def test_the_gaps_stay_proportional_to_the_form(height: int) -> None:
     declines to use goes back into the gaps, which
     `test_beyond_the_ceiling_the_void_returns_and_says_so` states outright.
     """
-    bands = menu_bands(height, ROW_COUNT)
+    bands = menu_bands(height, GROUPS)
     gap_above = bands.subtitle_y - (bands.form_top + bands.row_pitch / 2)
     gap_below = (bands.form_bottom - bands.row_pitch / 2) - bands.hint_y
 
@@ -241,7 +267,7 @@ def test_the_gaps_stay_proportional_to_the_form(height: int) -> None:
 
 def test_the_sweep_exercises_both_clamps_and_the_range_between() -> None:
     """The split above is real: every one of the three regimes has a height."""
-    scales = {menu_bands(h, ROW_COUNT).scale for h in HEIGHTS}
+    scales = {menu_bands(h, GROUPS).scale for h in HEIGHTS}
     assert MENU_SCALE_MIN in scales, "no swept height reaches the floor"
     assert MENU_SCALE_MAX in scales, "no swept height reaches the ceiling"
     assert UNCLAMPED_HEIGHTS, "the ratio guard would parametrize over nothing"
@@ -258,14 +284,16 @@ def test_beyond_the_ceiling_the_void_returns_and_says_so(height: int) -> None:
     size. The bands still may not collide, which the collision guard covers at
     the same heights.
     """
-    bands = menu_bands(height, ROW_COUNT)
+    bands = menu_bands(height, GROUPS)
     assert bands.scale in (MENU_SCALE_MIN, MENU_SCALE_MAX)
-    assert bands.form_height == pytest.approx(ROW_COUNT * MENU_ROW_HEIGHT * bands.scale)
+    assert bands.form_height == pytest.approx(
+        (ROW_COUNT * MENU_ROW_HEIGHT + GROUP_BREAKS * MENU_GROUP_GAP) * bands.scale
+    )
 
 
 def test_a_taller_window_gets_a_taller_form() -> None:
     """The plain statement of the defect, which a constant pitch cannot satisfy."""
-    forms = [menu_bands(h, ROW_COUNT).form_height for h in UNCLAMPED_HEIGHTS]
+    forms = [menu_bands(h, GROUPS).form_height for h in UNCLAMPED_HEIGHTS]
     assert forms == sorted(forms)
     assert forms[-1] > forms[0]
 
@@ -284,6 +312,139 @@ def test_the_form_block_keeps_its_place_whatever_the_row_count(rows: int) -> Non
     The block sits half a row below the window's vertical centre at every count,
     which is where it sat before the fix.
     """
-    bands = menu_bands(SCREEN_HEIGHT, rows)
+    bands = menu_bands(SCREEN_HEIGHT, GROUPS[:rows])
     block_centre = (bands.form_top + bands.form_bottom) / 2
     assert block_centre == SCREEN_HEIGHT / 2 - bands.row_pitch / 2
+
+
+# --- The rows are grouped and one of them carries weight (#1101) -----------
+
+
+def test_the_seven_rows_fall_into_the_three_decisions_they_are() -> None:
+    """Which race, which cars, whether the agents run.
+
+    Named here so a row added to the wrong group fails rather than quietly
+    joining the one above it.
+    """
+    by_group = {f.key: f.group for f in FIELDS}
+    assert by_group == {
+        "year": "race",
+        "round": "race",
+        "mode": "cars",
+        "driver_main": "cars",
+        "driver_rival": "cars",
+        "team": "cars",
+        "strategy": "pipeline",
+    }
+
+
+def test_the_groups_are_contiguous_in_draw_order() -> None:
+    """A group split across the form would put a gap inside itself.
+
+    `menu_row_offsets` inserts a gap wherever consecutive rows differ, so a
+    table ordered race, cars, race would draw three bands for two groups.
+    """
+    seen: list[str] = []
+    for group in GROUPS:
+        if not seen or seen[-1] != group:
+            assert group not in seen, f"{group} is split across the form"
+            seen.append(group)
+    assert seen == ["race", "cars", "pipeline"]
+
+
+def test_a_gap_sits_at_every_boundary_and_nowhere_else() -> None:
+    """The pitch between two rows says whether they are the same kind."""
+    offsets = menu_row_offsets(GROUPS, pitch=40, group_gap=22)
+    steps = [b - a for a, b in zip(offsets, offsets[1:])]
+    expected = [40 + (22 if a != b else 0) for a, b in zip(GROUPS, GROUPS[1:])]
+    assert steps == expected
+    assert steps.count(62) == GROUP_BREAKS == 2
+
+
+def test_one_driver_mode_loses_a_row_but_not_a_boundary() -> None:
+    """Hiding the rival row must not merge the cars group into its neighbours.
+
+    The rival row is the only one with a `visible` predicate and it sits inside
+    its own group, so the form gets shorter by one row and keeps both gaps.
+    """
+    one_driver = LaunchConfig(mode_two_drivers=False)
+    visible = tuple(f.group for f in FIELDS if f.visible(one_driver))
+
+    assert len(visible) == ROW_COUNT - 1
+    breaks = sum(1 for a, b in zip(visible, visible[1:]) if a != b)
+    assert breaks == GROUP_BREAKS
+
+    bands = menu_bands(SCREEN_HEIGHT, visible)
+    assert bands.form_height == (ROW_COUNT - 1) * MENU_ROW_HEIGHT + breaks * MENU_GROUP_GAP
+
+
+def test_exactly_one_row_is_emphasised_and_it_is_the_pipeline_switch() -> None:
+    """The switch that decides whether the multi-agent layer runs at all.
+
+    Emphasis is only worth anything while it is scarce, so the count is asserted
+    as well as which row carries it.
+    """
+    emphasised = [f.key for f in FIELDS if f.emphasis]
+    assert emphasised == ["strategy"]
+    assert MENU_EMPHASIS > 1.0
+
+
+def test_the_boundary_between_two_bindings_is_visible() -> None:
+    """Four printed marks for five pairs, read off the line rather than the constant.
+
+    A first draft of this asserted `menu_hint_line().split(MENU_HINT_SEPARATOR)`,
+    which is circular: swapping the separator back to three spaces still splits
+    into five, so the guard passed against the exact run-on it was written for.
+    It counts marks in the rendered string now, and whitespace is not a mark.
+    """
+    line = menu_hint_line()
+    marks = [c for c in line if not (c.isalnum() or c.isspace() or c == "/")]
+    assert len(marks) == len(MENU_HINTS) - 1, f"{line!r} has no visible boundaries"
+    assert MENU_HINT_SEPARATOR.strip(), "a whitespace-only separator is the defect"
+
+
+def test_the_hint_line_holds_every_binding_in_order() -> None:
+    """The separator may change without the contract it separates changing."""
+    parts = menu_hint_line().split(MENU_HINT_SEPARATOR)
+    assert parts == [f"{key} {action}" for key, action in MENU_HINTS]
+    for part in parts:
+        assert "  " not in part, f"{part!r} still runs two tokens together"
+
+
+def test_the_hint_names_the_keys_the_menu_actually_reads() -> None:
+    """A hint documenting a key the view does not bind is worse than none."""
+    keys = {key for key, _ in MENU_HINTS}
+    assert keys == {"UP/DOWN", "LEFT/RIGHT", "Type", "ENTER", "ESC"}
+
+
+@pytest.mark.parametrize("year", [2023, 2024, 2025])
+def test_the_round_value_is_two_tokens_for_every_round_of_every_season(year: int) -> None:
+    """No leading space and no double space, at one digit or two.
+
+    The old `%2d` put a leading space on rounds 1 to 9, and the value column is
+    left-aligned, so those nine indented one space further than the rest. Swept
+    over the real calendars rather than over the default round.
+    """
+    for round_ in range(1, 24):
+        value = round_label(year, round_)
+        assert value == value.lstrip(), f"{year} R{round_}: {value!r} has a leading space"
+        assert "  " not in value, f"{year} R{round_}: {value!r} has a double space"
+        assert value.split(" ", 1)[0] == str(round_)
+
+
+def test_the_round_value_still_names_the_circuit() -> None:
+    """Trimming the spacing must not trim the half a reader actually reads.
+
+    Both digit widths, and two different seasons, because the round-to-circuit
+    map is per year: Melbourne opened 2025 at round 1 and was round 3 in 2024,
+    while 2025 round 3 was Suzuka.
+    """
+    assert round_label(2025, 1) == "1 Melbourne"
+    assert round_label(2024, 3) == "3 Melbourne"
+    assert round_label(2025, 3) == "3 Suzuka"
+    assert round_label(2024, 23) == "23 Lusail"
+
+
+def test_an_unknown_round_says_so_rather_than_inventing_a_circuit() -> None:
+    """Absent data has to look absent, per the weather panel's `N/A` (#1087)."""
+    assert round_label(2025, 99).endswith("?")
