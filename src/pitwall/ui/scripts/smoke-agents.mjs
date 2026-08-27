@@ -1665,6 +1665,123 @@ const CTY_VIEW = {
 }
 
 
+// --- ⭐ the hover affordance, asserted as the RENDERED cursor and border ------
+//
+// Both rules were gated on `.agent-card:has(.agent-tooltip)` and neither ever
+// fired: the popup is portaled to `<body>`, so it is not a descendant of the
+// card and `:has()` could not reach it (#1089). Ten lines of comment above them
+// described the trade-off that produced them, so a reader checking whether the
+// affordance existed read that and stopped.
+//
+// **The signal this sweeps on is the tooltip actually appearing, never the
+// class.** Asserting `.has-tooltip` against the component that sets it is the
+// mechanism checking itself, and the mechanism is what was wrong last time. So
+// each card is hovered, and what it DID (a popup, or none) is compared against
+// what it LOOKS like (the computed cursor, the border that lifted).
+//
+// It also asserts the sweep reached both outcomes. The fixture gives RAG
+// `tooltip: null`, so one card must come out on each arm; without that line a
+// build where no card had the affordance, or where every card did, would pass
+// whichever arm it happened to satisfy.
+{
+  const hoverCtx = await browser.newContext({ viewport: CLIENT });
+  const hoverPage = await hoverCtx.newPage();
+  watchPage(hoverPage, failures, "hover affordance");
+  await hoverPage.addInitScript((view) => {
+    window.pywebview = {
+      api: {
+        get_agents_view: async (since) => (since >= view.seq ? null : view),
+        get_connection: async () => ({ label: "Connected", colour: "#10b981" }),
+      },
+    };
+  }, VIEW);
+  await hoverPage.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await hoverPage.waitForSelector(".agent-card", { timeout: 5000 });
+
+  // Read with the pointer parked off every card, so this is the resting border
+  // the hover rule has to change. Taken from a card rather than from a token so
+  // a theme edit cannot silently make "changed" and "unchanged" the same string.
+  await hoverPage.mouse.move(2, 2);
+  await hoverPage.waitForTimeout(150);
+  const resting = await hoverPage.evaluate(
+    () => getComputedStyle(document.querySelector(".agent-card")).borderColor,
+  );
+
+  const withTooltip = [];
+  let hoveredCardBorder = null;
+  for (let index = 0; index < 6; index += 1) {
+    await hoverPage.locator(".agent-card").nth(index).hover();
+    await hoverPage.waitForTimeout(200);
+    const seen = await hoverPage.evaluate((i) => {
+      const card = document.querySelectorAll(".agent-card")[i];
+      const style = getComputedStyle(card);
+      return {
+        popup: document.querySelectorAll(".agent-tooltip").length === 1,
+        cursor: style.cursor,
+        border: style.borderColor,
+      };
+    }, index);
+    withTooltip.push(seen.popup);
+    if (seen.popup) hoveredCardBorder = seen.border;
+    check(
+      seen.popup ? seen.cursor === "help" : seen.cursor !== "help",
+      `agent card ${index}: the help cursor appears exactly where a transcript does ` +
+        `(popup ${seen.popup}, cursor ${seen.cursor})`,
+    );
+    check(
+      seen.popup ? seen.border !== resting : seen.border === resting,
+      `agent card ${index}: the border lifts under the pointer exactly where a ` +
+        `transcript does (popup ${seen.popup}, ${resting} -> ${seen.border})`,
+    );
+    await hoverPage.mouse.move(2, 2);
+    await hoverPage.waitForTimeout(150);
+  }
+  check(
+    withTooltip.some(Boolean) && withTooltip.some((has) => !has),
+    `agent cards: the sweep reached BOTH outcomes, so neither arm passed by never ` +
+      `running (${JSON.stringify(withTooltip)})`,
+  );
+
+  // The WHY module is the third tooltip target and had no affordance at all
+  // until #1092, which the #1089 fix made worse by giving the other two one.
+  // Same class, same rule, so this asserts the SAME pair of effects rather than
+  // a second convention.
+  await hoverPage.mouse.move(2, 2);
+  await hoverPage.waitForTimeout(150);
+  const why = await hoverPage.evaluate(
+    () => getComputedStyle(document.querySelector(".why-panel")).borderColor,
+  );
+  await hoverPage.locator(".why-panel").hover();
+  await hoverPage.waitForTimeout(250);
+  const whyHover = await hoverPage.evaluate(() => {
+    const node = document.querySelector(".why-panel");
+    const style = getComputedStyle(node);
+    return { cursor: style.cursor, border: style.borderColor, popup: document.querySelectorAll(".agent-tooltip").length };
+  });
+  check(
+    whyHover.popup === 1,
+    `why panel: hovering it opens the orchestrator transcript (${whyHover.popup})`,
+  );
+  check(
+    whyHover.cursor === "help",
+    `why panel: it says so with the same help cursor the consoles use (${whyHover.cursor})`,
+  );
+  check(
+    whyHover.border !== why,
+    `why panel: and the same border lift (${why} -> ${whyHover.border})`,
+  );
+  // The same VALUE, not merely some change: one tell has to mean one thing, and
+  // two modules drifting to two different hover colours is how it stops doing so.
+  check(
+    whyHover.border === hoveredCardBorder,
+    `why panel: the lift lands on the same colour the consoles use ` +
+      `(${whyHover.border} vs ${hoveredCardBorder})`,
+  );
+  await hoverCtx.close();
+}
+
 await browser.close();
 server.close();
 

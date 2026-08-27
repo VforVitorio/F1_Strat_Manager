@@ -143,9 +143,10 @@ export function ContingenciesCard({ view }: { view: ContingenciesView }) {
  * One branch.
  *
  * The hover affordance is gated on a class this component sets, NOT on
- * `:has(.agent-tooltip)`. That selector is what the six consoles use and it has
- * never matched anything: the popup is portaled to `document.body`, so it is
- * not a descendant of the card whose hover it was meant to drive.
+ * `:has(.agent-tooltip)`: the popup is portaled to `document.body`, so it is
+ * not a descendant of the card whose hover it was meant to drive, and that
+ * selector matched nothing. The six consoles carried it until #1089 and now
+ * set their own class the same way.
  *
  * Hover changes the BACKGROUND only. This card sits in a flex column above
  * nothing and below PIT, so anything that changes its box moves a neighbour.
