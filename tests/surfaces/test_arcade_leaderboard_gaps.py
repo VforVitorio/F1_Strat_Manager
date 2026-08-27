@@ -144,15 +144,19 @@ def _order(session: SessionData, idx: int) -> list[str]:
 
 
 def _panel(code: str):
-    """A stand-in for DriverInfoPanel: `_neighbor_gaps` reads only `self.code`.
+    """A stand-in for DriverInfoPanel: `_neighbor_gaps` reads no panel state.
 
     Constructing the real panel allocates `arcade.Text`, which wants a GL
-    context CI does not have. Duck-typing also keeps the test honest the
-    other way: a method that starts reading another attribute raises here
-    instead of passing.
+    context CI does not have. Duck-typing also keeps the test honest the other
+    way: a method that starts reading an attribute raises here instead of
+    passing.
+
+    Since #1102 the panel holds a column per driver rather than belonging to
+    one, so the code is an argument. It is bound here so the callers below read
+    the same as they did.
     """
-    stand_in = SimpleNamespace(code=code, _gap_label=DriverInfoPanel._gap_label)
-    stand_in._neighbor_gaps = lambda *a: DriverInfoPanel._neighbor_gaps(stand_in, *a)
+    stand_in = SimpleNamespace(_gap_label=DriverInfoPanel._gap_label)
+    stand_in._neighbor_gaps = lambda *a: DriverInfoPanel._neighbor_gaps(stand_in, code, *a)
     return stand_in
 
 

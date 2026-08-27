@@ -94,10 +94,16 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 `--viewer` was used at launch.
 
 The controls list collapses to a single `C  Controls` line when the column above
-it has no room, which at the default 1280x720 is any session with a rival: the
-list needs 154 px and the two driver cards leave 146. It used to draw over the
-second card instead. `C` opens it anyway where it does not fit, on the grounds
-that a list you asked for is one you can dismiss with the same key.
+it has no room. The list needs 158 px, and the left column leaves 263 at the
+default 1280x720 whether one driver is followed or two, so the collapse fires
+only on a window dragged below roughly 618 px tall. `C` opens the list anyway
+where it does not fit, on the grounds that a list you asked for is one you can
+dismiss with the same key.
+
+The telemetry under the weather card is one table with a column per driver. It
+used to be a card each, which repeated the same six labels under two headers and
+took 354 px of the column for twelve values; at the default height that left
+146 px against a list needing 158, and the list drew over the second card.
 
 ## Known limitations
 

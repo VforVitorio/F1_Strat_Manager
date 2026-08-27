@@ -1,9 +1,16 @@
-"""The controls legend never draws over the driver cards (#1096).
+"""The controls legend never draws over the driver table (#1096, #1102).
 
-At the default 1280x720 with two drivers the left column leaves 146 px below
-the lowest card and the full legend spans 154, so it drew straight over the
-rival card's DRS, Compound and Ahead rows. Two drivers is what the menu opens
-with, so this was the out-of-the-box first frame.
+At the default 1280x720 with two drivers the left column used to leave 146 px
+below the lowest of two stacked cards while the full legend spans 158, so it
+drew straight over the rival card's DRS, Compound and Ahead rows. Two drivers is
+what the menu opens with, so this was the out-of-the-box first frame.
+
+#1102 replaced the two cards with one table carrying a column per driver, which
+removes the constraint rather than managing it: the column is 177 px deep at any
+driver count instead of 354, so 720 leaves 263 px and the full list fits. The
+collapse is NOT dead code, and this file is where that is checked. It now fires
+below about 618 px of window height rather than below 788, and the sweep keeps
+600 in it for exactly that reason.
 
 **Asserted on a pure function, not on a rendered window.** The geometry lives
 between GL calls in ``on_draw``, so a check on the drawn result needs a display,
@@ -53,15 +60,17 @@ def _weather_bottom(window_height: int) -> int:
 
 
 def _lowest_card_bottom(window_height: int, *, has_rival: bool) -> int:
-    """Bottom edge of the last card in the left column, mirroring ``on_draw``.
+    """Bottom edge of the driver table, mirroring ``on_draw``.
 
-    The cards chain off the weather panel's bottom, so the whole column
-    translates 1:1 with the window height and only the card COUNT changes.
+    The table chains off the weather panel's bottom, so the column translates
+    1:1 with the window height. Since #1102 the driver COUNT no longer changes
+    the depth: one and two drivers are the same table with one or two value
+    columns, so `has_rival` is accepted and deliberately unused. The parameter
+    stays because the assertions below sweep both modes and a silently
+    driver-count-independent column is itself worth asserting.
     """
-    main_bottom = _weather_bottom(window_height) - DRIVER_BOX_GAP - DRIVER_BOX_HEIGHT
-    if not has_rival:
-        return main_bottom
-    return main_bottom - DRIVER_BOX_GAP - DRIVER_BOX_HEIGHT
+    del has_rival
+    return _weather_bottom(window_height) - DRIVER_BOX_GAP - DRIVER_BOX_HEIGHT
 
 
 def test_the_model_matches_the_geometry_measured_on_a_real_window() -> None:
@@ -75,7 +84,7 @@ def test_the_model_matches_the_geometry_measured_on_a_real_window() -> None:
     """
     assert _weather_bottom(720) == 500
     assert _weather_bottom(800) == 580
-    assert _lowest_card_bottom(720, has_rival=True) == 146
+    assert _lowest_card_bottom(720, has_rival=True) == 323
     assert _lowest_card_bottom(720, has_rival=False) == 323
 
 
@@ -114,22 +123,50 @@ def test_the_sweep_reaches_both_modes() -> None:
     assert modes == {"full", "hint"}, f"the sweep only ever produced {modes}"
 
 
-def test_the_default_window_with_two_drivers_collapses() -> None:
-    """The exact case the defect was, named so a regression is legible.
+def test_the_default_window_with_two_drivers_now_fits_the_full_list() -> None:
+    """The exact case the defect was, inverted by #1102.
 
-    1280x720 is `SCREEN_HEIGHT`, and the menu opens on two drivers, so this is
-    the first frame of a default launch rather than an edge case.
+    1280x720 is `SCREEN_HEIGHT` and the menu opens on two drivers, so this is
+    the first frame of a default launch. It used to leave 146 px against a list
+    that needs 158 and collapse to a hint; one table leaves 263 and the list
+    fits, which is the measurable win #1102 was asked for.
     """
     space = _space_below(720, has_rival=True)
+    assert space == 263
+    assert space >= legend_span(len(ControlsLegend.LINES))
+    assert legend_mode(space, len(ControlsLegend.LINES)) == "full"
+
+
+def test_the_collapse_still_fires_on_a_window_a_user_can_produce() -> None:
+    """#1102 must not turn #1096's fix into a branch nobody can reach.
+
+    The window is resizable with no minimum, so the heights below the crossover
+    are reached by dragging. If this ever fails the collapse has become dead
+    code and the branch should be reconsidered rather than kept unreachable.
+    """
+    space = _space_below(600, has_rival=True)
     assert space < legend_span(len(ControlsLegend.LINES))
     assert legend_mode(space, len(ControlsLegend.LINES)) == "hint"
+
+
+def test_the_driver_count_no_longer_changes_the_column_depth() -> None:
+    """One table, one depth, which is what freed the room (#1102).
+
+    Two stacked cards cost 354 px and a table costs 177 whether it carries one
+    column or two, so the geometry that produced the overlap is gone rather
+    than merely accommodated.
+    """
+    for height in HEIGHTS:
+        assert _lowest_card_bottom(height, has_rival=True) == _lowest_card_bottom(
+            height, has_rival=False
+        )
 
 
 def test_one_driver_at_the_default_height_still_gets_the_full_list() -> None:
     """The fix must not collapse a legend that fits.
 
-    A single driver leaves a whole card's worth of room at 720, so collapsing
-    there would be the fix over-reaching.
+    This held before #1102 because a single card left a whole card's worth of
+    room, and holds after it because the table is that same depth.
     """
     space = _space_below(720, has_rival=False)
     assert space >= legend_span(len(ControlsLegend.LINES))

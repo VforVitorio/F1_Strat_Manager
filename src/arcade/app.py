@@ -339,24 +339,19 @@ class F1ArcadeView(arcade.View):
             top_y=h - 220,
             width=LEADERBOARD_WIDTH,
         )
-        self._driver_info_main = DriverInfoPanel(
+        # One table with a column per driver rather than a card each. Two cards
+        # repeated the same six labels under two headers and took 354 px of the
+        # left column for twelve values (#1102).
+        followed = [(driver_main, self._color_for(driver_main))]
+        if driver_rival:
+            followed.append((driver_rival, self._color_for(driver_rival)))
+        self._driver_info = DriverInfoPanel(
             x=20,
             top_y=h - 200,
             width=DRIVER_BOX_WIDTH,
             height=DRIVER_BOX_HEIGHT,
-            driver_code=driver_main,
-            color=self._color_for(driver_main),
+            drivers=followed,
         )
-        self._driver_info_rival: DriverInfoPanel | None = None
-        if driver_rival:
-            self._driver_info_rival = DriverInfoPanel(
-                x=20,
-                top_y=h - 200 - DRIVER_BOX_HEIGHT - DRIVER_BOX_GAP,
-                width=DRIVER_BOX_WIDTH,
-                height=DRIVER_BOX_HEIGHT,
-                driver_code=driver_rival,
-                color=self._color_for(driver_rival),
-            )
 
         self._progress_bar = ProgressBar(
             total_frames=session_data.total_frames,
@@ -902,31 +897,25 @@ class F1ArcadeView(arcade.View):
         self._race_events.draw()
         self._weather.draw(frame, self.window.height)
         sorted_progress = self._leaderboard.sorted_progress(frame, self._gaps, frame_idx)
-        # DRIVER_BOX_GAP also controls the weather → main-driver gap for
-        # a consistent rhythm between the three stacked cards.
-        self._driver_info_main.set_top(self._weather.bottom_y - DRIVER_BOX_GAP)
-        self._driver_info_main.draw(frame, sorted_progress, self._gaps, frame_idx)
-        if self._driver_info_rival:
-            self._driver_info_rival.set_top(
-                self._weather.bottom_y - DRIVER_BOX_GAP - DRIVER_BOX_HEIGHT - DRIVER_BOX_GAP
-            )
-            self._driver_info_rival.draw(frame, sorted_progress, self._gaps, frame_idx)
+        # DRIVER_BOX_GAP separates the weather card from the driver table. The
+        # two are 14 px apart on screen rather than 32, because
+        # `WeatherPanel.bottom_y` is computed from the last row's baseline and
+        # sits 18 px above the card's own edge.
+        self._driver_info.set_top(self._weather.bottom_y - DRIVER_BOX_GAP)
+        self._driver_info.draw(frame, sorted_progress, self._gaps, frame_idx)
 
         if self._show_progress_bar:
             self._progress_bar.draw(self.window.width, frame_idx)
         # The legend decides between the full list and a one-line hint from the
-        # room the cards above it actually left, because at the default 720 with
-        # two drivers the column leaves 146 px and the list needs 154, so it used
-        # to draw straight over the rival card (#1096). Measured from the LOWEST
-        # card rather than from a constant: the stack's depth depends on whether
-        # a rival was chosen.
-        lowest_card = self._driver_info_main.top_y - self._driver_info_main.height
-        if self._driver_info_rival is not None:
-            lowest_card = min(
-                lowest_card,
-                self._driver_info_rival.top_y - self._driver_info_rival.height,
-            )
-        self._controls_legend.draw(space_below=lowest_card - self._controls_legend.bottom)
+        # room the column above it actually left. It used to draw over the rival
+        # card at the default 720, where two stacked cards left 146 px against a
+        # list that needs 158 (#1096). One table leaves 263 there, so the full
+        # list fits, and the collapse now fires below about 615 px of window
+        # instead of below 788. Measured from the panel rather than assumed,
+        # because the room still depends on the window's height.
+        self._controls_legend.draw(
+            space_below=self._driver_info.bottom_y - self._controls_legend.bottom
+        )
         self._update_hud(frame)
 
     def on_key_press(self, symbol: int, modifiers: int) -> None:
