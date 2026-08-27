@@ -50,6 +50,14 @@ DRIVER_BOX_HEIGHT: Final[int] = 145
 DRIVER_BOX_GAP: Final[int] = 32
 DRIVER_HEADER_HEIGHT: Final[int] = 28
 DRIVER_ROW_GAP: Final[int] = 19
+DRIVER_PAD_X: Final[int] = 12
+# Narrowest the driver table's label column may get, so the value columns take
+# the rest. Not the width of the longest label: a label only has to clear the
+# value on its OWN row, and the widest label (Compound, 64 px) sits beside a
+# single letter while the widest values (the gaps, 103 px) sit beside 37 and
+# 40 px labels. Measured over 400 frames of a real race, the widest
+# label-plus-value pair on any row is 140 px.
+DRIVER_LABEL_MIN: Final[int] = 40
 
 # --- Leaderboard ----------------------------------------------------------
 LEADERBOARD_WIDTH: Final[int] = 240

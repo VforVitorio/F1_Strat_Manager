@@ -11,6 +11,7 @@ rows, a bug that bit both the reference and earlier attempts here.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Final
 
 import arcade
@@ -21,6 +22,8 @@ from src.arcade.config import (
     COMPOUND_LETTERS,
     CONTENT_BG,
     DRIVER_HEADER_HEIGHT,
+    DRIVER_LABEL_MIN,
+    DRIVER_PAD_X,
     DRIVER_ROW_GAP,
     DRS_ELIGIBLE_CODE,
     DRS_OPEN_CODES,
@@ -235,15 +238,104 @@ class WeatherPanel:
         arcade.draw_rect_filled(arcade.XYWH(cx, strip_cy, self.width, self.STRIP_H), ACCENT)
 
 
-class DriverInfoPanel:
-    """Telemetry box for one driver: speed, gear, DRS, compound, gaps.
+DRIVER_ROW_LABELS: Final[tuple[str, ...]] = (
+    "Speed",
+    "Gear",
+    "DRS",
+    "Compound",
+    "Ahead",
+    "Behind",
+)
 
-    Redesigned vs f1_replay's filled team-colour header: a neutral
-    CONTENT_BG card with a 3 px team-colour strip on top and the driver
-    code rendered in team colour, instead of a clone of the reference app."""
+
+def driver_rows(
+    data: dict,
+    ahead: str,
+    behind: str,
+) -> list[tuple[str, str, tuple[int, int, int]]]:
+    """One driver's six label/value/colour rows, as finished strings.
+
+    Split out of the panel's draw call for the reason ``_weather_rows`` was
+    (#1087): the rendered TEXT is then assertable without a GL context, and a
+    check that needs a window is a check that does not run in CI.
+    """
+    tyre = int(data.get("tyre", 1))
+    drs = data.get("drs", 0)
+    return [
+        ("Speed", f"{data.get('speed', 0):.0f} km/h", TEXT_PRIMARY),
+        ("Gear", f"{data.get('gear', 0)}", TEXT_PRIMARY),
+        ("DRS", DriverInfoPanel._drs_label(drs), DriverInfoPanel._drs_color(drs)),
+        ("Compound", COMPOUND_LETTERS.get(tyre, "?"), COMPOUND_COLORS.get(tyre, TEXT_PRIMARY)),
+        ("Ahead", ahead, TEXT_SECONDARY),
+        ("Behind", behind, TEXT_SECONDARY),
+    ]
+
+
+def driver_table(
+    per_driver: list[list[tuple[str, str, tuple[int, int, int]]]],
+) -> list[tuple[str, list[tuple[str, tuple[int, int, int]]]]]:
+    """Turn one row list per driver into one row per label, one cell per driver.
+
+    The two drivers used to get a card each, so the same six labels were drawn
+    twice under two headers: 354 px of column for twelve values (#1102). Here
+    the label is written once and each driver contributes a cell to it.
+
+    Raises when the row lists do not agree on their labels, because a table that
+    silently zips mismatched rows is how a value ends up under the wrong name.
+    """
+    if not per_driver:
+        return []
+    labels = [label for label, _, _ in per_driver[0]]
+    for rows in per_driver[1:]:
+        if [label for label, _, _ in rows] != labels:
+            raise ValueError(f"driver row labels disagree: {labels} vs {[r[0] for r in rows]}")
+    return [
+        (label, [(rows[i][1], rows[i][2]) for rows in per_driver]) for i, label in enumerate(labels)
+    ]
+
+
+def driver_column_edges(
+    width: int,
+    column_count: int,
+    *,
+    pad_x: int = DRIVER_PAD_X,
+    label_min: int = DRIVER_LABEL_MIN,
+) -> tuple[float, ...]:
+    """Right edge of each value column, as an offset from the card's left edge.
+
+    Columns are equal and share whatever the label column does not need. The
+    minimum is 40 px rather than the width of the longest label, because a label
+    only has to clear the value on its OWN row: "Compound" is the widest at 64 px
+    and its value is a single letter, while "Ahead" is 37 px against a 103 px
+    value. Measured over 400 frames of a real race, the widest label-plus-value
+    pair on any row is 140 px, which one column of 118 plus a 40 px label
+    column clears by 18.
+
+    With one column this returns the card's own right padding, so a single
+    driver draws exactly where it did before the table existed.
+    """
+    inner = width - 2 * pad_x
+    column = (inner - label_min) / column_count
+    return tuple(pad_x + label_min + column * (i + 1) for i in range(column_count))
+
+
+class DriverInfoPanel:
+    """Telemetry table for one or two drivers: speed, gear, DRS, compound, gaps.
+
+    One card with a value column per driver rather than a card each. Two cards
+    carried the same six labels under two headers and 354 px of the left column
+    for twelve values, which is what left the controls legend nowhere to draw at
+    the default window height (#1096, #1102).
+
+    Visual identity, unchanged: a neutral CONTENT_BG card with a 3 px
+    team-colour strip on top and the driver code in team colour. With two
+    drivers the strip is split at the boundary between their columns, so which
+    colour belongs to which column is legible from the strip as well as from
+    the code above it.
+    """
 
     STRIP_H: int = 3
-    PAD_X: int = 12
+    PAD_X: int = DRIVER_PAD_X
 
     def __init__(
         self,
@@ -251,35 +343,40 @@ class DriverInfoPanel:
         top_y: int,
         width: int,
         height: int,
-        driver_code: str,
-        color: tuple[int, int, int],
+        drivers: Sequence[tuple[str, tuple[int, int, int]]],
     ) -> None:
+        if not drivers:
+            raise ValueError("a driver panel needs at least one driver")
         self.x = x
         self.top_y = top_y
         self.width = width
         self.height = height
-        self.code = driver_code
-        self.color = color
-        self._header = arcade.Text(
-            driver_code,
-            0,
-            0,
-            color,
-            15,
-            bold=True,
-            font_name=FONT_TITLE,
-            anchor_x="left",
-            anchor_y="center",
-        )
-        self._subheader = arcade.Text(
-            "DRIVER",
+        self.drivers = tuple(drivers)
+        self.codes = tuple(code for code, _ in self.drivers)
+        self._column_edges = driver_column_edges(width, len(self.drivers), pad_x=self.PAD_X)
+        self._headers = [
+            arcade.Text(
+                code,
+                0,
+                0,
+                color,
+                15,
+                bold=True,
+                font_name=FONT_TITLE,
+                anchor_x="right",
+                anchor_y="center",
+            )
+            for code, color in self.drivers
+        ]
+        self._caption = arcade.Text(
+            "DRIVERS" if len(self.drivers) > 1 else "DRIVER",
             0,
             0,
             TEXT_TERTIARY,
             9,
             bold=True,
             font_name=FONT_TITLE,
-            anchor_x="right",
+            anchor_x="left",
             anchor_y="center",
         )
         self._label = arcade.Text(
@@ -304,6 +401,11 @@ class DriverInfoPanel:
             anchor_y="center",
         )
 
+    @property
+    def bottom_y(self) -> int:
+        """Bottom edge of the card, which is what the legend measures against."""
+        return self.top_y - self.height
+
     def set_top(self, top_y: int) -> None:
         self.top_y = top_y
 
@@ -314,49 +416,59 @@ class DriverInfoPanel:
         gaps: RaceGapCalculator,
         frame_idx: int,
     ) -> None:
-        data = (frame.get("drivers") or {}).get(self.code)
-        if not data:
-            return
-        cx = self.x + self.width / 2
-        cy = self.top_y - self.height / 2
+        drivers_in_frame = frame.get("drivers") or {}
+        per_driver: list[list[tuple[str, str, tuple[int, int, int]]]] = []
+        for code in self.codes:
+            data = drivers_in_frame.get(code)
+            if not data:
+                return
+            ahead, behind = self._neighbor_gaps(code, all_drivers_sorted, gaps, frame, frame_idx)
+            per_driver.append(driver_rows(data, ahead, behind))
 
-        arcade.draw_rect_filled(arcade.XYWH(cx, cy, self.width, self.height), (*CONTENT_BG, 230))
-        arcade.draw_rect_outline(arcade.XYWH(cx, cy, self.width, self.height), BORDER_COLOR, 1)
-        strip_cy = self.top_y - self.STRIP_H / 2
-        arcade.draw_rect_filled(arcade.XYWH(cx, strip_cy, self.width, self.STRIP_H), self.color)
-        header_cy = self.top_y - DRIVER_HEADER_HEIGHT / 2
-        self._header.x = self.x + self.PAD_X
-        self._header.y = header_cy
-        self._header.draw()
-        self._subheader.x = self.x + self.width - self.PAD_X
-        self._subheader.y = header_cy
-        self._subheader.draw()
-
-        ahead, behind = self._neighbor_gaps(all_drivers_sorted, gaps, frame, frame_idx)
-        rows: list[tuple[str, str, tuple[int, int, int]]] = [
-            ("Speed", f"{data.get('speed', 0):.0f} km/h", TEXT_PRIMARY),
-            ("Gear", f"{data.get('gear', 0)}", TEXT_PRIMARY),
-            ("DRS", self._drs_label(data.get("drs", 0)), self._drs_color(data.get("drs", 0))),
-            (
-                "Compound",
-                COMPOUND_LETTERS.get(int(data.get("tyre", 1)), "?"),
-                COMPOUND_COLORS.get(int(data.get("tyre", 1)), TEXT_PRIMARY),
-            ),
-            ("Ahead", ahead, TEXT_SECONDARY),
-            ("Behind", behind, TEXT_SECONDARY),
-        ]
+        self._draw_card()
+        self._draw_header()
         y = self.top_y - DRIVER_HEADER_HEIGHT - 14
-        for label, value, color in rows:
+        for label, cells in driver_table(per_driver):
             self._label.text = label
             self._label.x = self.x + self.PAD_X
             self._label.y = y
             self._label.draw()
-            self._value.text = value
-            self._value.color = color
-            self._value.x = self.x + self.width - self.PAD_X
-            self._value.y = y
-            self._value.draw()
+            for edge, (value, color) in zip(self._column_edges, cells, strict=True):
+                self._value.text = value
+                self._value.color = color
+                self._value.x = self.x + edge
+                self._value.y = y
+                self._value.draw()
             y -= DRIVER_ROW_GAP
+
+    def _draw_card(self) -> None:
+        """The card body, its outline, and one strip segment per driver."""
+        cx = self.x + self.width / 2
+        cy = self.top_y - self.height / 2
+        arcade.draw_rect_filled(arcade.XYWH(cx, cy, self.width, self.height), (*CONTENT_BG, 230))
+        arcade.draw_rect_outline(arcade.XYWH(cx, cy, self.width, self.height), BORDER_COLOR, 1)
+
+        strip_cy = self.top_y - self.STRIP_H / 2
+        left = float(self.x)
+        for i, (_, color) in enumerate(self.drivers):
+            last = i == len(self.drivers) - 1
+            right = self.x + self.width if last else self.x + self._column_edges[i]
+            arcade.draw_rect_filled(
+                arcade.XYWH((left + right) / 2, strip_cy, right - left, self.STRIP_H),
+                color,
+            )
+            left = right
+
+    def _draw_header(self) -> None:
+        """The caption on the left, each driver's code over its own column."""
+        header_cy = self.top_y - DRIVER_HEADER_HEIGHT / 2
+        self._caption.x = self.x + self.PAD_X
+        self._caption.y = header_cy
+        self._caption.draw()
+        for header, edge in zip(self._headers, self._column_edges, strict=True):
+            header.x = self.x + edge
+            header.y = header_cy
+            header.draw()
 
     @staticmethod
     def _drs_label(drs: int) -> str:
@@ -385,15 +497,21 @@ class DriverInfoPanel:
 
     def _neighbor_gaps(
         self,
+        code: str,
         sorted_drivers: list[tuple[str, float | None]] | None,
         gaps: RaceGapCalculator,
         frame: dict,
         frame_idx: int,
     ) -> tuple[str, str]:
+        """The intervals either side of `code`, as the timing screen shows them.
+
+        Takes the code rather than reading one off the panel, because the panel
+        now holds a column per driver instead of belonging to one.
+        """
         if not sorted_drivers:
             return "N/A", "N/A"
-        codes = [code for code, _ in sorted_drivers]
-        if self.code not in codes:
+        codes = [c for c, _ in sorted_drivers]
+        if code not in codes:
             return "N/A", "N/A"
         # Inactive is not retired. A finisher's telemetry ends the moment he
         # takes the flag, so reading `active` alone put "NOR OUT" on the
@@ -404,7 +522,7 @@ class DriverInfoPanel:
             for code, data in (frame.get("drivers") or {}).items()
             if not (data or {}).get("active", True) and not gaps.has_finished(code)
         }
-        idx = codes.index(self.code)
+        idx = codes.index(code)
         me = sorted_drivers[idx]
         ahead = (
             "LEADER"
