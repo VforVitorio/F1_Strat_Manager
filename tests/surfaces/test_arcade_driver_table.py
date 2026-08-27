@@ -11,7 +11,7 @@ needs a display and a check that needs a display does not run in CI.
 ``_weather_rows`` was split out for exactly this reason and this file follows it.
 
 The column arithmetic is checked against widths MEASURED off the live
-``arcade.Text`` objects over 400 frames of a real race, listed in ``WIDEST``,
+``arcade.Text`` objects over a real race, listed in ``WIDEST``,
 because what the font renders is the one thing a pure function cannot produce.
 """
 
@@ -38,8 +38,12 @@ from src.arcade.overlays import (
 )
 
 # Rendered widths of the label and the widest value each row produced, read off
-# the panel's own Text objects over EVERY 60th of Melbourne 2025's 125,279
-# frames, for all twenty drivers, through the real gap pipeline. The gap rows
+# the panel's own Text objects over EVERY 60th of a real race's 125,279 frames,
+# for all twenty drivers, through the real gap pipeline. The race is SUZUKA
+# 2025, round 3. It was recorded here as Melbourne: the probe asked the loader
+# for `(2025, 3, "Melbourne")`, and the loader fetches by ROUND while it used to
+# name the cache by LABEL, so the pickle said Melbourne with Suzuka inside it
+# (#1119). The measurements are real, the name was not. The gap rows
 # are the wide ones: they carry the neighbour's code, a signed interval and the
 # "(L)" suffix.
 #
@@ -219,7 +223,7 @@ def test_a_three_digit_interval_is_a_known_bound_that_does_not_fit() -> None:
     constructible: it renders 116.9 px against a 118 px column, and the
     alphabet-worst code takes it to 123.3.
 
-    Melbourne 2025 never produces one, and the widest it does produce clears by
+    Suzuka 2025 never produces one, and the widest it does produce clears by
     6.8 px. Fitting one would need a column of about 126 and a label column of
     36, so a card of 312 px against a `MARGIN_LEFT` of 330 that starts at 20:
     the circuit would pay 12 px of width for a string no served session
