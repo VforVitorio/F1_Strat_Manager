@@ -96,7 +96,7 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 The controls list collapses to a single `C  Controls` line when the column above
 it has no room. The list needs 158 px, and the left column leaves 263 at the
 default 1280x720 whether one driver is followed or two, so the collapse fires
-only on a window dragged below roughly 618 px tall. `C` opens the list anyway
+only on a window dragged below 615 px tall. `C` opens the list anyway
 where it does not fit, on the grounds that a list you asked for is one you can
 dismiss with the same key.
 
@@ -104,6 +104,10 @@ The telemetry under the weather card is one table with a column per driver. It
 used to be a card each, which repeated the same six labels under two headers and
 took 354 px of the column for twelve values; at the default height that left
 146 px against a list needing 158, and the list drew over the second card.
+
+The window has no minimum size, and below about 475 px tall the table reaches
+the collapsed hint line. Nothing collapses further at that point. Before the
+table replaced the two cards the same crossing happened at about 652.
 
 ## Known limitations
 

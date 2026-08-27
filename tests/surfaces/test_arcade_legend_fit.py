@@ -35,13 +35,22 @@ from src.arcade.config import (
     WEATHER_ROW_GAP,
     WEATHER_TOP_OFFSET,
 )
-from src.arcade.overlays import ControlsLegend, legend_mode, legend_span
+from src.arcade.overlays import (
+    ControlsLegend,
+    _weather_rows,
+    legend_mode,
+    legend_span,
+)
 
 # The window heights a user can actually produce. The window is resizable with
 # no minimum, so the small ones are reachable by dragging, not hypothetical.
 HEIGHTS = (600, 660, 720, 800, 900, 1080)
 
-_WEATHER_ROWS = 5
+# Read from the panel's own row builder rather than transcribed. The pin
+# below catches CONSTANT drift; a literal 5 would not catch STRUCTURAL
+# drift, and a sixth weather row moves the real column 22 px while
+# leaving both this model and its pins green (#1111).
+_WEATHER_ROWS = len(_weather_rows({}))
 
 
 def _weather_bottom(window_height: int) -> int:

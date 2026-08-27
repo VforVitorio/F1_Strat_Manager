@@ -914,7 +914,7 @@ class F1ArcadeView(arcade.View):
         # room the column above it actually left. It used to draw over the rival
         # card at the default 720, where two stacked cards left 146 px against a
         # list that needs 158 (#1096). One table leaves 263 there, so the full
-        # list fits, and the collapse now fires below about 615 px of window
+        # list fits, and the collapse now fires below 615 px of window
         # instead of below 788. Measured from the panel rather than assumed,
         # because the room still depends on the window's height.
         self._controls_legend.draw(

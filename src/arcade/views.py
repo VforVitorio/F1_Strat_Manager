@@ -217,8 +217,14 @@ def menu_bands(window_height: int, groups: Sequence[str]) -> MenuBands:
     The three bands used to be pinned to constants, so a taller window only ever
     grew the two gaps between them. Here every distance is a multiple of
     `menu_scale`, which makes the gap-to-form ratio a property of the layout
-    rather than of the window: it was 0.46 at 720 and 1.10 at 1080, and it is
-    now 0.46 at both (#1100).
+    rather than of the window: the gap above the form was 0.46 of the form's own
+    height at 720 and 1.10 at 1080, and it is 0.327 at both now (#1100).
+
+    That constant is 0.327 rather than the 0.46 measured when #1100 landed
+    because #1101 then added a gap at each group boundary, growing the form from
+    280 px to 324 at scale 1. It holds over [612, 1440], which is where neither
+    clamp is active; below the floor and above the ceiling the ratio moves, and
+    `test_beyond_the_ceiling_the_void_returns_and_says_so` covers both ends.
 
     `groups` is one entry per VISIBLE row, in draw order, so the form's height
     depends on how many group boundaries the rows cross as well as on how many

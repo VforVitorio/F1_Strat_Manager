@@ -32,6 +32,7 @@ from src.arcade.config import (
     TRACK_INTERP_EDGE,
     TRACK_INTERP_REF,
     TRACK_MIN_CLEARANCE,
+    TRACK_MIN_CLEARANCE_Y,
     TRACK_PADDING,
     TRACK_WIDTH_WORLD,
 )
@@ -86,9 +87,10 @@ def track_viewport(window_width: int, window_height: int) -> TrackViewport:
     - top, a plain gap, since the lap readout sits over the left column.
 
     The trace is limited by the viewport's WIDTH at every window size Melbourne
-    was measured at, so the left inset is the one that matters: it reserved 340
-    px for a column 320 px wide, and those 20 px came off the circuit for
-    nothing.
+    was measured at, so the left inset is the one that matters. It reserved 340
+    px for a column 320 px wide; 10 of those 20 px are kept deliberately, as the
+    gap that stops the trace touching the cards, and the other 10 went back to
+    the circuit.
     """
     return TrackViewport(
         left=MARGIN_LEFT,
@@ -103,19 +105,25 @@ def track_inset(
     *,
     padding: float = TRACK_PADDING,
     min_clearance: int = TRACK_MIN_CLEARANCE,
+    min_clearance_y: int = TRACK_MIN_CLEARANCE_Y,
 ) -> tuple[float, float]:
     """Empty margin the trace keeps inside `viewport`, per axis.
 
     A fraction alone is wrong at small window sizes. Cars are drawn ON the trace
-    with a three-letter code centred above or below the dot, so what has to
-    clear the panels is the label, not the polyline: at 0.02 the fraction gives
-    14 px in a 1280-wide window against a label that reaches 21 either side.
-    The floor is what makes the clearance a property of the label rather than of
-    the window (#1103).
+    with a three-letter code anchored to the dot, so what has to clear the
+    panels is the label, not the polyline: at 0.02 the fraction gives 14 px in a
+    1280-wide window against a label that reaches 21 either side. The floor is
+    what makes the clearance a property of the label rather than of the window
+    (#1103).
+
+    The two floors differ because the label is CENTRED on the dot horizontally,
+    costing half its width, while `_draw_car` anchors it a whole line above or
+    below. The vertical floor binds only in a window taller than it is wide,
+    since the fit is width-limited otherwise (#1111).
     """
     return (
         max(viewport.width * padding, float(min_clearance)),
-        max(viewport.height * padding, float(min_clearance)),
+        max(viewport.height * padding, float(min_clearance_y)),
     )
 
 

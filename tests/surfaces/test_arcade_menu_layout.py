@@ -92,9 +92,11 @@ def test_band_is_sized_to_the_content_and_not_to_a_constant() -> None:
     assert left - (MENU_GUTTER + widest_label) == 0
     assert right - (MENU_GUTTER + widest_value) == 0
 
-    fill_left, fill_right = left + MENU_FOCUS_PAD, right + MENU_FOCUS_PAD
-    assert fill_left - (MENU_GUTTER + widest_label) <= MENU_FOCUS_PAD
-    assert fill_right - (MENU_GUTTER + widest_value) <= MENU_FOCUS_PAD
+    # Read off the geometry the draw call uses, not recomputed here. A first
+    # version added MENU_FOCUS_PAD to the two equalities above and asserted the
+    # result was at most MENU_FOCUS_PAD, which is PAD <= PAD (#1111).
+    geometry = menu_form_geometry([r[1] for r in ROW_WIDTHS], [r[2] for r in ROW_WIDTHS])
+    assert geometry.band_half - (MENU_GUTTER + max(widest_label, widest_value)) <= MENU_FOCUS_PAD
 
 
 def test_band_tracks_the_widest_row_when_a_value_grows() -> None:

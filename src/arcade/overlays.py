@@ -1061,9 +1061,14 @@ def legend_mode(space_below: int | None, row_count: int, *, forced_open: bool = 
 
     ``space_below`` is the gap between the legend's bottom edge and the lowest
     thing already drawn above it, or ``None`` when the caller has nothing above
-    to measure against. The full legend spans 154 px and the column leaves 146
-    at the default 720 with two drivers, so it cannot fit there at ANY anchor,
-    which is why clamping it under the lowest card was not the fix.
+    to measure against.
+
+    The list spans 158 px. When this function was written the column above it
+    was two stacked driver cards and left 146 at the default 720 with two
+    drivers, so the list could not fit there at ANY anchor, which is why
+    clamping it under the lowest card was not the fix. #1102 replaced those
+    cards with one table and the column now leaves 263 at that height, so the
+    collapse fires below roughly 615 px of window instead of below 788.
 
     ``forced_open`` wins: a user who pressed the key asked for the panel and can
     dismiss it again, so an overlap they summoned is theirs to make.
