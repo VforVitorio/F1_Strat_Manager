@@ -53,9 +53,24 @@ TRACK_PADDING: Final[float] = 0.02
 # alone gives 14 px in a 1280-wide window, so the floor is what stops a label
 # reaching the leaderboard there. The old 0.05 cleared it by accident.
 TRACK_MIN_CLEARANCE: Final[int] = 22
+# The same floor for the vertical axis, and it is larger because a label reaches
+# further up and down than it does sideways: it is CENTRED on the dot, so
+# sideways it costs half its width, while `_draw_car` anchors it a whole line
+# above or below. Equal to CAR_LABEL_MAX_REACH_ABOVE. The fit is width-limited
+# in a landscape window, so this changes nothing there; it binds in a window
+# taller than it is wide, which is where a label could otherwise reach the
+# playback readout (#1111).
+TRACK_MIN_CLEARANCE_Y: Final[int] = 31
 # Half the widest three-letter driver label, measured on the real font at
-# CAR_LABEL_FONT_SIZE. Read by the guard that keeps the clearance above honest.
-CAR_LABEL_MAX_HALF_WIDTH: Final[int] = 21
+# CAR_LABEL_FONT_SIZE and rounded UP: "WWW" renders 42.2 px, so 21.1. Read by
+# the guard that keeps the clearance above honest, which is why it rounds the
+# way that makes the bound true rather than the way that makes it tidy.
+CAR_LABEL_MAX_HALF_WIDTH: Final[int] = 22
+# What a car's label reaches ABOVE or BELOW the dot's centre, which is not its
+# half-width: `_draw_car` anchors the label at CAR_RADIUS + 4 and the rendered
+# line is 20 px tall. The vertical clearance guard asserted the half-width and
+# so named a number 9 px short of the drawn extent (#1111).
+CAR_LABEL_MAX_REACH_ABOVE: Final[int] = 31
 
 # --- Weather panel --------------------------------------------------------
 # Left edge of every panel in the left column, weather card and driver table
@@ -76,10 +91,12 @@ DRIVER_ROW_GAP: Final[int] = 19
 DRIVER_PAD_X: Final[int] = 12
 # Narrowest the driver table's label column may get, so the value columns take
 # the rest. Not the width of the longest label: a label only has to clear the
-# value on its OWN row, and the widest label (Compound, 64 px) sits beside a
-# single letter while the widest values (the gaps, 103 px) sit beside 37 and
-# 40 px labels. Measured over 400 frames of a real race, the widest
-# label-plus-value pair on any row is 140 px.
+# value on its OWN row, and the widest label (Compound, 64.5 px) sits beside a
+# single letter while the widest values (the gaps, 111.2 px) sit beside 36.8 and
+# 39.8 px labels. Measured over every 60th frame of a real race for all twenty
+# drivers, the widest label-plus-value pair on any row is 148.1 px, which this
+# 40 px column plus a 118 px value column clears by 9.9. A first pass sampled
+# 400 frames of two drivers and read 103 and 140 (#1111).
 DRIVER_LABEL_MIN: Final[int] = 40
 
 # --- Leaderboard ----------------------------------------------------------

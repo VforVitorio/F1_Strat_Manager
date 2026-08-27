@@ -37,23 +37,34 @@ from src.arcade.overlays import (
     present_drivers,
 )
 
-# Rendered widths of the label and the widest value each row produced, measured
-# 2026-08-27 over 400 frames of Melbourne 2025 with NOR and VER, read off the
-# panel's own Text objects. The gap rows are the wide ones: they carry the
-# neighbour's code, a signed interval and the "(L)" suffix.
+# Rendered widths of the label and the widest value each row produced, read off
+# the panel's own Text objects over EVERY 60th of Melbourne 2025's 125,279
+# frames, for all twenty drivers, through the real gap pipeline. The gap rows
+# are the wide ones: they carry the neighbour's code, a signed interval and the
+# "(L)" suffix.
+#
+# Re-measured 2026-08-27. The first pass sampled 400 frames of two drivers and
+# put Ahead at 103 px; the full race reaches 111.2. The subject of a measurement
+# is part of the measurement, which is section 11 of CLAUDE.md (#1111).
 WIDEST: dict[str, tuple[float, float]] = {
-    "Speed": (36, 63),
-    "Gear": (27, 8),
-    "DRS": (24, 39),
-    "Compound": (64, 6),
-    "Ahead": (37, 103),
-    "Behind": (40, 100),
+    "Speed": (35.8, 63.3),
+    "Gear": (26.9, 8.1),
+    "DRS": (23.8, 39.1),
+    "Compound": (64.5, 13.4),
+    "Ahead": (36.8, 111.2),
+    "Behind": (39.8, 107.0),
 }
 
-# A gap can be wider than anything that race produced: three digits of seconds
-# and a four-character code. At the ~7 px per character the measurements imply,
-# that is about this.
-WORST_CASE_VALUE = 115.0
+# The widest value the SERVED distribution produces, which is what the columns
+# are sized against. Named for what it is rather than "worst case": the seconds
+# branch of `_gap_label` is uncapped, so a wider string is CONSTRUCTIBLE and
+# does not fit. `test_a_three_digit_interval_is_a_known_bound_that_does_not_fit`
+# records that rather than hiding it behind a comfortable constant (#1111).
+WIDEST_SERVED_VALUE = 111.2
+
+# A three-digit interval at the panel's font, measured: "DOO +123.45s (L)" is
+# 116.9 px and the alphabet-worst "WWW -123.45s (L)" is 123.3.
+CONSTRUCTIBLE_THREE_DIGIT_VALUE = 116.9
 
 
 def _frame(speed: float = 232.0, gear: int = 6, drs: int = 0, tyre: int = 1) -> dict:
@@ -170,12 +181,17 @@ def test_no_label_can_reach_the_value_beside_it(columns: int) -> None:
 
 @pytest.mark.parametrize("columns", [1, 2])
 def test_no_column_can_reach_the_one_before_it(columns: int) -> None:
-    """A value is right-aligned, so it grows leftward into its neighbour."""
+    """A value is right-aligned, so it grows leftward into its neighbour.
+
+    Against the widest the served distribution produces, not against a
+    hypothetical: see `test_a_three_digit_interval_is_a_known_bound_that_does_not_fit`
+    for the string that would not fit and why it is left that way.
+    """
     edges = driver_column_edges(DRIVER_BOX_WIDTH, columns)
     previous_edge = DRIVER_PAD_X + DRIVER_LABEL_MIN
     for edge in edges:
-        assert edge - WORST_CASE_VALUE > previous_edge, (
-            f"a {WORST_CASE_VALUE} px value in the column ending at {edge} "
+        assert edge - WIDEST_SERVED_VALUE > previous_edge, (
+            f"a {WIDEST_SERVED_VALUE} px value in the column ending at {edge} "
             f"overruns the one ending at {previous_edge}"
         )
         previous_edge = edge
@@ -184,13 +200,38 @@ def test_no_column_can_reach_the_one_before_it(columns: int) -> None:
 def test_the_widest_measured_row_clears_by_a_readable_margin() -> None:
     """Not merely non-overlapping: the numbers stay separable at a glance.
 
-    The binding row is either gap row, at 140 px of label plus value against a
-    118 px column plus a 40 px label column.
+    The binding row is `Ahead`, at 148.1 px of label plus value against a 118 px
+    column plus a 40 px label column. The margin is 9.9 px, about one character.
+    It was stated as 18 while the fixture came from a 400-frame sample; the full
+    race costs 8 of those (#1111).
     """
     first, _ = driver_column_edges(DRIVER_BOX_WIDTH, 2)
     widest_pair = max(label + value for label, value in WIDEST.values())
-    assert widest_pair == 140
-    assert first - DRIVER_PAD_X - widest_pair >= 12
+    assert widest_pair == pytest.approx(148.0, abs=0.2)
+    assert first - DRIVER_PAD_X - widest_pair >= 9
+
+
+def test_a_three_digit_interval_is_a_known_bound_that_does_not_fit() -> None:
+    """Recorded rather than asserted away, because the columns cannot hold it.
+
+    The seconds branch of `_gap_label` fires whenever two cars are under one LAP
+    OF DISTANCE apart, however large the interval, so a three-digit gap is
+    constructible: it renders 116.9 px against a 118 px column, and the
+    alphabet-worst code takes it to 123.3.
+
+    Melbourne 2025 never produces one, and the widest it does produce clears by
+    6.8 px. Fitting one would need a column of about 126 and a label column of
+    36, so a card of 312 px against a `MARGIN_LEFT` of 330 that starts at 20:
+    the circuit would pay 12 px of width for a string no served session
+    contains. Left unfixed deliberately. If this ever fails because the
+    constants moved, the trade has changed and is worth re-making, not silenced.
+    """
+    first, second = driver_column_edges(DRIVER_BOX_WIDTH, 2)
+    column = second - first
+    assert WIDEST_SERVED_VALUE < column, "the served distribution fits, which is the claim"
+    assert CONSTRUCTIBLE_THREE_DIGIT_VALUE > column - 2, (
+        "a three-digit interval now fits comfortably, so this bound is stale"
+    )
 
 
 def test_a_third_column_would_not_fit_and_the_test_says_so() -> None:
@@ -202,7 +243,7 @@ def test_a_third_column_would_not_fit_and_the_test_says_so() -> None:
     """
     edges = driver_column_edges(DRIVER_BOX_WIDTH, 3)
     column = edges[1] - edges[0]
-    assert column < WORST_CASE_VALUE, (
+    assert column < WIDEST_SERVED_VALUE, (
         "three columns now fit, so this bound is stale rather than the panel wrong"
     )
 
