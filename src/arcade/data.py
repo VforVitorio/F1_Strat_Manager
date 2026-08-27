@@ -131,9 +131,9 @@ class SessionData:
     # and then thrown away; the arcade UI showed a hardcoded 45 C / 18 C / DRY
     # constant on every lap of every race while the strategy pipeline used the
     # real values from a different path. Empty dict means the loader could not
-    # extract weather (older cache, or the session genuinely has none); the
-    # panel's own ``.get(key, default)`` calls keep the old constants as the
-    # last-resort display instead of raising.
+    # extract weather (older cache, or the session genuinely has none), and the
+    # panel then renders "N/A" per field rather than a display constant, so a
+    # session with no weather reads as one with no weather (#1087).
     weather_by_lap: dict[int, dict[str, Any]] = field(default_factory=dict)
     # Whether each driver's telemetry actually places the car. False when the
     # distance never advances: on Melbourne 2025 that is HAD, whose position
@@ -274,9 +274,21 @@ def _nearest_sample(t: np.ndarray, timeline: np.ndarray) -> np.ndarray:
     return np.where(closer_to_left, right - 1, right)
 
 
-# The eight forward gears plus neutral. 0 is a REAL reading - 1,400 raw samples
-# on Melbourne 2025, and the PITWALL GEAR lane's [0, 9] range renders it - so the
-# validity test is one-sided.
+# The eight forward gears plus neutral, and the validity test is ONE-SIDED because
+# 0 is a real reading rather than a sentinel: `session.car_data` for Melbourne 2025
+# carries 202,509 of them across the 20 drivers, and the PITWALL GEAR lane's [0, 9]
+# range renders it.
+#
+# **None of them reaches a replay, and that is a property of the DATA, not a filter
+# here.** Every one of those 202,509 samples falls OUTSIDE every lap window: the
+# cars are stationary in the garage and on the grid, before lap 1 starts at 00:56:06
+# session time, while the laps run to 02:19:37. `_process_driver_data` reads
+# `lap.get_telemetry()`, so it only ever sees samples inside a lap, and across all
+# 1,059 laps of this race not one carries gear 0. Measured 2026-08-26 (#1094).
+#
+# So a replay of this race legitimately serves no neutral frame. Do NOT widen the
+# predicate below to `< 1` on the strength of that: the reading is real, other
+# sessions can put a stationary car inside a lap window, and one-sided is the rule.
 def _concat_sorted_by_time(arrays: dict[str, list[np.ndarray]]) -> dict[str, np.ndarray]:
     """Flatten the per-lap arrays into one time-ordered block per channel.
 
@@ -848,10 +860,23 @@ class SessionLoader:
     def _weather_row_to_dict(self, row: "pd.Series") -> dict[str, Any]:
         """Map one merged weather+lap row to the ``WeatherPanel``-facing shape.
 
-        Key names match ``WeatherPanel.draw``'s ``weather.get(key, default)``
-        calls exactly, so a row missing a single reading (rare, but possible
-        on an incomplete weather sample) only loses that one field to the
-        panel's own default instead of dropping the whole lap."""
+        Key names match the panel's lookups exactly, so a row missing a single
+        reading (rare, but possible on an incomplete weather sample) loses only
+        that one field instead of dropping the whole lap.
+
+        **A missing reading is an explicit ``None`` under the key, never an
+        absent key**, which is why the panel cannot lean on a ``dict.get``
+        default: the default fires on a missing KEY and this stores a missing
+        VALUE. ``overlays._reading`` is the consumer that coalesces it, and
+        before #1087 it did not exist, so a single NaN sample raised inside
+        ``on_draw`` and took the render loop with it.
+
+        **``Rainfall`` needs the same ``pd.notna`` guard as the five numbers,
+        and for a worse reason.** It is the one field where a dropped sample
+        did not raise: ``bool(float("nan"))`` is ``True``, so a NaN read as
+        "WET" and the panel announced rain on a dry race. A crash is loud and a
+        wrong affirmative is not, which is why this line survived the fix that
+        was written to close exactly this class."""
         return {
             "air_temp": float(row["AirTemp"]) if pd.notna(row.get("AirTemp")) else None,
             "track_temp": float(row["TrackTemp"]) if pd.notna(row.get("TrackTemp")) else None,
@@ -860,7 +885,11 @@ class SessionLoader:
             "wind_direction": (
                 float(row["WindDirection"]) if pd.notna(row.get("WindDirection")) else None
             ),
-            "rain_state": "WET" if bool(row.get("Rainfall")) else "DRY",
+            "rain_state": (
+                ("WET" if bool(row["Rainfall"]) else "DRY")
+                if pd.notna(row.get("Rainfall"))
+                else None
+            ),
         }
 
     def _extract_official_status(self, session: Any, driver_codes: dict) -> dict[str, str]:

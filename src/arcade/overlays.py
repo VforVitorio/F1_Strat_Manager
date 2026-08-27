@@ -87,6 +87,68 @@ def _wind_dir(deg: float | None) -> str:
     return _COMPASS[int(((deg % 360) / 22.5) + 0.5) % 16]
 
 
+def _reading(value: float | None, spec: str, unit: str = "") -> str:
+    """Format one weather reading with its unit, or ``"N/A"`` when there is none.
+
+    **The unit belongs to the number, so an absent reading carries neither.**
+    Rendering "N/A C" puts a unit on a quantity that was never measured, and on
+    the wind row, where two fields share one line, it produced "N/A km/h N/A".
+    Every string assertion passed on that: it took looking at the drawn panel.
+
+    ``SessionLoader._weather_row_to_dict`` writes an explicit ``None`` UNDER
+    THE KEY when FastF1's reading is NaN, so ``dict.get(key, default)`` returns
+    that ``None`` and the default never fires. This is the ``Series.get`` lesson
+    of CLAUDE.md section 11 reproduced in a plain dict: the default covers a
+    missing KEY, never a missing VALUE.
+
+    ``"N/A"`` rather than the old display constant, and that is the point of the
+    fix rather than an aesthetic choice. 18.0 C shown for an unknown air
+    temperature is a number the reader cannot tell apart from a measurement,
+    which is the sentinel-collision shape this repo keeps paying for. Absent
+    data has to look absent.
+    """
+    if value is None:
+        return "N/A"
+    return f"{format(value, spec)}{unit}"
+
+
+def _weather_rows(weather: dict) -> list[tuple[str, str]]:
+    """The panel's five label/value pairs, as finished strings.
+
+    Split out of ``WeatherPanel.draw`` so the rendered TEXT can be asserted
+    without a GL context. The crash this closes lived in these five
+    expressions and nowhere else in the draw call, and a check that needed a
+    window to run is a check that does not run.
+
+    Every field degrades the same way, which is what was missing: ``_wind_dir``
+    already returned ``"N/A"`` on a missing direction while its five siblings
+    formatted whatever they were handed, so one field of six carried the fix.
+    """
+    speed = weather.get("wind_speed")
+    direction = weather.get("wind_direction")
+    # One row, two readings, so it collapses to a single "N/A" only when BOTH
+    # are missing. A known speed with an unknown bearing is a real state and
+    # keeps saying so.
+    if speed is None and direction is None:
+        wind = "N/A"
+    else:
+        wind = f"{_reading(speed, '.1f', ' km/h')} {_wind_dir(direction)}"
+
+    return [
+        ("Track", _reading(weather.get("track_temp"), ".1f", " C")),
+        ("Air", _reading(weather.get("air_temp"), ".1f", " C")),
+        ("Humidity", _reading(weather.get("humidity"), ".0f", "%")),
+        ("Wind", wind),
+        # A string, so it takes the `or` rather than ``_reading``, but it is
+        # nullable for the same reason as the five numbers: the loader stores
+        # ``None`` when the ``Rainfall`` sample is missing. It did not always.
+        # `bool(float("nan"))` is ``True``, so a dropped sample used to render
+        # "WET" on a dry race, and that is worse than the crash the other five
+        # fields took, because a wrong affirmative reading is silent.
+        ("Rain", f"{weather.get('rain_state') or 'N/A'}"),
+    ]
+
+
 class WeatherPanel:
     """Top-left weather readout: track/air temp, humidity, wind, rain.
 
@@ -143,17 +205,7 @@ class WeatherPanel:
     def draw(self, frame: dict | None, window_height: int) -> None:
         weather = (frame or {}).get("weather") or {}
         top_y = window_height - self.top_offset
-        rows: list[tuple[str, str]] = [
-            ("Track", f"{weather.get('track_temp', 45.0):.1f} C"),
-            ("Air", f"{weather.get('air_temp', 18.0):.1f} C"),
-            ("Humidity", f"{weather.get('humidity', 55.0):.0f}%"),
-            (
-                "Wind",
-                f"{weather.get('wind_speed', 0.0):.1f} km/h "
-                f"{_wind_dir(weather.get('wind_direction'))}",
-            ),
-            ("Rain", f"{weather.get('rain_state', 'DRY')}"),
-        ]
+        rows = _weather_rows(weather)
         panel_h = 26 + len(rows) * WEATHER_ROW_GAP + self.PANEL_PADDING
         self._draw_card(top_y, panel_h)
 
