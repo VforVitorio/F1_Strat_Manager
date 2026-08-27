@@ -103,8 +103,9 @@ def menu_content_extents(
     would move both its edges on every focus change, which reads worse than a
     band that is a little loose on the short rows.
 
-    The two extents are not equal. At 1280 the widest label is STRATEGY and the
-    widest value is the round's GP name, and those render at 83 and 131 pixels.
+    The two extents are not equal. At 1280 the widest label is STRATEGY, drawn a
+    step larger than its siblings, and the widest value is the round's GP name,
+    and those render at 107 and 120 pixels.
     """
     widest_label = max(label_widths) if label_widths else 0.0
     widest_value = max(value_widths) if value_widths else 0.0
@@ -244,6 +245,22 @@ def menu_bands(window_height: int, groups: Sequence[str]) -> MenuBands:
     )
 
 
+def scale_changed(previous: float | None, current: float) -> bool:
+    """Whether the menu's Text objects need their font sizes pushed again.
+
+    `previous` is `None` until something has actually been pushed, and it is
+    `None` rather than a float because 1.0 is BOTH what a freshly built view
+    would carry and a scale `menu_scale` genuinely returns at SCREEN_HEIGHT. A
+    view opened at the default size therefore skipped its own first push, so the
+    strategy row's emphasis never reached the glyphs and appeared only after a
+    resize away and back (#1109). That is the sentinel collision `CLAUDE.md`
+    section 11 names: a placeholder that is also a value the code can find.
+
+    Pure, so the collision is checkable without a window.
+    """
+    return previous is None or previous != current
+
+
 class MenuFormGeometry(NamedTuple):
     """Where the menu form sits, in offsets from the window's centre axis.
 
@@ -379,8 +396,9 @@ class MenuView(arcade.View):
         self._error: str = ""
         self._loading: bool = False
         self._focus_idx: int = 0
-        # Last scale pushed into the Text objects; see `_apply_scale`.
-        self._scale: float = 1.0
+        # Last scale pushed into the Text objects, or None while nothing has
+        # been. See `scale_changed` for why it cannot be a float.
+        self._scale: float | None = None
 
         self._fields: list[_FormField] = self._build_fields()
 
@@ -517,7 +535,7 @@ class MenuView(arcade.View):
         Text objects here, so the guard is what keeps a resize from costing that
         on every one of sixty frames a second.
         """
-        if scale == self._scale:
+        if not scale_changed(self._scale, scale):
             return
         self._scale = scale
         self._title.font_size = MENU_TITLE_FONT * scale
