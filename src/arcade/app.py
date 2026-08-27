@@ -36,11 +36,11 @@ from src.arcade.config import (
     FPS,
     LEADERBOARD_RIGHT_MARGIN,
     LEADERBOARD_WIDTH,
-    MARGIN_BOTTOM,
+    LEFT_PANEL_X,
     MARGIN_LEFT,
     MARGIN_RIGHT,
-    MARGIN_TOP,
     PLAYBACK_SPEEDS,
+    PLAYBACK_STATE_Y,
     SEEK_RATE_MULTIPLIER,
     STREAM_BROADCAST_EVERY_N_FRAMES,
     STREAM_HISTORY_TAIL,
@@ -63,7 +63,7 @@ from src.arcade.overlays import (
     WeatherPanel,
     track_status_label,
 )
-from src.arcade.track import Track
+from src.arcade.track import Track, track_viewport
 
 logger = logging.getLogger(__name__)
 
@@ -283,14 +283,7 @@ class F1ArcadeView(arcade.View):
             self._selected_drivers.add(driver_rival)
 
         w, h = window.width, window.height
-        self._track.update_scaling(
-            w,
-            h,
-            margin_left=MARGIN_LEFT,
-            margin_right=MARGIN_RIGHT,
-            margin_bottom=MARGIN_BOTTOM,
-            margin_top=MARGIN_TOP,
-        )
+        self._track.update_scaling(track_viewport(w, h))
 
         self._lap_label = arcade.Text(
             "LAP",
@@ -346,13 +339,24 @@ class F1ArcadeView(arcade.View):
         if driver_rival:
             followed.append((driver_rival, self._color_for(driver_rival)))
         self._driver_info = DriverInfoPanel(
-            x=20,
+            x=LEFT_PANEL_X,
             top_y=h - 200,
             width=DRIVER_BOX_WIDTH,
             height=DRIVER_BOX_HEIGHT,
             drivers=followed,
         )
 
+        self._playback_text = arcade.Text(
+            "",
+            0,
+            0,
+            TEXT_TERTIARY,
+            11,
+            bold=True,
+            font_name=FONT_BODY,
+            anchor_x="left",
+            anchor_y="center",
+        )
         self._progress_bar = ProgressBar(
             total_frames=session_data.total_frames,
             total_laps=session_data.max_lap_number,
@@ -981,14 +985,7 @@ class F1ArcadeView(arcade.View):
             self._selected_drivers = {code}
 
     def on_resize(self, width: float, height: float) -> None:
-        self._track.update_scaling(
-            int(width),
-            int(height),
-            margin_left=MARGIN_LEFT,
-            margin_right=MARGIN_RIGHT,
-            margin_bottom=MARGIN_BOTTOM,
-            margin_top=MARGIN_TOP,
-        )
+        self._track.update_scaling(track_viewport(int(width), int(height)))
         self._leaderboard.x = int(width) - LEADERBOARD_RIGHT_MARGIN
         self._leaderboard.set_top(int(height) - 20)
         # The race-events pill rides the leaderboard's right edge; on_draw
@@ -1107,8 +1104,16 @@ class F1ArcadeView(arcade.View):
         hh = int(t // 3600)
         mm = int((t % 3600) // 60)
         ss = int(t % 60)
-        paused = "  PAUSED" if self._is_paused else ""
-        self._time_text.text = f"{hh:02d}:{mm:02d}:{ss:02d}  x{self.playback_speed}{paused}"
+        self._time_text.text = f"{hh:02d}:{mm:02d}:{ss:02d}"
         self._lap_label.draw()
         self._lap_text.draw()
         self._time_text.draw()
+        # Playback state sits with the playback control rather than under the
+        # lap counter. The speed multiplier and PAUSED describe the replay, the
+        # lap and the clock describe the race, and the band above the progress
+        # bar was empty while these two rode in the top-left corner (#1103).
+        paused = "  PAUSED" if self._is_paused else ""
+        self._playback_text.text = f"x{self.playback_speed}{paused}"
+        self._playback_text.x = MARGIN_LEFT
+        self._playback_text.y = PLAYBACK_STATE_Y
+        self._playback_text.draw()
