@@ -39,18 +39,25 @@ from src.arcade.views import (
     menu_row_offsets,
     menu_scale,
     round_label,
+    scale_changed,
 )
 
-# (row, rendered label width, rendered value width), measured 2026-08-27 at
-# 1280x720 with the menu's default LaunchConfig, seven rows visible.
+# (row, rendered label width, rendered value width), read off a FRESH MenuView
+# at 1280x720 after one `on_draw`, with the default LaunchConfig and all seven
+# rows visible. Re-measured 2026-08-27 after two changes in the same sprint
+# invalidated the first pass: #1101 dropped the round value's `%2d` padding
+# (131 -> 120) and gave STRATEGY its emphasis step, which #1109 then made
+# actually reach the glyphs (83/36 -> 107/47). Taking these from a fresh view
+# rather than a resized one is deliberate: it is the state a user sees, and it
+# is the state the bug hid in.
 ROW_WIDTHS: list[tuple[str, float, float]] = [
-    ("Year", 43, 46),
-    ("Round", 62, 131),
-    ("Mode", 51, 99),
-    ("Driver", 61, 44),
-    ("Rival", 48, 33),
-    ("Team", 47, 81),
-    ("Strategy", 83, 36),
+    ("Year", 42.7, 46.0),
+    ("Round", 62.1, 120.3),
+    ("Mode", 50.7, 99.4),
+    ("Driver", 60.5, 44.0),
+    ("Rival", 47.6, 33.3),
+    ("Team", 47.5, 80.5),
+    ("Strategy", 107.1, 46.8),
 ]
 
 
@@ -75,8 +82,8 @@ def test_band_is_sized_to_the_content_and_not_to_a_constant() -> None:
     """The band may exceed the widest row by the padding and by nothing else.
 
     This is the assertion the old code fails. It drew a fixed 540 px rectangle
-    with a 460 px rule under a form whose content spans 254 px, so the excess
-    was 143 px on the right where the padding allows 24 (#1099).
+    with a 460 px rule under a form whose content spans 267 px, so the excess
+    was 130 px on the right where the padding allows 24 (#1099).
     """
     left, right = _extents_for(ROW_WIDTHS)
     widest_label = max(r[1] for r in ROW_WIDTHS)
@@ -448,3 +455,52 @@ def test_the_round_value_still_names_the_circuit() -> None:
 def test_an_unknown_round_says_so_rather_than_inventing_a_circuit() -> None:
     """Absent data has to look absent, per the weather panel's `N/A` (#1087)."""
     assert round_label(2025, 99).endswith("?")
+
+
+# --- The emphasis reaches the glyphs on the first frame (#1109) ------------
+
+
+def test_a_fresh_view_has_never_pushed_a_scale() -> None:
+    """`None`, not 1.0, is what "nothing applied yet" means.
+
+    A float cannot carry that state: `menu_scale(SCREEN_HEIGHT)` is exactly 1.0,
+    so a view built at the default size and initialised to 1.0 reads as though
+    its own first push had already happened. It had not, and the strategy row's
+    emphasis never reached the glyphs until the window was resized and back.
+    """
+    assert scale_changed(None, 1.0) is True
+    assert scale_changed(None, menu_scale(SCREEN_HEIGHT)) is True
+
+
+def test_a_repeated_scale_is_not_pushed_twice() -> None:
+    """The cache still has to earn its keep.
+
+    Assigning `font_size` re-lays out the glyph run and the view holds sixteen
+    Text objects, so this is what keeps a steady window off that cost sixty
+    times a second.
+    """
+    assert scale_changed(1.0, 1.0) is False
+    assert scale_changed(0.85, 0.85) is False
+
+
+@pytest.mark.parametrize("height", HEIGHTS)
+def test_every_reachable_scale_is_pushed_from_the_initial_state(height: int) -> None:
+    """No window size may reproduce the collision at some other value.
+
+    1.0 is the one that bit, because it is the default window's scale, but the
+    clamps make 0.85 and 2.0 reachable by dragging too. A `None` initial state
+    is the only one that cannot collide with any of them.
+    """
+    assert scale_changed(None, menu_scale(height)) is True
+
+
+def test_the_emphasised_row_is_the_widest_label_once_it_is_applied() -> None:
+    """What the bug looked like in the fixture, stated so it cannot come back.
+
+    STRATEGY is 83 px unemphasised and 107 emphasised. While the emphasis never
+    reached the glyphs, the widest label was STRATEGY at its plain size, and the
+    focus band was cut for text a third smaller than what a resized window drew.
+    """
+    widest = max(ROW_WIDTHS, key=lambda row: row[1])
+    assert widest[0] == "Strategy"
+    assert widest[1] > 100, "the fixture was taken before the emphasis reached the glyphs"
