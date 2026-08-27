@@ -11,7 +11,7 @@ rows, a bug that bit both the reference and earlier attempts here.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final
 
 import arcade
@@ -252,7 +252,7 @@ DRIVER_ROW_LABELS: Final[tuple[str, ...]] = (
 
 
 def driver_rows(
-    data: dict,
+    data: dict | None,
     ahead: str,
     behind: str,
 ) -> list[tuple[str, str, tuple[int, int, int]]]:
@@ -261,7 +261,16 @@ def driver_rows(
     Split out of the panel's draw call for the reason ``_weather_rows`` was
     (#1087): the rendered TEXT is then assertable without a GL context, and a
     check that needs a window is a check that does not run in CI.
+
+    ``data`` is ``None`` when the frame carries nothing for this driver, and the
+    row set comes back as six ``N/A`` cells in the tertiary colour rather than
+    as nothing. Two cards each guarded themselves, so an absent rival cost the
+    rival card alone; the merged table returned before drawing anything and took
+    the other driver's live telemetry with it (#1110). Absent data has to look
+    absent, which is the same rule the weather panel's readings follow.
     """
+    if data is None:
+        return [(label, "N/A", TEXT_TERTIARY) for label in DRIVER_ROW_LABELS]
     tyre = int(data.get("tyre", 1))
     drs = data.get("drs", 0)
     return [
@@ -320,6 +329,23 @@ def driver_column_edges(
     inner = width - 2 * pad_x
     column = (inner - label_min) / column_count
     return tuple(pad_x + label_min + column * (i + 1) for i in range(column_count))
+
+
+def present_drivers(
+    codes: Sequence[str],
+    drivers_in_frame: Mapping[str, dict] | None,
+) -> tuple[str, ...]:
+    """Which of the followed drivers this frame actually carries.
+
+    Pure, so the panel's one all-or-nothing decision is checkable without a GL
+    context. It is the decision that regressed: two cards each guarded
+    themselves and an absent rival cost the rival card, while the merged table
+    returned before drawing anything and took the other driver's live telemetry
+    with it (#1110). The card goes only when this comes back empty.
+    """
+    if not drivers_in_frame:
+        return ()
+    return tuple(code for code in codes if drivers_in_frame.get(code))
 
 
 class DriverInfoPanel:
@@ -422,11 +448,13 @@ class DriverInfoPanel:
         drivers_in_frame = frame.get("drivers") or {}
         per_driver: list[list[tuple[str, str, tuple[int, int, int]]]] = []
         for code in self.codes:
-            data = drivers_in_frame.get(code)
-            if not data:
-                return
+            data = drivers_in_frame.get(code) or None
             ahead, behind = self._neighbor_gaps(code, all_drivers_sorted, gaps, frame, frame_idx)
             per_driver.append(driver_rows(data, ahead, behind))
+        # The card goes only when NOT ONE followed driver is in the frame, which
+        # is what the two separate cards did between them (#1110).
+        if not present_drivers(self.codes, drivers_in_frame):
+            return
 
         self._draw_card()
         self._draw_header()

@@ -27,12 +27,14 @@ from src.arcade.config import (
     DRIVER_PAD_X,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    TEXT_TERTIARY,
 )
 from src.arcade.overlays import (
     DRIVER_ROW_LABELS,
     driver_column_edges,
     driver_rows,
     driver_table,
+    present_drivers,
 )
 
 # Rendered widths of the label and the widest value each row produced, measured
@@ -203,3 +205,81 @@ def test_a_third_column_would_not_fit_and_the_test_says_so() -> None:
     assert column < WORST_CASE_VALUE, (
         "three columns now fit, so this bound is stale rather than the panel wrong"
     )
+
+
+# --- One absent driver costs his column, not the table (#1110) -------------
+
+
+def test_an_absent_driver_produces_six_absences_rather_than_nothing() -> None:
+    """Absent data has to look absent, the rule `_weather_rows` follows (#1087).
+
+    A column that simply vanished would change the table's width frame to frame
+    while a driver dropped in and out of the feed.
+    """
+    rows = driver_rows(None, "N/A", "N/A")
+    assert [label for label, _, _ in rows] == list(DRIVER_ROW_LABELS)
+    assert {value for _, value, _ in rows} == {"N/A"}
+
+
+def test_an_absent_column_is_dimmer_than_a_real_reading() -> None:
+    """Colour is what separates a missing value from a measured one at a glance.
+
+    `TEXT_PRIMARY` on an absent cell would read as data, which is the
+    sentinel-shaped failure this repo keeps paying for: an unknown that cannot
+    be told apart from a real value.
+    """
+    absent = {colour for _, _, colour in driver_rows(None, "N/A", "N/A")}
+    assert absent == {TEXT_TERTIARY}
+    assert TEXT_TERTIARY != TEXT_PRIMARY
+
+
+def test_the_present_driver_keeps_his_telemetry_when_the_other_is_missing() -> None:
+    """The regression, stated as the assertion that catches it.
+
+    Two cards each guarded themselves, so an absent rival cost the rival card
+    alone. The merged table returned from `draw` on the first driver without
+    frame data, before the card was drawn at all, and took the other driver's
+    live telemetry with it (#1110).
+    """
+    present = driver_rows(_frame(speed=232, gear=6), "VER +2.36s (L)", "PIA -1.80s (L)")
+    table = driver_table([present, driver_rows(None, "N/A", "N/A")])
+
+    assert len(table) == len(DRIVER_ROW_LABELS)
+    assert all(len(cells) == 2 for _, cells in table)
+    by_label = {label: [value for value, _ in cells] for label, cells in table}
+    assert by_label["Speed"] == ["232 km/h", "N/A"]
+    assert by_label["Ahead"] == ["VER +2.36s (L)", "N/A"]
+
+
+def test_a_table_of_nobody_is_all_absences() -> None:
+    """What the panel checks before deciding not to draw its card at all.
+
+    Every followed driver missing is the one case where the whole card goes,
+    which is what the two separate cards did between them.
+    """
+    table = driver_table([driver_rows(None, "N/A", "N/A")] * 2)
+    values = {value for _, cells in table for value, _ in cells}
+    assert values == {"N/A"}
+
+
+@pytest.mark.parametrize(
+    ("frame_drivers", "expected"),
+    [
+        ({"NOR": {"speed": 1}, "VER": {"speed": 2}}, ("NOR", "VER")),
+        ({"NOR": {"speed": 1}}, ("NOR",)),
+        ({"VER": {"speed": 2}}, ("VER",)),
+        ({}, ()),
+        (None, ()),
+        ({"NOR": {}}, ()),
+    ],
+)
+def test_presence_is_read_per_driver_not_all_or_nothing(
+    frame_drivers: dict | None, expected: tuple[str, ...]
+) -> None:
+    """The panel draws its card whenever ANY followed driver is in the frame.
+
+    The last case matters on its own: an empty dict for a driver is not a
+    driver, and the old code's `if not data` treated it the same way. Whatever
+    the frame says, one missing driver must not remove the other.
+    """
+    assert present_drivers(("NOR", "VER"), frame_drivers) == expected
