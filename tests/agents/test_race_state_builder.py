@@ -24,8 +24,8 @@ import pytest
 from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
 from src.agents.position_projection import GAP_UNKNOWN_FALLBACK_S
 from src.agents.race_state_builder import (
-    DEFAULT_AIR_TEMP_C,
-    DEFAULT_TRACK_TEMP_C,
+    RACE_STATE_DEFAULT_AIR_TEMP_C,
+    RACE_STATE_DEFAULT_TRACK_TEMP_C,
     UNKNOWN_COMPOUND,
     UNKNOWN_TYRE_LIFE,
     build_race_state,
@@ -140,8 +140,8 @@ def test_canonical_defaults_fire_when_keys_are_absent(caplog):
     assert rs.total_laps == DEFAULT_TOTAL_LAPS
     assert rs.compound == UNKNOWN_COMPOUND
     assert rs.tyre_life == UNKNOWN_TYRE_LIFE
-    assert rs.air_temp == DEFAULT_AIR_TEMP_C
-    assert rs.track_temp == DEFAULT_TRACK_TEMP_C
+    assert rs.air_temp == RACE_STATE_DEFAULT_AIR_TEMP_C
+    assert rs.track_temp == RACE_STATE_DEFAULT_TRACK_TEMP_C
     assert rs.rainfall is False
     assert rs.radio_msgs == []
     assert rs.rcm_events == []
@@ -188,8 +188,8 @@ def test_present_but_none_weather_lands_on_defaults_without_crashing():
     """
     state = _lap_state(weather={"air_temp": None, "track_temp": None, "rainfall": None})
     rs = build_race_state(state)
-    assert rs.air_temp == DEFAULT_AIR_TEMP_C
-    assert rs.track_temp == DEFAULT_TRACK_TEMP_C
+    assert rs.air_temp == RACE_STATE_DEFAULT_AIR_TEMP_C
+    assert rs.track_temp == RACE_STATE_DEFAULT_TRACK_TEMP_C
     assert rs.rainfall is False
 
 

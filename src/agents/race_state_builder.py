@@ -14,7 +14,8 @@ data. All 71 race directories carry a readable weather.parquet with zero NaN
 AirTemp/TrackTemp rows, so the keys are always present and always non-None, and
 40.0-vs-35.0 never actually reached a model there. The value below is chosen on
 the measured-median argument alone, not on a live-divergence one. What IS live is
-the present-but-None case this builder now handles: see DEFAULT_TRACK_TEMP_C.
+the present-but-None case this builder now handles: see
+RACE_STATE_DEFAULT_TRACK_TEMP_C.
 
 The drift that actually bit this codebase was LOGIC drift, not just
 literals: the #750 pace-delta axis, the #465 dead position default, the #633 gap
@@ -80,10 +81,24 @@ _MISSING_COMPOUND_MARKERS = frozenset({"", "nan", "none"})
 # also legitimately find.
 UNKNOWN_TYRE_LIFE = 0
 
-# Dataset medians (2023+2024 weather columns; the 2025 featured parquet carries
-# none): air median 24.1 C, track median exactly 35.0 C. The CLI's old 40.0 track
-# default corresponded to nothing measured, which is the whole reason to pick a
-# canonical value here.
+# **A SECOND pair, deliberately not `_shared_defaults`'s, and the prefix is the
+# whole point.** `_shared_defaults` carries 24.6 / 34.7 under the unprefixed
+# names and the sub-agents read those. This pair held 25.0 / 35.0 under the SAME
+# two names, which is how the divergence survived #789's consolidation: a
+# duplicate with a different name is visible at a glance, a duplicate with the
+# same name reads as the import three lines up (#1088). Renaming moves no served
+# number. Unifying them would, because whichever value wins reaches a prompt, so
+# that is a measurement with its own before and after and is tracked separately.
+#
+# These are #784's F10 decision values, chosen on 2026-08-02 against the dataset
+# as it stood then, when the medians read 24.1 / 35.0 and the 2025 featured
+# parquet carried no weather columns. Neither of those is true today: the 2025
+# parquet carries them natively, and after the 2023 Spanish GP duplicate was
+# removed the medians read 24.7 / 35.5 over 2023+2024 and 24.6 / 34.7 over
+# 2023-2025. Do NOT read the pair below as a present-tense measurement; the
+# per-field record is in documents/audits/DESIGN_race_state_single_contract.md
+# (F10). What the choice was made AGAINST still stands: the CLI's old 40.0 track
+# default corresponded to nothing measured at all.
 #
 # Where these actually fire, measured rather than assumed: NOT on the replay path
 # (all 71 race dirs ship a readable weather.parquet with zero NaN temperature
@@ -92,8 +107,8 @@ UNKNOWN_TYRE_LIFE = 0
 # at all and the producer honours that as an explicit None per key. That case
 # used to reach `float(None)` and raise TypeError; treating present-but-None as
 # missing is what makes these constants load-bearing.
-DEFAULT_AIR_TEMP_C = 25.0
-DEFAULT_TRACK_TEMP_C = 35.0
+RACE_STATE_DEFAULT_AIR_TEMP_C = 25.0
+RACE_STATE_DEFAULT_TRACK_TEMP_C = 35.0
 
 
 def _targeting_against_rival(
@@ -364,8 +379,8 @@ def build_race_state(
         tyre_life=tyre_life if tyre_life is not None else UNKNOWN_TYRE_LIFE,
         gap_ahead_s=float(gap_ahead_s) if gap_ahead_s is not None else None,
         pace_delta_s=float(pace_delta_s),
-        air_temp=_weather_reading(weather, "air_temp", DEFAULT_AIR_TEMP_C),
-        track_temp=_weather_reading(weather, "track_temp", DEFAULT_TRACK_TEMP_C),
+        air_temp=_weather_reading(weather, "air_temp", RACE_STATE_DEFAULT_AIR_TEMP_C),
+        track_temp=_weather_reading(weather, "track_temp", RACE_STATE_DEFAULT_TRACK_TEMP_C),
         rainfall=bool(weather.get("rainfall", False)),
         radio_msgs=radio_msgs if radio_msgs is not None else [],
         rcm_events=rcm_events if rcm_events is not None else [],

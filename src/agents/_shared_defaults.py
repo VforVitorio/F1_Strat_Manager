@@ -43,10 +43,15 @@ def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> f
     identical reads in ``tire_agent`` and ``race_situation_agent`` had not. Hence one
     named function rather than a fourth inline copy.
 
-    ``default`` stays a per-caller argument on purpose: the agents disagree on the
-    fallback temperatures (pace uses 25/35, tire and race_situation use 28/38) and
-    reconciling those numbers is a modelling decision tracked in #789, not something to
-    smuggle in behind a crash fix.
+    ``default`` stayed a per-caller argument because the agents disagreed on the
+    fallback temperatures when this was written (pace 25/35, tire and race_situation
+    28/38), and reconciling those numbers was a modelling decision rather than something
+    to smuggle in behind a crash fix. #789 then reconciled them, so every TEMPERATURE call
+    site now passes the two constants below. The parameter stays because the signature is
+    the general one and because the other quantities never went through that
+    consolidation: humidity is 50.0 at every caller, and rainfall is ``0`` at
+    ``pace_agent.py:974`` and ``0.0`` at ``tire_agent.py:1647``. Those two are
+    per-caller numbers still, not evidence that the temperature disagreement survives.
     """
     value = source.get(key)
     if value is None:

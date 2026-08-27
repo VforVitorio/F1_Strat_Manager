@@ -1614,7 +1614,11 @@ class RaceSituationAgent:
             "circuit_sc_rate": self.cfg.sc_rate_for(event_name),
             "total_laps": int(session.total_laps),
             "fastest_lap_s": _clean["LapTime"].min().total_seconds(),
-            "AirTemp": float(_wx["AirTemp"].mean()) if "AirTemp" in _wx else 28.0,
+            # The last bare temperature literal #789 left behind, two lines from
+            # siblings it did migrate. It was invisible to that sprint's guard,
+            # which matches a literal in the DEFAULT POSITION of a call and
+            # cannot see a ternary `else`.
+            "AirTemp": float(_wx["AirTemp"].mean()) if "AirTemp" in _wx else DEFAULT_AIR_TEMP_C,
             "TrackTemp": float(_wx["TrackTemp"].mean())
             if "TrackTemp" in _wx
             else DEFAULT_TRACK_TEMP_C,
