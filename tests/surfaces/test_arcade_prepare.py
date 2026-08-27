@@ -23,24 +23,33 @@ from src.arcade.prepare import (
     STAGE_TEAM_RADIO,
     STAGE_TELEMETRY,
     PrepareProgress,
+    RaceDataUnavailable,
     prepare_race,
     race_stages,
 )
 
 
 class _Recorder:
-    """Stands in for the three slow calls and records the order they came in."""
+    """Stands in for the three slow calls and records the order they came in.
 
-    def __init__(self) -> None:
+    `ensure_race` returns a real populated directory because `prepare_race`
+    inspects it: `snapshot_download` on a pattern that matches nothing returns
+    an empty one quietly, and refusing that is the point of the check.
+    """
+
+    def __init__(self, tmp_path) -> None:
         self.calls: list[tuple[str, tuple]] = []
+        self.race_dir = tmp_path / "raw"
+        self.race_dir.mkdir(parents=True, exist_ok=True)
+        (self.race_dir / "laps.parquet").write_bytes(b"x")
 
     def ensure_race(self, year, gp_name, show_progress=True):
         self.calls.append(("ensure_race", (year, gp_name, show_progress)))
-        return f"raw/{year}/{gp_name}"
+        return self.race_dir
 
     def ensure_radio_corpus(self, year, gp_name, show_progress=True):
         self.calls.append(("ensure_radio_corpus", (year, gp_name, show_progress)))
-        return f"audio/{year}/{gp_name}"
+        return self.race_dir
 
     def loader(self):
         recorder = self
@@ -64,9 +73,9 @@ class _Session:
 
 
 @pytest.fixture
-def recorder(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
+def recorder(monkeypatch: pytest.MonkeyPatch, tmp_path) -> _Recorder:
     """Patch the three slow calls at the module `prepare_race` imports them from."""
-    rec = _Recorder()
+    rec = _Recorder(tmp_path)
     import src.arcade.data as arcade_data
     import src.f1_strat_manager.data_cache as data_cache
 
@@ -162,10 +171,38 @@ def test_no_progress_callback_is_a_supported_caller(recorder: _Recorder) -> None
     assert session is not None
 
 
-def test_the_label_names_the_stage_and_its_place(recorder: _Recorder) -> None:
+def test_the_label_names_the_stage_and_its_place() -> None:
     """What the menu renders, so it is asserted rather than eyeballed."""
-    progress = PrepareProgress(stage=STAGE_TELEMETRY, index=3, total=3, elapsed_s=12.0)
+    progress = PrepareProgress(stage=STAGE_TELEMETRY, index=3, total=3, started_at=0.0)
     assert progress.label == "Building telemetry  (3/3)"
+
+
+def test_the_elapsed_seconds_climb_rather_than_sitting_at_zero() -> None:
+    """Each stage reports ONCE, at its start, so a stored elapsed is always 0.
+
+    The telemetry build is 349 s on a cold race. A readout frozen at "0s" for
+    six minutes says exactly what a hung window says, which is the opposite of
+    what putting this on a worker was for (#1116).
+    """
+    progress = PrepareProgress(stage=STAGE_TELEMETRY, index=3, total=3, started_at=100.0)
+    assert progress.elapsed_s(100.0) == 0.0
+    assert progress.elapsed_s(142.0) == 42.0
+    assert progress.elapsed_s(99.0) == 0.0, "a clock that went backwards is not negative time"
+
+
+def test_the_bar_shows_work_finished_not_work_started() -> None:
+    """`index / total` reads 100% the moment the LAST stage begins.
+
+    That last stage is the long one, so the bar would sit full for the entire
+    wait it exists to describe.
+    """
+    total = 3
+    fractions = [
+        PrepareProgress(stage="s", index=i, total=total, started_at=0.0).done_fraction
+        for i in range(1, total + 1)
+    ]
+    assert fractions == [0.0, pytest.approx(1 / 3), pytest.approx(2 / 3)]
+    assert max(fractions) < 1.0
 
 
 def test_prepare_touches_no_gl_object() -> None:
@@ -179,3 +216,29 @@ def test_prepare_touches_no_gl_object() -> None:
         text = handle.read()
     assert "import arcade" not in text
     assert "arcade.Text" not in text
+
+
+def test_a_race_the_dataset_does_not_hold_refuses_instead_of_degrading(
+    recorder: _Recorder,
+) -> None:
+    """An empty fetch has to stop the launch, not feed an empty agents window.
+
+    `snapshot_download` on a glob that matches nothing returns without raising,
+    which is how "Mexico City" fetched zero files and looked exactly like a race
+    that worked, right up until the AGENTS window sat empty (#1116).
+    """
+    for item in recorder.race_dir.iterdir():
+        item.unlink()
+
+    with pytest.raises(RaceDataUnavailable, match="Lusail"):
+        prepare_race(2025, 23, "Lusail", strategy_enabled=True)
+
+
+def test_the_refusal_happens_before_the_long_build(recorder: _Recorder) -> None:
+    """Six minutes of telemetry for a race with no data is six minutes wasted."""
+    for item in recorder.race_dir.iterdir():
+        item.unlink()
+
+    with pytest.raises(RaceDataUnavailable):
+        prepare_race(2025, 23, "Lusail", strategy_enabled=True)
+    assert "load" not in recorder.names

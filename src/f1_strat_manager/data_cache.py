@@ -441,6 +441,32 @@ def ensure_setup(
     console.print(f"[{COL_OK}][OK] Setup complete. Cached under {local_dir}[/{COL_OK}]")
 
 
+# Races the dataset stores under a name the calendar does not use. Keyed by
+# season because the same race is not named the same way in every one: Miami is
+# `Miami` in 2023 and 2024 and `Miami_Gardens` in 2025, after the circuit's
+# location rather than the city. Everything else is the label with its spaces
+# turned into underscores, measured against the repository listing: with this
+# table, 70 of the 70 rounds the menu offers across 2023-2025 resolve.
+_RACE_FOLDER_ALIASES: dict[tuple[int, str], str] = {
+    (2025, "Miami"): "Miami_Gardens",
+}
+
+
+def race_folder(year: int, gp_name: str) -> str:
+    """The dataset folder holding this GP, from the name the menu shows.
+
+    `ensure_race` used to glob the label verbatim. `snapshot_download` on a
+    pattern that matches nothing returns quietly, so picking "Mexico City"
+    fetched zero files, raised nothing, and left the strategy layer degrading
+    against an empty directory: the same defect the lazy fetch was added to
+    close, surviving it for six of the 2025 rounds (#1116).
+    """
+    alias = _RACE_FOLDER_ALIASES.get((year, gp_name))
+    if alias is not None:
+        return alias
+    return gp_name.replace(" ", "_")
+
+
 def ensure_race(year: int, gp_name: str, show_progress: bool = True) -> Path:
     """Download a single race folder when it is missing and return its path.
 
@@ -452,7 +478,8 @@ def ensure_race(year: int, gp_name: str, show_progress: bool = True) -> Path:
     (possibly empty) path and can decide whether to raise.
     """
     data_root = get_data_root()
-    race_dir = data_root / "raw" / str(year) / gp_name
+    folder = race_folder(year, gp_name)
+    race_dir = data_root / "raw" / str(year) / folder
 
     if race_dir.exists() and any(race_dir.iterdir()):
         return race_dir
@@ -460,7 +487,7 @@ def ensure_race(year: int, gp_name: str, show_progress: bool = True) -> Path:
     if os.environ.get("F1_STRAT_OFFLINE") == "1":
         return race_dir
 
-    patterns = [f"data/raw/{year}/{gp_name}/**"]
+    patterns = [f"data/raw/{year}/{folder}/**"]
     _snapshot_download(patterns, show_progress=show_progress)
     return race_dir
 
@@ -563,6 +590,7 @@ __all__ = [
     "is_first_run",
     "ensure_setup",
     "ensure_race",
+    "race_folder",
     "ensure_radio_corpus",
     "ensure_models",
 ]

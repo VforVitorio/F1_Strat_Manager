@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Callable, Final, NamedTuple
@@ -314,6 +315,30 @@ def menu_form_geometry(
     )
 
 
+def last_round(year: int) -> int:
+    """Final round of that season, from the calendar rather than a constant.
+
+    The stepper was clamped to 23, so 2025 could not reach round 24, Yas Island,
+    which is a real published race the menu simply would not offer; and 2023,
+    which ran 22, stepped into a round with no name at all (#1116).
+    """
+    rounds = get_gp_names(year)
+    return max(rounds) if rounds else 1
+
+
+def _step_year(cfg: LaunchConfig, delta: int) -> None:
+    """Move a season, keeping the round inside the calendar it lands in.
+
+    Strategy mode pins the year, because the agents are only trained and
+    validated for it. Seasons run different lengths, so a round that exists in
+    one may not exist in the next.
+    """
+    if cfg.strategy_mode:
+        return
+    cfg.year = max(2023, min(2025, cfg.year + delta))
+    cfg.round_ = min(cfg.round_, last_round(cfg.year))
+
+
 def build_menu_fields(toggle_strategy: Callable[[], None]) -> list[_FormField]:
     """The seven rows the menu draws, in draw order.
 
@@ -330,12 +355,8 @@ def build_menu_fields(toggle_strategy: Callable[[], None]) -> list[_FormField]:
             kind="int",
             group="race",
             get_value=lambda c: str(c.year),
-            step_left=lambda c: (
-                setattr(c, "year", max(2023, c.year - 1)) if not c.strategy_mode else None
-            ),
-            step_right=lambda c: (
-                setattr(c, "year", min(2025, c.year + 1)) if not c.strategy_mode else None
-            ),
+            step_left=lambda c: _step_year(c, -1),
+            step_right=lambda c: _step_year(c, +1),
         ),
         _FormField(
             key="round",
@@ -344,7 +365,7 @@ def build_menu_fields(toggle_strategy: Callable[[], None]) -> list[_FormField]:
             group="race",
             get_value=lambda c: round_label(c.year, c.round_),
             step_left=lambda c: setattr(c, "round_", max(1, c.round_ - 1)),
-            step_right=lambda c: setattr(c, "round_", min(23, c.round_ + 1)),
+            step_right=lambda c: setattr(c, "round_", min(last_round(c.year), c.round_ + 1)),
         ),
         _FormField(
             key="mode",
@@ -557,7 +578,9 @@ class MenuView(arcade.View):
         if progress is None:
             self._loading_text.text = "Preparing race..."
         else:
-            self._loading_text.text = f"{progress.label}   {progress.elapsed_s:.0f}s"
+            self._loading_text.text = (
+                f"{progress.label}   {progress.elapsed_s(time.monotonic()):.0f}s"
+            )
         self._loading_text.x = w / 2
         self._loading_text.y = bands.status_y
         self._loading_text.draw()
@@ -569,7 +592,7 @@ class MenuView(arcade.View):
         bar_y = bands.status_y - MENU_ROW_HEIGHT * bands.scale * 0.55
         height = max(3.0, 4.0 * bands.scale)
         arcade.draw_rect_filled(arcade.XYWH(w / 2, bar_y, half * 2, height), (*CONTENT_BG, 220))
-        done = progress.index / progress.total
+        done = progress.done_fraction
         arcade.draw_rect_filled(
             arcade.XYWH(
                 w / 2 - half + half * done,
