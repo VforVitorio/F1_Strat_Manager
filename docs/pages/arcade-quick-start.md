@@ -87,10 +87,17 @@ Hotkeys handled by `F1ArcadeView.on_key_press`:
 | `D` | show / hide the DRS zones on the track |
 | `B` | show / hide the progress bar |
 | `A` | show / hide the eighteen non-featured cars |
+| `C` | show / hide the controls list itself |
 | `Escape` | close the window |
 
 `Escape` quits rather than returning to the menu, and it does so whether or not
 `--viewer` was used at launch.
+
+The controls list collapses to a single `C  Controls` line when the column above
+it has no room, which at the default 1280x720 is any session with a rival: the
+list needs 154 px and the two driver cards leave 146. It used to draw over the
+second card instead. `C` opens it anyway where it does not fit, on the grounds
+that a list you asked for is one you can dismiss with the same key.
 
 ## Known limitations
 
