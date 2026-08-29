@@ -101,7 +101,7 @@
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
-  color: var(--purple-300);
+  color: var(--accent-text);
   background: rgba(108,92,231,0.12);
   border: 1px solid rgba(108,92,231,0.22);
   padding: 2px 9px;
@@ -130,13 +130,13 @@
 }
 .rl-badge.planned-badge {
   background: rgba(108,92,231,0.14);
-  color: var(--purple-300);
+  color: var(--accent-text);
   border: 1px solid rgba(108,92,231,0.28);
 }
 .rl-badge.side-badge {
-  background: rgba(255,255,255,0.05);
+  background: var(--tint-2);
   color: var(--fg-3);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--tint-4);
 }
 
 /* Title + summary */

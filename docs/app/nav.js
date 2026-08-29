@@ -216,9 +216,15 @@ window.PAGES = [
   },
 ];
 
-// Tag colour map (used as a soft white-ish neutral with subtle hue hints).
-// Keep neutral so they read as secondary nodes in the graph.
-window.TAG_COLOR = "#cfc6e6";
+// Tag node colour: a soft neutral, so tags read as secondary nodes in the graph.
+//
+// Per theme, because a near-white neutral is invisible on a light canvas. A function rather than
+// a constant so callers get the current value; the graph asks for it once per frame.
+window.TAG_COLORS = { dark: "#cfc6e6", light: "#5b5470" };
+window.tagColor = function () {
+  return window.TAG_COLORS[document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"];
+};
+
 window.TAG_LABELS = {
   agents: "agents",
   langgraph: "langgraph",
