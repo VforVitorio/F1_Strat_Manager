@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
+from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE
 from src.agents._shared_defaults import (
     DEFAULT_AIR_TEMP_C,
     DEFAULT_TRACK_TEMP_C,
@@ -241,6 +242,38 @@ class PaceOutput:
 # ─────────────────────────────────────────────────────────────────────────────
 # PaceAgent class
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def _unknown_if_missing(tyre_life) -> int:
+    """A tyre age, with an absent one encoded as the shared unknown.
+
+    `or` cannot be used for this and that is the whole point: it is false for 0,
+    which is the value `race_state_builder` publishes when it does not know the
+    age, so `d.get("tyre_life") or 1` rewrote every unknown as a one-lap-old set.
+    A missing key and a stored None both mean the same thing and both land on the
+    same constant, which is what keeps this reader and the builder from drifting.
+    """
+    return UNKNOWN_TYRE_LIFE if tyre_life is None else int(tyre_life)
+
+
+def _laps_since_pit(driver_state: dict) -> int:
+    """Laps since the last stop, falling back to the tyre age under N01's rule.
+
+    Written as branches rather than as an `or` chain, and the chain is why: it
+    ended in `or 1`, so an unknown age fell straight through to a one-lap-old
+    stint. That is the same fabrication `_unknown_if_missing` exists to stop, one
+    keyword argument further down, and the first version of this fix kept it.
+
+    The fallback to the age is N01's own definition on an unpitted stint, so it is
+    a lookup rather than an approximation (#800). When neither is known the answer
+    is the shared unknown: N06 predicts identically at 0, 1 and 2 on a real row
+    (86.712000 against 86.654000 at 12), so nothing served moves, and the value
+    that does not collide is the one to publish.
+    """
+    laps = driver_state.get("laps_since_pit")
+    if laps is not None:
+        return int(laps)
+    return _unknown_if_missing(driver_state.get("tyre_life"))
 
 
 def _previous_tyre_life(tyre_life: Optional[int]) -> Optional[int]:
@@ -992,7 +1025,22 @@ class PaceAgent:
             fresh_tyre=d.get("fresh_tyre"),
             lap_number=lap_number,
             stint=d.get("stint") or 1,
-            tyre_life=d.get("tyre_life") or 1,
+            # `.get`, not `or 1`. The state manager already publishes
+            # UNKNOWN_TYRE_LIFE for an age it does not have
+            # (`race_state_builder.py:379`), and `or` is false for 0, so the `or 1`
+            # here turned that unknown back into a fresh set one hop after it was
+            # chosen - undoing the sentinel at the only consumer that matters.
+            # Same shape as the `position` fix three lines below, which this file
+            # already carries the reasoning for (#628), and the same defect #832
+            # removed from N15's own reader.
+            #
+            # Measured on the shipped N06 booster: tyre_life 0, 1 and 2 predict
+            # 86.712000 identically on a real Lusail row (12 predicts 86.654000),
+            # so passing the unknown through changes no served number today. What
+            # it changes is `_previous_tyre_life`, which returns None at <= 1 and
+            # so sends Prev_TyreLife to the model as NaN rather than as a
+            # fabricated age.
+            tyre_life=_unknown_if_missing(d.get("tyre_life")),
             compound=d.get("compound") or "MEDIUM",
             # Plain .get, no `or` fallback: `d.get('position') or 1` collapsed a
             # missing telemetry reading AND the #428 sentinel (a stored `0`)
@@ -1015,7 +1063,7 @@ class PaceAgent:
             # (#800). `or` rather than the two-arg get: a producer that has not been
             # updated reports the key absent, and lap 1 of an unpitted race is 1
             # under N01's rule anyway.
-            laps_since_pit=d.get("laps_since_pit") or d.get("tyre_life") or 1,
+            laps_since_pit=_laps_since_pit(d),
             fuel_load=laps_remaining / max(total_laps, 1),
             year=meta.get("year") or 2025,
             # ``d.get('prev_lap_time') or 90.0``, NOT ``d.get('lap_time_s')``: the

@@ -20,6 +20,8 @@ traps before a line was written:
 from __future__ import annotations
 
 import logging
+import threading
+import time
 
 from src.f1_strat_manager.data_cache import get_data_root
 from src.pitwall.agents_view import AgentsViewBuilder
@@ -135,6 +137,11 @@ class PitwallHost:
         # `_session_for`. It has no revision of its own: it rides in the bulk
         # payload because it is a function of the bulk's signature exactly.
         self._radio: RadioCorpus | None = None
+        # Serialises the swap in `_session_for`. Two windows poll this host on
+        # their own threads and the pre-warm below is a third, so without it the
+        # first bulk and the warm-up could load the same race twice.
+        self._session_lock = threading.Lock()
+        self._warm_thread: threading.Thread | None = None
         # The LIVE channel's state, masked by the clock rather than by
         # completed laps. `_live_view` is the last block SERVED, so the
         # revision moves exactly when the screen would change and not ten
@@ -144,7 +151,54 @@ class PitwallHost:
         self._live_view: dict[str, dict] = {}
 
     def start(self) -> None:
+        """Connect to the producer, then load this race off the request path.
+
+        The laps and the radio corpus used to load inside `_session_for` on the
+        first `get_bulk`, which is a call the window is blocked on while it
+        paints nothing: 1.1 s of a cold start spent where the user is watching
+        (#1004). Nothing about that work needs the request. It needs the race,
+        which arrives on the first tick.
+
+        So a daemon thread waits for that tick and loads the race itself. By the
+        time the window asks, `_session_for` finds its own cache warm and
+        returns. A window that asks first anyway is not wrong, only unlucky: the
+        lock makes the two paths take turns instead of both loading.
+        """
         self._client.start()
+        self._warm_thread = threading.Thread(
+            target=self._warm_session, name="pitwall-warm", daemon=True
+        )
+        self._warm_thread.start()
+
+    def _warm_session(self, timeout_s: float = 30.0, poll_s: float = 0.05) -> None:
+        """Load this race as soon as the producer names it, off the request path.
+
+        Gives up quietly after `timeout_s`. A producer that never publishes a
+        race is a real state (the arcade is still building its telemetry, or was
+        never started), and the windows already have a story for it; turning it
+        into an error here would replace a waiting screen with a broken one.
+
+        The race lives under the payload's `arcade` block, which is where
+        `get_bulk` and `get_live_lap` read it from (`app.py:658` puts it there).
+        Reading the top level instead finds nothing on a real producer, so the
+        thread would poll for the full timeout and warm nothing while every test
+        with a flattened fixture went on passing. That is what the first version
+        of this did.
+        """
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            payload = self._client.latest
+            arcade = (payload or {}).get("arcade") or {}
+            if arcade.get("location"):
+                started = time.monotonic()
+                self._session_for(arcade)
+                logger.info(
+                    "Pit-wall session pre-warmed in %.0f ms, off the first bulk",
+                    (time.monotonic() - started) * 1000,
+                )
+                return
+            time.sleep(poll_s)
+        logger.info("Pit-wall pre-warm gave up after %.0fs: the producer named no race", timeout_s)
 
     def get_tick(self, since_seq: int = -1) -> dict | None:
         """Return the latest payload if the caller has not seen it yet.
@@ -417,16 +471,21 @@ class PitwallHost:
         because the branch exists to be defensive and was not.
         """
         year, location = arcade.get("year"), arcade.get("location")
-        if not isinstance(year, int) or not isinstance(location, str):
-            self._session_key = None
-            self._session = None
-            self._radio = None
-            return None
-        if self._session_key != (year, location):
-            self._session_key = (year, location)
-            self._session = SessionLaps.load(get_data_root(), year, location)
-            self._radio = RadioCorpus.load(get_data_root(), year, location)
-        return self._session
+        # The whole body is under the lock, the clearing branch included. Leaving
+        # that one outside would let a malformed tick null the three fields while
+        # the pre-warm thread was mid-load, and the loader would then publish a
+        # race the clearing had just decided nobody should be served.
+        with self._session_lock:
+            if not isinstance(year, int) or not isinstance(location, str):
+                self._session_key = None
+                self._session = None
+                self._radio = None
+                return None
+            if self._session_key != (year, location):
+                self._session_key = (year, location)
+                self._session = SessionLaps.load(get_data_root(), year, location)
+                self._radio = RadioCorpus.load(get_data_root(), year, location)
+            return self._session
 
     def _masked_view(self, arcade: dict, reveal: dict[str, int]) -> dict:
         """Load the race once, then slice it; or say it is not on disk.

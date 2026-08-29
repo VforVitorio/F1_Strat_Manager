@@ -226,25 +226,47 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
   // **Re-fit once the webfont has actually arrived**, rather than reserving pixels
   // against the possibility. `document.fonts.ready` is the signal; the observer below
   // catches everything else that changes the card's box.
+  // **The observer is installed once and outlives every fit decision (#1083).**
+  //
+  // `fit` is a `useCallback` over the fit state, so its identity changes on each
+  // decision. An effect that depends on it therefore ran `observer.disconnect()`
+  // and built a new `ResizeObserver` every time the panel re-decided, and a
+  // resize landing inside that window had nothing watching it: the panel kept
+  // the previous height's answer until something else moved the card's box.
+  //
+  // That is what made the CI guard flaky rather than wrong. Two check-runs on
+  // one SHA four seconds apart, one green one red, `BESTS at h=593: room 69,
+  // floor card 113, rendered ranked 11` - eleven being the depth of the h=833
+  // client the sweep starts from, so the panel had not re-decided at all. It
+  // never reproduced locally, because a slower machine widens the gap.
+  //
+  // Holding the callback in a ref keeps the deps free of it. The observer calls
+  // whatever `fit` is at the moment it fires, which is the same behaviour the
+  // re-installation was reaching for, minus the window with no observer in it.
+  const fitRef = useRef(fit);
+  useEffect(() => {
+    fitRef.current = fit;
+  }, [fit]);
+
   useEffect(() => {
     let live = true;
     document.fonts?.ready.then(() => {
-      if (live) fit();
+      if (live) fitRef.current();
     });
     return () => {
       live = false;
     };
-  }, [fit]);
+  }, [card]);
 
   useEffect(() => {
     const column = card?.parentElement;
     if (!card || !column) return;
-    fit();
-    const observer = new ResizeObserver(fit);
+    fitRef.current();
+    const observer = new ResizeObserver(() => fitRef.current());
     observer.observe(column);
     observer.observe(card);
     return () => observer.disconnect();
-  }, [card, fit, content]);
+  }, [card, content]);
 
   return fitState;
 }

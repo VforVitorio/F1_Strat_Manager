@@ -111,7 +111,7 @@
 .rl-date {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--fg-4);
+  color: var(--fg-3);
   white-space: nowrap;
 }
 .rl-badge {
@@ -177,7 +177,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--fg-4);
+  color: var(--fg-3);
   margin: 36px 0 20px 44px;
 }
 

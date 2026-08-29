@@ -34,6 +34,7 @@ from src.arcade.config import (
     FASTF1_CACHE_DIR,
     POOL_SIZE,
 )
+from src.f1_strat_manager.tyre_stint_repair import repair_tyre_stints
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,54 @@ def _lap_fraction_from_distance(
         fraction[lo:hi] = np.clip((dist[lo:hi] - start) / length, 0.0, 1.0)
         previous_length = length
     return fraction
+
+
+def _repair_session_stints(session) -> None:
+    """Apply the shared tyre-stint repair to this session's laps, in place.
+
+    The replay used to read `TyreLife` straight off FastF1 while the two other
+    consumers of the same race repaired it first: `laps_augment` on the way into
+    the models, `session_data` on the way into PITWALL's timing tower. Both
+    surfaces launch from one `f1-arcade --strategy` and sit on screen together,
+    so a race with corrupted stint data showed two different ages for one tyre
+    and nothing said which to believe (#951). Two members of a trio had the fix
+    and the third did not, which is this repo's most frequent defect wearing a
+    cross-surface costume: each surface was self-consistent, so neither could
+    catch it alone.
+
+    Written back column by column rather than by replacing `session.laps`,
+    because the repair returns a plain DataFrame and the code below needs the
+    FastF1 `Laps` subclass: `pick_drivers` in the per-driver extraction and
+    `pick_fastest` for the reference lap are both methods on it. The repair
+    reindexes its result to the input's index, so the assignment aligns row for
+    row.
+
+    Silent on a healthy race, which is the repair's own contract rather than a
+    check here: a frame that needs nothing comes back unchanged with an empty
+    report.
+    """
+    laps = getattr(session, "laps", None)
+    if laps is None or laps.empty:
+        return
+
+    repaired, report = repair_tyre_stints(pd.DataFrame(laps))
+    if not report.changed_anything:
+        return
+
+    # The three columns the repair writes. Named rather than copying the whole
+    # frame, so this cannot quietly overwrite a column FastF1 owns; a column the
+    # repair starts touching later would simply not arrive, and the guard for
+    # that is the parity check against session_data, not this loop.
+    for column in ("TyreLife", "Stint", "Compound"):
+        if column in repaired.columns:
+            laps[column] = repaired[column]
+
+    logger.info(
+        "Arcade tyre-stint repair: %d driver(s) touched, %d lap(s) now carry an "
+        "unknown age, which is what PITWALL's tower shows for the same race",
+        len(report.drivers_touched),
+        report.unknown_after,
+    )
 
 
 def _enable_fastf1_cache() -> None:
@@ -528,6 +577,7 @@ class SessionLoader:
         logger.info("Loading FastF1 session: %d round %d", year, round_)
         session = fastf1.get_session(year, round_, "R")
         session.load(telemetry=True, weather=True, laps=True)
+        _repair_session_stints(session)
 
         # Read FastF1's authoritative Location (``Suzuka``, ``Melbourne``, …)
         # so the strategy pipeline can find the right per-race folder

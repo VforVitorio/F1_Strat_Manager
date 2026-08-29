@@ -340,6 +340,31 @@ def _snapshot_download(
     return local_dir
 
 
+def _resolve_repo() -> None:
+    """Ask the Hub for the dataset's metadata, and nothing else.
+
+    This is what the spinner in :func:`ensure_data` is actually waiting on: is
+    the Hub reachable, does the revision exist, do the credentials work. One
+    API call answers all three, and it answers them before any bytes are
+    fetched, which is the fail-fast the caller wants.
+
+    It replaces a full silent `snapshot_download` that was standing in for the
+    probe (#168). That call downloaded the whole 7-8 GB with progress bars
+    switched off, under a spinner reading "Resolving...", and only then did the
+    second call run with progress on, find every file present and return at
+    once. A first-time user watched a spinner for the entire download and then
+    a progress bar that completed instantly, and the Hub metadata sweep ran
+    twice.
+    """
+    from huggingface_hub import HfApi
+
+    HfApi().repo_info(
+        repo_id=HF_DATASET_REPO_ID,
+        repo_type="dataset",
+        revision=HF_DATASET_REVISION,
+    )
+
+
 def _render_header(console, data_root: Path) -> None:
     """Print the first-run banner using the same Rich palette as the CLI.
 
@@ -422,10 +447,7 @@ def ensure_setup(
             f"[{COL_DIM}]Resolving {HF_DATASET_REPO_ID} from HuggingFace Hub…[/{COL_DIM}]",
             spinner="dots",
         ):
-            local_dir = _snapshot_download(patterns, show_progress=False)
-        # A second call with progress=True streams the actual download; the
-        # first call warms the HTTP client and validates credentials so we
-        # fail fast if the Hub is unreachable.
+            _resolve_repo()
         local_dir = _snapshot_download(patterns, show_progress=show_progress)
     except Exception as exc:
         raise RuntimeError(
