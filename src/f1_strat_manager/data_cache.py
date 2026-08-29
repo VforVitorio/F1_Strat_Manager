@@ -148,6 +148,15 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     # (~80 MB); :func:`ensure_radio_corpus` downloads it lazily per GP
     # only when the simulation actually targets that race.
     "data/processed/race_radios/**",
+    # The two holdouts the calibration tier scores on. Neither is used at
+    # inference, so their absence is not a broken install, and that is exactly
+    # why they went unnoticed: `f1-eval calibration` degrades each missing one to
+    # a `pending` row rather than failing, so a regenerated report quietly shipped
+    # with three fewer measurements than the one it replaced. Found while closing
+    # #838, and the same shape as the undercut gap in #798 and the two import-time
+    # artefacts in #837: a consumer reads it, the pattern list does not ask for it.
+    "data/processed/overtake_labeled/**",
+    "data/processed/laps_tiredeg.parquet",
     # RAG index: optional, the Hub may not have it yet. snapshot_download
     # ignores missing patterns silently.
     "data/rag/**",

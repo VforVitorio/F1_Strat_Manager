@@ -24,6 +24,16 @@ from src.f1_strat_manager.data_cache import get_data_root
 from src.pitwall.host import PitwallHost
 from src.pitwall.session_data import SessionLaps, race_dir, unavailable
 
+# A location that is not a Grand Prix, so the "nothing on disk" branch is reached
+# by construction rather than by what happens to be installed. These three checks
+# used to name a real race the curated download left out, and they passed only on
+# a PARTIAL install: pulling the full `data/raw` tree gave that race its laps and
+# all three went red, having never once run in the state they were written for.
+# `RadioCorpus.load` and `SessionLaps.load` both answer None for an unknown GP
+# (they catch `resolve_gp_slug`'s ValueError) exactly as they do for a missing
+# directory, so the branch under test is the same one.
+NO_SUCH_RACE = "Not A Circuit"
+
 MELBOURNE = (2025, "Melbourne")
 
 
@@ -970,7 +980,7 @@ def test_pointing_the_arcade_at_a_race_with_no_laps_clears_the_sectors():
         pytest.skip("2025/Melbourne is not in this install's curated data set")
     assert melbourne["drivers"]["NOR"]["lap"] == 21
 
-    client.latest = tick_for("Shanghai", 20)
+    client.latest = tick_for(NO_SUCH_RACE, 20)
     switched = host.get_live_lap(melbourne["rev"])
 
     assert switched is not None, (

@@ -241,26 +241,45 @@ def test_only_decoration_uses_the_sub_aa_token() -> None:
 BESTS_PANEL = ROOT / "src" / "pitwall" / "ui" / "src" / "features" / "data" / "BestsPanel.tsx"
 
 
-def test_the_bests_observer_outlives_a_fit_decision() -> None:
-    """#1083: the observer was rebuilt on every decision, so a resize could land
-    with nothing watching and the panel kept the previous height's answer.
+def test_the_fit_callback_does_not_close_over_the_state_it_sets() -> None:
+    """#1083, and the regression the first attempt at it shipped.
 
-    Two check-runs on one SHA four seconds apart, one green one red, and it never
-    reproduced locally: `BESTS at h=593: room 69, floor card 113, rendered ranked
-    11`, eleven being the depth of the h=833 client the sweep starts from.
+    The observer was rebuilt on every decision because its effect depended on
+    `fit`, a `useCallback` over the fit state, so a resize landing in the gap was
+    unobserved. The first fix put `fit` behind a ref and dropped it from the deps.
+    That made it worse: `fitRef.current = fit` runs in a PASSIVE effect, and under
+    load a ResizeObserver callback is delivered before that effect runs, so the
+    observer called the previous render's closure. Its stale `if (fitState.ranked)`
+    branch re-latched the floor from the compact card at 60 px and `room 63 >= 60`
+    flipped the panel back to ranked in a slot whose real floor card is 115 px.
+    Measured: the signature fired on 24 of 24 throttled loads, and `smoke-data`
+    failed 7 of 9 unthrottled runs where the pre-fix bundle passed 3 of 3.
 
-    A text assertion on a dependency array, and it says so. The property IS the
-    array: React re-runs the effect when any entry changes identity, and `fit` is
-    a `useCallback` over the fit state, so listing it there is the defect. There
-    is no Python parser for TSX in this repo, and the alternative, counting
-    `ResizeObserver` constructions in a real browser, needs a populated bulk that
-    only `scripts/smoke-data.mjs` knows how to build.
+    Both defects have one cause, which is why one assertion covers both: `fit`
+    read the state it sets. It now reads the rendered rows from the DOM instead,
+    so it is identity-stable per card node, and the observer effect can depend on
+    it directly without ever being torn down by a decision.
+
+    Still a text assertion, and the reason is unchanged: there is no TSX parser
+    here. What changed is WHAT it pins. The previous version pinned
+    `fitRef.current()` verbatim, an implementation, and would have blocked this
+    repair; these pin the property, that no fit state appears in the callback's
+    dependencies and that no ref stands between the observer and the callback.
     """
     source = BESTS_PANEL.read_text(encoding="utf-8")
-    assert "const observer = new ResizeObserver(() => fitRef.current());" in source, (
-        "the observer no longer calls through the ref, so its effect depends on `fit` again"
+    code = "\n".join(
+        line for line in source.splitlines() if not line.strip().startswith(("//", "*"))
     )
-    assert "}, [card, content]);" in source, (
-        "the observer effect's dependency array changed; if `fit` is back in it, every "
-        "fit decision tears the observer down and reinstalls it"
+    assert "fitState" not in code.split("}, [card]);")[0].split("const fit = useCallback")[-1], (
+        "the fit callback reads fitState again, so it closes over its own output and a "
+        "stale copy can re-latch the floor from the compact card"
+    )
+    assert "fitRef" not in code, (
+        "a ref is back between the observer and the callback; its updater runs in a "
+        "passive effect, after ResizeObserver delivery under load"
+    )
+    assert "new ResizeObserver(fit)" in code, "the observer no longer calls fit directly"
+    assert "}, [card, fit, content]);" in code, (
+        "the observer effect's dependency array changed; `fit` belongs there and is safe "
+        "there only while it stays identity-stable"
     )

@@ -1,13 +1,13 @@
 # calibration
 
-- harness `998a800` · schema v1 · generated 2026-07-11T19:14:07+00:00
+- harness `4724f3ed` · schema v1 · generated 2026-08-29T18:38:10+00:00
 - era 2022-2025 · dataset 2025 holdout + frozen calibration artifacts · seed deterministic · llm none
 - artifacts: overtake_model=`cbb9d0eb0beb`, pit_cfg=`41dd673a93fb`, tcn_mc_calib=`e03a170f6de4`
 
 | model | metric | value | nominal | status | detail |
 |---|---|---|---|---|---|
 | undercut | ece_calibrated | 0.1303 | 0.05 | drift | n=252; 10-bin equal-width |
-| pit_duration | p05_p95_coverage | 0.7024 | 0.9 | drift | n=252; empirical P05-P95 coverage recomputed on the regenerated N15 holdout |
+| pit_duration | p05_p95_coverage | 0.6984 | 0.9 | drift | n=252; empirical P05-P95 coverage recomputed on the regenerated N15 holdout |
 | overtake | brier_calibrated | 0.0520 | - | ok | n=10217; brier raw 0.1304 -> cal 0.0520 (Platt val-2024) |
 | overtake | ece_calibrated | 0.0319 | 0.05 | ok | n=10217; 10-bin equal-width |
 | safety_car | brier_calibrated | 0.0426 | - | ok | n=995; recomputed on 2025 holdout |
