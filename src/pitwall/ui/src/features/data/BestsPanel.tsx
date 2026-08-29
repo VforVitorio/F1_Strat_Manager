@@ -168,9 +168,33 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
     if (measuredRow > 0) lastRowHeight.current = measuredRow;
     const rowHeight = measuredRow > 0 ? measuredRow : (lastRowHeight.current ?? 0);
     if (rowHeight <= 0) return;
-    if (fitState.ranked) {
-      const extraRows = Math.max(0, fitState.depth - RANKED_FLOOR);
-      floorHeight.current = card.scrollHeight - extraRows * rowHeight;
+    // **Latched from the rows the card is RENDERING, never from the state this
+    // callback sets.** Reading `fitState` here is what made `fit` close over its
+    // own output, and the closure is the whole defect: `fitRef.current = fit` ran
+    // in a passive effect, and under load a ResizeObserver callback is delivered
+    // BEFORE that effect, so the observer ran the previous render's `fit`. Its
+    // stale `if (fitState.ranked)` branch re-latched the floor from the COMPACT
+    // card at 60 px, and `room 63 >= 60` then flipped the panel back to ranked in
+    // a slot whose real floor card is 115 px. Measured on the committed code: the
+    // signature fired on 24 of 24 throttled loads, and whether the check failed
+    // was only whether a second observer fire happened to heal it.
+    //
+    // `.bests-sections` is a four-COLUMN grid, so the card's height is governed by
+    // the TALLEST section, and the max of the rendered row counts is exactly what
+    // that height contains. It is also more correct than subtracting
+    // `fitState.depth`, which over-subtracts rows that were never rendered when
+    // the data is shallower than the depth the state asked for.
+    //
+    // The sibling that never had this bug does the same thing:
+    // `RacePaceGrid.tsx:186` measures a real cell and carries `useCallback([])`.
+    const renderedRows = Math.max(
+      0,
+      ...[...card.querySelectorAll(".bests-section")].map(
+        (section) => section.querySelectorAll(".bests-row").length,
+      ),
+    );
+    if (renderedRows > 0) {
+      floorHeight.current = card.scrollHeight - (renderedRows - RANKED_FLOOR) * rowHeight;
     }
     const atFloor = floorHeight.current;
     if (atFloor === null) return;
@@ -192,7 +216,7 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
       ranked: true,
       depth: Math.min(RANKED_FLOOR + extra, RANKED_CAP),
     });
-  }, [card, fitState.ranked, fitState.depth]);
+  }, [card]);
 
   // **`content` is in here because the card mounts EMPTY, and that was a P1.**
   // The card appears with the first TICK; its rows come from the BULK, which
@@ -243,30 +267,25 @@ function useFitsRanked(card: HTMLElement | null, content: number): Fit {
   // Holding the callback in a ref keeps the deps free of it. The observer calls
   // whatever `fit` is at the moment it fires, which is the same behaviour the
   // re-installation was reaching for, minus the window with no observer in it.
-  const fitRef = useRef(fit);
-  useEffect(() => {
-    fitRef.current = fit;
-  }, [fit]);
-
   useEffect(() => {
     let live = true;
     document.fonts?.ready.then(() => {
-      if (live) fitRef.current();
+      if (live) fit();
     });
     return () => {
       live = false;
     };
-  }, [card]);
+  }, [fit]);
 
   useEffect(() => {
     const column = card?.parentElement;
     if (!card || !column) return;
-    fitRef.current();
-    const observer = new ResizeObserver(() => fitRef.current());
+    fit();
+    const observer = new ResizeObserver(fit);
     observer.observe(column);
     observer.observe(card);
     return () => observer.disconnect();
-  }, [card, content]);
+  }, [card, fit, content]);
 
   return fitState;
 }

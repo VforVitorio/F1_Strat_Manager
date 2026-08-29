@@ -24,6 +24,16 @@ from src.pitwall.host import PitwallHost
 from src.pitwall.radio_feed import RadioCorpus, unavailable
 from src.pitwall.session_data import SessionLaps
 
+# A location that is not a Grand Prix, so the "nothing on disk" branch is reached
+# by construction rather than by what happens to be installed. These three checks
+# used to name a real race the curated download left out, and they passed only on
+# a PARTIAL install: pulling the full `data/raw` tree gave that race its laps and
+# all three went red, having never once run in the state they were written for.
+# `RadioCorpus.load` and `SessionLaps.load` both answer None for an unknown GP
+# (they catch `resolve_gp_slug`'s ValueError) exactly as they do for a missing
+# directory, so the branch under test is the same one.
+NO_SUCH_RACE = "Not A Circuit"
+
 MELBOURNE = (2025, "Melbourne")
 
 
@@ -178,7 +188,7 @@ def test_a_race_with_no_corpus_says_so_instead_of_going_quiet():
     A feed that answered with an empty list would repeat it one channel over.
     """
     assert unavailable() == {"available": False, "events": []}
-    assert RadioCorpus.load(get_data_root(), 2025, "Shanghai") is None
+    assert RadioCorpus.load(get_data_root(), 2025, NO_SUCH_RACE) is None
 
 
 def test_the_feed_rides_in_the_bulk_and_a_race_switch_empties_it():
@@ -197,7 +207,7 @@ def test_the_feed_rides_in_the_bulk_and_a_race_switch_empties_it():
     assert served["radio"]["available"] is True
     assert served["radio"]["events"], "the bulk went out without the feed"
 
-    client.latest = _tick(dict.fromkeys(codes, 24), location="Shanghai")
+    client.latest = _tick(dict.fromkeys(codes, 24), location=NO_SUCH_RACE)
     switched = host.get_bulk(served["rev"])
     assert switched["available"] is False, "the table did not follow the race switch"
     assert switched["radio"] == {"available": False, "events": []}, (
