@@ -19,6 +19,7 @@ CFG : TireAgentConfig: loads routing, calibration, encoding maps, cliff threshol
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import re
@@ -922,14 +923,26 @@ def _compound_name_to_id(compound_name: str, gp_name: str, year: int) -> str:
 # LangGraph / LangChain optional imports
 # ─────────────────────────────────────────────────────────────────────────────
 
+# lc_tool stays eager: the @lc_tool decorators further down run at import time.
+# ChatOpenAI and create_agent do not, and importing them here cost 7.2 s measured,
+# because langchain_openai drags transformers and the langgraph stack in behind
+# it. This module is imported by the orchestrator, so every CLI invocation paid
+# that, `--help` included, whether or not the ReAct agent was ever built. The two
+# names are now imported in get_react_agent(), which already creates its client
+# on first call, and find_spec answers the availability question without
+# executing anything.
 try:
     from langchain_core.tools import tool as lc_tool
-    from langchain_openai import ChatOpenAI
-    from langchain.agents import create_agent
 
-    _LANGGRAPH_AVAILABLE = True
+    _LC_CORE_AVAILABLE = True
 except ImportError:
-    _LANGGRAPH_AVAILABLE = False
+    _LC_CORE_AVAILABLE = False
+
+_LANGGRAPH_AVAILABLE = (
+    _LC_CORE_AVAILABLE
+    and importlib.util.find_spec("langchain_openai") is not None
+    and importlib.util.find_spec("langchain.agents") is not None
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1481,6 +1494,9 @@ class TireAgent:
             return self._react_agent
 
         import os
+
+        from langchain.agents import create_agent
+        from langchain_openai import ChatOpenAI
 
         if provider is None:
             provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")

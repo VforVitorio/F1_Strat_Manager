@@ -12,6 +12,7 @@ run_pit_strategy_agent_from_state(lap_state, laps_df) → PitStrategyOutput  (RS
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import re
@@ -628,14 +629,25 @@ def _build_pit_prompt(
 # LangGraph / LangChain optional imports
 # ─────────────────────────────────────────────────────────────────────────────
 
+# lc_tool stays eager: the @lc_tool decorators further down run at import time.
+# ChatOpenAI, create_agent and HumanMessage do not, and importing them here cost
+# 7.2 s measured, because langchain_openai drags transformers and the langgraph
+# stack in behind it. This module is imported by the orchestrator, so every CLI
+# invocation paid that, `--help` included, whether or not the ReAct agent was
+# ever built. The names are now imported where they are used, and find_spec
+# answers the availability question without executing anything.
 try:
     from langchain_core.tools import tool as lc_tool
-    from langchain_core.messages import HumanMessage
-    from langchain_openai import ChatOpenAI
-    from langchain.agents import create_agent
-    _LANGGRAPH_AVAILABLE = True
+
+    _LC_CORE_AVAILABLE = True
 except ImportError:
-    _LANGGRAPH_AVAILABLE = False
+    _LC_CORE_AVAILABLE = False
+
+_LANGGRAPH_AVAILABLE = (
+    _LC_CORE_AVAILABLE
+    and importlib.util.find_spec("langchain_openai") is not None
+    and importlib.util.find_spec("langchain.agents") is not None
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1371,6 +1383,10 @@ class PitStrategyAgent:
             return self._react_agent
 
         import os
+
+        from langchain.agents import create_agent
+        from langchain_openai import ChatOpenAI
+
         if provider is None:
             provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
 
@@ -1630,6 +1646,8 @@ class PitStrategyAgent:
             sc_currently_active=sc_currently_active,
             vsc_active=vsc_active,
         )
+
+        from langchain_core.messages import HumanMessage
 
         react_agent = self.get_react_agent()
         response    = react_agent.invoke({'messages': [HumanMessage(content=message)]})

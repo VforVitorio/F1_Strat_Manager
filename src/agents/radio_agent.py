@@ -31,8 +31,10 @@ Note: tools wrap the inference helpers for isolated testing. In production,
 run_radio_agent() calls run_pipeline() and run_rcm_pipeline() directly.
 """
 
+import importlib.util
 import json
 import sys
+import threading
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -48,17 +50,26 @@ warnings.filterwarnings("ignore")
 # ── Pydantic for structured LLM output ────────────────────────────────────────
 from pydantic import BaseModel, Field as PydanticField
 
-# ── Optional LangChain imports ─────────────────────────────────────────────────
+# ── Optional LangChain imports ──────────────────────────────────────
+# langchain_core stays eager because the @tool decorators below run at import.
+# Probed, not imported. `import langchain_openai` costs 14.3 s measured: it drags
+# the langgraph stack and transformers in behind it, and every consumer of the
+# name sits inside a factory that already builds its client on first call. So an
+# eager import charged that to `f1-sim --help`, to a --no-llm run, and to every
+# surface that merely touches this module. find_spec answers the only question
+# asked here, is it installed, in about a millisecond and executes nothing.
 try:
     from langchain_core.tools import tool
     from langchain_core.messages import HumanMessage, SystemMessage
-    from langchain_openai import ChatOpenAI
-    _LC_OK = True
+    _LC_CORE_OK = True
 except ImportError:
-    _LC_OK = False
-    def tool(fn):  # noqa: E302
+    _LC_CORE_OK = False
+
+    def tool(fn):
         """No-op decorator when langchain_core is not installed."""
         return fn
+
+_LC_OK = _LC_CORE_OK and importlib.util.find_spec("langchain_openai") is not None
 
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
@@ -90,13 +101,13 @@ except (ImportError, OSError, RuntimeError):
 
 # ── Module-level globals ───────────────────────────────────────────────────────
 # Left over from the notebook's global-state design. Only run_radio_agent_from_state
-# writes LAPS/SESSION_META (for total_laps/year bookkeeping, see its docstring:
-# "not queried during inference"), and nothing in this module ever reads them back.
-# run_radio_agent itself is self-contained through lap_state and never touches
-# these. RCM_DF is declared here but not written or read anywhere.
-LAPS:         pd.DataFrame = pd.DataFrame()
-RCM_DF:       pd.DataFrame = pd.DataFrame()
-SESSION_META: dict         = {}
+# writes SESSION_META (for total_laps/year bookkeeping, see its docstring: "not
+# queried during inference"), and nothing in this module ever reads it back.
+# run_radio_agent itself is self-contained through lap_state and never touches it.
+# The LAPS and RCM_DF frames that used to sit here are gone: LAPS was a full copy
+# of the race frame taken on every lap and read by nothing, and RCM_DF was never
+# even written.
+SESSION_META: dict = {}
 
 
 # ── RCM classification constants ──────────────────────────────────────────────
@@ -202,15 +213,15 @@ class RadioOutput:
 
 
 # ==============================================================================
-# RadioAgentCFG: loads the three NLP models at instantiation time
+# RadioAgentCFG: holds the three NLP models, loaded on first use
 # ==============================================================================
 
 @dataclass
 class RadioAgentCFG:
     """Runtime configuration for the Radio Agent.
 
-    Loads the three N24 NLP models (sentiment, intent, NER) and assembles
-    the pipeline dict consumed by run_pipeline(). Device is auto-detected
+    Holds the three N24 NLP models (sentiment, intent, NER) behind the lazy
+    `pipeline` property consumed by run_pipeline(). Device is auto-detected
     from CUDA availability so the module runs on CPU when no GPU is present.
 
     model_name:
@@ -220,7 +231,7 @@ class RadioAgentCFG:
         Torch device for all three NLP models. Resolved at init time from
         CUDA availability. The same device is used across all inference calls.
     pipeline:
-        Dict assembled in __post_init__ with keys sentiment_model,
+        Dict built on first access with keys sentiment_model,
         sentiment_tokenizer, intent_model, ner_model, ner_tokenizer,
         ner_label2id, ner_id2label. Same schema as N24's build_pipeline().
     alert_intents:
@@ -245,7 +256,6 @@ class RadioAgentCFG:
     intent_names:     tuple = ("INFORMATION", "PROBLEM", "ORDER", "WARNING", "QUESTION")
     sentiment_labels: tuple = ("negative", "neutral", "positive")
     ner_max_len:      int   = 128
-    pipeline:         dict  = field(init=False)
 
     # ------------------------------------------------------------------
     # Private model-loading helpers
@@ -350,21 +360,59 @@ class RadioAgentCFG:
     # ------------------------------------------------------------------
 
     def __post_init__(self):
-        nlp_dir = _DATA_ROOT / "models" / "nlp"
+        self._pipeline: Optional[dict] = None
+        self._pipeline_lock = threading.Lock()
 
-        s_tok,  s_model                = self._load_sentiment_model(nlp_dir, self.device)
-        i_model, _intent_names         = self._load_intent_model(nlp_dir)
-        n_tok,  n_model, n_l2i, n_i2l = self._load_ner_model(nlp_dir, self.device)
+    @property
+    def pipeline(self) -> dict:
+        """The three NLP models, built on first use rather than at import.
 
-        self.pipeline = {
-            "sentiment_model":     s_model,
-            "sentiment_tokenizer": s_tok,
-            "intent_model":        i_model,
-            "ner_model":           n_model,
-            "ner_tokenizer":       n_tok,
-            "ner_label2id":        n_l2i,
-            "ner_id2label":        n_i2l,
-        }
+        Building them reads three checkpoints off disk and costs 17 s measured,
+        warm. It used to run in __post_init__, so merely importing this module
+        paid the whole bill: importing it took 25.8 s after torch against 8.0 s
+        now. scripts/run_simulation_cli.py imports it above its argparse block,
+        which is part of why `f1-sim --help` took 12.6 s to print a usage
+        string, and every surface that touches the agents module paid it whether
+        or not a radio message was ever analysed.
+
+        Every consumer of the models goes through here, so the cost now lands on
+        the first message instead. The rest of the config (device, label lists,
+        alert intents, ner_max_len) stays eager because it is free, which is
+        what keeps _intent_name_to_idx below a plain import-time expression.
+
+        Locked, because the eager version was serialised by the import lock and a
+        property is not. Two concurrent requests through the backend's strategy
+        endpoint would otherwise each spend the 17 s building a pipeline the
+        other was already building. The double check keeps the steady-state read
+        lock-free.
+
+        Callers that want the cost paid up front read this property somewhere
+        they control, which is what scripts/run_simulation_cli.py does in its
+        pre-warm block. Importing the module no longer loads anything.
+        """
+        if self._pipeline is not None:
+            return self._pipeline
+
+        with self._pipeline_lock:
+            if self._pipeline is not None:
+                return self._pipeline
+
+            nlp_dir = _DATA_ROOT / "models" / "nlp"
+
+            s_tok,  s_model                = self._load_sentiment_model(nlp_dir, self.device)
+            i_model, _intent_names         = self._load_intent_model(nlp_dir)
+            n_tok,  n_model, n_l2i, n_i2l = self._load_ner_model(nlp_dir, self.device)
+
+            self._pipeline = {
+                "sentiment_model":     s_model,
+                "sentiment_tokenizer": s_tok,
+                "intent_model":        i_model,
+                "ner_model":           n_model,
+                "ner_tokenizer":       n_tok,
+                "ner_label2id":        n_l2i,
+                "ner_id2label":        n_i2l,
+            }
+        return self._pipeline
 
 
 # ── Module-level singletons ────────────────────────────────────────────────────
@@ -752,6 +800,7 @@ def _get_radio_llm():
                 "langchain_openai is not installed — cannot run LLM synthesis. "
                 "Install it with: pip install langchain-openai"
             )
+        from langchain_openai import ChatOpenAI
         provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
         if provider == 'openai':
             # parallel_tool_calls is NOT sent, because OpenAI rejects it when no tools are specified
@@ -991,7 +1040,7 @@ def run_radio_agent_from_state(
 ) -> "RadioOutput":
     """RSM adapter: run the Radio Agent without a live FastF1 session.
 
-    Populates the module-level LAPS/SESSION_META globals from laps_df for
+    Populates the module-level SESSION_META global from laps_df for
     bookkeeping (see the module docstring); the actual radio and RCM processing
     runs through run_radio_agent(lap_state, persist=persist), which reads
     everything it needs from lap_state directly and never touches those globals.
@@ -1013,9 +1062,8 @@ def run_radio_agent_from_state(
 
     Returns a RadioOutput identical to what run_radio_agent() would produce.
     """
-    global LAPS, SESSION_META
+    global SESSION_META
 
-    LAPS = laps_df.copy()
     SESSION_META = {
         "year":       int(laps_df["Year"].iloc[0]) if "Year" in laps_df.columns else 0,
         "gp":         lap_state.get("session_meta", {}).get("gp", ""),

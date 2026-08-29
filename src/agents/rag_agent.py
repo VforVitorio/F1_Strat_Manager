@@ -23,6 +23,7 @@ run_rag_agent_from_state(lap_state)
 """
 
 import json
+import importlib.util
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,14 +46,17 @@ from src.rag.retriever import (  # noqa: E402
     query_rag_tool,
 )
 
-# ── Optional LangChain / LangGraph imports ─────────────────────────────────────
-try:
-    from langchain_core.messages import HumanMessage
-    from langchain_openai import ChatOpenAI
-    from langchain.agents import create_agent
-    _LC_OK = True
-except ImportError:
-    _LC_OK = False
+# ── Optional LangChain / LangGraph imports ─────────────────────────────
+# Probed, not imported. `import langchain_openai` costs 14.3 s measured: it drags
+# the langgraph stack and transformers in behind it, and every consumer of the
+# name sits inside a factory that already builds its client on first call. So an
+# eager import charged that to `f1-sim --help`, to a --no-llm run, and to every
+# surface that merely touches this module. find_spec answers the only question
+# asked here, is it installed, in about a millisecond and executes nothing.
+_LC_OK = (
+    importlib.util.find_spec("langchain_openai") is not None
+    and importlib.util.find_spec("langchain.agents") is not None
+)
 
 
 # ==============================================================================
@@ -169,6 +173,10 @@ def get_rag_react_agent():
                 "the RAG agent. Install with: pip install langgraph langchain-openai"
             )
         import os
+
+        from langchain.agents import create_agent
+        from langchain_openai import ChatOpenAI
+
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
         if provider == "openai":
             llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0, timeout=120, max_retries=1)
@@ -215,6 +223,8 @@ def run_rag_agent(question: str) -> "RegulationContext":
     Returns a RegulationContext with answer, chunks, and deduplicated articles.
     Use ctx.articles for citations, not the article numbers in ctx.answer.
     """
+    from langchain_core.messages import HumanMessage
+
     agent  = get_rag_react_agent()
     result = agent.invoke({"messages": [HumanMessage(content=question)]})
     answer = result["messages"][-1].content
