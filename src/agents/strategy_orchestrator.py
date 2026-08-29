@@ -35,6 +35,7 @@ Liu et al. (2024) arXiv:2402.02392: DeLLMa decision under uncertainty with LLM
 import json
 import logging
 import math
+import importlib.util
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -58,12 +59,14 @@ while not (_REPO_ROOT / ".git").exists():
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ── Optional LangChain imports ─────────────────────────────────────────────────
-try:
-    from langchain_openai import ChatOpenAI
-    _LC_OK = True
-except ImportError:
-    _LC_OK = False
+# ── Optional LangChain imports ──────────────────────────────────────
+# Probed, not imported. `import langchain_openai` costs 14.3 s measured: it drags
+# the langgraph stack and transformers in behind it, and every consumer of the
+# name sits inside a factory that already builds its client on first call. So an
+# eager import charged that to `f1-sim --help`, to a --no-llm run, and to every
+# surface that merely touches this module. find_spec answers the only question
+# asked here, is it installed, in about a millisecond and executes nothing.
+_LC_OK = importlib.util.find_spec("langchain_openai") is not None
 
 # ── Sub-agent imports ──────────────────────────────────────────────────────────
 from src.agents.pace_agent         import (
@@ -186,6 +189,7 @@ def _get_orchestrator_llm():
                 "langchain_openai is not installed. "
                 "Install with: pip install langchain-openai"
             )
+        from langchain_openai import ChatOpenAI
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
         if provider == "openai":
             # No parallel_tool_calls: OpenAI rejects it when no tools are specified
@@ -1462,6 +1466,13 @@ def _run_mc_simulation(
         else 0.5
     )
 
+    # pace_s is drawn and never read, and deleting it is NOT free. F841 says the
+    # NAME is unused; the DRAW is not. It takes n values off rng, so removing the
+    # line shifts cliff_s, sc_s, pit_s and ucut_s to different numbers, which
+    # re-rolls every candidate score and every golden in tests/mc. The line stays
+    # until someone re-blesses the projection path on purpose. To see it, draw the
+    # same triangular twice off one seed, once after an n-sized normal and once
+    # without: the two triples share no value.
     pace_s  = rng.normal(pace_out.lap_time_pred, sigma_pace, n)  # noqa: F841
     cliff_s = rng.triangular(p10_cliff, p50_cliff, p90_cliff, n)
     sc_s    = rng.random(n) < sc_prob

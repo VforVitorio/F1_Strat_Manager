@@ -238,8 +238,17 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 CACHE_VERSION: Final[str] = "v15"  # + the shared lap-boundary sample sorts stably (#1069)
 
 # --- Multiprocessing pool -------------------------------------------------
-# Serial by default: Windows spawn + pickling a loaded session across 8
-# workers has hung in cold-cache runs. Flip to >1 once FastF1 is warm.
+# Serial. The reason recorded here used to be a hang: Windows spawn plus pickling
+# a loaded session across 8 workers, on a cold cache. That story is NOT
+# established. `documents/audits/AUDIT_P2_LOADING.md` row A3 repeats it as fact,
+# and the load audit that went looking could not reproduce it. Nobody has since
+# re-run it either, so treat the hang as unexplained rather than as the reason.
+#
+# What actually keeps this at 1 is that raising it has never been measured as a
+# win, and the work a pool would spread is FastF1's per-lap telemetry loop, which
+# is 93% of a cold build and which #1121 removes outright rather than
+# parallelises. Raise this only alongside a timed cold build, never on the
+# strength of the core count.
 POOL_SIZE: Final[int] = 1
 
 

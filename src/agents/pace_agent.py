@@ -719,10 +719,11 @@ class PaceAgent:
     ) -> tuple[float, float]:
         """Estimate a P10/P90 confidence interval via Gaussian feature perturbation.
 
-        Runs n forward passes, each time adding independent Gaussian noise
-        (sigma = NOISE_PCT × feature_value) to the continuous features most
-        subject to real-world variability. The noise scale approximates sensor
-        noise and lap-to-lap variation; it is not formal Bayesian uncertainty.
+        Perturbs the row n times with independent Gaussian noise
+        (sigma = NOISE_PCT × feature_value) on the continuous features most
+        subject to real-world variability, then scores all n rows in one forward
+        pass. The noise scale approximates sensor noise and lap-to-lap
+        variation; it is not formal Bayesian uncertainty.
 
         N31 uses this interval to sample pace scenarios in Monte Carlo strategy
         evaluation. A wider interval increases the variance of the strategy
@@ -747,17 +748,21 @@ class PaceAgent:
 
         rng = np.random.default_rng(seed)
         base = feature_df.values.copy().astype(float)
-        col_idx = {c: feature_df.columns.get_loc(c) for c in noise_cols}
+        col_idx = [feature_df.columns.get_loc(c) for c in noise_cols]
 
-        preds = []
-        for _ in range(n):
-            row = base.copy()
-            for col, idx in col_idx.items():
-                sigma = abs(base[0, idx]) * _NOISE_PCT
-                row[0, idx] += rng.normal(0, sigma)
-            df_row = pd.DataFrame(row, columns=feature_df.columns)
-            delta = float(self.model.predict(df_row)[0])
-            preds.append(float(df_row["Prev_LapTime"].iloc[0]) + delta)
+        # One perturbed block and one predict() call, where this used to run n
+        # single-row calls. The samples are the same numbers, not merely close
+        # ones: numpy computes normal(0, sigma) as sigma * standard_normal(), and
+        # a C-order (n, len(noise_cols)) block draws sample-major then column,
+        # which is the order the per-sample loop drew in. Batching matters here
+        # because XGBoost pays a fixed pandas-to-native conversion per call, and
+        # at n=200 that conversion was 61% of an offline lap.
+        sigmas = np.abs(base[0, col_idx]) * _NOISE_PCT
+        block = np.repeat(base, n, axis=0)
+        block[:, col_idx] += rng.normal(0.0, 1.0, size=(n, len(col_idx))) * sigmas
+
+        perturbed = pd.DataFrame(block, columns=feature_df.columns)
+        preds = perturbed["Prev_LapTime"].to_numpy() + self.model.predict(perturbed)
 
         return float(np.percentile(preds, 10)), float(np.percentile(preds, 90))
 
