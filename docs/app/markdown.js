@@ -93,47 +93,102 @@ function highlightCode(code, lang) {
   return escaped;
 }
 
-// Initialize mermaid once
-let mermaidInited = false;
+// ---------- Mermaid ----------
+// Mermaid bakes its colours into the SVG at render time, so unlike everything else on this page
+// it cannot follow a token swap. Three things have to happen on a theme change, and missing any
+// one of them leaves diagrams in the previous theme:
+//
+//   1. mermaid.initialize() has to run again with the new variables. It is a once-per-page call
+//      by design, so the latch below records WHICH theme it was initialised for rather than a
+//      plain boolean.
+//   2. Every block's `rendered` flag has to be cleared, or the render loop skips it.
+//   3. The source has to still exist. It does not: the loop replaces the block's innerHTML with
+//      the finished SVG, which deletes the .mermaid-src child it read the source from. So the
+//      source is cached onto the element the first time it is seen.
+const MERMAID_PALETTE = {
+  dark: {
+    darkMode: true,
+    background: "transparent",
+    primaryColor: "#1e2139",
+    primaryTextColor: "#ffffff",
+    primaryBorderColor: "#a29bfe",
+    lineColor: "#a29bfe",
+    secondaryColor: "#23234a",
+    tertiaryColor: "#111827",
+    mainBkg: "#1e2139",
+    secondBkg: "#23234a",
+    textColor: "#e9e7ff",
+    nodeBorder: "rgba(162,155,254,0.5)",
+    clusterBkg: "rgba(108,92,231,0.08)",
+    clusterBorder: "rgba(108,92,231,0.32)",
+    edgeLabelBackground: "#111827",
+    labelBoxBkgColor: "#111827",
+    labelBoxBorderColor: "#a29bfe",
+    labelTextColor: "#ffffff",
+    actorBkg: "#1e2139",
+    actorBorder: "#a29bfe",
+    actorTextColor: "#ffffff",
+    actorLineColor: "#a29bfe",
+    noteBkgColor: "#23234a",
+    noteBorderColor: "#a29bfe",
+    noteTextColor: "#ffffff",
+    sequenceNumberColor: "#0c0d14",
+    activationBkgColor: "#6c5ce7",
+    activationBorderColor: "#a29bfe",
+  },
+  // The light values mirror the light token ramp rather than lightening the dark ones: the node
+  // fill is the card colour, text is the ink colour, and every line and border takes purple-700,
+  // because purple-300 is 2.23:1 on a light ground and would leave the edges barely visible.
+  light: {
+    darkMode: false,
+    background: "transparent",
+    primaryColor: "#ffffff",
+    primaryTextColor: "#14121f",
+    primaryBorderColor: "#5a48d4",
+    lineColor: "#5a48d4",
+    secondaryColor: "#eceaf9",
+    tertiaryColor: "#e9eaf4",
+    mainBkg: "#ffffff",
+    secondBkg: "#eceaf9",
+    textColor: "#14121f",
+    nodeBorder: "rgba(90,72,212,0.55)",
+    clusterBkg: "rgba(108,92,231,0.06)",
+    clusterBorder: "rgba(108,92,231,0.28)",
+    edgeLabelBackground: "#f5f5fa",
+    labelBoxBkgColor: "#ffffff",
+    labelBoxBorderColor: "#5a48d4",
+    labelTextColor: "#14121f",
+    actorBkg: "#ffffff",
+    actorBorder: "#5a48d4",
+    actorTextColor: "#14121f",
+    actorLineColor: "#5a48d4",
+    noteBkgColor: "#eceaf9",
+    noteBorderColor: "#5a48d4",
+    noteTextColor: "#14121f",
+    sequenceNumberColor: "#ffffff",
+    activationBkgColor: "#6c5ce7",
+    activationBorderColor: "#5a48d4",
+  },
+};
+
+/** Which theme mermaid was last initialised for, or null before the first call. */
+let mermaidTheme = null;
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
 function ensureMermaid() {
-  if (mermaidInited || !window.mermaid) return;
+  const theme = currentTheme();
+  if (mermaidTheme === theme || !window.mermaid) return;
   mermaid.initialize({
     startOnLoad: false,
     theme: "base",
     securityLevel: "loose",
     fontFamily: "Inter, system-ui, sans-serif",
-    themeVariables: {
-      darkMode: true,
-      background: "transparent",
-      primaryColor: "#1e2139",
-      primaryTextColor: "#ffffff",
-      primaryBorderColor: "#a29bfe",
-      lineColor: "#a29bfe",
-      secondaryColor: "#23234a",
-      tertiaryColor: "#111827",
-      mainBkg: "#1e2139",
-      secondBkg: "#23234a",
-      textColor: "#e9e7ff",
-      nodeBorder: "rgba(162,155,254,0.5)",
-      clusterBkg: "rgba(108,92,231,0.08)",
-      clusterBorder: "rgba(108,92,231,0.32)",
-      edgeLabelBackground: "#111827",
-      labelBoxBkgColor: "#111827",
-      labelBoxBorderColor: "#a29bfe",
-      labelTextColor: "#ffffff",
-      actorBkg: "#1e2139",
-      actorBorder: "#a29bfe",
-      actorTextColor: "#ffffff",
-      actorLineColor: "#a29bfe",
-      noteBkgColor: "#23234a",
-      noteBorderColor: "#a29bfe",
-      noteTextColor: "#ffffff",
-      sequenceNumberColor: "#0c0d14",
-      activationBkgColor: "#6c5ce7",
-      activationBorderColor: "#a29bfe",
-    },
+    themeVariables: MERMAID_PALETTE[theme],
   });
-  mermaidInited = true;
+  mermaidTheme = theme;
 }
 
 async function renderMermaidBlocks(root) {
@@ -142,9 +197,12 @@ async function renderMermaidBlocks(root) {
   const blocks = root.querySelectorAll(".mermaid-block");
   for (const b of blocks) {
     if (b.dataset.rendered === "1") continue;
+    // The source is cached on first sight because the assignment below deletes the element it
+    // came from. Without this, a re-render after a theme change finds nothing to render.
     const src = b.querySelector(".mermaid-src");
-    if (!src) continue;
-    const code = src.textContent;
+    if (src && b.dataset.mermaidSrc === undefined) b.dataset.mermaidSrc = src.textContent;
+    const code = b.dataset.mermaidSrc;
+    if (code === undefined) continue;
     const id = b.dataset.mermaidId || ("m" + Math.random().toString(36).slice(2, 9));
     try {
       const { svg } = await mermaid.render(id, code);
@@ -156,6 +214,21 @@ async function renderMermaidBlocks(root) {
     }
   }
 }
+
+
+/**
+ * Re-render every diagram on the page in the new theme.
+ *
+ * Mermaid's own state has to be reset first (`ensureMermaid` reads the attribute and reinitialises
+ * because the recorded theme no longer matches), then each block is unmarked so the render loop
+ * stops skipping it.
+ */
+window.addEventListener("f1sl:themechange", function () {
+  document.querySelectorAll(".mermaid-block").forEach(function (b) {
+    if (b.dataset.mermaidSrc !== undefined) delete b.dataset.rendered;
+  });
+  renderMermaidBlocks(document);
+});
 
 // React component — renders markdown for a given slug
 function MarkdownArticle({ slug, onTOC }) {
