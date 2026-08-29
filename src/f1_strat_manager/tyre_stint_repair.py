@@ -74,10 +74,12 @@ real stop explains the change by itself; that is the Monaco case).
   2025 it nulls 162 of 927 rows (17.5%), the whole opening stint of five cars, and leaves all
   24 of that race's genuine stops alone.
 * **A nulled age is not neutral downstream, and that bounds how far this should ever go.**
-  `pit_strategy_agent._tyre_life_in` reads a NaN `TyreLife` as a FRESH SET (1), so a null
-  reaches N15 as a number, not as an unknown, and a wronger one than the artefact it
-  replaced. That is why repair 2 is scoped to a shape that is provably not a stop rather
-  than to every drop this module cannot explain.
+  `pit_strategy_agent._tyre_life_in` used to read a NaN `TyreLife` as a FRESH SET (1), so
+  a null reached N15 as a number, and a wronger one than the artefact it replaced. It now
+  serves `UNKNOWN_TYRE_LIFE` and logs the call as an extrapolation (#832, #1008), which
+  removes the cost but not the scoping: repair 2 stays narrow because a null still travels
+  to consumers this module cannot see, and widening it is a separate decision with its own
+  evidence rather than a consequence of one reader being fixed.
 * **Raw-fed surfaces see feed values.** Consumers that read a raw parquet directly rather
   than through `augment_featured_laps` -- the replay engine and the backend's own race
   loader -- are not repaired. Unifying that is a wider change than this repair.
@@ -359,6 +361,11 @@ def _age_restarted_on_an_unchanged_set(ordered: pd.DataFrame, position: int) -> 
     a number further from the truth than the one the feed published. Requiring a landing
     on exactly 1 removes all 435, and Melbourne 2025's five republished ages all land on
     exactly 1, so the pair of conditions keeps the artefact and drops the false positives.
+
+    The "N15 reads a NaN as a fresh set" half of that argument is no longer true (#832):
+    N15 now serves `UNKNOWN_TYRE_LIFE` and says so in the log. The measured half stands on
+    its own, and is why this test did not change: 435 genuine same-compound stops in 53
+    grands prix would be nulled by a plain drop test, whatever the reader does with a null.
 
     --- WHAT THAT 435 DOES AND DOES NOT SHOW ---
     It shows the plain drop test is unusable. It does **not** show that a genuine

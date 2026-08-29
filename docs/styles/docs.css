@@ -117,7 +117,7 @@ body::after {
   background: var(--tint-2);
   box-shadow: 0 0 0 3px rgba(108,92,231,0.12);
 }
-.search-input::placeholder { color: var(--fg-4); }
+.search-input::placeholder { color: var(--fg-3); }
 .search-icon {
   position: absolute; left: 12px; top: 50%;
   transform: translateY(-50%);
@@ -129,7 +129,7 @@ body::after {
   transform: translateY(-50%);
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--fg-4);
+  color: var(--fg-3);
   padding: 2px 6px;
   border: 1px solid var(--hairline);
   border-radius: 4px;
@@ -201,7 +201,7 @@ body::after {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--fg-4);
+  color: var(--fg-3);
   margin-bottom: 8px;
 }
 .search-tag-row {
@@ -318,7 +318,7 @@ body::after {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-weight: 600;
-  color: var(--fg-4);
+  color: var(--fg-3);
   padding: 0 12px;
   margin: 0 0 6px;
   display: flex;
@@ -366,7 +366,7 @@ body::after {
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--fg-4);
+  color: var(--fg-3);
   letter-spacing: 0;
 }
 
@@ -401,7 +401,7 @@ body::after {
   gap: 8px;
   font-family: var(--font-mono);
   font-size: 11.5px;
-  color: var(--fg-4);
+  color: var(--fg-3);
   margin-bottom: 16px;
 }
 .breadcrumb a { color: var(--fg-3); }
@@ -689,7 +689,7 @@ body::after {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-weight: 600;
-  color: var(--fg-4);
+  color: var(--fg-3);
   margin: 0 0 12px;
 }
 .toc-list {
@@ -985,7 +985,7 @@ body::after {
 .agent-card-tag {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--fg-4);
+  color: var(--fg-3);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   margin-bottom: 8px;
@@ -1018,7 +1018,7 @@ body::after {
   border-top: 1px solid var(--hairline);
   font-size: 11.5px;
   font-family: var(--font-mono);
-  color: var(--fg-4);
+  color: var(--fg-3);
 }
 .agent-card-meta strong { color: var(--accent-text); font-weight: 500; }
 
@@ -1180,7 +1180,7 @@ body::after {
   font-family: var(--font-mono);
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--fg-4);
+  color: var(--fg-3);
   margin-bottom: 6px;
 }
 .page-footer-title {
@@ -1406,7 +1406,7 @@ body::after {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--fg-4);
+  color: var(--fg-3);
   font-weight: 600;
   margin-bottom: 12px;
 }
@@ -1425,7 +1425,7 @@ body::after {
   display: flex;
   justify-content: space-between;
   font-size: 11.5px;
-  color: var(--fg-4);
+  color: var(--fg-3);
   font-family: var(--font-mono);
 }
 

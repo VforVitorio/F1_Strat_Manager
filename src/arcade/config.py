@@ -235,7 +235,13 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # v15: a NaN Rainfall sample now pickles as None instead of "WET" (#1087). The bytes differ only
 # for a session that HAS a NaN weather row, which is exactly the session the fix exists for, so
 # leaving the version at v14 would have delivered the fix to everyone except the affected.
-CACHE_VERSION: Final[str] = "v15"  # + the shared lap-boundary sample sorts stably (#1069)
+# v16: the replay now runs the shared tyre-stint repair over the session before extracting, so its
+# tyre ages match PITWALL's tower instead of disagreeing with it on the same screen (#951). Same
+# shape as v15 and the same reason to move: measured over the four 2025 races on hand, three come
+# back byte-identical (Lusail, Monaco, Las Vegas, zero rows touched) and Melbourne moves 162 rows
+# across 5 drivers, taking unknown ages from 5 to 167. A pickle of a healthy race is unchanged, so
+# holding the version would have shipped the fix to everyone except the races that need it.
+CACHE_VERSION: Final[str] = "v16"  # + the shared lap-boundary sample sorts stably (#1069)
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial. The reason recorded here used to be a hang: Windows spawn plus pickling

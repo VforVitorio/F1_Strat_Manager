@@ -41,6 +41,7 @@ from src.strategy.inference.guard_rails import (
 )
 
 from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
+from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -867,29 +868,45 @@ class PitStrategyAgent:
         (1.98%) of the 2025 featured parquet have a NaN TyreLife. That is the same
         Series.get trap as #428/#462, on a third column.
 
-        A missing tyre age means "fresh" is the only defensible read: a car with no
-        recorded TyreLife has just been given a set, and 1 is what the dead default was
-        reaching for anyway. It is also the conservative direction for N15, which is
-        predicting how long the stop takes, not whether to make it.
+        An absent age is served as UNKNOWN_TYRE_LIFE, the shared constant, and NOT
+        as a fabricated 1 (#832, #1008). This used to argue that a missing age means
+        the set is fresh, which is a reasonable-sounding case for the wrong number:
+        1 is a reading N15 legitimately finds on the first lap of every stint, so the
+        sentinel and the measurement were the same value and nothing downstream could
+        tell them apart. `race_state_builder` rejects 1 for exactly that reason and
+        its comment says so; one member of the pair had the rule and its twin did not.
+        0 occurs zero times across 2023, 2024 and 2025, so it collides with nothing,
+        and it sits below the envelope's floor, which is what turns the absence from
+        silent into audible: the call is labelled an extrapolation rather than a fit.
         """
         value = row.get('TyreLife')
         if value is None or pd.isna(value):
-            logger.warning('TyreLife missing on the lap row; N15 reads it as a fresh set')
-            return 1
+            logger.warning(
+                'TyreLife missing on the lap row; N15 is served %d, the non-colliding '
+                'unknown, so its stop-duration prediction is not a fit',
+                UNKNOWN_TYRE_LIFE,
+            )
+            value = UNKNOWN_TYRE_LIFE
 
         # Label the call BEFORE clipping, because after the clip the evidence is gone:
         # every value reads as in-range once it has been forced there. The clip is what
         # keeps N15 inside its fitted range and it is unchanged; this only makes the
         # moment it bites visible instead of silent (#710).
+        #
+        # The message reports what is SERVED rather than the ceiling, because `min`
+        # only clips the top. Saying "clipped to 50" for a value below the floor was
+        # false the moment an unknown could reach here, which is what #832 made
+        # possible: 0 is passed through untouched.
+        served  = min(int(value), _MAX_TRAINED_TYRE_LIFE)
         verdict = _N15_TYRE_LIFE_ENVELOPE.check({'tyre_life_in': float(value)})
         if not verdict:
             logger.warning(
-                'N15 called outside its trained range: %s; the value is clipped to %d, '
-                'so the prediction is an extrapolation to the boundary rather than a fit',
+                'N15 called outside its trained range: %s; it is served %d, so the '
+                'prediction is an extrapolation rather than a fit',
                 dict(verdict.violations),
-                _MAX_TRAINED_TYRE_LIFE,
+                served,
             )
-        return min(int(value), _MAX_TRAINED_TYRE_LIFE)
+        return served
 
     def _build_pit_duration_features(
         self,
