@@ -191,6 +191,73 @@ function ensureMermaid() {
   mermaidTheme = theme;
 }
 
+// ---------- Full-screen diagrams ----------
+// Mermaid scales a diagram down to the article column, which on a graph of a dozen nodes leaves
+// the labels too small to read. Every rendered block gets a button that clones its SVG into a
+// native <dialog>: showModal() carries the backdrop, the Escape key and the focus trap, so none
+// of the three is written here.
+
+const MERMAID_EXPAND_BUTTON =
+  '<button class="mermaid-expand" type="button" title="Expand diagram" aria-label="Expand diagram">' +
+  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>';
+
+/** The single dialog every diagram reuses, built on the first expand. */
+let mermaidDialog = null;
+
+function ensureMermaidDialog() {
+  if (mermaidDialog) return mermaidDialog;
+  mermaidDialog = document.createElement("dialog");
+  mermaidDialog.className = "mermaid-dialog";
+  mermaidDialog.innerHTML =
+    '<button class="mermaid-dialog-close" type="button" title="Close" aria-label="Close diagram">' +
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>' +
+    '<div class="mermaid-dialog-body"></div>';
+  // A click that lands on the dialog element itself landed on the backdrop, since the diagram and
+  // the close button are both children.
+  mermaidDialog.addEventListener("click", function (e) {
+    if (e.target === mermaidDialog || e.target.closest(".mermaid-dialog-close")) mermaidDialog.close();
+  });
+  document.body.appendChild(mermaidDialog);
+  return mermaidDialog;
+}
+
+function openMermaidDialog(svg) {
+  const dialog = ensureMermaidDialog();
+  const clone = svg.cloneNode(true);
+  // The id has to be renamed, and mermaid's embedded <style> with it. That id is both the scope
+  // of every rule in the style block and the handle mermaid reuses on a re-render: leaving the
+  // clone holding a copy makes getElementById ambiguous, and the theme-change re-render then
+  // draws into the clone and leaves the article's own diagram broken.
+  const oldId = clone.id;
+  if (oldId) {
+    const newId = oldId + "-full";
+    clone.id = newId;
+    clone.querySelectorAll("style").forEach(function (s) {
+      s.textContent = s.textContent.split("#" + oldId).join("#" + newId);
+    });
+  }
+  // Mermaid sizes the SVG to the column it rendered into, as a width/height pair plus an inline
+  // max-width. All three have to go or the diagram keeps the column's width inside the dialog.
+  // What replaces them is a stylesheet rule, so the dialog can size a phone differently.
+  clone.removeAttribute("width");
+  clone.removeAttribute("height");
+  clone.style.maxWidth = "none";
+  dialog.querySelector(".mermaid-dialog-body").replaceChildren(clone);
+  dialog.showModal();
+}
+
+// Delegated, because `b.innerHTML = svg` in the render loop below throws away any listener bound
+// to a button from a previous render.
+document.addEventListener("click", function (e) {
+  const btn = e.target.closest && e.target.closest(".mermaid-expand");
+  if (!btn) return;
+  const svg = btn.parentElement.querySelector(":scope > svg");
+  if (svg) openMermaidDialog(svg);
+});
+
 async function renderMermaidBlocks(root) {
   if (!window.mermaid) return;
   ensureMermaid();
@@ -206,7 +273,7 @@ async function renderMermaidBlocks(root) {
     const id = b.dataset.mermaidId || ("m" + Math.random().toString(36).slice(2, 9));
     try {
       const { svg } = await mermaid.render(id, code);
-      b.innerHTML = svg;
+      b.innerHTML = svg + MERMAID_EXPAND_BUTTON;
       b.dataset.rendered = "1";
     } catch (e) {
       console.warn("mermaid render error", e);
@@ -222,8 +289,12 @@ async function renderMermaidBlocks(root) {
  * Mermaid's own state has to be reset first (`ensureMermaid` reads the attribute and reinitialises
  * because the recorded theme no longer matches), then each block is unmarked so the render loop
  * stops skipping it.
+ *
+ * An open full-screen diagram is closed rather than re-rendered, because its clone carries the
+ * previous theme's colours baked into it and nothing re-runs mermaid over a clone.
  */
 window.addEventListener("f1sl:themechange", function () {
+  if (mermaidDialog && mermaidDialog.open) mermaidDialog.close();
   document.querySelectorAll(".mermaid-block").forEach(function (b) {
     if (b.dataset.mermaidSrc !== undefined) delete b.dataset.rendered;
   });

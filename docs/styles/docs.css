@@ -646,19 +646,101 @@ body::after {
 .token.property, .token.tag { color: var(--code-property); }
 .token.parameter { color: var(--code-param); }
 
-/* Mermaid container */
+/* Mermaid container.
+   The top padding is 44px rather than 24px to clear the expand button, which floats over the
+   diagram's own top-left corner and would otherwise sit on the first node. */
 .mermaid-block {
+  position: relative;
   background: var(--bg-1);
   border: 1px solid var(--divider);
   border-radius: 12px;
-  padding: 24px;
+  padding: 44px 24px 24px;
   margin: 18px 0 24px;
   overflow-x: auto;
   display: flex;
   justify-content: center;
   box-shadow: var(--shadow-card);
 }
-.mermaid-block svg { max-width: 100%; height: auto; }
+/* Direct child only: the expand button carries an icon svg of its own. */
+.mermaid-block > svg { max-width: 100%; height: auto; }
+
+/* The expand control, and the close button that mirrors it inside the dialog.
+   Visible at rest rather than on hover: a hover-gated control is unreachable by touch and
+   invisible to anyone scanning the page for a way to enlarge the diagram. */
+.mermaid-expand,
+.mermaid-dialog-close {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--fg-3);
+  background: var(--tint-2);
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.mermaid-expand:hover,
+.mermaid-dialog-close:hover {
+  color: var(--accent-text);
+  border-color: var(--purple-500);
+}
+.mermaid-expand {
+  top: 10px;
+  left: 10px;
+  width: 30px;
+  height: 30px;
+}
+
+/* Full-screen diagram. The <dialog> is modal, so the backdrop, the Escape key and the focus
+   trap all come from the browser. */
+.mermaid-dialog {
+  width: 92vw;
+  height: 90vh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  box-shadow: var(--shadow-elev);
+  overflow: hidden;
+}
+/* ::backdrop only inherits custom properties from its originating element on recent browsers,
+   so the two theme values are written out here instead of read from --overlay-veil. */
+.mermaid-dialog::backdrop {
+  background: rgba(8, 8, 12, 0.85);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+:root[data-theme='light'] .mermaid-dialog::backdrop {
+  background: rgba(245, 245, 250, 0.88);
+}
+.mermaid-dialog-close {
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  z-index: 1;
+}
+.mermaid-dialog-body {
+  width: 100%;
+  height: 100%;
+  padding: 56px 28px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+/* The diagram fits the dialog rather than the article column. Mermaid's own width/height are
+   stripped in markdown.js, since an inline attribute would win over this. */
+.mermaid-dialog-body svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .mermaid-error {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1542,12 +1624,6 @@ body::after {
   animation: fade-in 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Scroll wrapper applied by the markdown renderer around mermaid SVGs. */
-.mermaid-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
 /* ---------------------------------------------------------
    xl  ≤ 1280px — drop the right-hand TOC column.
    --------------------------------------------------------- */
@@ -1797,13 +1873,31 @@ body::after {
 
   /* Mermaid diagrams scroll horizontally instead of squashing. */
   .mermaid-block {
-    padding: 16px 14px;
+    padding: 40px 14px 16px;
     justify-content: flex-start;
   }
-  .mermaid-block > svg,
-  .mermaid-block .mermaid-scroll {
+  .mermaid-block > svg {
     min-width: 0;
     max-width: 100%;
+  }
+  /* Nearly the whole viewport, since a phone has none to spare. */
+  .mermaid-dialog {
+    width: 100vw;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+  .mermaid-dialog-body {
+    padding: 52px 12px 12px;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  /* A phone cannot make a wide diagram both whole and legible. Fitting it to 360px is what the
+     article column already does, so the dialog holds it at a readable width and scrolls instead,
+     growing past the floor when the phone is turned. */
+  .mermaid-dialog-body svg {
+    min-width: 720px;
+    height: auto;
   }
 
   /* Home hero. */
@@ -2094,7 +2188,9 @@ body::after {
   .nav-right,
   .home-cta-row,
   .cta-strip,
-  .mini-graph {
+  .mini-graph,
+  .mermaid-expand,
+  .mermaid-dialog {
     display: none !important;
   }
   .shell,
