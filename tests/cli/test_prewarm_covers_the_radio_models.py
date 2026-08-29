@@ -30,14 +30,27 @@ so what is under test is whether `_prewarm_agents` reaches them at all.
 
 from __future__ import annotations
 
+import ast
 import sys
 from pathlib import Path
 
 import pytest
 
+from tests.conftest import skip_no_tire_models
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+# Importing the CLI reaches strategy_orchestrator and therefore tire_agent, whose
+# module-level config reads data/models/tire_degradation/routing_config.json and
+# raises FileNotFoundError when the weights are absent. That is an OSError, not an
+# ImportError, so importorskip does not catch it and the job goes red on a runner
+# that was never meant to have the file. The marker goes on the tests that import
+# the CLI, not on the module, because the source check below has to keep running
+# where the weights do not exist. Otherwise the only guard against this regression
+# would be one that never executes in CI.
+CLI_SOURCE = ROOT / "scripts" / "run_simulation_cli.py"
 
 
 @pytest.fixture
@@ -62,6 +75,45 @@ def stubbed_radio_cfg(monkeypatch: pytest.MonkeyPatch):
     return cfg, calls
 
 
+def _prewarm_ast() -> ast.FunctionDef:
+    """The `_prewarm_agents` definition, parsed rather than imported."""
+    tree = ast.parse(CLI_SOURCE.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_prewarm_agents":
+            return node
+    raise AssertionError("_prewarm_agents is gone from run_simulation_cli.py")
+
+
+def _suppressed_block(fn: ast.FunctionDef) -> ast.With:
+    """The `with _devnull_fds():` body, which is where output is safe to emit."""
+    for node in ast.walk(fn):
+        if isinstance(node, ast.With):
+            for item in node.items:
+                call = item.context_expr
+                if isinstance(call, ast.Call) and getattr(call.func, "id", None) == "_devnull_fds":
+                    return node
+    raise AssertionError("_prewarm_agents no longer wraps its work in _devnull_fds()")
+
+
+def test_the_prewarm_reads_the_pipeline_inside_the_suppressed_block() -> None:
+    """The structural half, which runs on a machine with no weights at all.
+
+    Parsed, not grepped: what matters is that the read happens INSIDE the
+    `_devnull_fds()` context, and a text search cannot tell that from a read two
+    lines after it, which is the shape that leaks the load report.
+    """
+    reads = [
+        node
+        for node in ast.walk(_suppressed_block(_prewarm_ast()))
+        if isinstance(node, ast.Attribute) and node.attr == "pipeline"
+    ]
+    assert reads, (
+        "nothing in the suppressed block reads .pipeline, so the NLP models load "
+        "on the first lap instead, printing their load report into the Live view"
+    )
+
+
+@skip_no_tire_models
 @pytest.mark.parametrize("no_llm", [True, False])
 def test_the_prewarm_builds_the_radio_pipeline(stubbed_radio_cfg, no_llm: bool) -> None:
     """Both modes, because the docstring says this one is unconditional.
@@ -79,6 +131,7 @@ def test_the_prewarm_builds_the_radio_pipeline(stubbed_radio_cfg, no_llm: bool) 
     assert sorted(calls) == ["intent", "ner", "sentiment"]
 
 
+@skip_no_tire_models
 def test_the_prewarm_swallows_a_failing_load(stubbed_radio_cfg, monkeypatch) -> None:
     """It is best-effort by design, and must stay that way.
 
