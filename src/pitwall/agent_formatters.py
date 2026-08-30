@@ -52,6 +52,35 @@ STATUS_WATCH: str = "WATCH"
 STATUS_ALERT: str = "ALERT"
 STATUS_IDLE: str = "IDLE"
 
+# The body's width budget, in characters of the 11 px line font.
+#
+# `_truncate`'s 70 bounds the MESSAGE and nothing else, and it was written
+# against a 280-340 px Qt label. Every body line also carries a prefix built
+# from wire text (`RCM L23 {label}: `, `{driver} {intent}: "`), and none of it
+# was ever counted, so the rendered line had no bound at all.
+#
+# The narrowest client this window opens at is 1226 px, from a 1280x720 screen;
+# `.agent-card-body.has-below` in `agents.css` is keyed to that same
+# measurement. A third of the grid leaves the body 373 px there, and realistic
+# transcript text measures about 5.0 px per character at 11 px, so the whole
+# LINE gets 74. `.agent-line` carries `overflow-wrap: anywhere` over a
+# content-sized grid row, so a line over budget does not truncate: it wraps,
+# grows the row, and takes the height out of the charts above it.
+#
+# The full message is never lost. `radio_tooltip` returns every message
+# uncapped, which is the division this window already uses: the ticker on the
+# glass, the record one hover away.
+BODY_LINE_LIMIT: int = 74
+
+# A flag token or an intent, not a sentence. `flag`, `event_type` and the N21
+# intent are all free wire text, and a label longer than this arrived in the
+# wrong field.
+LABEL_LIMIT: int = 22
+
+# What the message keeps even when the prefix has taken its share, so a long
+# label cannot render a line that is all prefix and an ellipsis.
+MESSAGE_FLOOR: int = 24
+
 # Type alias for readability only.
 Line = tuple[str, tuple[int, int, int]]
 Formatted = tuple[str, tuple[int, int, int], list[Line], str]
@@ -122,6 +151,16 @@ def _truncate(text: str | None, limit: int = 70) -> str:
     if len(s) <= limit:
         return s
     return s[: max(limit - 3, 0)].rstrip() + "..."
+
+
+def _message_room(prefix: str) -> int:
+    """Characters the message may use once ``prefix`` has taken its share of the line.
+
+    The prefix is bounded by its own callers (`_rcm_label`, `_radio_driver` and
+    `_radio_intent` each cap what they return), so the floor is a guard against
+    a prefix at its limit rather than against an unbounded one.
+    """
+    return max(MESSAGE_FLOOR, BODY_LINE_LIMIT - len(prefix))
 
 
 # --- N25 Pace -----------------------------------------------------------
@@ -311,8 +350,15 @@ def _rcm_label(event: dict[str, Any]) -> str:
     investigations) and finally to the literal ``RCM`` so the line never
     renders an empty bracket. Pulled into its own helper so both the body
     ticker and the tooltip render the same label for the same event.
+
+    Both wire fields are free text and neither was bounded, so a long
+    ``event_type`` rendered a body line with no width limit at all. Capped
+    here rather than at the call site because the tooltip reads the same
+    helper, and a label is a label on both surfaces. That does not reopen the
+    tooltip's uncapped-message rule: this bounds the LABEL, and the message
+    still arrives whole.
     """
-    return str(event.get("flag") or event.get("event_type") or "RCM")
+    return _truncate(str(event.get("flag") or event.get("event_type") or "RCM"), LABEL_LIMIT)
 
 
 def _radio_driver(event: dict[str, Any]) -> str:
@@ -324,8 +370,11 @@ def _radio_driver(event: dict[str, Any]) -> str:
     every entry depending on serialisation. ``UNKNOWN`` matches the same
     fallback string used in the agent itself, so the dashboard never
     invents a driver code that does not exist.
+
+    Capped like the other two label helpers: the field is wire text, and a
+    driver code longer than a label is malformed rather than long.
     """
-    return str(event.get("driver") or "UNKNOWN")
+    return _truncate(str(event.get("driver") or "UNKNOWN"), LABEL_LIMIT)
 
 
 def _radio_intent(event: dict[str, Any]) -> str:
@@ -335,8 +384,11 @@ def _radio_intent(event: dict[str, Any]) -> str:
     line still renders an intent column. Trusting the dict shape produced
     by ``run_pipeline`` (``analysis.intent``); only the boundary against
     missing keys is guarded, per the project's no-defensive-checks rule.
+
+    Capped for the same reason as ``_rcm_label``: the classifier's label is
+    free text on the wire and it rides in the body line's prefix.
     """
-    return str((event.get("analysis") or {}).get("intent") or "INFO")
+    return _truncate(str((event.get("analysis") or {}).get("intent") or "INFO"), LABEL_LIMIT)
 
 
 def _correction_row(entry: dict[str, Any]) -> dict[str, str]:
@@ -589,21 +641,26 @@ def format_radio(r: dict[str, Any] | None) -> Formatted:
     body: list[Line] = [
         (f"{n_radios} radios · {n_rcms} rcm", TEXT_SECONDARY),
     ]
+    # Both lines are budgeted as a WHOLE, prefix included. Capping only the
+    # message left the prefix free to run the rendered line past the card, and
+    # `.agent-line` wraps rather than clips, so the overflow came out of the
+    # charts above rather than out of the transcript.
     if rcm_events:
         last_rcm = rcm_events[-1]
+        prefix = f"RCM L{last_rcm.get('lap', '?')} {_rcm_label(last_rcm)}: "
         body.append(
             (
-                f"RCM L{last_rcm.get('lap', '?')} "
-                f"{html.escape(_rcm_label(last_rcm))}: {_escaped(last_rcm.get('message'))}",
+                f"{html.escape(prefix)}{_escaped(last_rcm.get('message'), _message_room(prefix))}",
                 TEXT_SECONDARY,
             )
         )
     for event in _radios_worth_the_room(radio_events, alerts):
+        prefix = f"{_radio_driver(event)} {_radio_intent(event)}: "
+        # The two quotes are part of the rendered line and so part of its budget.
+        room = _message_room(prefix) - 2
         body.append(
             (
-                f"{html.escape(_radio_driver(event))} "
-                f"{html.escape(_radio_intent(event))}: "
-                f'"{_escaped(event.get("message"))}"',
+                f'{html.escape(prefix)}"{_escaped(event.get("message"), room)}"',
                 TEXT_TERTIARY,
             )
         )

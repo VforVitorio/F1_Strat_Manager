@@ -2240,3 +2240,56 @@ def test_the_routing_roster_is_the_routers_own_conditional_agents():
     assert {agent_id for agent_id, _ in ROUTING_LANES} == added, (
         f"the roster and the router disagree: {ROUTING_LANES} vs {sorted(added)}"
     )
+
+
+def test_no_radio_body_line_can_outgrow_the_card():
+    """A body line is budgeted whole, prefix included, or it wraps into the charts.
+
+    The 70-character cap bounds the MESSAGE. Every line also carries a prefix
+    built from wire text (`RCM L23 {label}: `, `{driver} {intent}: "`), and
+    `_rcm_label` reads `flag` or `event_type` straight off the feed with no
+    bound at all. At two grid columns the slack hid it; at one column the
+    rendered line runs past the card, and `.agent-line` carries
+    `overflow-wrap: anywhere` over a content-sized grid row, so the overflow
+    comes out of the PACE and TIRE charts rather than out of the transcript.
+
+    The hostile strings here are the shape the wire can actually produce: an
+    `event_type` is a structured token nobody bounds, and the N21 intent is a
+    classifier label.
+    """
+    from src.pitwall.agent_formatters import BODY_LINE_LIMIT, format_radio
+
+    block = {
+        "rcm_events": [
+            {
+                "lap": 23,
+                "event_type": "INVESTIGATION_AFTER_THE_RACE_FOR_A_PROCEDURAL_BREACH" * 3,
+                "message": "M" * 400,
+            }
+        ],
+        "radio_events": [
+            {
+                "driver": "UNKNOWN_DRIVER_IDENTIFIER" * 2,
+                "analysis": {"intent": "INSTRUCTION_WITH_A_VERY_LONG_CLASSIFIER_LABEL"},
+                "message": "W" * 400,
+            }
+        ],
+        "alerts": [],
+    }
+
+    import html
+
+    lines = [html.unescape(text) for text, _ in format_radio(block)[2]]
+    transcript = [line for line in lines if ":" in line and "radios" not in line]
+
+    assert len(transcript) == 2, f"both the RCM line and the radio line render: {lines}"
+    for line in transcript:
+        assert len(line) <= BODY_LINE_LIMIT, (
+            f"{len(line)} visible characters against a {BODY_LINE_LIMIT} budget: {line!r}"
+        )
+
+    # And the budget is spent on the message, not eaten by the prefix: a line
+    # that is all label and an ellipsis carries no transcript at all.
+    for line in transcript:
+        _, _, tail = line.partition(": ")
+        assert len(tail.strip('"')) >= 20, f"the message keeps its floor: {line!r}"
