@@ -78,6 +78,7 @@ from src.agents.strategy_orchestrator import (
     best_mc_candidate,
     race_context_from_lap_state,
 )
+from src.agents.position_projection import project_rejoin
 from src.f1_strat_manager.gp_slugs import resolve_gp_key
 
 # The profiles #169 delivers. ``fast`` (direct-mode sub-agents + event-triggered
@@ -231,6 +232,11 @@ def _run_rich(
 
     with _StageTimer(timings, "mc"):
         _ctx = race_context_from_lap_state(lap_state, race_state)
+        # The draws the candidates are scored on, borrowed rather than re-drawn.
+        # The rejoin readout answers a different question about the same stop,
+        # and two samplings would put two answers for one lap on one screen.
+        # Empty when the legacy path ran, which is the readout's idle signal.
+        mc_draws: dict[str, Any] = {}
         mc_results = _run_mc_simulation(
             pace_out=pace_out,
             tire_out=tire_out,
@@ -241,8 +247,10 @@ def _run_rich(
             position=_ctx.get("position"),
             laps_remaining=_ctx.get("laps_remaining"),
             pit_context=_ctx.get("pit_context"),
+            capture=mc_draws,
         )
         best_mc = best_mc_candidate(mc_results)
+        rejoin = _rejoin_from(mc_draws)
 
     with _StageTimer(timings, "synthesis"):
         prompt = _build_orchestrator_prompt(
@@ -292,6 +300,7 @@ def _run_rich(
     agent_outputs = None
     if return_agent_outputs:
         agent_outputs = _assemble_agent_outputs(
+            rejoin=rejoin,
             pace_out=pace_out,
             tire_out=tire_out,
             situation_out=situation_out,
@@ -305,8 +314,26 @@ def _run_rich(
     return rec, agent_outputs, timings
 
 
+def _rejoin_from(capture: dict[str, Any]) -> Any:
+    """The PIT EXIT readout for this lap, or ``None`` when there is none to make.
+
+    ``None`` covers both absences and they are the same absence to a reader: the
+    legacy seconds path ran, so nothing was deposited, or the projection ran with
+    no rival carrying a usable gap. Neither is a position, and a surface renders
+    an idle state rather than inventing one.
+    """
+    if not capture:
+        return None
+    return project_rejoin(
+        capture["rival_states"],
+        capture["pit_loss_s"],
+        capture.get("current_position"),
+    )
+
+
 def _assemble_agent_outputs(
     *,
+    rejoin: Any = None,
     pace_out: Any,
     tire_out: Any,
     situation_out: Any,
@@ -333,6 +360,13 @@ def _assemble_agent_outputs(
         "rag": rag_dict,
         "active": list(active),
         "guardrail_reason": guardrail_reason,
+        # Where a stop taken on this lap puts us, or None. It rides here rather
+        # than on `StrategyRecommendation` because the fourteen fields of that
+        # model are frozen (#1046 schema v2), and rather than inside
+        # `scenario_scores` because that dict is iterated key by key into the
+        # LLM prompt and flattened to floats on the wire: an extra entry there
+        # becomes a phantom fifth candidate in one place and a crash in another.
+        "pit_exit": rejoin,
     }
     return outputs
 

@@ -36,8 +36,9 @@ from typing import Any
 import numpy as np
 
 from src.agents.position_projection import (
-    DriverPlan,
-    ProjectionConfig,
+    REJOIN_CLIFF_LAPS,
+    REJOIN_CONFIG,
+    REJOIN_PLAN,
     RivalState,
     project_positions,
 )
@@ -79,7 +80,7 @@ DEFAULT_SCORING_YEARS: tuple[int, ...] = (2023, 2024, 2025)
 # A stop is a stop whether or not the tyre falls off a cliff two laps later, so
 # the ground truth uses a flat degradation profile and a cliff far outside the
 # window. What is under test is the geometry of the rejoin, not the tyre model.
-_GROUND_TRUTH_CLIFF_LAPS = 99.0
+_GROUND_TRUTH_CLIFF_LAPS = REJOIN_CLIFF_LAPS
 
 # The horizon has to be the one the comparison uses. Each stop is projected from
 # the lap before and checked against the lap after, which is two laps, so the
@@ -88,15 +89,14 @@ _GROUND_TRUTH_CLIFF_LAPS = 99.0
 # high for the wrong reason: the extra laps let rivals separate, and a projection
 # graded on a horizon it was not asked about is not validated at all. The tyre
 # terms are off for the same reason the cliff is far away.
-_GROUND_TRUTH_CONFIG = ProjectionConfig(
-    window_laps=2,
-    racing_laps=2.0,
-    fresh_gain_s=0.0,
-    cliff_loss_s=0.0,
-    neutralisation_saving_s=0.0,
-)
+#
+# IMPORTED rather than declared here, and that is load-bearing. The PIT EXIT card
+# reads the same constant, and its whole claim is that the number on the glass is
+# the number graded below. Two copies of this config is how that claim would
+# quietly stop being true while both files still looked right.
+_GROUND_TRUTH_CONFIG = REJOIN_CONFIG
 
-_STOP_NOW = DriverPlan("PIT_NOW", stops_in_window=True, stop_offset_laps=0)
+_STOP_NOW = REJOIN_PLAN
 
 # What each measured table exists to answer, in one line. Kept beside the report
 # rather than in the JSON because it is editorial, and the JSON is machine-read.
