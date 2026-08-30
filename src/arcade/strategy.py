@@ -17,6 +17,7 @@ regress the webapp consumers that still depend on the backend.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 from dataclasses import asdict, dataclass, field
@@ -170,6 +171,17 @@ class LapDecisionDTO:
     contingencies: list[dict[str, Any]] = field(default_factory=list)
     key_risks: list[str] = field(default_factory=list)
     guardrail_reason: str | None = None
+    # Where a stop taken on this lap puts us, as a plain dict for the same
+    # reason `contingencies` is one: the wire is JSON and `asdict` walks this
+    # DTO. `None` when the projection did not run or found no traffic, which is
+    # an absence the windows render as an idle card rather than as a position.
+    #
+    # A field of its own, never a fifth entry in `scenario_scores`: that dict is
+    # iterated key by key into the orchestrator's LLM prompt (a stray key
+    # becomes a phantom candidate), flattened to `{str: float}` on the wire (a
+    # dict entry is silently dropped), and read by `_scoreable` with `.get`
+    # (a numeric entry raises and kills the lap).
+    pit_exit: dict[str, Any] | None = None
     # Raw per-agent outputs (populated by the arcade-local pipeline so the
     # dashboard can render predicted vs actual, CI bounds, cliff percentiles
     # and every other model detail that used to live only in the CLI panel).
@@ -842,6 +854,47 @@ def _contingency_dicts(contingencies: Any) -> list[dict[str, Any]]:
     return packed
 
 
+def _finite(value: Any) -> float | None:
+    """A float the wire can carry, or None. NaN and inf are not numbers to JSON."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _pit_exit_payload(readout: Any) -> dict[str, Any] | None:
+    """The rejoin readout as the plain dict the wire carries, or None.
+
+    Flattened here rather than left as a nested dataclass so the wire shape is
+    STATED, and so the golden that pins it (`tests/surfaces/
+    test_arcade_wire_contract.py`) fails on a rename instead of silently
+    following one. `contingencies` is flattened one line above for the same
+    reason.
+
+    A neighbour is `None` when there is no car on that side, which is a real
+    state: rejoining into the lead has nothing ahead. It is never an empty dict,
+    because a consumer would then read a driver code of "" and a gap of 0.0,
+    and 0.0 is a gap the code can also legitimately find.
+    """
+    if readout is None:
+        return None
+
+    def _car(neighbour: Any) -> dict[str, Any] | None:
+        if neighbour is None:
+            return None
+        return {"driver": str(neighbour.driver), "gap_s": _finite(neighbour.gap_s)}
+
+    return {
+        "slot": int(readout.slot),
+        "from_position": int(readout.from_position) if readout.from_position else None,
+        "band": int(readout.band),
+        "ahead": _car(readout.ahead),
+        "behind": _car(readout.behind),
+        "rivals_used": int(readout.rivals_used),
+    }
+
+
 def _build_decision(
     rec: Any,
     race_state: Any,
@@ -885,6 +938,7 @@ def _build_decision(
         contingencies=_contingency_dicts(getattr(rec, "contingencies", None)),
         key_risks=[str(risk) for risk in (getattr(rec, "key_risks", None) or [])],
         guardrail_reason=None,
+        pit_exit=_pit_exit_payload(agent_outputs.get("pit_exit")),
         per_agent=_build_per_agent(agent_outputs),
         memory_block=memory_block,
         plan_changed=plan_changed,

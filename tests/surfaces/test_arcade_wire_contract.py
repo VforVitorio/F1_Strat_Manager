@@ -133,6 +133,19 @@ def _decision() -> LapDecisionDTO:
         ],
         key_risks=["rejoin into traffic"],
         guardrail_reason="none",
+        # Both neighbours populated, because that is the state whose SHAPE a
+        # consumer has to generate types from. The absent ones are real too and
+        # they are pinned where they occur: `None` for the whole block before a
+        # projection has run (`GOLDEN_MINIMAL_DIFFS`), and a `None` neighbour
+        # when the rejoin lands in the lead or at the back.
+        pit_exit={
+            "slot": 3,
+            "from_position": 1,
+            "band": 0,
+            "ahead": {"driver": "VER", "gap_s": -4.5},
+            "behind": {"driver": "RUS", "gap_s": 4.1},
+            "rivals_used": 16,
+        },
         # Real field names, taken from the agents' own output dataclasses and
         # guarded by `test_the_per_agent_fixture_uses_the_producers_real_field_names`.
         # An invented set used to live here and agreed with the dev producer's
@@ -336,6 +349,14 @@ GOLDEN_SHAPE = {
                 "key_risks": ["str"],
                 "gap_ahead_s": "float",
                 "guardrail_reason": "str",
+                "pit_exit": {
+                    "ahead": {"driver": "str", "gap_s": "float"},
+                    "band": "int",
+                    "behind": {"driver": "str", "gap_s": "float"},
+                    "from_position": "int",
+                    "rivals_used": "int",
+                    "slot": "int",
+                },
                 "lap_number": "int",
                 "lap_time_s": "float",
                 "memory_block": "str",
@@ -366,6 +387,14 @@ GOLDEN_SHAPE = {
             "key_risks": ["str"],
             "gap_ahead_s": "float",
             "guardrail_reason": "str",
+            "pit_exit": {
+                "ahead": {"driver": "str", "gap_s": "float"},
+                "band": "int",
+                "behind": {"driver": "str", "gap_s": "float"},
+                "from_position": "int",
+                "rivals_used": "int",
+                "slot": "int",
+            },
             "lap_number": "int",
             "lap_time_s": "float",
             "memory_block": "str",
@@ -1110,3 +1139,76 @@ def test_the_pipeline_delegate_no_longer_throws_the_stage_timings_away():
         if isinstance(node, ast.Attribute) and node.attr in {"debug", "info", "warning"}
     ]
     assert logged, "the timings are bound and then still go nowhere"
+
+
+def test_the_rejoin_rides_its_own_field_and_never_the_scenario_scores():
+    """`scenario_scores` is the four candidates and nothing else.
+
+    Driven through `_build_decision`, the PRODUCER, rather than through the
+    hand-built fixture above. An earlier version of this test read
+    `_payload()`, whose DTO is constructed literally, so it could not see a
+    producer routing the readout somewhere else: it passed against a mutation
+    that put `PIT_EXIT` straight into `scenario_scores`. Pinning a fixture
+    instead of a producer is how this file was once green while describing a
+    contract nothing emitted.
+
+    Three separate consumers break if a fifth entry appears in that dict, in
+    three different ways: `_format_mc_row` iterates every key into the
+    orchestrator's LLM prompt, so an entry becomes a phantom candidate the
+    model synthesises against; `_normalize_scores` drops a dict entry silently,
+    so the data never arrives; and `_scoreable` calls `.get` on each value, so a
+    numeric entry raises and kills the lap.
+    """
+    from types import SimpleNamespace
+
+    from src.agents.position_projection import RejoinNeighbour, RejoinReadout
+    from src.arcade.strategy import _build_decision
+
+    rec = SimpleNamespace(
+        action="PIT_NOW",
+        confidence=0.71,
+        reasoning="",
+        scenario_scores={"PIT_NOW": {"score": 0.71}, "STAY_OUT": {"score": 0.29}},
+        contingencies=[],
+        key_risks=[],
+    )
+    race_state = SimpleNamespace(
+        lap=23, compound="MEDIUM", tyre_life=12, position=1, gap_ahead_s=1.4
+    )
+    readout = RejoinReadout(
+        slot=3,
+        from_position=1,
+        band=0,
+        ahead=RejoinNeighbour("VER", -4.5),
+        behind=RejoinNeighbour("RUS", 4.1),
+        rivals_used=16,
+    )
+
+    decision = _build_decision(rec, race_state, 81.3, {"pit_exit": readout})
+
+    assert set(decision.scenario_scores) == {"PIT_NOW", "STAY_OUT"}, (
+        f"the rejoin leaked into the scored dict: {sorted(decision.scenario_scores)}"
+    )
+    assert all(isinstance(v, float) for v in decision.scenario_scores.values()), (
+        "scenario_scores is {str: float} on the wire; a nested value breaks the "
+        "backend's coercion and the webapp's chart"
+    )
+    assert decision.pit_exit is not None, "the producer dropped the readout"
+    assert decision.pit_exit["slot"] == 3
+    assert decision.pit_exit["ahead"]["driver"] == "VER"
+
+    # And the same producer with nothing to say says nothing.
+    empty = _build_decision(rec, race_state, 81.3, {})
+    assert empty.pit_exit is None
+
+
+def test_an_absent_rejoin_reaches_the_consumer_as_null_not_as_a_position():
+    """No projection, no readout, and nothing number-shaped in its place.
+
+    The legacy seconds path deposits no draws, so there is nothing to project
+    from. A consumer must be able to tell that from a real rejoin, which means
+    the whole block is null rather than a slot with a zero in it.
+    """
+    from src.arcade.strategy import _pit_exit_payload
+
+    assert _pit_exit_payload(None) is None
