@@ -479,10 +479,10 @@ Wire the multi-agent system into the FastAPI backend, expose strategy tools via 
       default LLM provider flipped from `lmstudio` to `openai` (override with
       `F1_LLM_PROVIDER`)
 
-**Step 13: Legacy cleanup:** ⬜ Not started
+**Step 13: Legacy cleanup:** ✅ Done (2026-07-26, #591)
 
-- [ ] Archive `src/agents/base_agent.py`, `src/agents/strategy_agent.py`, `src/agents/rules/`
-- [ ] Replace legacy jupytext `src/nlp/pipeline.py` with N24-aligned implementation
+- [X] Archive `src/agents/base_agent.py`, `src/agents/strategy_agent.py` and `src/agents/rules/`, all moved to `legacy/experta_engine/`
+- [X] Retire the legacy jupytext `src/nlp/pipeline.py`, moved to `legacy/nlp_standalone/` with `ner.py`, `sentiment.py` and `radio_classifier.py`. There was nothing to replace: sentiment, intent and NER are loaded and run inside `src/agents/radio_agent.py`, and `src/nlp/` now holds only `radio_runner.py` and `rcm_state.py`, which the CLI, the arcade and the backend all import
 
 **Driver + Team selection (single-driver perspective):**
 
@@ -513,7 +513,7 @@ At session start, the user selects `TEAM` and `DRIVER` (e.g. McLaren / NOR). Thi
 
 - [X] Docker Compose: FastAPI backend + Streamlit frontend (`docker-compose.yml`, two services). Qdrant runs on-disk in-process (no container); LM Studio/OpenAI is reached from the host via `host.docker.internal`. Kafka sidecar descoped (see note above)
 - [ ] Alternative: Streamlit Cloud + hosted FastAPI (documented as viable, not deployed)
-- [ ] Legacy cleanup: archive `base_agent.py`, `strategy_agent.py`, `rules/`; update `src/nlp/pipeline.py` to match N24
+- [X] Legacy cleanup: archive `base_agent.py`, `strategy_agent.py`, `rules/` and the standalone NLP modules. Done in step 13 above (#591)
 
 **Success Metrics:**
 
@@ -532,7 +532,7 @@ At session start, the user selects `TEAM` and `DRIVER` (e.g. McLaren / NOR). Thi
 **Test scope actually executed (absorbed into v1.0.0):**
 
 - [X] End-to-end CLI simulation with no-LLM and LLM modes on representative 2025 races
-- [X] Smoke tests for agent imports and Arcade dashboard subprocess (`tests/agents/test_agents.py`, `tests/surfaces/test_arcade_dashboard_imports.py`)
+- [X] Smoke tests for agent imports and Arcade dashboard subprocess (`tests/agents/test_agents.py`, and a dashboard import test that was retired with the Qt windows PITWALL replaced)
 - [X] FastAPI + FastMCP integration path validated via `TestClient` and manual chat interactions
 - [X] Historical replay of the Bahrain 2025 GP used as the primary qualitative demo
 
