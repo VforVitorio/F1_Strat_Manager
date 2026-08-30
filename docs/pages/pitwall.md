@@ -102,13 +102,53 @@ moment, not an error in either.
 
 ### PITWALL · AGENTS
 
-A 1:1 port of the Qt strategy window: header, the orchestrator card, scenario
-bars, the six-tab reasoning panel, and the 3x2 grid of sub-agent cards with
-their embedded charts.
+Four strata, top to bottom: header, the decision band, the agent grid, status
+bar. The band answers one question per module across the line the eye lands on
+anyway, left to right in the order a reader asks them, which is what the
+orchestrator is doing, why, on what evidence, and what happens next.
 
-It is 1:1 **by construction** rather than by inspection. The host calls the Qt
-window's own formatters and hands the React side an already-formatted view, so
-the two surfaces cannot describe the same lap differently.
+**The Qt lineage ends at the layout, and only at the layout.** Every string,
+colour and glyph still comes out of `src/pitwall/agents_view/`, which is the Qt
+window's own code, so the two surfaces cannot describe the same lap
+differently. What the port inherited and then dropped is the geometry: a header
+strip over a 540 / 740 horizontal split, decision in the left column and a 3x2
+card grid in the right. That split made the decision a peer of the agent grid,
+two territories with no reading order, and put the most important content on the
+window in the same column as a reasoning panel measured at 1.9% ink.
+
+The grid places its cards by name rather than in reading order, because three of
+the six want a shape reading order does not give them:
+
+```
+pace   tire   side
+radio  exit   rag
+```
+
+**PIT EXIT is the one output with no Qt counterpart.** It answers the question a
+pit wall asks before every stop: box on this lap, and what position does the car
+rejoin in, with which cars either side. It reads `P1 → P3` under an *if we box
+now* header, the car ahead and the car behind named with the gap to each. The
+number is the one the projection layer is graded on, 86.1% within one position
+over 552 real green-flag stops of 2025, because the card computes at the same
+two-lap horizon the ground truth measures rather than at the five-lap one the
+strategy scoring uses.
+
+The card is a hypothetical and says so in its own header, which is what keeps it
+readable on a STAY_OUT lap. Suppressing it there was designed and rejected: it
+would idle the card on exactly the laps somebody is asking whether to box, which
+is when the readout earns its space. It carries no identity colour either. The
+live call wears ACCENT one card up, and a branch that is not happening must not.
+
+RADIO gave up the second of its two columns to make room, so the bottom row runs
+three cards wide. That is not cosmetic. At one column a radio transcript no
+longer fits on one line and the body wraps rather than clips, so the height comes
+out of the charts above it, which is why `agent_formatters.BODY_LINE_LIMIT`
+budgets the lines.
+
+Before the first view arrives the window renders what the Qt window shows at
+startup rather than a spinner. The scenario scores are the one field that no
+longer follows Qt: they read `--` where it painted `0%`, because before the first
+tick nothing has been simulated and 0% is a measurement.
 
 ## How it is wired
 
