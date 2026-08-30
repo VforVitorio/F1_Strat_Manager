@@ -21,27 +21,40 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent.parent
-_INTENT_DIR = ROOT / "data" / "models" / "nlp" / "intent_setfit_modernbert_v1"
-_HAS_INTENT_HEAD = (_INTENT_DIR / "model_head.pkl").exists()
-_HAS_NER_CFG = (ROOT / "data" / "models" / "nlp" / "ner_v1" / "model_config.json").exists()
-_HAS_NER_MODEL = (
-    ROOT / "data" / "models" / "nlp" / "ner_v1" / "bert_bio_v1" / "bert_bio_state_dict.pt"
-).exists()
-_HAS_RCM_CORPUS = bool(list((ROOT / "data" / "processed").glob("race_radios/2025/*/rcm.parquet")))
+
+
+def _models_file(*parts: str) -> Path:
+    """A model artefact at the path the stage reads.
+
+    Every probe in this module goes through `get_data_root()` / `get_models_root()`
+    rather than `ROOT / "data"`, because `F1_STRAT_DATA_ROOT` moves what the code
+    reads and a probe anchored on the repo does not follow it. A probe that MISSES
+    while the code hits degrades to a skip, which is harmless; a probe that HITS
+    while the code misses turns a skip into a hard failure, and that is what a
+    repo-anchored probe produced under the override (three failures, none of them a
+    real defect).
+    """
+    from src.f1_strat_manager.data_cache import get_models_root
+
+    return get_models_root().joinpath(*parts)
+
+
+def _processed_dir() -> Path:
+    """``<data root>/processed``, for the same reason as above."""
+    from src.f1_strat_manager.data_cache import get_data_root
+
+    return get_data_root() / "processed"
 
 
 def _label_file(name: str) -> Path:
-    """A label file at the path the stage reads, which is not always under the repo.
+    """A label file at the path the stage reads, for the same reason as above."""
+    return _processed_dir() / "radio_nlp" / name
 
-    The probes above use `ROOT / "data"`; `src/strategy/eval/nlp.py` uses
-    `get_data_root()`, and `F1_STRAT_DATA_ROOT` moves that elsewhere. For the
-    weights the difference is harmless (a probe that misses degrades to a skip),
-    but these two decide between a skip and a failure, so they read what the code
-    reads.
-    """
-    from src.f1_strat_manager.data_cache import get_data_root
 
-    return get_data_root() / "processed" / "radio_nlp" / name
+_HAS_INTENT_HEAD = _models_file("nlp", "intent_setfit_modernbert_v1", "model_head.pkl").exists()
+_HAS_NER_CFG = _models_file("nlp", "ner_v1", "model_config.json").exists()
+_HAS_NER_MODEL = _models_file("nlp", "ner_v1", "bert_bio_v1", "bert_bio_state_dict.pt").exists()
+_HAS_RCM_CORPUS = bool(list(_processed_dir().glob("race_radios/2025/*/rcm.parquet")))
 
 
 # The label sets the intent and NER stages score against. Both are on the Hub
@@ -89,7 +102,7 @@ def test_gold_bio_tags_align_to_split_words():
 
 
 @pytest.mark.data
-@pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent head absent (CI runner without weights)")
+@pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent head not downloaded")
 def test_intent_predict_proba_order_is_aligned():
     """NR-08: the production predict_proba decode reads the correct class (no swap)."""
     from src.strategy.eval.nlp import verify_intent_column_order
@@ -100,7 +113,7 @@ def test_intent_predict_proba_order_is_aligned():
 
 
 @pytest.mark.data
-@pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent model absent (CI runner without weights)")
+@pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent model not downloaded")
 @pytest.mark.skipif(not _HAS_INTENT_LABELS, reason="intent_labeled_data.csv not downloaded")
 def test_intent_reproduction_is_sane():
     """Setfit-free reproduction runs and beats chance on the labeled set."""
@@ -113,7 +126,7 @@ def test_intent_reproduction_is_sane():
 
 
 @pytest.mark.data
-@pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent model absent (CI runner without weights)")
+@pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent model not downloaded")
 @pytest.mark.skipif(not _HAS_INTENT_LABELS, reason="intent_labeled_data.csv not downloaded")
 def test_alert_precision_from_gold_is_high():
     """Alert precision (intent PROBLEM/WARNING) is real (gold-derived) and clears 0.8."""
@@ -137,7 +150,7 @@ def test_dead_ner_classes_flags_zero_f1_types():
 
 
 @pytest.mark.data
-@pytest.mark.skipif(not _HAS_NER_MODEL, reason="ner weights absent (CI runner without weights)")
+@pytest.mark.skipif(not _HAS_NER_MODEL, reason="ner weights not downloaded")
 @pytest.mark.skipif(
     not _HAS_NER_ANNOTATIONS, reason="f1_radio_entity_annotations.json not downloaded"
 )
@@ -151,7 +164,7 @@ def test_ner_entity_f1_reproduces_headline():
 
 
 @pytest.mark.data
-@pytest.mark.skipif(not _HAS_RCM_CORPUS, reason="2025 rcm corpus absent (CI runner without data)")
+@pytest.mark.skipif(not _HAS_RCM_CORPUS, reason="2025 rcm corpus not downloaded")
 def test_rcm_coverage_is_high():
     """The ported parser leaves few OTHER events; overall coverage clears 0.9."""
     from src.strategy.eval.nlp import reproduce_rcm

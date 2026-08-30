@@ -51,11 +51,25 @@ _CONSTRUCTION_READS = {
 #
 # `ner_v1/model_config.json` sits one level ABOVE the weights, so the pattern that pulls
 # `ner_v1/bert_bio_v1/**` misses it and every clean install lost NR-07 (#1146).
+#
+# The value is the artefact path; the needle is what proves the module still reads it.
+# A bare filename works when the filename is distinctive. It is NOT enough for
+# `model_config.json`, which appears five times in `nlp.py` for five different models, and
+# the parent directory is worse: `_NER_DIR = "ner_v1"` at nlp.py:54 survives deleting the
+# read entirely, so that needle could not fail. Verified by relocating the read to another
+# path in a scratch worktree, which compiled and left the guard green.
 _EVAL_READS = {
     "nlp.py": (
-        "data/processed/radio_nlp/intent_labeled_data.csv",
-        "data/processed/radio_nlp/f1_radio_entity_annotations.json",
-        "data/models/nlp/ner_v1/model_config.json",
+        ("data/processed/radio_nlp/intent_labeled_data.csv", "intent_labeled_data.csv"),
+        (
+            "data/processed/radio_nlp/f1_radio_entity_annotations.json",
+            "f1_radio_entity_annotations.json",
+        ),
+        ("data/models/nlp/ner_v1/model_config.json", '_NER_DIR / "model_config.json"'),
+    ),
+    "alert_llm.py": (
+        ("data/processed/radio_nlp/radios_raw.csv", "radios_raw.csv"),
+        ("data/processed/radio_nlp/intent_labeled_data.csv", "intent_labeled_data.csv"),
     ),
 }
 
@@ -102,11 +116,13 @@ def test_the_module_still_reads_the_artefact_this_test_claims(module, artefact):
     )
 
 
-@pytest.mark.parametrize(
-    ("module", "artefact"),
-    sorted((mod, art) for mod, arts in _EVAL_READS.items() for art in arts),
+_EVAL_CASES = sorted(
+    (mod, art, needle) for mod, reads in _EVAL_READS.items() for art, needle in reads
 )
-def test_an_eval_label_set_is_pulled_by_the_downloader(module, artefact):
+
+
+@pytest.mark.parametrize(("module", "artefact", "needle"), _EVAL_CASES)
+def test_an_eval_artefact_is_pulled_by_the_downloader(module, artefact, needle):
     """The download list must cover what the eval stages read, or the report loses a row."""
     patterns = _patterns()
     assert _covers(patterns, artefact), (
@@ -116,21 +132,14 @@ def test_an_eval_label_set_is_pulled_by_the_downloader(module, artefact):
     )
 
 
-@pytest.mark.parametrize(
-    ("module", "artefact"),
-    sorted((mod, art) for mod, arts in _EVAL_READS.items() for art in arts),
-)
-def test_the_eval_module_still_reads_the_artefact_this_test_claims(module, artefact):
+@pytest.mark.parametrize(("module", "artefact", "needle"), _EVAL_CASES)
+def test_the_eval_module_still_reads_the_artefact_this_test_claims(module, artefact, needle):
     """Same staleness guard as the construction list above, for the same reason."""
     source = (ROOT / "src" / "strategy" / "eval" / module).read_text(encoding="utf-8")
-    filename = artefact.rsplit("/", 1)[-1]
-    stem = filename.rsplit(".", 1)[0]
-    # `model_config.json` is built from a directory constant plus the bare filename, so
-    # the path never appears whole in the source and the parent directory is the claim.
-    needle = filename if filename != "model_config.json" else artefact.split("/")[-2]
     assert needle in source, (
-        f"src/strategy/eval/{module} no longer mentions {needle} (for {stem}): either the "
-        f"read moved and this entry is stale, or the list needs whatever replaced it."
+        f"src/strategy/eval/{module} no longer contains {needle!r}, the expression that "
+        f"reads {artefact}: either the read moved and this entry is stale, or the list "
+        f"needs whatever replaced it."
     )
 
 
