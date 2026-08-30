@@ -17,6 +17,8 @@ seventy, and the radio corpus is a separate artefact that can be absent on its o
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from src.f1_strat_manager.data_cache import get_data_root
@@ -246,3 +248,78 @@ def test_a_tick_that_names_no_race_takes_the_feed_down_with_the_table():
     assert answered["radio"] == {"available": False, "events": []}, (
         "the table went empty and the previous race's radio stayed on screen beside it"
     )
+
+
+class _BlockingSession:
+    """A race whose `masked_view` parks, so a swap can land in the middle of it."""
+
+    def __init__(self) -> None:
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def masked_view(self, reveal, t_min):
+        self.entered.set()
+        self.release.wait(10)
+        return {"available": True, "drivers": {"NOR": 20}}
+
+
+class _StubCorpus:
+    """A radio corpus that always has something to say, so silence means a torn read."""
+
+    @staticmethod
+    def masked_view(reveal):
+        return {"available": True, "events": [{"kind": "radio", "driver": "NOR"}]}
+
+
+def test_the_table_and_the_radio_come_from_the_same_race_under_a_concurrent_swap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pair has to be taken once, not read again after the table is built.
+
+    `_session_for` loads the laps and the corpus under one lock, which settles
+    who WRITES them. The reader was still unlocked: `_masked_view` built the
+    table, and only then read `self._radio` off the host. A swap landing in that
+    gap serves one race's table beside another race's radio, or beside the
+    `{"available": False, "events": []}` the clearing branch had just published,
+    which is exactly what the comment on the lock says cannot happen.
+
+    Executed rather than argued. A window thread parks inside
+    `session.masked_view`; a second thread runs a tick that names no race, which
+    takes the clearing branch and nulls all three fields; the window is then let
+    go. Before the fix the payload came back as an available table beside an
+    unavailable feed.
+
+    Stubs rather than the real Melbourne corpus, because the interleaving needs a
+    `masked_view` that parks on command and the real one returns immediately.
+    `test_a_tick_that_names_no_race_takes_the_feed_down_with_the_table` is the
+    same clearing branch on real data, without the second thread.
+    """
+    import src.pitwall.host as host_module
+
+    session = _BlockingSession()
+    monkeypatch.setattr(host_module.SessionLaps, "load", lambda root, y, loc: session)
+    monkeypatch.setattr(host_module.RadioCorpus, "load", lambda root, y, loc: _StubCorpus())
+
+    host = PitwallHost(_FakeClient(), window_count=1)
+    served: dict[str, dict] = {}
+
+    def window() -> None:
+        served["view"] = host._masked_view(
+            {"year": 2025, "location": "Melbourne", "global_t_min": 0.0}, {"NOR": 20}
+        )
+
+    reader = threading.Thread(target=window, name="window")
+    reader.start()
+    assert session.entered.wait(10), "the window never reached masked_view"
+
+    host._session_for({"year": None, "location": None})
+    session.release.set()
+    reader.join(10)
+
+    view = served["view"]
+    assert view["available"] is True, "the table did not build; the case is not exercised"
+    assert view["radio"]["available"] is True, (
+        "the table was served for one race beside a radio the clearing branch had already "
+        f"withdrawn: {view['radio']}"
+    )
+    assert view["radio"]["events"], "the feed came back empty beside a populated table"

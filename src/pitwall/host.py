@@ -409,7 +409,7 @@ class PitwallHost:
         if payload is None:
             return None
         arcade = payload.get("arcade") or {}
-        session = self._session_for(arcade)
+        session, _ = self._session_for(arcade)
         if session is None:
             # The twin `get_bulk` has always had this branch and this one did
             # not. Plain None means "keep what you have", so pointing the
@@ -463,8 +463,8 @@ class PitwallHost:
             for code, state in (arcade.get("drivers") or {}).items()
         }
 
-    def _session_for(self, arcade: dict) -> SessionLaps | None:
-        """The loaded race for this tick, or None when it is not on disk.
+    def _session_for(self, arcade: dict) -> tuple[SessionLaps | None, RadioCorpus | None]:
+        """The loaded race AND its radio for this tick, or a pair of Nones.
 
         Cached on (year, location) so pointing the arcade at another race
         replaces the laps instead of serving the previous one's - the
@@ -484,6 +484,16 @@ class PitwallHost:
         beside it had already given up on. Not reachable from today's producer,
         which always publishes an int year and a str location, and fixed anyway
         because the branch exists to be defensive and was not.
+
+        **Both come back from here rather than the caller reading `self._radio`.**
+        Loading them under one lock only settles who WRITES them; the reader was
+        still unlocked, so `_masked_view` could take the table from one race and
+        then, after the swap, read the radio of another - or the radio the
+        clearing branch above had just withdrawn. The interleaving served a table
+        with one driver's laps beside `{"available": False, "events": []}`, which
+        is precisely what the comment on the lock says cannot happen. Returning
+        the pair hands the caller one consistent snapshot and leaves nothing for
+        it to re-read.
         """
         year, location = arcade.get("year"), arcade.get("location")
         # The whole body is under the lock, the clearing branch included. Leaving
@@ -495,12 +505,12 @@ class PitwallHost:
                 self._session_key = None
                 self._session = None
                 self._radio = None
-                return None
+                return None, None
             if self._session_key != (year, location):
                 self._session_key = (year, location)
                 self._session = SessionLaps.load(get_data_root(), year, location)
                 self._radio = RadioCorpus.load(get_data_root(), year, location)
-            return self._session
+            return self._session, self._radio
 
     def _masked_view(self, arcade: dict, reveal: dict[str, int]) -> dict:
         """Load the race once, then slice it; or say it is not on disk.
@@ -511,7 +521,7 @@ class PitwallHost:
         #904 already paid for once on the AGENTS history.
         """
         year, location = arcade.get("year"), arcade.get("location")
-        session = self._session_for(arcade)
+        session, radio = self._session_for(arcade)
         if session is None:
             view = unavailable(
                 year if isinstance(year, int) else None,
@@ -527,9 +537,7 @@ class PitwallHost:
         # bulk is 66,991 / 152,657 / 337,289 bytes at reveal L10 / L24 / L57 on
         # the real Melbourne payload, and the largest feed in the whole corpus
         # (Monaco, 210 events) is about 31 KB - 9%.
-        view["radio"] = (
-            radio_unavailable() if self._radio is None else self._radio.masked_view(reveal)
-        )
+        view["radio"] = radio_unavailable() if radio is None else radio.masked_view(reveal)
         return view
 
     def release_window(self) -> int:
