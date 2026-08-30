@@ -43,7 +43,6 @@ from pathlib import Path
 
 import pytest
 
-from src.agents.strategy_orchestrator import CFG
 from tests.conftest import HAS_TIRE_MODELS as _HAS_MODELS
 from tests.mc.canned_outputs import canned_outputs as _canned_outputs
 
@@ -302,6 +301,8 @@ def test_the_readout_prices_the_stop_the_candidates_were_scored_on():
 
     assert losses.min() >= low - 1e-9, f"{losses.min()} is below {low}, so it was not drawn here"
     assert losses.max() <= high + 1e-9, f"{losses.max()} is above {high}, so it was not drawn here"
+    from src.agents.strategy_orchestrator import CFG
+
     assert len(losses) == CFG.n_sim, "one entry per scored draw"
     assert losses.std() > 0.05, (
         "a 500-draw triangular sample has spread; a flat array is a summary "
