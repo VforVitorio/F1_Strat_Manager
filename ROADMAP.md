@@ -645,16 +645,21 @@ letting the roadmap contradict the CHANGELOG.
 
 | Version | Milestone | What it adds |
 |---|---|---|
-| **v2.6.0** | Arcade, modernized | A trackside frontend built in **web technology** for part of the live Arcade experience, running **alongside** the pyglet 2D replay rather than replacing it. **Desktop windows, not a web app**: the strategy and telemetry surfaces move to React hosted in the platform webview, reusing the React app's tab and URL-contract machinery from v2.0.0. They open as OS windows and need no browser and no server. The `lap_state` contract and the agents stay unchanged. |
 | **v2.8.0** | Rival Agent | A new, additive LangGraph node that predicts each nearby rival's next strategic move (pit window, compound, undercut/overcut) and feeds it to the orchestrator. Recommendations move from reactive to anticipatory. The six existing agents are untouched. |
 | **v3.0.0** | Live race inference | Real-time ingestion over the OpenF1 WebSocket (the `lap_state` contract is unchanged, so agents and orchestrator don't change), plus adaptation to the 2026 technical/sporting regulation (re-cluster, re-label compounds, drift monitoring). |
 
-Why that order: v2.6.0 is *same data, better face*. It carries low risk, and it reuses what v2.0.0
-already built. v3.0.0 is *new data, in real time*, which depends on a live source and its
-reliability. Polishing the modern surface before plugging in the live feed means there is
+Why that order: the surface came first because it is *same data, better face*, which carries low
+risk and reuses what v2.0.0 already built. v3.0.0 is *new data, in real time*, and depends on a live
+source and its reliability. Polishing the surface before plugging in the live feed means there is
 somewhere good to render the data once it arrives.
 
 Superseded: "Modern frontend" was planned here as v1.6.0 and **shipped as v2.0.0** on 2026-07-21.
+
+Shipped: "Arcade, modernized" was planned here as v2.6.0 and **shipped on 2026-08-29**, as PITWALL:
+two desktop windows in React hosted in a platform webview, running alongside the pyglet replay. What
+shipped is narrower than the row promised in one respect and wider in another. It is not a web app
+and never opens a browser, and it also carried a design pass over the replay, every one of the 70
+rounds of 2023 to 2025 loading from the menu, and a round of startup and per-lap cost work.
 
 ### Rival Agent: the anticipatory turn (v2.8.0)
 
@@ -678,5 +683,5 @@ These map to the eight future-work lines in the thesis ([`documents/thesis/`](do
 
 ---
 
-**Last Updated:** July 28, 2026
-**Version:** 1.13 (renumbered the planned milestones to v2.6.0/v2.8.0/v3.0.0 after the release train overtook them; brought the wording in line with the docs-site roadmap)
+**Last Updated:** August 29, 2026
+**Version:** 1.14 (v2.6.0 shipped, so its row moves out of the planned table; the remaining planned milestones are v2.8.0 and v3.0.0)

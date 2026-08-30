@@ -464,23 +464,25 @@
   </div>
 </li>
 
+<li class="rl-item">
+  <div class="rl-dot done"></div>
+  <div class="rl-card">
+    <div class="rl-header">
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.6.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-08-29</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
+    </div>
+    <p class="rl-title">PITWALL, a designed Arcade, and a startup that stops making you wait</p>
+    <p class="rl-summary">The trackside surface is now <strong>PITWALL</strong>: two desktop windows built in React and hosted in a platform webview, a DATA window with the timing tower, the bests panel, the race-pace grid, the track ring and the radio feed, and an AGENTS window that shows the decision and the six consoles behind it. They run alongside the pyglet replay rather than replacing it, and the <code>lap_state</code> contract and the agents are unchanged. The replay itself got a design pass over the launch menu and the circuit layout, and every one of the 70 rounds of 2023 to 2025 now loads from the menu where only one did.</p>
+    <p class="rl-summary">Startup and per-lap cost came down with it. <code>f1-sim --help</code> went from 12.6 s to 3.6 s and a five-lap offline run from 15.6 s to 5.5 s, because importing an agent no longer drags the LLM stack in behind it; N25's confidence interval went from 660 ms to 5.9 ms a lap by scoring one perturbed block instead of two hundred single rows, returning the same numbers; a warm session load went from 7.2 s to 3.8 s, and the pit-wall windows no longer pay 300 ms for the race on the first request they block on. Full detail in the <a href="https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">changelog</a>.</p>
+  </div>
+</li>
+
 </ul>
 
 <p class="rl-section-label">Planned milestones</p>
 
 <ul class="rl-wrap">
-
-<li class="rl-item">
-  <div class="rl-dot planned"></div>
-  <div class="rl-card planned">
-    <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v2.6.0</span>
-      <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
-    </div>
-    <p class="rl-title">Arcade, modernized: a trackside frontend in web technology</p>
-    <p class="rl-summary">Bring the web app's modern frontend to part of the live Arcade experience, running alongside the pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to React hosted in the platform webview - desktop windows, not a web app; the <code>lap_state</code> contract and the agents stay unchanged.</p>
-  </div>
-</li>
 
 <li class="rl-item">
   <div class="rl-dot planned"></div>
