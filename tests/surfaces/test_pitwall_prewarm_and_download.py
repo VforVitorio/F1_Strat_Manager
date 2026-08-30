@@ -352,3 +352,70 @@ def test_a_second_thread_waits_out_the_load_instead_of_reading_it_half_done(
         "the second thread read the session while the first was still loading it, "
         f"and was served {served['second']!r} - the lock is not serialising the swap"
     )
+
+
+class StillTalkingClient(FakeClient):
+    """A client whose `latest` outlives its own `stop()`, which is the real one.
+
+    `ArcadeStreamClient` keeps the slot on purpose: `_close_socket` says a frozen
+    board is still useful and the windows dim it rather than blanking it. So a
+    stopped client goes on naming a race, and `FakeClient` above does NOT model
+    that, it answers None once stopped. A pre-warm guard written against the
+    optimistic fixture passes without exercising anything, which is the same
+    fixture-fidelity gap the first version of #1004 already paid for once.
+    """
+
+    @property
+    def latest(self) -> dict | None:
+        return self._payload
+
+
+def test_the_warm_up_stops_when_the_host_does(loaded: list[tuple]) -> None:
+    """A host that is torn down mid-wait must not load a race for windows that closed.
+
+    The thread waits up to 30 s for the producer to name a race and used to watch
+    only that deadline. Nothing told it the windows were gone, and the client it
+    asks keeps answering after `stop()`, so a host shut down two seconds in went
+    on to load the laps and the corpus and populate `_session_key` on a torn-down
+    host. Bounded (a daemon reading parquet) and still work nobody will read.
+
+    Driven synchronously rather than through the thread, because a thread race
+    decided by a sleep is a flake; this calls the loop the thread runs.
+    """
+    torn_down = PitwallHost(client=StillTalkingClient(), window_count=2)
+    torn_down._client.start()
+    torn_down.shutdown()
+    torn_down._warm_session(timeout_s=1.0, poll_s=0.02)
+
+    assert loaded == [], f"the pre-warm loaded a race after shutdown(): {loaded}"
+    assert torn_down._session_key is None, (
+        f"a torn-down host came out with a session loaded: {torn_down._session_key}"
+    )
+
+    # And the same client still warms a host nobody shut down, so the assertions
+    # above are about the teardown and not about a fixture that names no race.
+    running = PitwallHost(client=StillTalkingClient(), window_count=2)
+    running._client.start()
+    running._warm_session(timeout_s=1.0, poll_s=0.02)
+    assert loaded == [(2025, "Melbourne"), (2025, "Melbourne")], (
+        f"the client never named a race, so the teardown assertions prove nothing: {loaded}"
+    )
+
+
+def test_the_last_window_closing_stops_the_warm_up_too(loaded: list[tuple]) -> None:
+    """`release_window` tears the client down at the last close, so it ends this too.
+
+    Two teardown paths reach the same state and only one of them is `shutdown()`.
+    Fixing the one the gate happened to execute would leave its twin open, which
+    is the defect this repo pays for most.
+    """
+    host = PitwallHost(client=StillTalkingClient(), window_count=2)
+    host._client.start()
+
+    assert host.release_window() == 1, "closing one of two windows tore the host down"
+    assert not host._stopped.is_set(), "one window closing already stopped the pre-warm"
+
+    assert host.release_window() == 0
+    loaded.clear()
+    host._warm_session(timeout_s=1.0, poll_s=0.02)
+    assert loaded == [], f"the pre-warm loaded a race after the last window closed: {loaded}"

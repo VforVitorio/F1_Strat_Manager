@@ -142,6 +142,10 @@ class PitwallHost:
         # first bulk and the warm-up could load the same race twice.
         self._session_lock = threading.Lock()
         self._warm_thread: threading.Thread | None = None
+        # Set by `shutdown()` and by the last `release_window()`. The pre-warm
+        # below waits up to 30 s for a race, so without it a host that is torn
+        # down two seconds in keeps a thread looking for work nobody will read.
+        self._stopped = threading.Event()
         # The LIVE channel's state, masked by the clock rather than by
         # completed laps. `_live_view` is the last block SERVED, so the
         # revision moves exactly when the screen would change and not ten
@@ -184,9 +188,17 @@ class PitwallHost:
         thread would poll for the full timeout and warm nothing while every test
         with a flattened fixture went on passing. That is what the first version
         of this did.
+
+        **It also stops when the host does.** It used to watch only its deadline,
+        so a host torn down two seconds into the wait left a thread that went on
+        to load a race for windows that had closed. Waiting on `_stopped` rather
+        than sleeping is what makes it leave within one poll instead of thirty
+        seconds. The host asks itself rather than asking the client, because a
+        client whose `latest` survives its own `stop()` is exactly the shape this
+        used to depend on.
         """
         deadline = time.monotonic() + timeout_s
-        while time.monotonic() < deadline:
+        while time.monotonic() < deadline and not self._stopped.is_set():
             payload = self._client.latest
             arcade = (payload or {}).get("arcade") or {}
             if arcade.get("location"):
@@ -197,7 +209,10 @@ class PitwallHost:
                     (time.monotonic() - started) * 1000,
                 )
                 return
-            time.sleep(poll_s)
+            self._stopped.wait(poll_s)
+        if self._stopped.is_set():
+            logger.info("Pit-wall pre-warm stopped: the host was torn down before a race arrived")
+            return
         logger.info("Pit-wall pre-warm gave up after %.0fs: the producer named no race", timeout_s)
 
     def get_tick(self, since_seq: int = -1) -> dict | None:
@@ -535,10 +550,12 @@ class PitwallHost:
         self._windows_open = max(0, self._windows_open - 1)
         if self._windows_open == 0:
             logger.info("Last Pitwall window closed - stopping the stream client")
+            self._stopped.set()
             self._client.stop()
         return self._windows_open
 
     def shutdown(self) -> None:
         """Unconditional teardown, for the process exiting rather than a window closing."""
         self._windows_open = 0
+        self._stopped.set()
         self._client.stop()
