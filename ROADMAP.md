@@ -438,10 +438,10 @@ Wire the multi-agent system into the FastAPI backend, expose strategy tools via 
 - [X] FastMCP server mounted alongside FastAPI; `/chat/` is an MCP client ✅
 - [X] Phase 1: agent MCP tools: `predict_pace`, `predict_tire`, `predict_situation`, `predict_pit`, `analyze_radio`, `query_regulations`, `recommend_strategy` ✅
 - [X] Phase 2: telemetry MCP tools via `FastMCP.from_openapi()`: `get_lap_times`, `get_telemetry`, `compare_drivers`, `get_race_data` (HTTP fallback for chat) ✅
-- [X] **2026-04-14: inline Plotly chart rendering** for the 4 Phase 2 tools in the chat: new `chart_builders.py`, `_render_chart` dispatcher, purple-outlined bubbles matching the agent cards. Backend trim split via `_trim_for_llm` so the UI receives the full payload. Qdrant singleton fix (`@lru_cache` on `get_retriever`) ✅
-- [X] `pages/strategy.py`: Live strategy card (action badge, confidence bar, scenario scores, reasoning) ✅
+- [X] **2026-04-14: inline Plotly chart rendering** for the 4 Phase 2 tools in the chat: new `chart_builders.py` (Streamlit-era, removed with that frontend in v2.0.0), `_render_chart` dispatcher, purple-outlined bubbles matching the agent cards. Backend trim split via `_trim_for_llm` so the UI receives the full payload. Qdrant singleton fix (`@lru_cache` on `get_retriever`) ✅
+- [X] `pages/strategy.py`: Live strategy card (action badge, confidence bar, scenario scores, reasoning) ✅ (Streamlit-era; the React web app carries this surface since v2.0.0)
   - Sub-agent tabs: Pace (CI ribbon), Tyres (cliff gauge), Race Situation (overtake + SC gauges), Pit Analysis (undercut + duration)
-- [X] `pages/race_analysis.py`: 5-tab race view (Overview, Competitive, Gap Analysis, Degradation, Predictions) ✅
+- [X] `pages/race_analysis.py`: 5-tab race view (Overview, Competitive, Gap Analysis, Degradation, Predictions) ✅ (Streamlit-era; same migration as the row above)
   - Port legacy components from `legacy/app_streamlit_v1/` with N25-N31 API data sources
 
 **Step 11: CLI simulation demo (`scripts/run_simulation_cli.py`):** ✅ DONE

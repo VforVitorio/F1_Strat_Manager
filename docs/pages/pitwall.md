@@ -107,10 +107,13 @@ bar. The band answers one question per module across the line the eye lands on
 anyway, left to right in the order a reader asks them, which is what the
 orchestrator is doing, why, on what evidence, and what happens next.
 
-**The Qt lineage ends at the layout, and only at the layout.** Every string,
-colour and glyph still comes out of `src/pitwall/agents_view/`, which is the Qt
-window's own code, so the two surfaces cannot describe the same lap
-differently. What the port inherited and then dropped is the geometry: a header
+**The Qt lineage ends at the layout, and only at the layout.** The host formats
+nothing on the React side: every headline, body line and colour is produced by
+`src/pitwall/agent_formatters.py`, the Qt window's own formatting code, and
+`agents_view/builder.py` states that as its first invariant. Chart colours come
+from `src/arcade/palette`, which the replay uses too. The Qt window itself is
+gone, so the rule now buys a single source for the strings rather than agreement
+between two surfaces. What the port inherited and then dropped is the geometry: a header
 strip over a 540 / 740 horizontal split, decision in the left column and a 3x2
 card grid in the right. That split made the decision a peer of the agent grid,
 two territories with no reading order, and put the most important content on the
