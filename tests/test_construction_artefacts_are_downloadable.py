@@ -8,6 +8,11 @@ reaches it raised FileNotFoundError.
 It stayed invisible for two reasons worth naming, because both are how this class of gap
 survives: every machine that had run the notebook already had the file, and the one
 `f1-sim` run people reach for happens not to trigger the pit agent.
+
+The EVAL tier is the same gap with a quieter failure and it is guarded here too (#1130,
+#1146). A stage that cannot find its label set returns a `pending` row instead of
+raising, so the report ships a measurement short and says nothing, and the golden test
+that would have caught it skips with a reason naming the weights.
 """
 
 from __future__ import annotations
@@ -36,6 +41,22 @@ _CONSTRUCTION_READS = {
     "pit_strategy_agent.py": "data/processed/undercut_labeled/undercut_clean.parquet",
     "race_situation_agent.py": "data/processed/sc_labeled/sc_labeled_2023_2025.parquet",
     "radio_agent.py": "data/models/nlp/bert_sentiment_v1/best_roberta_sentiment_model.pt",
+}
+
+
+# Label sets and configs the #304 eval stages score against, keyed by the file in
+# `src/strategy/eval/` that reads them. A miss here does NOT raise: the stage returns a
+# `pending` row and the golden test skips, so the report loses a measurement silently.
+# That is why they need a guard of their own rather than being caught by a failing run.
+#
+# `ner_v1/model_config.json` sits one level ABOVE the weights, so the pattern that pulls
+# `ner_v1/bert_bio_v1/**` misses it and every clean install lost NR-07 (#1146).
+_EVAL_READS = {
+    "nlp.py": (
+        "data/processed/radio_nlp/intent_labeled_data.csv",
+        "data/processed/radio_nlp/f1_radio_entity_annotations.json",
+        "data/models/nlp/ner_v1/model_config.json",
+    ),
 }
 
 
@@ -78,6 +99,38 @@ def test_the_module_still_reads_the_artefact_this_test_claims(module, artefact):
     assert filename in source, (
         f"{module} no longer mentions {filename}: either the read moved and this entry "
         f"is stale, or the artefact list needs updating for whatever replaced it."
+    )
+
+
+@pytest.mark.parametrize(
+    ("module", "artefact"),
+    sorted((mod, art) for mod, arts in _EVAL_READS.items() for art in arts),
+)
+def test_an_eval_label_set_is_pulled_by_the_downloader(module, artefact):
+    """The download list must cover what the eval stages read, or the report loses a row."""
+    patterns = _patterns()
+    assert _covers(patterns, artefact), (
+        f"src/strategy/eval/{module} scores against {artefact}, but no pattern in "
+        f"_DEFAULT_MODEL_PATTERNS pulls it. A clean install will report a `pending` row "
+        f"instead of the measurement, and the golden test will skip rather than fail."
+    )
+
+
+@pytest.mark.parametrize(
+    ("module", "artefact"),
+    sorted((mod, art) for mod, arts in _EVAL_READS.items() for art in arts),
+)
+def test_the_eval_module_still_reads_the_artefact_this_test_claims(module, artefact):
+    """Same staleness guard as the construction list above, for the same reason."""
+    source = (ROOT / "src" / "strategy" / "eval" / module).read_text(encoding="utf-8")
+    filename = artefact.rsplit("/", 1)[-1]
+    stem = filename.rsplit(".", 1)[0]
+    # `model_config.json` is built from a directory constant plus the bare filename, so
+    # the path never appears whole in the source and the parent directory is the claim.
+    needle = filename if filename != "model_config.json" else artefact.split("/")[-2]
+    assert needle in source, (
+        f"src/strategy/eval/{module} no longer mentions {needle} (for {stem}): either the "
+        f"read moved and this entry is stale, or the list needs whatever replaced it."
     )
 
 

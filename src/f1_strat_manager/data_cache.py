@@ -100,6 +100,13 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     "data/models/nlp/sentiment_classifier_v1/**",
     "data/models/nlp/intent_setfit_modernbert_v1/**",
     "data/models/nlp/ner_v1/bert_bio_v1/**",
+    # The NER training eval, one level ABOVE the weights, so the pattern that
+    # pulls `bert_bio_v1/**` misses it. `dead_ner_classes` reads its per-class
+    # B-F1 to flag entity types the model never gets right, and returns a
+    # `pending` row rather than raising when it is absent, so `f1-eval nlp`
+    # shipped one measurement short and said nothing (#1146). Same shape as the
+    # undercut gap in #798 and the two import-time artefacts in #837.
+    "data/models/nlp/ner_v1/model_config.json",
     "data/models/nlp/rcm_parser_v1/**",
     # The RoBERTa sentiment weights, read at MODULE IMPORT by
     # `radio_agent.py` (a bare `torch.load`, not a lazy accessor). Without
@@ -148,6 +155,11 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     # (~80 MB); :func:`ensure_radio_corpus` downloads it lazily per GP
     # only when the simulation actually targets that race.
     "data/processed/race_radios/**",
+    # The intent and NER label sets the #304 eval tier scores against. Neither
+    # was published, so three golden tests skipped on any machine that HAD the
+    # weights, and the NLP report carried `pending` rows where measurements
+    # belong (#1130). 313 KB for the pair.
+    "data/processed/radio_nlp/**",
     # The two holdouts the calibration tier scores on. Neither is used at
     # inference, so their absence is not a broken install, and that is exactly
     # why they went unnoticed: `f1-eval calibration` degrades each missing one to
