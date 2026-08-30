@@ -72,11 +72,13 @@ _NO_PIT_BEFORE_LAP = 5
 # is unrecoverable BY REGULATION. That article does not reach a green-flag lap,
 # where the bound rests on the ~22-25 s cost instead, and on this measurement.
 #
-# This is also the bound behind the four excluded stops in the six-race
-# `decision-modes` subset (Monaco VER, Lusail STR and HAD, Monza OCO). #716's issue
-# body attributes four stops to the early-race bound as well; measured on that
-# subset the early-race bound excludes NONE, and `decision_modes.md` carries no
-# `opening_laps` row at all.
+# This is also the bound behind the `closing_laps` stops in the `decision-modes`
+# sweep (Monaco VER, Lusail STR and HAD, Monza OCO), still exactly those four now
+# that the sweep covers all 24 races of 2025. #716's issue body attributes four
+# stops to the early-race bound as well; on the retired six-race subset that bound
+# excluded none, so `decision_modes.md` carried no `opening_laps` row, and over the
+# full season it excludes four different stops (Imola OCO, Mexico_City LAW,
+# Shanghai ALO and Shanghai BOR).
 _NO_PIT_LAST_N_LAPS = 3
 
 _CLIFF_P10_SAFE = 2
