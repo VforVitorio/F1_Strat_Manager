@@ -307,7 +307,7 @@ def test_a_second_thread_waits_out_the_load_instead_of_reading_it_half_done(
     race rather than reading the half-swapped state. `_session_for` assigns
     `_session_key` first and only then calls the two loaders, so an unlocked
     second thread finds the key already set, skips the load it would otherwise
-    have done, and returns `self._session` while it is still None - a caller
+    have done, and returns the pair while both halves are still None - a caller
     told the race is not on disk during the very load that is putting it there.
 
     Timing rather than a barrier, because a barrier inside the loader deadlocks
@@ -347,8 +347,8 @@ def test_a_second_thread_waits_out_the_load_instead_of_reading_it_half_done(
         f"the race was loaded {len(calls)} times, not once for the laps and once "
         f"for the radio: {calls}"
     )
-    assert served["first"] == "Melbourne-2025"
-    assert served["second"] == "Melbourne-2025", (
+    assert served["first"] == ("Melbourne-2025", "Melbourne-2025")
+    assert served["second"] == ("Melbourne-2025", "Melbourne-2025"), (
         "the second thread read the session while the first was still loading it, "
         f"and was served {served['second']!r} - the lock is not serialising the swap"
     )
