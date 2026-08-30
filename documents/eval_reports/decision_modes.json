@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "8d43342d",
+    "harness_sha": "83c59629",
     "dataset": "data/raw laps, every 2025 race (RAW, not featured)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-08-30T16:34:12+00:00",
+    "generated_at": "2026-08-30T17:54:11+00:00",
     "artifacts": {}
   },
   "status": "masked",

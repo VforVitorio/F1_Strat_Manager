@@ -161,7 +161,7 @@ def write_report(
 
 def _render_md(name: str, header: ReportHeader, table_md: str) -> str:
     """Render a report: title, provenance header block, then the table body."""
-    artifacts = ", ".join(f"{k}=`{v}`" for k, v in header.artifacts.items()) or "—"
+    artifacts = ", ".join(f"{k}=`{v}`" for k, v in header.artifacts.items()) or "none"
     lines = [
         f"# {name}",
         "",
