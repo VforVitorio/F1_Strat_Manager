@@ -196,7 +196,7 @@ The compounding effect is what made the old values worth changing rather than me
 
 Measured as a **single-variable comparison**: both columns run on the product's real race state, so only the bounds differ:
 
-| decision-agreement tier, 2025, 178 eligible stops | old bounds (8 / 12 / 15, wet 10) | shipped bounds (2 / 7 / 8, wet 6) |
+| decision-agreement tier, the retired six-race 2025 subset, 178 eligible stops | old bounds (8 / 12 / 15, wet 10) | shipped bounds (2 / 7 / 8, wet 6) |
 |---|---|---|
 | `min_stint` exclusion bucket | 17 stops | **5** |
 | scored sample | 54 | **66** |
@@ -204,6 +204,8 @@ Measured as a **single-variable comparison**: both columns run on the product's 
 | within one lap | 40.7% | 37.9% |
 | within two laps | 46.3% | **51.5%** |
 | mean signed error | -2.20 laps | -1.97 |
+
+Both columns are the six races the tier sampled when the comparison was made, so the shipped-bounds column is not the system's current rate. On the whole 2025 season, 573 eligible stops, the shipped bounds score 204, exact 18.6%, within one 34.3%, within two 50.0%, mean signed -2.21 laps. `documents/eval_reports/decision_modes.md` is the current artefact. The table survives its own sample because comparing two sets of constants needs both arms measured on one sample, and only the shipped arm was re-run wider.
 
 **The recalibration buys sample, not accuracy, and the honest reading is that the twelve stops it admits are harder than the ones already there.** Exact and within-one fall; within-two and the mean error improve. A bound that excludes a case is not scoring it well, it is refusing to be graded on it, so a lower rate over a wider sample is the more informative number, though calling that an accuracy improvement would be the same flattery the bound itself was performing.
 
