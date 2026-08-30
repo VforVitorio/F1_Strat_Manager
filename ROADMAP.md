@@ -661,6 +661,13 @@ shipped is narrower than the row promised in one respect and wider in another. I
 and never opens a browser, and it also carried a design pass over the replay, every one of the 70
 rounds of 2023 to 2025 loading from the menu, and a round of startup and per-lap cost work.
 
+It also carries one thing the row did not promise at all, and the row is corrected rather than the
+release renamed. "Same data, better face" is the reason the milestone was cheap, and the PIT EXIT
+card is a new model output on the glass: it answers what position a stop taken on this lap rejoins
+in and which cars land either side. It went in here because the whole surface was being rebuilt
+around it, and moving the same card through a second release would have meant touching the same
+five files twice.
+
 ### Rival Agent: the anticipatory turn (v2.8.0)
 
 Today the system reasons about its own car and treats rivals as scenery; a good pit wall decides by anticipating the cars around it. The Rival Agent closes that gap. It reuses the existing two-driver mode (which already loads a rival's public telemetry next to ours), tire age, gap, track position and history to predict what the cars in our fight will do next. Ground truth is reconstructed from real 2024-2025 pit stops cross-referenced with telemetry; the agent is validated by ablation (with/without) against the real outcome and the actual pit-wall decision on the Grands Prix already validated in the thesis. Supporting building blocks: a rival next-move classifier, a lap-by-lap rival sequence model, situation/profile clustering with anomaly detection, a scaled pit-stop ground-truth pipeline, a neural surrogate of the Monte Carlo simulator, an RL pit-stop benchmark, and analogous-race-state retrieval.
@@ -684,4 +691,4 @@ These map to the eight future-work lines in the thesis ([`documents/thesis/`](do
 ---
 
 **Last Updated:** August 29, 2026
-**Version:** 1.14 (v2.6.0 shipped, so its row moves out of the planned table; the remaining planned milestones are v2.8.0 and v3.0.0)
+**Version:** 1.15 (the v2.6.0 entry now names the PIT EXIT card, which the milestone row never promised)
