@@ -32,6 +32,7 @@ from src.arcade.palette import (
     hex_str,
 )
 from src.arcade.strategy import classify_action
+from src.arcade.track_status import _NOT_RACING
 from src.pitwall.reasoning_lines import clean
 
 # The two posture chips are FACTS, not warnings, so they wear text colour and
@@ -527,3 +528,108 @@ def build_scenarios(
             }
         )
     return rows
+
+
+# The one action that is not a strategy at all, so there is no stop to price.
+# The neutralised case is handled separately and NOT by an action, because the
+# action can legitimately be PIT_NOW under a Safety Car.
+_REJOIN_UNANSWERABLE: frozenset[str] = frozenset({"ALERT"})
+
+
+def build_pit_exit(
+    latest: dict[str, Any] | None, track_status: str | None = None
+) -> dict[str, Any]:
+    """Where a stop taken on THIS lap would put us, as rows the window renders.
+
+    **Framing, not suppression, and that distinction is the whole design.** The
+    #962 defect is a panel dressing a hypothetical in the enacted call's
+    identity, so the fix there was to thread the published action in and crown
+    only what was actually chosen. The same mechanism applies here and the same
+    rule does NOT: blanking the card on a `STAY_OUT` lap would idle it on
+    exactly the laps a pit wall wants it, since "should we box?" is the question
+    a stay-out lap is asking. What keeps it honest is the conditional header and
+    the refusal of the live call's identity colours, the rule
+    `build_contingencies` states for the same reason four lines into its own
+    docstring.
+
+    **Four idle states, each with its own sentence**, because they are different
+    facts to a reader and none of them is a position:
+
+    - no call yet, which is every lap before the first decision;
+    - the projection did not run, which is the legacy seconds path (no rivals
+      with usable gaps) and every producer built on `_default_lap_state`;
+    - the field is absent, which is an old host feeding a new bundle;
+    - an `ALERT`, which is not a strategy, or a neutralised lap, where the
+      green-flag rejoin prices racing that is not happening: the pit loss is
+      cheaper because the field is queued, and overtaking is prohibited
+      (Art. 55.8). The Monte Carlo scores those draws with its own neutralised
+      config; this card has one number and no room to say which regime it is in,
+      so it says nothing.
+
+    A number-shaped placeholder is never rendered for any of them. `P?` beside a
+    zero reads as data on a glass a strategist scans.
+    """
+    if not latest:
+        return {"state": "idle", "note": "— no call yet —"}
+
+    action = str(latest.get("action") or "").upper()
+    if action in _REJOIN_UNANSWERABLE:
+        return {"state": "idle", "note": "— no stop to price —"}
+
+    # The status comes off the tick, decoded once by the producer, exactly as
+    # the header takes it: two sources for one fact on a desk where both windows
+    # are open is how they get to disagree. `_NOT_RACING` is the arcade's own
+    # set, imported rather than restated, so the card and the pace ranking mean
+    # the same thing by "not racing".
+    if track_status in _NOT_RACING:
+        return {"state": "idle", "note": f"— {str(track_status).lower()} —"}
+
+    readout = latest.get("pit_exit")
+    if not isinstance(readout, dict):
+        # Absent for two reasons that read the same to a strategist: the legacy
+        # scoring ran, or this payload predates the field.
+        return {"state": "idle", "note": "— no rejoin geometry —"}
+
+    slot = readout.get("slot")
+    if not isinstance(slot, int):
+        return {"state": "idle", "note": "— no rejoin geometry —"}
+
+    origin = readout.get("from_position")
+    band = readout.get("band") or 0
+    return {
+        "state": "ready",
+        # The move, not the destination: "P3" alone hides what the stop costs,
+        # and the cost is the reason anyone reads this card.
+        "headline": f"P{origin} \u2192 P{slot}" if isinstance(origin, int) else f"P{slot}",
+        # Only when the draws disagree. A "±0" on 70% of laps is a decoration
+        # that teaches a reader to stop looking at the ones that say ±2.
+        "band": f"\u00b1{band}" if isinstance(band, int) and band > 0 else "",
+        "rows": [
+            row for row in (_neighbour_row(readout, side) for side in ("ahead", "behind")) if row
+        ],
+        # The header's qualifier. It rides as data because it is the sentence
+        # that makes the rest a hypothesis rather than a forecast.
+        "qualifier": "if we box now",
+    }
+
+
+def _neighbour_row(readout: dict[str, Any], side: str) -> dict[str, str] | None:
+    """One car the rejoin lands next to, or nothing when that side is empty.
+
+    An absent neighbour is a real state and it is rendered by ABSENCE: rejoining
+    into the lead has no car ahead, and a row reading `--  0.0s ahead` would put
+    a gap of zero on the glass, which is a value the projection can also
+    legitimately produce.
+
+    The sign is consumed here rather than shipped: the wire carries the module's
+    signed convention (negative is ahead) and the window says "ahead" in words,
+    so a reader never has to hold a sign convention in their head.
+    """
+    car = readout.get(side)
+    if not isinstance(car, dict):
+        return None
+    driver = str(car.get("driver") or "").strip()
+    gap = car.get("gap_s")
+    if not driver or not isinstance(gap, (int, float)):
+        return None
+    return {"driver": driver, "gap": f"{abs(float(gap)):.1f}s", "side": side}
