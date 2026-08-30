@@ -7,8 +7,11 @@ locally and skip on CI without ``data/models/``.
 Three of them need a LABEL SET as well as the weights, and the skips have to say
 so separately. Scoring intent or NER against nothing returns a ``pending`` row,
 which these tests read as a failure; gating them on the weights alone made them
-fail on any machine that had the weights and not the labels, and neither label
-file is published (#1130).
+fail on any machine that had the weights and not the labels.
+
+Both label files are on the Hub since #1130 and both are covered by
+``_DEFAULT_MODEL_PATTERNS``, so a skip here now means the download did not run
+rather than that the file does not exist.
 """
 
 from __future__ import annotations
@@ -41,9 +44,11 @@ def _label_file(name: str) -> Path:
     return get_data_root() / "processed" / "radio_nlp" / name
 
 
-# The label sets the intent and NER stages score against. Neither is on the Hub
-# (#1130), so a machine WITH the weights and without these fails three tests it
-# has no way to pass; CI never saw it because there the weights are absent too.
+# The label sets the intent and NER stages score against. Both are on the Hub
+# under `data/processed/radio_nlp/` (#1130). The probes stay because CI runs
+# without `data/` at all, and because a machine can hold the weights and not the
+# labels: before they were published that combination failed three tests it had
+# no way to pass, and CI never saw it because there the weights are absent too.
 _HAS_INTENT_LABELS = _label_file("intent_labeled_data.csv").exists()
 _HAS_NER_ANNOTATIONS = _label_file("f1_radio_entity_annotations.json").exists()
 
@@ -96,7 +101,7 @@ def test_intent_predict_proba_order_is_aligned():
 
 @pytest.mark.data
 @pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent model absent (CI runner without weights)")
-@pytest.mark.skipif(not _HAS_INTENT_LABELS, reason="intent_labeled_data.csv absent (#1130)")
+@pytest.mark.skipif(not _HAS_INTENT_LABELS, reason="intent_labeled_data.csv not downloaded")
 def test_intent_reproduction_is_sane():
     """Setfit-free reproduction runs and beats chance on the labeled set."""
     from src.strategy.eval.nlp import reproduce_intent
@@ -109,7 +114,7 @@ def test_intent_reproduction_is_sane():
 
 @pytest.mark.data
 @pytest.mark.skipif(not _HAS_INTENT_HEAD, reason="intent model absent (CI runner without weights)")
-@pytest.mark.skipif(not _HAS_INTENT_LABELS, reason="intent_labeled_data.csv absent (#1130)")
+@pytest.mark.skipif(not _HAS_INTENT_LABELS, reason="intent_labeled_data.csv not downloaded")
 def test_alert_precision_from_gold_is_high():
     """Alert precision (intent PROBLEM/WARNING) is real (gold-derived) and clears 0.8."""
     from src.strategy.eval.nlp import reproduce_alert_precision
@@ -120,7 +125,7 @@ def test_alert_precision_from_gold_is_high():
 
 
 @pytest.mark.data
-@pytest.mark.skipif(not _HAS_NER_CFG, reason="ner model_config absent (CI runner without weights)")
+@pytest.mark.skipif(not _HAS_NER_CFG, reason="ner model_config not downloaded")
 def test_dead_ner_classes_flags_zero_f1_types():
     """NR-07: entity types with ~0 frozen-eval B-F1 are flagged untrustworthy."""
     from src.strategy.eval.nlp import dead_ner_classes
@@ -134,7 +139,7 @@ def test_dead_ner_classes_flags_zero_f1_types():
 @pytest.mark.data
 @pytest.mark.skipif(not _HAS_NER_MODEL, reason="ner weights absent (CI runner without weights)")
 @pytest.mark.skipif(
-    not _HAS_NER_ANNOTATIONS, reason="f1_radio_entity_annotations.json absent (#1130)"
+    not _HAS_NER_ANNOTATIONS, reason="f1_radio_entity_annotations.json not downloaded"
 )
 def test_ner_entity_f1_reproduces_headline():
     """Entity micro-F1 reproduces the frozen 0.4151 headline within tolerance (full-set optimistic)."""
