@@ -21,6 +21,7 @@ mistake, kept as an assertion.
 from __future__ import annotations
 
 import ast
+import threading
 import time
 from pathlib import Path
 
@@ -282,4 +283,72 @@ def test_the_fit_callback_does_not_close_over_the_state_it_sets() -> None:
     assert "}, [card, fit, content]);" in code, (
         "the observer effect's dependency array changed; `fit` belongs there and is safe "
         "there only while it stays identity-stable"
+    )
+
+
+# One load, slow enough that a second thread reliably arrives while it is still
+# running.  sets  BEFORE it calls the loaders, so the
+# window a second thread can fall into is the whole load, not the compare.
+SLOW_LOAD_S = 0.3
+
+
+def test_a_second_thread_waits_out_the_load_instead_of_reading_it_half_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_session_lock` serialises two threads through one load, and nothing else says so.
+
+    The lock exists because two windows poll this host on their own threads and
+    the pre-warm is a third. Every other guard in this file pins the pre-warm
+    MECHANISM - that a load happens, off the request path, on a daemon, and gives
+    up - and none of them touches the lock: replacing `with self._session_lock:`
+    with `if True:` leaves them all green in 2.73 s.
+
+    The property the lock buys is that a thread arriving mid-load waits for the
+    race rather than reading the half-swapped state. `_session_for` assigns
+    `_session_key` first and only then calls the two loaders, so an unlocked
+    second thread finds the key already set, skips the load it would otherwise
+    have done, and returns `self._session` while it is still None - a caller
+    told the race is not on disk during the very load that is putting it there.
+
+    Timing rather than a barrier, because a barrier inside the loader deadlocks
+    the fixed code (only one thread ever reaches it). The second thread starts
+    a third of one load in, and the first holds the lock for two loads, so the
+    margin is 0.1 s of slack on one side and 0.5 s on the other.
+    """
+    calls: list[tuple] = []
+
+    class SlowStub:
+        @staticmethod
+        def load(root, year, location):
+            calls.append((year, location))
+            time.sleep(SLOW_LOAD_S)
+            return f"{location}-{year}"
+
+    import src.pitwall.host as host_module
+
+    monkeypatch.setattr(host_module.SessionLaps, "load", SlowStub.load)
+    monkeypatch.setattr(host_module.RadioCorpus, "load", SlowStub.load)
+
+    host = PitwallHost(client=FakeClient(), window_count=2)
+    served: dict[str, object] = {}
+
+    def ask(name: str) -> None:
+        served[name] = host._session_for(RACE)
+
+    first = threading.Thread(target=ask, args=("first",), name="first-window")
+    second = threading.Thread(target=ask, args=("second",), name="second-window")
+    first.start()
+    time.sleep(SLOW_LOAD_S / 3)
+    second.start()
+    first.join(10)
+    second.join(10)
+
+    assert calls == [(2025, "Melbourne"), (2025, "Melbourne")], (
+        f"the race was loaded {len(calls)} times, not once for the laps and once "
+        f"for the radio: {calls}"
+    )
+    assert served["first"] == "Melbourne-2025"
+    assert served["second"] == "Melbourne-2025", (
+        "the second thread read the session while the first was still loading it, "
+        f"and was served {served['second']!r} - the lock is not serialising the swap"
     )
