@@ -442,15 +442,22 @@ def test_tyre_life_is_the_builders_contract_now():
 # --- the report's honesty --------------------------------------------------
 
 
-def test_render_states_the_subset_and_refuses_to_imply_full_coverage():
-    """The scope caveats are part of the artifact, not decoration."""
+def test_render_names_every_race_and_keeps_season_scope_apart_from_coverage():
+    """The scope caveats are part of the artifact, not decoration.
+
+    The sample is now the whole 2025 season, so the old "stratified subset, not full
+    coverage" wording is gone. The distinction it protected is not: covering every race
+    of a season is a different claim from the coverage verdict, which says how many of
+    those stops the metric could locate a decision inside. A reader who conflates the
+    two reads `masked` as "we only looked at some races".
+    """
     body = _render_table(
         _agreement([0, 1], guard_railed=1),
         [StopVerdict(2025, "Lusail", "NOR", 30, 30, 0, "scored")],
         "ok",
     )
-    assert "not** full coverage" in body
-    assert "stratified subset" in body
+    assert "not a stratified subset" in body
+    assert "not** the same thing as the coverage verdict" in body
     assert "no-llm" in body
     for _year, race in SAMPLED_RACES:
         assert race in body
