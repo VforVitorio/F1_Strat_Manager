@@ -240,11 +240,16 @@ def test_alpha_collapses_the_score_onto_a_single_quantile(alpha, key):
 
 
 # ---------------------------------------------------------------------------
+# The capture channel. Gated on the weights like the value tests above: these
+# drive the real `_run_mc_simulation`, whose canned outputs construct the tyre
+# agent, so a runner without `data/models/` cannot reach them. The SHAPE checks
+# further up stay ungated on purpose.
 # The capture channel — the rejoin readout prices the SAME stop the candidates
 # were scored on, or the window shows two answers for one lap
 # ---------------------------------------------------------------------------
 
 
+@pytestmark_values
 def test_the_capture_never_reaches_the_scored_return():
     """Looking at the draws cannot change them, and cannot widen the contract.
 
@@ -266,6 +271,7 @@ def test_the_capture_never_reaches_the_scored_return():
     assert set(watched) == {"pit_loss_s", "rival_states", "current_position"}
 
 
+@pytestmark_values
 def test_the_readout_prices_the_stop_the_candidates_were_scored_on():
     """One draw vector, two products. The alternative is two stories per lap.
 
@@ -323,6 +329,7 @@ def test_the_readout_prices_the_stop_the_candidates_were_scored_on():
     assert again == readout, "the readout is deterministic for one capture"
 
 
+@pytestmark_values
 def test_the_legacy_path_deposits_nothing():
     """No rivals, no projection, no draws to share, and no readout to render.
 
