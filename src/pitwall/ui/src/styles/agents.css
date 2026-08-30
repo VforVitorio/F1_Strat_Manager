@@ -274,15 +274,15 @@
  *
  * Named areas rather than source order, because three of the six want a shape
  * the reading order does not give them: the two chart cards need the tall
- * slots, SITUATION and PIT are compact and both feed the decision so they
- * stack beside them, and RADIO carries the wordiest content on the window -
- * transcripts - so it spans two columns.
+ * slots, and SITUATION and PIT are compact and both feed the decision so they
+ * stack beside them in one area.
  *
- * Rows 1 and 2 are `minmax(0, 1fr)` so the chart column splits the available
- * height evenly with the two stacked cards; row 3 is content-sized with a
- * floor. `minmax(0, …)` rather than `1fr` alone: a `1fr` row has an automatic
- * MINIMUM of its content, so a card that overflows pushes the grid past its
- * container instead of scrolling inside itself. */
+ * Two rows since PIT EXIT took the middle of the bottom one. Row 1 is
+ * `minmax(0, 1fr)` so the chart column takes the available height; row 2 is
+ * content-sized. `minmax(0, …)` rather than `1fr` alone: a `1fr` row has an
+ * automatic MINIMUM of its content, so a card that overflows pushes the grid
+ * past its container instead of scrolling inside itself. RADIO's one column and
+ * what it cost are documented on `.slot-exit` below, where the change was made. */
 
 .agents-grid {
   display: grid;

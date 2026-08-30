@@ -297,10 +297,10 @@ export function AgentsWindow() {
         </div>
 
         {/* The six consoles below it, in named grid areas rather than source
-            order: the two chart cards take the tall slots, SITUATION and PIT
-            are compact and both feed the decision so they stack beside them,
-            and RADIO carries the wordiest content on the window - transcripts -
-            so it spans two columns.
+            order: the two chart cards take the tall slots, and SITUATION and
+            PIT are compact and both feed the decision so they stack beside
+            them. Two rows, not three, since PIT EXIT took the middle of the
+            bottom one and RADIO went down to a single column.
 
             SITUATION and PIT share ONE area through a stack rather than taking
             a grid row each. Given a row each they sat at the top of two equal

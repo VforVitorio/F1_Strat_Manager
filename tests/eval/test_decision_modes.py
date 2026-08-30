@@ -2,16 +2,19 @@
 
 Two layers, deliberately split the same way ``test_position_projection.py`` splits:
 
-1. Pure tests that pin the contract — which stops the guard rails make
+1. Pure tests that pin the contract, which stops the guard rails make
    unanswerable, how an agreement is aggregated, when coverage is untrustworthy,
-   and that the report keeps saying it is a subset. These run everywhere.
+   and that the report keeps naming its scope. These run everywhere.
 
 2. One data-tier test that refuses to believe a sample it has not counted. It
    needs ``data/raw`` and skips without it.
 
-The report's honesty is itself under test here. ``test_render_states_the_subset``
+The report's honesty is itself under test here.
+``test_render_names_every_race_and_keeps_season_scope_apart_from_coverage``
 exists because the single most damaging edit anyone could make to this module is
-deleting the sentence that says the figures are conditional on six races.
+deleting the sentence that says which races the figures come from. That sentence
+used to say the sample was six races; since #1143 it says the whole 2025 season,
+and the test follows the scope rather than the wording.
 """
 
 from __future__ import annotations
