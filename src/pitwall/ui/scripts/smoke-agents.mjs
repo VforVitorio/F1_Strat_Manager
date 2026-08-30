@@ -381,7 +381,10 @@ await page.goto(`http://127.0.0.1:${server.address().port}/agents.html`, {
 });
 await page.waitForSelector(".agent-card", { timeout: 5000 });
 
-check((await page.locator(".agent-card").count()) === 6, "six agent cards");
+// Seven since PIT EXIT took the column RADIO gave up: the six consoles plus
+// the rejoin card, which reuses the `.agent-card` shell so it inherits the
+// frozen-feed dimming and the body scroll rather than restating them.
+check((await page.locator(".agent-card").count()) === 7, "seven agent cards");
 check((await page.locator(".agent-chart canvas").count()) === 2, "two chart canvases");
 // The BOXES, not just the canvases inside them. Counting canvases answered
 // 2 for years while all six cards carried an `.agent-chart` - the renderer
@@ -601,6 +604,7 @@ const grid = await page.evaluate(() => {
     situation: box(".slot-situation"),
     pit: box(".slot-pit"),
     radio: box(".slot-radio"),
+    exit: box(".slot-exit"),
     rag: box(".slot-rag"),
   };
 });
@@ -612,9 +616,30 @@ check(
   grid.situation.top < grid.pit.top && grid.situation.left === grid.pit.left,
   "SITUATION sits over PIT in one column",
 );
+// RADIO used to span the two chart columns; PIT EXIT has the second one now.
+// The row is three columns wide and each one sits under the column above it,
+// which is what makes the bottom row read as part of the same grid rather than
+// as a strip glued to the bottom.
 check(
-  grid.radio.left === grid.pace.left && grid.radio.right >= grid.tire.right,
-  "RADIO spans the two chart columns",
+  grid.radio.left === grid.pace.left && grid.radio.right <= grid.tire.left,
+  "RADIO holds the first column alone",
+);
+check(
+  grid.exit.left === grid.tire.left && grid.exit.right <= grid.situation.left,
+  "PIT EXIT holds the second, under TIRE",
+);
+// The line budget that makes one column survivable. A radio line over budget
+// does not clip: `.agent-line` wraps over a content-sized row, so the height
+// comes out of the charts above, and the failure would look like a chart bug.
+const radioLines = await page.evaluate(() =>
+  [...document.querySelectorAll(".slot-radio .agent-line")].map((el) => {
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 14;
+    return Math.round(el.getBoundingClientRect().height / lineHeight);
+  }),
+);
+check(
+  radioLines.length > 0 && radioLines.every((lines) => lines === 1),
+  `every RADIO line sets on one line at one column (${radioLines.join(",")})`,
 );
 check(
   grid.rag.left === grid.situation.left && grid.rag.top >= grid.radio.top,
