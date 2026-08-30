@@ -38,6 +38,7 @@ import { OrchestratorCard } from "./OrchestratorCard";
 import { WhyPanel } from "./WhyPanel";
 import { ScenarioBars } from "./ScenarioBars";
 import { ContingenciesCard } from "./ContingenciesCard";
+import { PitExitCard } from "./PitExitCard";
 import { PlanPanel } from "./PlanPanel";
 import { HeaderBar } from "./HeaderBar";
 import { PaceChart } from "./PaceChart";
@@ -330,6 +331,11 @@ export function AgentsWindow() {
             <ContingenciesCard view={shown.contingencies ?? IDLE_VIEW.contingencies} />
           </div>
           <Console slot="radio" title="Radio" card={shown.cards.radio ?? IDLE_CARD} />
+          {/* Between the ticker and RAG, on the column the grid already had.
+              RADIO gave up one of its two columns for it; the formatter's line
+              budget moved in the same sprint, because at one column a radio
+              transcript wraps and the height comes out of the charts above. */}
+          <PitExitCard view={shown.pit_exit} />
           <Console slot="rag" title="RAG" card={shown.cards.rag ?? IDLE_CARD} />
         </div>
       </div>

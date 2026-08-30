@@ -290,12 +290,46 @@
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
     "pace tire side"
-    "radio radio rag";
+    "radio exit rag";
   gap: 8px;
   min-height: 0;
 }
 .slot-pace {
   grid-area: pace;
+}
+/* RADIO gave up the second of its two columns for this. The consequence is not
+   cosmetic: at one column a radio transcript no longer fits on one line, and
+   `.agent-line` wraps rather than clips over a content-sized row, so the height
+   comes out of the charts above. `agent_formatters.BODY_LINE_LIMIT` budgets the
+   whole line, prefix included, in the same sprint as this rule. */
+.slot-exit {
+  grid-area: exit;
+}
+.exit-qualifier {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.exit-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.exit-band {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.5;
+}
+.exit-row {
+  display: flex;
+  gap: 6px;
+}
+.exit-driver {
+  display: inline-block;
+  min-width: 46px;
+  font-weight: 600;
 }
 .slot-tire {
   grid-area: tire;

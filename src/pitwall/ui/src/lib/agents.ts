@@ -279,6 +279,35 @@ export interface ContingenciesView {
   empty: string | null;
 }
 
+/** One car the rejoin lands next to. `side` is the word, so no consumer holds a sign. */
+export interface PitExitNeighbour {
+  driver: string;
+  /** Already absolute and formatted, e.g. `4.5s`. */
+  gap: string;
+  side: "ahead" | "behind";
+}
+
+/**
+ * Where a stop taken on THIS lap would put us.
+ *
+ * Two states and no third: `ready` carries the move and the two neighbours,
+ * `idle` carries one sentence saying WHY there is nothing to show. There is
+ * deliberately no shape in which a slot is present but meaningless, because a
+ * number-shaped placeholder reads as data on a glass a strategist scans.
+ */
+export type PitExitView =
+  | {
+      state: "ready";
+      /** `P1 -> P3`, or `P3` alone when the current position is unknown. */
+      headline: string;
+      /** `±2` only when the draws disagree, else the empty string. */
+      band: string;
+      rows: PitExitNeighbour[];
+      /** The header's qualifier, which is what makes the rest a hypothesis. */
+      qualifier: string;
+    }
+  | { state: "idle"; note: string };
+
 export interface AgentsView {
   view_version: number;
   seq: number | null;
@@ -290,6 +319,13 @@ export interface AgentsView {
   charts: { pace: PaceSeries; tire: TireSeries };
   plan_timeline: PlanTimelineView;
   contingencies: ContingenciesView;
+  /**
+   * Optional so a NEW bundle tolerates an OLD host. The host is a separate
+   * process on the same desk and the two are not upgraded atomically; an
+   * absent field has to reach the same idle branch as a host that had nothing
+   * to say, which is what makes the wire's no-version-bump answer safe.
+   */
+  pit_exit?: PitExitView;
   history: { pace: PaceHistoryRow[]; tire: TireHistoryRow[] };
   status_bar: { text: string; transient: boolean };
 }

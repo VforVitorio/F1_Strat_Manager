@@ -79,6 +79,20 @@ def decision(lap: int, action: str, confidence: float) -> LapDecisionDTO:
         pit_lap_target=lap + 1,
         compound_next="HARD",
         undercut_target="RUS",
+        # The PIT EXIT readout, on the same principle as the four contingencies
+        # below: a fixture thinner than the real payload gets the card developed
+        # against a state it will rarely be in. The band alternates so both of
+        # the card's numeric states are reachable by watching one race, and the
+        # neighbours drop away near the front so the missing-side rendering is
+        # reachable too.
+        pit_exit={
+            "slot": 4 if lap % 7 else 2,
+            "from_position": 4,
+            "band": lap % 3,
+            "ahead": None if lap % 7 == 0 else {"driver": "VER", "gap_s": -4.5},
+            "behind": {"driver": "RUS", "gap_s": 4.1},
+            "rivals_used": 16,
+        },
         # Both landed on the DTO with schema v2 (#1046). They are here because a
         # fixture that omits a field the real producer sends is the drift #853
         # was about: the window gets developed against a payload thinner than

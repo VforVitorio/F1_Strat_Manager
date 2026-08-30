@@ -22,6 +22,7 @@ from src.pitwall.agents_view.charts import build_pace_series, build_tire_series,
 from src.pitwall.agents_view.decision import (
     build_contingencies,
     build_orchestrator,
+    build_pit_exit,
     build_scenarios,
 )
 from src.pitwall.agents_view.history import LapHistory
@@ -122,6 +123,13 @@ class AgentsViewBuilder:
             # instead", and a card-level target would nest with the per-row
             # ones and open two popups at once.
             "contingencies": build_contingencies(latest or None),
+            # Where a stop on THIS lap lands, in the bottom row beside the
+            # radio ticker. The track status rides in from the same tick the
+            # header decodes, so the card and the banner cannot disagree about
+            # whether the field is racing.
+            "pit_exit": build_pit_exit(
+                latest or None, (payload.get("arcade") or {}).get("track_status_label")
+            ),
             "reasoning": build_reasoning(latest or None),
             "cards": build_cards(latest or None),
             "charts": charts,

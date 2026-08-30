@@ -2293,3 +2293,84 @@ def test_no_radio_body_line_can_outgrow_the_card():
     for line in transcript:
         _, _, tail = line.partition(": ")
         assert len(tail.strip('"')) >= 20, f"the message keeps its floor: {line!r}"
+
+
+def _rejoin_payload(**over):
+    block = {
+        "slot": 3,
+        "from_position": 1,
+        "band": 0,
+        "ahead": {"driver": "VER", "gap_s": -4.5},
+        "behind": {"driver": "RUS", "gap_s": 4.1},
+        "rivals_used": 16,
+    }
+    block.update(over)
+    return block
+
+
+def test_the_pit_exit_card_stays_up_on_a_stay_out_lap():
+    """The readout is a hypothetical, and a stay-out lap is when it is asked.
+
+    The obvious #962 rule -- never assert a rejoin on a lap whose call is not a
+    stop -- was rejected during design: enforced literally it blanks the card on
+    exactly the laps a strategist is deciding whether to box. What keeps it
+    honest instead is the qualifier, which the builder emits as data because it
+    is the sentence that turns a forecast into a question.
+    """
+    from src.pitwall.agents_view.decision import build_pit_exit
+
+    view = build_pit_exit({"action": "STAY_OUT", "pit_exit": _rejoin_payload()})
+
+    assert view["state"] == "ready", f"the card idled on a stay-out lap: {view}"
+    assert view["qualifier"] == "if we box now"
+    assert view["headline"] == "P1 → P3"
+
+
+def test_the_pit_exit_card_says_why_it_has_nothing_to_show():
+    """Four absences, four sentences, and never a number-shaped placeholder.
+
+    They are different facts to a reader: no decision yet, a decision whose
+    scoring never ran the projection, an old host with no such field, and a lap
+    whose regime makes the green-flag rejoin the wrong thing to price.
+    """
+    from src.pitwall.agents_view.decision import build_pit_exit
+
+    states = {
+        "no call": build_pit_exit(None),
+        "alert": build_pit_exit({"action": "ALERT", "pit_exit": _rejoin_payload()}),
+        "legacy": build_pit_exit({"action": "STAY_OUT"}),
+        "neutralised": build_pit_exit(
+            {"action": "PIT_NOW", "pit_exit": _rejoin_payload()}, "SAFETY CAR"
+        ),
+    }
+
+    for name, view in states.items():
+        assert view["state"] == "idle", f"{name} rendered as data: {view}"
+        assert view["note"].strip(), f"{name} idled without saying why"
+        assert "headline" not in view, f"{name} carried a position anyway: {view}"
+
+    assert len({v["note"] for v in states.values()}) >= 3, (
+        f"the absences have to read differently: {[v['note'] for v in states.values()]}"
+    )
+
+
+def test_the_band_only_appears_when_the_draws_disagree():
+    """A ±0 on seven laps in ten teaches the eye to skip the ±2 that matters."""
+    from src.pitwall.agents_view.decision import build_pit_exit
+
+    firm = build_pit_exit({"action": "PIT_NOW", "pit_exit": _rejoin_payload(band=0)})
+    spread = build_pit_exit({"action": "PIT_NOW", "pit_exit": _rejoin_payload(band=2)})
+
+    assert firm["band"] == "", f"a settled slot draws no band: {firm}"
+    assert spread["band"] == "±2"
+
+
+def test_a_missing_neighbour_is_absent_rather_than_a_zero():
+    """Rejoining into the lead has no car ahead, and 0.0 s is a real gap."""
+    from src.pitwall.agents_view.decision import build_pit_exit
+
+    view = build_pit_exit({"action": "PIT_NOW", "pit_exit": _rejoin_payload(ahead=None)})
+
+    sides = [row["side"] for row in view["rows"]]
+    assert sides == ["behind"], f"an empty side must not render a row: {view['rows']}"
+    assert view["rows"][0]["gap"] == "4.1s", "the sign is spent on the word, not shown"
