@@ -46,6 +46,8 @@ from src.rag.retriever import (  # noqa: E402
     query_rag_tool,
 )
 
+from src.agents._shared_defaults import LLM_MAX_RETRIES
+
 # ── Optional LangChain / LangGraph imports ─────────────────────────────
 # Probed, not imported. `import langchain_openai` costs 14.3 s measured: it drags
 # the langgraph stack and transformers in behind it, and every consumer of the
@@ -179,7 +181,7 @@ def get_rag_react_agent():
 
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
         if provider == "openai":
-            llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0, timeout=120, max_retries=1)
+            llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0, timeout=120, max_retries=LLM_MAX_RETRIES)
         else:
             llm = ChatOpenAI(
                 model="gpt-4.1-mini",
@@ -188,7 +190,7 @@ def get_rag_react_agent():
                 temperature=0,
                 model_kwargs={"parallel_tool_calls": False},
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         _rag_agent = create_agent(
             model=llm,

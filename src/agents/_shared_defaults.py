@@ -20,6 +20,21 @@ from typing import Any, Mapping
 # one site at a time.
 DEFAULT_TOTAL_LAPS: int = 57
 
+# How many times an agent's LLM client retries a recoverable failure. The SDK retries
+# only connection errors, 408, 409, 429 and 5xx, and it waits what the provider asks:
+# ``openai._base_client.BaseClient._calculate_retry_timeout`` honours ``Retry-After``
+# when it is between 0 and 60 s, and otherwise backs off exponentially with jitter. So
+# the budget is spent in provider-declared waits rather than in guesses.
+#
+# It was 1, which is two attempts, and a single 429 mid-burst cost a whole lap of an LLM
+# run: the API reported 178831 of 200000 TPM used and asked for a retry, but a TPM
+# window drains over a MINUTE and both attempts landed inside it (#1153). Five covers
+# one window. It does NOT make a long enough burst safe; pacing the run still does that.
+#
+# Restated as a bare ``1`` in twelve places across six agent modules before this, which
+# is the same drift ``DEFAULT_TOTAL_LAPS`` above was consolidated to stop.
+LLM_MAX_RETRIES: int = 5
+
 
 def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> float:
     """Read a numeric reading that may be ABSENT or PRESENT-AND-``None``.

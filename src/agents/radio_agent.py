@@ -143,6 +143,8 @@ from src.f1_strat_manager.rcm_events import (  # noqa: E402
     classify_rcm_event as _classify_rcm_event,
 )
 
+from src.agents._shared_defaults import LLM_MAX_RETRIES
+
 
 
 
@@ -808,7 +810,7 @@ def _get_radio_llm():
                 model=CFG.model_name,
                 temperature=0.0,
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         else:
             base_llm = ChatOpenAI(
@@ -818,7 +820,7 @@ def _get_radio_llm():
                 temperature=0.0,
                 model_kwargs={"parallel_tool_calls": False},
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         _structured_llm = base_llm.with_structured_output(RadioSynthesis)
     return _structured_llm
