@@ -47,6 +47,8 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.agents._shared_defaults import LLM_MAX_RETRIES
+
 logger = logging.getLogger(__name__)
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
@@ -193,7 +195,7 @@ def _get_orchestrator_llm():
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
         if provider == "openai":
             # No parallel_tool_calls: OpenAI rejects it when no tools are specified
-            llm = ChatOpenAI(model=CFG.model_name, temperature=CFG.temperature, timeout=120, max_retries=1)
+            llm = ChatOpenAI(model=CFG.model_name, temperature=CFG.temperature, timeout=120, max_retries=LLM_MAX_RETRIES)
         else:
             llm = ChatOpenAI(
                 model=CFG.model_name,
@@ -202,7 +204,7 @@ def _get_orchestrator_llm():
                 temperature=CFG.temperature,
                 model_kwargs={"parallel_tool_calls": False},
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         if _temperature_was_dropped(llm, CFG.temperature):
             # ASCII only: this line lands on Windows terminals, where the repo's
@@ -1562,6 +1564,7 @@ def _run_mc_simulation(
 from src.rag.store_lock import LOCK_EXCEPTIONS as _LOCK_EXCEPTIONS
 from src.rag.store_lock import QDRANT_LOCK_SIGNATURE as _QDRANT_LOCK_SIGNATURE  # noqa: F401
 from src.rag.store_lock import is_store_locked as _is_store_locked
+
 
 
 # Logged once per process, not once per lap. A locked store fails every lap

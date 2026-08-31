@@ -40,7 +40,10 @@ from src.strategy.inference.guard_rails import (
     _NO_PIT_LAST_N_LAPS,
 )
 
-from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
+from src.agents._shared_defaults import (
+    DEFAULT_TOTAL_LAPS,
+    LLM_MAX_RETRIES,
+)
 from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
@@ -1416,10 +1419,10 @@ class PitStrategyAgent:
                 model_kwargs={'parallel_tool_calls': False},
                 disable_streaming=True,
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         else:
-            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=1)
+            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=LLM_MAX_RETRIES)
 
         self._react_agent = create_agent(
             llm, self._tools, system_prompt=_PIT_STRATEGY_SYSTEM_PROMPT

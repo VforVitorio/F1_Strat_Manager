@@ -37,6 +37,7 @@ from src.agents._shared_defaults import (
     DEFAULT_AIR_TEMP_C,
     DEFAULT_TOTAL_LAPS,
     DEFAULT_TRACK_TEMP_C,
+    LLM_MAX_RETRIES,
     reading_or_default,
 )
 from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE, normalise_compound
@@ -1508,10 +1509,10 @@ class TireAgent:
                 api_key=api_key,
                 temperature=0,
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         else:
-            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=1)
+            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=LLM_MAX_RETRIES)
 
         self._react_agent = create_agent(
             model=llm,
