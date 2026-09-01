@@ -46,7 +46,16 @@ Track outline with the DRS zones drawn in green, two driver icons (our driver in
 
 ### PITWALL · AGENTS
 
-Orchestrator card on the left (action badge, confidence bar, pace/risk chips, plan strip with compound pill, and a guardrail line that shows when the no-LLM hard guard overrode the LLM pick), scenario bars beneath it (four bars for STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT) and reasoning tabs below that. On the right, a 3x2 grid of sub-agent cards: Pace (N25), Tire (N26), Situation (N27), Radio (N29), Pit (N28, dimmed when inactive), RAG (N30, dimmed when inactive). Pace and Tire carry embedded ECharts plots.
+Four strata, top to bottom: header, decision band, agent grid, status bar. The band runs left to right in the order a reader asks the questions, which is what the orchestrator is doing, why, on what evidence, and what happens next: the orchestrator card with its action badge and confidence bar, the reasoning panel, the scenario bars (STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT, scored by the Monte Carlo over the agents' own distributions) and the plan strip.
+
+Under it a grid places its cards by name rather than in reading order, because three of them want a shape reading order does not give them:
+
+```
+pace   tire   side
+radio  exit   rag
+```
+
+`side` stacks Situation (N27) and Pit (N28); `exit` is the PIT EXIT card, which answers what position a stop taken on this lap rejoins in and which cars land either side. Pace (N25) and Tire (N26) carry embedded ECharts plots, and Radio (N29) and RAG (N30) dim when inactive.
 
 ### PITWALL · DATA
 
