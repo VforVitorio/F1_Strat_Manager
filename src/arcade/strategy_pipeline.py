@@ -35,15 +35,25 @@ def run_strategy_pipeline(
     laps_df: pd.DataFrame,
     lap_state: dict | None = None,
     memory: "DecisionMemory | None" = None,
+    no_llm: bool = False,
 ) -> tuple["StrategyRecommendation", dict]:
     """Run the full N31 pipeline; return the recommendation and per-agent outputs.
 
-    Public signature stays backward compatible: ``memory`` is optional and
-    defaults to ``None``, so ``src/arcade/strategy.py`` and the dashboard
-    formatters that already call this positionally keep working unchanged. The
-    ``agent_outputs`` dict carries the same keys as before (``pace_out``/
-    ``tire_out``/``situation_out``/``radio_out``/``pit_out``/
-    ``regulation_context``/``rag``/``active``) plus ``guardrail_reason``.
+    Public signature stays backward compatible: ``memory`` and ``no_llm`` are
+    both optional and default to the pre-existing behaviour (LLM synthesis),
+    so ``src/arcade/strategy.py`` and the dashboard formatters that already
+    call this positionally keep working unchanged. The ``agent_outputs`` dict
+    carries the same keys as before (``pace_out``/``tire_out``/
+    ``situation_out``/``radio_out``/``pit_out``/``regulation_context``/
+    ``rag``/``active``) plus ``guardrail_reason``.
+
+    ``no_llm`` (#1155) selects ``run_lap``'s deterministic profile instead of
+    the LLM-synthesised one: ``True`` routes through ``"no-llm"`` (zero LLM
+    clients, ``src/strategy/inference/no_llm.py``), ``False`` keeps the
+    existing ``"rich"`` profile. The caller carried this flag through two
+    dataclasses and a constructor call without it ever reaching here, so
+    setting it on the arcade's request changed nothing and the arcade always
+    ran the paid path.
 
     **The stage timings are LOGGED, not returned and not broadcast (#1045).**
     This docstring used to say they were dropped here and that "a future arcade
@@ -60,8 +70,9 @@ def run_strategy_pipeline(
 
     DEBUG and not INFO: this runs once per lap of every arcade race.
     """
+    profile = "no-llm" if no_llm else "rich"
     rec, agent_outputs, timings = run_lap(
-        race_state, laps_df, lap_state, profile="rich", memory=memory
+        race_state, laps_df, lap_state, profile=profile, memory=memory
     )
     if logger.isEnabledFor(logging.DEBUG):
         breakdown = " ".join(f"{stage}={seconds:.3f}s" for stage, seconds in timings.items())

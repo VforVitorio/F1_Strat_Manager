@@ -55,6 +55,16 @@ def _parse_args() -> argparse.Namespace:
         "--strategy", action="store_true", help="Enable strategy overlay (requires year 2025)."
     )
     parser.add_argument("--provider", choices=("lmstudio", "openai"), default="openai")
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help=(
+            "Run the strategy layer on the deterministic profile (zero LLM "
+            "clients, zero cost) instead of the LLM-synthesised one. Only "
+            "takes effect with --viewer and --strategy; the in-window menu "
+            "has no toggle for it yet."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -89,6 +99,7 @@ def _show_viewer_directly(window: arcade.Window, args: argparse.Namespace) -> No
     if args.driver2:
         cfg.driver_rival = args.driver2.upper()
     cfg.strategy_mode = args.strategy
+    cfg.no_llm = args.no_llm
     view = MenuView(window)
     window.show_view(view)
     view.launch_with(cfg)
