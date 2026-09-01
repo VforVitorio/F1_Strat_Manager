@@ -81,9 +81,9 @@ field by lap fraction, and the **radio feed**: race control messages and
 driver radio in one list, newest line on top, the header naming the total so
 the cut at the bottom is never silent. The feed carries the whole field
 rather than only the pinned car, a rival's line marked `BROADCAST`, the same
-tag band 4 gives a rival's trace: a real team receives the public broadcast
-radio feed too, so showing it is fidelity rather than a privilege the window
-grants itself.
+tag the rival's traces carry. A real team receives the public broadcast radio
+feed too, so showing it is fidelity rather than a privilege the window grants
+itself.
 
 **RACE PACE** is a grid, one column per driver and one row per lap: how quick
 each lap was. **RACE TRACE** is a chart of the same laps read the other way,
@@ -96,12 +96,15 @@ own arithmetic: a grid squeezed to half this height stops showing enough laps
 to read as a history, and a trace squeezed the same way, to roughly 300 px,
 stops resolving the gaps it exists to show.
 
-Shipping both, with the grid one click from the default tab, runs against
-what the pit-wall research behind this window found. Across seven sources and
-six photographs of a real SBG/Catapult RaceX client, not one race-trace line
-chart appears on a wall, while the literature names the gapper plot the
-central strategy tool, and the pace grid takes up more screen area than
-anything else in the photographs. RACE TRACE stays because the question it
+Shipping both, with the grid one click from the default tab, follows what the
+pit-wall research behind this window found and what it could not settle.
+Across seven sources and six photographs of a real SBG/Catapult RaceX client,
+not one race-trace line chart appears on a wall, while the literature names
+the gapper plot the central strategy tool, and the pace grid takes up more
+screen area than anything else in the photographs. The photographs cover the
+in-session view, so they cannot rule out a trace living on an analysis tab;
+what they establish is which of the two a wall keeps in front of it during a
+race. RACE TRACE stays because the question it
 answers has no other tab that can answer it.
 
 Four details that are not cosmetic:
