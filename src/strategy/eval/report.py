@@ -36,7 +36,14 @@ ERA_TAG = "2022-2025"
 
 
 def _harness_sha() -> str:
-    """Short git SHA of the repo the harness runs from, or ``unknown``.
+    """Describe the commit the harness runs from, or ``unknown``.
+
+    Uses ``git describe --always --dirty`` rather than a bare
+    ``rev-parse --short HEAD``: a report generated from a modified working
+    tree (the normal case, since regeneration happens before the change that
+    motivated it gets committed) gets a ``-dirty`` suffix, so the stamped
+    value tells a reader when it does NOT pin a reproducible commit instead
+    of silently naming the parent commit as if it did (#1152).
 
     Returns ``unknown`` when running outside a checkout (e.g. an installed
     tool venv) so a report is never blocked on git being available.
@@ -46,7 +53,7 @@ def _harness_sha() -> str:
         return "unknown"
     try:
         out = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+            ["git", "-C", str(repo), "describe", "--always", "--dirty"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -72,8 +79,9 @@ class ReportHeader:
     """Provenance stamp attached to every eval report (E-15).
 
     Invariants:
-    - ``harness_sha`` pins the code; ``artifacts`` pins the model weights;
-      together they make a report reproducible.
+    - ``harness_sha`` pins the code and ``artifacts`` pins the model weights;
+      together they make a report reproducible, and a ``-dirty`` suffix on
+      ``harness_sha`` says plainly when that does NOT hold.
     - ``generated_at`` is provenance only and is NOT part of report equality
       (two runs of the same code on the same data are "equal" bar the clock).
     - ``llm`` is ``none`` for pure-ML reports; NLP/orchestrator reports that

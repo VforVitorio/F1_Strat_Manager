@@ -7,18 +7,25 @@ renderer's ``artifacts`` placeholder in four reports without touching the
 renderer. The next regeneration put the em dash back in a fifth, so the tree held
 two spellings of the same empty value and neither traced to the code.
 
-These two tests close that loop from both ends: the renderer's placeholder is
-asserted directly, and every committed report is asserted to carry a placeholder
-the renderer can produce.
+Two tests close that loop from both ends: the renderer's placeholder is asserted
+directly, and every committed report is asserted to carry a placeholder the
+renderer can produce.
+
+A third test guards a separate defect in the same header (#1152):
+``harness_sha`` used to pin the parent commit with no marker saying the working
+tree that generated the report was never committed at all, so a report could
+name a commit that cannot produce the bytes it stamps.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
 
+import src.strategy.eval.report as report
 from src.strategy.eval.report import ReportHeader, _render_md
 
 ROOT = Path(__file__).parent.parent.parent
@@ -65,3 +72,37 @@ def test_committed_report_artifacts_line_matches_the_renderer(report: Path):
         assert re.fullmatch(r"[\w.\-]+=`[0-9a-f]+`", entry), (
             f"{report.name} artifacts entry {entry!r} is not a rendered name=`hash` pair"
         )
+
+
+def _run_git(repo: Path, *args: str) -> None:
+    """Run a git command against `repo`, raising if it fails."""
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+
+
+def test_harness_sha_marks_a_dirty_working_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """`_harness_sha()` flags an uncommitted change instead of naming the parent commit.
+
+    Exercises a real, disposable git repository under `tmp_path` rather than
+    mocking `subprocess`, so the guard fails if the command reverts to
+    `git rev-parse --short HEAD`, which carries no dirty marker and always
+    names the last commit even when the tree that produced the report was
+    never committed (#1152).
+    """
+    repo = tmp_path / "probe"
+    repo.mkdir()
+    _run_git(repo, "init", "-q")
+    _run_git(repo, "config", "user.email", "probe@test.local")
+    _run_git(repo, "config", "user.name", "probe")
+    tracked = repo / "tracked.txt"
+    tracked.write_text("v1", encoding="utf-8")
+    _run_git(repo, "add", "tracked.txt")
+    _run_git(repo, "commit", "-q", "-m", "init")
+
+    monkeypatch.setattr(report, "_find_repo_root", lambda: repo)
+
+    clean_sha = report._harness_sha()
+    assert not clean_sha.endswith("-dirty"), f"clean tree stamped as dirty: {clean_sha!r}"
+
+    tracked.write_text("v2", encoding="utf-8")  # uncommitted change to a tracked file
+    dirty_sha = report._harness_sha()
+    assert dirty_sha.endswith("-dirty"), f"modified tree not flagged as dirty: {dirty_sha!r}"
