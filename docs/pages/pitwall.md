@@ -68,10 +68,44 @@ green for a driver's own best, amber for slower than his own. Under it, the
 **bests**: S1, S2, S3 and Lap ranked across the field with their percentage off
 the leader, and the theoretical lap those three sectors recombine into.
 
-**Right: the own car's lap** as four locked-axis traces against distance: Δ
-Time, Speed, Brake, Throttle, ported field by field from the Qt telemetry
-panel, plus a shared vertical cursor marking where the car is on the lap, and a
-schematic **track ring** placing the whole field by lap fraction.
+**Right: a tab strip over three panels**, because the column has 825 px of
+width to give and sharing it costs one of them too much: with the track ring
+still mounted, the pace grid's columns narrow enough that 1,101 of 1,140
+cells clip. The panels take turns instead.
+
+**TRACES**, the tab open by default, is the own car's lap as four locked-axis
+traces against distance: Δ Time, Speed, Brake, Throttle, ported field by field
+from the Qt telemetry panel, plus a shared vertical cursor marking where the
+car is on the lap. Beside it, a schematic **track ring** placing the whole
+field by lap fraction, and the **radio feed**: race control messages and
+driver radio in one list, newest line on top, the header naming the total so
+the cut at the bottom is never silent. The feed carries the whole field
+rather than only the pinned car, a rival's line marked `BROADCAST`, the same
+tag the rival's traces carry. A real team receives the public broadcast radio
+feed too, so showing it is fidelity rather than a privilege the window grants
+itself.
+
+**RACE PACE** is a grid, one column per driver and one row per lap: how quick
+each lap was. **RACE TRACE** is a chart of the same laps read the other way,
+where everyone is relative to a reference over the whole race: one cut down
+it at a given lap gives every gap in the field at that moment, a question
+the grid cannot answer.
+
+Splitting the two across tabs rather than stacking them repeats the column's
+own arithmetic: a grid squeezed to half this height stops showing enough laps
+to read as a history, and a trace squeezed the same way, to roughly 300 px,
+stops resolving the gaps it exists to show.
+
+Shipping both, with the grid one click from the default tab, follows what the
+pit-wall research behind this window found and what it could not settle.
+Across seven sources and six photographs of a real SBG/Catapult RaceX client,
+not one race-trace line chart appears on a wall, while the literature names
+the gapper plot the central strategy tool, and the pace grid takes up more
+screen area than anything else in the photographs. The photographs cover the
+in-session view, so they cannot rule out a trace living on an analysis tab;
+what they establish is which of the two a wall keeps in front of it during a
+race. RACE TRACE stays because the question it
+answers has no other tab that can answer it.
 
 Four details that are not cosmetic:
 
