@@ -1452,10 +1452,13 @@ def test_the_window_renders_no_guardrail_line_because_nothing_can_fill_it():
     """#974: a field typed, styled, documented and written by no producer.
 
     The view used to carry `⚠ Guardrail: <reason>` from
-    `latest["guardrail_reason"]`. `run_lap` hardcodes that to None for the
-    `rich` profile, `strategy_pipeline` hardcodes `profile="rich"`, and
-    `src/arcade/app.py` builds its request with a literal `no_llm=False`, so
-    on every arcade path the line was permanently blank.
+    `latest["guardrail_reason"]`. At the time #974 removed the render,
+    `run_lap` hardcoded that to None for the `rich` profile,
+    `strategy_pipeline` hardcoded `profile="rich"`, and `src/arcade/app.py`
+    built its request with a literal `no_llm=False`, so on every arcade path
+    the line was permanently blank. #1155 fixed the last two, so `--no-llm`
+    now reaches a profile that CAN produce a real reason; `build_orchestrator`
+    still drops the key regardless of profile, which is what this test pins.
 
     Asserted as the KEY BEING ABSENT while a reason is supplied, not as an
     empty string. An empty string is what the defect produced for its whole

@@ -313,18 +313,23 @@ def build_orchestrator(
     **There is no guardrail line, and that is the fix rather than an omission
     (#974).** The window used to render `⚠ Guardrail: <reason>` from
     `latest["guardrail_reason"]`, a field typed, documented, styled and tested
-    on a path that cannot deliver it. The chain, walked end to end:
+    on a path that cannot deliver it. The chain, walked end to end, at the
+    time #974 removed the render:
 
     - `apply_guard_rails` produces a reason at exactly one production site,
       `src/strategy/inference/no_llm.py:302`.
     - `run_lap` hardcodes `guardrail_reason=None` for the `rich` profile
       (`src/strategy/inference/engine.py:303`), because rich mode puts the
       bounds in the LLM's prompt instead of applying them after the fact.
-    - `src/arcade/strategy_pipeline.py:48` hardcodes `profile="rich"`, and
-      `src/arcade/app.py` builds its request with a literal `no_llm=False`.
+    - the arcade had no way to reach any other profile: `run_strategy_pipeline`
+      hardcoded `profile="rich"` and `src/arcade/app.py` built its request
+      with a literal `no_llm=False`, both since fixed (#1155).
 
-    Therefore, on every arcade path the value is None by construction, and the
-    line was permanently blank.
+    On the arcade's default (LLM) path the value is still None by
+    construction, for the same reason as always: rich mode never calls
+    `apply_guard_rails`. `--no-llm` (#1155) now reaches a profile that can
+    produce a real reason, and the window still does not render it. Restoring
+    the line is the breadcrumb below, not something #1155 took on.
 
     --- WHERE TO CHANGE IF THE ARCADE LEARNS TO RUN WITHOUT AN LLM ---
     Restore the field here, the `guardrail` key on `OrchestratorView`
