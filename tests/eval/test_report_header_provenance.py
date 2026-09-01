@@ -14,7 +14,12 @@ renderer can produce.
 A third test guards a separate defect in the same header (#1152):
 ``harness_sha`` used to pin the parent commit with no marker saying the working
 tree that generated the report was never committed at all, so a report could
-name a commit that cannot produce the bytes it stamps.
+name a commit that cannot produce the bytes it stamps. It also pins the SHAPE
+of the value, not only its dirty/clean state: a probe repo with no reachable
+tag cannot tell a bare ``git describe --always --dirty`` apart from the
+correct ``--exclude='*'`` form, since both fall back to the same short hash
+when there is nothing to describe from, so the probe repo carries a tag on
+purpose.
 """
 
 from __future__ import annotations
@@ -79,14 +84,29 @@ def _run_git(repo: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
 
 
+# A short git SHA: hex digits only, git's usual 7-40 char abbreviation range.
+# A tag-relative `describe` output (`legacy-2026-07-13-1098-g8b6cb305`) fails
+# this on both counts, letters outside a-f and a length no abbreviation reaches.
+_SHORT_SHA = re.compile(r"^[0-9a-f]{4,40}$")
+
+
 def test_harness_sha_marks_a_dirty_working_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """`_harness_sha()` flags an uncommitted change instead of naming the parent commit.
+    """`_harness_sha()` is a short sha, dirty-suffixed only when the tree is.
 
     Exercises a real, disposable git repository under `tmp_path` rather than
-    mocking `subprocess`, so the guard fails if the command reverts to
-    `git rev-parse --short HEAD`, which carries no dirty marker and always
-    names the last commit even when the tree that produced the report was
-    never committed (#1152).
+    mocking `subprocess`, with a tag on its first commit so the repo behaves
+    like this one (which carries `legacy-2026-07-13` on an ancestor of HEAD)
+    rather than a bare scratch repo, where a tagless `describe` looks
+    identical whether or not `--exclude` is passed.
+
+    Two things are pinned, not one. The dirty marker guards the fix from
+    #1152: reverting to `git rev-parse --short HEAD` carries no `-dirty`
+    suffix and always names the last commit, even when the tree that
+    produced the report was never committed. The shape guards the fix to
+    that fix: dropping `--exclude='*'` lets `describe` walk back to the
+    reachable tag and stamp a long, tag-relative description in its place,
+    which still ends in `-dirty` on schedule and would pass a check that
+    only looked at the suffix.
     """
     repo = tmp_path / "probe"
     repo.mkdir()
@@ -97,12 +117,19 @@ def test_harness_sha_marks_a_dirty_working_tree(tmp_path: Path, monkeypatch: pyt
     tracked.write_text("v1", encoding="utf-8")
     _run_git(repo, "add", "tracked.txt")
     _run_git(repo, "commit", "-q", "-m", "init")
+    # Annotated, not lightweight: `describe` ignores lightweight tags by default.
+    _run_git(repo, "tag", "-a", "unrelated-legacy-tag", "-m", "probe tag")
 
     monkeypatch.setattr(report, "_find_repo_root", lambda: repo)
 
     clean_sha = report._harness_sha()
     assert not clean_sha.endswith("-dirty"), f"clean tree stamped as dirty: {clean_sha!r}"
+    assert _SHORT_SHA.fullmatch(clean_sha), (
+        f"clean sha {clean_sha!r} is not a bare short sha, the reachable tag leaked in"
+    )
 
     tracked.write_text("v2", encoding="utf-8")  # uncommitted change to a tracked file
     dirty_sha = report._harness_sha()
-    assert dirty_sha.endswith("-dirty"), f"modified tree not flagged as dirty: {dirty_sha!r}"
+    assert dirty_sha == f"{clean_sha}-dirty", (
+        f"dirty sha {dirty_sha!r} is not the clean sha plus -dirty"
+    )

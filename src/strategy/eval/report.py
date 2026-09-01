@@ -36,14 +36,20 @@ ERA_TAG = "2022-2025"
 
 
 def _harness_sha() -> str:
-    """Describe the commit the harness runs from, or ``unknown``.
+    """Short git SHA of the repo the harness runs from, or ``unknown``.
 
-    Uses ``git describe --always --dirty`` rather than a bare
-    ``rev-parse --short HEAD``: a report generated from a modified working
-    tree (the normal case, since regeneration happens before the change that
-    motivated it gets committed) gets a ``-dirty`` suffix, so the stamped
-    value tells a reader when it does NOT pin a reproducible commit instead
-    of silently naming the parent commit as if it did (#1152).
+    Uses ``git describe --always --dirty --exclude='*'`` rather than a bare
+    ``rev-parse --short HEAD``. The ``--exclude`` pattern matches every tag,
+    so ``describe`` has no tag left to describe from and falls back to the
+    same short hash ``--always`` gives on its own; without it, ``describe``
+    walks back to the nearest reachable tag instead and stamps a long,
+    tag-relative description (e.g. ``legacy-2026-07-13-1098-g8b6cb305``) in
+    place of the short sha the header is supposed to pin. The one addition
+    over a bare ``rev-parse`` is the ``-dirty`` suffix, appended when the
+    working tree does not match the stamped commit: reports are regenerated
+    on a dirty tree before the change that motivated the regeneration gets
+    committed, so the sha used to be silently one commit stale with nothing
+    marking it (#1152).
 
     Returns ``unknown`` when running outside a checkout (e.g. an installed
     tool venv) so a report is never blocked on git being available.
@@ -53,7 +59,7 @@ def _harness_sha() -> str:
         return "unknown"
     try:
         out = subprocess.run(
-            ["git", "-C", str(repo), "describe", "--always", "--dirty"],
+            ["git", "-C", str(repo), "describe", "--always", "--dirty", "--exclude=*"],
             capture_output=True,
             text=True,
             timeout=5,
