@@ -483,7 +483,7 @@ class SimConnector(threading.Thread):
         # instead of the plan the model was given.
         memory_block = self._memory.block()
         rec, agent_outputs = run_strategy_pipeline(
-            race_state, laps_df, lap_state, memory=self._memory
+            race_state, laps_df, lap_state, memory=self._memory, no_llm=self._request.no_llm
         )
         self._memory.record(race_state.lap, rec)
         plan_changed = self._memory.last_call_changed()

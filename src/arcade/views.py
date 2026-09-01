@@ -68,6 +68,10 @@ class LaunchConfig:
     driver_rival: str = "LEC"
     team: str = "McLaren"
     strategy_mode: bool = False
+    # Reachable only through `--viewer --no-llm` (main.py:_show_viewer_directly);
+    # the in-window menu has no row for it, so an interactive launch keeps the
+    # LLM path by default. #1155.
+    no_llm: bool = False
 
 
 @dataclass
@@ -910,5 +914,6 @@ class MenuView(arcade.View):
             year=self._cfg.year,
             strategy_enabled=self._cfg.strategy_mode,
             team=self._cfg.team,
+            no_llm=self._cfg.no_llm,
         )
         self.window.show_view(view)

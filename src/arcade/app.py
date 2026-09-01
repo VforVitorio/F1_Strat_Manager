@@ -229,6 +229,7 @@ class F1ArcadeView(arcade.View):
         year: int = 2024,
         strategy_enabled: bool = False,
         team: str | None = None,
+        no_llm: bool = False,
     ) -> None:
         super().__init__(window=window)
         arcade.set_background_color(BG_COLOR)
@@ -245,6 +246,9 @@ class F1ArcadeView(arcade.View):
         self._year = year
         self._strategy_enabled = strategy_enabled
         self._team = team
+        # Reaches `_init_strategy_layer`'s `SimulateRequestDTO`, which used to
+        # hardcode `no_llm=False` regardless of what the caller wanted (#1155).
+        self._no_llm = no_llm
         self._strategy_connector = None  # set by __init__ if strategy_enabled
         self._strategy_state = None
         self._stream_server = None
@@ -429,7 +433,7 @@ class F1ArcadeView(arcade.View):
             team=self._team or "",
             driver2=self._driver_rival,
             risk_tolerance=0.5,
-            no_llm=False,
+            no_llm=self._no_llm,
             provider=provider,
             interval_s=0.0,
         )
