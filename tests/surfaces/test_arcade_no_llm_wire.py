@@ -13,6 +13,13 @@ The defect lived in the hop between them, so the guard has to sit there too.
 and `_build_decision` all run for real, so a "fix" that reconnects the wire at
 the wrong hop (patching the middle back to a hardcoded profile, say) still
 fails this file, not just the line it touched.
+
+Data-tier (`skip_no_tire_models`): importing `src.arcade.strategy_pipeline` pulls
+in `src.strategy.inference.engine`, which pulls in the full agent stack, and
+`TireAgentConfig` reads `data/models/tire_degradation/routing_config.json` at
+import time regardless of which profile a test exercises. Runs locally + on the
+data tier; skips on bare CI, same as `tests/engine/test_engine_no_llm.py` and
+`tests/audit/test_engine_scope_defaults.py`, which import the same chain.
 """
 
 from __future__ import annotations
@@ -23,9 +30,13 @@ from typing import Any
 import pandas as pd
 import pytest
 
+from tests.conftest import skip_no_tire_models as _skip_no_models
+
 pytest.importorskip("arcade", reason="the arcade replay is an optional surface")
 
 from src.arcade.strategy import SimConnector, SimulateRequestDTO, StrategyState  # noqa: E402
+
+pytestmark = _skip_no_models
 
 
 def _connector(no_llm: bool) -> SimConnector:
