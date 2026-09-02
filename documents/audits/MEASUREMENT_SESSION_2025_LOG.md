@@ -579,6 +579,14 @@ on every lap, that the car ahead sits exactly 2.0 s away and matches its pace ex
 2.0 is a plausible-looking number, so nothing downstream could tell it from a measurement.
 Filed as **#829**.
 
+**Corrected 2026-08-21 (#1044).** The first sentence above names two routes the fields do not
+take. `RaceState.gap_ahead_s` and `pace_delta_s` reach the orchestrator's synthesis prompt and
+stop there: N27 derives its own pair gap from `laps_df` and pairs by position, and the Monte
+Carlo is handed `lap_state["rivals"]` rather than anything off the RaceState. The conclusion in
+bold is unchanged and the figures are still not comparable, because the tier grades the
+synthesised decision and the synthesis is exactly what was fed the two constants. The same
+sentence was found in three other places and fixed there.
+
 **Corrected 2026-08-06 after an adversarial gate (F5).** The five laps tabled above are a
 probe, and the sentence this paragraph used to carry — *"the real gaps run 0.43 to 1.08"* —
 generalised them into a distribution. Over all 2744 laps the metric actually scores, the real

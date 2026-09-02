@@ -61,7 +61,7 @@ So `STAY_OUT` winning on 89 % of real stop laps is **not a failure**. Within fiv
 **The ugly thing**, verified verbatim in both files:
 
 ```python
-action=str(getattr(rec, "action", "ERROR"))
+action = str(getattr(rec, "action", "ERROR"))
 ```
 
 `src/arcade/strategy.py:807` and the submodule's `simulator.py:523`. A deliberately silent lap would render as a **red ERROR badge** while the dashboard status bar simultaneously shows `lap N · streaming`. Silence and failure are today indistinguishable. Not a live bug while nothing is deliberately silent, but the first thing to fix if this is ever revisited.

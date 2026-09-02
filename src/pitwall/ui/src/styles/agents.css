@@ -1,0 +1,1066 @@
+/* PITWALL · AGENTS: a decision band over six specialist consoles.
+ *
+ * The chrome numbers are still the Qt window's, because they were never the
+ * problem: the 44 px header (`HeaderBar.setFixedHeight`), the 10 px panel
+ * margins and 8 px spacing (`setContentsMargins` / `setSpacing`), the card
+ * border and radius (`theme.apply_dark_palette`'s `QFrame[card="true"]` rule),
+ * and the font sizes on each widget.
+ *
+ * **The SHAPE is not.** The 540 / 740 split (`splitter.setSizes`) is gone with
+ * the column it described, and so is the `WindowSpec` width derived from it.
+ * What replaces it is four horizontal strata, sized by the client the window
+ * really gets - 1486x833, measured inside the real window rather than taken
+ * from the `WindowSpec`.
+ *
+ * The `--qt-*` tokens and the `body` rule moved to `qt-base.css` when the
+ * DATA window needed the same palette. Pasting them into a
+ * second stylesheet would have been copy number six of a palette this repo
+ * has already found five copies of.
+ */
+
+.agents-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* --- Header ------------------------------------------------------------- */
+
+.header-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 6px 14px;
+  box-sizing: border-box;
+}
+.header-session {
+  font-size: 14px;
+  font-weight: 600;
+}
+.header-driver {
+  color: var(--qt-fg-2);
+  font-size: 13px;
+  margin-left: 6px;
+}
+.header-spacer {
+  flex: 1;
+}
+.chip {
+  color: var(--qt-fg-2);
+  background: var(--qt-elevated);
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+/* The connection chip is a chip like the other two: `window.py:81` gives
+ * the label `objectName("chip")` and the app stylesheet paints
+ * `QLabel#chip` with the elevated background. `set_connection`'s
+ * widget-level sheet overrides the colour and the padding, never the
+ * background, so Qt's cascade keeps it. An earlier comment here claimed
+ * the opposite. */
+.header-conn {
+  font-weight: 600;
+}
+
+/* The producer is gone. DANGER filled, the same treatment the DATA window's own
+ * frozen chip carries, so one state looks like one state across both windows. */
+.chip.is-frozen {
+  background: #ef4444;
+  color: var(--qt-bg);
+  font-weight: 800;
+}
+
+/* The neutralisation chip's two non-default states. The colours are INLINE, off
+ * the wire's own `track_status_color`, so nothing here names one: these rules
+ * carry the weight and the border only.
+ *
+ * A non-green status is filled and bold, because that is this window's whole
+ * reaction to a safety car and an outline chip swapping its text is a change a
+ * reader misses at a glance. The DATA strip made the same move for the same
+ * reason; `lib/trackStatus.ts` is the rule both of them ask. */
+.chip.is-filled {
+  color: var(--qt-bg);
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+/* An absence is not an alarm, so it gives up its weight AND its colour. This is
+ * what a missing TrackStatus entry wears, and what a live status wears once the
+ * feed is frozen: the label was true, the assertion is not. */
+.chip.is-unknown {
+  color: var(--qt-fg-3);
+  background: var(--qt-elevated);
+  font-weight: 500;
+}
+
+/* The cards while the feed is dead: dimmed, NOT desaturated. Same reasoning as the
+ * DATA window's `.data-main.is-frozen` - `saturate()` collapses hue differences and
+ * this window's colour is content too (the alarm red, the WARNING amber on a
+ * changed call, the confidence bar). `brightness()` scales all three channels
+ * together, so nothing moves relative to anything else. The header strip and the
+ * status bar stay at full strength: they carry the tells. */
+.agents-body.is-frozen {
+  filter: brightness(0.72);
+}
+
+/* --- The four strata ------------------------------------------------------
+ *
+ * header 44 · band · grid · status bar, inside 833 px of client. The band is
+ * `auto` and the grid is `1fr`, so the band takes what its content needs and
+ * the grid absorbs the remainder. Writing both as fixed pixel budgets is what
+ * the elevation spec proposed and it came out 5 px over the real height - a
+ * grid that takes the leftover cannot be over budget by construction. */
+
+.agents-body {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+}
+
+/* --- The decision band ----------------------------------------------------
+ *
+ * Four modules in the order the reader's question unfolds: what we are doing,
+ * why, on what evidence, and what happens next.
+ *
+ * The three fixed columns are budgeted against the client's real inner width
+ * (1486 − 20 px padding = 1466), which leaves PLAN 482 px of `1fr`. They are
+ * pixels rather than fractions for the same reason Qt's left panel was: the
+ * first three carry a known amount of text and the fourth is the one that
+ * should absorb width, so a proportional split would grow the wrong three. */
+
+.agents-band {
+  display: grid;
+  grid-template-columns: 340px 290px 330px 1fr;
+  gap: 8px;
+  min-height: 0;
+}
+.band-title {
+  margin: 0 0 6px;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.plan-panel {
+  padding: 10px 14px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* --- The race on one lap axis --------------------------------------------
+ *
+ * Three lanes and two marks, all placed by a per cent the host computed. The
+ * track is `position: relative` and everything inside it is absolute against
+ * that, so a lane's height never moves a mark's x. */
+
+.plan-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.plan-track {
+  position: relative;
+  padding-top: 4px;
+}
+.plan-lane {
+  position: relative;
+  width: 100%;
+}
+.plan-lane-hazard {
+  height: 5px;
+  margin-bottom: 2px;
+}
+/* **The empty track has to read as a groove, not as a bar.** It was
+ * `--qt-elevated`, and a run stint at 0.42 alpha over it came out the same
+ * tone: the laps this window never saw looked exactly like a stint it did see,
+ * which is the one thing this lane must never do. Window ground with a hairline
+ * reads as absence. */
+.plan-lane-stints {
+  height: 26px;
+  border-radius: 3px;
+  background: var(--qt-bg);
+  border: 1px solid var(--qt-border);
+  box-sizing: border-box;
+}
+.plan-lane-labels {
+  height: 16px;
+  margin-top: 3px;
+}
+
+/* The colour arrives inline, from the tyre chart's own `cliff_colour`, so the
+ * cliff is one fact drawn at two zoom levels rather than two ambers that
+ * happen to be close. The alpha is here because it is presentation. */
+.plan-cliff {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 2px;
+  opacity: 0.45;
+}
+
+/* A run stint: the compound at low alpha with a full-strength top edge, which
+ * is the boundary treatment the tyre chart already uses. */
+.plan-stint {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 2px;
+  border-top: 2px solid;
+  /* Enough for a compound to read as itself against the groove. Below about
+   * 0.5 the HARD white and the empty track were the same value. */
+  opacity: 0.62;
+}
+/* Planned: hollow. Not DASHED - a dashed stroke means broadcast-tier data in
+ * the sibling DATA window, and one stroke cannot mean two things across two
+ * windows a reader has open at once. */
+.plan-stint.is-planned {
+  border: 1px solid;
+  opacity: 1;
+}
+
+.plan-now {
+  position: absolute;
+  top: 0;
+  bottom: 19px;
+  width: 1px;
+  background: var(--qt-fg-3);
+}
+/* Directly over the lane it points into, not floating at the top of the
+ * module: a marker three lanes away from the bar it refers to is a decoration.
+ * `top` is the hazard lane's height plus its margin. */
+.plan-pit {
+  position: absolute;
+  top: 1px;
+  transform: translateX(-50%);
+  color: var(--qt-fg-1);
+  font-size: 9px;
+  line-height: 1;
+}
+.plan-end,
+.plan-cursor-label {
+  position: absolute;
+  top: 0;
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  white-space: nowrap;
+}
+.plan-end.is-start {
+  left: 0;
+}
+.plan-end.is-finish {
+  right: 0;
+}
+.plan-cursor-label {
+  transform: translateX(-50%);
+  color: var(--qt-fg-2);
+}
+
+.plan-caption {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-size: 12px;
+}
+
+/* --- The agent grid -------------------------------------------------------
+ *
+ * Named areas rather than source order, because three of the six want a shape
+ * the reading order does not give them: the two chart cards need the tall
+ * slots, and SITUATION and PIT are compact and both feed the decision so they
+ * stack beside them in one area.
+ *
+ * Two rows since PIT EXIT took the middle of the bottom one. Row 1 is
+ * `minmax(0, 1fr)` so the chart column takes the available height; row 2 is
+ * content-sized. `minmax(0, …)` rather than `1fr` alone: a `1fr` row has an
+ * automatic MINIMUM of its content, so a card that overflows pushes the grid
+ * past its container instead of scrolling inside itself. RADIO's one column and
+ * what it cost are documented on `.slot-exit` below, where the change was made. */
+
+.agents-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "pace tire side"
+    "radio exit rag";
+  gap: 8px;
+  min-height: 0;
+}
+.slot-pace {
+  grid-area: pace;
+}
+/* RADIO gave up the second of its two columns for this. The consequence is not
+   cosmetic: at one column a radio transcript no longer fits on one line, and
+   `.agent-line` wraps rather than clips over a content-sized row, so the height
+   comes out of the charts above. `agent_formatters.BODY_LINE_LIMIT` budgets the
+   whole line, prefix included, in the same sprint as this rule. */
+.slot-exit {
+  grid-area: exit;
+}
+.exit-qualifier {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.exit-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.exit-band {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.5;
+}
+.exit-row {
+  display: flex;
+  gap: 6px;
+}
+.exit-driver {
+  display: inline-block;
+  min-width: 46px;
+  font-weight: 600;
+}
+.slot-tire {
+  grid-area: tire;
+}
+/* The stack that holds SITUATION over PIT, so the column's leftover is one
+ * block under the pair rather than a gap between them. */
+.agents-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+/* **`min-height: 0`, or a long card leaves the window entirely.** A flex item's
+ * automatic minimum is its content, so a console with more lines than the
+ * column has room for cannot shrink - and `.agent-card` is deliberately
+ * `overflow: visible` so nothing can clip its tooltip, so it does not scroll
+ * either: it simply renders past the bottom of the client. Measured on the
+ * smoke's own fixture, PIT ran 384 px past a 833 px client while every stratum
+ * still summed to exactly 833, which is why the check that caught it asserts
+ * the DOCUMENT rather than the panels.
+ *
+ * With the minimum lifted the pair share the column and each body scrolls,
+ * which is this window's own rule: `qt-base.css` hides the scrollBAR and keeps
+ * the body reachable. */
+.agents-side > .agent-card {
+  min-height: 0;
+}
+.slot-radio {
+  grid-area: radio;
+}
+.slot-rag {
+  grid-area: rag;
+}
+
+/* **Size the CARD, not the cell.** A grid cell stretches its item by default,
+ * so the four text consoles took whatever height their row was handed and
+ * carried the difference as dead strip inside a bordered panel - 44-57% of
+ * the card on the layout this replaces, which is why the rows are
+ * content-sized in the first place. An empty bordered panel reads as content
+ * missing; window background does not read as anything.
+ *
+ * The two chart consoles are the exception and stretch on purpose: a chart
+ * has no natural height and the density is the point. */
+.agents-grid > .agent-card {
+  align-self: start;
+  max-height: 100%;
+}
+.agents-grid > .slot-pace,
+.agents-grid > .slot-tire {
+  align-self: stretch;
+}
+
+/* --- Cards -------------------------------------------------------------- */
+
+.agent-card {
+  position: relative;
+  /* The scroll is on `.agent-card-body`, not here: a positioned ancestor
+   * that scrolls clips the tooltip popup, and its left overflow is not
+   * even reachable. Qt clips a card that overflows its cap - the
+   * migration README records the right column "clipped mid-card" - so the
+   * footprint is the same and the content stays reachable. */
+  overflow: visible;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* DELIBERATE DIFFERENCE. `agent_card.py:156-158` asks for exactly this
+ * ("Dim the whole card when the agent is idle") and Qt silently ignores
+ * it: `opacity` in a Qt style sheet applies to QToolTip only, measured at
+ * 0 of 115,200 pixels changed with the rule on and off. So the port
+ * renders the intent the Qt author wrote and the toolkit dropped.
+ * Deleting it would mean reproducing a toolkit limitation on purpose. */
+.agent-card.is-idle {
+  /* Scoped to the CHROME, not the text. At 0.45 the trigger hint explaining
+   * why a card is dark measured 2.38:1 in rendered pixels, and the dim
+   * cannot be tuned into compliance - 0.75 still fails at 4.39:1 and 0.85
+   * no longer reads as dimmed. The producer already sends idle text in
+   * TEXT_TERTIARY, which measures 6.88:1 on this ground, so the colour
+   * system carries the state and the opacity only softens the frame. */
+  border-color: color-mix(in srgb, var(--qt-border) 45%, transparent);
+}
+.agent-card.is-idle .agent-glyph,
+.agent-card.is-idle .agent-chart {
+  opacity: 0.45;
+}
+.agent-card-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* **The body scrolls and nothing said so.** Scrollbars are hidden globally and
+ * that rule's own comment ends by naming this as the debt it leaves. Measured at
+ * the 1226 x 593 client a 1280x720 screen gives this window, the PACE and TIRE
+ * cards each hide 51 px, which is their entire Lap axis, and SITUATION and PIT
+ * cut a line through the middle of its glyphs. A chart with no axis reads as a
+ * chart, not as a chart with more below.
+ *
+ * The same mask the pace grid uses, for the same reason and in the same shape:
+ * a mask rather than an overlay leaves the content its own colours and puts
+ * nothing new in the hit-testing path, and the classes come from measured
+ * overflow rather than a breakpoint, so a card that fits shows nothing. */
+.agent-card-body.has-below,
+.cty-body.has-below {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent 100%);
+}
+
+.agent-card-body.has-above,
+.cty-body.has-above {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.agent-card-body.has-above.has-below,
+.cty-body.has-above.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-glyph {
+  font-size: 14px;
+  line-height: 1;
+}
+.agent-title {
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.agent-headline {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.agent-line {
+  margin: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.agent-chart {
+  margin-top: auto;
+  min-height: 140px; /* pace_chart.py / tire_chart.py setMinimumHeight(140) */
+  flex: 1;
+}
+
+/* --- Tooltip ------------------------------------------------------------ */
+
+/* Qt puts the tooltip on the CARD (`window.py:323,330`), so hovering
+ * anywhere over it opens the transcript and nothing extra is drawn. An
+ * earlier version added a visible "i" glyph and made only those 14 px
+ * hoverable: a new element with no counterpart in the window being
+ * ported.
+ *
+ * **Gated on a class `AgentCard` sets, never on `:has(.agent-tooltip)`.** That
+ * selector was here first and matched nothing for as long as it existed: the
+ * popup is portaled to `<body>` (`Tooltip.tsx:105`), so it is not a descendant
+ * of the card whose hover it was meant to drive, and neither of the two rules
+ * below ever fired (#1089).
+ *
+ * **Keyed on `.card`, not on `.agent-card`, so one tell means one thing.** The
+ * WHY module is a card carrying a tooltip exactly as the six consoles are, and
+ * it had no affordance at all until #1092. Giving it a third bespoke treatment
+ * would say "there is something here" in three different ways on one window. */
+.card.has-tooltip {
+  cursor: help;
+}
+
+/* **The cursor was the only tell that a card carried a transcript.** `cursor:
+ * help` says so once the pointer is already on it and says nothing to a reader
+ * scanning the window, and this card is the whole replacement for the reasoning
+ * tabs the Qt window had. A border that lifts under the pointer is the smallest
+ * thing that makes the affordance visible without adding a glyph the ported
+ * window never had, which is the trade the comment above already refused once.
+ *
+ * Border colour only: no size, no shadow, nothing that moves a neighbour. The
+ * six cards sit in a grid and a card that grows on hover would shift the five
+ * beside it, and the WHY module sits in the band beside three siblings with the
+ * same constraint. */
+.card.has-tooltip {
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.card.has-tooltip:hover {
+  border-color: var(--qt-fg-3);
+}
+
+/* The popup itself mounts and unmounts, so a mount animation runs exactly once
+ * per opening with no state to track. It fades and does not travel: the box is
+ * already positioned from the hovered card's rect, and sliding it would mean
+ * the text starts somewhere it does not belong. */
+@keyframes qt-tooltip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.agent-tooltip {
+  /* `fixed`, in the body, via a portal: nothing in the window tree can
+   * clip it. Two earlier fixes kept it inside the card and only moved
+   * which ancestor did the clipping. `top`/`left` come from the hovered
+   * card's rect, so there is no `:hover` rule here - the card mounts and
+   * unmounts the popup. */
+  position: fixed;
+  z-index: 10;
+  animation: qt-tooltip-in var(--motion-fast) var(--motion-ease) 1;
+  /* Sized to its content rather than a flat 30rem. A two-line tooltip used to
+   * be the same 502 px box as a twelve-line one, which reads as a panel that
+   * failed to fill rather than as a popup. */
+  width: max-content;
+  min-width: 18rem;
+  max-width: min(34rem, calc(100vw - 20px));
+  max-height: 22rem;
+  overflow-y: auto;
+  /* The one place the hidden scrollbar has to come BACK. `qt-base.css` hides
+   * it everywhere, which is right for the persistent card chrome - but this
+   * box has a hard height cap and a busy lap overruns it,
+   * so without a bar the transcript is cut with nothing saying so. A popup is
+   * transient, so its scrollbar is not clutter. */
+  scrollbar-width: thin;
+  padding: 8px 10px;
+  background: var(--qt-elevated);
+  border: 1px solid var(--qt-border);
+  border-radius: 6px;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.5;
+}
+
+/* The popup's own layout is markup, not `<br>` tags in a string for Qt's
+ * tooltip parser to digest. Truncation lives here too: the host stopped
+ * cutting messages at 70 characters, which was the CARD's width budget
+ * applied to a popup clipped by nothing. */
+.tip-section {
+  display: block;
+  margin-bottom: 8px;
+}
+.tip-section:last-of-type {
+  margin-bottom: 0;
+}
+.tip-title {
+  display: block;
+  color: var(--qt-fg-1);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.tip-row {
+  display: block;
+  margin-top: 2px;
+}
+.tip-lead {
+  color: var(--qt-fg-3);
+  margin-right: 6px;
+  white-space: nowrap;
+}
+/* **No line clamp.** It cut every row at four lines with nothing saying so,
+ * which is the silent truncation this window's whole idle-state doctrine is
+ * against - and it now also lands on the model-detail rows, where the four
+ * lines would be an agent's reasoning cut mid-sentence. The popup has a height
+ * cap and a visible scrollbar for the case where the content really is long;
+ * a bar is a signal, a clamp is not. */
+.tip-text {
+  overflow-wrap: anywhere;
+}
+.tip-footer {
+  display: block;
+  margin-top: 6px;
+  color: var(--qt-fg-3);
+}
+
+/* --- Status bar --------------------------------------------------------- */
+
+/* --- Orchestrator card (orchestrator_card.py) ---------------------------- */
+
+/* The 4 px rule is the identity colour's second, quieter home: the inline
+ * `border-left-color` is the action's own colour, so the module is marked
+ * without anything being painted. */
+.orchestrator {
+  padding: 12px 14px 12px 12px;
+  border-left: 4px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* **Bounded on purpose.** `classify_action` maps seven actions and falls back
+ * to echoing the raw string, so an unknown producer word arrives here at
+ * 32 px/800 with no upper length. Seven of the seven fit (UNDERCUT is the
+ * widest at 179 px against ~308 px of inner width); the eighth is whatever a
+ * future producer sends. */
+.orch-action {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.orch-conf {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* Promoted from 11 px to the same visual rank as the word it qualifies: the
+ * action and its confidence are one unit, and the number used to render at
+ * the size of an axis tick. */
+.orch-conf-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.orch-conf-caption {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.orch-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #282834; /* the empty stop of Qt's gradient */
+  overflow: hidden;
+}
+.orch-bar-fill {
+  height: 100%;
+}
+/* Plain text. These were outline pills, which is a button costume on a surface
+ * where nothing can be pressed, and they are facts: a posture somebody chose,
+ * not a state to act on. */
+.orch-facts {
+  margin: 0;
+  font-size: 12px;
+}
+.orch-facts-sep {
+  color: var(--qt-fg-3);
+}
+/* The previous call, on the lap this one replaced it. Tertiary text with a
+ * WARNING dot: it is a CHANGE, which is worth noticing, and not a fault,
+ * which is what the alarm colour one line below means. */
+.orch-changed {
+  margin: 0;
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}
+.orch-changed::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  vertical-align: middle;
+}
+
+/* --- Scenario bars (scenario_bars.py) ------------------------------------ */
+
+.scenarios {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scenarios-title {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.scenario-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.scenario-label {
+  width: 44px;
+  flex: 0 0 44px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.scenario-bar {
+  flex: 1;
+  min-width: 120px;
+  height: 10px;
+  border: 1px solid var(--qt-border);
+  border-radius: 5px;
+  background: var(--qt-elevated);
+  overflow: hidden;
+  display: block;
+}
+/* A scenario nobody scored keeps its lane but loses its track, so the row
+ * reads as "not on the table" rather than as "scored last". Both drew an
+ * identical empty track before (#963). */
+.scenario-bar.is-unscored {
+  border-color: transparent;
+  background: transparent;
+}
+.scenario-bar-fill {
+  display: block;
+  height: 100%;
+}
+/* `NOT TAKEN`, on a Monte Carlo winner the orchestrator overruled (#962). It
+ * sits between the bar and the score because that is where the eye already
+ * is when it asks why the widest bar is not the call. */
+.scenario-note {
+  /* A fixed lane, so every row's track is the same length whether or not it
+   * carries a mark - the bars are a comparison and a shortened track is a
+   * different number. */
+  width: 56px;
+  flex: 0 0 56px;
+  text-align: right;
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.scenario-score {
+  width: 46px;
+  flex: 0 0 46px;
+  text-align: right;
+  font-size: 11px;
+  font-family: var(--qt-mono);
+  white-space: pre;
+}
+
+/* --- WHY (band module 2) --------------------------------------------------
+ *
+ * What stood here was a `QTabWidget` port: six tabs and a monospace pane, the
+ * largest bordered surface on the window carrying five short lines at 1.9%
+ * ink with 318 px of it empty. The tabs are gone; the module holds the one
+ * sentence that earned the glass and points at the rest. */
+
+.why-panel {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* Clamped, and the clamp earns its place HERE and not on `.tip-text`. This is
+ * a summary by construction and the whole narrative is one keypress away, so
+ * cutting it is the design; cutting the drill-down tier, which is the only
+ * copy, is a silent amputation. */
+.why-narrative {
+  margin: 0;
+  color: var(--qt-fg-1);
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Both tooltip targets are keyboard targets now, so both need a focus ring.
+ * `:focus-visible` rather than `:focus`, so a mouse click does not paint one. */
+.why-panel:focus-visible,
+.agent-card:focus-visible,
+.cty-row:focus-visible,
+.cty-body:focus-visible {
+  outline: 2px solid var(--qt-accent);
+  outline-offset: 2px;
+}
+
+/* --- The two embedded charts --------------------------------------------- */
+
+/* The chart takes whatever its console's text leaves.
+ *
+ * **Third generation of this comment, and the second time it was wrong about
+ * the same rule.** It described a 260-420 band on `.agents-right`, a column
+ * the decision band deleted; before that it claimed the row grew freely while
+ * the caps sat three hundred lines above it. There is no band and no right
+ * column now: the two chart consoles stretch to their grid row (`agents.css`'s
+ * `.agents-grid > .slot-pace`) and the chart fills what the headline and body
+ * do not take. */
+/* The wrapper is the positioning context for the hover readout (#999); the
+ * chart fills it. Absolute, never fixed: the agents body takes a `filter` when
+ * the feed freezes, and a filter becomes the containing block for fixed
+ * descendants, so a fixed box would jump the moment the feed stopped. */
+.chart-hover {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 140px;
+}
+.chart {
+  width: 100%;
+  height: 100%;
+  min-height: 140px;
+}
+.chart-hover-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--qt-fg-1);
+  pointer-events: none;
+}
+/* Small on purpose: these two cards plot three or four quantities at a lap, not
+ * twenty, so the box is a lap and a short list. The field's whole list is the
+ * race trace's shape and lives with that panel. */
+.chart-readout {
+  position: absolute;
+  top: 6px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  background: var(--qt-elevated);
+  border: 1px solid var(--qt-border);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.chart-readout-lap {
+  margin-bottom: 3px;
+  color: var(--qt-fg-1);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.chart-readout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.chart-readout-value {
+  color: var(--qt-fg-2);
+}
+
+/* Opting the tooltip back INTO a scrollbar, against `qt-base.css`'s blanket
+ * hide. Chromium needs the pseudo-element re-declared; `display: none` there
+ * cannot be undone by `scrollbar-width` alone. */
+.agent-tooltip::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+.agent-tooltip::-webkit-scrollbar-thumb {
+  background: var(--qt-border);
+  border-radius: 3px;
+}
+.agent-tooltip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- CONTINGENCIES (the side column's empty region) ----------------------
+ *
+ * **`flex: 1 1 0` is what makes the collapse decision loop-free.** A flex basis
+ * of zero keeps this card's CONTENTS out of the sizing calculation, so its used
+ * height is exactly the column's free space, `column - situation - pit - gaps`,
+ * and nothing it renders can move the number it measures itself against. The
+ * DATA window's BESTS panel is the counter-example: its decision changes its own
+ * height and #1083 is open because of it.
+ *
+ * `min-height: 0` removes the automatic content minimum that would put the
+ * contents back into that calculation. `box-sizing: border-box` is NOT global in
+ * this stylesheet, so it is declared: without it the padding and border land
+ * outside the residual and the card overflows the column, and it is also what
+ * keeps the measured height identical whether the border is drawn or not.
+ *
+ * This is its own rule rather than a comma added to `.agents-side > .agent-card`
+ * above. That rule means "a content-height console must be allowed to shrink";
+ * this one means "fill the residual and ignore your content". Two intents that
+ * happen to share a declaration. */
+.contingencies {
+  flex: 1 1 0;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Below the floor the element keeps its place in the flow and stops looking like
+ * a panel. Window background reads as nothing; an empty bordered box reads as
+ * content that failed to arrive. */
+.contingencies.is-collapsed {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.cty-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--qt-fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* The count is the TOTAL, so a body that scrolls still says how many there are. */
+.cty-count {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-weight: 400;
+}
+
+.cty-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cty-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
+}
+
+/* **Gated on a class the component sets**, for the reason spelled out beside
+ * `.agent-card.has-tooltip` above: a portaled popup is not a descendant of its
+ * own anchor, so `:has()` cannot reach it. This card had the right shape first
+ * and the six consoles were brought to it in #1089.
+ *
+ * Background only. This card sits in a flex column under PIT, so anything that
+ * changes its box moves a neighbour - the same reason the consoles' own hover is
+ * a border and not a size. */
+.cty-row.has-detail {
+  cursor: help;
+}
+
+.cty-row.has-detail {
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.cty-row.has-detail:hover {
+  background: var(--qt-elevated);
+}
+
+.cty-trigger {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--qt-fg-1);
+  font-size: 11px;
+}
+
+/* The WORD carries the priority. No alarm hue: red on this window belongs to the
+ * live call's action, and a branch that is not happening must not wear it. */
+.cty-priority {
+  flex: none;
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.cty-switch {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Two lines, and the rest one hover away. The full text is never only here. */
+.cty-rationale {
+  margin: 0;
+  color: var(--qt-fg-3);
+  font-size: 10px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.cty-empty {
+  margin: auto 0;
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}
+
+/* The risks, in the body under the branches. A heading and dim lines, so the
+ * block reads as a second kind of content rather than as more branches. */
+.cty-risks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--qt-border);
+}
+
+.cty-risks-title {
+  margin: 0 0 2px;
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.cty-risk {
+  margin: 0;
+  color: var(--qt-fg-2);
+  font-size: 10px;
+  line-height: 1.35;
+}

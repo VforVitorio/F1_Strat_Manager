@@ -6,7 +6,7 @@
         <mxCell id="1" parent="0"/>
 
         <!-- TITLE -->
-        <mxCell id="title" value="Data Pipeline — From Raw Telemetry to Strategy Recommendations" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="title" value="Data Pipeline, From Raw Telemetry to Strategy Recommendations" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#a78bfa;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="250" y="10" width="1100" height="40" as="geometry"/>
         </mxCell>
 

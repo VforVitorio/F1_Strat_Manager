@@ -54,7 +54,7 @@ discount) — so ANY guard-rail change touches at minimum 3 files:
 `src/strategy/inference/engine.py:358`:
 
 ```python
-guardrail_reason=None,  # rich mode applies rails via the LLM prompt, not post-hoc
+guardrail_reason = (None,)  # rich mode applies rails via the LLM prompt, not post-hoc
 ```
 
 `_run_rich` (`engine.py:235-360`) calls `_assemble_recommendation` at line

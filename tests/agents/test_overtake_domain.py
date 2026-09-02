@@ -228,7 +228,7 @@ def test_the_prose_renderer_never_formats_none_as_a_number():
 
 def test_the_dashboard_shows_an_absence_rather_than_zero_percent():
     """ "overtake 0%" and "we cannot say" would prompt opposite calls on the pit wall."""
-    from src.arcade.dashboard.agent_formatters import format_situation
+    from src.pitwall.agent_formatters import format_situation
 
     _headline, _colour, body, _status = format_situation(
         {"overtake_prob": None, "sc_prob_3lap": 0.1, "threat_level": "LOW"}

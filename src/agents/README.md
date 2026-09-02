@@ -1,6 +1,6 @@
 # src/agents: Multi-Agent Strategy System
 
-LangGraph-based multi-agent system extracted from notebooks N25–N31.
+LangGraph-based multi-agent system extracted from notebooks N25-N31.
 Each module is importable without a FastF1 session via its `*_from_state` RSM adapter.
 
 ---
@@ -39,15 +39,15 @@ at a page that no longer exists. See
 |---|---|---|
 | N25 | `PaceOutput` | `lap_time_pred`, `ci_p10`, `ci_p90`, `delta_vs_prev`, `reasoning` |
 | N26 | `TireOutput` | `laps_to_cliff_p10/p50/p90`, `warning_level`, `deg_rate`, `reasoning` |
-| N27 | `RaceSituationOutput` | `overtake_prob` (nullable — see below), `sc_prob_3lap`, `threat_level`, `reasoning` |
+| N27 | `RaceSituationOutput` | `overtake_prob` (nullable, see below), `sc_prob_3lap`, `threat_level`, `reasoning` |
 | N28 | `PitStrategyOutput` | `action`, `compound_recommendation`, `stop_duration_p05/p50/p95`, `undercut_prob`, `reasoning` |
 | N29 | `RadioOutput` | `radio_events`, `rcm_events`, `alerts`, `reasoning`, `corrections` |
 | N30 | `RegulationContext` | `answer`, `articles`, `chunks`, `.reasoning` (alias for answer) |
 | N31 | `StrategyRecommendation` | `action`, `reasoning`, `confidence`, `scenario_scores`, `regulation_context` |
 
 **N27's `overtake_prob` is `float | None`.** N11 dropped every training pair more than 2.5 s
-apart before labelling, so the model has no labelled example beyond that gap — 43.1% of real
-position-adjacent pairs in 2025. There it returns `None` rather than an extrapolation. `None`
+apart before labelling, so the model has no labelled example beyond that gap (43.1% of real
+position-adjacent pairs in 2025). There it returns `None` rather than an extrapolation. `None`
 is not `0.0`: zero is the value the regulation asserts under a Safety Car (Art. 55.8), and
 consumers have to tell the two apart.
 
@@ -94,7 +94,7 @@ Every agent exposes two entry points: one that expects populated module globals
 from a FastF1 session, and an RSM adapter that needs no session because it
 builds `SESSION_META` from the laps frame and calls the same core logic.
 
-**The two are not uniform, and assuming they are will break your call.** The
+The two are not uniform, and assuming they are will break the call. The
 table above carries the real signatures, taken from `inspect.signature`. Three
 of them differ from what a reader would guess:
 
@@ -192,7 +192,7 @@ The legacy engine is not used. Do not import from it in new code.
 
 | Layer | Model |
 |---|---|
-| Sub-agents N25–N29 | `gpt-4.1-mini` |
+| Sub-agents N25-N29 | `gpt-4.1-mini` |
 | Orchestrator N31 | `gpt-5.4-mini` (`OrchestratorConfig.model_name`) |
 
 Notebooks default to `local-model` (LM Studio). Switch to the OpenAI model IDs above when deploying via FastAPI.

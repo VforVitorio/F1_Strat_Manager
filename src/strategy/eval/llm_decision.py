@@ -21,8 +21,8 @@ because these definitions are literally the same objects.
 WHAT IS DIFFERENT, AND HAS TO BE SAID EVERY TIME
 ------------------------------------------------
 1. **The sample is smaller and it is chosen, not enumerated.** The
-   deterministic tier can afford to sweep every green-flag stop of six races at
-   0.51 s/lap. This path costs 15.93 s/lap, so it runs over named windows. A
+   deterministic tier can afford to sweep every green-flag stop of the whole 2025
+   season at 0.213 s/lap. This path costs 15.93 s/lap, so it runs over named windows. A
    figure from here describes those windows and nothing wider.
 2. **It is not deterministic.** The orchestrator requests ``temperature=0`` and
    ``gpt-5.4-mini`` discards it. A single pass is one sample of a distribution,

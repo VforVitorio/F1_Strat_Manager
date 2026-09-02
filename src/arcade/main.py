@@ -17,7 +17,7 @@ import arcade
 from src.arcade.config import SCREEN_HEIGHT, SCREEN_WIDTH, WINDOW_TITLE
 
 # Load repo-root ``.env`` so OPENAI_API_KEY / F1_LLM_PROVIDER / HF_TOKEN are
-# available to the agents spawned by the local strategy pipeline — the CLI
+# available to the agents spawned by the local strategy pipeline: the CLI
 # and backend do the same (``scripts/run_simulation_cli.py`` header) but
 # the arcade used to skip this step and silently fell back to whatever was
 # already exported in the shell.
@@ -55,6 +55,16 @@ def _parse_args() -> argparse.Namespace:
         "--strategy", action="store_true", help="Enable strategy overlay (requires year 2025)."
     )
     parser.add_argument("--provider", choices=("lmstudio", "openai"), default="openai")
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help=(
+            "Run the strategy layer on the deterministic profile (zero LLM "
+            "clients, zero cost) instead of the LLM-synthesised one. Only "
+            "takes effect with --viewer and --strategy; the in-window menu "
+            "has no toggle for it yet."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -65,74 +75,34 @@ def _show_menu(window: arcade.Window) -> None:
 
 
 def _show_viewer_directly(window: arcade.Window, args: argparse.Namespace) -> None:
-    """Legacy path: bypass the menu and build a F1ArcadeView from CLI args."""
-    from src.arcade.app import F1ArcadeView
-    from src.arcade.config import get_gp_names
-    from src.arcade.data import SessionLoader
-    from src.arcade.track import Track
+    """Boot straight into the replay, through the menu's own launch path.
 
-    year = args.year
-    round_num = args.round
-    gp = get_gp_names(year).get(round_num, f"Round{round_num}")
+    This used to be a second implementation: its own `SessionLoader().load`, its
+    own driver fallback, its own `F1ArcadeView`. The menu grew a lazy per-race
+    fetch and a worker thread so the window keeps drawing through a download and
+    a 349 s telemetry build; this path would not have grown either, because
+    nothing here shared a line with it. It now fills a `LaunchConfig` and hands
+    it over, so `--viewer` and the menu can only ever behave the same (#1115).
+    """
+    from src.arcade.views import LaunchConfig, MenuView
 
-    # gp is the arcade's display label from the GP_NAMES table, which does
-    # not stay in sync with the active season calendar (``GP_NAMES[3]`` is
-    # "Australia" but 2025 round 3 is Suzuka). The real race is resolved by
-    # FastF1 inside SessionLoader; re-log after the load with the
-    # authoritative Location so the startup trace does not mislead.
-    logger.info("Requesting session: year=%d round=%d (label=%s)", year, round_num, gp)
-    session_data = SessionLoader().load(year, round_num, gp)
-    logger.info(
-        "Loaded session: %s %d (label=%s) — %d drivers, laps %d-%d, %d frames",
-        session_data.location or "?",
-        year,
-        gp,
-        len(session_data.frames_by_driver),
-        session_data.min_lap_number,
-        session_data.max_lap_number,
-        session_data.total_frames,
-    )
-
-    ref_x, ref_y = session_data.ref_lap_xy
-    track = Track(
-        ref_x=ref_x,
-        ref_y=ref_y,
-        drs_flags=session_data.ref_lap_drs,
-        rotation_deg=session_data.circuit_rotation_deg,
-    )
-
-    driver_main = args.driver or _pick_default_driver(session_data)
-    driver_rival = args.driver2
-    if driver_main not in session_data.frames_by_driver:
-        logger.warning("Driver %s not in session; falling back", driver_main)
-        driver_main = _pick_default_driver(session_data)
-    if driver_rival and driver_rival not in session_data.frames_by_driver:
-        logger.warning("Rival %s not in session; ignoring", driver_rival)
-        driver_rival = None
-
-    view = F1ArcadeView(
-        window=window,
-        session_data=session_data,
-        track=track,
-        driver_main=driver_main,
-        driver_rival=driver_rival,
-        year=year,
-        strategy_enabled=args.strategy,
-        team=args.team,
-    )
+    # Only the flags that were actually passed override the defaults. An empty
+    # `--driver` used to fall through to `_pick_default_driver`, which read the
+    # loaded session; the form validates before anything is loaded, so an empty
+    # string would now surface as "driver must be 3 letters". The menu's own
+    # default stands instead, and `_show_replay` still swaps in a driver the
+    # session really has if that one is absent from it.
+    cfg = LaunchConfig(year=args.year, round_=args.round, team=args.team)
+    if args.driver:
+        cfg.driver_main = args.driver.upper()
+    cfg.mode_two_drivers = bool(args.driver2)
+    if args.driver2:
+        cfg.driver_rival = args.driver2.upper()
+    cfg.strategy_mode = args.strategy
+    cfg.no_llm = args.no_llm
+    view = MenuView(window)
     window.show_view(view)
-
-
-def _pick_default_driver(session_data) -> str:
-    """Prefer a finisher of the final lap; fall back to first driver otherwise."""
-    codes = list(session_data.frames_by_driver.keys())
-    if not codes:
-        raise RuntimeError("Session has no drivers")
-    for code in codes:
-        frames = session_data.frames_by_driver[code]
-        if frames and frames[-1].active:
-            return code
-    return codes[0]
+    view.launch_with(cfg)
 
 
 if __name__ == "__main__":

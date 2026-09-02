@@ -154,14 +154,34 @@ def test_the_restore_reproduces_N04s_own_2025_output_exactly():
         "against and this test would hold vacuously"
     )
 
+    # The guard above names the WRONG precondition. What the restore reads is the RAW
+    # tree, one directory per GP, and the curated download ships a single race - so on a
+    # clean install the restore correctly returns NaN for the other 23 and this test
+    # reported "22,197 of 22,760 laps disagree with N04", a number about missing files
+    # and not about alignment. Scope to the races whose raw laps are actually here.
+    available = sorted(
+        {path.name for path in (ROOT / "data" / "raw" / "2025").glob("*") if path.is_dir()}
+        & set(truth["GP_Name"].dropna().unique())
+    )
+    if not available:
+        pytest.skip("no 2025 raw race directories present; the restore has nothing to read")
+
     stripped = truth.drop(columns=list(WEATHER_COLUMNS))
     restored = augment_featured_laps(stripped, 2025)
+    restored = restored[restored["GP_Name"].isin(available)]
+    truth = truth[truth["GP_Name"].isin(available)]
 
     keys = ["GP_Name", "Driver", "LapNumber"]
     joined = restored[[*keys, *WEATHER_COLUMNS]].merge(
         truth[[*keys, *WEATHER_COLUMNS]], on=keys, suffixes=("_mine", "_n04")
     )
     assert len(joined) == len(restored), "every restored lap must find its published twin"
+    # Vacuity is the failure this test exists to catch (see the docstring): a restore that
+    # produced nothing at all would otherwise compare an empty frame and pass.
+    assert joined["TrackTemp_mine"].notna().any(), (
+        f"the restore returned no weather for {available} even though their raw laps are "
+        "present; comparing this would hold vacuously"
+    )
 
     for column in WEATHER_COLUMNS:
         mine, published = joined[f"{column}_mine"], joined[f"{column}_n04"]

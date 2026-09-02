@@ -1,0 +1,114 @@
+/* The arcade palette and the window chrome both PITWALL windows share.
+ *
+ * The COLOURS are the arcade palette (`src/arcade/palette.py`), not
+ * `tokens.css`. The two deliberately differ and `test_pitwall_tokens.py`
+ * freezes the difference; adopting the web palette here would be the
+ * redesign sprints 8 and 9 own, not a port. `tokens.css` is still loaded
+ * for its type scale.
+ *
+ * **It is one file because it would otherwise be two.** The AGENTS window
+ * declared these in its own stylesheet; when DATA needed the same tokens the
+ * cheap move was to paste them, which would have been copy number six of a
+ * palette this repo has already found five copies of. One declaration site,
+ * one drift guard.
+ */
+
+:root {
+  --qt-bg: #121127;
+  --qt-panel: #181633;
+  --qt-elevated: #1e1b4b;
+  --qt-border: #2d2d3a;
+  --qt-fg-1: #ffffff;
+  --qt-fg-2: #d1d5db;
+  --qt-fg-3: #9ca3af;
+  --qt-accent: #a78bfa;
+  --qt-mono: "FiraCode Nerd Font Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
+}
+
+/* --- Motion: state changes only, never data -------------------------------
+ *
+ * The doctrine is `lib/chart.ts`'s and it is not up for revision: on a screen
+ * fed ten times a second, the difference between not animating updates and
+ * animating them is the difference between polish and nausea. So nothing that
+ * moves at 10 Hz carries a transition - not the six trace lanes, the tower's
+ * numbers, the cursor, the ring's dots or the pace cells' colours. Everything
+ * that does is a STATE CHANGE and happens at most about once a lap, or when a
+ * hand moves.
+ *
+ * Two durations, because two things are being said. `--motion-fast` is an
+ * acknowledgement: a press, a hover, a panel arriving. `--motion-decay` is a
+ * mark that fades: this landed just now. It is under a second on purpose,
+ * because reveals arrive every 4.5 s at 1x and the product plays at up to 4x,
+ * so a longer decay would stack tints on top of each other at speed.
+ */
+:root {
+  --motion-fast: 120ms;
+  --motion-decay: 900ms;
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* **`none`, not the usual `0.01ms` idiom.** That idiom exists so `transitionend`
+ * and `animationend` still fire for scripts that depend on them; nothing here
+ * does, every item is pure CSS that ends in its own resting state. `none` is
+ * what makes the guard deterministic: `document.getAnimations()` is empty
+ * rather than briefly non-empty, so the assertion is a fact rather than a race.
+ * A future item that needs an end event has to revisit this block, not work
+ * around it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--qt-bg);
+  color: var(--qt-fg-1);
+  font-family: var(--font-body, system-ui, sans-serif);
+  font-size: 13px;
+}
+
+/* `theme.apply_dark_palette`'s `QFrame[card="true"]` rule. Both windows
+ * frame their panels with it. */
+.card {
+  background: var(--qt-panel);
+  border: 1px solid var(--qt-border);
+  border-radius: 6px;
+}
+
+/* `QMainWindow.setStatusBar(QStatusBar())`, which both windows do. The
+ * 1.5 s auto-clear that goes with it is `lib/useStatusText.ts`. */
+.status-bar {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  background: var(--qt-panel);
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}
+
+/* --- Scrollbars: reachable, invisible ------------------------------------
+ *
+ * The bars that appear for scrolling inside the cards are visual noise on a
+ * surface whose whole job is to be read at a glance, and the overflow that
+ * summons them is usually trivial - measured, four of the six card bodies
+ * overflow by FOURTEEN pixels and each was drawing a full-height scrollbar for it.
+ *
+ * Hidden, not removed. The bodies stay `overflow: auto`, so a wheel, a
+ * trackpad, a touch drag and the keyboard all still reach the content. What
+ * goes is the chrome. Deleting the scroll instead would go back to CLIPPING,
+ * which is what Qt did and what the migration README records as a defect of
+ * the window being replaced ("the right column clipped mid-card").
+ *
+ * The one thing this does not give back is the AFFORDANCE - nothing now hints
+ * that a card has more below. That is a design question, not a CSS one, and
+ * it belongs to the elevate pass along with the hover treatment.
+ */
+* {
+  scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chromium, which is what WebView2 is */
+}

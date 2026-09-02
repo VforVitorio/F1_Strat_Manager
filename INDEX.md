@@ -4,7 +4,7 @@ _Revolutionising strategic decision-making in Formula 1 through AI-powered predi
 
 The project integrates several ML stacks: XGBoost/LightGBM for race strategy signals, a TCN for tyre degradation, Whisper + BERT for radio communications, and YOLOv8 for team identification, into a unified **Strategy Orchestrator** that produces real-time race recommendations. A companion telemetry app (FastAPI + Streamlit) exposes the models interactively.
 
-The current development phase (N25–N31) replaces the legacy Experta rule engine with a **LangGraph multi-agent architecture**: specialised sub-agents (pace, tyre, overtake, safety car, pit strategy, radio NLP, regulation RAG) coordinate under a Supervisor Orchestrator.
+The current development phase (N25-N31) replaces the legacy Experta rule engine with a **LangGraph multi-agent architecture**: specialised sub-agents (pace, tyre, overtake, safety car, pit strategy, radio NLP, regulation RAG) coordinate under a Supervisor Orchestrator.
 
 > For full documentation see the [README](README.md) and the [DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab). For the deep reference (methodology, metrics, design rationale): the **TFG thesis + IEEE technical report** in [`documents/thesis/`](documents/thesis/). Legacy paper: [F1_Strategy_Manager_AI.pdf](documents/docs_legacy_strat_manager/F1_Strategy_Manager_AI.pdf).
 
@@ -99,7 +99,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 | [N30_rag_agent.ipynb](notebooks/agents/N30_rag_agent.ipynb)   | RAG Agent, retrieval-augmented generation over FIA Sporting and Technical Regulations (2023-2025) via local Qdrant; returns structured `RegulationContext` objects with article references |
 | [N34_radio_runner_smoke.ipynb](notebooks/agents/N34_radio_runner_smoke.ipynb) | Radio runner smoke test, end-to-end validation of `src/nlp/radio_runner.py`: cache hit/miss, per-lap radio distribution, transcript sanity, and N29 round-trip via `run_radio_agent_from_state` on Bahrain 2025 (28 radios + 76 RCMs, lap 4 emits a PROBLEM alert) |
 
-> The full multi-agent system (N25–N31) is **complete**. The importable agent + orchestrator modules live in [`src/agents/`](src/agents/) (each exposes `run_*_agent_from_state`). Notebooks N26–N29, N30B (RAG benchmark), two N31 notebooks (`N31_strategy_orchestrator.ipynb` + `N31_mc_visualization.ipynb`), N32 (smoke test), N33 (decision thresholds + calibration benchmarks), and N34 (radio runner smoke) are under `notebooks/agents/`. A different, unrelated `N33_radio_dataset_builder.ipynb` lives under `notebooks/nlp/` (see the NLP table below), the two share a number by coincidence, not by pipeline order.
+> The full multi-agent system (N25-N31) is **complete**. The importable agent + orchestrator modules live in [`src/agents/`](src/agents/) (each exposes `run_*_agent_from_state`). Notebooks N26-N29, N30B (RAG benchmark), two N31 notebooks (`N31_strategy_orchestrator.ipynb` + `N31_mc_visualization.ipynb`), N32 (smoke test), N33 (decision thresholds + calibration benchmarks), and N34 (radio runner smoke) are under `notebooks/agents/`. A different, unrelated `N33_radio_dataset_builder.ipynb` lives under `notebooks/nlp/` (see the NLP table below), the two share a number by coincidence, not by pipeline order.
 
 ---
 
@@ -114,7 +114,7 @@ Notebooks are the primary development artefact. `src/` modules are extracted fro
 
 ### `src/agents/`
 
-**Production multi-agent system** (N25–N31): `pace_agent.py`, `tire_agent.py`, `race_situation_agent.py`, `pit_strategy_agent.py`, `radio_agent.py`, `rag_agent.py`, `strategy_orchestrator.py`. Each exposes a `run_*_agent_from_state(...)` adapter consumed by the CLI, the Arcade and the web app backend. The adapters do **not** share one signature: most take `(lap_state, laps_df)`, but `run_pace_agent_from_state` takes only `lap_state` and the orchestrator takes a third `lap_state` argument. The authoritative list is in [src/agents/README.md](src/agents/README.md), regenerated from `inspect.signature`.
+**Production multi-agent system** (N25-N31): `pace_agent.py`, `tire_agent.py`, `race_situation_agent.py`, `pit_strategy_agent.py`, `radio_agent.py`, `rag_agent.py`, `strategy_orchestrator.py`. Each exposes a `run_*_agent_from_state(...)` adapter consumed by the CLI, the Arcade and the web app backend. The adapters do **not** share one signature: most take `(lap_state, laps_df)`, but `run_pace_agent_from_state` takes only `lap_state` and the orchestrator takes a third `lap_state` argument. The authoritative list is in [src/agents/README.md](src/agents/README.md), regenerated from `inspect.signature`.
 
 **Production support module** for the orchestrator:
 

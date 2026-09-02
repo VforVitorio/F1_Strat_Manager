@@ -1,0 +1,164 @@
+/* =========================================================
+   F1 StratLab design tokens, ported 1:1 from the brand system
+   (parent docs/styles/tokens.css). Source of truth for the SPA.
+   Colors + fonts are mapped into Tailwind's @theme in index.css so
+   utilities (bg-bg-2, text-fg-2, font-display) exist; gradients,
+   shadows and tracking stay here and are used via component CSS.
+
+   Dark-only at parity (migration Q6): the ramp is dark and semantic
+   (--bg-*, --fg-*), so a designed light theme is a token swap (E1),
+   not a refactor. Do NOT hardcode hex in components; use these vars.
+   ========================================================= */
+:root {
+  /* ---------- BASE BACKGROUND RAMP ---------- */
+  --bg-0: #08080c; /* page black */
+  --bg-1: #0c0d14; /* deep surface (hero) */
+  --bg-2: #111827; /* sidebar / card dark */
+  --bg-3: #17192b; /* card resting */
+  --bg-4: #1e2139; /* card hovered / elevated */
+  --bg-5: #23234a; /* sidebar-hover / input bg */
+
+  /* ---------- FOREGROUND RAMP ---------- */
+  --fg-1: #ffffff; /* primary text */
+  --fg-2: rgba(255, 255, 255, 0.72); /* secondary text */
+  --fg-3: rgba(255, 255, 255, 0.6); /* tertiary / captions — WCAG AA (~5.2:1 on #111827) */
+  --fg-4: rgba(255, 255, 255, 0.42); /* disabled / hairline labels — WCAG AA (~4.6:1 on #111827) */
+  --fg-inv: #0c0d14; /* on-primary text */
+
+  /* ---------- BRAND / PURPLE (PRIMARY) ---------- */
+  --purple-50: #f2efff;
+  --purple-100: #e0d9ff;
+  --purple-200: #c2b4ff;
+  --purple-300: #a29bfe; /* hover */
+  --purple-400: #8b7cf6;
+  --purple-500: #7f6ff0; /* secondary */
+  --purple-600: #6c5ce7; /* PRIMARY */
+  --purple-700: #5a48d4;
+  --purple-800: #4434a6;
+  --purple-900: #2a1f6b;
+
+  --accent-primary: var(--purple-600);
+  --accent-secondary: var(--purple-500);
+  --accent-hover: var(--purple-300);
+
+  /* ---------- BLUE (TELEMETRY / DATA) ---------- */
+  --blue-300: #60a5fa;
+  --blue-400: #3385ff;
+  --blue-500: #2563eb;
+  --blue-600: #1d4ed8;
+
+  /* ---------- SEMANTIC / STATUS ---------- */
+  --success: #43ff64; /* green pill */
+  --warning: #ffbd33; /* amber */
+  --danger: #ff5733; /* pit/stop red */
+  --info: #3385ff; /* info blue */
+
+  /* ---------- F1 TIRE COMPOUND ACCENTS ---------- */
+  --tire-soft: #ff2d3a; /* red */
+  --tire-medium: #ffcf2d; /* yellow */
+  --tire-hard: #e6e6e6; /* white */
+  --tire-inter: #2dd47a; /* green */
+  --tire-wet: #2d8fff; /* blue */
+  --tire-ink: #0c0d14; /* fixed dark text for compound pills — tyre colours are
+    identity, not themeable, so this never flips in light theme (see below) */
+
+  /* ---------- DIVIDERS / SURFACES ---------- */
+  --divider: rgba(255, 255, 255, 0.1);
+  --divider-strong: rgba(255, 255, 255, 0.18);
+  --hairline: rgba(255, 255, 255, 0.06);
+
+  /* ---------- GRADIENTS (brand; chrome/hero only, never behind data) ---------- */
+  --grad-purple: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+  --grad-purple-soft: linear-gradient(
+    135deg,
+    rgba(108, 92, 231, 0.18) 0%,
+    rgba(162, 155, 254, 0.08) 100%
+  );
+  --grad-hero: radial-gradient(
+    ellipse 120% 80% at 50% 0%,
+    rgba(108, 92, 231, 0.28) 0%,
+    rgba(108, 92, 231, 0.08) 35%,
+    transparent 70%
+  );
+  --grad-halo: radial-gradient(circle at 50% 50%, rgba(162, 155, 254, 0.35) 0%, transparent 60%);
+
+  /* ---------- SHADOWS ---------- */
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.25);
+  --shadow-elev: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 0 1px rgba(108, 92, 231, 0.35), 0 12px 40px rgba(108, 92, 231, 0.25);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  /* ---------- RADII (aligned to Tailwind: md 12px = rounded-xl) ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* ---------- TYPOGRAPHY (self-hosted via @fontsource-variable) ---------- */
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Tracking (used sparingly, e.g. eyebrows) */
+  --tracking-tightest: -0.04em;
+  --tracking-tighter: -0.02em;
+  --tracking-tight: -0.01em;
+  --tracking-wide: 0.04em;
+  --tracking-widest: 0.18em;
+}
+
+/* =========================================================
+   LIGHT THEME (E1) — a token swap, stamped via data-theme='light' on
+   <html> (see app/providers.tsx + the FOUC guard in index.html). Only the
+   *semantic* ramp flips: the background/foreground ladders, dividers, shadows
+   and the hero gradient. Identity colours (purple, blue, tyre compounds) and
+   chrome gradients stay put — they read on both themes. This block is more
+   specific than `html { color-scheme: dark }`, so `color-scheme: light` wins
+   here declaratively (no @media, single source of truth = the attribute).
+
+   Not solved by a var swap: HARD's white chip (--tire-hard) would vanish on a
+   light card — instead every compound pill carries a permanent border-hairline
+   (invisible-ish in dark, load-bearing in light). Status colours are darkened
+   to pass contrast on white. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-0: #f5f5fa; /* page */
+  --bg-1: #eef0f7; /* deep surface (hero) */
+  --bg-2: #e9eaf4; /* sidebar / chrome */
+  --bg-3: #ffffff; /* card resting */
+  --bg-4: #f7f7fc; /* card hovered / elevated */
+  --bg-5: #eceaf9; /* input bg */
+
+  --fg-1: #14121f; /* near-black, purple tint (mirror of dark --bg-1) */
+  --fg-2: rgba(20, 18, 31, 0.75);
+  --fg-3: rgba(20, 18, 31, 0.58);
+  --fg-4: rgba(20, 18, 31, 0.42);
+  --fg-inv: #ffffff;
+
+  --accent-hover: var(--purple-700); /* purple-300 fails as text on white */
+
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #dc2626;
+  --info: #1d4ed8;
+
+  --divider: rgba(20, 18, 31, 0.1);
+  --divider-strong: rgba(20, 18, 31, 0.18);
+  --hairline: rgba(20, 18, 31, 0.06);
+
+  --grad-hero: radial-gradient(
+    ellipse 120% 80% at 50% 0%,
+    rgba(108, 92, 231, 0.14) 0%,
+    rgba(108, 92, 231, 0.05) 35%,
+    transparent 70%
+  );
+
+  --shadow-card: 0 2px 10px rgba(20, 18, 31, 0.08);
+  --shadow-elev: 0 12px 40px rgba(20, 18, 31, 0.14);
+  --shadow-glow: 0 0 0 1px rgba(108, 92, 231, 0.3), 0 12px 40px rgba(108, 92, 231, 0.15);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}

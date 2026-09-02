@@ -100,7 +100,20 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     "data/models/nlp/sentiment_classifier_v1/**",
     "data/models/nlp/intent_setfit_modernbert_v1/**",
     "data/models/nlp/ner_v1/bert_bio_v1/**",
+    # The NER training eval, one level ABOVE the weights, so the pattern that
+    # pulls `bert_bio_v1/**` misses it. `dead_ner_classes` reads its per-class
+    # B-F1 to flag entity types the model never gets right, and returns a
+    # `pending` row rather than raising when it is absent, so `f1-eval nlp`
+    # shipped one measurement short and said nothing (#1146). Same shape as the
+    # undercut gap in #798 and the two import-time artefacts in #837.
+    "data/models/nlp/ner_v1/model_config.json",
     "data/models/nlp/rcm_parser_v1/**",
+    # The RoBERTa sentiment weights, read at MODULE IMPORT by
+    # `radio_agent.py` (a bare `torch.load`, not a lazy accessor). Without
+    # them the orchestrator cannot be imported at all, so the CLI, the
+    # arcade pipeline and every eval tier are unreachable on a clean
+    # install - a harder failure than a degraded feature (#837).
+    "data/models/nlp/bert_sentiment_v1/**",
     "data/models/xgb_laptime_final.json",
     "data/models/xgb_laptime_final_feature_names.json",
     "data/models/xgb_laptime_global_v1.json",
@@ -128,6 +141,13 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     # missing from this list and from the dataset itself, which stayed invisible
     # because every machine that has run the notebook already had the file (#798).
     "data/processed/undercut_labeled/**",
+    # N13's safety-car labels, read at MODULE IMPORT by
+    # `race_situation_agent.py` to build the per-circuit SC base-rate map.
+    # Same class as the undercut gap above and as the sentiment weights
+    # higher up: import-time, so its absence is not a missing feature but
+    # an orchestrator that cannot be constructed (#837). Three artefacts,
+    # one pattern list, and only one of them had ever been noticed.
+    "data/processed/sc_labeled/**",
     # Radio corpus metadata: small parquets (~430 KB total for the full
     # 2025 calendar) that the runner reads to enumerate per-lap team-radio
     # rows and FIA race-control messages. The matching MP3 audio tree under
@@ -135,6 +155,20 @@ _DEFAULT_MODEL_PATTERNS: tuple[str, ...] = (
     # (~80 MB); :func:`ensure_radio_corpus` downloads it lazily per GP
     # only when the simulation actually targets that race.
     "data/processed/race_radios/**",
+    # The intent and NER label sets the #304 eval tier scores against. Neither
+    # was published, so three golden tests skipped on any machine that HAD the
+    # weights, and the NLP report carried `pending` rows where measurements
+    # belong (#1130). 313 KB for the pair.
+    "data/processed/radio_nlp/**",
+    # The two holdouts the calibration tier scores on. Neither is used at
+    # inference, so their absence is not a broken install, and that is exactly
+    # why they went unnoticed: `f1-eval calibration` degrades each missing one to
+    # a `pending` row rather than failing, so a regenerated report quietly shipped
+    # with three fewer measurements than the one it replaced. Found while closing
+    # #838, and the same shape as the undercut gap in #798 and the two import-time
+    # artefacts in #837: a consumer reads it, the pattern list does not ask for it.
+    "data/processed/overtake_labeled/**",
+    "data/processed/laps_tiredeg.parquet",
     # RAG index: optional, the Hub may not have it yet. snapshot_download
     # ignores missing patterns silently.
     "data/rag/**",
@@ -327,6 +361,31 @@ def _snapshot_download(
     return local_dir
 
 
+def _resolve_repo() -> None:
+    """Ask the Hub for the dataset's metadata, and nothing else.
+
+    This is what the spinner in :func:`ensure_data` is actually waiting on: is
+    the Hub reachable, does the revision exist, do the credentials work. One
+    API call answers all three, and it answers them before any bytes are
+    fetched, which is the fail-fast the caller wants.
+
+    It replaces a full silent `snapshot_download` that was standing in for the
+    probe (#168). That call downloaded the whole 7-8 GB with progress bars
+    switched off, under a spinner reading "Resolving...", and only then did the
+    second call run with progress on, find every file present and return at
+    once. A first-time user watched a spinner for the entire download and then
+    a progress bar that completed instantly, and the Hub metadata sweep ran
+    twice.
+    """
+    from huggingface_hub import HfApi
+
+    HfApi().repo_info(
+        repo_id=HF_DATASET_REPO_ID,
+        repo_type="dataset",
+        revision=HF_DATASET_REVISION,
+    )
+
+
 def _render_header(console, data_root: Path) -> None:
     """Print the first-run banner using the same Rich palette as the CLI.
 
@@ -409,10 +468,7 @@ def ensure_setup(
             f"[{COL_DIM}]Resolving {HF_DATASET_REPO_ID} from HuggingFace Hub…[/{COL_DIM}]",
             spinner="dots",
         ):
-            local_dir = _snapshot_download(patterns, show_progress=False)
-        # A second call with progress=True streams the actual download; the
-        # first call warms the HTTP client and validates credentials so we
-        # fail fast if the Hub is unreachable.
+            _resolve_repo()
         local_dir = _snapshot_download(patterns, show_progress=show_progress)
     except Exception as exc:
         raise RuntimeError(
@@ -428,6 +484,32 @@ def ensure_setup(
     console.print(f"[{COL_OK}][OK] Setup complete. Cached under {local_dir}[/{COL_OK}]")
 
 
+# Races the dataset stores under a name the calendar does not use. Keyed by
+# season because the same race is not named the same way in every one: Miami is
+# `Miami` in 2023 and 2024 and `Miami_Gardens` in 2025, after the circuit's
+# location rather than the city. Everything else is the label with its spaces
+# turned into underscores, measured against the repository listing: with this
+# table, 70 of the 70 rounds the menu offers across 2023-2025 resolve.
+_RACE_FOLDER_ALIASES: dict[tuple[int, str], str] = {
+    (2025, "Miami"): "Miami_Gardens",
+}
+
+
+def race_folder(year: int, gp_name: str) -> str:
+    """The dataset folder holding this GP, from the name the menu shows.
+
+    `ensure_race` used to glob the label verbatim. `snapshot_download` on a
+    pattern that matches nothing returns quietly, so picking "Mexico City"
+    fetched zero files, raised nothing, and left the strategy layer degrading
+    against an empty directory: the same defect the lazy fetch was added to
+    close, surviving it for six of the 2025 rounds (#1116).
+    """
+    alias = _RACE_FOLDER_ALIASES.get((year, gp_name))
+    if alias is not None:
+        return alias
+    return gp_name.replace(" ", "_")
+
+
 def ensure_race(year: int, gp_name: str, show_progress: bool = True) -> Path:
     """Download a single race folder when it is missing and return its path.
 
@@ -439,7 +521,8 @@ def ensure_race(year: int, gp_name: str, show_progress: bool = True) -> Path:
     (possibly empty) path and can decide whether to raise.
     """
     data_root = get_data_root()
-    race_dir = data_root / "raw" / str(year) / gp_name
+    folder = race_folder(year, gp_name)
+    race_dir = data_root / "raw" / str(year) / folder
 
     if race_dir.exists() and any(race_dir.iterdir()):
         return race_dir
@@ -447,7 +530,7 @@ def ensure_race(year: int, gp_name: str, show_progress: bool = True) -> Path:
     if os.environ.get("F1_STRAT_OFFLINE") == "1":
         return race_dir
 
-    patterns = [f"data/raw/{year}/{gp_name}/**"]
+    patterns = [f"data/raw/{year}/{folder}/**"]
     _snapshot_download(patterns, show_progress=show_progress)
     return race_dir
 
@@ -550,6 +633,7 @@ __all__ = [
     "is_first_run",
     "ensure_setup",
     "ensure_race",
+    "race_folder",
     "ensure_radio_corpus",
     "ensure_models",
 ]

@@ -2,7 +2,7 @@
 
 - harness `840289a` · schema v1 · generated 2026-08-06T15:27:15+00:00
 - era 2022-2025 · dataset data/raw laps, ground truth 2025, measured tables 2023-2025 (RAW, not featured) · seed deterministic · llm none
-- artifacts: —
+- artifacts: none
 
 ## Position projection against real pit stops
 
@@ -21,10 +21,10 @@ this is measured accuracy and not a proxy. Neutralised stops are excluded
 because the pit-loss reconstruction, not the projection, is wrong under a
 Safety Car.
 
-**The seasons row is not decoration.** 2023 and 2024 are TRAINING seasons for
+The seasons row is not decoration. 2023 and 2024 are TRAINING seasons for
 every model in the stack and 2025 is the holdout the shipped system infers on,
 so a figure that mixes them is partly the system reading back its own training
-data. Quote the season scope on the same line as the number, always.
+data. The season scope is quoted on the same line as the number, always.
 
 ## Measured tables the scorer reads
 

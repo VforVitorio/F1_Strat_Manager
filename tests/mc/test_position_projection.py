@@ -684,3 +684,163 @@ def test_a_circuit_that_never_throws_a_safety_car_pays_nothing_for_waiting():
     """The term has to vanish where the hazard does, or it becomes a free bonus."""
     config = _flat_config(neutralisation_saving_s=8.0, neutralisation_onset_rate=0.0)
     assert _delta(STOP_NOW, config) == pytest.approx(_delta(STOP_NEXT_LAP, config))
+
+
+# ---------------------------------------------------------------------------
+# The rejoin readout — the PIT EXIT card's number, and the config it must be
+# computed at for its published accuracy to describe it
+# ---------------------------------------------------------------------------
+
+
+def test_the_card_and_the_graded_harness_read_the_same_config():
+    """One config object, not two that happen to agree today.
+
+    The card's whole claim is that the number on the glass is the number the
+    ground truth graded. Two declarations of the same five fields is how that
+    claim stops being true while both files still look right, and this repo has
+    paid for that shape more than once.
+    """
+    from src.agents.position_projection import REJOIN_CLIFF_LAPS, REJOIN_CONFIG, REJOIN_PLAN
+    from src.strategy.eval import projection as harness
+
+    assert harness._GROUND_TRUTH_CONFIG is REJOIN_CONFIG, (
+        "the harness declared its own config again; the card's accuracy label "
+        "now describes a different estimator"
+    )
+    assert harness._STOP_NOW is REJOIN_PLAN
+    assert harness._GROUND_TRUTH_CLIFF_LAPS == REJOIN_CLIFF_LAPS
+
+
+def test_the_rejoin_is_read_at_two_laps_not_at_the_runtime_five():
+    """The horizon is the difference between a graded number and an ungraded one.
+
+    A rival two seconds behind separates further over five racing laps than over
+    two, so the two horizons put us in different places. The fixture puts a car
+    where the extra three laps change the answer; the readout has to give the
+    two-lap one.
+    """
+    from src.agents.position_projection import project_rejoin
+
+    rivals = [
+        RivalState(driver="AAA", gap_s=-30.0),
+        # Slower than us by half a second a lap: over two racing laps they are
+        # still inside our pit loss, over five they have dropped out of it.
+        RivalState(driver="BBB", gap_s=19.0, pace_delta_s=0.5),
+    ]
+    pit_loss = np.full(200, 21.0)
+
+    readout = project_rejoin(rivals, pit_loss, current_position=2)
+    assert readout is not None
+
+    five_lap = project_positions(
+        rivals, STOP_NOW, _flat_config(window_laps=5, racing_laps=5.0), pit_loss, np.full(200, 99.0)
+    )
+    assert readout.slot != int(five_lap.positions[0]), (
+        "the fixture no longer separates the horizons; it cannot see the mutation"
+    )
+    assert readout.slot == 3, f"two-lap rejoin puts us behind both cars: {readout}"
+
+
+def test_the_readout_names_the_cars_from_one_coherent_draw():
+    """Slot, car ahead and car behind describe the same world, by exact value.
+
+    An earlier version of this test asserted only that the two neighbours
+    straddle us, which `_nearest_either_side` guarantees by construction
+    whatever vector it is handed: it passed against a mutant that fed it the
+    NEGATED medians. The expected names and slot are written out instead, so the
+    test states the answer rather than restating the helper.
+
+    Flat draws, so the arithmetic is closed: our delta is the 22 s pit loss (the
+    rejoin config zeroes every tyre term), every gap moves down by it, and
+    AAA/BBB/CCC land ahead while DDD stays behind.
+    """
+    from src.agents.position_projection import project_rejoin
+
+    rivals = [
+        RivalState(driver="AAA", gap_s=-8.0),
+        RivalState(driver="BBB", gap_s=-1.0),
+        RivalState(driver="CCC", gap_s=12.0),
+        RivalState(driver="DDD", gap_s=40.0),
+    ]
+
+    readout = project_rejoin(rivals, np.full(500, 22.0), current_position=3)
+
+    assert readout is not None
+    assert readout.slot == 4, f"three cars project ahead of us: {readout}"
+    assert readout.ahead is not None and readout.ahead.driver == "CCC", (
+        f"the nearest of the three ahead is CCC at -10 s: {readout.ahead}"
+    )
+    assert readout.behind is not None and readout.behind.driver == "DDD", (
+        f"the only car left behind is DDD at +18 s: {readout.behind}"
+    )
+    assert readout.ahead.gap_s == pytest.approx(-10.0)
+    assert readout.behind.gap_s == pytest.approx(18.0)
+    assert readout.band == 0, "identical draws cannot disagree about the slot"
+    assert readout.from_position == 3
+
+
+def test_no_cliff_value_can_move_the_rejoin():
+    """The readout is independent of the tyre model, and of WHICH tyre model.
+
+    An earlier version of this test drove `driver_time_delta` at the rejoin
+    config and asserted the cliff term was inert. It was circular: the rejoin
+    config sets `cliff_loss_s` to zero, so the term is zero whatever the cliff
+    is, and the assertion could not fail. It passed against a mutant that turned
+    `max(0, laps_before_stop - cliff)` into `abs(...)`.
+
+    What actually holds the independence is the CONFIG, so that is what this
+    pins: two facts, each with its own reason, plus the end-to-end invariance
+    the two of them buy.
+    """
+    from src.agents.position_projection import REJOIN_CONFIG, REJOIN_PLAN, project_rejoin
+
+    assert REJOIN_CONFIG.cliff_loss_s == 0.0, (
+        "the rejoin prices the geometry of the stop, not the tyre it is on; a "
+        "nonzero cliff loss here makes 'if we box now' tyre-model-dependent"
+    )
+    assert REJOIN_PLAN.stop_offset_laps == 0, (
+        "a stop taken later runs laps on the old set, and then the cliff is "
+        "not a modelling choice but a real cost"
+    )
+
+    rivals = [RivalState(driver="AAA", gap_s=-5.0), RivalState(driver="BBB", gap_s=6.0)]
+    pit_loss = np.full(64, 21.0)
+    baseline = project_rejoin(rivals, pit_loss, current_position=2)
+
+    # `project_rejoin` fixes its own cliff, so the invariance is asserted where a
+    # caller could still change it: the delta the readout is built on.
+    far = driver_time_delta(REJOIN_PLAN, pit_loss, np.full(64, 99.0), REJOIN_CONFIG, False)
+    for value in (0.25, 0.0, -3.0):
+        other = driver_time_delta(REJOIN_PLAN, pit_loss, np.full(64, value), REJOIN_CONFIG, False)
+        assert np.array_equal(far, other), f"a cliff of {value} moved the stop's cost"
+    # Both rivals project ahead: a 21 s stop drops us past a car 5 s up the
+    # road and past one 6 s behind, so the slot is third of three.
+    assert baseline is not None and baseline.slot == 3
+
+
+def test_no_traffic_means_no_readout_rather_than_a_position():
+    """An absent answer is None, never P1 with nothing behind it.
+
+    A slot rendered from an empty grid is a claim about cars that were never
+    measured, and the surfaces would draw it as data.
+    """
+    from src.agents.position_projection import project_rejoin
+
+    pit_loss = np.full(16, 21.0)
+    assert project_rejoin([], pit_loss, current_position=1) is None
+    assert project_rejoin([RivalState(driver="AAA", gap_s=None)], pit_loss, 1) is None
+    assert project_rejoin([RivalState(driver="AAA", gap_s=float("nan"))], pit_loss, 1) is None
+
+
+def test_an_unknown_current_position_stays_unknown():
+    """`from_position` is None rather than a placeholder integer.
+
+    The surface renders "P1 -> P3"; with no current position it has to render
+    the destination alone, and a zero or a one here would invent the move.
+    """
+    from src.agents.position_projection import project_rejoin
+
+    rivals = [RivalState(driver="AAA", gap_s=-5.0), RivalState(driver="BBB", gap_s=6.0)]
+    readout = project_rejoin(rivals, np.full(16, 21.0), current_position=None)
+    assert readout is not None
+    assert readout.from_position is None

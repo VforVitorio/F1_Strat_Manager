@@ -40,7 +40,7 @@ Constraints inherited from the project:
   Radio NLP initiative: mega-corpus + auto-labeling + improved sentiment + picaresca
   detection. The HF artifact is `f1stratlab/f1-team-radio-corpus` under the `f1stratlab`
   org (the current `VforVitorio/f1-strategy-dataset` is planned to move there).
-- **Repo topology is an open decision**: Victor's stated preference is a submodule of the
+- **Repo topology is an open decision**: the stated preference is a submodule of the
   core repo; the standing recommendation in `project_future_vision` is an independent
   public repo for visibility (the corpus is a standalone artifact, and the ecosystem rule
   says "repo independiente si es artefacto standalone"). Decide at kickoff (open question
@@ -56,7 +56,7 @@ Constraints inherited from the project:
 
 ---
 
-## 2. Asset inventory: what already exists (build on it, do not reinvent)
+## 2. Asset inventory: what already exists (reused, not reinvented)
 
 | Asset | Where | State |
 |---|---|---|
@@ -111,8 +111,8 @@ coded message, or an honest mistake. The system's output is therefore not "lie /
 but a **divergence measurement plus a calibrated probability of strategic misdirection**,
 and those two things are kept on separate axes throughout.
 
-This matters epistemically: divergence is objective and auditable (you can plot the lap
-times next to the transcript); intent is latent and will always be soft. Publishing hard
+This matters epistemically: divergence is objective and auditable (the lap times can be
+plotted next to the transcript); intent is latent and will always be soft. Publishing hard
 numbers for the first and calibrated, explicitly-uncertain numbers for the second is the
 only honest way to report this work (section 3.6).
 
@@ -123,7 +123,8 @@ Every claim-bearing radio message gets three orthogonal annotations:
 1. **Verifiability** (deterministic, from claim type): `VERIFIABLE` (maps to a telemetry
    predicate), `PARTIALLY_VERIFIABLE` (predicate exists but is confounded, e.g. fuel
    saving where fuel load is unobservable but throttle traces are not),
-   `UNVERIFIABLE` (feelings, plans, references to information we cannot see).
+   `UNVERIFIABLE` (feelings, plans, references to information not observable from
+   outside).
 2. **Divergence** (continuous score + banded class, from the distant-supervision engine,
    section 3.4): `CONSISTENT`, `MILD_DIVERGENCE`, `STRONG_DIVERGENCE`, computed only for
    verifiable and partially verifiable claims.
@@ -149,7 +150,7 @@ be observed do not get labels.
 | P3 | Fake problem to misdirect rivals | Fabricated or inflated technical issue voiced on an open channel to bait a rival reaction (early pit, pushed strategy) | Claim: technical_issue entities, severe framing. Reality: no telemetry trace (speed traces, throttle/brake patterns nominal), no retirement, pace unaffected. Outcome: rival strategy response within k laps (rival pits, pushes) with no matching real problem |
 | P4 | Dummy pit call | "Box, box" (or garage/pit-crew theater) with no actual stop, to trigger a rival's covering stop | Claim: pit_call entity / ORDER intent. Reality + outcome: no pit event for the driver within 2 laps (OpenF1 `/v1/pit`), optionally a rival pit event in the same window |
 | P5 | Fuel/energy-saving claims | "Saving fuel", "lift and coast", "managing" used as cover for pace, or claimed but not executed | Claim: saving language. Reality: throttle traces (OpenF1 car_data ~3.7 Hz) show or do not show lift-and-coast signatures (early throttle drop before braking zones); lap-time pattern consistent or not |
-| P6 | Coded / euphemistic instruction | Engineer messages whose surface form hides the real instruction ("Plan C", "Scenario 7", "strat 2", agreed code words) | Claim: low-semantic-transparency instruction (OOV codewords, no verifiable content). Outcome: a consistent action follows (pit, pace change, position swap). Not deceptive toward us per se, but a distinct class: literal NLP reads it as noise, the action reveals meaning |
+| P6 | Coded / euphemistic instruction | Engineer messages whose surface form hides the real instruction ("Plan C", "Scenario 7", "strat 2", agreed code words) | Claim: low-semantic-transparency instruction (OOV codewords, no verifiable content). Outcome: a consistent action follows (pit, pace change, position swap). Not deceptive as such, but a distinct class: literal NLP reads it as noise, the action reveals meaning |
 | P7 | Feigned/inflated incident severity | Brake/engine/damage complaint that conveniently disappears | Claim: severe technical issue. Reality: no degradation in speed/brake telemetry across subsequent laps, no retirement, no pit for repairs. Outcome: complaint never recurs |
 | P8 | SC-fishing / condition inflation | Reporting debris, stopped cars, or track conditions in a way that invites a Safety Car or VSC review favorable to the reporter's strategy window | Claim: track_condition/incident entities. Reality: no matching `/v1/race_control` message (no investigation, no flag) within the window. Context: the reporting driver is in a pit window where an SC would gift a cheap stop |
 | P0 | Honest baseline (control) | Claims that check out, complaints followed by confirming telemetry and consistent action | Required as the majority control class; everything is measured against it |
@@ -186,7 +187,7 @@ evidence window: laps L-3 to L+N (N = 3 to 5, per predicate), with:
 - Lap and sector times, fuel-corrected, from FastF1/OpenF1 (already extracted per-lap in
   the project's parquet trees).
 - Stint context: compound, tyre age (OpenF1 `/v1/stints`), pit events (`/v1/pit`).
-- Model counterfactuals: this is where radiogate gets unusual leverage. The TFG's own
+- Model counterfactuals: this is where radiogate has an unusual advantage. The TFG's own
   calibrated models provide the "expected reality" baseline:
   - TireDegTCN (with MC Dropout quantiles) predicts the expected degradation curve for
     that compound and tyre age: a "tyres are gone" claim is scored against the predicted
@@ -329,7 +330,7 @@ apart.
 - Size: 300 to 500 clips. Composition: all high-divergence candidates from a season
   slice, an equal number of matched CONSISTENT controls (same claim family, same circuit
   type), plus a random sample for base-rate honesty.
-- Annotators: 2 to 3 F1-literate annotators (Victor plus recruited; Q3). Each clip is
+- Annotators: 2 to 3 F1-literate annotators (one already available plus recruited; Q3). Each clip is
   presented with the transcript, the audio, AND the telemetry evidence panel; annotating
   picaresca from text alone would just reproduce the tone-guessing failure mode.
 - Instrument: per-axis annotation (verifiability, divergence band given the panel,
@@ -379,7 +380,8 @@ The consumer-side design (all additive, nothing in `src/agents/` internals chang
   not consumed. The natural first consumer is the future Rival Agent (the TFM): its
   intent estimate over a rival's next move should weight that rival's radio evidence by
   (1 - p_misdirection), and treat P4/P3 flags as evidence FOR the opposite of the
-  literal claim (a dummy box call is information: they want us to pit).
+  literal claim (a dummy box call is information: the rival wants the tracked car to
+  pit).
 - **Own-pit-wall guardrail**: in the orchestrator's guardrail layer (the strategic
   guardrails already exist as a pattern), add: no strategy recommendation may cite a
   rival radio claim as primary evidence when `p_misdirection` exceeds a threshold; the
@@ -702,13 +704,13 @@ prerequisite touching the existing repo, and it was already planned independentl
 
 ---
 
-## 7. Open questions for Victor
+## 7. Open questions
 
 1. **Audio posture (Q1, blocking R5)**: metadata + fetch-script (recommended), gated
-   audio, or full public audio? And do we revisit the existing 529 public MP3s when the
-   dataset moves to the `f1stratlab` org?
+   audio, or full public audio? And should the existing 529 public MP3s be revisited
+   when the dataset moves to the `f1stratlab` org?
 2. **Repo topology (Q2, blocking kickoff)**: radiogate as a submodule of the core repo
-   (your stated preference) or an independent public repo (the visibility
+   (the stated preference) or an independent public repo (the visibility
    recommendation)? The ecosystem rule ("standalone artifact = independent repo")
    argues for independent.
 3. **Annotation resourcing (Q3, sizes R2/R4)**: who are annotators 2 and 3, what is the
@@ -730,9 +732,9 @@ prerequisite touching the existing repo, and it was already planned independentl
    revisited against the actual state of the master when this is picked up.)
 9. **NER schema (Q9)**: appetite for collapsing the 9 entity types to ~6 based on the
    confusability audit, given the annotation cost of keeping all 9 at acceptable F1?
-10. **Case-study curation (Q10)**: a short working session to list candidate radio-games
-    incidents from 2023 to 2025 that you know of, to be verified against the corpus
-    before any of them is cited in write-ups.
+10. **Case-study curation (Q10)**: a short working session to list remembered candidate
+    radio-games incidents from 2023 to 2025, to be verified against the corpus before
+    any of them is cited in write-ups.
 
 ---
 

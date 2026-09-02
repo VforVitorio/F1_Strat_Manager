@@ -1,18 +1,23 @@
-# Arcade Dashboard Architecture
+# Arcade Dashboard Architecture (legacy)
 
-Developer-level reference for the PySide6 dashboard that ships alongside the arcade replay. Written for someone who plans to extend or modify either window (add a new sub-agent card, a new telemetry chart, retheme the palette, change the wire protocol).
+> **Retired surface.** The PySide6 dashboard was replaced by [PITWALL](#/pitwall) and `src/arcade/dashboard/` was removed from the repo, along with the `PySide6` and `pyqtgraph` dependencies. It survives in git history, and the window's rendered output survives as committed screenshots under `documents/dev_docs/migration/pitwall/`, which is the baseline the port was checked against. This page is kept as historical reference; **the paths below no longer exist on `dev`**.
+>
+> Two modules did NOT die with it. `agent_formatters.py` and `reasoning_lines.py` moved to `src/pitwall/`, because PITWALL's AGENTS window renders by calling them - which is what makes the port 1:1 by construction rather than by inspection.
 
-Phase 3.5 Proceso B shipped thirteen files under `src/arcade/dashboard/` plus a new `src/arcade/strategy_pipeline.py` and the rewritten `src/arcade/strategy.py::SimConnector`. The arcade autolaunches the dashboard subprocess when the user enables strategy mode; the user never runs a second command.
+Developer-level reference for the PySide6 dashboard that shipped alongside the arcade replay, written for someone extending either window.
 
-## Three-window split
+Phase 3.5 Proceso B shipped the `src/arcade/dashboard/` package (fifteen modules, `reasoning_lines.py` among them) plus a new `src/arcade/strategy_pipeline.py` and the rewritten `src/arcade/strategy.py::SimConnector`. The arcade autolaunched the dashboard subprocess when the user enabled strategy mode; the user never ran a second command.
 
-Three windows, two processes.
+## The window split
 
 - **Arcade replay**: `pyglet`-backed, owned by `F1ArcadeView`. Drives the simulation loop, owns the `StrategyState`, runs `TelemetryStreamServer` on `127.0.0.1:9998`, and renders the track.
 - **Strategy dashboard**: `PySide6` `MainWindow`. Orchestrator card, six sub-agent cards with embedded `pyqtgraph` charts, scenario bars, six-tab reasoning panel.
 - **Telemetry window**: `PySide6` `TelemetryWindow`. Standalone `QMainWindow` with a 2x2 grid of `pyqtgraph` plots (Delta, Speed, Brake, Throttle) in F1-broadcast style.
+- **PITWALL**: a third process, `python -m src.pitwall`, opening **PITWALL · DATA** and **PITWALL · AGENTS**, two pywebview windows rendering React over the same broadcast, through one shared TCP client. It also serves the same two pages on loopback and logs the URL.
 
-The pyglet window runs in the arcade process. The two Qt windows live together inside one subprocess spawned by the arcade.
+The pyglet window runs in the arcade process. The two Qt windows live together inside one subprocess; PITWALL is another.
+
+> **Both follower stacks run at once, deliberately.** PITWALL is the replacement for the two Qt windows, and keeping the originals alive beside it during the migration is what lets every ported panel be compared against the window it replaces while that window still exists (`_spawn_pitwall`, `src/arcade/app.py`). The Qt pair retires at the end of the migration; this page describes it until then.
 
 ## Process topology
 
@@ -60,7 +65,7 @@ The flagship card. Four visual elements:
 
 ### `agent_card.py`
 
-Reusable widget: headline label, body `QLabel` (rich text with small monospace), and a reserved chart slot. The Pace and Tire cards slot in their `pyqtgraph` plots via `card.set_chart(widget)`. The Pit and RAG cards dim to 60 % opacity when the conditional agent did not fire on the current lap.
+Reusable widget: headline label, body `QLabel` (rich text with small monospace), and a reserved chart slot. The Pace and Tire cards slot in their `pyqtgraph` plots via `card.set_chart(widget)`. The Pit and RAG cards dim to 60% opacity when the conditional agent did not fire on the current lap.
 
 ### `agent_formatters.py`
 
@@ -89,7 +94,9 @@ The 2x2 grid of telemetry plots. Lives in its own module so `TelemetryWindow` ca
 
 ## Wire protocol
 
-The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-terminated payload. The full shape:
+The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-terminated payload.
+
+**The JSON below is a historical example and no longer describes the wire.** It is the shape the Qt dashboard consumed before that dashboard was retired in `7ea6a7a6`: a single telemetry sample per car under the role keys `main` and `rival`, plus `session`, `driver`, `driver2` and `delta_s` keys the producer does not emit. The current contract is the table under it, and the frozen shape lives in `tests/surfaces/test_arcade_wire_contract.py`.
 
 ```json
 {
@@ -127,6 +134,26 @@ The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-termi
 
 Top-level keys: `arcade`, `strategy`, `playback`. The dashboard's fan-out router reads from these three roots and nothing else, extending the protocol is additive.
 
+### What the wire gained for PITWALL
+
+Every one of these is additive (the Qt dashboard ignores them and is unaffected), and each exists because a consumer would otherwise have to re-derive it and drift from the producer:
+
+| Field | What it carries |
+|---|---|
+| `arcade.race_order` | every published driver, best first, ranked by the arcade leaderboard's OWN code, so the wire and the panel cannot disagree |
+| `arcade.drivers.<code>.laps_completed` | laps completed off the crossing map. The reveal carrier: show lap *L* for a driver iff `L <= laps_completed` |
+| `arcade.drivers.<code>.progress` | laps plus fraction, the ordering coordinate. `null` when the telemetry never placed the car |
+| `arcade.drivers.<code>.has_finished` | chequered flag versus retirement, from FastF1's official classification. **`active` alone reads the winner as retired** |
+| `arcade.drivers.<code>.active` / `.rel_dist` / `.has_position` | on track, fraction of the current lap, and whether the car was ever placed at all |
+| `arcade.driver_colors` | per-driver RGB from the arcade's own palette, published so no consumer hardcodes a sixth copy of it |
+| `arcade.track_status` | FastF1 TrackStatus digits for the lap on screen |
+| `arcade.telemetry.drivers` | a **span** of samples since the last tick, oldest first, per driver code, not one point, and not just the pinned pair. At 8x, one point per tick discarded 95% of the trace. Schema v2 replaced the role keys `main`/`rival` with the whole grid so a consumer can chart any car without asking the producer to publish it; read the old pair as `drivers[driver_main]` and `drivers[driver_rival]` |
+| `arcade.telemetry.rewound` / `.dropped` | the eviction signals: a backwards seek, and frames a forward jump could not carry |
+| `arcade.global_t_min` / `.location` | the session-time origin, and FastF1's authoritative Location for resolving the race directory |
+| `schema_version` / `seq` | the payload version, and a strictly increasing sequence per message SENT, which is what lets two consumers on independent timers agree on a frame |
+
+Bumping `CACHE_VERSION` to v12 came with these; the first launch of a given GP after upgrading rebuilds its session pickle.
+
 ## Extension points
 
 ### Adding a new sub-agent card
@@ -146,7 +173,7 @@ Top-level keys: `arcade`, `strategy`, `playback`. The dashboard's fan-out router
 Five threads cooperate.
 
 - **Arcade main thread** (pyglet), runs the `F1ArcadeView.on_update` tick, mutates the `StrategyState` under `_lock`, calls `TelemetryStreamServer.broadcast(snapshot)`.
-- **SimConnector background thread**, iterates `RaceReplayEngine.replay()` and calls `run_strategy_pipeline(race_state, laps_df)` per lap. One thread, one lap at a time, so the main pyglet thread never blocks on LLM inference.
+- **SimConnector background thread**, iterates `RaceReplayEngine.replay()` and calls `run_strategy_pipeline(race_state, laps_df, lap_state, memory=self._memory)` per lap. Passing `lap_state` is not optional: with it `None` the Monte Carlo falls back to the legacy seconds path and the projection layer is silently amputated, which is the one call shape these pages used to show. One thread, one lap at a time, so the main pyglet thread never blocks on LLM inference.
 - **TelemetryStreamServer accept thread**, daemon thread inside the arcade process. Blocks on `server_socket.accept()`.
 - **Qt main thread** (dashboard subprocess), runs `QApplication.exec()`. Drives all UI updates. Never touches the network.
 - **QThread stream clients** (one per top-level Qt window), each owns its own TCP socket.

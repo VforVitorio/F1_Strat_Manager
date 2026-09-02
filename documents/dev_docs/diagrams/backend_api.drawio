@@ -6,7 +6,7 @@
         <mxCell id="1" parent="0"/>
 
         <!-- TITLE -->
-        <mxCell id="title" value="FastAPI Backend — Endpoint Map (/api/v1)" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#2dd4bf;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+        <mxCell id="title" value="FastAPI Backend, Endpoint Map (/api/v1)" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#2dd4bf;fillColor=none;strokeColor=none;" vertex="1" parent="1">
           <mxGeometry x="350" y="10" width="900" height="40" as="geometry"/>
         </mxCell>
 
