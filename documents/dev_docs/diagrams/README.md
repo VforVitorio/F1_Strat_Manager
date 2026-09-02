@@ -8,24 +8,36 @@ All of these were last edited on 2026-05-13, before two releases landed: v2.0.0 
 
 | Diagram | State |
 |---|---|
-| `system_architecture` | updated: Surface 3 is the React web app, not Streamlit |
+| `system_architecture` | updated 2026-08-26 (#1090): Surface 2's windows 2 and 3 said `Dashboard (Qt)` and `Telemetry (Qt)` over a description reading `pyglet Arcade + PySide6 dashboard`. They are the two PITWALL webview windows in one process. Surface 3 is the React web app, not Streamlit |
 | `backend_api` | updated: the `/voice` router and its two endpoints removed |
 | `chat_mcp_flow` | updated: voice input path removed, the chat UI is the React tab |
 | `docker_deployment` | updated: `f1_webapp` on nginx, host 8501 to container 80 |
 | `webapp_structure` | **new**: the React app's feature folders and how they reach the backend |
 | `frontend_pages_streamlit_legacy` | **renamed and marked retired**: it is the Streamlit page tree, kept as a record of a surface that no longer exists |
-| `arcade_3window_architecture` | current |
-| `multi_agent_architecture` | updated 2026-08-02: N25's box no longer says "LangGraph ReAct" — pace's scaffold was formally retired in #781, N25 is now shown as a direct XGBoost call, same as the sub-agents header line |
-| `multi_agent_flow` | current, but predates the projection redesign |
-| `strategy_pipeline_flow` | predates the shared inference engine |
-| `subprocess_launch_sequence` | current |
-| `tcp_broadcast_dataflow` | current |
+| `arcade_3window_architecture_qt_legacy` | **renamed and marked retired**: it is the PySide6 pair PITWALL replaced in sprint 7. Not relabelled into the new topology, because that is not a relabel - the DATA window is not shaped like the Qt telemetry window. The live picture is the Mermaid graph in `docs/pages/multi-agent.md` |
+| `multi_agent_architecture` | updated 2026-08-02: N25's box no longer says "LangGraph ReAct", because pace's scaffold was formally retired in #781, N25 is now shown as a direct XGBoost call, same as the sub-agents header line |
+| `multi_agent_flow` | updated 2026-08-26: its routing, draw count and synthesis model match the orchestrator, but its Layer 2 box did not. The four candidates are `STAY_OUT` / `PIT_NOW` / `UNDERCUT` / `OVERCUT` (`strategy_orchestrator.py:272`), not one STAY OUT and three PIT NOW compound variants, and the score is `payoff(project_positions(rivals))` per draw (`:1308-1323`), not a sample from the sub-agent distributions |
+| `strategy_pipeline_flow` | updated 2026-08-26: its Layer 3 said `gpt-4.1-mini`, which is what the SUB-AGENTS use, while the synthesis it labels is the orchestrator's own `gpt-5.4-mini` (`strategy_orchestrator.py:138`); and its pace MAE of 0.392 s is the notebook-era value the metrics registry marks `canonical: false`, superseded by 0.4104 s |
+| `subprocess_launch_sequence` | updated 2026-08-26 (#1090): the actor columns already said PITWALL while four messages still described the Qt pair. Step 6b spawned `src.arcade.telemetry`, a module that does not exist, and step 14 sent a second TCP tick to it; `app.py:501` opens ONE subprocess and `src/pitwall/__main__.py` builds ONE `ArcadeStreamClient` for both windows, so both arrows now start at the PITWALL column. Step 7 is `PitwallHost(ArcadeStreamClient)`, and step 15's "tabs" went with the reasoning panel in #1020 |
+| `tcp_broadcast_dataflow` | updated 2026-08-26 (#1090): the live subscriber box read `QMainWindow` / `QThread` / `pyqtSignal` beside a second box correctly marked RETIRED. It is one pywebview process reading one socket for both windows. The 2x2 grid is ECharts |
 | `data_pipeline` | current on the surfaces; note the FastF1 cache is one directory now, not two |
 | `agents/` | one per sub-agent (N25 to N30) plus the `StrategyRecommendation` schema; `N25_pace_agent` updated 2026-08-02 to drop the ReAct-tool boxes it never actually used (#781) |
 
-Verified: every file parses as XML, and no label outside the file marked legacy names a retired surface.
+Verified 2026-08-26: all 20 files parse as XML, and no label, tab name or XML comment carries an em dash.
 
-**A note on how the previous version of this file got it wrong.** It reported six of twelve diagrams as stale, from a grep for "Streamlit" and "voice" across the raw XML. That counts matches inside style attributes and colour names, not labels, so it over-reported three files and under-reported `docker_deployment`, whose problem was a container named `f1_telemetry_frontend` with neither word in it. The audit above parses labels instead.
+The three that still named the retired Qt surface were redrawn in #1090, and the rule they broke is
+now checked rather than asserted: `tests/surfaces/test_diagrams_no_retired_surface.py` parses the
+`value=` attributes of every diagram outside the two `*_legacy.drawio` files and fails on
+`PySide6`, `QApplication`, `QMainWindow`, `QThread`, `pyqtSignal` or `src.arcade.telemetry`. A box
+whose own label carries the word RETIRED is exempt, because drawing the dead surface beside the
+live one is how `tcp_broadcast_dataflow` shows what was replaced. It also fails a diagram that
+yields no labels at all, which is what a compressed draw.io save looks like from the outside.
+
+The check is the parse half only. Whether a diagram means what the code does is still a reading
+against the source, which is how the four defects above were found and how the drift in
+`multi_agent_flow` was found running the opposite way.
+
+**How this audit is made.** Labels are parsed out of the `value=` attributes and the tab names, never grepped from the raw XML. A grep counts matches inside style attributes and colour names, which both over-reports (a file whose only hit is a colour) and under-reports (`docker_deployment`, whose defect was a container named `f1_telemetry_frontend`, containing neither search word). Each figure is then checked against the code it describes rather than against a sibling diagram, because the drift runs in both directions.
 
 ## These are not what the docs site renders
 

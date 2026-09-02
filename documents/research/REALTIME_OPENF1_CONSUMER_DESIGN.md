@@ -36,7 +36,7 @@ from FastF1 parquets; the agents never learn where it came from:
   matches real pit-wall operations and is the property that makes live mode cheap: the
   live consumer only has to close laps correctly, not stream at 10 Hz into the agents.
 
-So the deliverable is one new producer: a **live state manager** that assembles OpenF1
+The deliverable is therefore one new producer: a **live state manager** that assembles OpenF1
 messages into the identical `lap_state` dict and hands it to the same orchestrator loop,
 the same backend streams, and the same UI fan-out. Replay and live become two producers
 of one contract. Everything below is in service of that single sentence.
@@ -119,7 +119,7 @@ of the pit-wall doc's feed inventory). Per stream, at race time:
 The critical fact: **this is timing-screen-tier data for ALL cars, symmetrically.** A
 public consumer is not a team. There is no private high-rate channel for "our" car:
 no ERS deployment, no brake pressures, no fuel flow, no tyre temperatures. The pit-wall
-doc's tier (c) (hidden) applies to our own driver too when we are not the actual team.
+doc's tier (c) (hidden) applies to our own driver too, since the project is not the actual team.
 
 ### 3.2 How the single-driver boundary degrades, honestly
 
@@ -133,9 +133,9 @@ Live, that asymmetry weakens in a specific and fortunate way:
   position, gap, compound, tyre life, stint, pit flags, track status) plus one honest
   estimate (`fuel_load`, a linear depletion model, not a measurement, per the module
   docstring). None of the driver fields encodes a private channel. So the dict survives
-  live almost intact; what changes is the STORY we tell about it, not its shape.
+  live almost intact; what changes is the STORY told about it, not its shape.
 - **The asymmetry that survives is modeling attention, not data.** Live, "our driver"
-  means: the car we run our estimators on continuously (degradation TCN state, fuel
+  means: the car whose estimators run continuously (degradation TCN state, fuel
   model, stint plan), with rivals tracked at the same observational tier but without a
   persistent modeled state. That is also a fair description of how a real wall treats
   the other 19 cars. The docstring claim "mirrors a real pit wall" gets STRONGER for
@@ -261,8 +261,8 @@ Assembly rules:
   and mutating history would poison the agents' per-lap reasoning trail.
 - **Late corrections** (timing corrections, deleted laps) are applied to the internal
   store and logged, so post-session analysis and the parity tests see them, but no
-  re-emission occurs. This is the same posture a wall takes: you decide on the screen
-  you had.
+  re-emission occurs. This is the same posture a wall takes: decisions are made on the
+  screen that was available at the time.
 - **Out-of-order within the grace window** is handled naturally by the accumulators
   (facts are keyed, not sequenced).
 
@@ -397,9 +397,9 @@ direction invariant intact.
 
 ---
 
-## 11. Open questions for Victor
+## 11. Open questions
 
-1. **OpenF1 account**: are you willing to take the paid/registered real-time tier when
+1. **OpenF1 account**: should the project take on the paid/registered real-time tier when
    L3 arrives, or should L3 target polling-only for the first live season?
 2. **Live entry point**: new `f1-live` CLI command, or backend-managed live sessions
    only (started via API, watched from the dashboard)? The untouchable rule forbids

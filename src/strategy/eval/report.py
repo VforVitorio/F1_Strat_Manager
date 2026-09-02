@@ -38,6 +38,19 @@ ERA_TAG = "2022-2025"
 def _harness_sha() -> str:
     """Short git SHA of the repo the harness runs from, or ``unknown``.
 
+    Uses ``git describe --always --dirty --exclude='*'`` rather than a bare
+    ``rev-parse --short HEAD``. The ``--exclude`` pattern matches every tag,
+    so ``describe`` has no tag left to describe from and falls back to the
+    same short hash ``--always`` gives on its own; without it, ``describe``
+    walks back to the nearest reachable tag instead and stamps a long,
+    tag-relative description (e.g. ``legacy-2026-07-13-1098-g8b6cb305``) in
+    place of the short sha the header is supposed to pin. The one addition
+    over a bare ``rev-parse`` is the ``-dirty`` suffix, appended when the
+    working tree does not match the stamped commit: reports are regenerated
+    on a dirty tree before the change that motivated the regeneration gets
+    committed, so the sha used to be silently one commit stale with nothing
+    marking it (#1152).
+
     Returns ``unknown`` when running outside a checkout (e.g. an installed
     tool venv) so a report is never blocked on git being available.
     """
@@ -46,7 +59,7 @@ def _harness_sha() -> str:
         return "unknown"
     try:
         out = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+            ["git", "-C", str(repo), "describe", "--always", "--dirty", "--exclude=*"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -72,8 +85,9 @@ class ReportHeader:
     """Provenance stamp attached to every eval report (E-15).
 
     Invariants:
-    - ``harness_sha`` pins the code; ``artifacts`` pins the model weights;
-      together they make a report reproducible.
+    - ``harness_sha`` pins the code and ``artifacts`` pins the model weights;
+      together they make a report reproducible, and a ``-dirty`` suffix on
+      ``harness_sha`` says plainly when that does NOT hold.
     - ``generated_at`` is provenance only and is NOT part of report equality
       (two runs of the same code on the same data are "equal" bar the clock).
     - ``llm`` is ``none`` for pure-ML reports; NLP/orchestrator reports that
@@ -161,7 +175,7 @@ def write_report(
 
 def _render_md(name: str, header: ReportHeader, table_md: str) -> str:
     """Render a report: title, provenance header block, then the table body."""
-    artifacts = ", ".join(f"{k}=`{v}`" for k, v in header.artifacts.items()) or "—"
+    artifacts = ", ".join(f"{k}=`{v}`" for k, v in header.artifacts.items()) or "none"
     lines = [
         f"# {name}",
         "",

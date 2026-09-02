@@ -15,6 +15,20 @@
       var d = document.documentElement;
       d.classList.add("js");
       setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
     })();
   </script>
 
@@ -96,8 +110,9 @@
   }
   </script>
 
-  <!-- Theme color (mobile browsers) -->
-  <meta name="theme-color" content="#0c0d14" media="(prefers-color-scheme: dark)" />
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
   <meta name="theme-color" content="#0c0d14" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -135,10 +150,10 @@
 
   <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
        Loaded in dependency order; they share window globals. -->
-  <script src="app/nav.js?v=8"></script>
-  <script src="app/markdown.js?v=5"></script>
-  <script src="app/components.js?v=9"></script>
-  <script src="app/graph.js?v=8"></script>
+  <script src="app/nav.js?v=9"></script>
+  <script src="app/markdown.js?v=9"></script>
+  <script src="app/components.js?v=10"></script>
+  <script src="app/graph.js?v=9"></script>
   <script src="app/home.js?v=7"></script>
   <script src="app/main.js?v=7"></script>
 

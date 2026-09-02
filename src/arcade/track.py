@@ -12,33 +12,119 @@ here and in the loader, which collapsed the outline into a pseudo-circle.
 from __future__ import annotations
 
 import logging
-from typing import Final
+from typing import Final, NamedTuple
 
 import numpy as np
 
 import arcade
 from src.arcade.config import (
     DRS_COLOR,
+    DRS_OPEN_CODES,
     DRS_WIDTH,
     FINISH_CHEQUER_SEGMENTS,
     FINISH_CHEQUER_WIDTH,
+    MARGIN_BOTTOM,
+    MARGIN_LEFT,
+    MARGIN_RIGHT,
+    MARGIN_TOP,
     TRACK_EDGE_COLOR,
     TRACK_EDGE_WIDTH,
     TRACK_INTERP_EDGE,
     TRACK_INTERP_REF,
+    TRACK_MIN_CLEARANCE,
+    TRACK_MIN_CLEARANCE_Y,
     TRACK_PADDING,
     TRACK_WIDTH_WORLD,
 )
 
 logger = logging.getLogger(__name__)
 
-# f1_replay uses {10, 12, 14} on a qualifying fastest lap, where the
-# driver opens the wing throughout each activation zone. Value 10
-# ("eligible") covers the short stretch between the detection line and the
-# moment the wing actually opens; including it prevents a visible gap at
-# the start of each zone.
-_DRS_ACTIVE: Final[set[int]] = {10, 12, 14}
+# The open-code set lives in `config.py` now: the wire publishes a decoded
+# `drs_open` for PITWALL's DRS lane, so two subsystems read this fact and a second
+# copy of it is the twin this repo pays for most often.
 _DRS_OUTWARD_OFFSET: Final[float] = 0.9  # fraction of track_width beyond the outer edge
+
+
+class TrackViewport(NamedTuple):
+    """The rectangle the circuit is allowed to draw in, in scene coordinates."""
+
+    left: int
+    right: int
+    bottom: int
+    top: int
+
+    @property
+    def width(self) -> float:
+        return max(1.0, float(self.right - self.left))
+
+    @property
+    def height(self) -> float:
+        return max(1.0, float(self.top - self.bottom))
+
+    @property
+    def centre_x(self) -> float:
+        return (self.left + self.right) / 2.0
+
+    @property
+    def centre_y(self) -> float:
+        return (self.bottom + self.top) / 2.0
+
+
+def track_viewport(window_width: int, window_height: int) -> TrackViewport:
+    """What is left for the circuit once the panels have taken what they use.
+
+    **Pure on purpose**, the same reason `legend_mode` is (#1096): a check on
+    the drawn result needs a window and a check that needs a window does not run
+    in CI.
+
+    Each inset is derived from the panel that sits there rather than chosen, so
+    a panel that grows moves the circuit and one that shrinks gives space back:
+
+    - left, the driver table and the weather card, which start at
+      `LEFT_PANEL_X` and are at most `DRIVER_BOX_WIDTH` wide,
+    - right, the leaderboard, which reserves `LEADERBOARD_RIGHT_MARGIN`,
+    - bottom, the progress bar and the controls legend's hint line,
+    - top, a plain gap, since the lap readout sits over the left column.
+
+    The trace is limited by the viewport's WIDTH at every window size Melbourne
+    was measured at, so the left inset is the one that matters. It reserved 340
+    px for a column 320 px wide; 10 of those 20 px are kept deliberately, as the
+    gap that stops the trace touching the cards, and the other 10 went back to
+    the circuit.
+    """
+    return TrackViewport(
+        left=MARGIN_LEFT,
+        right=window_width - MARGIN_RIGHT,
+        bottom=MARGIN_BOTTOM,
+        top=window_height - MARGIN_TOP,
+    )
+
+
+def track_inset(
+    viewport: TrackViewport,
+    *,
+    padding: float = TRACK_PADDING,
+    min_clearance: int = TRACK_MIN_CLEARANCE,
+    min_clearance_y: int = TRACK_MIN_CLEARANCE_Y,
+) -> tuple[float, float]:
+    """Empty margin the trace keeps inside `viewport`, per axis.
+
+    A fraction alone is wrong at small window sizes. Cars are drawn ON the trace
+    with a three-letter code anchored to the dot, so what has to clear the
+    panels is the label, not the polyline: at 0.02 the fraction gives 14 px in a
+    1280-wide window against a label that reaches 21 either side. The floor is
+    what makes the clearance a property of the label rather than of the window
+    (#1103).
+
+    The two floors differ because the label is CENTRED on the dot horizontally,
+    costing half its width, while `_draw_car` anchors it a whole line above or
+    below. The vertical floor binds only in a window taller than it is wide,
+    since the fit is width-limited otherwise (#1111).
+    """
+    return (
+        max(viewport.width * padding, float(min_clearance)),
+        max(viewport.height * padding, float(min_clearance_y)),
+    )
 
 
 class Track:
@@ -121,32 +207,29 @@ class Track:
 
     def update_scaling(
         self,
-        width: int,
-        height: int,
+        viewport: TrackViewport,
         *,
-        margin_left: int,
-        margin_right: int,
-        margin_bottom: int,
-        margin_top: int,
         padding: float = TRACK_PADDING,
     ) -> None:
-        """Fit the rotated track into the reserved viewport and rebuild screen polylines."""
+        """Fit the rotated track into `viewport` and rebuild the screen polylines.
+
+        Takes the rectangle rather than four margins so that where the circuit is
+        allowed to draw is decided once, by `track_viewport`, and can be checked
+        without a window (#1103).
+        """
         if not self._has_geometry:
             return
 
-        inner_w = max(1.0, width - margin_left - margin_right)
-        inner_h = max(1.0, height - margin_bottom - margin_top)
-        usable_w = inner_w * (1.0 - 2.0 * padding)
-        usable_h = inner_h * (1.0 - 2.0 * padding)
+        inset_x, inset_y = track_inset(viewport, padding=padding)
+        usable_w = viewport.width - 2.0 * inset_x
+        usable_h = viewport.height - 2.0 * inset_y
 
         scale_x = usable_w / max(1e-6, self._world_w)
         scale_y = usable_h / max(1e-6, self._world_h)
         self._scale = float(min(scale_x, scale_y))
 
-        screen_cx = margin_left + inner_w / 2.0
-        screen_cy = margin_bottom + inner_h / 2.0
-        self._tx = float(screen_cx - self._scale * self._world_cx)
-        self._ty = float(screen_cy - self._scale * self._world_cy)
+        self._tx = float(viewport.centre_x - self._scale * self._world_cx)
+        self._ty = float(viewport.centre_y - self._scale * self._world_cy)
 
         self._screen_inner = self._project_poly(self._world_inner)
         self._screen_outer = self._project_poly(self._world_outer)
@@ -211,7 +294,7 @@ class Track:
         mag[mag < 1e-12] = 1.0
         nx = -dy / mag
         ny = dx / mag
-        # Shoelace signed area — flip sign so normals consistently point outward.
+        # Shoelace signed area: flip sign so normals consistently point outward.
         signed_area = 0.5 * float(np.sum(xs * np.roll(ys, -1) - np.roll(xs, -1) * ys))
         if signed_area > 0:
             nx = -nx
@@ -222,14 +305,14 @@ class Track:
         """Project the raw-lap DRS-active mask onto the resampled edge polyline.
 
         The reference draws DRS by slicing the unsampled outer polyline with
-        raw telemetry indices. We resample the edges to `edge_len`, so we map
-        each edge point to its nearest raw sample (same parametric t in
+        raw telemetry indices. The edges here are resampled to `edge_len`, so
+        each edge point maps to its nearest raw sample (same parametric t in
         [0, 1]) and scan for contiguous active runs there. Gives a clean
         start/end without the fragmentation the earlier index-rescale
         produced."""
         if drs_flags.size < 2 or edge_len < 2:
             return []
-        active_raw = np.isin(np.round(drs_flags).astype(int), tuple(_DRS_ACTIVE))
+        active_raw = np.isin(np.round(drs_flags).astype(int), tuple(DRS_OPEN_CODES))
         if not active_raw.any():
             return []
         raw_len = len(drs_flags)

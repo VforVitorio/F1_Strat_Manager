@@ -21,6 +21,8 @@ function Icon({ name, ...props }) {
     case "globe":   return React.createElement("svg", common, React.createElement("circle",{cx:12,cy:12,r:10}), React.createElement("path",{d:"M2 12h20"}), React.createElement("path",{d:"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"}));
     case "external": return React.createElement("svg", common, React.createElement("path", {d:"M7 17 17 7M7 7h10v10"}));
     case "package":  return React.createElement("svg", common, React.createElement("path", {d:"m16.5 9.4-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"}));
+    case "sun":     return React.createElement("svg", common, React.createElement("circle",{cx:12,cy:12,r:4}), React.createElement("path",{d:"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"}));
+    case "moon":    return React.createElement("svg", common, React.createElement("path", {d:"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"}));
     default: return null;
   }
 }
@@ -206,6 +208,90 @@ function Search({ onPick }) {
 }
 window.Search = Search;
 
+
+// ---------- Theme ----------
+// The switch, and the circular reveal that plays when it is pressed.
+//
+// The technique is theme-toggle.rdsx.dev's, the same one the webapp ships. The animation lives
+// here rather than in CSS because the circle's origin is wherever the button happens to be, which
+// only JavaScript knows.
+//
+// The FOUC guard in index.html has already stamped data-theme on <html> before this file loads,
+// so `readTheme` reads the DOM rather than recomputing from storage: one source of truth.
+var THEME_STORAGE_KEY = "f1sl.docs.theme";
+// Kept in step with the keyframe in tokens.css. Two places, because a keyframe on a
+// pseudo-element outside the document tree cannot read a custom property.
+var THEME_TRANSITION_MS = 480;
+
+function readTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
+// The mobile browser chrome follows the page, and the meta tag is the only way to say so.
+function paintBrowserChrome(theme) {
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", theme === "light" ? "#f5f5fa" : "#0c0d14");
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  paintBrowserChrome(theme);
+  try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch (e) {}
+  // Mermaid renders to SVG with colours baked in at render time, and the canvas graph keeps its
+  // own palette, so both have to be told. Anything else on the page follows the tokens for free.
+  window.dispatchEvent(new CustomEvent("f1sl:themechange", { detail: { theme: theme } }));
+}
+
+// Expands a circle of the new theme from (x, y) out to the farthest corner, so it finishes
+// covering the viewport exactly as the animation ends.
+function revealTheme(x, y) {
+  var endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  document.documentElement.animate(
+    { clipPath: ["circle(0px at " + x + "px " + y + "px)",
+                 "circle(" + endRadius + "px at " + x + "px " + y + "px)"] },
+    { duration: THEME_TRANSITION_MS, easing: "ease-in-out",
+      pseudoElement: "::view-transition-new(root)" }
+  );
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState(readTheme);
+
+  function onClick(e) {
+    const next = theme === "light" ? "dark" : "light";
+    const canAnimate = typeof document.startViewTransition === "function"
+      && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!canAnimate) { applyTheme(next); setTheme(next); return; }
+
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+
+    // applyTheme must run synchronously inside this callback: the API snapshots the old frame
+    // before it and the new frame right after it returns, so a React state update alone would
+    // land after the snapshot and the transition would capture no change at all.
+    const t = document.startViewTransition(function () {
+      applyTheme(next);
+      setTheme(next);
+    });
+    t.ready.then(function () { revealTheme(x, y); }, function () {
+      // `ready` rejects when the browser skips the transition. The theme has already flipped, so
+      // there is nothing to undo and the reveal is simply dropped.
+    });
+  }
+
+  // The icon shows the theme you are about to switch TO, not the one you are in, so the control
+  // reads as an action rather than as a status light.
+  return React.createElement("button", {
+    className: "nav-pill",
+    onClick: onClick,
+    title: theme === "light" ? "Switch to dark theme" : "Switch to light theme",
+    "aria-label": theme === "light" ? "Switch to dark theme" : "Switch to light theme",
+  }, React.createElement(Icon, { name: theme === "light" ? "moon" : "sun" }));
+}
+window.ThemeToggle = ThemeToggle;
+
 // ---------- TopNav ----------
 function TopNav({ onNav, onOpenGraph, onToggleSidebar, sidebarOpen }) {
   return React.createElement("nav", { className: "topnav" },
@@ -230,6 +316,7 @@ function TopNav({ onNav, onOpenGraph, onToggleSidebar, sidebarOpen }) {
       ),
       React.createElement(Search, { onPick: onNav }),
       React.createElement("div", { className: "nav-right" },
+        React.createElement(ThemeToggle, null),
         React.createElement("button", {
           className: "nav-pill",
           onClick: onOpenGraph,
@@ -408,7 +495,7 @@ function Breadcrumb({ page, onNav }) {
     React.createElement("span", { className: "breadcrumb-sep" }, "/"),
     React.createElement("span", null, page.section),
     React.createElement("span", { className: "breadcrumb-sep" }, "/"),
-    React.createElement("span", { style: { color: "var(--purple-300)" } }, page.title),
+    React.createElement("span", { style: { color: "var(--accent-text)" } }, page.title),
   );
 }
 window.Breadcrumb = Breadcrumb;

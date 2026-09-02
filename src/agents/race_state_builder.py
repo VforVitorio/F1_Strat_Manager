@@ -14,7 +14,8 @@ data. All 71 race directories carry a readable weather.parquet with zero NaN
 AirTemp/TrackTemp rows, so the keys are always present and always non-None, and
 40.0-vs-35.0 never actually reached a model there. The value below is chosen on
 the measured-median argument alone, not on a live-divergence one. What IS live is
-the present-but-None case this builder now handles: see DEFAULT_TRACK_TEMP_C.
+the present-but-None case this builder now handles: see
+RACE_STATE_DEFAULT_TRACK_TEMP_C.
 
 The drift that actually bit this codebase was LOGIC drift, not just
 literals: the #750 pace-delta axis, the #465 dead position default, the #633 gap
@@ -80,10 +81,24 @@ _MISSING_COMPOUND_MARKERS = frozenset({"", "nan", "none"})
 # also legitimately find.
 UNKNOWN_TYRE_LIFE = 0
 
-# Dataset medians (2023+2024 weather columns; the 2025 featured parquet carries
-# none): air median 24.1 C, track median exactly 35.0 C. The CLI's old 40.0 track
-# default corresponded to nothing measured, which is the whole reason to pick a
-# canonical value here.
+# **A SECOND pair, deliberately not `_shared_defaults`'s, and the prefix is the
+# whole point.** `_shared_defaults` carries 24.6 / 34.7 under the unprefixed
+# names and the sub-agents read those. This pair held 25.0 / 35.0 under the SAME
+# two names, which is how the divergence survived #789's consolidation: a
+# duplicate with a different name is visible at a glance, a duplicate with the
+# same name reads as the import three lines up (#1088). Renaming moves no served
+# number. Unifying them would, because whichever value wins reaches a prompt, so
+# that is a measurement with its own before and after and is tracked separately.
+#
+# These are #784's F10 decision values, chosen on 2026-08-02 against the dataset
+# as it stood then, when the medians read 24.1 / 35.0 and the 2025 featured
+# parquet carried no weather columns. Neither of those is true today: the 2025
+# parquet carries them natively, and after the 2023 Spanish GP duplicate was
+# removed the medians read 24.7 / 35.5 over 2023+2024 and 24.6 / 34.7 over
+# 2023-2025. Do NOT read the pair below as a present-tense measurement; the
+# per-field record is in documents/audits/DESIGN_race_state_single_contract.md
+# (F10). What the choice was made AGAINST still stands: the CLI's old 40.0 track
+# default corresponded to nothing measured at all.
 #
 # Where these actually fire, measured rather than assumed: NOT on the replay path
 # (all 71 race dirs ship a readable weather.parquet with zero NaN temperature
@@ -92,23 +107,28 @@ UNKNOWN_TYRE_LIFE = 0
 # at all and the producer honours that as an explicit None per key. That case
 # used to reach `float(None)` and raise TypeError; treating present-but-None as
 # missing is what makes these constants load-bearing.
-DEFAULT_AIR_TEMP_C = 25.0
-DEFAULT_TRACK_TEMP_C = 35.0
+RACE_STATE_DEFAULT_AIR_TEMP_C = 25.0
+RACE_STATE_DEFAULT_TRACK_TEMP_C = 35.0
 
 
 def _targeting_against_rival(
     lap_state: Dict[str, Any],
     rival: str,
-    fallback_gap_s: float,
+    fallback_gap_s: Optional[float],
     fallback_pace_s: float,
-) -> Tuple[float, float]:
+) -> Tuple[Optional[float], float]:
     """Gap and pace delta of our driver measured against a chosen ``rival``.
 
     Returns ``(gap_ahead_s, pace_delta_s)`` framed around the rival the user
     picked in the Strategy tab, so the recommendation reasons about the duel the
     user actually asked for instead of about whichever car happens to sit one
-    position ahead (#431). Both values land on the RaceState, which feeds N27's
-    overtake scoring inputs and the orchestrator's synthesis prompt.
+    position ahead (#431). Both values land on the RaceState, and from there they
+    reach the orchestrator's synthesis prompt (its RACE CONTEXT block) and
+    nothing else. They do NOT re-target the sub-agents: N27 derives its own pair
+    gap from laps_df against the car one position ahead, and N28 picks undercut
+    candidates positionally too, so choosing a rival reframes what the synthesis
+    READS, never what the models SCORE. Anything that needs the models to analyse
+    a chosen car is a different piece of work.
 
     gap_ahead_s is the absolute on-track interval to the rival, read from the
     rival's ``interval_to_driver_s`` (rival elapsed time minus ours: the sign
@@ -129,8 +149,13 @@ def _targeting_against_rival(
     if match is None:
         return fallback_gap_s, fallback_pace_s
 
+    # The fallback may now be None - no car ahead to measure (#878) - and
+    # round(None) raises, so the measured and fallback branches round apart.
     interval = match.get("interval_to_driver_s")
-    gap_ahead_s = abs(float(interval)) if interval is not None else fallback_gap_s
+    if interval is not None:
+        gap_ahead_s: Optional[float] = round(abs(float(interval)), 3)
+    else:
+        gap_ahead_s = fallback_gap_s
 
     driver_lap_s = lap_state.get("driver", {}).get("lap_time_s")
     rival_lap_s = match.get("lap_time_s")
@@ -139,7 +164,7 @@ def _targeting_against_rival(
     else:
         pace_delta_s = fallback_pace_s
 
-    return round(gap_ahead_s, 3), round(pace_delta_s, 3)
+    return gap_ahead_s, round(pace_delta_s, 3)
 
 
 def _car_ahead(lap_state: Dict[str, Any], our_position: int) -> Optional[Dict[str, Any]]:
@@ -153,24 +178,27 @@ def _car_ahead(lap_state: Dict[str, Any], our_position: int) -> Optional[Dict[st
     return match
 
 
-def _gap_to_car_ahead(car_ahead: Optional[Dict[str, Any]]) -> float:
-    """Absolute interval to the car ahead, without conflating two zeros.
+def _gap_to_car_ahead(car_ahead: Optional[Dict[str, Any]]) -> Optional[float]:
+    """Absolute interval to the car ahead, or None when there is no car ahead.
 
-    No car ahead means we lead, and 0.0 is honest there. A car ahead whose
-    ``interval_to_driver_s`` was never measured is NOT a zero gap: 0.0 reads as
-    side by side, which the orchestrator's clean-air band and N27's sub-1.0s DRS
-    window both act on (#633). It degrades to ``GAP_UNKNOWN_FALLBACK_S`` instead.
+    No car directly ahead - we lead, or the pos-1 car is not classified this
+    lap - is an ABSENCE, and it returns None (#878). It used to return 0.0,
+    called "honest" here for two years: 0.0 is ALSO a real measured value
+    (two cars side by side; the served 2025 season has four such laps), the
+    sub-1.0s DRS band acts on it, and a falsy ``or`` downstream turned it
+    into a fabricated 2.0 rival for the race leader on 1,262 laps. A value
+    meaning "nothing to measure" must not be a value the code can also
+    legitimately find - the rule ``Position`` three files away already
+    follows (#465).
 
-    Be honest about what that fallback still is: 2.0 is fabricated, and a real
-    2.0 s gap is common, so it does not satisfy the rule that a default must
-    never be a value the code can also legitimately find. It is less harmful
-    than 0.0, not correct. The real fix is ``RaceState.gap_ahead_s`` becoming
-    ``float | None``, which ``RivalState`` in position_projection.py already is
-    and whose consumers already guard with ``is not None``. That is a Pydantic
-    contract change, tracked under #628.
+    A car ahead whose ``interval_to_driver_s`` was never measured is a
+    DIFFERENT claim - the car exists, the number does not - and still
+    degrades to ``GAP_UNKNOWN_FALLBACK_S``: fabricated, less harmful than
+    0.0, not correct, and deliberately unchanged here. Retiring it is its
+    own decision over its own population.
     """
     if car_ahead is None:
-        return 0.0
+        return None
     interval = car_ahead.get("interval_to_driver_s")
     if interval is None:
         return GAP_UNKNOWN_FALLBACK_S
@@ -333,10 +361,11 @@ def build_race_state(
         pace_delta_s = _pace_delta_vs_car_ahead(driver_state, car_ahead)
 
     if rival:
+        # The positional fallback may be the leader's None; float(None) raises.
         gap_ahead_s, pace_delta_s = _targeting_against_rival(
             lap_state,
             rival,
-            float(gap_ahead_s),
+            float(gap_ahead_s) if gap_ahead_s is not None else None,
             float(pace_delta_s),
         )
 
@@ -348,10 +377,10 @@ def build_race_state(
         position=position,
         compound=normalise_compound(driver_state.get("compound")),
         tyre_life=tyre_life if tyre_life is not None else UNKNOWN_TYRE_LIFE,
-        gap_ahead_s=float(gap_ahead_s),
+        gap_ahead_s=float(gap_ahead_s) if gap_ahead_s is not None else None,
         pace_delta_s=float(pace_delta_s),
-        air_temp=_weather_reading(weather, "air_temp", DEFAULT_AIR_TEMP_C),
-        track_temp=_weather_reading(weather, "track_temp", DEFAULT_TRACK_TEMP_C),
+        air_temp=_weather_reading(weather, "air_temp", RACE_STATE_DEFAULT_AIR_TEMP_C),
+        track_temp=_weather_reading(weather, "track_temp", RACE_STATE_DEFAULT_TRACK_TEMP_C),
         rainfall=bool(weather.get("rainfall", False)),
         radio_msgs=radio_msgs if radio_msgs is not None else [],
         rcm_events=rcm_events if rcm_events is not None else [],

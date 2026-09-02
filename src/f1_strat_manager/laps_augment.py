@@ -226,8 +226,10 @@ def augment_featured_laps(
             continue
         # Correct tyre-stint metadata the live-timing feed published wrong, BEFORE the
         # merge, because the repair needs `PitInTime` and only the raw frame carries it
-        # (#790). It touches nothing on a healthy race, so this is a no-op for 69 of the
-        # 71 shipped races.
+        # (#790). It touches nothing on a healthy race. That was "a no-op for 69 of the 71
+        # shipped races" while #790's NaN-block shape was the only one repaired; #988 added
+        # the republished-age shape, which also fires on Melbourne 2025, so the count is
+        # what the repair reports rather than a number written here.
         raw, stint_report = repair_tyre_stints(raw)
         if stint_report.changed_anything:
             corrections.append(_stint_corrections(raw, path, gp_name))

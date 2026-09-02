@@ -65,7 +65,7 @@ def stint_history_flags(
                     lesson: an unscoped season frame would blend races). Needs
                     Driver / LapNumber / Compound; Stint is optional.
         driver:     FIA three-letter code.
-        lap_number: Inclusive upper bound — only laps at or before it count.
+        lap_number: Inclusive upper bound. Only laps at or before it count.
 
     Returns:
         ``stops_made``: highest visible stint number minus one (FastF1 numbers
@@ -124,7 +124,7 @@ def stint_history_timeline(
 
     Returns a map from lap number to the flags AS OF that lap. A lap the driver
     did not complete is absent, and the caller reads the nearest earlier lap or
-    treats it as unknown — never as a default.
+    treats it as unknown, never as a default.
     """
     if gp_laps is None or gp_laps.empty or not _REQUIRED_COLUMNS <= set(gp_laps.columns):
         return {}
@@ -156,9 +156,10 @@ def stint_history_timeline(
 def _flags_from_history(compounds: list[str], stints: set[int]) -> dict[str, Any]:
     """Turn an accumulated compound list and stint set into the three flags.
 
-    Shared by the per-lap and whole-timeline entry points so the two can never
-    disagree about what the same history means — a duplicated rule here would be
-    the kind of drift that costs a race.
+    Used by stint_history_timeline. stint_history_flags reimplements the same
+    pending/stops/compounds rule inline rather than calling this helper, so the
+    two must be kept in sync by hand: a duplicated rule like this is the kind of
+    drift that costs a race.
     """
     highest_stint = max(stints) if stints else None
     stops_made = highest_stint - 1 if highest_stint is not None else None

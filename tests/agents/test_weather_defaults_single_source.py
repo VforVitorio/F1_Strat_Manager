@@ -11,6 +11,7 @@ while a fourth literal grew back two files away, which is how this started.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -34,6 +35,53 @@ _LITERAL_DEFAULT = re.compile(
     r"""(air_temp|track_temp|AirTemp|TrackTemp)["']?\s*,\s*(\d+\.?\d*)\s*\)""",
 )
 
+# The quantity names, for the AST check below.
+_QUANTITIES = ("air_temp", "track_temp", "AirTemp", "TrackTemp")
+
+
+def _ternary_literal_defaults(source: str) -> list[str]:
+    """Temperature values whose fallback is a bare number in a ternary `else`.
+
+    The shape the regex above cannot see, and the one that survived #789 in
+    `race_situation_agent`: `"AirTemp": float(...) if "AirTemp" in _wx else 28.0`.
+    A ternary `else` is not a call argument, so there is no closing paren after
+    the number and the pattern walks straight past it. The literal sat two lines
+    from a sibling that HAD been migrated, which is why nobody reading the block
+    noticed either (#1088).
+
+    **Parsed, not matched.** A regex for this needs the quantity name and the
+    `else` on one line, and it therefore misses both an integer literal
+    (`else 28`) and the multiline form that the very sibling line at
+    `race_situation_agent.py:1621-1624` is written in today. The tree does not
+    care where the newlines fall.
+
+    Keyed on the dict KEY or the assignment target naming a temperature, since
+    that is what says which quantity the fallback is for.
+    """
+    offenders: list[str] = []
+
+    def literal(node: ast.expr) -> str | None:
+        if isinstance(node, ast.IfExp) and isinstance(node.orelse, ast.Constant):
+            value = node.orelse.value
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return str(value)
+        return None
+
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                named = isinstance(key, ast.Constant) and key.value in _QUANTITIES
+                found = literal(value) if named else None
+                if found is not None:
+                    offenders.append(f"{key.value}: ... else {found}")
+        elif isinstance(node, ast.Assign):
+            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            found = literal(node.value)
+            for name in names:
+                if found is not None and any(q.lower() in name.lower() for q in _QUANTITIES):
+                    offenders.append(f"{name} = ... else {found}")
+    return offenders
+
 
 @pytest.mark.parametrize("module", _MODEL_FACING)
 def test_no_model_facing_agent_states_its_own_temperature_fallback(module):
@@ -43,6 +91,7 @@ def test_no_model_facing_agent_states_its_own_temperature_fallback(module):
     code = "\n".join(line.split("#", 1)[0] for line in source.splitlines())
 
     offenders = [m.group(0).strip() for m in _LITERAL_DEFAULT.finditer(code)]
+    offenders += _ternary_literal_defaults(source)
     assert offenders == [], (
         f"{module} states a numeric temperature fallback: {offenders}. Import "
         f"DEFAULT_AIR_TEMP_C / DEFAULT_TRACK_TEMP_C from _shared_defaults instead."

@@ -73,10 +73,17 @@ def test_pandas_parquet_roundtrip():
 
 
 def test_scipy_signal_resample():
-    """scipy.signal.resample stays usable for arcade telemetry interp.
+    """scipy.signal.resample stays importable and keeps its signature.
 
-    SessionLoader resamples per-driver telemetry on this call path; a
-    signature change would silently corrupt arcade playback timing.
+    **It is NOT on any arcade call path.** The sentence that stood here said
+    "SessionLoader resamples per-driver telemetry on this call path", and there
+    is no scipy anywhere in `src/arcade`: the resampler is `np.interp` for the
+    continuous channels and a `searchsorted` nearest-neighbour pick for the
+    discrete ones (#1002). A guard whose docstring names a caller that does not
+    exist is how the next reader concludes the wrong module is covered.
+
+    Kept because scipy is a declared dependency and this is the environment
+    suite, whose job is that the declared stack imports and behaves.
     """
     pytest.importorskip("scipy")
     import numpy as np
@@ -334,8 +341,8 @@ _TIER2_IMPORTS = [
     "plotly",
     "matplotlib",
     "seaborn",
-    # Arcade (heavy import — PySide6 / pyqtgraph already covered by
-    # tests/test_arcade_dashboard_imports.py, do not re-import here)
+    # Arcade (heavy import). The Qt dashboard it used to share this note
+    # with was retired in sprint 7 along with PySide6 and pyqtgraph.
     "arcade",
     # Agents
     # experta now imports cleanly: [tool.uv] override-dependencies bumps

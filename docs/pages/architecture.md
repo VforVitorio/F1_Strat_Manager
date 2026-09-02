@@ -4,7 +4,7 @@
 
 ## One lap, end to end
 
-The diagram below traces the lifecycle of a single lap. Every component is reified in `src/`, the names match the production modules so you can grep your way from this page into the source.
+The diagram below traces the lifecycle of a single lap. Every component is reified in `src/`, the names match the production modules, so a grep from this page reaches straight into the source.
 
 ```mermaid
 sequenceDiagram
@@ -28,24 +28,24 @@ sequenceDiagram
     Orch-->>UI: StrategyRecommendation payload
 ```
 
-The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in a PySide6 dashboard, and the web app surfaces it in its strategy and chat tabs.
+The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in the two PITWALL windows, and the web app surfaces it in its strategy and chat tabs.
 
 ## Where to go next
 
 Six layers, six pages, each linked from the agent graph and from this page.
 
-- **[Multi-agent system](#/multi-agent)**: N25–N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.
+- **[Multi-agent system](#/multi-agent)**: N25-N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.
 - **[Simulation engine](#/simulation)**: `RaceReplayEngine`, `RaceStateManager`, the `lap_state` schema every layer agrees on.
 - **[Agents API reference](#/agents-api)**, per-agent input / output schemas, model artefacts and entry-point signatures.
 - **[Backend API](#/backend-api)**: FastAPI routers, the SSE simulation endpoint, the contract the web app and the Arcade speak.
 - **[Streamlit frontend (legacy)](#/streamlit)**, walkthrough of the retired Streamlit app, kept for historical reference.
-- **[Arcade dashboard](#/arcade-quick-start)**, three independent windows coordinated by a single Python process.
+- **[Arcade dashboard](#/arcade-quick-start)**, several independent windows coordinated across two Python processes (pyglet owns the replay and broadcasts; the follower surfaces subscribe from a child process).
 
 > **Looking for a specific file?** The narratives on this site stop at the contract level. For per-file deep-dives, every function in `src/agents/`, every notebook from N06 to N34, every helper in `src/arcade/`, jump to the [F1 StratLab DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab). It is regenerated on every push to `main`.
 
 ## Key data contracts
 
-Three structures cross every boundary in the system. If you remember nothing else, remember these.
+Three structures cross every boundary in the system, and these are the ones that matter most.
 
 ### `lap_state`
 
@@ -64,7 +64,7 @@ The structured output the orchestrator emits per decision tick (called `Strategy
 Three independent release tracks ship the system so that consumers can pick the surface that fits their workflow:
 
 - **R1: CLI wheel.** `uv tool install` straight from the GitHub release. Headless, batchable, no GPU needed for the inference path.
-- **R2: Arcade.** The three-window PySide6 + pyglet experience. Same wheel, but the `f1-arcade` entry point boots the GUI and spawns the strategy subprocess locally.
+- **R2: Arcade.** The pyglet 2D replay plus its live strategy surfaces. Same wheel, but the `f1-arcade` entry point boots the GUI and spawns the strategy subprocess locally.
 - **R3: Backend + web app.** The FastAPI server (SSE simulator, MCP tools) plus the React SPA. The docker-compose recipe ships the whole stack; `f1-webapp` launches it.
 
 See [Setup and deployment](#/setup) for the full install matrix per surface and platform.

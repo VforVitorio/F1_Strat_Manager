@@ -1,10 +1,10 @@
-"""src/agents — Multi-Agent Strategy System (v0.9)
+"""src/agents: Multi-Agent Strategy System (v0.9)
 
 Public re-exports for the six sub-agents and the orchestrator, resolved LAZILY.
 
 Importing this package (or any submodule under it) no longer eagerly loads every
-agent. The heavy agents — the radio NLP stack (Whisper/RoBERTa/SetFit/NER) and
-the RAG embedder — used to load at import time simply because they were listed
+agent. The heavy agents, the radio NLP stack (Whisper/RoBERTa/SetFit/NER) and
+the RAG embedder, used to load at import time simply because they were listed
 here, so touching ANY single agent (e.g. the Model Lab asking only for the Pace
 XGBoost model) pulled the whole family into memory and VRAM. Now each name below
 resolves on first access via module ``__getattr__`` (PEP 562), so a single-agent

@@ -1,0 +1,1806 @@
+/* PITWALL · DATA: band 4's geometry, in CSS.
+ *
+ * Every number here comes from a Qt call in the retired dashboard's
+ * `telemetry_panel.py` or `telemetry_window.py`:
+ * the 10 px window and panel margins and the 8 px root spacing
+ * (`setContentsMargins` / `setSpacing`), the 10 px grid spacing and equal
+ * row/column stretch (`grid.setSpacing(10)`,
+ * `setColumnStretch/setRowStretch(…, 1)`), the 4 px gap between a chart's
+ * title row and its plot, the (4, 0, 4, 0) title-row margins with 6 px
+ * spacing, the 8 px chip radius with 2/8 padding, and every font size and
+ * weight on each label.
+ *
+ * The palette and the shared chrome (`.card`, `.status-bar`) are in
+ * `qt-base.css`. Trace colours are NOT here: they are per-metric and live
+ * with the component that chooses them, pinned slot by slot by
+ * `test_pitwall_tokens.py`.
+ */
+
+.data-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* `QVBoxLayout(host).setContentsMargins(10, 10, 10, 10)` on the window's
+ * central widget.
+ *
+ * A grid of `auto` over `minmax(0, 1fr)`, not two flex children: band 1 must
+ * take exactly its content height and everything else must take the rest,
+ * and `minmax(0, ...)` is what stops the second row growing past the window
+ * on a client shorter than this one. Scrollbars are hidden globally
+ * (`qt-base.css`), so a row that overflows does not announce itself - it just
+ * silently stops showing its bottom. */
+.data-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+/* --- Band 1: the status strip -------------------------------------------- */
+
+/* One row, 29 px of content at this type scale. The cheapest band there is,
+ * and no reason to make it taller: everything on it is a single value. */
+.status-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  min-width: 0;
+}
+
+.strip-lap {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.strip-lap-total {
+  color: var(--qt-fg-3);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Same chip language as `.driver-chip` in band 4: 1 px border in the chip's
+ * own colour, so the strip and the traces panel read as one system. */
+.strip-chip {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+/* **The two connection rules that used to sit here are gone.** They were a
+ * second owner of the socket's colours, and they disagreed with the first:
+ * "Connecting..." was dim through `is-unknown` here and WARNING amber through
+ * the AGENTS view, for one socket, on two windows a reader has open side by
+ * side. `PitwallHost.get_connection` now returns the word AND its colour from
+ * one map, and the argument this comment makes is what that map adopted.
+ *
+ * Unknown is DIM, never a colour that means something. A missing track status
+ * is an absence, and an absence that borrows the green or the amber is a
+ * made-up answer. */
+/* **The track status is the most important state change on this window, and
+ * until now it only swapped colour between two frames.** A strategist looking
+ * at the tower when a safety car is deployed had nothing in peripheral vision
+ * to catch: the chip was a different colour on the next frame and that was all.
+ *
+ * One shot, never a loop. A looping pulse on a live wall becomes furniture
+ * within a lap and then competes with the data for attention, which is the
+ * consumer-dashboard failure this window exists not to be. It fires when the
+ * chip is created, and `StatusStrip` keys the chip on its text, so "created"
+ * means "the status changed".
+ *
+ * `box-shadow` rather than a transform: it takes no layout, so a 1465 px strip
+ * does not reflow, and the chip is a ~90 x 18 px surface, which is the "small
+ * and isolated" case where paint-triggering motion is the right trade. */
+@keyframes qt-track-chip-pulse {
+  from {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  to {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+
+.strip-chip-track {
+  animation: qt-track-chip-pulse var(--motion-decay) var(--motion-ease) 1;
+}
+
+.strip-chip.is-unknown {
+  color: var(--qt-fg-3);
+}
+.strip-chip.is-provisional {
+  color: #f59e0b;
+}
+
+/* A non-green track status is FILLED, not outlined. The background is the wire's
+ * own `track_status_color` and the text is the window's ground, so the chip reads
+ * as a state rather than as a label - the difference between "there is a safety
+ * car" being 18 px of outlined text and being the one loud thing on the strip.
+ * `--qt-bg` rather than black: measured against every label the producer can
+ * emit, the ground clears AA on all of them - YELLOW FLAG 12.08:1, VSC 8.61,
+ * SAFETY CAR 7.93, RED FLAG 4.92, the dimmest of the four and still over 4.5. */
+.strip-chip.is-filled {
+  color: var(--qt-bg);
+  font-weight: 800;
+}
+
+/* The producer is gone. DANGER, the same red the Disconnected chip carries, and
+ * filled for the same reason the track status is: this is a state, not a label. */
+.strip-chip.is-frozen {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: var(--qt-bg);
+  font-weight: 800;
+}
+
+/* The board while the feed is dead: DIMMED, never desaturated, never blurred and
+ * never faded far. The last known state is the best information a strategist has,
+ * so the treatment has to say "this is history" while leaving the board readable -
+ * and "readable" includes the COLOUR, which on this window is content: the pace
+ * grid's thirds, the tower's sector code, the trace's twenty team lines.
+ *
+ * **`saturate(0.45)` was here and it cost the pace grid two thirds of its ranking.**
+ * Computed on the filter-effects saturation matrix and confirmed by sampling the
+ * same pixels live and frozen: the RGB distance between the quickest third and the
+ * slowest fell 61%, and between the session best and a deleted lap 66%. Two of
+ * this sprint's own changes interacting - the frozen filter over the markers added
+ * an hour earlier.
+ *
+ * `brightness()` scales all three channels by the same factor, so it dims the board
+ * without moving any hue relative to any other: a dimmer green is still greener
+ * than a dimmer amber, and every rank the tone channel encodes survives. It costs
+ * the distance the same 28% it costs the brightness, which is a proportional loss
+ * rather than a collapse.
+ *
+ * Band 1 and the status bar stay at full strength: they carry the four independent
+ * tells that say WHY it looks like this - the DATA FROZEN chip, the neutral track
+ * chip, `PLAYBACK —` and the status line. */
+.data-main.is-frozen {
+  filter: brightness(0.72);
+}
+
+.strip-spacer {
+  flex: 1 1 auto;
+}
+
+.strip-field {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.strip-field-label {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.strip-field-value {
+  color: var(--qt-fg-2);
+  font-family: var(--qt-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.data-waiting {
+  margin: 0;
+  color: var(--qt-fg-3);
+  font-size: 13px;
+}
+
+.data-waiting code {
+  font-family: var(--qt-mono);
+  color: var(--qt-fg-2);
+}
+
+/* --- The two columns ------------------------------------------------------
+ *
+ * The all-cars world on the left and the own-car world on the right, which is
+ * how a real wall splits them across physical surfaces - and, separately, the
+ * only arrangement that fits: four stacked bands need 908 px of the 790 this
+ * window has, with band 3 still at zero.
+ *
+ * 630 px for the left column, and the number is measured on THIS table rather
+ * than inherited: its natural width is 597 px at 11 px mono, so the card needs
+ * 619 before any column is compressed. A prototype measurement put it at
+ * 597.6 and recommended 620, which happens to land one pixel clear - close
+ * enough that a font fallback would eat it. 630 leaves eleven pixels of air.
+ */
+.data-main {
+  display: grid;
+  grid-template-columns: 630px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+/* `auto` for the tower and the remainder for what sits under it. The tower
+ * must NEVER be squeezed: scrollbars are hidden globally (`qt-base.css`), so
+ * a squeezed tower does not gain a scrollbar, it silently stops drawing its
+ * last rows - a timing tower with no P15 to P20 and nothing saying so. */
+.left-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+/* --- Band 2 left: the timing tower ---------------------------------------- */
+
+.tower {
+  padding: 10px;
+  min-width: 0;
+}
+
+/* 11 px mono and 20 px rows: the floor at which the twelve columns stay
+ * legible at 150% scaling, measured on the real screen. 12 px fits THIS
+ * machine and costs the bests panel its room on a 1080p laptop at 125%. */
+.tower-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--qt-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tower-table th {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: right;
+  padding: 0 4px 3px;
+  border-bottom: 1px solid var(--qt-border);
+  white-space: nowrap;
+}
+
+.tower-table td {
+  height: 20px;
+  padding: 0 4px;
+  text-align: right;
+  color: var(--qt-fg-2);
+  white-space: nowrap;
+}
+
+.col-pos,
+.col-num,
+.col-drv,
+.col-tyre {
+  text-align: left;
+}
+
+.col-pos {
+  color: var(--qt-fg-3);
+  width: 20px;
+}
+.col-num {
+  color: var(--qt-fg-3);
+  width: 22px;
+}
+/* The code in the primary foreground, with the team colour beside it rather than
+ * inside it. Six of the twenty wire colours fail AA as 11 px text on this card and
+ * four fail the 3.0 large-text floor; the code is the row key of this window's main
+ * panel. `--qt-fg-1` on this ground is 17.48:1.
+ *
+ * **The swatch costs the table NO width**, and it had to: the cell is 34 px by a
+ * measurement, the table's natural width was 597.6 of the 608 the card gives, and
+ * an inline 3 px bar with a 4 px gap took it to 608.0625 - over by a sixteenth of
+ * a pixel, which the tower's own no-column-is-compressed guard caught. So the
+ * padding moves rather than growing: 8 left and 0 right instead of 4 and 4, and the
+ * swatch is absolutely positioned in the space that opens up. The column's total is
+ * unchanged and the eleven pixels of air the 630 px note budgets stay spent on
+ * nothing. */
+.col-drv {
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  width: 34px;
+  white-space: nowrap;
+}
+
+/* The body cells only: the header keeps the column-label treatment every other
+ * header has, and its own padding, so `DRV` stays aligned with its neighbours. */
+td.col-drv {
+  color: var(--qt-fg-1);
+  padding-left: 8px;
+  padding-right: 0;
+  position: relative;
+}
+
+/* A filled bar, not a dot, and nearly the row's height: a shape carries a dim
+ * colour where glyphs cannot, and this one is REDUNDANT - the code beside it
+ * already names the car - so a 1.88:1 team colour degrades to "hard to see"
+ * instead of to "unreadable". */
+.drv-swatch {
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 12px;
+  border-radius: 1px;
+}
+.col-last {
+  color: var(--qt-fg-1);
+  font-weight: 700;
+}
+.col-note {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+/* The trap speed rides beside its sector time, dimmer and smaller, so the
+ * cell reads as one value with an annotation rather than as two columns. */
+.cell-speed {
+  margin-left: 5px;
+  font-size: 0.82em;
+  color: var(--qt-fg-3);
+}
+
+/* A deleted lap time is struck, not hidden: it happened, and it does not
+ * count. The bests recompute already excludes it. */
+.col-last.is-deleted {
+  text-decoration: line-through;
+  color: var(--qt-fg-3);
+}
+
+/* The sector colour code every timing screen uses: purple is fastest of the
+ * session outright, green is the driver's own best, yellow is slower than his
+ * own best. Plain is a time with nothing to compare against yet, and it stays
+ * the body colour rather than borrowing one of the three - a colour that means
+ * something is not free to spend on "no comparison". */
+.col-sector.is-purple {
+  color: #a78bfa;
+  font-weight: 700;
+}
+.col-sector.is-green {
+  color: #10b981;
+}
+/* WARNING, not the broadcast's own yellow. Every colour in these stylesheets
+ * has to trace back to a name in `palette.py`, and #facc15 - the yellow the
+ * arcade's flag banner uses - is not one of them. Amber reads as "slower"
+ * just as well and stays inside the guard. */
+.col-sector.is-yellow {
+  color: #f59e0b;
+}
+
+/* A sector carried over from the previous lap. Dimmed, never hidden: it is a
+ * real time the car really set, and it is the freshest thing that cell can
+ * honestly hold - the third sector's crossing IS the end of its lap, so the S3
+ * on screen mid-lap is always the previous one's. */
+.col-sector.is-stale {
+  opacity: 0.5;
+}
+
+/* --- Band 2 right: the bests panel ---------------------------------------- */
+
+/* `max-height: 100%` is the structural half of #979 and `BestsPanel`'s measured
+ * degradation is the other. Without it the card takes its content height and
+ * hangs over the column, where the overflow is clipped by an ancestor with
+ * nothing to reach it by - 90 px of it at the 1265 x 593 client, THEORETICAL
+ * included. Clamped, an overflow that survives the degradation is at least
+ * reachable by the wheel, which is what every other panel in this window does
+ * (`qt-base.css` hides the scrollbar, not the scrolling). */
+.bests {
+  /* Explicit, because `.card`'s padding and border are otherwise ADDED to the
+   * percentage cap and it stops binding: measured, a 63 px slot allowed an 85 px
+   * border box and the card sat 2 px over the column. */
+  box-sizing: border-box;
+  padding: 10px;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: start;
+}
+
+.bests-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.bests-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.bests-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+/* Four sections side by side. They spend WIDTH, which the left column has,
+ * rather than height, which it does not: stacked they would be four times as
+ * tall for the same twelve rows.
+ *
+ * **The LAP column is sized to its content and the three sectors share the
+ * rest**, because four equal columns are 146 px each and the LAP section's
+ * ranked rows need 153: a lap time is `1:29.601` where a sector is `31.717`, two
+ * glyphs wider, and the row also carries a delta and a compound letter. Measured
+ * on the live page, exactly two of the twelve rows overflowed - ranks 2 and 3 of
+ * LAP, the only ones carrying both. (Reported once as a property of
+ * `.bests-row`, which would have sent a fix at all twelve.) */
+.bests-sections {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) max-content;
+  gap: 8px;
+}
+
+.bests-section {
+  min-width: 0;
+}
+
+/* The compact form: the purple holders plus the theoretical, for the client where
+ * the ranked panel does not fit at all. Spends width, which this column has 630 px
+ * of, instead of the height it has 63 of. Measured, it wraps to TWO 17 px lines at
+ * 1265 and the card comes to 62 px in a 63 px slot - it fits, with about one wrap
+ * of margin. See `BestsPanel`'s note. */
+.bests-leaders {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 0 2px;
+  /* The same 17 px a ranked row uses, stated rather than inherited from the
+   * font: at the default line-height this line came to 20 px and the whole card
+   * to 64 in a 63 px slot - a one-pixel overhang, which `max-height` would then
+   * have turned into a one-pixel scroll instead of a fit. */
+  line-height: 17px;
+}
+
+.bests-leader {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* The section label is a column heading in the ranked form and an inline tag
+ * here, so the rule that underlines it has to stop applying. */
+.bests-leaders .bests-field-label {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* The theoretical is not a purple anybody set, so it sits apart from the four
+ * that were. */
+.bests-leader.is-theoretical {
+  margin-left: auto;
+}
+
+.bests-field-label {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--qt-border);
+  margin-bottom: 3px;
+}
+
+.bests-row {
+  display: grid;
+  grid-template-columns: 10px 30px 1fr auto 10px;
+  gap: 4px;
+  align-items: baseline;
+  font-family: var(--qt-mono);
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--qt-fg-2);
+}
+
+.bests-row.is-purple .bests-value {
+  color: #a78bfa;
+  font-weight: 700;
+}
+
+.bests-rank,
+.bests-compound {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+}
+
+.bests-code {
+  color: var(--qt-fg-1);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.bests-value {
+  text-align: right;
+}
+
+.bests-delta {
+  color: var(--qt-fg-3);
+  font-size: 9px;
+}
+
+.bests-empty {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.bests-theoretical {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--qt-border);
+}
+
+.bests-theoretical-value {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bests-theoretical-note {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+}
+
+/* A stopped car stays in the tower at the place its laps earned, dimmed. It
+ * is not removed: a timing screen classifies retirements, it does not pretend
+ * they were never entered. */
+.tower-row.is-out td {
+  color: var(--qt-fg-3);
+  opacity: 0.65;
+}
+
+/* The tower doubles as the rival selector (#1051). A selectable row is a tab
+ * stop under a roving tabindex; the pinned one is the car band 4 compares
+ * against.
+ *
+ * The pin reads as a LEFT EDGE plus a lifted ground rather than a colour on the
+ * text. Every cell in the row already carries meaning through colour - purple
+ * and green sectors, the deleted-lap strike, the OUT dimming - so tinting the
+ * text would collide with the timing screen's own code. The edge is the one
+ * channel the row has spare. */
+.tower-row.is-pinned td {
+  background: var(--qt-elevated);
+}
+
+.tower-row.is-pinned td:first-child {
+  box-shadow: inset 2px 0 0 var(--qt-accent);
+}
+
+/* Focus is visible on its own, separately from the pin: the reader moves the
+ * candidate row with Up and Down BEFORE committing it with Enter, and a
+ * candidate nobody can see is a keyboard trap that looks like a dead key. */
+.tower-row:focus {
+  outline: 1px solid var(--qt-accent);
+  outline-offset: -1px;
+}
+
+.tower-row.is-finished .col-last {
+  color: var(--qt-fg-2);
+}
+
+/* Band 4 is the traces plus the ring in its corner. The ring is a fixed
+ * column because it is a circle: giving it a fraction of the width makes it
+ * shrink as the traces grow, which is backwards - the traces are the thing
+ * that wants the room.
+ *
+ * **`minmax(0, 1fr)` and not `1fr`, because a `1fr` track carries an `auto`
+ * minimum and one line of prose was setting the window's minimum width.**
+ * `.traces-lap` is `nowrap`, so its min-content is its entire text, and with
+ * nothing on the way up stopping the contribution it reached this track.
+ * Measured at a FIXED 1266x593 client, changing only the note: 6 characters
+ * overflowed the document by 0 px, 42 by 199, and the longest note the header
+ * can render, 66 characters, by 389. It reached the desktop too, 169 px at
+ * 1486x833. What went off screen was the ring and every radio message body,
+ * with scrollbars hidden globally so nothing said so. See #1073. */
+.band4 {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 10px;
+}
+
+/* --- Band 4: the traces panel (TelemetryPanel) --------------------------- */
+
+/* `QFrame` with `card=true` (so it carries `.card` from `qt-base.css`),
+ * root margins 10 and spacing 8. */
+.traces {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The width half of `min-height: 0`, and it is load-bearing rather than
+   * symmetric: without it the header note's min-content travels up to band 4's
+   * grid track. #1073. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+/* Header row: `setContentsMargins(2, 0, 2, 0)`, `setSpacing(10)`, and the
+ * extra `addSpacing(10)` Qt inserts after the lap label. */
+.traces-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+  /* Same reason as `.traces` above: this row is the last stop before the note
+   * reaches the grid track. #1073. */
+  min-width: 0;
+}
+
+/* The lap label plus every note the header can append.
+ *
+ * `nowrap` is not decoration: the header is a flex row sharing its line with the
+ * two driver chips, and a note long enough to push them wraps the row, which
+ * takes its height out of the CHART below. Measured at 1265x593 with one note
+ * showing, the six lanes lose about 2 px each and the delta lane falls from 72 px
+ * to 71, which drops its 10 px labels below the 12 px pitch they need to stay
+ * apart. The exposure is not new - `NO POSITION DATA (X, Y)` is longer than any
+ * note added since - it had simply never been measured with a note up. Clipping
+ * the tail of a note is the right trade against shrinking the payload.
+ *
+ * **The paragraph above stood alone for one sprint and it was half the story.**
+ * `nowrap` makes a line's min-content its whole text, and until #1073 nothing
+ * between here and band 4's grid track set `min-width: 0`, so the note sized the
+ * WINDOW: 389 px of ring and radio off screen at the 720p client, 169 px at the
+ * 1920x1080 one. The trade this comment describes is still the right one, but it
+ * only holds because the containment is now in place; the `text-overflow` below
+ * is what does the clipping the paragraph promises. Do not remove the
+ * `min-width: 0` on `.traces` or `.traces-header` on the grounds that this
+ * element already has one. */
+.traces-lap {
+  color: var(--qt-fg-1);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-right: 10px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traces-vs {
+  color: var(--qt-fg-3);
+  font-size: 11px;
+}
+
+/* `_DriverChip._apply_style`: 1 px border in the chip's own colour, 8 px
+ * radius, 2/8 padding, 12 px 800 with 1 px tracking. */
+.driver-chip {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  padding: 2px 8px;
+}
+
+/* **The main chip has no colour here either, for the same reason as the rival's
+ * below.** It carried palette.INFO, the blue `TelemetryPanel` builds its own-car
+ * pen from, on a window whose tower, ring and race trace all paint that same car
+ * in its team colour - so one window rendered NOR blue in one corner and papaya
+ * in three others. A stylesheet cannot know which car is main any more than it
+ * can know which is pinned; `DataWindow` resolves both from `driver_colors` and
+ * passes them down.
+ *
+ * #1070 fixed the rival and left this one, five lines above its own comment. */
+
+/* **The rival chip has no colour here, and that is the fix for #1070.** It used
+ * to carry palette.WARNING beside the rule above, matching the fixed amber the
+ * six trace lanes drew in. Both came from the Qt port, which fixes the rival to
+ * WARNING whoever it is. Once the tower could pin any car that stopped being
+ * right: the amber sits an RGB distance of 33.5 from McLaren papaya, the closest
+ * pair in the team palette, so a McLaren rival looked correct and everyone else
+ * looked like a stale colour. The value is now per-driver, off `driver_colors`
+ * on the wire, and arrives as an inline `color` from `DataWindow`; the
+ * `currentColor` border above follows it. A stylesheet cannot know which car is
+ * pinned, so there is nothing to put here. */
+
+/* --- The 2x2 grid ------------------------------------------------------- */
+
+/* --- Band 4: the SIX-LANE stack ------------------------------------------
+ *
+ * The 2x2 grid that stood here is retired. The agreed layout drawing assigned the
+ * stacked form to this sprint and calls the 2x2 "the wrong shape"; the arithmetic
+ * and the research are in `documents/research/PITWALL_TRACES_SPACE_SPEC.md`.
+ *
+ * The stack is ONE canvas with six ECharts grids, so the geometry lives in
+ * `TraceStack.laneLayout` where it can be derived from the measured box - 666 px at
+ * the 1485 client, 430 at 1265 - rather than tabulated in two media queries. What
+ * this stylesheet owns is the positioning context and the two HTML overlays that
+ * must not be ECharts graphics, because `notMerge: true` would restart them ten
+ * times a second. */
+.trace-stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.trace-stack-plot {
+  position: absolute;
+  inset: 0;
+}
+
+/* One per lane, INSIDE its lane's height: the channel name on the left in the
+ * lane's own colour, its live value on the right. The MoTeC/AiM convention - a
+ * stacked lane is read with a cursor and a readout, not by counting gridlines - and
+ * on the DRS lane it is what tells a flat line apart from a broken one. */
+.trace-lane-label {
+  position: absolute;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  height: 12px;
+  pointer-events: none;
+}
+
+.trace-lane-name {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.trace-lane-unit {
+  color: var(--qt-fg-3);
+  font-weight: 400;
+}
+
+.trace-lane-value {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The ONE cursor: the car's live position on the lap, unbroken from lane 1's top to
+ * lane 6's bottom, so a reader's vertical cut is a single line rather than six
+ * fragments. Solid, not dashed, and that is measured: the car covers about 6 m per
+ * 100 ms tick, which on this plot is under one pixel, so a dashed line never moves a
+ * whole dash - it shifts its pattern by a fraction of a pixel ten times a second and
+ * shimmers. `--qt-fg-3` is the stroke this window already reserves for it. */
+.trace-cursor {
+  position: absolute;
+  width: 1px;
+  pointer-events: none;
+}
+/* The hover cursor (#999), brighter than the car's mark because it is only on
+ * screen while the reader is asking for it. `--qt-fg-1` is also the colour of
+ * the lane values it produces, so the mark and its numbers read as one thing.
+ *
+ * The colour is set here rather than inline, unlike `.trace-cursor`'s, because
+ * it has a token and the car's is `CURSOR_LINE` from the shared chart palette. */
+.trace-cursor.is-hover {
+  background: var(--qt-fg-1);
+}
+/* The hovered distance. `position: absolute`, never `fixed`: `.data-main.is-frozen`
+ * applies a `filter`, and a filter creates a containing block for fixed
+ * descendants, so a fixed overlay JUMPS by the header height the moment the feed
+ * freezes. Measured at 50 px. The same rule holds for every readout overlay on
+ * both windows. */
+.trace-hover-dist {
+  position: absolute;
+  padding: 1px 4px;
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* The rival's value beside our car's. A gap rather than a separator glyph: the
+ * two are already told apart by colour, and a slash would be a fourth thing to
+ * read in a 12 px row. */
+.trace-lane-rival {
+  margin-left: 6px;
+}
+
+/* ---- The race trace's hover readout (#999) ---------------------------------
+ * The wrapper only exists to be the positioning context: the plot fills it, and
+ * the cursor and the box are absolute inside it. Absolute, never fixed - a
+ * `filter` on an ancestor becomes the containing block for fixed descendants,
+ * and this window applies one when the feed freezes. */
+.trace-band-hover {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.trace-band-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--qt-fg-1);
+  pointer-events: none;
+}
+.trace-band-box {
+  position: absolute;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  background: var(--qt-elevated);
+  border: 1px solid var(--qt-border);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.trace-band-box-lap {
+  margin-bottom: 3px;
+  color: var(--qt-fg-1);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.trace-band-box-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.trace-band-box-code {
+  color: var(--qt-fg-3);
+}
+.trace-band-box-value {
+  color: var(--qt-fg-2);
+}
+
+/* ---- The pace grid's cross-highlight (#999) --------------------------------
+ * A background wash on the hovered cell's row header and column header, and a
+ * ring on the cell itself. No floating box: this panel's axes are already on
+ * screen, so the readout is knowing WHICH of them the cell belongs to.
+ *
+ * The wash is `--qt-elevated` rather than an accent because the cell colours
+ * already carry the ranking, and a hue here would be a fifth thing competing
+ * with the three tone thirds and the neutralised rail. */
+.pace-table th.is-cross {
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+}
+.pace-table td.is-crosshair {
+  outline: 1px solid var(--qt-fg-2);
+  outline-offset: -1px;
+}
+/* The row itself, which costs nothing and needs no state. */
+.pace-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* `_delta_placeholder`, one lane deep. Centred, italic, tertiary - the Qt treatment,
+ * scoped to the lane that actually has nothing to draw instead of to a whole cell.
+ * The other five lanes are perfectly readable with one car in them. */
+.trace-lane-caption {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--qt-fg-3);
+  font-style: italic;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* The tier tag the Qt window never had. `PITWALL_REALISM_AND_TELEMETRY_
+ * SURFACE.md` 2.2 calls rival traces "broadcast tier": real and public,
+ * but the coarse low-rate channel, not pit-wall-grade telemetry. It rides the
+ * header's rival chip - one card, one header, six lanes; saying it six times is the
+ * wrongness the per-cell legends already died for. */
+.trace-tier {
+  color: var(--qt-fg-3);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+/* `_delta_placeholder`: centred, italic, tertiary, 12 px, and it REPLACES
+ * the plot rather than sitting over it. */
+.trace-placeholder {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--qt-fg-3);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* --- Band 4 corner: the track ring --------------------------------------- */
+
+/* Same 10 px padding and 8 px stack as the traces panel, so the two cards
+ * sitting side by side share an internal rhythm. */
+.ring {
+  /* Sized to its content, not stretched down the column. The card holds a
+   * circle, a legend and at most one line of text; a full-height card leaves
+   * two thirds of itself empty and reads as a panel that failed to load. */
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  min-height: 0;
+}
+
+.ring-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+/* Matches `.trace-title` / `.trace-subtitle`: this is a panel heading of the
+ * same rank as a chart's. */
+.ring-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.ring-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+.ring-svg {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--qt-border);
+  stroke-width: 1.5;
+}
+
+/* Start/finish, at twelve o'clock. */
+.ring-line {
+  stroke: var(--qt-fg-2);
+  stroke-width: 2;
+}
+
+.ring-lap {
+  fill: var(--qt-fg-1);
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.ring-lap-total {
+  fill: var(--qt-fg-3);
+  font-size: 11px;
+}
+
+.ring-code {
+  fill: var(--qt-fg-2);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ring-dot circle {
+  stroke-width: 1.5;
+}
+
+/* The three states, and they have to be told apart at a glance on a 200 px
+ * circle. Running is a solid dot in the driver's own colour; finished keeps
+ * the fill and gains a white collar (the flag); out is hollow and dimmed,
+ * which is the only state that reads as "not on track" without a legend. */
+.ring-dot.is-finished circle {
+  stroke: var(--qt-fg-1);
+  stroke-width: 2;
+}
+
+.ring-dot.is-out {
+  opacity: 0.7;
+}
+
+/* A NEUTRAL ring, not the driver's own colour. Hollow at 45% opacity, a dark
+ * team colour (VER's #0600ef) came out all but invisible on this panel - the
+ * state that most needs to read at a glance was the one that did not.
+ * Identity is carried by position and by the two code labels; legibility is
+ * what "out" needs.
+ *
+ * On the CIRCLE, not on the group. `stroke` is set as a presentation
+ * attribute on the circle itself, and an inherited value loses to that -
+ * a rule on the `<g>` would have changed nothing at all. */
+.ring-dot.is-out circle {
+  stroke: var(--qt-fg-3);
+}
+
+.ring-legend {
+  display: flex;
+  gap: 8px;
+  padding: 0 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ring-key.is-running {
+  color: var(--qt-fg-2);
+}
+.ring-key.is-finished {
+  color: var(--qt-fg-1);
+}
+.ring-key.is-out {
+  color: var(--qt-fg-3);
+}
+
+/* A car the telemetry never placed has no angle at all, so it is named here
+ * rather than drawn at fraction 0 - which is the start line, a place a real
+ * car can be. */
+.ring-blind {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--qt-fg-3);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+/* --- The radio / RCM feed, in the column under the ring ------------------ */
+
+/* The ring self-sizes (`align-self: start`) and leaves the rest of its 260 px
+ * column empty - about 416 px on this machine. This is what goes there, so
+ * the column becomes ring-then-feed rather than ring-then-nothing. */
+.side-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+.radio-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  min-height: 0;
+  /* The CARD clips; the LIST below scrolls. Setting both to `overflow: hidden`
+   * makes this the one panel in the window whose content becomes unreachable:
+   * measured on the live page, 10 of 46 events visible, 344 px of clientHeight
+   * against 1379 of scrollHeight, with no user input able to reach the other
+   * 36 (setting `scrollTop` from the console still worked, so the content was
+   * there and only the reader had no path to it).
+   *
+   * That is not the window's hidden-scrollbar rule. `qt-base.css` hides the
+   * CHROME and keeps bodies scrollable, in as many words: "a wheel, a trackpad,
+   * a touch drag and the keyboard all still reach the content". This panel was
+   * the exception, and the header's count said how many events EXIST, not that
+   * most of them could not be read. */
+  overflow: hidden;
+}
+
+/* Same rank and rhythm as `.ring-header`, so the two cards in this column
+ * read as one surface. */
+.radio-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.radio-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.radio-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+.radio-count {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.radio-empty {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+  margin: 0;
+  padding: 0 2px;
+}
+
+.radio-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The one declaration that gives the reader the other 36 events back. Newest
+   * first already puts the fold where it belongs, and the scrollbar stays
+   * invisible, so nothing about the panel's pixels changes. */
+  overflow-y: auto;
+}
+
+.radio-row {
+  display: grid;
+  grid-template-columns: 22px auto 1fr;
+  align-items: baseline;
+  column-gap: 5px;
+  padding: 3px 2px;
+  border-top: 1px solid var(--qt-border);
+  font-size: 10px;
+  line-height: 13px;
+}
+
+.radio-row:first-child {
+  border-top: none;
+}
+
+.radio-lap {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+}
+
+.radio-who {
+  color: var(--qt-fg-1);
+  font-family: var(--qt-mono);
+  font-weight: 700;
+}
+
+/* Race control is the field's own voice rather than a driver's, so it reads
+ * one step back from a code. */
+.radio-row.is-rcm .radio-who {
+  color: var(--qt-fg-3);
+  font-weight: 400;
+}
+
+/* The public feed, tagged exactly as band 4 tags a pinned rival's trace: the
+ * same WARNING the rival chip uses.
+ *
+ * **This used to end "so one colour means one tier across the whole window",
+ * and that clause was false.** `#f59e0b` is five things here: broadcast tier on
+ * this tag and on the rival's chip, the PROVISIONAL warning, the tower's
+ * slower-than-own-best sector, the pace grid's slowest third, and now the
+ * neutralised-lap rail. Each surface disambiguates locally, which is why it costs
+ * little in practice - what it cost was the safety car, which had no loud amber
+ * left to reach for and got a FILLED chip instead (`.strip-chip.is-filled`), so
+ * weight rather than hue separates the state of the race from an annotation. */
+.radio-tier {
+  color: #f59e0b;
+  font-family: var(--qt-mono);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+}
+
+.radio-text {
+  color: var(--qt-fg-2);
+  /* Two lines, then the `title` attribute carries the rest - the same
+   * treatment the AGENTS radio card gives a transcript, so a long race
+   * control message cannot push nine events off the panel on its own. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* The RCM category, in three or four characters, from the two wire fields that
+ * nothing read. Existing palette values only - the same `#f59e0b` the tier tag and
+ * the neutralised rail already carry for "this changes how the track is being
+ * driven", `#10b981` for a clear, tertiary for the informational DRS note - so a
+ * reader ranks a ten-row fold by weight before reading a word of it. */
+.radio-cat {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-family: var(--qt-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  vertical-align: 1px;
+  color: var(--qt-bg);
+}
+
+.radio-cat.is-sc,
+.radio-cat.is-flag {
+  background: #f59e0b;
+}
+
+.radio-cat.is-clear {
+  background: #10b981;
+}
+
+.radio-cat.is-drs {
+  background: var(--qt-fg-3);
+}
+
+/* `x4` on a collapsed run. Dim, because the count annotates the message rather
+ * than being part of it. */
+.radio-repeats {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-weight: 700;
+}
+
+/* The fold, in words. `.radio-list` already scrolls - the comment above it says
+ * that is what "gives the reader the other 36 events back" - but this window hides
+ * scrollbars globally, so the scroll itself is invisible and nothing on screen said
+ * the other 36 were down there. */
+.radio-fold {
+  margin: 0;
+  padding: 3px 2px 0;
+  border-top: 1px solid var(--qt-border);
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+/* --- The right column's tab strip, and band 3 --------------------------- */
+
+/* The two worlds take turns in this column rather than sharing it. Measured:
+ * band 3 with the ring still mounted gets 555 px, its columns fall to 25.25 px
+ * against 25 px of text, and 1,101 of 1,140 cells clip. There is no
+ * arrangement that keeps both. */
+.right-column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px;
+  min-height: 0;
+}
+
+.tab-strip {
+  display: flex;
+  gap: 4px;
+}
+
+/* 6/12 rather than 3/10: these were 22 px tall and the reference strip's buttons
+ * 15, against the ~28-32 px a mouse target wants - and the three reference
+ * buttons change what the whole race trace MEANS, since they move the zero line.
+ * Pure whitespace; both headers have slack at both client sizes.
+ *
+ * **`line-height` is pinned because the padding alone is not the height.** With
+ * the line-height left to the font this measured 26 px on the machine it was
+ * written on and 23 in CI, where JetBrains Mono is not installed - the guard
+ * caught it there, which is the guard working, and it is the same
+ * a-fallback-font-eats-the-pixel class the left column's 630 px note worries
+ * about. Both strips now compute to 26 from the stylesheet alone. */
+.tab {
+  background: none;
+  border: 1px solid var(--qt-border);
+  border-radius: 3px;
+  color: var(--qt-fg-3);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 12px;
+  padding: 6px 12px;
+}
+
+.tab.is-active {
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+}
+
+/* --- The controls acknowledge a hand -------------------------------------
+ *
+ * Nothing on either window reacted to the mouse at all: no hover, no press, no
+ * transition anywhere in the four stylesheets. A control that does not change
+ * under the cursor reads as a label, and a click that produces no immediate
+ * feedback reads as a click that missed, which on a surface whose job is to be
+ * believed is worse than plain.
+ *
+ * `background` and `color` only, both paint on a ~70 x 26 px target, and the
+ * press is INSTANT: `transition: none` on `:active` so the acknowledgement
+ * arrives on the same frame as the click, and the release eases back. A
+ * transition on the way in would delay the one thing this exists to provide. */
+.tab,
+.ref {
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.tab:hover,
+.ref:hover {
+  border-color: var(--qt-fg-3);
+  color: var(--qt-fg-2);
+}
+
+.tab:active,
+.ref:active {
+  background: var(--qt-elevated);
+  transition: none;
+}
+
+/* The tower row is a control too, and it has been since #1051 made it the
+ * rival selector. It carried `:focus` and nothing for the pointer, so the only
+ * clue that twenty rows were clickable was the cursor shape. */
+.tower-row {
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.tower-row:hover td {
+  background: var(--qt-elevated);
+}
+
+.tower-row:active td {
+  background: var(--qt-elevated);
+  transition: none;
+}
+
+/* **A record announces itself, once.** The purple leader used to change between
+ * two frames with nothing to catch, on a panel a strategist glances at rather
+ * than watches.
+ *
+ * It is the same decay as the pace grid's landing tint and deliberately so: two
+ * different fades for "this just happened" would read as two different kinds of
+ * event. What differs is the surface, a ~60 x 18 px number rather than a row, so
+ * this one can afford to touch the text colour as well as the ground.
+ *
+ * Fired by React remounting the value span when its number changes, which is why
+ * only the LEADER's value carries a key. The forty rows below it change with
+ * every re-rank and flashing those would make the panel strobe. */
+@keyframes qt-best-flash {
+  from {
+    background-color: color-mix(in srgb, #a78bfa 38%, transparent);
+    color: var(--qt-fg-1);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.bests-row.is-purple .bests-value,
+.bests-leader .bests-value {
+  animation: qt-best-flash var(--motion-decay) var(--motion-ease) 1;
+  border-radius: 2px;
+}
+
+/* --- The tab switch ------------------------------------------------------
+ *
+ * Three whole worlds swap instantly today and the change reads as a jolt: the
+ * right column is more than half the window and every pixel of it is different
+ * on the next frame.
+ *
+ * **Fade IN only, never a crossfade.** A true crossfade needs both worlds
+ * mounted at once, and the tabs are conditional renders, so it would mean a
+ * second live ECharts instance during every switch. The cost of that is not
+ * priced and the benefit is small: what jolts is the arrival, not the departure.
+ *
+ * On the three tab roots rather than on a wrapper, because each one mounts
+ * fresh on a switch and a CSS animation starts when an element is created. That
+ * also means the fade runs once when the window opens, which is correct: the
+ * panel is arriving then too.
+ *
+ * Opacity is composite work, so fading a 556 x 750 px panel costs the
+ * compositor a layer and the main thread nothing, which is what makes it safe
+ * on the one surface here big enough to matter. */
+@keyframes qt-tab-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.band4,
+.pace,
+.trace-band {
+  animation: qt-tab-in var(--motion-fast) var(--motion-ease) 1;
+}
+
+/* The radio and RCM rows are not clickable and this hover does not pretend they
+ * are: it is a READING aid on a 10 px, 13 px-line list where the eye loses its
+ * place between the lap column and the message. Cheap, and measured: the live
+ * page runs 240 frames at p95 16.7 ms with zero long tasks, so a background
+ * swap on one row is noise against that budget.
+ *
+ * **No transition on this one, on purpose.** `RadioFeed` keys its rows by index
+ * into a newest-first list, so a new event remounts every row; a transition
+ * would restart mid-hover each time an event lands. A plain hover has no
+ * restart to show. Removing that constraint is the keying decision #1075
+ * records, and this rule can gain its transition when that lands. */
+.radio-row:hover {
+  background: var(--qt-elevated);
+}
+
+/* **The card fills the column, and the LAP AXIS is what stops the newest row moving.**
+ *
+ * ⚠️ This comment described `align-self: end` - a card grown upward from the bottom of
+ * the column - and that declaration is gone. It was the right fix for a table that held
+ * only the laps that had run: content-sized and top-aligned, at lap 24 of 57 it filled
+ * 288 px of a 722 px column and the newest row migrated ~12 px per lap, 434 px over a
+ * race. Bottom-anchoring the card moved that emptiness outside it.
+ *
+ * The table is now the WHOLE race from lap 1, with future laps drawn as a grey
+ * skeleton, so there is no growth to anchor: the card is the same height at lap 1 and at
+ * lap 57 and the scroller does the work from the first reveal. `align-self: end` on a
+ * card that no longer grows is a no-op that reads as load-bearing, which is why it went
+ * with the mechanism rather than being left "just in case".
+ *
+ * **What did NOT survive the change** (`RacePaceGrid.tsx`'s pin comment carries the
+ * measurement): the newest revealed row is no longer at a FIXED height. It is on screen
+ * throughout, and it stops moving only once the revealed part outgrows the scroller.
+ *
+ * `max-height: 100%` still keeps this honest: without it the card would grow past the
+ * grid row and spill, and the scroller - which needs a bounded height to scroll at all -
+ * would never bound. */
+.pace {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 100%;
+  padding: 10px;
+  min-height: 0;
+}
+
+.pace-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.pace-title {
+  color: var(--qt-fg-1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.pace-subtitle {
+  color: var(--qt-fg-3);
+  font-size: 10px;
+}
+
+/* The lap axis scrolls because it must - Monaco's 78 laps overflow this column
+ * on every machine at every legible size - and scrollbars are hidden globally,
+ * so this range is the affordance. It says which laps are on screen; a hidden
+ * scrollbar says nothing at all. */
+.pace-range {
+  color: var(--qt-fg-3);
+  font-family: var(--qt-mono);
+  font-size: 10px;
+  margin-left: auto;
+}
+
+/* **The scroll says it exists.**
+ *
+ * The wheel always worked here - hiding a scrollbar does not disable wheel, keyboard or
+ * touch scrolling - but this window hides scrollbars globally, and the research on that
+ * is unanimous: NN/g and Baymard both find users simply do not discover scrollable
+ * content once the one universal signal is gone (Baymard: 26% of top e-commerce sites
+ * fail on exactly this), and GitLab shipped and then fixed the same bug. So the edge
+ * that has more behind it fades, and the classes are set from MEASURED overflow rather
+ * than from a breakpoint, so a panel that happens to fit shows nothing.
+ *
+ * A mask rather than a gradient overlay: the rows underneath keep their own colours and
+ * nothing new sits in the hit-testing path of a cell. */
+.pace-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  /* Belt and braces for a webview that might ship a different default. */
+  scrollbar-width: none;
+}
+
+.pace-scroll.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+
+.pace-scroll.has-above {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.pace-scroll.has-above.has-below {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 18px),
+    transparent 100%
+  );
+}
+
+/* Keyboard users reach the rest of the race through this element, so it has to say when
+ * it has focus. `:focus-visible`, so a mouse click does not draw a ring. */
+.pace-scroll:focus-visible {
+  outline: 1px solid var(--qt-accent);
+  outline-offset: -1px;
+}
+
+/* A lap that has not been driven. The number stays - that is the point, it says how
+ * much race is left - and it steps back so the driven race is what the eye lands on.
+ * No cell treatment is needed: an unrevealed cell already renders empty.
+ *
+ * **`--qt-fg-3` at 0.6, not `--qt-border`, and the first attempt was measured wrong.**
+ * `--qt-border` came out at **1.29:1** on the card and 1.18 on the banded columns -
+ * invisible, on an element that CARRIES MEANING (how much race is left), so the 3:1
+ * floor for a meaningful graphic applies rather than nothing at all. The palette has
+ * no grey between `BORDER_COLOR` and `TEXT_TERTIARY`, so rather than invent a hex the
+ * cell steps `--qt-fg-3` back with opacity: 0.6 composites to 3.31:1 on the card and
+ * 3.16 on the banded columns, both clear, and it adds no colour for
+ * `test_pitwall_tokens.py` to pin. 0.55 was the other candidate and lands at 2.99 -
+ * under the floor on the card and 2.86 on the banding. */
+.pace-table tbody tr.is-future th.pace-lapcol {
+  color: var(--qt-fg-3);
+  opacity: 0.6;
+}
+
+/* "Now", findable in one saccade: the newest lap that HAS been driven, which is the
+ * last row before the future ones rather than the last row of the table. */
+.pace-table tbody tr:not(.is-future):last-of-type th.pace-lapcol,
+.pace-table tbody tr:not(.is-future):has(+ tr.is-future) th.pace-lapcol {
+  color: var(--qt-fg-1);
+  font-weight: 700;
+}
+
+.pace-table {
+  border-collapse: collapse;
+  font-family: var(--qt-mono);
+  /* 9 px, not the 10 the height gate blessed for the TOWER, and the screenshot
+   * is why. At 10 px `1:29.4` measures 39 px inside a 38.75 px column: nothing
+   * clips - `scrollWidth > clientWidth` counted zero of 760 cells on the live
+   * page - and the grid is still unreadable, because adjacent cells touch and
+   * twenty lap times run together into one string. At 9 px the same text is
+   * 33.2 px and leaves 5.5 px of gutter. A cell with a visible edge at 9 px
+   * reads better than a legible glyph with none. */
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  table-layout: fixed;
+  width: 100%;
+  /* Defined HERE, once. It used to exist only as a `var(--pace-row-h, 12px)`
+   * fallback in the two declarations below - a token nothing ever set, so the
+   * fallback always applied and the literal was written TWICE, one more copy
+   * than the tower's single `height: 20px`, under a comment claiming the
+   * opposite.
+   *
+   * **Twelve is a DECISION, kept deliberately, and no source supports it as a
+   * row height.** Material specifies 52, enterprise "condensed" 40, and trading
+   * terminals, whose users explicitly want maximum density, stop at 32 to 36;
+   * 12 px appears in the literature only as a minimum FONT size. What buys it
+   * is the whole-race fit, 57 rows without scrolling, and the responsive audit
+   * priced exactly who gets that: only a client 900 px tall or more, which is
+   * the 1920x1080 screen class alone. Every laptop the product opens on already
+   * scrolls this grid, with the wheel and the edge fade shipped for it.
+   *
+   * It is knife-edge even there. At a 913 px client the scroller leaves room
+   * for 13.0 px rows and at 900 for 12.8, so 12 is the only integer that serves
+   * both, and the 1707x960 reference machine already misses the fit by 22 px.
+   *
+   * Raising it would make every client more legible and cost the desktop the
+   * one place the race is visible at a glance. This trade was decided on
+   * 2026-08-24, in favor of keeping the fit. Recorded so the next reader finds a
+   * decision rather than an unjustified constant, and so that changing it is a
+   * deliberate reversal rather than a tidy-up. It must NOT be allowed to veto
+   * responsive work on the clients where the fit does not exist. */
+  --pace-row-h: 12px;
+}
+
+/* One row-height token, one place. The tower's 20 px is a literal in this
+ * stylesheet and the sprint-5 gate asked for a token instead; band 3 does not
+ * get to add a second literal, and nothing in TSX may copy this number - a
+ * consumer that needs it reads it with `getComputedStyle`. */
+.pace-table th,
+.pace-table td {
+  height: var(--pace-row-h);
+  line-height: var(--pace-row-h);
+  overflow: hidden;
+  padding: 0 1px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pace-table thead th {
+  background: var(--qt-panel);
+  color: var(--qt-fg-3);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+}
+
+/* The columns are separated by SHADE rather than by a rule, because a 1 px
+ * border costs a pixel the cell does not have: twenty of them take 20 px off
+ * an 803 px row and put every lap time back over its column's width. Banding
+ * costs nothing and does the same job. */
+.pace-table tbody td:nth-child(even) {
+  background: var(--qt-elevated);
+}
+
+.pace-lapcol {
+  color: var(--qt-fg-3);
+  font-weight: 400;
+  width: 26px;
+}
+
+/* The lap the field was NOT racing on. A 2 px rail rather than a text colour:
+ * amber TEXT one column right already means "slowest third", and the same hue in
+ * a different channel cannot be mistaken for it. It costs 2 px of a 26 px column
+ * that holds two digits at 9 px, so nothing moves. */
+.pace-table th.pace-lapcol.is-neutralised {
+  border-left: 2px solid #f59e0b;
+}
+
+/* The rail's key, in the subtitle. Without it the rail is a decoration. */
+.pace-legend-rail {
+  display: inline-block;
+  width: 2px;
+  height: 8px;
+  background: #f59e0b;
+  vertical-align: baseline;
+  margin-right: 3px;
+}
+
+/* **A lap landing is the panel's own heartbeat and it had no cue at all.** One
+ * row crosses from the grey skeleton into real times about every 4.5 s, and on
+ * a 57-row grid whose newest row is somewhere in the middle of a scroller,
+ * nothing said which one had just changed.
+ *
+ * A tint that DECAYS rather than a state that stays: after a second the lap is
+ * just a lap, and a persistent highlight would be a second thing competing with
+ * the colour thirds, which are the panel's actual ranking. It ends at
+ * transparent, so there is nothing to clean up and no JavaScript involved.
+ *
+ * Under a second on purpose. The product plays at up to 4x, where reveals
+ * arrive about every 1.1 s, so a longer decay would stack one lap's tint on the
+ * next and read as a permanently lit grid. It is `background-color` on a
+ * ~556 x 12 px row, which is the small isolated surface where paint-triggering
+ * motion is the right trade, and the cells above colour their TEXT rather than
+ * their ground, so the tint is visible underneath all of them.
+ *
+ * If the reader has scrolled away from the tail the tint decays off screen,
+ * which is correct: the follow-tail break exists precisely so the panel stops
+ * pulling a reader who has gone looking somewhere else. */
+@keyframes qt-pace-landed {
+  from {
+    background-color: color-mix(in srgb, var(--qt-accent) 26%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.pace-table tr.is-newest {
+  animation: qt-pace-landed var(--motion-decay) var(--motion-ease) 1;
+}
+
+/* Purple is the session's outright fastest lap, the same rule and the same
+ * colour the tower's sector cells use. */
+.pace-table td.is-best {
+  color: #a78bfa;
+  font-weight: 700;
+}
+
+/* The thirds of each lap's own ranking. Ranked rather than banded because a
+ * fixed percentage off the session best puts 82.4% of a wet, safety-car race
+ * in one colour - measured on the real Melbourne payload. */
+.pace-table td.is-t1 {
+  color: #10b981;
+}
+
+.pace-table td.is-t2 {
+  color: var(--qt-fg-2);
+}
+
+.pace-table td.is-t3 {
+  color: #f59e0b;
+}
+
+/* A time the stewards took away. Struck through and stepped back, which is
+ * what the tower already does to a deleted LAST - the two panels showing the
+ * same lap differently is the twin this repo pays for. It carries no rank
+ * because the ranking excludes it; it used to carry the FASTEST one. */
+.pace-table td.is-deleted {
+  color: var(--qt-fg-3);
+  text-decoration: line-through;
+}
+
+/* The in-lap in place of the time, as a timing screen shows it. DANGER red is
+ * kept for the lap you cannot unwind - the car is in the pit lane - and NOT for
+ * the out-lap, which is a car rejoining a race. Both were red, so laps 2-4 of
+ * Melbourne rendered as three full-field red rows and read as a crisis; and this
+ * red is the same one band 1's Disconnected chip uses. Measured, it is also
+ * 4.25:1 on the banded columns at 9 px, under the 4.5 floor for this size. */
+.pace-table td.is-pit {
+  color: #ef4444;
+}
+
+/* The out-lap: WARNING, the same amber the slowest third uses. The hue does not
+ * have to separate them because the TEXT does - `P.EXIT` against `1:33.5` - and
+ * spending a sixth meaning on amber is cheaper than telling a reader that a car
+ * rejoining the race is the same kind of event as one sitting in the box. */
+.pace-table td.is-out {
+  color: #f59e0b;
+}
+
+.pace-table td.is-none {
+  color: var(--qt-fg-3);
+}
+
+/* --- Band 3's second panel: the race trace ------------------------------- */
+
+.trace-band {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  min-height: 0;
+}
+
+/* The plot fills `.trace-band-hover`, which is the flex child that takes
+ * whatever the header leaves, carrying `flex: 1` and the `min-height: 0` that
+ * makes a flex item shrinkable, without which the div takes its content
+ * height, ECharts measures zero, and renders a canvas nothing ever appears
+ * on. The wrapper carries both instead of the plot itself, because the hover
+ * cursor and the readout box need a positioning context that is not the canvas. */
+.trace-band-plot {
+  position: absolute;
+  inset: 0;
+}
+
+.trace-band-empty {
+  color: var(--qt-fg-3);
+  font-size: 11px;
+  margin: auto;
+}
+
+/* The reference selector. It is the panel's ONLY control, so it sits in the
+ * header on the right where the pace grid puts its lap range - the same slot
+ * doing the same job, telling the reader what they are looking at. */
+.ref-strip {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.ref {
+  background: none;
+  border: 1px solid var(--qt-border);
+  border-radius: 3px;
+  color: var(--qt-fg-3);
+  cursor: pointer;
+  font-family: var(--qt-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  /* See `.tab`: 15 px was the smallest target on the window and it sits on the
+   * control that decides what the race trace is measured against. 6/9 rather than
+   * 4/8 so the three land on the same 26 px as the tab strip above them - two
+   * control rows of different heights on one panel is its own small wrongness. */
+  padding: 6px 9px;
+  line-height: 12px;
+}
+
+.ref.is-active {
+  background: var(--qt-elevated);
+  color: var(--qt-fg-1);
+}
