@@ -24,8 +24,8 @@ import pytest
 from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
 from src.agents.position_projection import GAP_UNKNOWN_FALLBACK_S
 from src.agents.race_state_builder import (
-    DEFAULT_AIR_TEMP_C,
-    DEFAULT_TRACK_TEMP_C,
+    RACE_STATE_DEFAULT_AIR_TEMP_C,
+    RACE_STATE_DEFAULT_TRACK_TEMP_C,
     UNKNOWN_COMPOUND,
     UNKNOWN_TYRE_LIFE,
     build_race_state,
@@ -140,8 +140,8 @@ def test_canonical_defaults_fire_when_keys_are_absent(caplog):
     assert rs.total_laps == DEFAULT_TOTAL_LAPS
     assert rs.compound == UNKNOWN_COMPOUND
     assert rs.tyre_life == UNKNOWN_TYRE_LIFE
-    assert rs.air_temp == DEFAULT_AIR_TEMP_C
-    assert rs.track_temp == DEFAULT_TRACK_TEMP_C
+    assert rs.air_temp == RACE_STATE_DEFAULT_AIR_TEMP_C
+    assert rs.track_temp == RACE_STATE_DEFAULT_TRACK_TEMP_C
     assert rs.rainfall is False
     assert rs.radio_msgs == []
     assert rs.rcm_events == []
@@ -188,8 +188,8 @@ def test_present_but_none_weather_lands_on_defaults_without_crashing():
     """
     state = _lap_state(weather={"air_temp": None, "track_temp": None, "rainfall": None})
     rs = build_race_state(state)
-    assert rs.air_temp == DEFAULT_AIR_TEMP_C
-    assert rs.track_temp == DEFAULT_TRACK_TEMP_C
+    assert rs.air_temp == RACE_STATE_DEFAULT_AIR_TEMP_C
+    assert rs.track_temp == RACE_STATE_DEFAULT_TRACK_TEMP_C
     assert rs.rainfall is False
 
 
@@ -203,12 +203,18 @@ def test_position_none_raises_value_error():
 
 
 @needs_models
-def test_gap_is_zero_when_no_car_ahead():
-    """P1 with no rival at position 0: leading, and 0.0 is honest there."""
+def test_gap_is_none_when_there_is_no_car_ahead():
+    """P1 with no rival at position 0: leading, and the gap is an ABSENCE.
+
+    This test used to assert `== 0.0` and its docstring called that
+    "honest" (#878). It was the green test defending the defect: 0.0 is
+    also what two cars side by side measure, and a falsy `or` downstream
+    turned it into a fabricated 2.0 rival for the race leader.
+    """
     state = _lap_state()
     state["driver"]["position"] = 1
     rs = build_race_state(state)
-    assert rs.gap_ahead_s == 0.0
+    assert rs.gap_ahead_s is None
 
 
 @needs_models
@@ -288,3 +294,100 @@ def test_radio_and_rcm_parameters_land_on_the_state():
     rs = build_race_state(_lap_state(), radio_msgs=radios, rcm_events=rcms)
     assert rs.radio_msgs == radios
     assert rs.rcm_events == rcms
+
+
+# --- No car ahead is an ABSENCE, not a zero (#878) ---------------------------
+#
+# These sit in the pure-helper tier on purpose. The integration tier needs the
+# real `RaceState`, whose lazy import reaches `race_situation_agent` and a
+# parquet the curated download does not ship - so those tests SKIP on a clean
+# checkout and in CI alike. A defect worth 2,315 laps of the served season
+# cannot be guarded by a test that never runs, so the semantics are asserted
+# here, where they execute everywhere.
+
+
+def test_no_car_ahead_is_none_and_a_measured_zero_survives():
+    """The three claims the old 0.0 collapsed into one number.
+
+    `_gap_to_car_ahead` returned 0.0 for "nobody ahead" and called it honest.
+    It is not: 0.0 is also what two cars side by side measure - the served
+    2025 season has four such laps - and a falsy `or` downstream turned the
+    leader's 0.0 into a fabricated 2.0 rival on 1,262 laps. Absent, measured
+    and unmeasured are three different claims and must look different.
+    """
+    from src.agents.race_state_builder import _gap_to_car_ahead
+
+    assert _gap_to_car_ahead(None) is None, "nobody ahead is an absence"
+    assert _gap_to_car_ahead({"driver": "VER", "interval_to_driver_s": 0.0}) == 0.0, (
+        "a measured zero is a measurement and must survive"
+    )
+    assert _gap_to_car_ahead({"driver": "VER", "interval_to_driver_s": -1.42}) == 1.42
+    assert _gap_to_car_ahead({"driver": "VER"}) == GAP_UNKNOWN_FALLBACK_S, (
+        "a car that IS there with no interval is a different claim, unchanged"
+    )
+
+
+def test_rival_targeting_survives_a_none_positional_fallback():
+    """The coercion twin that nearly shipped inside this fix.
+
+    With no car ahead the positional fallback is now None, and the old body
+    did `round(gap_ahead_s, 3)` unconditionally on the way out - `round(None)`
+    raises. The call site coerced with `float(gap_ahead_s)`, which raises too.
+    Both had to move; the design gate's own first draft moved one.
+    """
+    from src.agents.race_state_builder import _targeting_against_rival
+
+    lap_state = {
+        "driver": {"lap_time_s": 81.4},
+        "rivals": [
+            {"driver": "VER", "position": 2, "interval_to_driver_s": -1.42, "lap_time_s": 81.6},
+            {"driver": "RUS", "position": 4, "lap_time_s": 81.9},
+        ],
+    }
+
+    assert _targeting_against_rival(lap_state, "VER", None, 0.0)[0] == 1.42, "measured wins"
+    assert _targeting_against_rival(lap_state, "RUS", None, 0.0)[0] is None, "no interval, no gap"
+    assert _targeting_against_rival(lap_state, "HAM", None, 0.0)[0] is None, "rival not on track"
+    assert _targeting_against_rival(lap_state, "HAM", 2.0, 0.0)[0] == 2.0, "a float still passes"
+
+
+def test_the_prompt_says_leading_instead_of_printing_a_gap_that_is_not_there():
+    """What the LLM actually reads, which is the only live consumer.
+
+    Exactly three places in the repo read `race_state.gap_ahead_s`: this
+    prompt line and two wire boundaries. No model consumes it - N27 computes
+    its own pair gap from laps_df - so this string IS the behaviour, and it
+    used to say "Gap ahead: 0.00s" to a driver leading the race.
+
+    Extracted with `ast` rather than imported: the module reaches
+    `race_situation_agent` at import time and a parquet the curated download
+    omits, which is exactly how this surface stayed untested.
+    """
+    import ast
+
+    source = (
+        Path(__file__).resolve().parents[2] / "src" / "agents" / "strategy_orchestrator.py"
+    ).read_text(encoding="utf-8")
+    node = next(
+        n
+        for n in ast.parse(source).body
+        if isinstance(n, ast.FunctionDef) and n.name == "_gap_ahead_context_line"
+    )
+    node.args.args[0].annotation = None
+    node.returns = None
+    namespace: dict = {}
+    exec(
+        compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])), "<t>", "exec"),
+        namespace,
+    )
+    render = namespace["_gap_ahead_context_line"]
+
+    class _State:
+        def __init__(self, gap, position):
+            self.gap_ahead_s, self.position = gap, position
+
+    assert render(_State(1.42, 4)) == "Gap ahead: 1.42s"
+    assert render(_State(0.0, 7)) == "Gap ahead: 0.00s", "a measured zero is still printed"
+    assert "LEADING" in render(_State(None, 1)), "the leader is told they are leading"
+    assert "0.00" not in render(_State(None, 1)) and "2.00" not in render(_State(None, 1))
+    assert "no car classified" in render(_State(None, 5)), "P5 with a gap-less pos-4 car"

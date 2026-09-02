@@ -1,16 +1,16 @@
 <mxfile host="app.diagrams.net">
-  <diagram id="n26" name="N26 — Tire Agent">
+  <diagram id="n26" name="N26, Tire Agent">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="title" value="N26 — Tire Agent" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="title" value="N26, Tire Agent" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="280" y="20" width="400" height="30" as="geometry" />
         </mxCell>
 
         <!-- INPUT -->
-        <mxCell id="input" value="&lt;b&gt;Input — stint_state&lt;/b&gt;&lt;br/&gt;driver · compound_id · tyre_life&lt;br/&gt;gp_name · team · year" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+        <mxCell id="input" value="&lt;b&gt;Input, stint_state&lt;/b&gt;&lt;br/&gt;driver · compound_id · tyre_life&lt;br/&gt;gp_name · team · year" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="295" y="70" width="310" height="60" as="geometry" />
         </mxCell>
 
@@ -19,12 +19,12 @@
           <mxGeometry x="295" y="195" width="310" height="70" as="geometry" />
         </mxCell>
 
-        <!-- TOOL 1 — single deterministic pass -->
+        <!-- TOOL 1, single deterministic pass -->
         <mxCell id="tool1" value="&lt;b&gt;predict_tire_deg_tool&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Model: TireDegTCN per-compound (N10) · N09 global as C6 fallback&lt;/i&gt;&lt;br/&gt;Single deterministic forward pass&lt;br/&gt;→ cumulative_deg, deg_rate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="80" y="345" width="260" height="100" as="geometry" />
         </mxCell>
 
-        <!-- TOOL 2 — MC Dropout for uncertainty -->
+        <!-- TOOL 2, MC Dropout for uncertainty -->
         <mxCell id="tool2" value="&lt;b&gt;estimate_laps_to_cliff_tool&lt;/b&gt;&lt;br/&gt;&lt;i&gt;Same TireDegTCN with MC Dropout active&lt;/i&gt;&lt;br/&gt;N=50 forward passes&lt;br/&gt;→ laps_to_cliff P10/P50/P90, warning_level" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="560" y="345" width="260" height="100" as="geometry" />
         </mxCell>
@@ -35,7 +35,7 @@
         </mxCell>
 
         <!-- NOTE -->
-        <mxCell id="note" value="→ N31 Strategy Orchestrator · N28 Pit Agent (dependency — cliff_lap, warning_level)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=2;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="note" value="→ N31 Strategy Orchestrator · N28 Pit Agent (dependency, cliff_lap, warning_level)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=2;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="180" y="588" width="540" height="20" as="geometry" />
         </mxCell>
 

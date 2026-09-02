@@ -1,0 +1,26 @@
+{
+  "name": "pitwall-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && node scripts/clean-dist.mjs && vite build",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke-agents.mjs && node scripts/smoke-data.mjs"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0"
+  }
+}

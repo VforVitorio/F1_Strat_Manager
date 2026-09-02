@@ -2,7 +2,7 @@
 
 ## Module location
 
-All agents live in `src/agents/`. Each file is extracted from its corresponding notebook (N25–N31).
+All agents live in `src/agents/`. Each file is extracted from its corresponding notebook (N25-N31).
 
 ## Entry points
 
@@ -22,9 +22,9 @@ Every agent has two entry points:
 `lap_state`, which is why the stint fuel baseline is carried there rather than derived from a
 frame. The adapters are not uniform, so check the signature before assuming.
 
-Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory returning a compiled LangGraph `CompiledGraph`, for callers that want to drive the graph directly — it is genuinely invoked (the chat backend calls it). N25-N28 (pace, tire, race situation, pit strategy) used to have an equivalent free function each; all four were confirmed dead (zero callers anywhere in the repo) and removed in the 2026-08-01 cleanup pass. Tire, race situation and pit strategy still have their own `get_react_agent()` *instance method*, called internally from each agent's own `_run_core` — only the redundant module-level wrapper was removed for those three. The radio agent (N29) never had one: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.
+Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory returning a compiled LangGraph `CompiledGraph`, for callers that want to drive the graph directly: the chat backend calls it. N25-N28 (pace, tire, race situation, pit strategy) used to have an equivalent free function each; all four were confirmed dead (zero callers anywhere in the repo) and removed in the 2026-08-01 cleanup pass. Tire, race situation and pit strategy still have their own `get_react_agent()` *instance method*, called internally from each agent's own `_run_core`. Only the redundant module-level wrapper was removed for those three. The radio agent (N29) never had one: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.
 
-**N25 (pace) is deliberately deterministic — no ReAct loop at all.** Unlike its three siblings above, pace's `run()`/`run_from_state()` call the N06 XGBoost model directly; there is no LLM step to invoke and no category field (`warning_level`/`action`/`threat_level`) for an LLM to decide. `pace_agent.py` used to carry a complete but never-wired LangGraph ReAct scaffold (tools, system prompt, `get_react_agent()`) from the moment the module was first extracted — confirmed by archaeology to have been a deliberate per-agent choice made in the same commit that wired tire/pit/race_situation, not a wiring gap. It was formally retired (deleted, not left dead) in #781; see #778 for the full decision record.
+**N25 (pace) is deliberately deterministic: no ReAct loop at all.** Unlike its three siblings above, pace's `run()`/`run_from_state()` call the N06 XGBoost model directly; there is no LLM step to invoke and no category field (`warning_level`/`action`/`threat_level`) for an LLM to decide. `pace_agent.py` used to carry a complete but never-wired LangGraph ReAct scaffold (tools, system prompt, `get_react_agent()`) from the moment the module was first extracted, confirmed by archaeology to have been a deliberate per-agent choice made in the same commit that wired tire/pit/race_situation, not a wiring gap. It was formally retired (deleted, not left dead) in #781; see #778 for the full decision record.
 
 ## Output dataclasses
 
@@ -37,18 +37,21 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 | `delta_vs_median` | float | Delta vs session median |
 | `ci_p10` | float | 10th percentile bootstrap CI |
 | `ci_p90` | float | 90th percentile bootstrap CI |
-| `reasoning` | str | Deterministic summary string (no LLM call — see the note above) |
+| `reasoning` | str | Deterministic summary string (no LLM call, see the note above) |
 
 ### TireOutput (N26)
 
 | Field | Type | Description |
 |---|---|---|
-| `compound` | str | Current compound name (SOFT, MEDIUM, HARD) |
+| `compound` | str \| None | The **Pirelli compound ID** (e.g. `C2`, `C3`), not the SOFT/MEDIUM/HARD name. `None` when the compound is not in the slick map (a wet or intermediate lap). Verified on a served run: Melbourne lap 35 on HARD returns `'C3'` |
 | `current_tyre_life` | int | Current tire age in laps |
 | `deg_rate` | float | Degradation rate (seconds lost per lap) |
 | `laps_to_cliff_p10` | float | 10th percentile laps until cliff |
 | `laps_to_cliff_p50` | float | 50th percentile laps until cliff |
 | `laps_to_cliff_p90` | float | 90th percentile laps until cliff |
+| `gp_name` | str | The race the prediction was made for |
+| `cumulative_deg_s` | float | Seconds lost to degradation so far this stint |
+| `deg_cost_s` | float | **The field the scorers consume**: the degradation cost the Monte Carlo prices a stay-out against |
 | `warning_level` | str | OK, MONITOR, or PIT_SOON (derived from `laps_to_cliff_p10` against circuit-cluster-aware thresholds; there is no CRITICAL value) |
 | `reasoning` | str | LLM-generated reasoning text |
 
@@ -56,8 +59,8 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 
 | Field | Type | Description |
 |---|---|---|
-| `overtake_prob` | float \| None | Probability that **our car passes the car ahead** (0–1). `None` when that car is farther away than the 2.5 s gap N11 was trained on — the model has no labelled example out there, so it declines rather than extrapolating. `None` is not `0.0`: zero is what the regulation asserts under a Safety Car (Art. 55.8). |
-| `sc_prob_3lap` | float | Safety car probability within 3 laps (0–1) |
+| `overtake_prob` | float \| None | Probability that **the driver's car passes the car ahead** (0-1). `None` when that car is farther away than the 2.5 s gap N11 was trained on, because the model has no labelled example out there, so it declines rather than extrapolating. `None` is not `0.0`: zero is what the regulation asserts under a Safety Car (Art. 55.8). |
+| `sc_prob_3lap` | float | Safety car probability within 3 laps (0-1) |
 | `sc_currently_active` | bool | Any neutralisation (full Safety Car **or** Virtual Safety Car) is deployed **right now**. Not a prediction: it is read from the lap's RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces the regulatory facts (`sc_prob_3lap = 1.0`, `overtake_prob = 0` per Art. 55.8/56.6, `drs_window = 0` per Art. 22.1(c)) and activates N28. It does **not** force the action: whether to pit under a neutralisation is race state, not a rule. See [Multi-agent system](#/multi-agent). |
 | `vsc_active` | bool | The active neutralisation is specifically a **Virtual** Safety Car (Art. 56), only meaningful when `sc_currently_active` is true. Split out (#471) because a VSC and a full SC differ in pit-time saving, and the Monte Carlo / N28 prompt need to tell them apart, the single `sc_currently_active` flag could not. `sc_active` (a derived property, not a stored field) is true only under a full SC: `sc_currently_active and not vsc_active`. |
 | `threat_level` | str | LOW, MEDIUM, HIGH |
@@ -75,7 +78,7 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 | `stop_duration_p05` | float | 5th percentile stop duration (s) |
 | `stop_duration_p50` | float | Median stop duration (s) |
 | `stop_duration_p95` | float | 95th percentile stop duration (s) |
-| `undercut_prob` | float or None | Undercut success probability (0–1) |
+| `undercut_prob` | float or None | Undercut success probability (0-1) |
 | `undercut_target` | str or None | Target driver for undercut |
 | `sc_reactive` | bool | Whether recommendation is SC-reactive |
 | `reasoning` | str | LLM-generated reasoning text |
@@ -94,6 +97,7 @@ Only the RAG agent (N30) exposes a module-level `get_rag_react_agent()` factory 
 
 | Field | Type | Description |
 |---|---|---|
+| `question` | str | The question that was asked of the retriever |
 | `answer` | str | Synthesized answer from regulation passages |
 | `articles` | list[str] | Referenced FIA article numbers |
 | `chunks` | list | Raw retrieved text chunks |
@@ -107,7 +111,7 @@ The v2 schema (frozen at 14 fields) surrounds the primary `action` with executio
 |---|---|---|
 | `action` | str | STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, ALERT, the primary decision |
 | `reasoning` | str | Multi-sentence LLM synthesis of all sub-agent inputs, MC scores and regulation constraints |
-| `confidence` | float | 0–1 LLM self-assessed certainty; treat as qualitative, not calibrated |
+| `confidence` | float | 0-1 LLM self-assessed certainty; treat as qualitative, not calibrated |
 | `pit_lap_target` | int or None | Absolute lap of the planned stop. Populated for PIT_NOW/UNDERCUT/OVERCUT, optionally for a forward-looking STAY_OUT plan |
 | `compound_next` | str or None | Compound (SOFT/MEDIUM/HARD) chosen for the next stint; None for STAY_OUT |
 | `undercut_target` | str or None | Rival code targeted by an UNDERCUT/OVERCUT (e.g. "SAI") |
@@ -164,11 +168,11 @@ Every LangChain tool the LLM can call takes free-text arguments (`driver`, `lap_
 | N27 Situation | `predict_overtake_tool`, `predict_sc_tool` | `lap_number` is out of range, or (for `predict_overtake_tool`) either driver is unknown for that lap |
 | N28 Pit | `predict_pit_duration_tool`, `score_undercut_tool` | the named driver (`driver`/`driver_y`) is not present in the live roster for the current lap |
 
-N25 Pace originally had an equivalent guard on its own `predict_pace_tool` (#476), but that tool was deleted along with the rest of pace's unreachable LangGraph scaffold in #781 — pace has no LLM-facing tool left to guard, so the class of bug #476 fixed cannot occur for it anymore.
+N25 Pace originally had an equivalent guard on its own `predict_pace_tool` (#476), but that tool was deleted along with the rest of pace's unreachable LangGraph scaffold in #781: pace has no LLM-facing tool left to guard, so the class of bug #476 fixed cannot occur for it anymore.
 
 The refusal is a plain string return (e.g. `"error: 'HAM' is not on track at lap 12; valid: [...]"` or `"... REFUSED — {driver} is not on track ..."`), not an exception, the LLM sees a normal-looking tool result it can react to, rather than a traceback. `predict_pit_duration_tool` additionally cross-checks the LLM-supplied `under_sc` flag against the RCM-confirmed `sc_currently_active` ground truth when a real orchestrator run has set it, and trusts the confirmed value over the guess (logging a warning) rather than the other way round.
 
-"On track" is a **presence** check (the driver has a row in the live roster for this lap), the same convention `RaceStateManager` uses for `rivals`, see [Race replay engine → who counts as a rival](#/simulation). An age/lap-count cutoff cannot substitute for it: a finisher can go 20 laps without a row, and a retirement can surface as few as 9 laps in, so the ranges overlap.
+"On track" is a **presence** check (the driver has a row in the live roster for this lap), the same convention `RaceStateManager` uses for `rivals`, see [Race replay engine, who counts as a rival](#/simulation). An age/lap-count cutoff cannot substitute for it: a finisher can go 20 laps without a row, and a retirement can surface as few as 9 laps in, so the ranges overlap.
 
 The MCP-facing tools one layer up (`src/telemetry/backend/mcp_tools.py`, consumed by chat) apply an equivalent guard on `gp`/`driver`/`lap`/`year` before they even reach these agent-level tools, see [Backend API reference → Tool risk tiers and the chat allowlist](#/backend-api).
 

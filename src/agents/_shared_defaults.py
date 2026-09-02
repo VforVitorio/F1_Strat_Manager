@@ -1,6 +1,6 @@
 """Fallbacks shared by the agent modules when session_meta or weather arrives incomplete.
 
-A leaf module — no other agent internals, no heavy imports — so pulling these in never
+A leaf module (no other agent internals, no heavy imports), so pulling these in never
 drags in model weights (same reasoning as ``tire_parsing.py``).
 """
 
@@ -19,6 +19,21 @@ from typing import Any, Mapping
 # consolidated here so a future change updates every caller at once instead of drifting
 # one site at a time.
 DEFAULT_TOTAL_LAPS: int = 57
+
+# How many times an agent's LLM client retries a recoverable failure. The SDK retries
+# only connection errors, 408, 409, 429 and 5xx, and it waits what the provider asks:
+# ``openai._base_client.BaseClient._calculate_retry_timeout`` honours ``Retry-After``
+# when it is between 0 and 60 s, and otherwise backs off exponentially with jitter. So
+# the budget is spent in provider-declared waits rather than in guesses.
+#
+# It was 1, which is two attempts, and a single 429 mid-burst cost a whole lap of an LLM
+# run: the API reported 178831 of 200000 TPM used and asked for a retry, but a TPM
+# window drains over a MINUTE and both attempts landed inside it (#1153). Five covers
+# one window. It does NOT make a long enough burst safe; pacing the run still does that.
+#
+# Restated as a bare ``1`` in twelve places across six agent modules before this, which
+# is the same drift ``DEFAULT_TOTAL_LAPS`` above was consolidated to stop.
+LLM_MAX_RETRIES: int = 5
 
 
 def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> float:
@@ -43,10 +58,15 @@ def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> f
     identical reads in ``tire_agent`` and ``race_situation_agent`` had not. Hence one
     named function rather than a fourth inline copy.
 
-    ``default`` stays a per-caller argument on purpose: the agents disagree on the
-    fallback temperatures (pace uses 25/35, tire and race_situation use 28/38) and
-    reconciling those numbers is a modelling decision tracked in #789, not something to
-    smuggle in behind a crash fix.
+    ``default`` stayed a per-caller argument because the agents disagreed on the
+    fallback temperatures when this was written (pace 25/35, tire and race_situation
+    28/38), and reconciling those numbers was a modelling decision rather than something
+    to smuggle in behind a crash fix. #789 then reconciled them, so every TEMPERATURE call
+    site now passes the two constants below. The parameter stays because the signature is
+    the general one and because the other quantities never went through that
+    consolidation: humidity is 50.0 at every caller, and rainfall is ``0`` at
+    ``pace_agent.py:974`` and ``0.0`` at ``tire_agent.py:1647``. Those two are
+    per-caller numbers still, not evidence that the temperature disagreement survives.
     """
     value = source.get(key)
     if value is None:

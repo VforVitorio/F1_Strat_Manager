@@ -69,8 +69,8 @@ WHERE TO CHANGE IF THINGS MOVE:
 - ``src/strategy/inference/guard_rails.py`` owns the rails and the pit-action
   set. ``guard_rail_block`` CALLS the rail rather than restating its thresholds,
   because the first version retyped one boundary and got it wrong by one lap.
-- ``SAMPLED_RACES`` is the subset and the reason it exists; see its comment
-  before widening it.
+- ``SAMPLED_RACES`` is the sample and the reason it is 2025 only; see its
+  comment before changing it.
 - ``lap_inputs`` decides which laps are answerable and is deliberately free of
   agent imports, so the two bugs that lived there stay under test on a runner
   with no model weights.
@@ -101,28 +101,54 @@ from src.strategy.inference.guard_rails import (
 # it was built to answer rather than a horizon it never considers.
 DECISION_WINDOW_LAPS = 5
 
-# A full sweep is not affordable. Measured on this machine: 0.51 s per lap through
-# the no-llm stack, 28.8 s for one (race, driver) pair, and the real-stop sample
-# spans roughly 1440 pairs — about 11.5 hours for one report. So the tier runs on a
-# named, stratified subset instead, chosen for circuit archetype rather than
-# convenience: two conventional high-degradation circuits, two street circuits where
-# track position dominates, one low-downforce low-stop circuit and one fast circuit
-# with variable weather. Widening this is a runtime decision, not a correctness one —
-# but the report must keep saying which races it used.
+# EVERY RACE OF 2025, because the stratified subset this list used to hold was
+# affordable-by-necessity and is no longer necessary. The comment here used to say a
+# full sweep cost about 11.5 hours, from 0.51 s per lap and 28.8 s for one
+# (race, driver) pair over roughly 1440 pairs. That estimate assumed a FULL-RACE
+# replay per driver; `_replay_span` replays only the union of the scoring windows.
+# Measured on this machine, 2026-08-30: 8,393 replayed laps for the whole of 2025 at
+# 0.213 s per lap, about half an hour. All three seasons on disk are 27,550 laps, so
+# roughly 1.6 hours rather than 11.5.
 #
-# ALL SIX ARE 2025, AND THAT IS THE CORRECTNESS HALF. The first version of this list
-# took four of its six races from 2023-24, which are TRAINING seasons for every model
-# in the stack. A decision tier scored there is partly reading back its own training
-# data, and the whole point of this report is what the shipped system does on the
-# season it actually infers on. The archetypes are unchanged; only the year moved, so
-# the stratification argument above still holds.
-SAMPLED_RACES: tuple[tuple[int, str], ...] = (
-    (2025, "Barcelona"),  # conventional, high degradation
-    (2025, "Monaco"),  # street, track position is everything
-    (2025, "Silverstone"),  # fast, weather-variable
-    (2025, "Marina_Bay"),  # street, high degradation
-    (2025, "Lusail"),  # high degradation, stint-limited history
-    (2025, "Monza"),  # low downforce, fewest stops
+# What widening bought, measured on the same code: the eligible sample goes 178 -> 573
+# and the decline rate moves 40.4% -> 39.1%, so the old subset was representative for
+# the headline. It was not representative per race. Decline over the 24 races runs from
+# 4.8% at Suzuka to 88.9% at Melbourne, only 3 of them land within three points of the
+# season figure, and the retired subset's own six spanned 13.0% to 74.2%. That spread is
+# why a six-race read could not be trusted for anything circuit-shaped.
+#
+# 2025 ONLY, AND THAT IS THE CORRECTNESS HALF. 2023 and 2024 are TRAINING seasons for
+# every model in the stack, so a decision tier scored there is partly reading back its
+# own training data, and the whole point of this report is what the shipped system does
+# on the season it actually infers on.
+SAMPLED_RACES: tuple[tuple[int, str], ...] = tuple(
+    (2025, race)
+    for race in (
+        "Austin",
+        "Baku",
+        "Barcelona",
+        "Budapest",
+        "Imola",
+        "Jeddah",
+        "Las_Vegas",
+        "Lusail",
+        "Marina_Bay",
+        "Melbourne",
+        "Mexico_City",
+        "Miami_Gardens",
+        "Monaco",
+        "Montréal",
+        "Monza",
+        "Sakhir",
+        "Shanghai",
+        "Silverstone",
+        "Spa-Francorchamps",
+        "Spielberg",
+        "Suzuka",
+        "São_Paulo",
+        "Yas_Island",
+        "Zandvoort",
+    )
 )
 
 # Share of eligible stops that must actually be scored before the headline
@@ -337,9 +363,17 @@ def _decisions_in_window(
     # construct its own ``RaceState`` and two of its fields were constants: the gap
     # to the car ahead was `car.get("gap_ahead_s") or 2.0` on a dict that has no
     # such key (it carries `gap_to_leader_s`), so 2.0 was the value on 100% of laps
-    # of every race, and `pace_delta_s` was hardcoded to 0.0 beside it. Both feed
-    # N27's overtake scoring and the Monte Carlo this tier grades, so every figure
-    # it published described a stack fed two constants (#829).
+    # of every race, and `pace_delta_s` was hardcoded to 0.0 beside it. Both reach
+    # the orchestrator's SYNTHESIS PROMPT, which is the thing this tier grades, so
+    # every figure it published described a synthesis told on every lap that the car
+    # ahead sat exactly 2.0 s away and matched its pace (#829).
+    #
+    # Where they do NOT reach, because saying it wrongly is what #1044 corrected in
+    # four places at once: N27 derives its own pair gap from laps_df and pairs by
+    # position, and the Monte Carlo takes `lap_state["rivals"]` rather than anything
+    # off the RaceState (`engine.py`'s mc stage passes `rivals=`, `position=`,
+    # `laps_remaining=`, `pit_context=`). The invalidation stands; the route is the
+    # prompt.
     #
     # Imported here and not at module scope because ``build_race_state`` lazily
     # imports ``RaceState`` from the orchestrator on CALL, which pulls the whole
@@ -436,8 +470,10 @@ def _replay_span(stop_laps: list[int], total_laps: int) -> tuple[int, int]:
     """The laps to replay for one (race, driver), covering the union of the windows.
 
     One pass per driver rather than one per stop: two stops twenty laps apart still
-    cost one replay, which is where the runtime budget for a stratified subset comes
-    from.
+    cost one replay. This is also why a whole season is affordable at all. Over the 24
+    races of 2025 the union of the windows is 8,393 laps where a full-race replay per
+    driver would be 24,960, so assuming the second is what produced the 11.5 h estimate
+    this module used to carry. It is 2.97x too high.
 
     The span opens **one lap before** the earliest scoring window. A transition needs
     its predecessor to have been evaluated, so without that extra lap the first lap of
@@ -685,21 +721,33 @@ def _render_table(
         "``src/agents/race_state_builder.build_race_state``, and two of the fields it",
         "invented were constants: ``gap_ahead_s`` came from a key the driver dict does",
         "not carry, so it was **2.0 s on every lap of every race**, and ``pace_delta_s``",
-        "was hardcoded to 0.0. Both feed N27's overtake scoring and the Monte Carlo this",
-        "tier grades, so every figure published before this fix described a stack fed two",
-        "constants. **Figures generated before 2026-08-06 are not comparable to these.**",
+        "was hardcoded to 0.0. Both reach the orchestrator's synthesis prompt, which is",
+        "what this tier grades, so every figure published before this fix described a",
+        "synthesis told on every lap that the car ahead sat exactly 2.0 s away and matched",
+        "its pace. **Figures generated before 2026-08-06 are not comparable to these.**",
+        "",
+        "They do not reach N27, which derives its own pair gap from ``laps_df``, nor the",
+        "Monte Carlo, which takes the rivals list from the lap state. An earlier wording",
+        "here said they did.",
         "",
         "### Scope",
         "",
         f"- Sampled races ({agreement.races} measured): {races}.",
-        "- **All six are 2025, deliberately.** 2023 and 2024 are training seasons for",
+        "- **Every one is 2025, deliberately.** 2023 and 2024 are training seasons for",
         "  every model in the stack, so a decision tier scored there is partly reading",
-        "  back its own training data. An earlier version of this list took four of its",
-        "  six races from those seasons; the archetypes are unchanged, only the year.",
-        "- A full sweep of the real-stop sample is roughly 11.5 h of wall clock at",
-        "  0.51 s per lap through the stack, so this is a stratified subset by circuit",
-        "  archetype and **not** full coverage. Read every figure above as conditional",
-        "  on these races.",
+        "  back its own training data.",
+        "- This is the whole 2025 season, not a stratified subset. It used to be six",
+        "  races, on a runtime estimate of 11.5 h for a full sweep that assumed a",
+        "  full-race replay per driver; the tier replays only the scoring windows, so",
+        "  the whole season is 8,393 replayed laps at 0.213 s each, about half an hour.",
+        "  The subset was representative for the headline, 40.4% declines against 39.1%",
+        "  here, and not per race: decline runs from 4.8% at Suzuka to 88.9% at",
+        "  Melbourne, only 3 of the 24 races land within three points of the season",
+        "  figure, and the retired subset's own six spanned 13.0% to 74.2%. Read any",
+        "  per-circuit claim off the per-race numbers, never off this headline.",
+        "- Season coverage is **not** the same thing as the coverage verdict above. Every",
+        "  eligible 2025 stop is now looked at; the verdict says how many of them the",
+        "  metric could locate a decision inside.",
         '- Decisions come from `profile="no-llm"`: the deterministic Monte Carlo layer',
         "  plus the guard rails, never the LLM synthesis.",
         "- Agreement with the real pit wall is evidence, not correctness. The team can",
@@ -717,7 +765,7 @@ def build_decision_modes_report() -> dict[str, Any]:
         agreement, verdicts = None, []
 
     status = coverage_verdict(agreement) if agreement is not None else "unavailable"
-    header = build_header(dataset="data/raw laps, stratified 6-race subset (RAW, not featured)")
+    header = build_header(dataset="data/raw laps, every 2025 race (RAW, not featured)")
     md_path, json_path = write_report(
         "decision_modes",
         header,

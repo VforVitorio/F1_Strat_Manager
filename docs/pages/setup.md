@@ -68,10 +68,17 @@ See [Backend API reference → Authentication](#/backend-api) for how `F1_API_KE
 
 ```bash
 cd src/telemetry
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Verify at `http://localhost:8000/docs` (Swagger UI).
+
+> **Bind to loopback, not `0.0.0.0`.** `enforce_startup_security()` refuses to
+> start a keyless backend on a non-loopback address, but it reads the `F1_HOST`
+> setting, not the address uvicorn was actually given on the command line. So
+> `--host 0.0.0.0` with `F1_HOST` left at its default sails past the guard and
+> puts an unauthenticated API on the network. Binding wider requires setting
+> `F1_HOST` to match and giving it an `F1_API_KEY`.
 
 ### 5. Run the web app
 

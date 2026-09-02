@@ -180,6 +180,74 @@ jobs:
         if: steps.changes.outputs.backend == 'true'
         run: uv run mypy src/rag/
 
+  # The PITWALL window is TypeScript, and until this job existed nothing in
+  # CI ever loaded it: the Python suite pins the view dict the host returns,
+  # so deleting a whole component or the layout rule from the stylesheet left
+  # every test green. The sprint-3 exit gate measured exactly that.
+  #
+  # Advisory for now (`continue-on-error`), the same way pip-audit was
+  # introduced: promote it to a required context in `scripts/setup-github.sh`
+  # after a clean week. A browser step that turns every branch red on its
+  # first flake teaches people to ignore it.
+  pitwall-ui:
+    name: pitwall-ui
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: src/pitwall/ui
+    steps:
+      # checkout MUST run before paths-filter: on `push` events the filter
+      # falls back to `git diff` and needs the repo + history (fetch-depth:0).
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          filters: |
+            ui:
+              - 'src/pitwall/ui/**'
+              - '.github/workflows/ci.yml'
+
+      - name: Skip — no PITWALL UI changes
+        if: steps.changes.outputs.ui != 'true'
+        run: echo "No PITWALL UI changes; skipping the bundle build and smoke."
+
+      - uses: actions/setup-node@v6
+        if: steps.changes.outputs.ui == 'true'
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: src/pitwall/ui/package-lock.json
+
+      - name: Install dependencies
+        if: steps.changes.outputs.ui == 'true'
+        run: npm ci
+
+      - name: Typecheck
+        if: steps.changes.outputs.ui == 'true'
+        run: npm run typecheck
+
+      - name: Build the bundle
+        if: steps.changes.outputs.ui == 'true'
+        run: npm run build
+
+      - name: Install chromium
+        if: steps.changes.outputs.ui == 'true'
+        run: npx playwright install --with-deps chromium
+
+      # Structural, not visual, and BOTH windows: the elements exist, the
+      # AGENTS split computes to the 540 px Qt pins, the status bar's 1.5 s
+      # auto-clear actually fires, and DATA's four axes report the locked
+      # extents Qt pins them to. Pixels stay a human's job, with
+      # `scripts/shot-agents.mjs`.
+      - name: Smoke both windows
+        if: steps.changes.outputs.ui == 'true'
+        run: npm run smoke
+
   # Same-day CVE alerts on the locked Python deps (OSV/PyPA), independent of
   # whether the diff touches uv.lock. Always-on (no path filter) per
   # PROJECT_BOOTSTRAP.md §6; advisory (continue-on-error) while baselining,

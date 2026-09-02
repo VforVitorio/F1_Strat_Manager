@@ -3,8 +3,8 @@
 **Status: research design, future work (post-TFG). Plan only, no code, no commitments.**
 
 This document designs the `pitlab` initiative of the F1 StratLab ecosystem (initiative 4
-of 5, FUTURE.md sections 6, 10 and 11, not versioned): a local dashboard that lets Victor
-do data engineering and model retraining WITHOUT opening a notebook. It deliberately
+of 5, FUTURE.md sections 6, 10 and 11, not versioned): a local dashboard for data
+engineering and model retraining without opening a notebook. It deliberately
 covers only the gap that no other document owns: the Studio UI/UX, the experiment-tracker
 decision, and the orchestration layer. The pipeline the Studio operates is already fully
 designed in two completed audits, and this document cross-references them instead of
@@ -39,7 +39,7 @@ that logic must be filed against the owning audit, not specified here.
   storage, or a model registry from scratch.
 - Not a race-day surface. The CLI, Arcade and the telemetry SPA are the race surfaces;
   pitlab is the maintenance workshop between races.
-- Not a cloud product. It runs on Victor's machine, offline by default (section 7).
+- Not a cloud product. It runs on a single local machine, offline by default (section 7).
 
 ---
 
@@ -73,10 +73,10 @@ orchestration and panels.
 | # | Criterion | Why it matters here |
 |---|---|---|
 | C1 | **Local-first / offline by default** | The project's philosophy is no mandatory external services; the whole system already runs from one machine plus HF Hub. A tracker that phones home or needs an account fails the posture |
-| C2 | **Self-host footprint on Windows 11** | Victor's machine is the only deployment target (uv-managed Python, CUDA-pinned torch). A docker-compose stack of databases for a single user is disproportionate ops burden |
+| C2 | **Self-host footprint on Windows 11** | The deployment target is a single Windows 11 machine (uv-managed Python, CUDA-pinned torch). A docker-compose stack of databases for a single user is disproportionate ops burden |
 | C3 | **Model registry with staged promotion** | #189 Phase 4 requires acceptance gates, champion/challenger comparison, promote and rollback; per-GP lineage (base model, fine-tune data, calibration provenance) |
 | C4 | **Data versioning story** | Era-structured datasets and reproducible retrains need versioned data. Note: the project ALREADY has a data-versioning layer decided, HF Hub dataset revisions with per-release pinning (#242 Phase 3, open question 4). The tracker does not need to duplicate it |
-| C5 | **Cost** | Zero recurring cost target; this is a personal ecosystem, not a funded team |
+| C5 | **Cost** | Zero recurring cost target; this is a personal project, not a funded team |
 | C6 | **Integration effort with the actual stack** | XGBoost, LightGBM, PyTorch Lightning (the TCN), plain sklearn calibrators; a Python API clean enough that `f1-train` and the #189 5.2 monitors log automatically; a queryable REST/Python API the FastAPI service can proxy to the SPA |
 | C7 | **Longevity / bus factor** | The tracker outlives any single season; prefer boring, huge-community tools |
 
@@ -127,13 +127,13 @@ remains the single data-versioning and distribution layer.** Concretely:
   lets pitlab build only the panels that add F1-specific value instead of re-cloning a
   generic runs table.
 
-**Fallback trigger:** if the ecosystem ever genuinely needs multi-machine training
+**Fallback trigger:** if the ecosystem ever needs multi-machine training
 (cloud GPU bursts for gridmind-scale jobs) or team-grade queues, revisit ClearML then.
 The `f1-train` boundary makes the tracker swappable: screens talk to the pitlab FastAPI
 service, never to MLflow directly, so a tracker swap is a service-layer change.
 
-This is a reasoned departure from FUTURE.md 6.2's ClearML lean; it needs Victor's
-ratification (open question 1).
+This is a reasoned departure from FUTURE.md 6.2's ClearML lean, pending ratification
+(open question 1).
 
 ---
 
@@ -172,7 +172,7 @@ SPA.** Same stack, different process and lifecycle:
 ## 5. The Studio screens
 
 The seven-stage pipeline (FUTURE.md 6.4) maps to nine screens in three navigation
-groups. Every screen lists what it shows, what Victor can do, and what it wraps.
+groups. Every screen lists what it shows, what actions it exposes, and what it wraps.
 Feature lists, metrics and encodings are ALWAYS re-read from the manifests at build
 time (`feature_manifest_*.json`, `tiredeg_sequence_config.json`, `encoding_maps.json`,
 `tire_compounds_by_race.json`, the kmeans artifacts); nothing is hardcoded in the UI.
@@ -298,7 +298,7 @@ The layer between "button" and `src/strategy/training/`. Kept deliberately thin.
 `f1-train` CLI (or `f1-data` facade calls for ingestion jobs), never an in-process
 import-and-call inside the web service. Rationale: crash isolation (a CUDA OOM kills
 the job process, not the Studio), environment determinism (the same uv environment and
-entry point Victor would use by hand, so headless and Studio runs are bit-identical),
+entry point used for a manual run, so headless and Studio runs are bit-identical),
 and trivially safe cancellation (terminate the process group).
 
 **Job state.** A small SQLite-backed job table owned by the pitlab service: queued,
@@ -338,7 +338,7 @@ to the monitoring experiment that Home reads.
 
 ## 7. Local-first posture and the HF flow
 
-- **One machine, no cloud.** Everything runs on Victor's Windows 11 machine with the
+- **One machine, no cloud.** Everything runs on a single Windows 11 machine with the
   uv-managed environment and the CUDA-pinned torch build. Mandatory external surface:
   none. Optional external surface: exactly one, Hugging Face Hub, and only when pulling
   data or publishing artifacts. The tracker store, job DB, logs and artifacts all live
@@ -393,7 +393,7 @@ better than running `f1-train` by hand plus the MLflow UI, stop and reassess bre
   mitigation is structural: the MLflow UI escape hatch means pitlab only ever needs to
   build panels that are F1-specific (compound editor, cluster pooling, gate verdicts,
   era health), and S2's stop-and-reassess gate is explicit.
-- **Wrapper drift.** If a screen quietly grows pipeline logic (a join fixup here, a
+- **Wrapper drift.** If a screen grows pipeline logic (a join fixup here, a
   threshold default there), the #189/#242 ownership boundary erodes and two sources of
   truth appear. Rule: pipeline behavior changes are PRs against the owning layer, and
   the Studio version-pins the contracts it consumes (manifests v2 schema, facade
@@ -414,7 +414,7 @@ better than running `f1-train` by hand plus the MLflow UI, stop and reassess bre
 
 ---
 
-## 10. Open questions for Victor
+## 10. Open questions
 
 1. **Ratify the tracker: MLflow local without DVC, HF Hub as the data-versioning
    layer.** This departs from FUTURE.md 6.2's ClearML lean for footprint reasons
@@ -424,7 +424,7 @@ better than running `f1-train` by hand plus the MLflow UI, stop and reassess bre
    Fase 0, extraction to the dedicated `pitlab` repo (independent, consumed as a
    submodule like the radiogate ruling) deferred to the ecosystem-repo-integration
    note. Confirm or invert (repo-first from day 1).
-3. **UI breadth for v1.** Which stages genuinely need panels versus staying
+3. **UI breadth for v1.** Which stages need panels versus staying
    CLI + stock MLflow UI? The S2 vertical slice (Train + Runs) is committed; everything
    after is negotiable per the stop-and-reassess gate.
 4. **HF publish policy.** Proposed: promotion is local, publication to `f1stratlab` is

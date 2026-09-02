@@ -368,7 +368,7 @@ Posture rules baked into the templates and the profiles:
 - **Auth and secrets**: the bot posts as its own dedicated account via OAuth
   (user-context token). Keys live in the host's environment/secret store, never in the
   repo; the public repo ships an `.env.example` with names only.
-- **Compliance**: the account carries X's automated-account label, managed by Victor's
+- **Compliance**: the account carries X's automated-account label, managed by a
   personal account (required by X automation policy); no duplicate content (dedupe
   layer); minimal mentions/hashtags; back off on 429s, never retry through limits.
   Suspension is an existential outage for this adapter (risk register).
@@ -431,7 +431,7 @@ box-bot is a well-behaved service that is off far more than it is on. Five state
   refreshed from a public calendar source at the start of each race week. The calendar
   only decides WHEN to arm; whether there is anything to narrate is decided solely by
   the core stream actually publishing a session. If the core is not running, `ARMED`
-  times out quietly back to `DORMANT` and posts nothing anywhere.
+  times out back to `DORMANT` and posts nothing anywhere.
 - **Covered sessions v1**: races and sprint races only. Quali and FP coverage is a B5
   expansion (more sessions is where X's daily cap starts binding).
 - **Stream-down behavior.** In `DEGRADED` the bot posts nothing and never extrapolates.
@@ -441,15 +441,15 @@ box-bot is a well-behaved service that is off far more than it is on. Five state
   backfill of missed laps on reconnect.
 - **Per-platform health**: a sick publisher (revoked webhook, X rate-lock) is skipped
   while the others continue; health transitions are logged, never posted about.
-- **Between weekends** the service is genuinely off (a scheduler starts it for the
+- **Between weekends** the service is off (a scheduler starts it for the
   armed window and stops it after cooldown). No idle polling, no idle connections.
 
 ---
 
 ## 8. Repo topology and deployment
 
-- **Repo**: independent public repo (working name `box-bot`) under Victor's GitHub,
-  bootstrapped with the standard baseline (branch protection, CI, Dependabot, release
+- **Repo**: independent public repo (working name `box-bot`) under a personal GitHub
+  account, bootstrapped with the standard baseline (branch protection, CI, Dependabot, release
   automation). Its CI runs unit tests over triggers/budgets/renderers, the content lint
   suite, and the stream contract test against the pinned core release. The core repo is
   not touched: no submodule, no workflow, no import, no mention required (ecosystem
@@ -461,7 +461,7 @@ box-bot is a well-behaved service that is off far more than it is on. Five state
 - **What it pins**: core release tag + stream schema version (contract), the
   gridmind-published checker artifact version, and (when adopted) the gridmind LoRA
   revision served in LM Studio. Every pin bump is an explicit commit.
-- **Where it runs (v1 decision)**: co-located with the core live stack on Victor's GPU
+- **Where it runs (v1 decision)**: co-located with the core live stack on the same GPU
   workstation during race weekends. Rationale: the core's live consumer and backend
   already run there during a session, LM Studio needs that GPU to serve the LoRA, and
   the bot only needs to exist while the stream does. The correlated-failure objection
@@ -509,7 +509,7 @@ box-bot is a well-behaved service that is off far more than it is on. Five state
 | **B1: content engine, dry-run** | Triggers, dedupe, budgets, priority queue, TTLs, card builder, skeleton templates, both renderers writing to a log; no LLM, no network publishers | B0; recorded streams from the live consumer's shadow-replay harness (L1) |
 | **B2: guardrail gate + publishers** | Checker wired as the blocking gate; LLM color path (OpenAI mini first); regeneration + fallback + lint + audit log; X and Discord adapters implemented behind the `Publisher` interface | B1; gridmind G1 (checker artifact published) |
 | **B3: shadow season** | Full pipeline over live sessions publishing ONLY to a private Discord channel (the shadow surface; no X posts); measure verifier block rate, end-to-end latency vs TTLs, per-platform budget behavior | B2; live consumer L4 in production; aligns with gridmind G6's shadow-run |
-| **B4: public launch** | Public Discord server first (full feed + charts), then the X account (races + sprints, text-only, Free tier); scorecard summaries on both | B3 metrics green; the 2026-model gate satisfied (or a pre-drift-season race); Victor signs off on identity (Q2/Q3) |
+| **B4: public launch** | Public Discord server first (full feed + charts), then the X account (races + sprints, text-only, Free tier); scorecard summaries on both | B3 metrics green; the 2026-model gate satisfied (or a pre-drift-season race); identity confirmed (Q2/Q3) |
 | **B5: expansion** | gridmind LoRA as primary phrasing model; X chart media (tier decision); quali/FP coverage; `RIVAL_MOVE` posts; Bluesky/Mastodon adapters if wanted | B4 stable; gridmind LoRA shipped; Rival Agent exists (for `RIVAL_MOVE`) |
 
 Discord launches before X deliberately: it is free, editable, lower-stakes, and its
@@ -550,7 +550,7 @@ a real platform before the first tweet exists.
 
 ---
 
-## 12. Open questions for Victor
+## 12. Open questions
 
 1. **X tier at launch**: confirm Free tier with the 16-post budget for B4, deferring
    Basic (about 200 USD/month) to B5 if coverage expands. Re-verify the exact caps at

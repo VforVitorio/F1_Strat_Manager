@@ -57,14 +57,24 @@ if str(_REPO_ROOT) not in sys.path:
 
 import fastf1  # noqa: E402
 
+from src.arcade.config import DRS_OPEN_CODES  # noqa: E402
+
 
 def extract_zones(tel, corners_df=None, min_length_m: float = 80.0) -> list[dict]:
     """Walk the telemetry row-by-row, emit one dict per DRS-ON run.
 
-    FastF1 publishes ``DRS`` as a status byte; values ``>= 10`` mean the
-    flap is open. A "zone" is any maximal run of open samples. Zones
+    FastF1 publishes ``DRS`` as a status byte and the open codes are
+    ``DRS_OPEN_CODES`` (10, 12 and 14), which this reads from the one place
+    they are declared. A "zone" is any maximal run of open samples. Zones
     shorter than ``min_length_m`` are dropped as telemetry blips: real
     F1 DRS activation zones are always several hundred metres long.
+
+    **This used to say "values >= 10 mean the flap is open" and test exactly
+    that, which is not the same set.** ``>= 10`` also admits 11 and 13, which
+    FastF1 never emits but the arcade's resampler manufactures - 401 and 515
+    frames on Melbourne 2025 (#1002) - so the threshold form called frames
+    open that the wire's own ``drs_open`` calls closed. Two decoders of one
+    fact, disagreeing about the values that only exist by accident.
 
     When ``corners_df`` is provided (from ``session.get_circuit_info()``)
     each zone is tagged with the nearest corner at its start and end
@@ -77,7 +87,7 @@ def extract_zones(tel, corners_df=None, min_length_m: float = 80.0) -> list[dict
     speed = tel["Speed"].to_numpy().astype(float)
 
     zones: list[dict] = []
-    active = drs >= 10
+    active = np.isin(drs, tuple(DRS_OPEN_CODES))
     n = active.size
     i = 0
     while i < n:

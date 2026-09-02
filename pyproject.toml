@@ -85,8 +85,14 @@ dependencies = [
     # ===================
     "arcade>=3.0.0",
     "scipy>=1.10.0",
-    "pyside6>=6.5.0",
-    "pyqtgraph>=0.13.0",
+    # PITWALL: the two desktop windows are a React build inside an OS webview.
+    # Chosen over Electron/Tauri because it is an ordinary pyproject dependency,
+    # so `uv sync` installs it and the user installs nothing else. Honest cost:
+    # it uses the platform webview, so Linux needs `webkit2gtk` as a SYSTEM
+    # package (Windows 11 and macOS ship theirs). Nothing outside
+    # `src/pitwall/__main__.py` imports it, so a machine without the system
+    # library still runs every test and every other surface.
+    "pywebview>=5.0",
     # ===================
     # UTILITIES
     # ===================
@@ -123,6 +129,7 @@ f1-sim       = "scripts.run_simulation_cli:main"
 f1-arcade    = "src.arcade.main:main"
 f1-webapp    = "scripts.run_webapp:main"
 f1-eval      = "src.strategy.eval.cli:main"
+f1-pitwall   = "src.pitwall.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -184,11 +191,21 @@ torchvision = [
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml", "*.json"]
+# PITWALL's two windows ARE this bundle: without it `f1-pitwall` starts, finds
+# no `dist/`, prints the build hint and exits 1. `dist/` is gitignored build
+# output, so it exists only after `npm run build` - which makes the ORDER part
+# of the release procedure, not a detail. `tests/infra/test_wheel_ships_the_ui.py`
+# is what stops a wheel shipping without it.
+"src.pitwall" = ["ui/dist/**"]
 
 [tool.setuptools.exclude-package-data]
 # Source maps never belong in a wheel; a dev-box npm build can leave them
 # under src/ and the "*" json/yaml glob above would otherwise rake them in.
 "*" = ["**/*.map"]
+# The UI's build-tool manifests are not runtime data. They were the ONLY thing
+# from `src/pitwall/ui/` that ever reached a wheel: measured on 2.5.1, three
+# JSONs in and zero bundle files, the exact inversion of what is wanted.
+"src.pitwall.ui" = ["*.json"]
 
 [tool.black]
 line-length = 100

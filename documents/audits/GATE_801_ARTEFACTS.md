@@ -601,6 +601,7 @@ PR 6 is the only artefact writer; it runs the regeneration exactly once.
 ```python
 """Diff a regenerated featured parquet against its backed-up predecessor.
 Usage: python check_regen.py <backup.parquet> <new.parquet> <year>"""
+
 import sys
 import numpy as np
 import pandas as pd
@@ -626,20 +627,25 @@ for c in backup.columns:
         continue
     a, b = j[f"{c}_old"], j[f"{c}_new"]
     if a.dtype.kind in "ifb" and b.dtype.kind in "ifb":
-        bad = ~((a.isna() & b.isna()) | np.isclose(a.astype(float), b.astype(float),
-                                                   rtol=0, atol=1e-6, equal_nan=False))
+        bad = ~(
+            (a.isna() & b.isna())
+            | np.isclose(a.astype(float), b.astype(float), rtol=0, atol=1e-6, equal_nan=False)
+        )
     else:
         bad = (a.astype(str) != b.astype(str)) & ~(a.isna() & b.isna())
     assert not bad.any(), f"{c}: {int(bad.sum())} cells changed"
 
 # 4. The added weather equals the committed restore (the alignment gate)
 from src.f1_strat_manager.laps_augment import augment_featured_laps
+
 restored = augment_featured_laps(backup, year)
 jr = restored.merge(new[[*KEYS, *WEATHER]], on=KEYS, suffixes=("_restore", "_new"))
 for c in WEATHER:
     a, b = jr[f"{c}_restore"], jr[f"{c}_new"]
-    bad = ~((a.isna() & b.isna()) | np.isclose(a.astype(float), b.astype(float),
-                                               rtol=0, atol=1e-9, equal_nan=False))
+    bad = ~(
+        (a.isna() & b.isna())
+        | np.isclose(a.astype(float), b.astype(float), rtol=0, atol=1e-9, equal_nan=False)
+    )
     assert not bad.any(), f"weather {c}: {int(bad.sum())} mismatches vs restore"
 
 # 5. The Vegas hole is preserved (a regeneration that 'fixed' it changed the rule)

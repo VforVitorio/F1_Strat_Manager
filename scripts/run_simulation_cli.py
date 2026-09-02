@@ -457,9 +457,16 @@ def _prewarm_agents(no_llm: bool) -> None:
     try:
         with _devnull_fds():
             from src.agents.pace_agent import _get_default_pace_agent
-            from src.agents.radio_agent import CFG as _r  # noqa: F401
+            from src.agents.radio_agent import CFG as _r
 
             _get_default_pace_agent()
+            # Reading .pipeline is what loads the three N24 checkpoints. The import
+            # alone used to do it, because RadioAgentCFG built them in __post_init__;
+            # it is a lazy property now, so importing the name here would prewarm
+            # nothing and the 14 s load would land mid-run instead, on a lap, with
+            # transformers' LOAD REPORT printing straight through the Live display
+            # because the fd suppression only wraps this block.
+            _r.pipeline
 
             if not no_llm:
                 from src.agents.pit_strategy_agent import _get_default_pit_agent

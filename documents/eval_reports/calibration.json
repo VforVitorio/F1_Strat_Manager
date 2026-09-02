@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "998a800",
+    "harness_sha": "4724f3ed",
     "dataset": "2025 holdout + frozen calibration artifacts",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-07-11T19:14:07+00:00",
+    "generated_at": "2026-08-29T18:38:10+00:00",
     "artifacts": {
       "overtake_model": "cbb9d0eb0beb",
       "pit_cfg": "41dd673a93fb",
@@ -65,7 +65,7 @@
     {
       "model": "pit_duration",
       "metric": "p05_p95_coverage",
-      "value": 0.7023809523809523,
+      "value": 0.6984126984126984,
       "nominal": 0.9,
       "status": "drift",
       "detail": "n=252; empirical P05-P95 coverage recomputed on the regenerated N15 holdout"

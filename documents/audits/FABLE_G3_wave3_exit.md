@@ -23,7 +23,7 @@
 `src/agents/strategy_orchestrator.py:1849`:
 
 ```python
-prev_lap_time  = lap_state.get("prev_lap_time", 92.0),
+prev_lap_time = (lap_state.get("prev_lap_time", 92.0),)
 ```
 
 Two defects in one line, both catalogued classes:

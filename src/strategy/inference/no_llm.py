@@ -49,6 +49,7 @@ from src.agents.strategy_orchestrator import (
 from src.agents.tire_agent import TireAgent, _compound_name_to_id
 from src.strategy.inference.engine import (
     _assemble_agent_outputs,
+    _rejoin_from,
     _build_default_lap_state,
     _StageTimer,
 )
@@ -285,6 +286,11 @@ def run_no_llm_lap(
 
     with _StageTimer(timings, "mc"):
         _ctx = race_context_from_lap_state(lap_state, race_state)
+        # Same capture the rich profile takes, for the same reason. Without it
+        # the PIT EXIT card renders its "no rejoin geometry" idle on laps where
+        # the projection DID run, which is worse than an absent card: the copy
+        # claims there is nothing to compute when there is.
+        mc_draws: dict[str, Any] = {}
         mc_results = _run_mc_simulation(
             pace_out=pace_out,
             tire_out=tire_out,
@@ -295,6 +301,7 @@ def run_no_llm_lap(
             position=_ctx.get("position"),
             laps_remaining=_ctx.get("laps_remaining"),
             pit_context=_ctx.get("pit_context"),
+            capture=mc_draws,
         )
         best_mc = best_mc_candidate(mc_results)
 
@@ -326,6 +333,7 @@ def run_no_llm_lap(
     agent_outputs = None
     if return_agent_outputs:
         agent_outputs = _assemble_agent_outputs(
+            rejoin=_rejoin_from(mc_draws),
             pace_out=pace_out,
             tire_out=tire_out,
             situation_out=situation_out,

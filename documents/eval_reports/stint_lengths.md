@@ -2,7 +2,7 @@
 
 - harness `0156673` · schema v1 · generated 2026-08-06T14:34:35+00:00
 - era 2022-2025 · dataset data/raw laps 2023-2025 (RAW, not featured) · seed deterministic · llm none
-- artifacts: —
+- artifacts: none
 
 ## Real green-flag stint lengths by compound (2023-2025 raw laps)
 
