@@ -76,9 +76,24 @@ def test_the_envelope_bound_is_the_clip_constant_not_a_second_number():
     assert upper == float(_MAX_TRAINED_TYRE_LIFE)
 
 
-def test_a_missing_tyre_life_is_still_read_as_a_fresh_set():
-    """The NaN path predates the envelope and must be untouched by it."""
+def test_a_missing_tyre_life_is_read_as_the_non_colliding_unknown():
+    """This asserted `== 1` until #832, and 1 was the defect.
+
+    The old name said "is still read as a fresh set", and the reason it read that
+    way was an argument that sounds right and picks the one value it must not: a
+    tyre on the first lap of a stint reads 1, so the sentinel and the measurement
+    were the same number. `race_state_builder` had already ruled 1 out in writing
+    for exactly that reason, and this consumer used it anyway.
+
+    The envelope half of the original claim still holds and is what this file is
+    about: the NaN path does not go through the bounds check to DECIDE anything.
+    What changed is that the value it substitutes now sits below the floor, so the
+    check labels the call an extrapolation instead of passing it silently.
+    """
     import numpy as np
 
-    assert _tyre_life_in(np.nan) == 1
-    assert _tyre_life_in(None) == 1
+    from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE
+
+    assert _tyre_life_in(np.nan) == UNKNOWN_TYRE_LIFE
+    assert _tyre_life_in(None) == UNKNOWN_TYRE_LIFE
+    assert _tyre_life_in(np.nan) != _tyre_life_in(1.0), "the unknown collides with a fresh set"

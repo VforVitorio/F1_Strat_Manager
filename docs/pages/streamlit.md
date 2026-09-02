@@ -21,7 +21,7 @@ Entry point: `frontend/app/main.py`.
 | Dashboard | `pages/dashboard.py` | Telemetry charts for selected session/driver |
 | Comparison | `pages/comparison.py` | Side-by-side telemetry for two drivers |
 | Race Analysis | `pages/race_analysis.py` | Tire, gap, and radio analysis tabs |
-| Strategy | `pages/strategy.py` | N25–N31 strategy advisor with agent tabs |
+| Strategy | `pages/strategy.py` | N25-N31 strategy advisor with agent tabs |
 | Chat | `pages/chat.py` | LM Studio chat interface |
 | Model Lab | `pages/model_lab.py` | Interactive ML model exploration |
 
@@ -71,7 +71,7 @@ The app launches directly into the Dashboard. Page routing uses `st.session_stat
 
 ## Strategy page
 
-The Strategy page (`pages/strategy.py`) is the primary interface for the N25–N31 agent system:
+The Strategy page (`pages/strategy.py`) is the primary interface for the N25-N31 agent system:
 
 1. **Selectors**: Year (hardcoded 2025), GP, Driver, Lap range, Analysis lap, Risk tolerance
 2. **Run button**: calls `StrategyService.get_recommend()` which hits `/api/v1/strategy/recommend`

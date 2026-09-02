@@ -1,12 +1,12 @@
 {
   "header": {
-    "harness_sha": "ea9c319",
-    "dataset": "data/raw laps, stratified 6-race subset (RAW, not featured)",
+    "harness_sha": "83c59629",
+    "dataset": "data/raw laps, every 2025 race (RAW, not featured)",
     "seed_policy": "deterministic",
     "era_tag": "2022-2025",
     "llm": "none",
     "schema_version": "1",
-    "generated_at": "2026-08-06T18:57:01+00:00",
+    "generated_at": "2026-08-30T17:54:11+00:00",
     "artifacts": {}
   },
   "status": "masked",
@@ -14,19 +14,31 @@
   "sampled_races": [
     {
       "year": 2025,
+      "race": "Austin"
+    },
+    {
+      "year": 2025,
+      "race": "Baku"
+    },
+    {
+      "year": 2025,
       "race": "Barcelona"
     },
     {
       "year": 2025,
-      "race": "Monaco"
+      "race": "Budapest"
     },
     {
       "year": 2025,
-      "race": "Silverstone"
+      "race": "Imola"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay"
+      "race": "Jeddah"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas"
     },
     {
       "year": 2025,
@@ -34,28 +46,431 @@
     },
     {
       "year": 2025,
+      "race": "Marina_Bay"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens"
+    },
+    {
+      "year": 2025,
+      "race": "Monaco"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal"
+    },
+    {
+      "year": 2025,
       "race": "Monza"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai"
+    },
+    {
+      "year": 2025,
+      "race": "Silverstone"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island"
+    },
+    {
+      "year": 2025,
+      "race": "Zandvoort"
     }
   ],
   "agreement": {
-    "sample_size": 66,
-    "eligible": 178,
-    "scored_share": 0.3707865168539326,
-    "races": 6,
-    "exact": 0.21212121212121213,
-    "within_one": 0.3787878787878788,
-    "within_two": 0.5151515151515151,
-    "mean_signed_error": -1.9696969696969697,
-    "mean_absolute_error": 2.4242424242424243
+    "sample_size": 204,
+    "eligible": 573,
+    "scored_share": 0.35602094240837695,
+    "races": 24,
+    "exact": 0.18627450980392157,
+    "within_one": 0.3431372549019608,
+    "within_two": 0.5,
+    "mean_signed_error": -2.2058823529411766,
+    "mean_absolute_error": 2.480392156862745
   },
   "buckets": {
     "closing_laps": 4,
-    "min_stint": 5,
-    "no_boundary_in_window": 31,
-    "no_call_in_window": 72,
-    "scored": 66
+    "min_stint": 16,
+    "no_boundary_in_window": 121,
+    "no_call_in_window": 224,
+    "opening_laps": 4,
+    "scored": 204
   },
   "verdicts": [
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "VER",
+      "actual_lap": 33,
+      "chosen_lap": 32,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "GAS",
+      "actual_lap": 27,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "ANT",
+      "actual_lap": 31,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "ALO",
+      "actual_lap": 30,
+      "chosen_lap": 27,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "LEC",
+      "actual_lap": 22,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "STR",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "TSU",
+      "actual_lap": 29,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "ALB",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "HUL",
+      "actual_lap": 33,
+      "chosen_lap": 32,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "LAW",
+      "actual_lap": 30,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "OCO",
+      "actual_lap": 24,
+      "chosen_lap": 20,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "NOR",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "COL",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "HAM",
+      "actual_lap": 31,
+      "chosen_lap": 29,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "BOR",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "BOR",
+      "actual_lap": 36,
+      "chosen_lap": 39,
+      "offset_laps": 3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "HAD",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "RUS",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "PIA",
+      "actual_lap": 30,
+      "chosen_lap": 30,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Austin",
+      "driver": "BEA",
+      "actual_lap": 30,
+      "chosen_lap": 25,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "VER",
+      "actual_lap": 40,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "GAS",
+      "actual_lap": 35,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "ANT",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "ALO",
+      "actual_lap": 21,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "LEC",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "STR",
+      "actual_lap": 37,
+      "chosen_lap": 35,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "TSU",
+      "actual_lap": 38,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "ALB",
+      "actual_lap": 15,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "HUL",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "LAW",
+      "actual_lap": 20,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "NOR",
+      "actual_lap": 37,
+      "chosen_lap": 35,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "COL",
+      "actual_lap": 16,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "HAM",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "BOR",
+      "actual_lap": 26,
+      "chosen_lap": 21,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "SAI",
+      "actual_lap": 27,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "HAD",
+      "actual_lap": 29,
+      "chosen_lap": 28,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "RUS",
+      "actual_lap": 39,
+      "chosen_lap": 39,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Baku",
+      "driver": "BEA",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
     {
       "year": 2025,
       "race": "Barcelona",
@@ -427,6 +842,1554 @@
     },
     {
       "year": 2025,
+      "race": "Budapest",
+      "driver": "VER",
+      "actual_lap": 17,
+      "chosen_lap": 16,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "VER",
+      "actual_lap": 48,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "GAS",
+      "actual_lap": 32,
+      "chosen_lap": 31,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "ANT",
+      "actual_lap": 21,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "ALO",
+      "actual_lap": 39,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "LEC",
+      "actual_lap": 19,
+      "chosen_lap": 19,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "LEC",
+      "actual_lap": 40,
+      "chosen_lap": 40,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "STR",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "TSU",
+      "actual_lap": 20,
+      "chosen_lap": 18,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "TSU",
+      "actual_lap": 37,
+      "chosen_lap": 34,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "ALB",
+      "actual_lap": 14,
+      "chosen_lap": 11,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "ALB",
+      "actual_lap": 38,
+      "chosen_lap": 34,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "HUL",
+      "actual_lap": 5,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "HUL",
+      "actual_lap": 41,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "LAW",
+      "actual_lap": 40,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "OCO",
+      "actual_lap": 14,
+      "chosen_lap": 11,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "NOR",
+      "actual_lap": 31,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "COL",
+      "actual_lap": 13,
+      "chosen_lap": 8,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "COL",
+      "actual_lap": 35,
+      "chosen_lap": 33,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "HAM",
+      "actual_lap": 42,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "BOR",
+      "actual_lap": 40,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "SAI",
+      "actual_lap": 15,
+      "chosen_lap": 12,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "SAI",
+      "actual_lap": 51,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "HAD",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "RUS",
+      "actual_lap": 19,
+      "chosen_lap": 15,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "RUS",
+      "actual_lap": 43,
+      "chosen_lap": 43,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "PIA",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "PIA",
+      "actual_lap": 45,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "BEA",
+      "actual_lap": 30,
+      "chosen_lap": 28,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Budapest",
+      "driver": "BEA",
+      "actual_lap": 48,
+      "chosen_lap": 48,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "GAS",
+      "actual_lap": 9,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "ALO",
+      "actual_lap": 12,
+      "chosen_lap": 12,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "LEC",
+      "actual_lap": 10,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "STR",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "LAW",
+      "actual_lap": 10,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "OCO",
+      "actual_lap": 1,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "opening_laps"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "COL",
+      "actual_lap": 22,
+      "chosen_lap": 18,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "BOR",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "SAI",
+      "actual_lap": 11,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "RUS",
+      "actual_lap": 11,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Imola",
+      "driver": "PIA",
+      "actual_lap": 13,
+      "chosen_lap": 10,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "VER",
+      "actual_lap": 21,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "ANT",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "ALO",
+      "actual_lap": 19,
+      "chosen_lap": 18,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "LEC",
+      "actual_lap": 29,
+      "chosen_lap": 24,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "STR",
+      "actual_lap": 39,
+      "chosen_lap": 35,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "ALB",
+      "actual_lap": 22,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "HUL",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "LAW",
+      "actual_lap": 20,
+      "chosen_lap": 19,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "NOR",
+      "actual_lap": 34,
+      "chosen_lap": 30,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "HAM",
+      "actual_lap": 23,
+      "chosen_lap": 19,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "SAI",
+      "actual_lap": 21,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "HAD",
+      "actual_lap": 34,
+      "chosen_lap": 30,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "RUS",
+      "actual_lap": 20,
+      "chosen_lap": 20,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "DOO",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "PIA",
+      "actual_lap": 19,
+      "chosen_lap": 14,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Jeddah",
+      "driver": "BEA",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "VER",
+      "actual_lap": 25,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "LEC",
+      "actual_lap": 24,
+      "chosen_lap": 21,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "TSU",
+      "actual_lap": 27,
+      "chosen_lap": 25,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "ALB",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "ALB",
+      "actual_lap": 34,
+      "chosen_lap": 29,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "ALB",
+      "actual_lap": 35,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "HUL",
+      "actual_lap": 30,
+      "chosen_lap": 28,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "LAW",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "OCO",
+      "actual_lap": 27,
+      "chosen_lap": 22,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "NOR",
+      "actual_lap": 22,
+      "chosen_lap": 21,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "COL",
+      "actual_lap": 25,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "HAM",
+      "actual_lap": 29,
+      "chosen_lap": 24,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "SAI",
+      "actual_lap": 22,
+      "chosen_lap": 21,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "HAD",
+      "actual_lap": 20,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "RUS",
+      "actual_lap": 17,
+      "chosen_lap": 17,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "PIA",
+      "actual_lap": 21,
+      "chosen_lap": 20,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Las_Vegas",
+      "driver": "BEA",
+      "actual_lap": 17,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "VER",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "GAS",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "ANT",
+      "actual_lap": 32,
+      "chosen_lap": 30,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "ALO",
+      "actual_lap": 32,
+      "chosen_lap": 32,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "LEC",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "STR",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "STR",
+      "actual_lap": 49,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "STR",
+      "actual_lap": 55,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "closing_laps"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "TSU",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "ALB",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "LAW",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "OCO",
+      "actual_lap": 34,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "NOR",
+      "actual_lap": 25,
+      "chosen_lap": 25,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "NOR",
+      "actual_lap": 44,
+      "chosen_lap": 44,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "COL",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "HAM",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "BOR",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "SAI",
+      "actual_lap": 32,
+      "chosen_lap": 32,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "HAD",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "HAD",
+      "actual_lap": 55,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "closing_laps"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "RUS",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "PIA",
+      "actual_lap": 24,
+      "chosen_lap": 24,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "PIA",
+      "actual_lap": 42,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "BEA",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "BEA",
+      "actual_lap": 40,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Lusail",
+      "driver": "BEA",
+      "actual_lap": 41,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "VER",
+      "actual_lap": 19,
+      "chosen_lap": 19,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "GAS",
+      "actual_lap": 24,
+      "chosen_lap": 19,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "GAS",
+      "actual_lap": 51,
+      "chosen_lap": 53,
+      "offset_laps": 2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "ANT",
+      "actual_lap": 25,
+      "chosen_lap": 25,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "ALO",
+      "actual_lap": 27,
+      "chosen_lap": 26,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "LEC",
+      "actual_lap": 21,
+      "chosen_lap": 16,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "STR",
+      "actual_lap": 38,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "TSU",
+      "actual_lap": 13,
+      "chosen_lap": 13,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "ALB",
+      "actual_lap": 42,
+      "chosen_lap": 45,
+      "offset_laps": 3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "HUL",
+      "actual_lap": 25,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "HUL",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "LAW",
+      "actual_lap": 48,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "OCO",
+      "actual_lap": 30,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "NOR",
+      "actual_lap": 26,
+      "chosen_lap": 22,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "COL",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "HAM",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "HAM",
+      "actual_lap": 46,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "BOR",
+      "actual_lap": 13,
+      "chosen_lap": 12,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "SAI",
+      "actual_lap": 50,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "HAD",
+      "actual_lap": 20,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "RUS",
+      "actual_lap": 25,
+      "chosen_lap": 20,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "PIA",
+      "actual_lap": 27,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Marina_Bay",
+      "driver": "BEA",
+      "actual_lap": 23,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "ANT",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "STR",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "ALB",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "HUL",
+      "actual_lap": 44,
+      "chosen_lap": 40,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "NOR",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "BOR",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "RUS",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "PIA",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Melbourne",
+      "driver": "BEA",
+      "actual_lap": 44,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "VER",
+      "actual_lap": 37,
+      "chosen_lap": 33,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "GAS",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "ANT",
+      "actual_lap": 22,
+      "chosen_lap": 22,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "ANT",
+      "actual_lap": 47,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "ALO",
+      "actual_lap": 20,
+      "chosen_lap": 16,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "ALO",
+      "actual_lap": 34,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "LEC",
+      "actual_lap": 31,
+      "chosen_lap": 29,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "STR",
+      "actual_lap": 26,
+      "chosen_lap": 25,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "STR",
+      "actual_lap": 43,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "TSU",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "ALB",
+      "actual_lap": 41,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "HUL",
+      "actual_lap": 25,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "LAW",
+      "actual_lap": 2,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "opening_laps"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "LAW",
+      "actual_lap": 5,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "OCO",
+      "actual_lap": 27,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "NOR",
+      "actual_lap": 34,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "COL",
+      "actual_lap": 48,
+      "chosen_lap": 43,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "HAM",
+      "actual_lap": 23,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "HAM",
+      "actual_lap": 47,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "BOR",
+      "actual_lap": 37,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "SAI",
+      "actual_lap": 17,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "SAI",
+      "actual_lap": 46,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "SAI",
+      "actual_lap": 56,
+      "chosen_lap": 61,
+      "offset_laps": 5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "HAD",
+      "actual_lap": 34,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "RUS",
+      "actual_lap": 25,
+      "chosen_lap": 21,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "RUS",
+      "actual_lap": 48,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "PIA",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "PIA",
+      "actual_lap": 47,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "BEA",
+      "actual_lap": 24,
+      "chosen_lap": 24,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Mexico_City",
+      "driver": "BEA",
+      "actual_lap": 48,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "VER",
+      "actual_lap": 26,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "ANT",
+      "actual_lap": 25,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "STR",
+      "actual_lap": 20,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "ALB",
+      "actual_lap": 26,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "HUL",
+      "actual_lap": 36,
+      "chosen_lap": 33,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "LAW",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "OCO",
+      "actual_lap": 23,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "BOR",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "SAI",
+      "actual_lap": 25,
+      "chosen_lap": 25,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Miami_Gardens",
+      "driver": "HAD",
+      "actual_lap": 22,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
       "race": "Monaco",
       "driver": "VER",
       "actual_lap": 28,
@@ -760,6 +2723,951 @@
     },
     {
       "year": 2025,
+      "race": "Montréal",
+      "driver": "VER",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "VER",
+      "actual_lap": 37,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "GAS",
+      "actual_lap": 53,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "ANT",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "ANT",
+      "actual_lap": 38,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "ALO",
+      "actual_lap": 15,
+      "chosen_lap": 11,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "ALO",
+      "actual_lap": 50,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "LEC",
+      "actual_lap": 28,
+      "chosen_lap": 24,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "LEC",
+      "actual_lap": 53,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "STR",
+      "actual_lap": 24,
+      "chosen_lap": 23,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "STR",
+      "actual_lap": 51,
+      "chosen_lap": 47,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "TSU",
+      "actual_lap": 56,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "ALB",
+      "actual_lap": 23,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "HUL",
+      "actual_lap": 19,
+      "chosen_lap": 18,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "LAW",
+      "actual_lap": 38,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "LAW",
+      "actual_lap": 54,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "OCO",
+      "actual_lap": 57,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "NOR",
+      "actual_lap": 29,
+      "chosen_lap": 25,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "NOR",
+      "actual_lap": 47,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "COL",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "HAM",
+      "actual_lap": 15,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "HAM",
+      "actual_lap": 45,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "BOR",
+      "actual_lap": 49,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "SAI",
+      "actual_lap": 57,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "HAD",
+      "actual_lap": 13,
+      "chosen_lap": 12,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "RUS",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "RUS",
+      "actual_lap": 42,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "PIA",
+      "actual_lap": 16,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "PIA",
+      "actual_lap": 45,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Montréal",
+      "driver": "BEA",
+      "actual_lap": 18,
+      "chosen_lap": 18,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "VER",
+      "actual_lap": 37,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "GAS",
+      "actual_lap": 49,
+      "chosen_lap": 45,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "ANT",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "ALO",
+      "actual_lap": 20,
+      "chosen_lap": 15,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "ALO",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "LEC",
+      "actual_lap": 33,
+      "chosen_lap": 33,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "STR",
+      "actual_lap": 49,
+      "chosen_lap": 51,
+      "offset_laps": 2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "TSU",
+      "actual_lap": 19,
+      "chosen_lap": 18,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "ALB",
+      "actual_lap": 41,
+      "chosen_lap": 36,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "LAW",
+      "actual_lap": 9,
+      "chosen_lap": 9,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "OCO",
+      "actual_lap": 51,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "closing_laps"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "NOR",
+      "actual_lap": 46,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "COL",
+      "actual_lap": 33,
+      "chosen_lap": 28,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "HAM",
+      "actual_lap": 38,
+      "chosen_lap": 33,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "BOR",
+      "actual_lap": 20,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "SAI",
+      "actual_lap": 30,
+      "chosen_lap": 27,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "HAD",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "RUS",
+      "actual_lap": 27,
+      "chosen_lap": 27,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "PIA",
+      "actual_lap": 45,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Monza",
+      "driver": "BEA",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "VER",
+      "actual_lap": 10,
+      "chosen_lap": 8,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "VER",
+      "actual_lap": 26,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "GAS",
+      "actual_lap": 10,
+      "chosen_lap": 6,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "GAS",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "ANT",
+      "actual_lap": 12,
+      "chosen_lap": 9,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "ANT",
+      "actual_lap": 27,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "ALO",
+      "actual_lap": 16,
+      "chosen_lap": 11,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "LEC",
+      "actual_lap": 17,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "STR",
+      "actual_lap": 12,
+      "chosen_lap": 8,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "TSU",
+      "actual_lap": 11,
+      "chosen_lap": 8,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "ALB",
+      "actual_lap": 16,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "HUL",
+      "actual_lap": 5,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "HUL",
+      "actual_lap": 27,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "LAW",
+      "actual_lap": 14,
+      "chosen_lap": 11,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "OCO",
+      "actual_lap": 8,
+      "chosen_lap": 6,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "OCO",
+      "actual_lap": 27,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "NOR",
+      "actual_lap": 10,
+      "chosen_lap": 8,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "HAM",
+      "actual_lap": 17,
+      "chosen_lap": 15,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "BOR",
+      "actual_lap": 13,
+      "chosen_lap": 9,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "SAI",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "SAI",
+      "actual_lap": 44,
+      "chosen_lap": 44,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "SAI",
+      "actual_lap": 45,
+      "chosen_lap": 44,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "HAD",
+      "actual_lap": 6,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "HAD",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "RUS",
+      "actual_lap": 13,
+      "chosen_lap": 8,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "DOO",
+      "actual_lap": 9,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "DOO",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "PIA",
+      "actual_lap": 14,
+      "chosen_lap": 12,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Sakhir",
+      "driver": "BEA",
+      "actual_lap": 14,
+      "chosen_lap": 9,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "VER",
+      "actual_lap": 13,
+      "chosen_lap": 8,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "GAS",
+      "actual_lap": 10,
+      "chosen_lap": 7,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "ANT",
+      "actual_lap": 12,
+      "chosen_lap": 7,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "ALO",
+      "actual_lap": 4,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "opening_laps"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "LEC",
+      "actual_lap": 15,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "STR",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "TSU",
+      "actual_lap": 11,
+      "chosen_lap": 8,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "TSU",
+      "actual_lap": 35,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "TSU",
+      "actual_lap": 46,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "ALB",
+      "actual_lap": 20,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "HUL",
+      "actual_lap": 20,
+      "chosen_lap": 18,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "LAW",
+      "actual_lap": 18,
+      "chosen_lap": 13,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "LAW",
+      "actual_lap": 30,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "OCO",
+      "actual_lap": 11,
+      "chosen_lap": 8,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "NOR",
+      "actual_lap": 15,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "HAM",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "HAM",
+      "actual_lap": 37,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "BOR",
+      "actual_lap": 1,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "opening_laps"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "BOR",
+      "actual_lap": 26,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "SAI",
+      "actual_lap": 17,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "HAD",
+      "actual_lap": 12,
+      "chosen_lap": 8,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "HAD",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "RUS",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "DOO",
+      "actual_lap": 11,
+      "chosen_lap": 7,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "PIA",
+      "actual_lap": 14,
+      "chosen_lap": 14,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Shanghai",
+      "driver": "BEA",
+      "actual_lap": 26,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
       "race": "Silverstone",
       "driver": "VER",
       "actual_lap": 11,
@@ -1039,178 +3947,205 @@
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
+      "race": "Spa-Francorchamps",
       "driver": "VER",
-      "actual_lap": 19,
-      "chosen_lap": 19,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "GAS",
-      "actual_lap": 24,
-      "chosen_lap": 19,
-      "offset_laps": -5,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "GAS",
-      "actual_lap": 51,
-      "chosen_lap": 53,
-      "offset_laps": 2,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "ANT",
-      "actual_lap": 25,
-      "chosen_lap": 25,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "ALO",
-      "actual_lap": 27,
-      "chosen_lap": 26,
-      "offset_laps": -1,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "LEC",
-      "actual_lap": 21,
-      "chosen_lap": 16,
-      "offset_laps": -5,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "STR",
-      "actual_lap": 38,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "TSU",
-      "actual_lap": 13,
-      "chosen_lap": 13,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "ALB",
-      "actual_lap": 42,
-      "chosen_lap": 45,
-      "offset_laps": 3,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "HUL",
-      "actual_lap": 25,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "HUL",
-      "actual_lap": 44,
+      "actual_lap": 12,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "LAW",
-      "actual_lap": 48,
+      "race": "Spa-Francorchamps",
+      "driver": "GAS",
+      "actual_lap": 11,
       "chosen_lap": null,
       "offset_laps": null,
-      "bucket": "no_boundary_in_window"
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "OCO",
+      "race": "Spa-Francorchamps",
+      "driver": "ANT",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "ANT",
       "actual_lap": 30,
       "chosen_lap": null,
       "offset_laps": null,
-      "bucket": "no_boundary_in_window"
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "NOR",
-      "actual_lap": 26,
-      "chosen_lap": 22,
-      "offset_laps": -4,
+      "race": "Spa-Francorchamps",
+      "driver": "ALO",
+      "actual_lap": 11,
+      "chosen_lap": 6,
+      "offset_laps": -5,
       "bucket": "scored"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "COL",
-      "actual_lap": 14,
+      "race": "Spa-Francorchamps",
+      "driver": "ALO",
+      "actual_lap": 29,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "HAM",
-      "actual_lap": 24,
+      "race": "Spa-Francorchamps",
+      "driver": "LEC",
+      "actual_lap": 12,
       "chosen_lap": null,
       "offset_laps": null,
-      "bucket": "no_boundary_in_window"
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "HAM",
-      "actual_lap": 46,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "BOR",
-      "actual_lap": 13,
-      "chosen_lap": 12,
-      "offset_laps": -1,
+      "race": "Spa-Francorchamps",
+      "driver": "STR",
+      "actual_lap": 12,
+      "chosen_lap": 10,
+      "offset_laps": -2,
       "bucket": "scored"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "SAI",
-      "actual_lap": 50,
+      "race": "Spa-Francorchamps",
+      "driver": "TSU",
+      "actual_lap": 13,
       "chosen_lap": null,
       "offset_laps": null,
-      "bucket": "no_boundary_in_window"
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
+      "race": "Spa-Francorchamps",
+      "driver": "ALB",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "HUL",
+      "actual_lap": 11,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "HUL",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "LAW",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "OCO",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "NOR",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "COL",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "COL",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "HAM",
+      "actual_lap": 11,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "BOR",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "SAI",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "SAI",
+      "actual_lap": 26,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "HAD",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
       "driver": "HAD",
       "actual_lap": 20,
       "chosen_lap": null,
@@ -1219,25 +4154,502 @@
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
+      "race": "Spa-Francorchamps",
       "driver": "RUS",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "PIA",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spa-Francorchamps",
+      "driver": "BEA",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "GAS",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "GAS",
+      "actual_lap": 38,
+      "chosen_lap": 35,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "ALO",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "LEC",
       "actual_lap": 25,
-      "chosen_lap": 20,
+      "chosen_lap": 25,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "LEC",
+      "actual_lap": 49,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "STR",
+      "actual_lap": 26,
+      "chosen_lap": 25,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "STR",
+      "actual_lap": 53,
+      "chosen_lap": 48,
       "offset_laps": -5,
       "bucket": "scored"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
-      "driver": "PIA",
-      "actual_lap": 27,
+      "race": "Spielberg",
+      "driver": "TSU",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "TSU",
+      "actual_lap": 30,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "TSU",
+      "actual_lap": 60,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_boundary_in_window"
     },
     {
       "year": 2025,
-      "race": "Marina_Bay",
+      "race": "Spielberg",
+      "driver": "ALB",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "ALB",
+      "actual_lap": 15,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "HUL",
+      "actual_lap": 12,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "HUL",
+      "actual_lap": 42,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "LAW",
+      "actual_lap": 32,
+      "chosen_lap": 29,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "OCO",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "OCO",
+      "actual_lap": 50,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "NOR",
+      "actual_lap": 20,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "NOR",
+      "actual_lap": 52,
+      "chosen_lap": 52,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "COL",
+      "actual_lap": 13,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "COL",
+      "actual_lap": 39,
+      "chosen_lap": 39,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "HAM",
+      "actual_lap": 26,
+      "chosen_lap": 26,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "HAM",
+      "actual_lap": 50,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "BOR",
+      "actual_lap": 21,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "BOR",
+      "actual_lap": 49,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "HAD",
+      "actual_lap": 28,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "RUS",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "RUS",
+      "actual_lap": 45,
+      "chosen_lap": 41,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "PIA",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "PIA",
+      "actual_lap": 53,
+      "chosen_lap": 49,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "BEA",
+      "actual_lap": 11,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Spielberg",
+      "driver": "BEA",
+      "actual_lap": 39,
+      "chosen_lap": 39,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "VER",
+      "actual_lap": 21,
+      "chosen_lap": 19,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "GAS",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "ANT",
+      "actual_lap": 31,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "ALO",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "LEC",
+      "actual_lap": 21,
+      "chosen_lap": 18,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "STR",
+      "actual_lap": 9,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "STR",
+      "actual_lap": 30,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "TSU",
+      "actual_lap": 23,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "ALB",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "HUL",
+      "actual_lap": 22,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "LAW",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "OCO",
+      "actual_lap": 32,
+      "chosen_lap": 28,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "NOR",
+      "actual_lap": 21,
+      "chosen_lap": 18,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "HAM",
+      "actual_lap": 30,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "BOR",
+      "actual_lap": 31,
+      "chosen_lap": 26,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "SAI",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "HAD",
+      "actual_lap": 25,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "RUS",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "DOO",
+      "actual_lap": 15,
+      "chosen_lap": 12,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
+      "driver": "PIA",
+      "actual_lap": 20,
+      "chosen_lap": 18,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Suzuka",
       "driver": "BEA",
       "actual_lap": 23,
       "chosen_lap": null,
@@ -1246,107 +4658,8 @@
     },
     {
       "year": 2025,
-      "race": "Lusail",
+      "race": "São_Paulo",
       "driver": "VER",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "GAS",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "ANT",
-      "actual_lap": 32,
-      "chosen_lap": 30,
-      "offset_laps": -2,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "ALO",
-      "actual_lap": 32,
-      "chosen_lap": 32,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "LEC",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "STR",
-      "actual_lap": 24,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "STR",
-      "actual_lap": 49,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "STR",
-      "actual_lap": 55,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "closing_laps"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "TSU",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "ALB",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "LAW",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "OCO",
       "actual_lap": 34,
       "chosen_lap": null,
       "offset_laps": null,
@@ -1354,53 +4667,197 @@
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "NOR",
-      "actual_lap": 25,
-      "chosen_lap": 25,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "NOR",
-      "actual_lap": 44,
-      "chosen_lap": 44,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "COL",
-      "actual_lap": 32,
+      "race": "São_Paulo",
+      "driver": "VER",
+      "actual_lap": 54,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "HAM",
-      "actual_lap": 32,
+      "race": "São_Paulo",
+      "driver": "GAS",
+      "actual_lap": 18,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "BOR",
-      "actual_lap": 32,
+      "race": "São_Paulo",
+      "driver": "GAS",
+      "actual_lap": 39,
+      "chosen_lap": 41,
+      "offset_laps": 2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "ANT",
+      "actual_lap": 21,
+      "chosen_lap": 18,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "ANT",
+      "actual_lap": 47,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "ALO",
+      "actual_lap": 28,
+      "chosen_lap": 28,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "ALO",
+      "actual_lap": 46,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "STR",
+      "actual_lap": 29,
+      "chosen_lap": 30,
+      "offset_laps": 1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "STR",
+      "actual_lap": 54,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "TSU",
+      "actual_lap": 24,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "TSU",
+      "actual_lap": 47,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_boundary_in_window"
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "SAI",
+      "race": "São_Paulo",
+      "driver": "ALB",
+      "actual_lap": 35,
+      "chosen_lap": 30,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "ALB",
+      "actual_lap": 55,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "HUL",
+      "actual_lap": 36,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "LAW",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "OCO",
+      "actual_lap": 47,
+      "chosen_lap": 47,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "NOR",
+      "actual_lap": 30,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "NOR",
+      "actual_lap": 50,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "COL",
+      "actual_lap": 29,
+      "chosen_lap": 27,
+      "offset_laps": -2,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "COL",
+      "actual_lap": 43,
+      "chosen_lap": 42,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "HAM",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "HAM",
       "actual_lap": 32,
       "chosen_lap": 32,
       "offset_laps": 0,
@@ -1408,44 +4865,98 @@
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "HAD",
-      "actual_lap": 32,
+      "race": "São_Paulo",
+      "driver": "HAM",
+      "actual_lap": 37,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "min_stint"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "SAI",
+      "actual_lap": 17,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "HAD",
-      "actual_lap": 55,
+      "race": "São_Paulo",
+      "driver": "SAI",
+      "actual_lap": 38,
       "chosen_lap": null,
       "offset_laps": null,
-      "bucket": "closing_laps"
+      "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Lusail",
+      "race": "São_Paulo",
+      "driver": "HAD",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "HAD",
+      "actual_lap": 37,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
       "driver": "RUS",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Lusail",
-      "driver": "PIA",
-      "actual_lap": 24,
-      "chosen_lap": 24,
-      "offset_laps": 0,
+      "actual_lap": 34,
+      "chosen_lap": 32,
+      "offset_laps": -2,
       "bucket": "scored"
     },
     {
       "year": 2025,
-      "race": "Lusail",
+      "race": "São_Paulo",
+      "driver": "RUS",
+      "actual_lap": 48,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
       "driver": "PIA",
+      "actual_lap": 38,
+      "chosen_lap": 34,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "PIA",
+      "actual_lap": 51,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "BEA",
+      "actual_lap": 17,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "São_Paulo",
+      "driver": "BEA",
       "actual_lap": 42,
       "chosen_lap": null,
       "offset_laps": null,
@@ -1453,17 +4964,152 @@
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "BEA",
+      "race": "Yas_Island",
+      "driver": "VER",
+      "actual_lap": 23,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "GAS",
+      "actual_lap": 13,
+      "chosen_lap": 8,
+      "offset_laps": -5,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "GAS",
+      "actual_lap": 40,
+      "chosen_lap": 36,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "ANT",
       "actual_lap": 32,
+      "chosen_lap": 31,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "ALO",
+      "actual_lap": 16,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "LEC",
+      "actual_lap": 16,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "LEC",
+      "actual_lap": 39,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "BEA",
+      "race": "Yas_Island",
+      "driver": "STR",
+      "actual_lap": 42,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "TSU",
+      "actual_lap": 32,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "ALB",
+      "actual_lap": 8,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "ALB",
+      "actual_lap": 33,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "HUL",
+      "actual_lap": 7,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "HUL",
+      "actual_lap": 42,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_call_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "LAW",
+      "actual_lap": 21,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "OCO",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "NOR",
+      "actual_lap": 16,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "NOR",
       "actual_lap": 40,
       "chosen_lap": null,
       "offset_laps": null,
@@ -1471,192 +5117,174 @@
     },
     {
       "year": 2025,
-      "race": "Lusail",
-      "driver": "BEA",
-      "actual_lap": 41,
+      "race": "Yas_Island",
+      "driver": "COL",
+      "actual_lap": 15,
+      "chosen_lap": 15,
+      "offset_laps": 0,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "COL",
+      "actual_lap": 40,
+      "chosen_lap": 36,
+      "offset_laps": -4,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "HAM",
+      "actual_lap": 8,
+      "chosen_lap": 7,
+      "offset_laps": -1,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "HAM",
+      "actual_lap": 31,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "VER",
-      "actual_lap": 37,
+      "race": "Yas_Island",
+      "driver": "BOR",
+      "actual_lap": 15,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_boundary_in_window"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "GAS",
-      "actual_lap": 49,
-      "chosen_lap": 45,
-      "offset_laps": -4,
+      "race": "Yas_Island",
+      "driver": "SAI",
+      "actual_lap": 18,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "HAD",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "RUS",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "PIA",
+      "actual_lap": 41,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Yas_Island",
+      "driver": "BEA",
+      "actual_lap": 14,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Zandvoort",
+      "driver": "ALO",
+      "actual_lap": 18,
+      "chosen_lap": 16,
+      "offset_laps": -2,
       "bucket": "scored"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "ANT",
-      "actual_lap": 28,
+      "race": "Zandvoort",
+      "driver": "ALO",
+      "actual_lap": 40,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "no_call_in_window"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "ALO",
-      "actual_lap": 20,
-      "chosen_lap": 15,
-      "offset_laps": -5,
+      "race": "Zandvoort",
+      "driver": "STR",
+      "actual_lap": 8,
+      "chosen_lap": 7,
+      "offset_laps": -1,
       "bucket": "scored"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "ALO",
-      "actual_lap": 24,
+      "race": "Zandvoort",
+      "driver": "TSU",
+      "actual_lap": 19,
+      "chosen_lap": 16,
+      "offset_laps": -3,
+      "bucket": "scored"
+    },
+    {
+      "year": 2025,
+      "race": "Zandvoort",
+      "driver": "HUL",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
+    },
+    {
+      "year": 2025,
+      "race": "Zandvoort",
+      "driver": "LAW",
+      "actual_lap": 27,
       "chosen_lap": null,
       "offset_laps": null,
       "bucket": "min_stint"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "LEC",
-      "actual_lap": 33,
-      "chosen_lap": 33,
-      "offset_laps": 0,
-      "bucket": "scored"
+      "race": "Zandvoort",
+      "driver": "COL",
+      "actual_lap": 19,
+      "chosen_lap": null,
+      "offset_laps": null,
+      "bucket": "no_boundary_in_window"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "STR",
-      "actual_lap": 49,
-      "chosen_lap": 51,
+      "race": "Zandvoort",
+      "driver": "BOR",
+      "actual_lap": 60,
+      "chosen_lap": 62,
       "offset_laps": 2,
       "bucket": "scored"
     },
     {
       "year": 2025,
-      "race": "Monza",
-      "driver": "TSU",
-      "actual_lap": 19,
-      "chosen_lap": 18,
-      "offset_laps": -1,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "ALB",
-      "actual_lap": 41,
-      "chosen_lap": 36,
-      "offset_laps": -5,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "LAW",
-      "actual_lap": 9,
-      "chosen_lap": 9,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "OCO",
-      "actual_lap": 51,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "closing_laps"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "NOR",
-      "actual_lap": 46,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "COL",
-      "actual_lap": 33,
-      "chosen_lap": 28,
-      "offset_laps": -5,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "HAM",
-      "actual_lap": 38,
-      "chosen_lap": 33,
-      "offset_laps": -5,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "BOR",
-      "actual_lap": 20,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
+      "race": "Zandvoort",
       "driver": "SAI",
-      "actual_lap": 30,
-      "chosen_lap": 27,
-      "offset_laps": -3,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "HAD",
-      "actual_lap": 32,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "RUS",
       "actual_lap": 27,
-      "chosen_lap": 27,
-      "offset_laps": 0,
-      "bucket": "scored"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "PIA",
-      "actual_lap": 45,
       "chosen_lap": null,
       "offset_laps": null,
-      "bucket": "no_boundary_in_window"
-    },
-    {
-      "year": 2025,
-      "race": "Monza",
-      "driver": "BEA",
-      "actual_lap": 18,
-      "chosen_lap": null,
-      "offset_laps": null,
-      "bucket": "no_call_in_window"
+      "bucket": "min_stint"
     }
   ]
 }

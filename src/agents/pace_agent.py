@@ -1,4 +1,4 @@
-"""Pace Agent — src/agents/pace_agent.py
+"""Pace Agent: src/agents/pace_agent.py
 
 Extracted from N25_pace_agent.ipynb. Wraps the N06 XGBoost delta-lap-time
 model into a clean OOP agent interface that returns lap time predictions,
@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
+from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE
 from src.agents._shared_defaults import (
     DEFAULT_AIR_TEMP_C,
     DEFAULT_TRACK_TEMP_C,
@@ -89,10 +90,10 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 N_BOOTSTRAP: int = 200
-_NOISE_PCT: float = 0.02  # 2 % Gaussian noise on continuous features
+_NOISE_PCT: float = 0.02  # 2% Gaussian noise on continuous features
 
 # Seconds of lap time recovered per lap as fuel burns off. N04 builds the training
-# feature as (TyreLife - min(TyreLife of the stint)) * 0.055 — verified exactly against
+# feature as (TyreLife - min(TyreLife of the stint)) * 0.055, verified exactly against
 # laps_featured_2025 (100% of laps reproduce, range 0..3.685 s). The same coefficient
 # lives in tire_agent._add_fuel_cols; deliberately duplicated rather than shared, since
 # unifying constants across agent modules is a wider refactor than this fix (#446).
@@ -111,7 +112,7 @@ FUEL_GAIN_PER_LAP_S: float = 0.055
 # owns (`_encode_categoricals` then `_add_lag_deg_features`), drop the rows N06 drops,
 # and take the min/max of each column over the resulting 42,957 rows.
 # `tests/agents/test_n06_envelope.py` re-runs that measurement and fails if any bound
-# below has drifted from it, so these cannot quietly become hand-typed numbers.
+# below has drifted from it, so a hand-typed number here fails that test.
 #
 # WHICH TEN OF THE TWENTY-FIVE, and why each of the other fifteen is out. A bound is a
 # claim that the value at inference is the same quantity, in the same units, as the
@@ -128,8 +129,8 @@ FUEL_GAIN_PER_LAP_S: float = 0.055
 #       not one: 0.0 sits mid-distribution for each (42.6% / 41.9% / 46.7% of training
 #       rows fall below it), so a bound could never fire and declaring one would
 #       advertise a check that cannot work.
-#     `mean_sector_speed` used to be listed here for the same reason and no longer is.
-#     `_compute_derived` substituted `prev_speed_st` whenever no mean sector speed was
+#     `mean_sector_speed` does NOT belong in this exclusion list. `_compute_derived`
+#     used to substitute `prev_speed_st` whenever no mean sector speed was
 #     supplied and `run_from_state` never supplied one, so the feature carried the speed
 #     trap on every real call: a different physical quantity, training means 256.8 vs
 #     303.0 km/h, and a bound over the first applied to the second fired on 83% of laps
@@ -181,7 +182,7 @@ _FEATURED_SEASONS: tuple[int, ...] = (2023, 2024, 2025)
 # `CompoundID` column holds and therefore what N06 was trained on. Not the manifest's
 # 0-based `categorical_encoding.Compound` block: that one encodes a column N06 drops.
 #
-# 0 is a TRAINED CLASS, not a spare slot — N01 does `.fillna(0)`, so every lap whose
+# 0 is a TRAINED CLASS, not a spare slot: N01 does `.fillna(0)`, so every lap whose
 # compound FastF1 did not report reached training as a 0. That is why an off-by-one here
 # is worse than a shift: it makes a SOFT lap indistinguishable from an unreported one.
 # `tests/agents/test_pace_compound_encoding.py` re-derives all of this from the artefact.
@@ -202,7 +203,7 @@ _normalise_gp_key = normalise_gp_key
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PaceOutput dataclass (public API — untouched)
+# PaceOutput dataclass (public API, untouched)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -210,7 +211,7 @@ _normalise_gp_key = normalise_gp_key
 class PaceOutput:
     """Structured output of the Pace Agent for one lap.
 
-    lap_time_pred is the N06 XGBoost prediction in absolute seconds — the model
+    lap_time_pred is the N06 XGBoost prediction in absolute seconds. The model
     outputs a delta vs Prev_LapTime internally; this field adds Prev_LapTime back
     so all downstream agents work in absolute lap time.
 
@@ -243,6 +244,38 @@ class PaceOutput:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _unknown_if_missing(tyre_life) -> int:
+    """A tyre age, with an absent one encoded as the shared unknown.
+
+    `or` cannot be used for this and that is the whole point: it is false for 0,
+    which is the value `race_state_builder` publishes when it does not know the
+    age, so `d.get("tyre_life") or 1` rewrote every unknown as a one-lap-old set.
+    A missing key and a stored None both mean the same thing and both land on the
+    same constant, which is what keeps this reader and the builder from drifting.
+    """
+    return UNKNOWN_TYRE_LIFE if tyre_life is None else int(tyre_life)
+
+
+def _laps_since_pit(driver_state: dict) -> int:
+    """Laps since the last stop, falling back to the tyre age under N01's rule.
+
+    Written as branches rather than as an `or` chain, and the chain is why: it
+    ended in `or 1`, so an unknown age fell straight through to a one-lap-old
+    stint. That is the same fabrication `_unknown_if_missing` exists to stop, one
+    keyword argument further down, and the first version of this fix kept it.
+
+    The fallback to the age is N01's own definition on an unpitted stint, so it is
+    a lookup rather than an approximation (#800). When neither is known the answer
+    is the shared unknown: N06 predicts identically at 0, 1 and 2 on a real row
+    (86.712000 against 86.654000 at 12), so nothing served moves, and the value
+    that does not collide is the one to publish.
+    """
+    laps = driver_state.get("laps_since_pit")
+    if laps is not None:
+        return int(laps)
+    return _unknown_if_missing(driver_state.get("tyre_life"))
+
+
 def _previous_tyre_life(tyre_life: Optional[int]) -> Optional[int]:
     """The previous lap's tyre age, or None where training had no previous lap.
 
@@ -261,12 +294,12 @@ class PaceAgent:
     """Encapsulates the N06 XGBoost lap-time prediction pipeline.
 
     All model artifacts (XGBoost weights, encoding maps, reference laps) are
-    loaded once in __init__ and stored as instance attributes — no module-level
+    loaded once in __init__ and stored as instance attributes: no module-level
     globals are used.
 
     Deliberately deterministic, unlike its tire/pit/race_situation siblings:
     pace has no qualitative judgment to make (no warning_level/action/threat_level
-    category alongside its numbers), so there is no LLM step to wire — see #778/#780
+    category alongside its numbers), so there is no LLM step to wire. See #778/#780
     for the archaeology and decision record.
 
     Instantiate via the module-level _get_default_pace_agent() factory to avoid
@@ -274,9 +307,9 @@ class PaceAgent:
 
     Args:
         models_dir: Directory containing xgb_laptime_delta_final.json and
-            the feature name JSON. Defaults to the repo-root–relative path.
+            the feature name JSON. Defaults to the repo-root-relative path.
         processed_dir: Directory containing circuit clusters, laps_featured,
-            and feature manifest. Defaults to the repo-root–relative path.
+            and feature manifest. Defaults to the repo-root-relative path.
     """
 
     def __init__(
@@ -307,7 +340,7 @@ class PaceAgent:
         """Load N06 XGBoost model and ordered feature name list from disk.
 
         Both artifacts are returned together to guarantee the feature order is
-        always consistent with the model version — callers must not reorder or
+        always consistent with the model version. Callers must not reorder or
         drop features between load and predict.
 
         Args:
@@ -327,14 +360,14 @@ class PaceAgent:
 
         The compound codes are N01's, the circuit clusters come from the k=4 clustering
         parquet (N05), and the team map is derived from the laps_featured parquet. All
-        three are static training artifacts — they must not be recomputed at inference
+        three are static training artifacts: they must not be recomputed at inference
         time to avoid encoding drift between train and serve.
 
         NOT the manifest's `categorical_encoding.Compound` block, which is what this used
         to read. That block is 0-based and describes N06's `encode_features` step, whose
         output column (`Compound`) is NOT among the 39 in `features_in`: the model eats
         `CompoundID`, N01's 1-based column, straight from the parquet. The eval harness
-        says so in its own docstring — "the model consumes the pre-numeric CompoundID" —
+        says so in its own docstring ("the model consumes the pre-numeric CompoundID"),
         and inference contradicted it, so every lap arrived one class low.
 
         Args:
@@ -473,7 +506,7 @@ class PaceAgent:
         """Map compound, team, and circuit to their integer label encodings.
 
         Unknown categories degrade gracefully to the most common training
-        value rather than raising an error — compound→1, team→0, cluster→1.
+        value rather than raising an error: compound→1, team→0, cluster→1.
 
         Args:
             compound: Pirelli compound string ('SOFT', 'MEDIUM', 'HARD', etc.).
@@ -484,8 +517,8 @@ class PaceAgent:
             Tuple (compound_id_int, team_id_int, cluster_int).
         """
         # The unknown code, not 1: 1 is SOFT on the trained scale, so an unrecognised
-        # compound string used to be served as a specific tyre rather than as the absent
-        # reading N01 encoded it as.
+        # compound string must resolve to the absent reading N01 encoded it as, not to
+        # a specific tyre.
         c_id = self.compound_id.get(compound, _COMPOUND_ID_UNKNOWN)
         t_id = self.team_id.get(team, 0)
         # `circuit_cluster` is keyed by the parquet slug; the replay path queries with the
@@ -523,13 +556,12 @@ class PaceAgent:
             fuel_load: Estimated fuel fraction in [0, 1].
             lap_number: Current race lap.
             total_laps: Total scheduled race laps.
-            prev_speed_st: Speed trap reading in km/h from the previous lap.
             mean_sector_speed: This circuit's trained mean sector speed, already
                 resolved; NaN when the GP does not resolve.
             stint_baseline_tyre_life: TyreLife recorded at the start of the
                 current stint. None means the caller has not been updated to
                 supply it, in which case FuelEffect is forced to NaN instead
-                of falling back to the old (wrong) formula — see the comment
+                of falling back to the old (wrong) formula. See the comment
                 in the body for why NaN is the safe default here (#446).
 
         Returns:
@@ -538,8 +570,8 @@ class PaceAgent:
         """
         # FuelEffect is the cumulative time recovered since the stint started, in
         # SECONDS (training range 0..3.685 s). It was being computed as
-        # `fuel_load * 0.03` — a [0, 0.03] value, ~100x too small and semantically
-        # different — so the model always read "fresh-fuel stint start" and the learned
+        # `fuel_load * 0.03` (a [0, 0.03] value, ~100x too small and semantically
+        # different), so the model always read "fresh-fuel stint start" and the learned
         # fuel-burn pace gain was suppressed on every lap (#446).
         #
         # Absent baseline -> NaN, never a fabricated number. NaN is IN-DISTRIBUTION here:
@@ -662,7 +694,7 @@ class PaceAgent:
         # Belt-and-braces: any caller that slips a None through lands here.
         # XGBoost refuses object-dtype columns; ``to_numeric(errors='coerce')``
         # converts None→NaN and the model handles NaN natively via its
-        # sparse-aware split logic (default_left). Cheap and defensive —
+        # sparse-aware split logic (default_left). Cheap and defensive:
         # no-op on already-numeric frames.
         numeric = df.apply(pd.to_numeric, errors="coerce")
         self._label_against_envelope(numeric)
@@ -720,13 +752,14 @@ class PaceAgent:
     ) -> tuple[float, float]:
         """Estimate a P10/P90 confidence interval via Gaussian feature perturbation.
 
-        Runs n forward passes, each time adding independent Gaussian noise
-        (sigma = NOISE_PCT × feature_value) to the continuous features most
-        subject to real-world variability. The noise scale approximates sensor
-        noise and lap-to-lap variation; it is not formal Bayesian uncertainty.
+        Perturbs the row n times with independent Gaussian noise
+        (sigma = NOISE_PCT × feature_value) on the continuous features most
+        subject to real-world variability, then scores all n rows in one forward
+        pass. The noise scale approximates sensor noise and lap-to-lap
+        variation; it is not formal Bayesian uncertainty.
 
         N31 uses this interval to sample pace scenarios in Monte Carlo strategy
-        evaluation — a wider interval increases the variance of the strategy
+        evaluation. A wider interval increases the variance of the strategy
         score distribution and makes the agent more conservative.
 
         Args:
@@ -748,17 +781,21 @@ class PaceAgent:
 
         rng = np.random.default_rng(seed)
         base = feature_df.values.copy().astype(float)
-        col_idx = {c: feature_df.columns.get_loc(c) for c in noise_cols}
+        col_idx = [feature_df.columns.get_loc(c) for c in noise_cols]
 
-        preds = []
-        for _ in range(n):
-            row = base.copy()
-            for col, idx in col_idx.items():
-                sigma = abs(base[0, idx]) * _NOISE_PCT
-                row[0, idx] += rng.normal(0, sigma)
-            df_row = pd.DataFrame(row, columns=feature_df.columns)
-            delta = float(self.model.predict(df_row)[0])
-            preds.append(float(df_row["Prev_LapTime"].iloc[0]) + delta)
+        # One perturbed block and one predict() call, where this used to run n
+        # single-row calls. The samples are the same numbers, not merely close
+        # ones: numpy computes normal(0, sigma) as sigma * standard_normal(), and
+        # a C-order (n, len(noise_cols)) block draws sample-major then column,
+        # which is the order the per-sample loop drew in. Batching matters here
+        # because XGBoost pays a fixed pandas-to-native conversion per call, and
+        # at n=200 that conversion was 61% of an offline lap.
+        sigmas = np.abs(base[0, col_idx]) * _NOISE_PCT
+        block = np.repeat(base, n, axis=0)
+        block[:, col_idx] += rng.normal(0.0, 1.0, size=(n, len(col_idx))) * sigmas
+
+        perturbed = pd.DataFrame(block, columns=feature_df.columns)
+        preds = perturbed["Prev_LapTime"].to_numpy() + self.model.predict(perturbed)
 
         return float(np.percentile(preds, 10)), float(np.percentile(preds, 90))
 
@@ -767,7 +804,7 @@ class PaceAgent:
 
         Filters self.laps_ref to the matching GP, year, and compound, then
         returns the median of LapTime_s. N31 uses this value to contextualise
-        the absolute predicted lap time — a large positive delta_vs_median
+        the absolute predicted lap time. A large positive delta_vs_median
         signals a degrading tyre or a slower compound choice.
 
         Args:
@@ -860,13 +897,17 @@ class PaceAgent:
             rainfall: True if rain was recorded during this lap.
             total_laps: Total scheduled race laps.
             gp_name: GP name matching self.circuit_cluster keys.
-            mean_sector_speed: Average sector speed; defaults to prev_speed_st.
+            mean_sector_speed: This lap's measured mean sector speed if the caller
+                has one; when None it is resolved per (year, GP) from the featured
+                artefact, NaN when unknown (#797). Never defaulted to prev_speed_st.
             prev_deg_rate: Degradation rate from the previous lap (s/lap).
             prev_cum_deg: Cumulative degradation at the previous lap.
             prev_deg_accel: Second derivative of degradation (s/lap²).
             stint_baseline_tyre_life: TyreLife at the start of the current
                 stint. None forces FuelEffect to NaN rather than a fabricated
-                estimate — see _compute_derived.
+                estimate. See _compute_derived.
+            fresh_tyre: FastF1's set-was-new flag; None falls back to the
+                `tyre_life <= 1` proxy.
 
         Returns:
             PaceOutput with all fields populated and a reasoning string.
@@ -950,7 +991,7 @@ class PaceAgent:
 
         # The PREVIOUS lap's trap, which is what N04 built and N06 ate: every `Prev_*`
         # column is one grouped shift within the stint. This used to read `speed_st`,
-        # THIS lap's trap, so the feature was a lap ahead of itself on every call — the
+        # THIS lap's trap, so the feature was a lap ahead of itself on every call: the
         # exact defect #435 fixed for `Prev_LapTime` and left in place for its sibling.
         #
         # No `or 300.0`. That default was not a neutral filler: 300 km/h sits inside the
@@ -984,14 +1025,29 @@ class PaceAgent:
             fresh_tyre=d.get("fresh_tyre"),
             lap_number=lap_number,
             stint=d.get("stint") or 1,
-            tyre_life=d.get("tyre_life") or 1,
+            # `.get`, not `or 1`. The state manager already publishes
+            # UNKNOWN_TYRE_LIFE for an age it does not have
+            # (`race_state_builder.py:379`), and `or` is false for 0, so the `or 1`
+            # here turned that unknown back into a fresh set one hop after it was
+            # chosen - undoing the sentinel at the only consumer that matters.
+            # Same shape as the `position` fix three lines below, which this file
+            # already carries the reasoning for (#628), and the same defect #832
+            # removed from N15's own reader.
+            #
+            # Measured on the shipped N06 booster: tyre_life 0, 1 and 2 predict
+            # 86.712000 identically on a real Lusail row (12 predicts 86.654000),
+            # so passing the unknown through changes no served number today. What
+            # it changes is `_previous_tyre_life`, which returns None at <= 1 and
+            # so sends Prev_TyreLife to the model as NaN rather than as a
+            # fabricated age.
+            tyre_life=_unknown_if_missing(d.get("tyre_life")),
             compound=d.get("compound") or "MEDIUM",
             # Plain .get, no `or` fallback: `d.get('position') or 1` collapsed a
             # missing telemetry reading AND the #428 sentinel (a stored `0`)
             # into P1, the race leader, straight into the live N06 XGBoost
             # feature (#628). Unlike race_situation_agent/pit_strategy_agent,
             # this value is never used in a `position - 1` rival lookup here,
-            # so there is no lookup to fool — the honest fix is simply to let
+            # so there is no lookup to fool. The honest fix is simply to let
             # an unknown position propagate as None. _build_feature_row's
             # existing pd.to_numeric(errors='coerce') turns that into NaN, and
             # XGBoost handles a missing 'Position' natively via its
@@ -1007,7 +1063,7 @@ class PaceAgent:
             # (#800). `or` rather than the two-arg get: a producer that has not been
             # updated reports the key absent, and lap 1 of an unpitted race is 1
             # under N01's rule anyway.
-            laps_since_pit=d.get("laps_since_pit") or d.get("tyre_life") or 1,
+            laps_since_pit=_laps_since_pit(d),
             fuel_load=laps_remaining / max(total_laps, 1),
             year=meta.get("year") or 2025,
             # ``d.get('prev_lap_time') or 90.0``, NOT ``d.get('lap_time_s')``: the
@@ -1017,8 +1073,8 @@ class PaceAgent:
             # real 'prev_lap_time' sourced from the parquet's Prev_LapTime column.
             # ``or``, not the two-arg get(key, default) form: Prev_LapTime is NaN
             # on the first lap of a stint/race (no earlier lap exists), which
-            # get_driver_state turns into an explicit ``None`` — present key, None
-            # value — and the two-arg form only substitutes when the KEY is
+            # get_driver_state turns into an explicit ``None`` (present key, None
+            # value), and the two-arg form only substitutes when the KEY is
             # absent, never when the VALUE is (the same Series.get trap #428/#446/
             # #462 keep finding). Unlike stint_baseline_tyre_life below, None
             # cannot be allowed through here: _predict() reads Prev_LapTime
@@ -1075,7 +1131,7 @@ def _get_default_pace_agent() -> PaceAgent:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public entry points (backward-compatible API — same signatures as before)
+# Public entry points (backward-compatible API, same signatures as before)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1107,7 +1163,7 @@ def run_pace_agent(
     """Run the Pace Agent for a single lap and return a structured PaceOutput.
 
     Thin entry point that delegates to the shared PaceAgent singleton. All
-    inference logic lives in PaceAgent.run() — see its docstring for full
+    inference logic lives in PaceAgent.run(). See its docstring for full
     parameter documentation.
     """
     return _get_default_pace_agent().run(

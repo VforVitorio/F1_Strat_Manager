@@ -101,7 +101,7 @@
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
-  color: var(--purple-300);
+  color: var(--accent-text);
   background: rgba(108,92,231,0.12);
   border: 1px solid rgba(108,92,231,0.22);
   padding: 2px 9px;
@@ -111,7 +111,7 @@
 .rl-date {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--fg-4);
+  color: var(--fg-3);
   white-space: nowrap;
 }
 .rl-badge {
@@ -130,13 +130,13 @@
 }
 .rl-badge.planned-badge {
   background: rgba(108,92,231,0.14);
-  color: var(--purple-300);
+  color: var(--accent-text);
   border: 1px solid rgba(108,92,231,0.28);
 }
 .rl-badge.side-badge {
-  background: rgba(255,255,255,0.05);
+  background: var(--tint-2);
   color: var(--fg-3);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--tint-4);
 }
 
 /* Title + summary */
@@ -177,7 +177,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--fg-4);
+  color: var(--fg-3);
   margin: 36px 0 20px 44px;
 }
 
@@ -451,23 +451,39 @@
   </div>
 </li>
 
+<li class="rl-item">
+  <div class="rl-dot done"></div>
+  <div class="rl-card">
+    <div class="rl-header">
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.1.0 to v2.5.1</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-07-28</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
+    </div>
+    <p class="rl-title">Decision memory, and a round of correctness hardening</p>
+    <p class="rl-summary">The orchestrator gained a per-race <strong>decision memory</strong>: a caller-owned accumulator rendered into the Layer 3 prompt, wired through the CLI, the arcade and the backend, so a recommendation can say what changed since the last lap and why. Alongside it, a run of correctness work on the Monte Carlo and the agents, including banding <code>threat_level</code> on the served calibrated scale rather than on raw-scale operating points, pricing the lap-number neutralisation union in all three places it lives, and breaking an exact scenario tie by a stated rule instead of by dictionary insertion order. Full detail in the <a href="https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">changelog</a>.</p>
+  </div>
+</li>
+
+<li class="rl-item">
+  <div class="rl-dot done"></div>
+  <div class="rl-card">
+    <div class="rl-header">
+      <span class="rl-version"><span class="sr-only">Version: </span>v2.6.0</span>
+      <span class="rl-date"><span class="sr-only">Date: </span>2026-08-29</span>
+      <span class="rl-badge done-badge"><span class="sr-only">Status: </span>Shipped</span>
+    </div>
+    <p class="rl-title">PITWALL, a designed Arcade, and a startup that stops making you wait</p>
+    <p class="rl-summary">The trackside surface is now <strong>PITWALL</strong>: two desktop windows built in React and hosted in a platform webview, a DATA window with the timing tower, the bests panel, the race-pace grid, the track ring and the radio feed, and an AGENTS window that shows the decision and the six consoles behind it. They run alongside the pyglet replay rather than replacing it, and the <code>lap_state</code> contract and the agents are unchanged. The replay itself got a design pass over the launch menu and the circuit layout, and every one of the 70 rounds of 2023 to 2025 now loads from the menu where only one did.</p>
+    <p class="rl-summary">The AGENTS window also gained a <strong>PIT EXIT</strong> card, which answers the one question a pit wall asks before every stop: if we box on this lap, what position do we rejoin in, and which cars land either side. It reads <code>P1 &rarr; P3</code> under an <em>if we box now</em> header, with the car ahead and the car behind named and the gap to each. The number is the one the projection layer is graded on, <strong>86.1% within one position over 552 real green-flag stops of 2025</strong>, because it is computed at the same two-lap horizon the ground truth measures rather than at the five-lap one the strategy scoring uses. RADIO gave up one of its two columns to make room, so the bottom row now runs three columns wide.</p>
+    <p class="rl-summary">Startup and per-lap cost came down with it. <code>f1-sim --help</code> went from 12.6 s to 3.6 s and a five-lap offline run from 15.6 s to 5.5 s, because importing an agent no longer drags the LLM stack in behind it; N25's confidence interval went from 660 ms to 5.9 ms a lap by scoring one perturbed block instead of two hundred single rows, returning the same numbers; a warm session load went from 7.2 s to 3.8 s, and the pit-wall windows no longer pay 300 ms for the race on the first request they block on. Full detail in the <a href="https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">changelog</a>.</p>
+  </div>
+</li>
+
 </ul>
 
 <p class="rl-section-label">Planned milestones</p>
 
 <ul class="rl-wrap">
-
-<li class="rl-item">
-  <div class="rl-dot planned"></div>
-  <div class="rl-card planned">
-    <div class="rl-header">
-      <span class="rl-version"><span class="sr-only">Version: </span>v2.6.0</span>
-      <span class="rl-badge planned-badge"><span class="sr-only">Status: </span>Planned</span>
-    </div>
-    <p class="rl-title">Arcade, modernized: a web-native trackside frontend</p>
-    <p class="rl-summary">Bring the web app's modern frontend to part of the live Arcade experience, running alongside the PySide6 / pyglet 2D replay rather than replacing it. The strategy and telemetry surfaces move to a web-native view; the <code>lap_state</code> contract and the agents stay unchanged.</p>
-  </div>
-</li>
 
 <li class="rl-item">
   <div class="rl-dot planned"></div>

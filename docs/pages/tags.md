@@ -1,8 +1,8 @@
 # Tags
 
-Every documentation page declares topical tags so you can navigate by
+Every documentation page declares topical tags for navigating by
 concept instead of by file tree. The knowledge graph (see the home page)
-uses these same tags to draw clusters; the tables below give you a flat,
+uses these same tags to draw clusters; the tables below give a flat,
 scannable index of the same data.
 
 Tags that appear on a single page are listed under **Other** at the end.
@@ -31,8 +31,8 @@ Tags that appear on a single page are listed under **Other** at the end.
 | `frontend` | [Web app](#/webapp), [Driver colors](#/driver-colors), [Streamlit frontend](#/streamlit) (legacy) |
 | `ui` | [Web app](#/webapp), [Dashboard architecture](#/arcade-dashboard), [Streamlit frontend](#/streamlit) (legacy) |
 | `api` | [Agents API reference](#/agents-api), [Backend API](#/backend-api) |
-| `telemetry` | [Race replay engine](#/simulation), [Backend API](#/backend-api), [Web app](#/webapp), [Dashboard architecture](#/arcade-dashboard) |
-| `chat` | [Backend API](#/backend-api), [Web app](#/webapp) |
+| `telemetry` | [Race replay engine](#/simulation), [Backend API](#/backend-api), [Web app](#/webapp), [Dashboard architecture](#/arcade-dashboard), [Streamlit frontend](#/streamlit) (legacy) |
+| `chat` | [Backend API](#/backend-api), [Web app](#/webapp), [Streamlit frontend](#/streamlit) (legacy) |
 | `voice` | [Streamlit frontend](#/streamlit) (legacy, the voice surface was retired in v2) |
 | `mcp` | [Backend API](#/backend-api), [Web app](#/webapp) |
 
@@ -46,7 +46,7 @@ Tags that appear on a single page are listed under **Other** at the end.
 | `uv` | [Getting started](#/getting-started), [Setup & deployment](#/setup), [CI/CD pipeline](#/ci-cd) |
 | `dev` | [Development overview](#/development), [Docs maintenance](#/docs-maintenance), [CI/CD pipeline](#/ci-cd) |
 | `git` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd) |
-| `release` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd), [Roadmap](#/roadmap), [Changelog](#/changelog) |
+| `release` | [Development overview](#/development), [CI/CD pipeline](#/ci-cd), [Roadmap](#/roadmap) |
 | `github-actions` | [Docs maintenance](#/docs-maintenance), [CI/CD pipeline](#/ci-cd) |
 
 ## Data

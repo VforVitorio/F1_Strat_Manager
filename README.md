@@ -23,13 +23,13 @@ F1 StratLab is an open-source multi-agent AI platform for Formula 1 race replay 
 </div>
 
 <div align="center">
-  <a href="docs/assets/demo/arcade-demo.mp4">
-    <img src="docs/assets/demo/arcade-demo.gif" alt="F1 StratLab arcade demo: 2D race replay, strategy dashboard and live telemetry" width="860"/>
+  <a href="docs/assets/demo/pitwall-demo.mp4">
+    <img src="docs/assets/demo/pitwall-demo.gif" alt="F1 StratLab at Qatar 2025: the Safety Car arrives mid-lap, sixteen of twenty cars box, and the system calls PIT NOW" width="860"/>
   </a>
 </div>
 
 <div align="center">
-  <sub>▶ The <strong>Arcade</strong>: 2D race replay, strategy dashboard and live telemetry, all driven by one shared stream. <a href="docs/assets/demo/arcade-demo.mp4">Click for the full clip</a>, or see all three surfaces on the <a href="https://vforvitorio.github.io/f1stratlab-web/#demo-carousel">landing page</a>.</sub>
+  <sub>▶ <strong>Qatar 2025, lap 7.</strong> The Safety Car comes out mid-lap and sixteen of the twenty cars box. McLaren stays out. This is what the three windows were saying while that happened. <a href="docs/assets/demo/pitwall-demo.mp4">Full clip ▶</a> · <a href="https://vforvitorio.github.io/f1stratlab-web/#demo-carousel">all three surfaces on the landing page</a>.</sub>
 </div>
 
 <div align="center">
@@ -64,10 +64,34 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the one-page topology and [`docs/`]
 | Surface                            | Command                                                                                                     | When to use                                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **CLI**                      | `f1-strat` (interactive wizard) · `f1-sim Melbourne VER "Red Bull Racing" --year 2025` (headless)                                                      | Headless Rich-based live inference panel for a single race. `f1-strat` opens an arrow-key menu (GP, driver, provider, head-to-head); `f1-sim` is the scripted form. |
-| **Arcade** (primary live UI) | `f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --driver2 LEC --strategy` | Three-window 2D race replay + PySide6 strategy dashboard + live telemetry grid. No backend required. |
+| **Arcade** (primary live UI) | `f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing" --driver2 LEC --strategy` | Three windows off one stream: the 2D race replay plus PITWALL DATA and PITWALL AGENTS. No backend required. |
 | **Web app** (post-race)    | `f1-webapp` (wraps `docker compose up`)                                                               | React SPA (Vite + TypeScript + Tailwind + ECharts): telemetry dashboard, 60fps driver comparison, ML model lab, multi-agent pit-wall strategy, race analysis, and a streaming AI chat that renders tool results inline. Backed by FastAPI. |
 
-The Arcade is in the hero above. Here are the other two:
+### What the Arcade opens
+
+Three windows off one shared stream, and the row below is **one moment on all three**: the lap the Safety Car arrives.
+
+<table>
+<tr>
+<td width="33%" align="center">
+  <img src="docs/assets/demo/pitwall-row-replay.gif" alt="The pyglet replay: twenty cars on the circuit outline with the Safety Car pill lit" width="100%"/>
+  <br/>
+  <sub><strong>Replay</strong> · where the cars are</sub>
+</td>
+<td width="33%" align="center">
+  <img src="docs/assets/demo/pitwall-row-data.gif" alt="PITWALL DATA: the twenty-row timing tower, sector times and the own-car traces" width="100%"/>
+  <br/>
+  <sub><strong>PITWALL · DATA</strong> · what the timing screen says</sub>
+</td>
+<td width="33%" align="center">
+  <img src="docs/assets/demo/pitwall-row-agents.gif" alt="PITWALL AGENTS: the decision band over the six specialist consoles" width="100%"/>
+  <br/>
+  <sub><strong>PITWALL · AGENTS</strong> · what it decided, and why</sub>
+</td>
+</tr>
+</table>
+
+The other two surfaces:
 
 <table>
 <tr>
@@ -118,7 +142,8 @@ Requires Python 3.10-3.12 and an `OPENAI_API_KEY` (or `F1_LLM_PROVIDER=lmstudio`
 
 ## Project layout
 
-- [`src/arcade/`](src/arcade/): 2D race replay (pyglet) + PySide6 strategy dashboard
+- [`src/arcade/`](src/arcade/): 2D race replay (pyglet) + the TCP broadcast the followers read
+- [`src/pitwall/`](src/pitwall/): the two desktop windows (React in a webview, one stream client)
 - [`src/agents/`](src/agents/): multi-agent orchestrator (N25 → N31)
 - [`src/simulation/`](src/simulation/): `RaceReplayEngine` + `RaceStateManager`
 - [`src/telemetry/`](src/telemetry/): FastAPI backend + React web app (post-race UI, git submodule)
@@ -149,7 +174,7 @@ This project is part of a broader F1 AI suite:
 
 ## Cite this work
 
-If F1 StratLab is useful in your research, your writing or your own project, please cite it. GitHub's "Cite this repository" button reads the same [`CITATION.cff`](CITATION.cff), but here it is in full so it can be copied without leaving the page.
+When F1 StratLab is useful in research, in writing or in a project, please cite it. GitHub's "Cite this repository" button reads the same [`CITATION.cff`](CITATION.cff), but here it is in full so it can be copied without leaving the page.
 
 **BibTeX**
 
@@ -172,7 +197,7 @@ If F1 StratLab is useful in your research, your writing or your own project, ple
 
 > F1 StratLab by Víctor Vega Sobral, https://github.com/VforVitorio/F1-StratLab
 
-If you build on a specific part, citing the version you used helps: the strategy engine changes between releases, so the numbers in a v1 run are not the numbers in a v2 one. And if you do use it for something, an issue or a message saying so is genuinely welcome, it is the only way to find out where this ends up.
+When a project builds on a specific part, citing the version used helps: the strategy engine changes between releases, so the numbers in a v1 run are not the numbers in a v2 one. And using it for something is worth an issue or a message about it: that is the only way to find out where this ends up.
 
 ---
 

@@ -1,11 +1,11 @@
 <mxfile host="app.diagrams.net">
-  <diagram id="n30" name="N30 — RAG Agent">
+  <diagram id="n30" name="N30, RAG Agent">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="title" value="N30 — RAG Agent" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="title" value="N30, RAG Agent" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="280" y="20" width="400" height="30" as="geometry" />
         </mxCell>
 
@@ -15,7 +15,7 @@
         </mxCell>
 
         <!-- INPUT -->
-        <mxCell id="input" value="&lt;b&gt;Input — question (natural language)&lt;/b&gt;&lt;br/&gt;From N31 Orchestrator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+        <mxCell id="input" value="&lt;b&gt;Input, question (natural language)&lt;/b&gt;&lt;br/&gt;From N31 Orchestrator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="330" y="90" width="310" height="55" as="geometry" />
         </mxCell>
 
@@ -25,22 +25,22 @@
         </mxCell>
 
         <!-- TOOL -->
-        <mxCell id="tool" value="&lt;b&gt;query_rag_tool&lt;/b&gt;&lt;br/&gt;&lt;i&gt;@tool — from src/rag/retriever.py&lt;/i&gt;&lt;br/&gt;Dense retrieval via sentence-transformers&lt;br/&gt;→ top-k=5 chunks per query · cosine similarity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="tool" value="&lt;b&gt;query_rag_tool&lt;/b&gt;&lt;br/&gt;&lt;i&gt;@tool, from src/rag/retriever.py&lt;/i&gt;&lt;br/&gt;Dense retrieval via sentence-transformers&lt;br/&gt;→ top-k=5 chunks per query · cosine similarity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="295" y="355" width="380" height="80" as="geometry" />
         </mxCell>
 
         <!-- VECTOR DB -->
-        <mxCell id="vdb" value="&lt;b&gt;Qdrant Vector DB (local on-disk)&lt;/b&gt;&lt;br/&gt;FIA Sporting Regulations 2023–2025&lt;br/&gt;Embeddings: BAAI/bge-m3 · 1024-dim · RTX 5070&lt;br/&gt;2,279 chunks · 512 chars · 64-char overlap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="vdb" value="&lt;b&gt;Qdrant Vector DB (local on-disk)&lt;/b&gt;&lt;br/&gt;FIA Sporting Regulations 2023-2025&lt;br/&gt;Embeddings: BAAI/bge-m3 · 1024-dim · RTX 5070&lt;br/&gt;2,279 chunks · 512 chars · 64-char overlap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="260" y="505" width="450" height="80" as="geometry" />
         </mxCell>
 
         <!-- OUTPUT -->
-        <mxCell id="output" value="&lt;b&gt;RegulationContext&lt;/b&gt;&lt;br/&gt;question · answer · chunks[] · articles[] (FIA citations)&lt;br/&gt;reasoning (property — alias for answer)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+        <mxCell id="output" value="&lt;b&gt;RegulationContext&lt;/b&gt;&lt;br/&gt;question · answer · chunks[] · articles[] (FIA citations)&lt;br/&gt;reasoning (property, alias for answer)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="295" y="660" width="380" height="65" as="geometry" />
         </mxCell>
 
         <!-- NOTE -->
-        <mxCell id="note" value="→ N31 as hard constraint — N30.articles used to filter illegal strategy options before LLM decides" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=2;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="note" value="→ N31 as hard constraint, N30.articles used to filter illegal strategy options before LLM decides" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontStyle=2;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="160" y="740" width="650" height="20" as="geometry" />
         </mxCell>
 

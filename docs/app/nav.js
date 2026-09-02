@@ -116,18 +116,27 @@ window.PAGES = [
     title: "Arcade quick start",
     section: "Arcade",
     file: "pages/arcade-quick-start.md",
-    description: "One-command launch of the three-window arcade MVP.",
+    description: "One-command launch of the three-window arcade.",
     eyebrow: "Quick start",
-    tags: ["arcade", "pyside6", "install"],
+    tags: ["arcade", "pitwall", "install"],
   },
   {
     slug: "arcade-dashboard",
-    title: "Dashboard architecture",
+    title: "Dashboard architecture (legacy)",
     section: "Arcade",
     file: "pages/arcade-dashboard.md",
-    description: "PySide6 package layout, wire protocol, thread model.",
-    eyebrow: "PySide6",
-    tags: ["arcade", "pyside6", "ui", "telemetry", "threading"],
+    description: "Retired PySide6 dashboard, kept for historical reference.",
+    eyebrow: "Legacy",
+    tags: ["arcade", "pyside6", "ui", "telemetry", "threading", "legacy"],
+  },
+  {
+    slug: "pitwall",
+    title: "PITWALL windows",
+    section: "Arcade",
+    file: "pages/pitwall.md",
+    description: "The React strategy surfaces: two pywebview windows, one shared client, and the same pages on loopback.",
+    eyebrow: "React",
+    tags: ["arcade", "ui", "telemetry", "frontend"],
   },
   {
     slug: "arcade-strategy-pipeline",
@@ -205,20 +214,17 @@ window.PAGES = [
     eyebrow: "Timeline",
     tags: ["overview", "release"],
   },
-  {
-    slug: "changelog",
-    title: "Changelog",
-    section: "Development",
-    file: "pages/changelog.md",
-    description: "Mirrored release history from the repo root CHANGELOG.md.",
-    eyebrow: "Releases",
-    tags: ["release"],
-  },
 ];
 
-// Tag colour map (used as a soft white-ish neutral with subtle hue hints).
-// Keep neutral so they read as secondary nodes in the graph.
-window.TAG_COLOR = "#cfc6e6";
+// Tag node colour: a soft neutral, so tags read as secondary nodes in the graph.
+//
+// Per theme, because a near-white neutral is invisible on a light canvas. A function rather than
+// a constant so callers get the current value; the graph asks for it once per frame.
+window.TAG_COLORS = { dark: "#cfc6e6", light: "#5b5470" };
+window.tagColor = function () {
+  return window.TAG_COLORS[document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"];
+};
+
 window.TAG_LABELS = {
   agents: "agents",
   langgraph: "langgraph",

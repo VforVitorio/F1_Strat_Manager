@@ -1,6 +1,6 @@
 # Documentation maintenance
 
-This page documents how the documentation site you are reading right now is built, deployed and extended. Read it before adding new pages, changing the theme or pointing the site at a custom domain.
+How this documentation site is built, deployed and extended. Read this before adding new pages, changing the theme or pointing the site at a custom domain.
 
 ## Stack overview
 
@@ -50,18 +50,18 @@ Then open `http://localhost:8000/`. Edit any `.md` file or `.js` script and refr
 ```
 
 3. If the page uses a tag not already in `window.TAG_LABELS`, add it there too.
-4. If you edited any `docs/app/*.js` file, bump its `?v=` cache-buster in `docs/index.html` so browsers pick up the change (e.g. `main.js?v=4` -> `main.js?v=5`).
+4. After editing any `docs/app/*.js` file, bump its `?v=` cache-buster in `docs/index.html` so browsers pick up the change (e.g. `main.js?v=4` -> `main.js?v=5`).
 5. Push to `main`. The deploy workflow runs automatically.
 
 ### Creating a new section
 
-Add the section name to `window.SECTIONS` in `nav.js` (order matters -- it controls sidebar ordering) and add a colour entry in `window.SECTION_COLORS`. Then set `section` on your page entry to match the new name exactly.
+Add the section name to `window.SECTIONS` in `nav.js` (order matters -- it controls sidebar ordering) and add a colour entry in `window.SECTION_COLORS`. Then set `section` on the new page entry to match the new name exactly.
 
 ## Theme and palette
 
 Styles live in `docs/styles/tokens.css` (CSS custom properties) and `docs/styles/docs.css` (component rules). The token file references the same property names the landing site uses (`--purple-600`, `--purple-300`, `--bg-0` and friends).
 
-If you change colours or fonts, update **both** repos:
+A change to colours or fonts must update **both** repos:
 
 - This docs site: `docs/styles/tokens.css`
 - Public landing: `f1stratlab-web/colors_and_type.css`
@@ -114,11 +114,11 @@ flowchart LR
 ```
 ````
 
-For more complex diagrams (draw.io sources in `docs/diagrams/`), export as SVG or PNG from [diagrams.net](https://app.diagrams.net/) and embed the image in the markdown.
+For more complex diagrams (Mermaid fenced blocks inside the page markdown (there is no `docs/diagrams/`; the draw.io sources live in `documents/dev_docs/diagrams/` in the repo, not on the site)), export as SVG or PNG from [diagrams.net](https://app.diagrams.net/) and embed the image in the markdown.
 
 ## Where to change if X
 
-| Change you want | File(s) to edit |
+| Desired change | File(s) to edit |
 |---|---|
 | Add a new docs page | `docs/pages/<slug>.md` + `window.PAGES` entry in `docs/app/nav.js` |
 | Edit the nav order or sections | `window.PAGES` / `window.SECTIONS` in `docs/app/nav.js` |

@@ -13,8 +13,8 @@ This document covers two tightly coupled forward-looking topics:
 2. **Topic 2, the telemetry surface**: the design of a real-telemetry pit-wall dashboard
    showing all drivers as a real wall would (our car full telemetry, rivals only the
    observable tier), synchronized with the race replay, plus the architecture decision
-   Victor is weighing: what to migrate out of the native Arcade surface, what to keep,
-   and what to kill.
+   The open question is what to migrate out of the native Arcade surface, what to
+   keep, and what to kill.
 
 Hard constraints honored throughout: design only, no code; `scripts/run_simulation_cli.py`,
 `src/agents/` internals, and `notebooks/**` are untouchable (everything proposed is
@@ -37,16 +37,16 @@ module docstring). That thesis has two halves that have never been written down 
 model:
 
 - **The input half**: which rival signals are legitimately observable, which are
-  derivable, and which are genuinely hidden and must be modeled as uncertainty. This
+  derivable, and which are hidden and must be modeled as uncertainty. This
   decides the Rival Agent's feature space (TFM) and the honesty of the simulation.
 - **The output half**: what the product SHOWS. A pit-wall dashboard that renders hidden
   rival data as if it were real breaks the same thesis on screen that the boundary
   protects in the agents.
 
-The correction from Victor (2026-07-06) that this document bakes in everywhere: a rival's
+The correction this document bakes in everywhere (2026-07-06): a rival's
 **tyre compound and tyre age (laps on the current set) ARE known to a real pit wall**.
 They are visible on TV, carried in the FIA timing feed, and trivially derivable from
-observed pit-in/pit-out laps. What is genuinely hidden for a rival is: raw car telemetry
+observed pit-in/pit-out laps. What is hidden for a rival is: raw car telemetry
 traces at professional fidelity (steering, brake pressures, ERS deployment), true tyre
 degradation / remaining grip, fuel load, engine and energy deployment modes, and the
 team's strategic intent. Verified against the code: `get_rival_states` already emits
@@ -113,11 +113,11 @@ RIVAL (rows 2-9 only). Tier definitions:
 
 | Tier | Signals | Notes |
 |---|---|---|
-| (a) Observed | Position, lap time, **sector times**, the four speed measurements, pit-in/pit-out events, gaps and intervals (lap-boundary and intra-lap via GPS/intervals), **current compound**, **tyre age / stint number**, track status, race control messages, DRS-window occupancy, coarse broadcast car data (speed/RPM/gear/throttle/brake-flag/DRS at 3-4 Hz) | Compound and tyre age are observed per Victor's correction; the FIA feed carries them directly (OpenF1 `/v1/stints` is that feed's public mirror). Broadcast car data is a REAL but REDUCED-FIDELITY channel; see the nuance box below |
+| (a) Observed | Position, lap time, **sector times**, the four speed measurements, pit-in/pit-out events, gaps and intervals (lap-boundary and intra-lap via GPS/intervals), **current compound**, **tyre age / stint number**, track status, race control messages, DRS-window occupancy, coarse broadcast car data (speed/RPM/gear/throttle/brake-flag/DRS at 3-4 Hz) | Compound and tyre age are observed per the correction in 1.2; the FIA feed carries them directly (OpenF1 `/v1/stints` is that feed's public mirror). Broadcast car data is a REAL but REDUCED-FIDELITY channel; see the nuance box below |
 | (b) Derivable | Tyre age recomputed from observed out-laps (the live-robust way to obtain what (a) also carries), stops so far, remaining sets per compound (allocation minus observed usage), new-vs-scuffed at fitting (allocation tracking, noisy), circuit pit loss and the undercut window, pace trend / degradation slope within the stint (the observable footprint of latent wear), free-air pit window and pit-exit traffic, DRS-train membership, "in the window of the car ahead" geometry | These are exactly feature families F1/F2/F3 of `RIVAL_AGENT_DESIGN.md` section 5 |
 | (c) Hidden | Raw professional telemetry (steering, brake pressures, ERS deployment), fuel load, engine/energy modes, TRUE degradation / remaining grip, whether the fitted set was new or scuffed (beyond the noisy derivation), team strategic intent, pit calls not yet visible in the lane, driver instructions not broadcast | Never features; only priors and uncertainty. The Rival Agent's H1-H4 heads PREDICT the observable consequences of this tier |
 
-**The broadcast car-data nuance (a deliberate refinement of the hidden list).** Victor's
+**The broadcast car-data nuance (a deliberate refinement of the hidden list).** That
 correction lists "raw car telemetry traces (throttle/brake/steering/ERS)" as hidden. That
 is right at professional fidelity, and this document keeps steering/ERS/brake-pressure
 firmly in tier (c). But the coarse broadcast channel (row 3 of 2.1) does expose rival
@@ -149,12 +149,12 @@ lap: `driver`, `team`, `position`, `lap_time_s`, `compound`, `tyre_life`, `stint
 | Field | Tier | Verdict |
 |---|---|---|
 | `position`, `lap_time_s` | (a) | Accurate |
-| `compound`, `tyre_life`, `stint` | (a)/(b) | Accurate, and consistent with Victor's correction; the live-parity discipline is to also DERIVE tyre age from observed pit events so the same logic works when the column does not exist (already specified in `RIVAL_AGENT_DESIGN.md` 4.1) |
+| `compound`, `tyre_life`, `stint` | (a)/(b) | Accurate, and consistent with the correction in 1.2; the live-parity discipline is to also DERIVE tyre age from observed pit events so the same logic works when the column does not exist (already specified in `RIVAL_AGENT_DESIGN.md` 4.1) |
 | `speed_st` | (a) | Accurate but incomplete (see "too stingy") |
 | `gap_to_leader_s`, `interval_to_driver_s` | (a) | Accurate; end-of-lap resolution only |
 | `is_pitting` (from `PitInTime`, `:277`) | (a) | Accurate; pit entry is publicly visible the moment it happens |
 
-**Direction 1: does the boundary leak hidden data? No, at the `lap_state` level.**
+**Direction 1, whether the boundary leaks hidden data. It does not, at the `lap_state` level.**
 The rival dict carries none of the driver-only fields: sector times, the I1/I2/FL speed
 readings, `fuel_load`, and the in/out-lap pair live only in `get_driver_state`
 (`race_state_manager.py:194-196, 207-212, 215-216`). Nothing in the rivals list is tier
@@ -162,14 +162,23 @@ readings, `fuel_load`, and the in/out-lap pair live only in `get_driver_state`
 
 One SURFACE-level qualification, not a contract leak: in Head-to-Head mode the Arcade
 telemetry window renders the rival's throttle/brake/speed traces
-(`src/arcade/app.py:460-473` broadcasts `telemetry.rival` built by `_frame_to_telemetry`,
-`app.py:65-96`; rendered by the 2x2 grid in `src/arcade/dashboard/telemetry_panel.py:1-27`).
+(the producer broadcasts a rival span built by `_frame_to_telemetry`; the Qt 2x2 grid
+that rendered it was retired in `7ea6a7a6` and PITWALL's DATA window draws it now).
+
+**Schema v2 widened this and the conclusion is unchanged (#1048).** The tick used to
+carry a span for two cars and now carries one for all twenty, so the wire holds
+broadcast-tier telemetry for the whole grid rather than for a pinned pair. That does not
+move the boundary this section is about, because the boundary is the AGENTS' input space:
+the spans reach no model and no prompt, which the rival-selector feasibility gate verified
+by tracing every route from the chosen rival into `src/agents/`. What changed is how many
+cars a SURFACE may draw, and the tiering and labelling requirement in section 3.4 now
+applies to any of them rather than to one.
 Because FastF1 car telemetry IS the broadcast channel, this is broadcast-tier, not
 privileged, so it is defensible; but it is UNLABELED today, and the module docstring's
 own framing ("timing-screen only", `race_state_manager.py:8-9`) would not predict it.
 The fix is labeling and tiering on screen (section 3.4), not deletion of data.
 
-**Direction 2: is the boundary too stingy? Yes, mildly, in five places.** A real wall
+**Direction 2, whether the boundary is too stingy. It is, mildly, in five places.** A real wall
 sees more than `get_rival_states` grants:
 
 | Withheld today | Reality | Evidence |
@@ -243,7 +252,7 @@ produce identical shapes. Coordinate with the Testing epic (#181/#182 fixtures).
    tier vs privileged oracle, to price the broadcast channel and justify the v1
    exclusion with a measurement.
 5. **No change** to its hidden list beyond the sub-tier split: fuel, modes, true
-   degradation, intent stay tier (c), exactly as it and Victor's correction state.
+   degradation, intent stay tier (c), exactly as it and the correction in 1.2 state.
 
 ### 2.5 How the existing Head-to-Head mode approximates this, and its improvements
 
@@ -306,7 +315,7 @@ render tiers (a)+(b); broadcast tier behind a label; tier (c) only ever as model
 | 4 | **Tyre/stint board** | Per driver: stint history, compound sequence, ages, estimated remaining sets | Partial: `tire_chart.py` for our driver; rivals' stints reconstructable from timing data | `src/arcade/dashboard/tire_chart.py:163-218` |
 | 5 | **Gap/interval evolution chart** ("race trace") | Cumulative gap lines per driver over laps; undercut windows visible as converging lines | Missing at runtime (the R2 provider is the source); Streamlit has a post-race version | `src/telemetry/frontend/components/race_analysis/gap_charts.py` |
 | 6 | **Pit window / pit-loss board** | Per rival: circuit pit loss, in-window flags, projected exit traffic | Missing; feature family F2 of the Rival design computes exactly this | `RIVAL_AGENT_DESIGN.md` section 5, F2 |
-| 7 | **Weather panel** | Air/track temp, wind, rain | Exists but renders hardcoded constants today (P3 finding A2); real per-lap weather is P3 Phase B.1 | `src/arcade/app.py:648-656`, `AUDIT_P3_ARCADE.md` A2 |
+| 7 | **Weather panel** | Air/track temp, wind, rain | Exists but renders hardcoded constants today ; real per-lap weather is P3 Phase B.1 | `src/arcade/app.py:648-656`, `AUDIT_P3_ARCADE.md` A2 |
 | 8 | **SC/flag status board** | Track status, SC/VSC/red spans, race control messages | Partial: live pill exists; timeline flag spans are dead (P3 A3); RCM feed not surfaced | `src/arcade/data.py:312`, `AUDIT_P3_ARCADE.md` A3 |
 | 9 | **Strategy board (agents)** | The six agent cards, orchestrator decision, scenario scores, reasoning | YES: the Qt strategy dashboard window | `src/arcade/dashboard/window.py` |
 | 10 | **Radio feed** | Own radio transcripts + NLP verdicts; rival radio (future radiogate corpus) | Partial: radio agent alerts in the cards; no dedicated feed panel | `src/arcade/dashboard/agent_formatters.py` (radio) |
@@ -329,7 +338,7 @@ render tiers (a)+(b); broadcast tier behind a label; tier (c) only ever as model
   `src/telemetry/backend/services/simulation/simulator.py`, whose own docstring says it
   exists "so the backend can stream ... to any SSE consumer (curl, Arcade, future
   dashboards)". Nothing consumes it yet (the Streamlit UI never calls it). The two
-  threads Victor is weaving together were already anticipated to converge here.
+  threads being drawn together were already anticipated to converge here.
 - **The migration stack** (`src/telemetry/docs/migration/MIGRATION_PLAN.md`, epic #25):
   React 19 + Vite + TypeScript strict + Tailwind v4 mapped to `tokens.css` + TanStack
   Router/Query + Zustand + Apache ECharts as the single chart lib + a custom canvas/rAF
@@ -337,7 +346,7 @@ render tiers (a)+(b); broadcast tier behind a label; tier (c) only ever as model
   react-three-fiber code-split for flagship moments. No `webapp/` exists yet; the plan
   is decision-grade but pre-implementation.
 
-**The connection question Victor asked: does the TCP stream feed a web client directly?**
+**The connection question: does the TCP stream feed a web client directly?**
 No. Browsers cannot open raw TCP sockets; a page can only speak HTTP(S), SSE, WebSocket,
 or WebRTC. So "the new tool consumes the Arcade backend" has three viable shapes:
 
@@ -384,7 +393,7 @@ timings, LLM latency, cache hit rates), where Grafana's model fits and no brand 
 constraints exist.
 
 **(c) Custom web surface on the migration stack.** Recommended, and this is also
-Victor's stated desire (the same stack as the telemetry-analysis surface). Evidence it
+the stated preference (the same stack as the telemetry-analysis surface). Evidence it
 fits: ECharts handles streaming line charts and large series natively (the plan already
 made it the single chart lib to kill the plotly.js bundle); the canvas/rAF replay engine
 planned for Comparison is the same primitive windows 2 and 5 need; the design system
@@ -394,14 +403,14 @@ pit-wall dashboard becomes one more route in `webapp/` (epic #25), not a new sta
 
 **(d) Full Arcade-to-web/Three.js migration.** Not now, converge later; see 3.5.
 
-### 3.4 Victor's per-window split, assessed one by one
+### 3.4 The proposed per-window split, assessed one by one
 
-Victor's lean: keep Arcade's circuit window native; migrate the agent-cards window to
+The proposal: keep Arcade's circuit window native; migrate the agent-cards window to
 the web stack; kill the Arcade telemetry window because the new all-drivers dashboard
 replaces it. Explicit opinions:
 
 **KEEP the circuit/track-map window in Arcade: agree, short-to-mid term.** It is the
-one window where native genuinely delivers today: the pyglet replay is shipped,
+one window where native delivers today: the pyglet replay is shipped,
 defended, and its known issues have cheap fixes already planned (P3 Phase C bakes the
 track tessellation; Phase B puts real weather and flag spans on it). Porting it now
 would be the most work for the least new capability. One honest qualifier: after
@@ -413,7 +422,7 @@ read as "keep until the parity gate", not "keep forever" (section 3.5).
 with the highest mismatch between content and host. Its content is text, badges, small
 charts and reasoning prose that change ONCE PER LAP, yet the Qt implementation re-renders
 six cards, the orchestrator card, six syntax-highlighted QTextEdits and a full
-tire-chart rebuild at 10 Hz (P3 finding A6, `dashboard/window.py:211-233`,
+tire-chart rebuild at 10 Hz (`dashboard/window.py:211-233`,
 `reasoning_tabs.py:210-229`, `tire_chart.py:163-218`). In the web stack all of that is
 idiomatic and cheap: collapsible/expandable panels, density toggles, decision-history
 scrubbing, hover detail, proper typography, and the once-per-lap update cadence is just
@@ -426,14 +435,14 @@ the broadcast's `strategy` block is the same payload the relay will carry.
 
 **KILL the Arcade telemetry window: agree.** It is the weakest window: two drivers
 maximum by design (`telemetry_panel.py:1-27`), a fixed 2x2 grid, pyqtgraph, and its own
-independent TCP client (`telemetry_window.py:53-57`, the second half of P3 finding A7).
+independent TCP client (`telemetry_window.py:53-57`).
 The new all-drivers dashboard strictly supersedes it: same four charts for our car, plus
 the timing tower, gap chart, stint board and rival tiers it could never grow into.
 Killing it (rather than migrating it 1:1) is right because its 2-driver framing is an
 artifact of the H2H mode, not a pit-wall concept; the replacement is designed from the
 Topic 1 taxonomy instead.
 
-**Is the resulting hybrid coherent, or a pain?** It is coherent, and, importantly, it is
+**Is the resulting hybrid coherent, or a pain?** It is coherent, and it is
 the SAME topology the system already runs: today the pyglet window broadcasts and a
 separate process (Qt) follows the stream as a one-directional consumer. The proposal
 replaces the Qt follower with a browser follower behind a backend relay; the sync model
@@ -461,7 +470,7 @@ flagship pages exist; sequencing the circuit port behind the parity gate keeps e
 focused. But the end-state question deserves a straight answer:
 
 **"One unified web app" vs "Arcade keeps the circuit + web app for the rest": the
-recommendation.** Adopt Victor's split NOW; schedule the unification DECISION for the
+recommendation.** Adopt that split NOW; schedule the unification DECISION for the
 parity gate, with the expectation that unification wins. Reasoning: the split is the
 correct migration path, not the final architecture. Once (i) migration S3 has shipped
 the canvas/rAF engine, (ii) the pit-wall route is live with the timing tower and gap
@@ -481,10 +490,10 @@ schema, the tower, the boards and the cards all carry over unchanged.
 - **Where**: a new route in `webapp/` (the epic #25 SPA), styled by the same
   `tokens.css`-mapped Tailwind theme; it is a sibling of Dashboard/Strategy/Comparison,
   not a separate app.
-- **Layout** (all panels collapsible, per Victor's ask; presets like "Strategist" /
+- **Layout** (all panels collapsible; presets like "Strategist" /
   "Race engineer" / "Broadcast" select which panels are open):
   - Left rail: **timing tower** (window 1), full field, virtualized rows; compound +
-    tyre-age chips per row (tier (a), per Victor's correction); pit flags.
+    tyre-age chips per row (tier (a), per the correction in 1.2); pit flags.
   - Center: **gap/interval race trace** (window 5, fed by the R2 provider) stacked over
     the **SC/flag timeline** (window 8). The center is deliberately NOT a track map in
     v1: the native Arcade window plays that role side by side until the parity gate.
@@ -561,14 +570,14 @@ Exit: replay running natively + pit-wall following in the browser, all-driver to
 Rebuild window 9 in the SPA bottom ribbon (formatters port as pure functions); delete
 `telemetry_window.py` + `telemetry_panel.py`; retire the Qt dashboard subprocess
 entirely (both windows gone); Arcade keeps only the pyglet circuit window and its TCP
-broadcast. **Explicit re-scope of P3/#199 this implies, needing Victor's sign-off**:
+broadcast. **Explicit re-scope of #199 this implies, still needing sign-off**:
 P3 Phase D items D.1 (StreamBroker) and D.2 (lap-gated Qt rendering) are SKIPPED (their
 problem hosts stop existing); D.3 (broadcast hygiene: dirty-flag serialization,
 non-blocking sends) SURVIVES and gains importance (the relay depends on a healthy
 broadcast); Phase B truth fixes (real weather B.1, flag spans B.2, provider flag B.3,
 round cap B.4) SURVIVE (the circuit window remains); Phase C (track baking, measured)
-SURVIVES; Phase A (engine dedup) is independent and unaffected. Exit: end state Victor
-described: native circuit replay + one web surface with cards + pit-wall telemetry.
+SURVIVES; Phase A (engine dedup) is independent and unaffected. Exit: the end state
+described above, native circuit replay plus one web surface with cards and pit-wall telemetry.
 
 **Phase 4: rival intent and realism mode.**
 The rival intent panel consuming `RivalContext` (TFM M4's integration output); the
@@ -616,7 +625,7 @@ prototype and zero sunk-cost pressure.
 
 ---
 
-## 6. Open questions for Victor
+## 6. Open questions
 
 **Q1: P3/#199 re-scope.** Approve Phase 3's explicit re-scope (skip P3 D.1/D.2, keep
 D.3 + Phases A/B/C, kill both Qt windows)? This should be recorded on the #199 epic so
