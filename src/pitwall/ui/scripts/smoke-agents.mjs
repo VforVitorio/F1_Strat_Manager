@@ -628,19 +628,20 @@ check(
   grid.exit.left === grid.tire.left && grid.exit.right <= grid.situation.left,
   "PIT EXIT holds the second, under TIRE",
 );
-// The line budget that makes one column survivable. A radio line over budget
-// does not clip: `.agent-line` wraps over a content-sized row, so the height
-// comes out of the charts above, and the failure would look like a chart bug.
-const radioLines = await page.evaluate(() =>
-  [...document.querySelectorAll(".slot-radio .agent-line")].map((el) => {
-    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 14;
-    return Math.round(el.getBoundingClientRect().height / lineHeight);
-  }),
-);
-check(
-  radioLines.length > 0 && radioLines.every((lines) => lines === 1),
-  `every RADIO line sets on one line at one column (${radioLines.join(",")})`,
-);
+// **The radio line budget is NOT checkable here, and a check that pretended
+// otherwise sat in this spot.** It asserted every `.slot-radio .agent-line`
+// renders on one line, and removing the formatter's cap entirely left all 137
+// checks green: this file feeds `VIEW` straight to the bundle, so the radio
+// card's body is the literal `"a body line"` above and never passes through
+// `agent_formatters` at all. The smoke tests the RENDERER; the cap is a
+// producer-side property and belongs to
+// `tests/surfaces/test_pitwall_agents_view.py::test_no_radio_body_line_can_outgrow_the_card`,
+// which was watched RED against two compiling mutants.
+//
+// There IS a renderer-side property worth having and this is not it: row 2 is
+// `auto`, so a long line grows the band and shrinks the charts, and nothing in
+// the layout stops it. The formatter cap is the only defence today. Asserting
+// that here would be asserting a design decision this sprint did not take.
 check(
   grid.rag.left === grid.situation.left && grid.rag.top >= grid.radio.top,
   "and RAG closes the corner",
