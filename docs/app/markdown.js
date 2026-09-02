@@ -72,8 +72,18 @@ function escapeHTML(s) {
 }
 
 function slugify(s) {
-  return s.toLowerCase()
-    .replace(/<[^>]+>/g, "")
+  // The tag strip repeats until it stops changing the string. One pass is
+  // bypassable by nesting, because `<<a>script>` becomes `<script>`, and
+  // CodeQL flags exactly that (js/incomplete-multi-character-sanitization).
+  // The character filter below already makes the output safe on its own, so
+  // this is about the value being sanitised where it is computed rather than
+  // relying on a later line to cover for it.
+  let stripped = s.toLowerCase();
+  for (let before = null; before !== stripped; ) {
+    before = stripped;
+    stripped = stripped.replace(/<[^>]+>/g, "");
+  }
+  return stripped
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
@@ -184,7 +194,12 @@ function ensureMermaid() {
   mermaid.initialize({
     startOnLoad: false,
     theme: "base",
-    securityLevel: "loose",
+    // `antiscript`, not `loose`: the labels across docs/pages use <br/> for
+    // multi-line nodes, which `strict` would escape, but `loose` sanitises
+    // nothing at all and the rendered SVG goes straight into innerHTML
+    // (js/xss-through-dom). `antiscript` keeps the markup those labels need
+    // and drops script tags.
+    securityLevel: "antiscript",
     fontFamily: "Inter, system-ui, sans-serif",
     themeVariables: MERMAID_PALETTE[theme],
   });
