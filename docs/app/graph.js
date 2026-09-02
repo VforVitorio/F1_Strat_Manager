@@ -10,6 +10,53 @@
 // var (not const): shared global scope across app scripts, no modules — see markdown.js.
 var { useEffect, useRef, useState } = React;
 
+// ---------- Canvas palette ----------
+// The graph draws to a 2D canvas, so no CSS reaches it and every colour has to be a literal here.
+// Two sets, keyed by theme, read fresh on each frame: the canvas redraws under
+// requestAnimationFrame, so a theme change is picked up on the next frame with no invalidation
+// step of its own.
+//
+// Two entries are not simple inversions. `nodeRing` is a ring drawn in the PAGE colour to punch
+// the node away from the background, so it follows the page rather than the ink. `labelShadow` is
+// a glow behind the label in the page colour for the same reason: on dark it is a black halo, on
+// light it has to be a white one, and left alone it would smudge every label.
+var GRAPH_PALETTE = {
+  dark: {
+    edgeHot:    "rgba(162,155,254,0.9)",
+    edgeWarm:   "rgba(162,155,254,0.45)",
+    edgeDimmed: "rgba(255,255,255,0.03)",
+    edgeTag:    "rgba(207,198,230,0.10)",
+    edge:       "rgba(255,255,255,0.10)",
+    tagFill:    "rgba(207,198,230,0.85)",
+    tagFillDim: "rgba(207,198,230,0.16)",
+    tagRing:    "rgba(255,255,255,0.5)",
+    nodeRing:   "rgba(8,8,12,0.85)",
+    labelShadow:"rgba(8,8,12,0.95)",
+    labelHot:   "#ffffff",
+    labelTag:   "rgba(225,219,250,0.78)",
+    label:      "rgba(255,255,255,0.72)",
+  },
+  light: {
+    edgeHot:    "rgba(90,72,212,0.9)",
+    edgeWarm:   "rgba(90,72,212,0.5)",
+    edgeDimmed: "rgba(20,18,31,0.05)",
+    edgeTag:    "rgba(20,18,31,0.14)",
+    edge:       "rgba(20,18,31,0.16)",
+    tagFill:    "rgba(91,84,112,0.85)",
+    tagFillDim: "rgba(91,84,112,0.20)",
+    tagRing:    "rgba(20,18,31,0.35)",
+    nodeRing:   "rgba(245,245,250,0.9)",
+    labelShadow:"rgba(245,245,250,0.95)",
+    labelHot:   "#14121f",
+    labelTag:   "rgba(20,18,31,0.72)",
+    label:      "rgba(20,18,31,0.75)",
+  },
+};
+
+function graphPalette() {
+  return GRAPH_PALETTE[document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"];
+}
+
 function buildSimulation(graph, w, h) {
   const all = graph.nodes;
   // Initial positions: spread evenly across the canvas using a jittered grid.
@@ -204,6 +251,11 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
       const ctx = canvas.getContext("2d");
       ctx.clearRect(0, 0, w, h);
 
+      // Read per frame rather than per mount, so a theme change lands on the next frame without
+      // needing to invalidate or remount anything. clearRect leaves the canvas transparent, so
+      // the page colour already shows through correctly in both themes.
+      const P = graphPalette();
+
       const hoverId = stateRef.current.hover;
       const hoverSet = hoverId ? adjacency[hoverId] || new Set() : null;
       const focusedTag = stateRef.current.focusedTag;
@@ -219,14 +271,14 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
         let stroke;
         let lw = isTag ? 0.8 : 1.1;
         if (isHi || isFocused) {
-          stroke = "rgba(162,155,254,0.9)";
+          stroke = P.edgeHot;
           lw += 0.4;
         } else if (isCurrent) {
-          stroke = "rgba(162,155,254,0.45)";
+          stroke = P.edgeWarm;
         } else if (isTag) {
-          stroke = hoverId ? "rgba(255,255,255,0.03)" : "rgba(207,198,230,0.10)";
+          stroke = hoverId ? P.edgeDimmed : P.edgeTag;
         } else {
-          stroke = hoverId ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.10)";
+          stroke = hoverId ? P.edgeDimmed : P.edge;
         }
         ctx.strokeStyle = stroke;
         ctx.lineWidth = lw;
@@ -238,7 +290,7 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
 
       // Nodes
       for (const n of sim.nodes) {
-        const color = n.isTag ? window.TAG_COLOR : (window.SECTION_COLORS[n.section] || "#a29bfe");
+        const color = n.isTag ? window.tagColor() : (window.SECTION_COLORS[n.section] || P.edgeHot);
         const isHover = n.id === hoverId;
         const isNeighbour = hoverSet && hoverSet.has(n.id);
         const isCurrent = n.id === currentSlug;
@@ -261,9 +313,9 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
         if (n.isTag) {
           ctx.beginPath();
           ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-          ctx.fillStyle = dim ? "rgba(207,198,230,0.16)" : "rgba(207,198,230,0.85)";
+          ctx.fillStyle = dim ? P.tagFillDim : P.tagFill;
           ctx.fill();
-          ctx.strokeStyle = dim ? "rgba(0,0,0,0)" : "rgba(255,255,255,0.5)";
+          ctx.strokeStyle = dim ? "rgba(0,0,0,0)" : P.tagRing;
           ctx.lineWidth = 1;
           ctx.stroke();
         } else {
@@ -271,7 +323,7 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
           ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
           ctx.fillStyle = dim ? color + "44" : color;
           ctx.fill();
-          ctx.strokeStyle = dim ? "rgba(0,0,0,0)" : "rgba(8,8,12,0.85)";
+          ctx.strokeStyle = dim ? "rgba(0,0,0,0)" : P.nodeRing;
           ctx.lineWidth = 1.5;
           ctx.stroke();
         }
@@ -285,17 +337,17 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
             : (mode === "overlay" || isHover || isCurrent || n.degree >= 2)
         );
         if (showLabel) {
-          ctx.shadowColor = "rgba(8,8,12,0.95)";
+          ctx.shadowColor = P.labelShadow;
           ctx.shadowBlur = 4;
           ctx.textAlign = "center";
           ctx.textBaseline = "top";
           if (n.isTag) {
             ctx.font = (mode === "mini" ? "500 9.5px " : "500 10.5px ") + "JetBrains Mono, ui-monospace, monospace";
-            ctx.fillStyle = isHover ? "#ffffff" : "rgba(225,219,250,0.78)";
+            ctx.fillStyle = isHover ? P.labelHot : P.labelTag;
             ctx.fillText(n.title, n.x, n.y + r + 4);
           } else {
             ctx.font = (mode === "mini" ? "500 10.5px " : "500 11.5px ") + "Inter, system-ui, sans-serif";
-            ctx.fillStyle = (isHover || isCurrent) ? "#ffffff" : "rgba(255,255,255,0.72)";
+            ctx.fillStyle = (isHover || isCurrent) ? P.labelHot : P.label;
             ctx.fillText(n.title, n.x, n.y + r + 6);
           }
           ctx.shadowBlur = 0;
@@ -435,7 +487,7 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
   const graphCounts = window.buildGraph();
   return React.createElement("div", { className: "graph-overlay" },
     React.createElement("div", { className: "graph-header" },
-      React.createElement(window.Icon, { name: "graph", width: 16, height: 16, style: { color: "var(--purple-300)" } }),
+      React.createElement(window.Icon, { name: "graph", width: 16, height: 16, style: { color: "var(--accent-text)" } }),
       React.createElement("div", null,
         React.createElement("div", { className: "graph-title" }, "Knowledge graph"),
         React.createElement("div", { className: "graph-subtitle" },
@@ -470,7 +522,7 @@ function GraphView({ mode = "overlay", onClose, onNav, currentSlug, initialTag }
           )
         ),
         React.createElement("div", { className: "graph-legend-row", style: { marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--hairline)" } },
-          React.createElement("span", { className: "graph-legend-dot", style: { background: window.TAG_COLOR, color: window.TAG_COLOR, width: 7, height: 7, boxShadow: "none", opacity: 0.85 } }),
+          React.createElement("span", { className: "graph-legend-dot", style: { background: window.tagColor(), color: window.tagColor(), width: 7, height: 7, boxShadow: "none", opacity: 0.85 } }),
           React.createElement("span", { style: { fontFamily: "var(--font-mono)" } }, "#tag"),
         ),
       ),

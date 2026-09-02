@@ -2,7 +2,7 @@
 
 - harness `b727baa` · schema v1 · generated 2026-07-11T17:47:16+00:00
 - era 2022-2025 · dataset radios_raw.csv unlabeled subset · seed deterministic · llm openai/gpt-4.1-mini
-- artifacts: —
+- artifacts: none
 
 > PROXY METRIC - LLM-judged, not ground truth. Needs a human-review pass before any paper claim. The paper-grade alert precision is the gold-based one in the nlp report.
 

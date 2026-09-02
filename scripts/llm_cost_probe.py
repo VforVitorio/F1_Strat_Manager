@@ -2,9 +2,10 @@
 
 Sizing question this exists to answer: the 2025 measurement session wants the
 stack driven in ``rich`` mode over decision windows, and nobody knows what that
-costs. A full-season sweep through the deterministic path is already ~11.5 h of
-wall clock at 0.51 s/lap; with an unbounded number of LLM calls per lap the
-ceiling is unknown and it is billed per call.
+costs. The deterministic path sweeps a full season in about half an hour
+(``documents/eval_reports/decision_modes.md``); with an unbounded number of LLM
+calls per lap the ceiling is unknown and it is billed per call, so the ratio
+between the two paths is the thing to measure rather than assume.
 
 The unit is the LAP, not the race, because the session's sample is made of
 windows rather than whole races. Boot cost (model weights, Whisper, the RAG

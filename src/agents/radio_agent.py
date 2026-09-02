@@ -1,38 +1,40 @@
 """src/agents/radio_agent.py
 
-Radio Agent — extraction from N29_radio_agent.ipynb.
+Radio Agent: extraction from N29_radio_agent.ipynb.
 
 Two-stream NLP pipeline:
   - driver radio: RoBERTa-base sentiment + SetFit intent + BERT-large NER
   - Race Control Messages: deterministic rule-based parser (N23/N24)
 
 Design (N06 pattern): NLP inference always runs before the LLM.
-Alerts are built deterministically from NLP is_alert flags — the LLM
+Alerts are built deterministically from NLP is_alert flags. The LLM
 receives pre-processed JSON results and acts as a reasoning layer only.
 The LLM cannot miss or hallucinate alerts.
 
 Entry points
 ------------
 run_radio_agent(lap_state)
-    Self-contained — everything it needs comes from lap_state itself.
+    Self-contained: everything it needs comes from lap_state itself.
     lap_state keys: lap (int), radio_msgs (list[RadioMessage]),
     rcm_events (list[RCMEvent]).
 
 run_radio_agent_from_state(lap_state, laps_df)
-    RSM adapter — builds SESSION_META from laps_df, no FastF1 session needed.
+    RSM adapter: builds SESSION_META from laps_df, no FastF1 session needed.
     Called by strategy_orchestrator when running from RaceStateManager context.
 
 Tools (LangChain)
 -----------------
-process_radio_tool   — NLP pipeline on a single radio message (testing utility)
-process_rcm_tool     — RCM parser on a single event (testing utility)
+process_radio_tool: NLP pipeline on a single radio message (testing utility)
+process_rcm_tool:   RCM parser on a single event (testing utility)
 
 Note: tools wrap the inference helpers for isolated testing. In production,
 run_radio_agent() calls run_pipeline() and run_rcm_pipeline() directly.
 """
 
+import importlib.util
 import json
 import sys
+import threading
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -48,17 +50,26 @@ warnings.filterwarnings("ignore")
 # ── Pydantic for structured LLM output ────────────────────────────────────────
 from pydantic import BaseModel, Field as PydanticField
 
-# ── Optional LangChain imports ─────────────────────────────────────────────────
+# ── Optional LangChain imports ──────────────────────────────────────
+# langchain_core stays eager because the @tool decorators below run at import.
+# Probed, not imported. `import langchain_openai` costs 14.3 s measured: it drags
+# the langgraph stack and transformers in behind it, and every consumer of the
+# name sits inside a factory that already builds its client on first call. So an
+# eager import charged that to `f1-sim --help`, to a --no-llm run, and to every
+# surface that merely touches this module. find_spec answers the only question
+# asked here, is it installed, in about a millisecond and executes nothing.
 try:
     from langchain_core.tools import tool
     from langchain_core.messages import HumanMessage, SystemMessage
-    from langchain_openai import ChatOpenAI
-    _LC_OK = True
+    _LC_CORE_OK = True
 except ImportError:
-    _LC_OK = False
-    def tool(fn):  # noqa: E302
+    _LC_CORE_OK = False
+
+    def tool(fn):
         """No-op decorator when langchain_core is not installed."""
         return fn
+
+_LC_OK = _LC_CORE_OK and importlib.util.find_spec("langchain_openai") is not None
 
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
@@ -90,13 +101,13 @@ except (ImportError, OSError, RuntimeError):
 
 # ── Module-level globals ───────────────────────────────────────────────────────
 # Left over from the notebook's global-state design. Only run_radio_agent_from_state
-# writes LAPS/SESSION_META (for total_laps/year bookkeeping — see its docstring:
-# "not queried during inference"), and nothing in this module ever reads them back.
-# run_radio_agent itself is self-contained through lap_state and never touches
-# these. RCM_DF is declared here but not written or read anywhere.
-LAPS:         pd.DataFrame = pd.DataFrame()
-RCM_DF:       pd.DataFrame = pd.DataFrame()
-SESSION_META: dict         = {}
+# writes SESSION_META (for total_laps/year bookkeeping, see its docstring: "not
+# queried during inference"), and nothing in this module ever reads it back.
+# run_radio_agent itself is self-contained through lap_state and never touches it.
+# The LAPS and RCM_DF frames that used to sit here are gone: LAPS was a full copy
+# of the race frame taken on every lap and read by nothing, and RCM_DF was never
+# even written.
+SESSION_META: dict = {}
 
 
 # ── RCM classification constants ──────────────────────────────────────────────
@@ -112,7 +123,7 @@ _SAFETY_FLAGS = {
     # A time-penalty ruling is strategically relevant whether it lands on us (we
     # serve it) or a rival (they lose track position, changing our undercut /
     # overcut calculus), so it is forwarded as an alert and routed to N30's
-    # regulation lookup. NR-04's _RCM_PENALTY_EVENT_TYPES already includes it;
+    # regulation lookup. The orchestrator's _RCM_PENALTY_EVENT_TYPES already includes it;
     # this is the upstream half that lets it actually reach the alert list
     # (#398 follow-up). Cost is bounded by the chat rate-limit + token cap.
     "TIME_PENALTY",
@@ -131,6 +142,8 @@ from src.f1_strat_manager.rcm_events import (  # noqa: E402
     RCMEvent,
     classify_rcm_event as _classify_rcm_event,
 )
+
+from src.agents._shared_defaults import LLM_MAX_RETRIES
 
 
 
@@ -180,7 +193,7 @@ class RadioOutput:
         Filtered subset of radio_events and rcm_events flagged as critical.
         Radio alerts: intent in CFG.alert_intents (PROBLEM, WARNING).
         RCM alerts: event_type in _SAFETY_FLAGS.
-        Always deterministic — never modified by the LLM.
+        Always deterministic, never modified by the LLM.
         N31 reads this field first to decide whether to escalate to N30 (RAG).
     reasoning:
         Human-readable synthesis from the LLM explaining which events were
@@ -189,7 +202,7 @@ class RadioOutput:
         List of NLP mismatches flagged by the LLM when the model classification
         contradicts the message content. Each entry is a dict with keys:
         driver, original_intent, suggested_intent, span, reason.
-        Alerts are NOT modified based on corrections — N31 receives both
+        Alerts are NOT modified based on corrections. N31 receives both
         the deterministic alerts and the LLM's mismatch assessment and
         decides how to weight them.
     """
@@ -202,15 +215,15 @@ class RadioOutput:
 
 
 # ==============================================================================
-# RadioAgentCFG — loads the three NLP models at instantiation time
+# RadioAgentCFG: holds the three NLP models, loaded on first use
 # ==============================================================================
 
 @dataclass
 class RadioAgentCFG:
     """Runtime configuration for the Radio Agent.
 
-    Loads the three N24 NLP models (sentiment, intent, NER) and assembles
-    the pipeline dict consumed by run_pipeline(). Device is auto-detected
+    Holds the three N24 NLP models (sentiment, intent, NER) behind the lazy
+    `pipeline` property consumed by run_pipeline(). Device is auto-detected
     from CUDA availability so the module runs on CPU when no GPU is present.
 
     model_name:
@@ -218,9 +231,9 @@ class RadioAgentCFG:
         the model currently loaded in LM Studio.
     device:
         Torch device for all three NLP models. Resolved at init time from
-        CUDA availability — same device is used across all inference calls.
+        CUDA availability. The same device is used across all inference calls.
     pipeline:
-        Dict assembled in __post_init__ with keys sentiment_model,
+        Dict built on first access with keys sentiment_model,
         sentiment_tokenizer, intent_model, ner_model, ner_tokenizer,
         ner_label2id, ner_id2label. Same schema as N24's build_pipeline().
     alert_intents:
@@ -234,6 +247,7 @@ class RadioAgentCFG:
     ner_max_len:
         Maximum token length for BERT-large NER tokenisation. Must match the
         N22 training config to avoid truncation artifacts on long messages.
+        Also used as the sentiment tokenizer's max_length.
     """
 
     model_name:       str   = "gpt-4.1-mini"
@@ -244,7 +258,6 @@ class RadioAgentCFG:
     intent_names:     tuple = ("INFORMATION", "PROBLEM", "ORDER", "WARNING", "QUESTION")
     sentiment_labels: tuple = ("negative", "neutral", "positive")
     ner_max_len:      int   = 128
-    pipeline:         dict  = field(init=False)
 
     # ------------------------------------------------------------------
     # Private model-loading helpers
@@ -349,27 +362,65 @@ class RadioAgentCFG:
     # ------------------------------------------------------------------
 
     def __post_init__(self):
-        nlp_dir = _DATA_ROOT / "models" / "nlp"
+        self._pipeline: Optional[dict] = None
+        self._pipeline_lock = threading.Lock()
 
-        s_tok,  s_model                = self._load_sentiment_model(nlp_dir, self.device)
-        i_model, _intent_names         = self._load_intent_model(nlp_dir)
-        n_tok,  n_model, n_l2i, n_i2l = self._load_ner_model(nlp_dir, self.device)
+    @property
+    def pipeline(self) -> dict:
+        """The three NLP models, built on first use rather than at import.
 
-        self.pipeline = {
-            "sentiment_model":     s_model,
-            "sentiment_tokenizer": s_tok,
-            "intent_model":        i_model,
-            "ner_model":           n_model,
-            "ner_tokenizer":       n_tok,
-            "ner_label2id":        n_l2i,
-            "ner_id2label":        n_i2l,
-        }
+        Building them reads three checkpoints off disk and costs 17 s measured,
+        warm. It used to run in __post_init__, so merely importing this module
+        paid the whole bill: importing it took 25.8 s after torch against 8.0 s
+        now. scripts/run_simulation_cli.py imports it above its argparse block,
+        which is part of why `f1-sim --help` took 12.6 s to print a usage
+        string, and every surface that touches the agents module paid it whether
+        or not a radio message was ever analysed.
+
+        Every consumer of the models goes through here, so the cost now lands on
+        the first message instead. The rest of the config (device, label lists,
+        alert intents, ner_max_len) stays eager because it is free, which is
+        what keeps _intent_name_to_idx below a plain import-time expression.
+
+        Locked, because the eager version was serialised by the import lock and a
+        property is not. Two concurrent requests through the backend's strategy
+        endpoint would otherwise each spend the 17 s building a pipeline the
+        other was already building. The double check keeps the steady-state read
+        lock-free.
+
+        Callers that want the cost paid up front read this property somewhere
+        they control, which is what scripts/run_simulation_cli.py does in its
+        pre-warm block. Importing the module no longer loads anything.
+        """
+        if self._pipeline is not None:
+            return self._pipeline
+
+        with self._pipeline_lock:
+            if self._pipeline is not None:
+                return self._pipeline
+
+            nlp_dir = _DATA_ROOT / "models" / "nlp"
+
+            s_tok,  s_model                = self._load_sentiment_model(nlp_dir, self.device)
+            i_model, _intent_names         = self._load_intent_model(nlp_dir)
+            n_tok,  n_model, n_l2i, n_i2l = self._load_ner_model(nlp_dir, self.device)
+
+            self._pipeline = {
+                "sentiment_model":     s_model,
+                "sentiment_tokenizer": s_tok,
+                "intent_model":        i_model,
+                "ner_model":           n_model,
+                "ner_tokenizer":       n_tok,
+                "ner_label2id":        n_l2i,
+                "ner_id2label":        n_i2l,
+            }
+        return self._pipeline
 
 
 # ── Module-level singletons ────────────────────────────────────────────────────
 CFG = RadioAgentCFG()
 
-# O(1) intent label lookup — populated immediately after CFG is created
+# O(1) intent label lookup: populated immediately after CFG is created
 _intent_name_to_idx: dict = {name: i for i, name in enumerate(CFG.intent_names)}
 
 
@@ -396,7 +447,7 @@ def _is_llm_synthesis_unavailable(exc: Exception) -> bool:
 
     Used by run_radio_agent to swap stage 3 for an empty reasoning string when
     the LLM is offline. Errors unrelated to LLM connectivity (NLP model bugs,
-    bad lap_state, missing fields) must NOT match — those should propagate up.
+    bad lap_state, missing fields) must NOT match: those should propagate up.
     """
     tn  = type(exc).__name__
     msg = str(exc)[:300]
@@ -587,14 +638,14 @@ def run_rcm_pipeline(event: "RCMEvent") -> dict:
 
 
 # ==============================================================================
-# LangChain tools (testing utilities — not used in production flow)
+# LangChain tools (testing utilities, not used in production flow)
 # ==============================================================================
 
 @tool
 def process_radio_tool(driver: str, lap: int, text: str) -> str:
     """Process a transcribed driver radio message through the NLP pipeline.
 
-    Testing utility — not part of the agent's main flow. In production,
+    Testing utility: not part of the agent's main flow. In production,
     run_radio_agent() calls run_pipeline() directly before the LLM synthesis step.
     Useful for manual inspection of individual radio messages in isolation.
 
@@ -633,7 +684,7 @@ def process_rcm_tool(
 ) -> str:
     """Parse a Race Control Message and flag safety-critical events.
 
-    Testing utility — not part of the agent's main flow. In production,
+    Testing utility: not part of the agent's main flow. In production,
     run_radio_agent() calls run_rcm_pipeline() directly before the LLM synthesis step.
     Useful for manual inspection of individual RCM rows in isolation.
 
@@ -665,7 +716,7 @@ def process_rcm_tool(
 
 
 # ==============================================================================
-# LLM synthesizer — lazy singleton, structured output
+# LLM synthesizer: lazy singleton, structured output
 # ==============================================================================
 
 _RADIO_SYSTEM_PROMPT = """You are the Radio Agent for an F1 race strategy system.
@@ -699,7 +750,7 @@ class CorrectionEntry(BaseModel):
         Intent label the LLM believes is correct based on message content.
     span:
         Verbatim substring from the original message that contradicts the
-        model's label — the specific phrase the LLM used as evidence.
+        model's label, the specific phrase the LLM used as evidence.
     reason:
         One-line explanation of why the model label is incorrect.
     """
@@ -732,7 +783,7 @@ class RadioSynthesis(BaseModel):
     )
 
 
-# Lazy singleton — created on first call to avoid LLM connection at import time
+# Lazy singleton: created on first call to avoid LLM connection at import time
 _structured_llm = None
 
 
@@ -751,14 +802,15 @@ def _get_radio_llm():
                 "langchain_openai is not installed — cannot run LLM synthesis. "
                 "Install it with: pip install langchain-openai"
             )
+        from langchain_openai import ChatOpenAI
         provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
         if provider == 'openai':
-            # parallel_tool_calls is NOT sent — OpenAI rejects it when no tools are specified
+            # parallel_tool_calls is NOT sent, because OpenAI rejects it when no tools are specified
             base_llm = ChatOpenAI(
                 model=CFG.model_name,
                 temperature=0.0,
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         else:
             base_llm = ChatOpenAI(
@@ -768,7 +820,7 @@ def _get_radio_llm():
                 temperature=0.0,
                 model_kwargs={"parallel_tool_calls": False},
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         _structured_llm = base_llm.with_structured_output(RadioSynthesis)
     return _structured_llm
@@ -778,7 +830,7 @@ def _build_synthesis_prompt(lap: int, radio_results: list, rcm_results: list) ->
     """Build the human message the LLM receives with pre-processed NLP JSON results.
 
     lap:
-        Current race lap number — appears as the first line so the LLM
+        Current race lap number, appearing as the first line so the LLM
         has temporal context before reading the event lists.
     radio_results:
         List of dicts from run_pipeline(), formatted as indented JSON so the
@@ -798,7 +850,7 @@ def _build_synthesis_prompt(lap: int, radio_results: list, rcm_results: list) ->
 
 
 # ==============================================================================
-# Alert builder (deterministic — runs before LLM)
+# Alert builder (deterministic, runs before LLM)
 # ==============================================================================
 
 def _build_alerts(
@@ -854,23 +906,24 @@ def _save_nlp_json(lap: int, radio_results: list, rcm_results: list) -> Path:
     """Persist the NLP inference results for one lap to disk as a JSON file.
 
     lap:
-        Current race lap number — used in the output filename.
+        Current race lap number, used in the output filename.
     radio_results:
         List of dicts from run_pipeline(), serialised as-is.
     rcm_results:
         List of dicts from run_rcm_pipeline(), serialised as-is.
 
     Saved to data/processed/radio_outputs/ with a lap+timestamp filename.
-    This is a pure side effect — the agent flow uses the in-memory dicts.
+    This is a pure side effect. The agent flow uses the in-memory dicts.
     Useful for audit trails, debugging and post-race replay.
 
-    Returns the Path of the saved file.
+    Returns the Path of the saved file, or None when the directory or file
+    cannot be written (read-only mount).
     """
     out_dir   = _DATA_ROOT / "processed" / "radio_outputs"
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
     except OSError:
-        return None  # read-only mount in Docker — skip persist
+        return None  # read-only mount in Docker, skip persist
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     path      = out_dir / f"radio_nlp_lap{lap:03d}_{timestamp}.json"
     payload   = {"lap": lap, "radio_results": radio_results, "rcm_results": rcm_results}
@@ -878,7 +931,7 @@ def _save_nlp_json(lap: int, radio_results: list, rcm_results: list) -> Path:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
     except OSError:
-        return None
+        return None  # read-only mount in Docker, skip persist
     return path
 
 
@@ -892,7 +945,7 @@ def run_radio_agent(lap_state: dict, persist: bool = False) -> "RadioOutput":
     Follows the N06 design: NLP inference runs first for all inputs, then the
     LLM receives the pre-processed JSON results and synthesises REASONING and
     CORRECTIONS via with_structured_output(RadioSynthesis). Alerts are built
-    deterministically from NLP outputs — the LLM cannot miss or hallucinate them.
+    deterministically from NLP outputs, so the LLM cannot miss or hallucinate them.
 
     The caller (N31) is responsible for pre-filtering radio_msgs and rcm_events
     to the relevant lap window before calling this function.
@@ -941,22 +994,22 @@ def run_radio_agent(lap_state: dict, persist: bool = False) -> "RadioOutput":
                 scope         = ev.get("scope", ""),
             ))
 
-    # Stage 1 — NLP inference (N06 pattern: models run before LLM)
+    # Stage 1: NLP inference (N06 pattern: models run before LLM)
     radio_results = [run_pipeline(msg.text) for msg in radio_msgs]
     rcm_results   = [run_rcm_pipeline(ev) for ev in rcm_events]
 
-    # Optional side effect — persist NLP JSON for audit trail
+    # Optional side effect: persist NLP JSON for audit trail
     if persist:
         _save_nlp_json(lap, radio_results, rcm_results)
 
-    # Stage 2 — Deterministic alerts from NLP results (before LLM)
+    # Stage 2: Deterministic alerts from NLP results (before LLM)
     alerts = _build_alerts(radio_results, rcm_results, radio_msgs)
 
-    # Stage 3 — LLM synthesises structured RadioSynthesis via with_structured_output.
+    # Stage 3: LLM synthesises structured RadioSynthesis via with_structured_output.
     # Wrapped in try/except so a missing or unreachable LLM backend (no provider,
     # --no-llm mode, network glitch, LM Studio without a loaded model) does not
     # discard the load-bearing stages 1+2. radio_events / rcm_events / alerts are
-    # the contract the orchestrator and the inference panel actually consume —
+    # the contract the orchestrator and the inference panel actually consume.
     # reasoning + corrections are presentation-only and acceptable to drop when
     # the synthesis layer is offline.
     try:
@@ -987,12 +1040,15 @@ def run_radio_agent_from_state(
     laps_df: pd.DataFrame,
     persist: bool = False,
 ) -> "RadioOutput":
-    """RSM adapter — run the Radio Agent without a live FastF1 session.
+    """RSM adapter: run the Radio Agent without a live FastF1 session.
 
-    Builds SESSION_META and LAPS from laps_df (already loaded by RaceStateManager)
-    instead of calling fastf1.get_session(). radio_msgs and rcm_events must still
-    be provided in lap_state — the orchestrator pre-filters them to the current lap
-    window before handing them to this function.
+    Populates the module-level SESSION_META global from laps_df for
+    bookkeeping (see the module docstring); the actual radio and RCM processing
+    runs through run_radio_agent(lap_state, persist=persist), which reads
+    everything it needs from lap_state directly and never touches those globals.
+    radio_msgs and rcm_events must still be provided in lap_state: the
+    orchestrator pre-filters them to the current lap window before handing them
+    to this function.
 
     lap_state keys:
         lap (int): Current race lap number.
@@ -1001,16 +1057,15 @@ def run_radio_agent_from_state(
         session_meta (dict, optional): Contains 'gp' key for SESSION_META.
     laps_df:
         Full laps DataFrame from RaceStateManager. Used only to populate
-        SESSION_META.total_laps and SESSION_META.year — not queried during
+        SESSION_META.total_laps and SESSION_META.year, not queried during
         inference (radio_msgs and rcm_events are already in lap_state).
     persist:
-        Forwarded to run_radio_agent — see its docstring.
+        Forwarded to run_radio_agent: see its docstring.
 
     Returns a RadioOutput identical to what run_radio_agent() would produce.
     """
-    global LAPS, SESSION_META
+    global SESSION_META
 
-    LAPS = laps_df.copy()
     SESSION_META = {
         "year":       int(laps_df["Year"].iloc[0]) if "Year" in laps_df.columns else 0,
         "gp":         lap_state.get("session_meta", {}).get("gp", ""),

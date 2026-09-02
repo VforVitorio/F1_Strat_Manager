@@ -107,16 +107,16 @@ integration design:
   exist in the simulation. That is the concrete hole the agent fills.
 - Tire (N26), race situation (N27), pit strategy (N28) and RAG (N30) are LangGraph ReAct
   agents (built via `create_agent` with tools wrapping each ML model); pace (N25) is
-  deliberately NOT — it has no qualitative judgment for an LLM to add, and its once-built
+  deliberately NOT. It has no qualitative judgment for an LLM to add, and its once-built
   ReAct scaffold was formally retired in #781 (documents/audits/AUDIT_pace_agent_react_archaeology_779.md)
   after archaeology showed it was never wired. Radio (N29) is a different shape again: a
   deterministic NLP pipeline (RoBERTa/SetFit/BERT NER) followed by ONE
   `with_structured_output()` synthesis call, not a ReAct tool loop. The orchestrator itself
   is a plain Python pipeline that calls the sub-agents' public entry points. "A new
   LangGraph node" for the Rival Agent should follow the ReAct pattern of N26-N28/N30 if it
-  needs qualitative judgment over its own tools — decide this on the Rival Agent's own
-  merits rather than assuming "same as N25-N29", which is no longer a uniform group — plus
-  a formalization of the whole graph for the multi-agent portion of the TFM (section 7).
+  needs qualitative judgment over its own tools. That should be decided on the Rival Agent's
+  own merits rather than by assuming "same as N25-N29", which is no longer a uniform group,
+  alongside a formalization of the whole graph for the multi-agent portion of the TFM (section 7).
 
 **The data already on disk.** Verified against `data/raw/2025/Budapest/` (and the P5
 audit, which verified this repo-wide):
@@ -428,7 +428,7 @@ citable artifact independent of the modeling results.
 The proposal's stated risk: "the rival's true compound and degradation are hidden
 information; they are modeled as uncertainty". This section makes that precise, because
 "hidden" has three different grades here and conflating them would either overclaim
-(pretending to see what we cannot) or underclaim (discarding data a real wall has).
+(pretending to see what is not observable) or underclaim (discarding data a real wall has).
 
 ### 4.1 The observability ladder
 
@@ -436,7 +436,7 @@ information; they are modeled as uncertainty". This section makes that precise, 
 |---|---|---|
 | **Directly observable** (timing screen) | Position, lap times, gaps/intervals, pit entry/exit events, track status, DRS window occupancy | Used as-is; these are the columns `get_rival_states` already exposes plus `intervals.parquet` |
 | **Derived-observable** (public, reconstructable live) | Tyre age (count laps since the rival's observed out-lap), stint number, current compound (broadcast tyre detection), remaining tyre allocation (race allocation minus observed used sets), pit loss for this circuit | Used, but computed **from observed events**, never read from privileged columns; current compound carries a noise model |
-| **Latent** (genuinely hidden) | True degradation state (wear, cliff proximity), fuel-corrected pace potential, team strategy intent, driver instructions | Never used as features; inferred only through their observable footprint (pace deltas, stint length vs compound norms); uncertainty carried in the output distributions |
+| **Latent** (hidden, not reconstructable) | True degradation state (wear, cliff proximity), fuel-corrected pace potential, team strategy intent, driver instructions | Never used as features; inferred only through their observable footprint (pace deltas, stint length vs compound norms); uncertainty carried in the output distributions |
 
 Two honest clarifications the TFM text must make:
 
@@ -634,7 +634,7 @@ was formalized into by #781 (documents/audits/AUDIT_pace_agent_react_archaeology
 a deterministic template-reasoning agent with no LLM step at all, once it was established
 the agent has no qualitative judgment for an LLM to add. Whether the Rival Agent instead
 gets an optional LLM synthesis layer like N26-N28/N30 (nicer prose, tool-calling ReAct
-shape for architectural symmetry) is open question Q3 — decide it the same way pace's was
+shape for architectural symmetry) is open question Q3. Decide it the same way pace's was
 decided, on whether the Rival Agent's own output carries a qualitative judgment beyond its
 quantile triples and probabilities, not by defaulting to "ReAct because the siblings are."
 The deterministic path is the guaranteed spine either way, mirroring how the existing
@@ -694,7 +694,7 @@ anticipatory extension adds, for each in-scope rival `j`:
 - `rivalpit_j_i ~ Bernoulli(p_pit_next_W_j)` (W = the 5-lap window the MC already uses).
 - Conditional on pitting, `rivallap_j_i ~ Triangular(pit_lap_p10, p50, p90)`.
 
-And modifies the candidate scores:
+It also modifies the candidate scores:
 
 - **STAY_OUT** gains a threat term: for the rival(s) behind us within the undercut
   window, expected loss `- rivalpit_j_i * q_j * POS_GAP_S`, where `q_j` is the N16
@@ -968,7 +968,7 @@ path.
 
 ---
 
-## 12. Open questions for Victor
+## 12. Open questions
 
 **Q1: Runtime rival scope.** Pit-cycle-radius (recommended: strategy-grounded,
 self-adjusting per circuit, typically 4-6 cars) vs fixed 5-nearest vs full grid at

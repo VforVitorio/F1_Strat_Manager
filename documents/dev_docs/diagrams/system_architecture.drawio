@@ -9,10 +9,10 @@
           <mxGeometry x="0" y="0" width="1920" height="1400" as="geometry"/>
         </mxCell>
 
-        <mxCell id="title" value="F1 StratLab &#8212; Digital Twin Multi-Agent System" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#E6E8EF;" vertex="1" parent="1">
+        <mxCell id="title" value="F1 StratLab, Digital Twin Multi-Agent System" style="text;html=1;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#E6E8EF;" vertex="1" parent="1">
           <mxGeometry x="360" y="20" width="1200" height="36" as="geometry"/>
         </mxCell>
-        <mxCell id="subtitle" value="System Overview &#8212; Three User-Facing Surfaces Sharing a Single Core" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=2;fontColor=#8B5CF6;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="System Overview, Three User-Facing Surfaces Sharing a Single Core" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=2;fontColor=#8B5CF6;" vertex="1" parent="1">
           <mxGeometry x="360" y="56" width="1200" height="24" as="geometry"/>
         </mxCell>
 
@@ -22,10 +22,10 @@
         </mxCell>
 
         <!-- Surface 1: CLI -->
-        <mxCell id="cli-box" value="Surface 1 &#8212; CLI&#10;scripts/run_simulation_cli.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#3B82F6;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="cli-box" value="Surface 1, CLI&#10;scripts/run_simulation_cli.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#3B82F6;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="80" y="230" width="520" height="280" as="geometry"/>
         </mxCell>
-        <mxCell id="cli-desc" value="Rich-based live inference panel&#10;direct import of src/agents/ &#8212; no HTTP&#10;PMV of the TFG &#8212; do NOT modify" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D2E3F;strokeColor=#3B82F6;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="cli-desc" value="Rich-based live inference panel&#10;direct import of src/agents/, no HTTP&#10;PMV of the TFG, do NOT modify" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D2E3F;strokeColor=#3B82F6;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="110" y="280" width="460" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="cli-ui" value="Rich Live &#183; history prints &#183; fixed bottom panel&#10;per-agent section output (Pace &#183; Tire &#183; Pit &#183; Radio &#183; Sit &#183; RAG)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#3B82F6;fontColor=#A0B4D8;fontSize=10;" vertex="1" parent="1">
@@ -36,27 +36,27 @@
         </mxCell>
 
         <!-- Surface 2: Arcade (highlighted) -->
-        <mxCell id="arc-box" value="Surface 2 &#8212; Arcade (MAIN FOCUS)&#10;python -m src.arcade.main --viewer --strategy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=3;" vertex="1" parent="1">
+        <mxCell id="arc-box" value="Surface 2, Arcade (MAIN FOCUS)&#10;python -m src.arcade.main --viewer --strategy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=3;" vertex="1" parent="1">
           <mxGeometry x="660" y="230" width="600" height="280" as="geometry"/>
         </mxCell>
-        <mxCell id="arc-desc" value="3-window live race replay &#8212; Phase 3.5 MVP&#10;local strategy pipeline &#8212; no FastAPI dependency&#10;pyglet Arcade + PySide6 dashboard + telemetry windows" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="arc-desc" value="3-window live race replay&#10;local strategy pipeline, no FastAPI dependency&#10;pyglet Arcade + the two PITWALL webview windows" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="690" y="280" width="540" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="arc-win1" value="Window 1&#10;Arcade Replay (pyglet)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#8B5CF6;fontColor=#D3B8E8;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="690" y="360" width="170" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="arc-win2" value="Window 2&#10;Dashboard (Qt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="arc-win2" value="Window 2&#10;PITWALL &#183; AGENTS (webview)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="875" y="360" width="170" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="arc-win3" value="Window 3&#10;Telemetry (Qt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#06B6D4;fontColor=#A6E0EC;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="arc-win3" value="Window 3&#10;PITWALL &#183; DATA (same process)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#06B6D4;fontColor=#A6E0EC;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1060" y="360" width="170" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="arc-tcp" value="TCP localhost:9998 broadcast &#8212; newline JSON @ 10 Hz" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#BDEBCC;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="arc-tcp" value="TCP localhost:9998 broadcast, newline JSON @ 10 Hz" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#BDEBCC;fontSize=10;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="690" y="430" width="540" height="60" as="geometry"/>
         </mxCell>
 
         <!-- Surface 3: Streamlit -->
-        <mxCell id="st-box" value="Surface 3 &#8212; Web app + FastAPI&#10;src/telemetry/webapp/ &#183; src/telemetry/backend/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#EC4899;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
+        <mxCell id="st-box" value="Surface 3, Web app + FastAPI&#10;src/telemetry/webapp/ &#183; src/telemetry/backend/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#EC4899;fontColor=#E6E8EF;fontStyle=1;fontSize=13;verticalAlign=top;spacingTop=10;strokeWidth=2;" vertex="1" parent="1">
           <mxGeometry x="1320" y="230" width="520" height="280" as="geometry"/>
         </mxCell>
         <mxCell id="st-desc" value="post-race analysis &#183; chat&#10;FastMCP tools on top of FastAPI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3F1D2D;strokeColor=#EC4899;fontColor=#E6E8EF;fontSize=11;" vertex="1" parent="1">
@@ -81,12 +81,12 @@
         </mxCell>
 
         <!-- SHARED CORE LAYER -->
-        <mxCell id="core-box" value="Shared Core &#8212; src/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#4ADE80;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=3;" vertex="1" parent="1">
+        <mxCell id="core-box" value="Shared Core, src/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A2138;strokeColor=#4ADE80;fontColor=#E6E8EF;fontStyle=1;fontSize=14;verticalAlign=top;spacingTop=10;strokeWidth=3;" vertex="1" parent="1">
           <mxGeometry x="80" y="580" width="1760" height="300" as="geometry"/>
         </mxCell>
 
         <!-- Agents -->
-        <mxCell id="agents" value="src/agents/ &#8212; N25-N31 Multi-Agent System" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+        <mxCell id="agents" value="src/agents/, N25-N31 Multi-Agent System" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
           <mxGeometry x="110" y="630" width="840" height="220" as="geometry"/>
         </mxCell>
         <mxCell id="ag-pace" value="N25 Pace&#10;XGBoost" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D2E3F;strokeColor=#3B82F6;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
@@ -118,10 +118,10 @@
         <mxCell id="llm-box" value="LLM Provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2B1A3C;strokeColor=#8B5CF6;fontColor=#E6E8EF;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
           <mxGeometry x="970" y="630" width="360" height="220" as="geometry"/>
         </mxCell>
-        <mxCell id="llm-openai" value="OpenAI &#8212; default&#10;ChatOpenAI gpt-4.1-mini (sub-agents)&#10;5.4-mini candidate (N31 orchestrator)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="llm-openai" value="OpenAI, default&#10;ChatOpenAI gpt-4.1-mini (sub-agents)&#10;gpt-5.4-mini (N31 orchestrator)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1D3F2A;strokeColor=#4ADE80;fontColor=#E6E8EF;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="990" y="680" width="320" height="70" as="geometry"/>
         </mxCell>
-        <mxCell id="llm-lm" value="LM Studio &#8212; local fallback&#10;F1_LLM_PROVIDER=lmstudio env var&#10;NEVER Anthropic (TFG constraint)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#8B5CF6;fontColor=#D3B8E8;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="llm-lm" value="LM Studio, local fallback&#10;F1_LLM_PROVIDER=lmstudio env var&#10;NEVER Anthropic (TFG constraint)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#8B5CF6;fontColor=#D3B8E8;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="990" y="760" width="320" height="70" as="geometry"/>
         </mxCell>
 
@@ -135,7 +135,7 @@
         <mxCell id="data-raw" value="data/raw/{year}/{Location}/&#10;FastF1 cache &#183; session.ff1pkl artefacts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1370" y="740" width="430" height="50" as="geometry"/>
         </mxCell>
-        <mxCell id="data-models" value="data/models/&#8212; tire_degradation &#183; pit_prediction &#183; nlp &#183; overtake &#183; sc_prob" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="data-models" value="data/models/,  tire_degradation &#183; pit_prediction &#183; nlp &#183; overtake &#183; sc_prob" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#243049;strokeColor=#F59E0B;fontColor=#F0D49C;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="1370" y="795" width="430" height="40" as="geometry"/>
         </mxCell>
 
@@ -166,7 +166,7 @@
         </mxCell>
 
         <!-- Footer note -->
-        <mxCell id="footer" value="All three surfaces load weights and read parquet from the SAME data/ tree &#8212; no duplication, no divergence" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontColor=#A0A5B8;fontStyle=2;" vertex="1" parent="1">
+        <mxCell id="footer" value="All three surfaces load weights and read parquet from the SAME data/ tree, no duplication, no divergence" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontColor=#A0A5B8;fontStyle=2;" vertex="1" parent="1">
           <mxGeometry x="360" y="905" width="1200" height="30" as="geometry"/>
         </mxCell>
 

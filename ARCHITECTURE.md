@@ -6,8 +6,8 @@ into the deep dives as needed.
 ## Three user-facing surfaces, one shared core
 
 - **CLI** (`f1-sim`), headless Rich-based live inference panel.
-- **Arcade** (`f1-arcade`), 2D race replay + PySide6 strategy dashboard
-  + PySide6 telemetry window (one command spawns all three).
+- **Arcade** (`f1-arcade`), 2D race replay + the two PITWALL windows
+  (one command spawns all three).
 - **Web app** (`f1-webapp`, a wrapper around `docker compose up`):
   post-race analysis and chat (React SPA backed by FastAPI).
 
@@ -41,13 +41,14 @@ LLM synthesis pass into a `StrategyRecommendation`. Full flow:
 `f1-arcade --strategy` spawns:
 
 1. The pyglet replay window (this process).
-2. One PySide6 subprocess hosting **two** Qt windows in a shared
-   `QApplication` event loop: `MainWindow` (strategy dashboard) and
-   `TelemetryWindow` (2×2 circuit-comparison grid).
+2. One PITWALL subprocess hosting **two** webview windows fed by one TCP
+   client: `AGENTS` (the orchestrator and six sub-agent cards) and `DATA`
+   (status strip, timing tower, bests, own-car traces, race pace and the
+   race trace).
 
-Both windows subscribe to the arcade's `TelemetryStreamServer` on
-`127.0.0.1:9998`. Details:
-[`docs/pages/arcade-dashboard.md`](docs/pages/arcade-dashboard.md).
+Both windows read the arcade's `TelemetryStreamServer` on
+`127.0.0.1:9998` through a single reader. Details:
+[`docs/pages/pitwall.md`](docs/pages/pitwall.md).
 
 ## Data flow
 

@@ -4,7 +4,7 @@
 
 ## Threshold sweeps
 
-Each classifier sub-agent exposes a precision–recall trade-off that the strategist picks deliberately. The sweeps below scan the full threshold space and mark the production operating point.
+Each classifier sub-agent exposes a precision-recall trade-off that the strategist picks deliberately. The sweeps below scan the full threshold space and mark the production operating point.
 
 ### Overtake (N12)
 
@@ -16,7 +16,7 @@ The Safety Car model is a soft contextual prior, not an exact predictor. AUC-PR 
 
 ### Undercut (N16)
 
-The undercut classifier sees the highest positive prevalence of the three (>30 % on the holdout) because the labelling step kept only pairs with a true undercut opportunity. The **0.522** threshold falls in the flat F1 region.
+The undercut classifier sees the highest positive prevalence of the three (>30% on the holdout) because the labelling step kept only pairs with a true undercut opportunity. The **0.522** threshold falls in the flat F1 region.
 
 ## MC Dropout coverage
 
@@ -28,11 +28,11 @@ Raw coverage stays around **0.20** across all compounds, active dropout only cap
 
 The strategy layer scores its four candidates in **projected track position**, not in seconds. That claim is directly checkable, because every real pit stop in the dataset is already a labelled example of it: project the stop from the lap before, then compare against where the car actually came out on the lap after. No hand-labelling is involved, which is what makes this a measured result rather than a plausibility argument.
 
-Over **552 green-flag stops across the 24 races of 2025**, the projection lands **within one position 86.1 %** of the time and is **exactly right 59.6 %** of the time, with a mean signed error of **+0.57 positions**. The bias is positive, so the projection is mildly pessimistic about the rejoin, which is the safer direction for a strategy call.
+Over **552 green-flag stops across the 24 races of 2025**, the projection lands **within one position 86.1%** of the time and is **exactly right 59.6%** of the time, with a mean signed error of **+0.57 positions**. The bias is positive, so the projection is mildly pessimistic about the rejoin, which is the safer direction for a strategy call.
 
-**Why 2025 and not all three seasons.** 2023 and 2024 are training seasons for every model in the stack; 2025 is the holdout the shipped system infers on. A figure that mixes them is partly the system reading back its own training data, so the headline is scoped to the season that describes the product. On all three seasons the same measurement reads 86.3 % over 1,768 stops in 70 races, and the earlier published **86.5 % over 1,810 stops in 71 races** is retired on two counts: it mixed the training seasons in, and its 71st race was the 2023 Spanish GP counted twice.
+**Why 2025 and not all three seasons.** 2023 and 2024 are training seasons for every model in the stack; 2025 is the holdout the shipped system infers on. A figure that mixes them is partly the system reading back its own training data, so the headline is scoped to the season that describes the product. On all three seasons the same measurement reads 86.3% over 1,768 stops in 70 races, and the earlier published **86.5% over 1,810 stops in 71 races** is retired on two counts: it mixed the training seasons in, and its 71st race was the 2023 Spanish GP counted twice.
 
-The gap between the training seasons (86.4 %, disjoint from the holdout) and the holdout itself (86.1 %) is 0.4 points, and that is **not** evidence the projection generalises well. It is a property of this particular measurement: the scorer runs on a fixed `ProjectionConfig` and consumes no learned model and none of the seven measured tables below, so the season scope has nothing to leak through. Do not carry that reasoning over to any figure that does read a model.
+The gap between the training seasons (86.4%, disjoint from the holdout) and the holdout itself (86.1%) is 0.4 points, and that is **not** evidence the projection generalises well. It is a property of this particular measurement: the scorer runs on a fixed `ProjectionConfig` and consumes no learned model and none of the seven measured tables below, so the season scope has nothing to leak through. Do not carry that reasoning over to any figure that does read a model.
 
 Neutralised stops are excluded, and not to flatter the number. Under a Safety Car every lap is slow, so the "two normal laps" baseline used to reconstruct the realised pit loss is wrong there: that corrupts the measurement's **input** rather than the projection itself. Measured separately, those stops show a mean error of +1.54 positions against +0.57 under green, which is the signature of exactly that problem.
 
@@ -86,8 +86,8 @@ Both notebooks emit CSV and Markdown tables alongside their PNGs:
 | NLP pipeline (GPU) | mean `run_pipeline` | **42.1 ms** | `data/eval/nlp_pipeline_cpu.{csv,md}` |
 | Sub-agent latency | min / max mean | **487 ms** (pace) / **4.4 s** (rag w/ LLM) | `data/eval/subagent_latency.{csv,md}` |
 | RAG agent | Content P@5 | **0.80** | `data/rag_eval/results_v1.md` |
-| MC Dropout (C2) | calibrated 80 % coverage | **0.840** | `data/eval/mc_dropout_coverage.{csv,md}` |
-| Position projection | within one place, 552 real stops (2025 only) | **86.1 %** | `documents/eval_reports/projection.{md,json}` |
+| MC Dropout (C2) | calibrated 80% coverage | **0.840** | `data/eval/mc_dropout_coverage.{csv,md}` |
+| Position projection | within one place, 552 real stops (2025 only) | **86.1%** | `documents/eval_reports/projection.{md,json}` |
 
 All numbers reproducible with the commands above.
 

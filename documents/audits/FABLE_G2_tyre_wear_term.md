@@ -308,7 +308,9 @@ Re-run, it is 0 red anywhere.
 
 ```python
 green_config = _config(racing_when_racing, clean_air_s)
-neutralised_config = _replace_m4(_config(racing_when_neutralised, 0.0), deg_cost_s=None)  # MUTANT M4
+neutralised_config = _replace_m4(
+    _config(racing_when_neutralised, 0.0), deg_cost_s=None
+)  # MUTANT M4
 ```
 
 - Executed evidence:
@@ -349,7 +351,7 @@ in-code comment calls the easiest to get wrong.
 - Mutant at `src/agents/strategy_orchestrator.py:772`:
 
 ```python
-+ _tyre_term(deg_cost_s, 0, window // 2)  # MUTANT M5: old_laps zeroed
++_tyre_term(deg_cost_s, 0, window // 2)  # MUTANT M5: old_laps zeroed
 ```
 
   With a reading, OVERCUT-green is now charged NOTHING for the `window // 2` laps it runs on

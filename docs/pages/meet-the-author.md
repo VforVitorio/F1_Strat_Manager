@@ -38,15 +38,15 @@ and a plan for the next pit window.
 
 The same engine drives three operator surfaces: a React web app
 for analysts (backed by a FastAPI/MCP API for programmatic access and
-chat tool-calling), a CLI for headless replays, and a three-window
-arcade (race replay, strategy dashboard, live telemetry) built in
-PySide6 + pyglet for the demo experience. The whole stack is open
+chat tool-calling), a CLI for headless replays, and a multi-window
+arcade (race replay plus the two PITWALL windows, agents and live
+telemetry) built in pyglet and React for the demo experience. The whole stack is open
 under Apache-2.0 and shipped as wheels and GitHub releases through
 release-please automation.
 
 This documentation site is the engineering companion to the thesis
 memoria, every notebook, model, agent and surface is wired into the
-graph view so you can navigate by topic, by tag, or by cross-reference.
+graph view for navigation by topic, by tag, or by cross-reference.
 
 ## Acknowledgements
 

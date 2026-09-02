@@ -6,16 +6,18 @@ uses, and mutates a shared ``StrategyState`` so ``F1ArcadeView.on_draw``
 and the dashboard subprocess can pick up the latest ``LapDecision`` plus
 every raw sub-agent output without blocking. The arcade no longer depends
 on the FastAPI backend at runtime: it owns its own simulation loop, which
-keeps the TFG's CLI/Streamlit path isolated from any arcade change.
+keeps the backend's own SSE consumers (the webapp) isolated from any arcade
+change.
 
 Lap loop order matches ``backend/services/simulation/simulator.py::simulate_race``
 (the SSE producer). Kept separate so edits to the arcade path cannot
-regress the CLI/Streamlit consumers that still depend on the backend.
+regress the webapp consumers that still depend on the backend.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 from dataclasses import asdict, dataclass, field
@@ -65,10 +67,19 @@ class SimulateRequestDTO:
 
 @dataclass(frozen=True)
 class StartEventDTO:
+    """The run's fixed metadata, emitted once before the first lap.
+
+    ``driver2`` used to sit here, carrying the launch rival's code onto the
+    wire, and nothing on either window rendered it (#1052). The rival identity
+    a consumer needs is `arcade.driver_rival` on every tick, which since
+    schema v2 names one of twenty spans rather than one of two roles. The
+    request still carries a `driver2`: that is the arcade's own pick, an input
+    rather than a published fact.
+    """
+
     gp: str = ""
     year: int = 0
     driver: str = ""
-    driver2: str | None = None
     team: str = ""
     lap_start: int = 1
     lap_end: int = 0
@@ -108,6 +119,35 @@ class PerAgentOutputsDTO:
 
 @dataclass(frozen=True)
 class LapDecisionDTO:
+    """One lap's decision, as the wire carries it.
+
+    **What this deliberately does NOT copy from ``StrategyRecommendation``, and
+    why (#1046).** That object has fourteen fields and this takes ten. The four
+    it leaves behind used to stop here silently, which reads as an oversight
+    rather than a decision:
+
+    - ``contingencies`` and ``key_risks`` ARRIVED with #1048's schema bump, which is
+      what this paragraph used to promise. ``contingencies`` is the one the
+      orchestrator memory audit calls load-bearing, and it is invisible in
+      ``reasoning``, which is why it was given its own field instead of being left
+      to the model's prose. They are carried as plain dicts and strings rather than
+      as the orchestrator's ``Contingency`` model: the wire is JSON and the DTO is
+      what ``asdict`` walks.
+    - ``expected_stint_end`` stays out. The PLAN timeline already draws the stint
+      boundary from ``pit_lap_target``, and a second source for one number on one
+      surface is the twin shape this repo pays for most.
+    - ``target_lap_time_s`` stays out. Under a safety car the rail sets it to
+      ``None`` by Art. 55.7, because N06 predicts green-flag pace and publishing a
+      target above the delta sends the driver at a penalty. A field whose absence
+      is the load-bearing case needs a designed rendering before it is worth
+      carrying, and nothing on either window asks for it.
+
+    **What it stopped carrying.** ``agent_alerts`` was a list of intent
+    strings flattened out of ``radio_out.alerts`` for a Qt dashboard retired in
+    ``7ea6a7a6``; it was a lossy copy of ``per_agent.radio.alerts``, which the same
+    tick carries in full and which the RADIO console actually renders (#1040).
+    """
+
     lap_number: int = 0
     compound: str = ""
     tyre_life: int = 0
@@ -124,8 +164,24 @@ class LapDecisionDTO:
     pit_lap_target: int | None = None
     compound_next: str | None = None
     undercut_target: str | None = None
-    agent_alerts: list[str] = field(default_factory=list)
+    # Conditional branches the orchestrator planned for upcoming laps, as plain
+    # dicts (`trigger`, `switch_to`, `priority`, `rationale`), plus the risks it
+    # chose to flag. Both are decision content that stopped at this boundary
+    # until schema v2 (#1046).
+    contingencies: list[dict[str, Any]] = field(default_factory=list)
+    key_risks: list[str] = field(default_factory=list)
     guardrail_reason: str | None = None
+    # Where a stop taken on this lap puts us, as a plain dict for the same
+    # reason `contingencies` is one: the wire is JSON and `asdict` walks this
+    # DTO. `None` when the projection did not run or found no traffic, which is
+    # an absence the windows render as an idle card rather than as a position.
+    #
+    # A field of its own, never a fifth entry in `scenario_scores`: that dict is
+    # iterated key by key into the orchestrator's LLM prompt (a stray key
+    # becomes a phantom candidate), flattened to `{str: float}` on the wire (a
+    # dict entry is silently dropped), and read by `_scoreable` with `.get`
+    # (a numeric entry raises and kills the lap).
+    pit_exit: dict[str, Any] | None = None
     # Raw per-agent outputs (populated by the arcade-local pipeline so the
     # dashboard can render predicted vs actual, CI bounds, cliff percentiles
     # and every other model detail that used to live only in the CLI panel).
@@ -220,21 +276,21 @@ class SimConnector(threading.Thread):
         self._stop_event = threading.Event()
         # Optional callback the arcade view supplies to publish the lap the
         # user is currently watching.  When set, the lap loop blocks until
-        # arcade catches up before kicking the agents — so pausing the
+        # arcade catches up before kicking the agents, so pausing the
         # replay also pauses the agentic flow.  When ``None`` (e.g. CLI
         # smoke tests) the loop runs as fast as the LLM allows, preserving
         # pre-existing behaviour.
         self._current_lap_provider = current_lap_provider
         # RadioPipelineRunner is materialised in _warmup_models after the
         # corpus is ensured on disk; ``None`` until then (graceful
-        # degrade path — the agents run with empty radio_msgs if the
+        # degrade path: the agents run with empty radio_msgs if the
         # corpus cannot be loaded).
         self._radio_runner: Any = None
         # One Safety-Car tracker for the whole replay: a "SAFETY CAR DEPLOYED"
         # corpus message is announced once (at the deploy lap), so without this
         # the per-lap RCM window is empty on laps 8-10 of the same neutralisation
         # and the SC override drops mid-stint. Persists the state across laps and
-        # re-asserts it in _build_race_state (NR-02, #305 → #398; same wiring the
+        # re-asserts it in _build_race_state (#305, #398; same wiring the
         # CLI uses).
         from src.nlp.rcm_state import RaceControlStateTracker
 
@@ -255,10 +311,10 @@ class SimConnector(threading.Thread):
 
         Returns ``True`` when the wait succeeded (arcade caught up or no
         provider was wired) and ``False`` when ``stop()`` was called while
-        we were waiting; the caller propagates that as a clean exit.
+        the loop was waiting; the caller propagates that as a clean exit.
         Polls instead of using a condition variable because the arcade
         view's frame index is read from a different thread without a lock
-        and we only need lap-level granularity, not frame-level.
+        and only lap-level granularity is needed, not frame-level.
         """
         if self._current_lap_provider is None:
             return True
@@ -268,7 +324,7 @@ class SimConnector(threading.Thread):
         return True
 
     # Number of laps the agent loop is allowed to lag behind the arcade
-    # before we consider the lap "stale" and skip the LLM call.  One lap
+    # before the lap counts as "stale" and the LLM call is skipped.  One lap
     # of buffer absorbs the natural drift between the ~5 s agent step and
     # the visual replay without making the dashboard miss the lap the
     # user is actively watching.
@@ -289,7 +345,7 @@ class SimConnector(threading.Thread):
         """Pull the real lap time out of a skipped lap_state, falling back.
 
         Keeps the next agent call's ``prev_lap_time`` baseline accurate
-        even when we skipped one or several intermediate laps; using the
+        even when one or several intermediate laps were skipped; using the
         actual recorded lap time is more truthful than carrying the last
         predicted value forward.
         """
@@ -427,7 +483,7 @@ class SimConnector(threading.Thread):
         # instead of the plan the model was given.
         memory_block = self._memory.block()
         rec, agent_outputs = run_strategy_pipeline(
-            race_state, laps_df, lap_state, memory=self._memory
+            race_state, laps_df, lap_state, memory=self._memory, no_llm=self._request.no_llm
         )
         self._memory.record(race_state.lap, rec)
         plan_changed = self._memory.last_call_changed()
@@ -457,7 +513,7 @@ class SimConnector(threading.Thread):
         with self._state._lock:
             self._state.error = "Warming up strategy models…"
         try:
-            import src.arcade.strategy_pipeline  # noqa: F401 — import-for-side-effects
+            import src.arcade.strategy_pipeline  # noqa: F401  (import for side effects)
             from src.agents.pace_agent import _get_default_pace_agent
             from src.agents.pit_strategy_agent import _get_default_pit_agent
             from src.agents.race_situation_agent import _get_default_situation_agent
@@ -486,8 +542,8 @@ class SimConnector(threading.Thread):
         the whole race and N28/N30 never fire on radio triggers.
 
         Graceful degrade: on any failure (corpus missing, Whisper
-        unavailable, transcript cache corrupt) we log a warning and
-        leave ``_radio_runner`` as ``None``; ``_build_race_state`` then
+        unavailable, transcript cache corrupt), a warning is logged and
+        ``_radio_runner`` is left as ``None``; ``_build_race_state`` then
         falls back to empty ``radio_msgs`` / ``rcm_events`` just like
         before.
         """
@@ -538,7 +594,6 @@ class SimConnector(threading.Thread):
                 gp=self._request.gp,
                 year=self._request.year,
                 driver=self._request.driver,
-                driver2=self._request.driver2,
                 team=self._request.team,
                 lap_start=lap_start,
                 lap_end=lap_end,
@@ -562,7 +617,7 @@ class SimConnector(threading.Thread):
         Never `read_parquet` this file raw. N04 drops `Time` and no published featured
         parquet carries a `Time_s`, which is the column N11 trains its overtake gap on,
         so a direct read silently degrades that gap to a lap-time delta: at Lusail the
-        model reads a 0.49 s mean gap where the truth is 3.29 s, and 90% of pairs look
+        model reads a 0.49 s mean gap where the actual gap is 3.29 s, and 90% of pairs look
         like they are in the DRS window when 20% are.
 
         The backend's loader had this fix and the CLI did not; the arcade did not either.
@@ -601,7 +656,7 @@ class SimConnector(threading.Thread):
 
         The lap_state -> RaceState mapping lives in
         ``src.agents.race_state_builder.build_race_state`` (#784): one
-        implementation shared by all three surfaces — this arcade, the CLI, and
+        implementation shared by all three surfaces: this arcade, the CLI, and
         the telemetry backend, which reaches it through a re-export shim (#786)
         rather than keeping the copy it used to carry. So the defaults the
         models receive no longer drift per surface.
@@ -614,7 +669,7 @@ class SimConnector(threading.Thread):
         re-injection. Both are passed to the builder as parameters.
 
         ``prev_lap_time`` is accepted but no longer read here: ``pace_delta_s``
-        used to be computed from it and that was the wrong axis (#750, now
+        was computed from it, and that was the wrong axis (#750, now
         enforced by the canonical builder). Left in the signature rather than
         removed, since the caller's per-lap bookkeeping that produces it
         (``_step_once`` / ``_lap_time_from_state``) serves no other purpose
@@ -631,14 +686,14 @@ class SimConnector(threading.Thread):
             except (KeyError, ValueError, TypeError) as exc:
                 # radios_for_lap does plain pandas row indexing + int/str
                 # casts (see RadioPipelineRunner._radio_row_to_dict /
-                # _rcm_row_to_dict) — a malformed lap_number or a missing
+                # _rcm_row_to_dict): a malformed lap_number or a missing
                 # column are the only realistic failure modes here.
                 logger.debug("radios_for_lap(%d) failed: %s", lap_num, exc)
 
         # Re-assert an active Safety Car on the laps whose RCM window carries no
         # fresh deploy message. Ingest only the laps actually processed here; a
         # release landing on a skipped (stale) lap is bounded by the tracker's
-        # safety valve rather than pinning the override (NR-02, #398 — mirrors
+        # safety valve rather than pinning the override (#398, mirrors
         # the CLI wiring in run_simulation_cli).
         self._sc_tracker.ingest(lap_num, rcm_events)
         if self._sc_tracker.should_inject(lap_num):
@@ -699,7 +754,7 @@ def _normalize_scores(raw: Any) -> dict[str, float]:
             v = v.get("score")
         # A candidate the projection engine declined to score arrives as None.
         # It used to become 0.0 here, which painted a full-height bar at the
-        # zero line for a strategy that was never on the table — a numeric
+        # zero line for a strategy that was never on the table: a numeric
         # sentinel by accident. Dropping the key instead leaves the dashboard
         # with three bars, and an absent bar cannot be misread as a score.
         if v is None:
@@ -715,7 +770,7 @@ def _dump_dataclass(obj: Any) -> dict[str, Any] | None:
     """Convert an agent-output dataclass to a plain dict, tolerating ``None``.
 
     ``dataclasses.asdict`` recurses into nested dataclasses, which is what
-    we want for the per-agent serialisation: ``PaceOutput``, ``TireOutput``,
+    the per-agent serialisation needs: ``PaceOutput``, ``TireOutput``,
     etc. turn into JSON-ready dicts without hand-written field mappings."""
     if obj is None:
         return None
@@ -727,19 +782,117 @@ def _dump_dataclass(obj: Any) -> dict[str, Any] | None:
     return obj if isinstance(obj, dict) else None
 
 
+# N27 computes these two from the RCM stream for the lap it was asked about.
+# The tick already carries `track_status_label`, decoded from FastF1 TrackStatus
+# for the lap on screen by the arcade's own priority rule, and BOTH windows
+# render that one. Publishing the agent's pair as well would put two sources for
+# one fact on one desk, free to disagree, which is the shape this repo pays for
+# most - so the wire carries the decoded signal and the agent keeps its own
+# copy for its own reasoning (#1043).
+#
+# They are filtered HERE rather than deleted from `RaceSituationOutput`, because
+# the pair is read across `src/agents/`: N27's own `sc_active` property, N28's
+# routing branches, and the orchestrator's safety-car handling including the
+# rail that nulls `target_lap_time_s` under Art. 55.7.
+_SITUATION_FIELDS_OFF_THE_WIRE = ("sc_currently_active", "vsc_active")
+
+
+def _situation_for_the_wire(situation_out: Any) -> dict[str, Any] | None:
+    """Dump N27's output minus the neutralisation booleans the tick decodes itself."""
+    dumped = _dump_dataclass(situation_out)
+    if dumped is None:
+        return None
+    return {k: v for k, v in dumped.items() if k not in _SITUATION_FIELDS_OFF_THE_WIRE}
+
+
 def _build_per_agent(agent_outputs: dict[str, Any]) -> PerAgentOutputsDTO:
     """Package the pipeline's intermediate outputs into a DTO the
     ``StrategyState`` can broadcast to the dashboard."""
     return PerAgentOutputsDTO(
         pace=_dump_dataclass(agent_outputs.get("pace_out")),
         tire=_dump_dataclass(agent_outputs.get("tire_out")),
-        situation=_dump_dataclass(agent_outputs.get("situation_out")),
+        situation=_situation_for_the_wire(agent_outputs.get("situation_out")),
         radio=_dump_dataclass(agent_outputs.get("radio_out")),
         pit=_dump_dataclass(agent_outputs.get("pit_out")),
         regulation_context=str(agent_outputs.get("regulation_context") or ""),
         rag=agent_outputs.get("rag"),
         active=list(agent_outputs.get("active") or []),
     )
+
+
+def _contingency_dicts(contingencies: Any) -> list[dict[str, Any]]:
+    """Flatten the orchestrator's ``Contingency`` models into wire dicts.
+
+    Four keys each: ``trigger``, ``switch_to``, ``priority``, ``rationale``.
+
+    Both ITEM shapes are handled because the list can hold either, and a
+    comprehension that assumed one would produce a payload of empty objects on
+    the other without failing anywhere.
+
+    **The fork that matters is one level up and it is the caller's**, not this
+    function's. ``_build_decision`` reads every optional field with ``getattr``,
+    so a dict-shaped ``rec`` would yield ``None`` for all of them, silently. That
+    shape does not reach the arcade today - ``run_lap``'s contract is a real
+    ``StrategyRecommendation`` on both the rich and the no-llm paths - and the
+    day one does, the hole is at the call site rather than here.
+    """
+    packed: list[dict[str, Any]] = []
+    for item in contingencies or []:
+        if isinstance(item, dict):
+            source = item
+        else:
+            source = {
+                key: getattr(item, key, None)
+                for key in ("trigger", "switch_to", "priority", "rationale")
+            }
+        packed.append(
+            {
+                key: str(source.get(key) or "")
+                for key in ("trigger", "switch_to", "priority", "rationale")
+            }
+        )
+    return packed
+
+
+def _finite(value: Any) -> float | None:
+    """A float the wire can carry, or None. NaN and inf are not numbers to JSON."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _pit_exit_payload(readout: Any) -> dict[str, Any] | None:
+    """The rejoin readout as the plain dict the wire carries, or None.
+
+    Flattened here rather than left as a nested dataclass so the wire shape is
+    STATED, and so the golden that pins it (`tests/surfaces/
+    test_arcade_wire_contract.py`) fails on a rename instead of silently
+    following one. `contingencies` is flattened one line above for the same
+    reason.
+
+    A neighbour is `None` when there is no car on that side, which is a real
+    state: rejoining into the lead has nothing ahead. It is never an empty dict,
+    because a consumer would then read a driver code of "" and a gap of 0.0,
+    and 0.0 is a gap the code can also legitimately find.
+    """
+    if readout is None:
+        return None
+
+    def _car(neighbour: Any) -> dict[str, Any] | None:
+        if neighbour is None:
+            return None
+        return {"driver": str(neighbour.driver), "gap_s": _finite(neighbour.gap_s)}
+
+    return {
+        "slot": int(readout.slot),
+        "from_position": int(readout.from_position) if readout.from_position else None,
+        "band": int(readout.band),
+        "ahead": _car(readout.ahead),
+        "behind": _car(readout.behind),
+        "rivals_used": int(readout.rivals_used),
+    }
 
 
 def _build_decision(
@@ -753,31 +906,26 @@ def _build_decision(
     """Merge the synthesised ``StrategyRecommendation`` + raw agent outputs
     into the DTO consumed by ``StrategyState.history`` / the dashboard.
 
-    ``agent_alerts`` is rebuilt from ``radio_out.alerts`` the same way
-    ``simulator._parse_lap_decision`` does it (string-or-dict tolerant)
-    so the dashboard's alerts feed stays schema-stable across paths.
+    ``contingencies`` is flattened to plain dicts because the wire is JSON and
+    ``asdict`` walks this DTO: the orchestrator holds them as ``Contingency``
+    models, which would not survive the trip typed anyway.
 
     ``memory_block`` / ``plan_changed`` come from ``DecisionMemory`` and are
     just carried onto the DTO here; the caller (``_step_once``) is the one
     that decides when each is captured relative to ``record()``.
     """
-    radio_out = agent_outputs.get("radio_out")
-    agent_alerts: list[str] = []
-    if radio_out is not None:
-        raw_alerts = getattr(radio_out, "alerts", []) or []
-        for a in raw_alerts:
-            if isinstance(a, dict):
-                agent_alerts.append(str(a.get("intent") or a.get("event_type") or "alert"))
-            else:
-                agent_alerts.append(str(a))
-
     return LapDecisionDTO(
         lap_number=race_state.lap,
         compound=str(race_state.compound),
         tyre_life=int(race_state.tyre_life),
         position=int(race_state.position),
         lap_time_s=float(lap_time_s) if lap_time_s else None,
-        gap_ahead_s=float(race_state.gap_ahead_s),
+        # The TCP wire contract pins this slot as float
+        # (tests/surfaces/test_arcade_wire_contract.py) and #857 owns the wire's
+        # future. 0.0 is the wire's existing absent-marker, kept AT THE BOUNDARY
+        # on purpose - not a producer writing 0.0 back into the strategy path,
+        # which is the defect #878 is about. Remove with the wire redesign.
+        gap_ahead_s=(float(race_state.gap_ahead_s) if race_state.gap_ahead_s is not None else 0.0),
         action=str(getattr(rec, "action", "ERROR")),
         confidence=float(getattr(rec, "confidence", 0.0) or 0.0),
         reasoning=str(getattr(rec, "reasoning", "")),
@@ -787,8 +935,10 @@ def _build_decision(
         pit_lap_target=getattr(rec, "pit_lap_target", None),
         compound_next=getattr(rec, "compound_next", None),
         undercut_target=getattr(rec, "undercut_target", None),
-        agent_alerts=agent_alerts,
+        contingencies=_contingency_dicts(getattr(rec, "contingencies", None)),
+        key_risks=[str(risk) for risk in (getattr(rec, "key_risks", None) or [])],
         guardrail_reason=None,
+        pit_exit=_pit_exit_payload(agent_outputs.get("pit_exit")),
         per_agent=_build_per_agent(agent_outputs),
         memory_block=memory_block,
         plan_changed=plan_changed,

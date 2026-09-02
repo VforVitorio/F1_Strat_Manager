@@ -4,7 +4,7 @@
 
 Offline replay of a race from a stored parquet snapshot. Emits `lap_state` dicts, the canonical data contract consumed by all seven strategy agents.
 
-This is the **demo path** for the thesis defence. The live path (Kafka consumer feeding real telemetry) will replace the iterator in v0.14+ without touching any agent code, because agents only see `lap_state` dicts regardless of source.
+This is the **demo path** for the thesis defence. The live path will replace the iterator at the **v3.0.0** milestone ([roadmap](#/roadmap)) without touching any agent code, because agents only see `lap_state` dicts regardless of source.
 
 ## Architecture
 
@@ -81,7 +81,10 @@ Known limitations:
 |---|---|
 | `race_state_manager.py` | Data boundary, per-lap state construction |
 | `replay_engine.py` | Parquet loading, lap iterator, Arcade frame builder |
+| `stint_history.py` | Per-driver stint tracking; emits the Art. 30.5(m) `stint_flags` and `rival_stop_pending` this page documents |
+| `data_validation.py` | Parquet quality checks, including the `IsAccurate` / `Deleted` warning the CLI prints on load |
 | `__main__.py` | Terminal CLI for quick testing |
+| `README.md` | Package-level notes |
 
 ## Running
 
@@ -107,17 +110,24 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
 ------------------------------------------------------------------------
    Lap  Pos      Compound   LapTime  Gap Leader                     Ahead                    Behind
 ------------------------------------------------------------------------
-     1    1  INT( 1L)  1:57.099    +0.000s                            P2:VER INT( 1L)  +2.293s
-     2    1  INT( 2L)    ---.-     +0.000s                            P2:VER INT( 2L)  +4.586s [IN]
-    20    1  INT(20L)  1:30.710    +0.000s                            P2:PIA INT(20L) +13.836s
-    34    1  INT(34L)  2:02.273    +0.000s                            P2:PIA INT(34L) +19.398s [IN]
-    35    1  HAR( 2L)  2:03.448    +0.000s                            P2:PIA HAR( 2L) +19.731s [OUT]
-    44    6  HAR(11L)  1:45.587   +34.252s  P5:LEC HAR(11L) +56.481s  P7:LAW MED(11L) +79.194s [IN]
-    46    3  INT( 2L)  1:31.567   -62.788s  P2:LEC HAR(13L) +56.205s  P4:TSU MED(13L) +62.387s
-    57    1  INT(13L)  1:27.126    +0.000s                            P2:VER INT(11L) -18.289s
-------------------------------------------------------------------------
-  Replay complete - 57 laps shown.
+     1    1  INT( 1L)  1:57.099    +0.000s                            P2:VER INT(1L)  +2.276s
+     2    1  INT( 2L)    ---.-     +0.000s                            P2:VER INT(2L)  +1.695s [IN]
+    20    1  INT(20L)  1:30.710    +0.000s                            P2:PIA INT(20L)  +2.623s
+    34    1  INT(34L)  2:02.273    +0.000s                            P2:PIA INT(34L)  +8.185s [IN]
+    35    1  HAR-C3( 2L)  2:03.448    +0.000s                            P2:PIA HAR-C3(2L)  +8.518s [OUT]
+    44    6  HAR-C3(11L)  1:45.587   +15.061s  P5:LEC HAR-C3(11L)  -0.138s  P7:LAW MED-C4(11L)  +4.589s [IN]
+    46    3  INT( 2L)  1:31.567    +4.415s  P2:LEC HAR-C3(13L)  -0.414s  P4:TSU MED-C4(13L)  +0.381s
+    57    1  INT(13L)  1:27.126    +0.000s                            P2:VER INT(11L)  +0.902s
 ```
+
+> Captured from a real run of the command above, on 2026-08-10. The block it
+> replaced had the same lap times and **pre-fix gaps**: it showed P2 at
+> +13.836 s on lap 20 where the code now emits +2.623 s, because it predated
+> the `Time_s` correction the *Gap computation* section below describes. A
+> stale example that demonstrates the exact failure its own page warns about
+> is worse than no example. The compound labels also gained their Pirelli
+> compound ID (`HAR-C3`) since the old block was captured.
+
 
 **Reading the output:**
 
@@ -233,9 +243,11 @@ python -m src.simulation Silverstone VER "Red Bull Racing" --data-dir data/raw/2
 }
 ```
 
-## Future: Kafka integration (v0.14)
+## Future: live ingestion (v3.0.0)
 
-Replace `RaceReplayEngine.replay()` with a `LiveKafkaConsumer.consume_lap()` iterator that emits the same `lap_state` dict from a live Kafka topic. Zero changes to agents or orchestrator.
+Replace `RaceReplayEngine.replay()` with a consumer that emits the same `lap_state` dict from a live feed. Zero changes to agents or orchestrator.
+
+> The sketch below is written against Kafka because that was the assumed transport when this page was drafted; the [roadmap](#/roadmap)'s v3.0.0 entry names the **OpenF1 WebSocket**. The shape of the change is what matters and it is the same either way: swap the iterator, leave the contract alone. The old `v0.14` numbering here predated the 1.0 release and is long dead.
 
 ```python
 # Current (offline)

@@ -145,6 +145,25 @@ def _projection_scores(alpha: float = 0.5) -> dict:
     )
 
 
+def _projection_scores_capturing(capture: dict, alpha: float = 0.5) -> dict:
+    """The same production entry point, with the draw channel opened."""
+    from src.agents.strategy_orchestrator import _run_mc_simulation
+
+    pace, tire, situation, pit = _canned_outputs()
+    return _run_mc_simulation(
+        pace,
+        tire,
+        situation,
+        pit,
+        alpha=alpha,
+        rivals=_RIVALS,
+        position=4,
+        laps_remaining=22,
+        pit_context=_PIT_CONTEXT,
+        capture=capture,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Shape — runs everywhere, including a CI runner with no model weights
 # ---------------------------------------------------------------------------
@@ -218,3 +237,119 @@ def test_alpha_collapses_the_score_onto_a_single_quantile(alpha, key):
         if cell["score"] is None:
             continue
         assert cell["score"] == pytest.approx(cell[key]), name
+
+
+# ---------------------------------------------------------------------------
+# The capture channel. Gated on the weights like the value tests above: these
+# drive the real `_run_mc_simulation`, whose canned outputs construct the tyre
+# agent, so a runner without `data/models/` cannot reach them. The SHAPE checks
+# further up stay ungated on purpose.
+# The capture channel — the rejoin readout prices the SAME stop the candidates
+# were scored on, or the window shows two answers for one lap
+# ---------------------------------------------------------------------------
+
+
+@pytestmark_values
+def test_the_capture_never_reaches_the_scored_return():
+    """Looking at the draws cannot change them, and cannot widen the contract.
+
+    The scored dict is pinned by exact equality below. If the capture were
+    returned rather than deposited, every consumer of a future capture field
+    would become a golden change, and the four candidate keys would stop being
+    the whole of `scenario_scores` (which the arcade wire pins in its own
+    golden, and which the LLM prompt iterates key by key).
+    """
+    watched: dict = {}
+    with_capture = _projection_scores_capturing(watched)
+    without = _projection_scores()
+
+    assert with_capture == without, "passing a capture moved the scores"
+    assert set(without) == {"STAY_OUT", "PIT_NOW", "UNDERCUT", "OVERCUT"}, (
+        f"the capture leaked into the scored dict: {sorted(without)}"
+    )
+    assert watched, "the projection path deposited nothing"
+    assert set(watched) == {"pit_loss_s", "rival_states", "current_position"}
+
+
+@pytestmark_values
+def test_the_readout_prices_the_stop_the_candidates_were_scored_on():
+    """One draw vector, two products. The alternative is two stories per lap.
+
+    A readout that sampled its own pit loss reproduces the scored numbers today
+    only by replaying seed 42 and the exact draw ORDER, and the order contains a
+    line whose result is discarded. Delete that line as dead and the two
+    products silently disagree, with no test failing, because the goldens pin
+    only the scores.
+    """
+    from src.agents.position_projection import project_rejoin
+
+    watched: dict = {}
+    _projection_scores_capturing(watched)
+
+    readout = project_rejoin(
+        watched["rival_states"], watched["pit_loss_s"], watched["current_position"]
+    )
+    assert readout is not None
+
+    # The captured array has to BE the one the scorer drew, not merely one of
+    # the right length. An earlier version of this test asserted determinism,
+    # which a mutant satisfied by depositing the real array plus half a second.
+    #
+    # The scorer builds `pit_loss_s = traversal_s + triangular(p05, p50, p95)`,
+    # so the support is closed and stated by the fixture: every element must sit
+    # inside `traversal + [p05, p95]`. Nothing here replays the draw ORDER,
+    # which is the seed-42 twin the design exists to avoid.
+    _, _, _, pit = _canned_outputs()
+    traversal = _PIT_CONTEXT["traversal_s"]
+    low = traversal + float(pit.stop_duration_p05)
+    high = traversal + float(pit.stop_duration_p95)
+    losses = watched["pit_loss_s"]
+
+    assert losses.min() >= low - 1e-9, f"{losses.min()} is below {low}, so it was not drawn here"
+    assert losses.max() <= high + 1e-9, f"{losses.max()} is above {high}, so it was not drawn here"
+    from src.agents.strategy_orchestrator import CFG
+
+    assert len(losses) == CFG.n_sim, "one entry per scored draw"
+    assert losses.std() > 0.05, (
+        "a 500-draw triangular sample has spread; a flat array is a summary "
+        "of the draws rather than the draws"
+    )
+
+    # RESIDUAL, stated rather than papered over: these bounds catch a shifted
+    # array and a degenerate one, and they cannot catch a DIFFERENT valid sample
+    # from the same distribution. Closing that needs the capture tied back to
+    # the scores, which means restating the scorer's own config in the test, and
+    # a second implementation of the thing under test is the drift this design
+    # exists to avoid. The tie that does hold is structural: the scorer deposits
+    # the same object it scores with, one statement apart.
+
+    again = project_rejoin(
+        watched["rival_states"], watched["pit_loss_s"], watched["current_position"]
+    )
+    assert again == readout, "the readout is deterministic for one capture"
+
+
+@pytestmark_values
+def test_the_legacy_path_deposits_nothing():
+    """No rivals, no projection, no draws to share, and no readout to render.
+
+    An empty capture is the honest idle signal: the surfaces branch on the key
+    being absent rather than on a number that would have to be invented.
+    """
+    from src.agents.strategy_orchestrator import _run_mc_simulation
+
+    pace, tire, situation, pit = _canned_outputs()
+    watched: dict = {}
+    _run_mc_simulation(
+        pace,
+        tire,
+        situation,
+        pit,
+        alpha=0.5,
+        rivals=[],
+        position=4,
+        laps_remaining=22,
+        pit_context=_PIT_CONTEXT,
+        capture=watched,
+    )
+    assert watched == {}, f"the legacy path deposited {sorted(watched)}"

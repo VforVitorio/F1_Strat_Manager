@@ -52,7 +52,7 @@ prints it:
 ```python
 pred = model(tensor).item()
 ...
-f'Cumulative degradation: {pred:.3f} s | Degradation rate: {deg_rate:.4f} s/lap'
+f"Cumulative degradation: {pred:.3f} s | Degradation rate: {deg_rate:.4f} s/lap"
 ```
 
 `_parse_tool_outputs` (`:658-668`) has regexes for `Degradation rate`, `P10`, `P50`, `P90` — and
@@ -78,8 +78,8 @@ decision materially, which is exactly why connecting the wrong one is worth avoi
 `N04_feature_engineering.ipynb` defines the target the TCN predicts:
 
 ```python
-baseline_tyrelife = group['TyreLife'].min()
-baseline_laptime  = group.loc[group['TyreLife'] == baseline_tyrelife, 'LapTime_s'].mean()
+baseline_tyrelife = group["TyreLife"].min()
+baseline_laptime = group.loc[group["TyreLife"] == baseline_tyrelife, "LapTime_s"].mean()
 FuelAdjustedDegAbsolute = adjusted - baseline_laptime
 ```
 

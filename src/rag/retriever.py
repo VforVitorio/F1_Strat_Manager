@@ -18,8 +18,13 @@ from pathlib import Path
 from typing import Any
 
 from langchain_core.tools import tool
-from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
+
+# QdrantClient and SentenceTransformer are imported inside RagRetriever.__init__.
+# sentence_transformers alone costs 7.3 s at import and pulls torch and
+# transformers with it, and this module is reached from the orchestrator on every
+# run, so `f1-sim --help` and any --no-llm lap paid for a vector store neither
+# one opens. get_retriever() is already a lazy singleton (see its docstring), so
+# the cost now lands on the first regulation question instead of on startup.
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -181,6 +186,9 @@ class RagRetriever:
                              overridden per call in ``query()`` when a broader or
                              narrower context window is needed.
         """
+        from qdrant_client import QdrantClient
+        from sentence_transformers import SentenceTransformer
+
         self._qdrant_path = Path(qdrant_path)
         self._collection_name = collection_name
         self._embedding_model = embedding_model

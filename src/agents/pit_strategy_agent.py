@@ -1,4 +1,4 @@
-"""Pit Strategy Agent — src/agents/pit_strategy_agent.py
+"""Pit Strategy Agent: src/agents/pit_strategy_agent.py
 
 Extracted from N28_pit_strategy_agent.ipynb. Wraps N15 (physical pit stop duration
 P05/P50/P95) and N16 (undercut success probability) in a LangGraph ReAct agent
@@ -12,6 +12,7 @@ run_pit_strategy_agent_from_state(lap_state, laps_df) → PitStrategyOutput  (RS
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import re
@@ -39,7 +40,11 @@ from src.strategy.inference.guard_rails import (
     _NO_PIT_LAST_N_LAPS,
 )
 
-from src.agents._shared_defaults import DEFAULT_TOTAL_LAPS
+from src.agents._shared_defaults import (
+    DEFAULT_TOTAL_LAPS,
+    LLM_MAX_RETRIES,
+)
+from src.agents.race_state_builder import UNKNOWN_TYRE_LIFE
 
 # ── Repo root (with root-stop guard for uv tool install) ─────────────────────
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -111,7 +116,7 @@ _STINT_CAPACITY_LAPS: dict[str, int] = {'SOFT': 18, 'MEDIUM': 30, 'HARD': 38}
 # `_MIN_STINT_LAPS['MEDIUM']`, and those are two different rules that happened to
 # share the number 12. One asks "has this set run long enough to be worth
 # replacing?", the other asks "is there enough race left for this compound to make
-# sense?" — nothing ties them, and the coupling was invisible because the values
+# sense?" Nothing ties them, and the coupling was invisible because the values
 # agreed. It surfaced when #716 recalibrated the minimum-stint bound to 7 against
 # real stint lengths and silently rewrote this unrelated rule to "MEDIUM: suitable
 # for 7-30 remaining laps" in the DEFAULT LLM path. 12 is what this band has always
@@ -143,7 +148,7 @@ _MAX_TRAINED_TYRE_LIFE: int = 50
 # The same ceiling, declared rather than left as a bare number (#710). The envelope does
 # not clip and does not change what N15 is fed: the clip below still does that, byte for
 # byte. What it adds is that exceeding the trained range stops being SILENT, which is the
-# failure this contract exists for — N26 spent two years answering out-of-range calls
+# failure this contract exists for. N26 spent two years answering out-of-range calls
 # with full confidence because nothing ever said so out loud.
 #
 # The lower bound is 1 because a tyre on its first lap reads 1, never 0.
@@ -153,7 +158,7 @@ _N15_TYRE_LIFE_ENVELOPE = OperatingEnvelope(
 )
 
 # N15's tight_pit_box feature (notebook cell 4): {"Monaco Grand Prix", "Singapore Grand
-# Prix", "Hungarian Grand Prix"} — circuits with narrow/short pit boxes that cause minor
+# Prix", "Hungarian Grand Prix"}, circuits with narrow/short pit boxes that cause minor
 # stop delays. Keyed here by the CANONICAL SLUG ('Monaco', 'Marina Bay', 'Budapest'), not
 # the full event name, because gp_name at inference can arrive in EITHER keyspace exactly
 # like circuit_traversal/circuit_undercut_rate above; resolve through slug_from_event_name
@@ -189,13 +194,13 @@ class PitAgentCFG:
 
     Loads three N15 quantile regressors (physical stop P05/P50/P95), the N16
     undercut LightGBM + Platt calibrator, and both JSON configs. All loaded with
-    joblib — required on Windows paths with non-ASCII characters.
+    joblib, required on Windows paths with non-ASCII characters.
 
     circuit_traversal maps GP event name → pit lane traversal time (s). Subtracting
     it from total pit time yields physical_stop_est, the N15 target variable.
 
     team_encoder is a sklearn LabelEncoder reconstructed from the class list in
-    model_config.json — no separate .pkl needed.
+    model_config.json, no separate .pkl needed.
 
     team_year_median_fallback (2.8 s): N15 never exported its per-team×year medians, so
     this constant used to stand in for EVERY call regardless of team or year (#450).
@@ -237,7 +242,7 @@ class PitAgentCFG:
         self.pit_features: list[str]   = pit_cfg['features']
         # Re-key the circuit tables into the SLUG keyspace the agents actually query
         # with (session_meta.gp_name / the featured parquet's GP_Name). They ship keyed
-        # by FastF1 full event names, whose overlap with the slugs is exactly zero — so
+        # by FastF1 full event names, whose overlap with the slugs is exactly zero, so
         # every lookup missed and silently took its default, freezing traversal at
         # 20.0 s and circuit_undercut_rate at 0.38 for every circuit (#448).
         self.circuit_traversal: dict   = rekey_by_slug(
@@ -285,7 +290,7 @@ class PitAgentCFG:
         add_team_year_median): physical_stop_est = pit_duration_s - circuit_traversal,
         grouped by (team, year) and reduced to the median. That table was never
         exported from the notebook, so inference fed every call the SAME 2.8s
-        constant no matter which team or year was asked about (#450) — this rebuilds
+        constant no matter which team or year was asked about (#450). This rebuilds
         it from data/raw/<year>/<GP>/pitstops.parquet instead of guessing.
 
         Requires self.circuit_traversal to already be populated (called after that
@@ -345,7 +350,7 @@ class PitAgentCFG:
         """Per-(team, year) physical-stop median (s), or the global fallback if unseen.
 
         Args:
-            team: Team name already normalised through _TEAM_ALIASES — callers must
+            team: Team name already normalised through _TEAM_ALIASES. Callers must
                 apply that alias BEFORE this lookup so a 2025 'Racing Bulls' row
                 lands on the same key as the '2023/2024 'RB' rows it aggregated with.
             year: Race year.
@@ -376,13 +381,18 @@ class PitStrategyOutput:
     """Structured output of the Pit Strategy Agent for one driver at one lap.
 
     Attributes:
-        action: Strategy recommendation — PIT_NOW, STAY_OUT, UNDERCUT, OVERCUT,
-            or REACTIVE_SC (box under an active/imminent Safety Car).
+        action: One of PIT_NOW, STAY_OUT, UNDERCUT, OVERCUT, or REACTIVE_SC (box
+            under an active/imminent Safety Car).
         recommended_lap: Lap on which the stop is recommended. None when STAY_OUT.
         compound_recommendation: SOFT, MEDIUM, or HARD for the next stint.
-        stop_duration_p05: 5th-percentile physical stop time (s) from N15.
+        stop_duration_p05: 5th-percentile physical stop time (s) from N15. 0.0 means
+            the duration tool was not called or did not parse; consumers must treat
+            it as absent (see `_durations_known` in the orchestrator), never as a
+            free stop.
         stop_duration_p50: Median physical stop time (s). Used for timing decisions.
+            Same 0.0-means-absent rule as stop_duration_p05.
         stop_duration_p95: 95th-percentile physical stop time (s). Pessimistic bound.
+            Same 0.0-means-absent rule as stop_duration_p05.
         undercut_prob: Calibrated N16 P(undercut success). None when no dry rival
             is within 5 positions or conditions are wet.
         undercut_target: Driver abbreviation of the undercut target. None when
@@ -405,11 +415,11 @@ class PitStrategyOutput:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Pure stateless helpers — accept all state as arguments, read no globals
+# Pure stateless helpers: accept all state as arguments, read no globals
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _compound_to_id(compound: str, gp_name: str, year: int) -> int:
-    """Convert SOFT/MEDIUM/HARD to Pirelli compound number (C1–C5/C6).
+    """Convert SOFT/MEDIUM/HARD to Pirelli compound number (C1-C5/C6).
 
     Uses the nested TIRE_COMPOUNDS structure {year_str: {gp_name: {compound: Cx}}}.
     The Cx string (e.g. 'C3') is stripped to its integer (3). Falls back to
@@ -421,7 +431,7 @@ def _compound_to_id(compound: str, gp_name: str, year: int) -> int:
         year: Race year as int.
 
     Returns:
-        Integer compound number (1–6).
+        Integer compound number (1-6).
     """
     # The keyspace trap: queried with the metadata name ('Miami Gardens') this missed and
     # returned _COMPOUND_FALLBACK, which for 2025 Miami is 1 where the answer is 3 (HARD)
@@ -444,7 +454,7 @@ def _extract_physical_stops(pit_path: Path, traversal_s: float) -> list[tuple[st
     subtracting traversal_s (this circuit's fixed traversal component) isolates the
     physical-stop component the same way N15's target was built. The TyreLife_out <= 5
     filter drops drive-through penalties and jack failures where no tyre was actually
-    changed — those carry no team-quality signal and were excluded from training too.
+    changed. Those carry no team-quality signal and were excluded from training too.
 
     Args:
         pit_path: Path to one GP's raw pitstops.parquet.
@@ -489,7 +499,7 @@ def _parse_tool_outputs(messages: list) -> dict:
     The ReAct agent calls score_undercut_tool once PER candidate rival (system prompt
     rule 2: "for each rival within 5 positions ahead"), so several undercut results can
     appear across the message history. Only latching onto the FIRST P(undercut_success)
-    match — and never onto WHICH driver it was scored against — meant undercut_target
+    match, and never onto WHICH driver it was scored against, meant undercut_target
     was assembled from the positional rival_ahead candidate instead of the driver N16
     actually scored highest, silently mismatching prob and target on every multi-rival
     call (#432). Tracking the argmax (driver, prob) pair across ALL score_undercut_tool
@@ -503,7 +513,7 @@ def _parse_tool_outputs(messages: list) -> dict:
         Dict with: stop_duration_p05/p50/p95, undercut_prob, undercut_target,
         compound_recommendation. Missing keys default to None. undercut_target is
         the driver whose call produced the highest undercut_prob seen, NOT yet
-        validated against the live-drivers roster — callers must validate before
+        validated against the live-drivers roster. Callers must validate before
         using it (see PitStrategyAgent._validate_undercut_target).
     """
     result: dict = {
@@ -540,7 +550,7 @@ def _parse_agent_summary(final_content: str) -> tuple[str, str, str]:
     """Extract ACTION, COMPOUND, and REASONING from the agent's structured summary.
 
     Falls back to ('STAY_OUT', 'MEDIUM', first 200 chars) when the structured
-    block is absent — prevents crashes when the LLM deviates from format.
+    block is absent, which prevents crashes when the LLM deviates from format.
 
     Args:
         final_content: Last message content string from the agent.
@@ -623,18 +633,29 @@ def _build_pit_prompt(
 # LangGraph / LangChain optional imports
 # ─────────────────────────────────────────────────────────────────────────────
 
+# lc_tool stays eager: the @lc_tool decorators further down run at import time.
+# ChatOpenAI, create_agent and HumanMessage do not, and importing them here cost
+# 7.2 s measured, because langchain_openai drags transformers and the langgraph
+# stack in behind it. This module is imported by the orchestrator, so every CLI
+# invocation paid that, `--help` included, whether or not the ReAct agent was
+# ever built. The names are now imported where they are used, and find_spec
+# answers the availability question without executing anything.
 try:
     from langchain_core.tools import tool as lc_tool
-    from langchain_core.messages import HumanMessage
-    from langchain_openai import ChatOpenAI
-    from langchain.agents import create_agent
-    _LANGGRAPH_AVAILABLE = True
+
+    _LC_CORE_AVAILABLE = True
 except ImportError:
-    _LANGGRAPH_AVAILABLE = False
+    _LC_CORE_AVAILABLE = False
+
+_LANGGRAPH_AVAILABLE = (
+    _LC_CORE_AVAILABLE
+    and importlib.util.find_spec("langchain_openai") is not None
+    and importlib.util.find_spec("langchain.agents") is not None
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt (module-level constant — unchanged from N28)
+# System prompt (module-level constant, unchanged from N28)
 # ─────────────────────────────────────────────────────────────────────────────
 
 # f-string: the COMPOUND vs REMAINING LAPS section below derives its SOFT bound from
@@ -723,7 +744,7 @@ REASONING: <one sentence>
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PitStrategyAgent — encapsulated agent class
+# PitStrategyAgent: encapsulated agent class
 # ─────────────────────────────────────────────────────────────────────────────
 
 class PitStrategyAgent:
@@ -845,34 +866,50 @@ class PitStrategyAgent:
         """TyreLife for N15, clipped to the trained ceiling, NaN-safe.
 
         `row` is a pandas Series, so `row.get('TyreLife', 1)` returns the STORED value
-        including NaN — the default only fires when the COLUMN is absent, never when the
+        including NaN. The default only fires when the COLUMN is absent, never when the
         VALUE is. `int(nan)` then raises ValueError inside the ReAct loop, and 451 rows
         (1.98%) of the 2025 featured parquet have a NaN TyreLife. That is the same
         Series.get trap as #428/#462, on a third column.
 
-        A missing tyre age means "fresh" is the only defensible read: a car with no
-        recorded TyreLife has just been given a set, and 1 is what the dead default was
-        reaching for anyway. It is also the conservative direction for N15, which is
-        predicting how long the stop takes, not whether to make it.
+        An absent age is served as UNKNOWN_TYRE_LIFE, the shared constant, and NOT
+        as a fabricated 1 (#832, #1008). This used to argue that a missing age means
+        the set is fresh, which is a reasonable-sounding case for the wrong number:
+        1 is a reading N15 legitimately finds on the first lap of every stint, so the
+        sentinel and the measurement were the same value and nothing downstream could
+        tell them apart. `race_state_builder` rejects 1 for exactly that reason and
+        its comment says so; one member of the pair had the rule and its twin did not.
+        0 occurs zero times across 2023, 2024 and 2025, so it collides with nothing,
+        and it sits below the envelope's floor, which is what turns the absence from
+        silent into audible: the call is labelled an extrapolation rather than a fit.
         """
         value = row.get('TyreLife')
         if value is None or pd.isna(value):
-            logger.warning('TyreLife missing on the lap row; N15 reads it as a fresh set')
-            return 1
+            logger.warning(
+                'TyreLife missing on the lap row; N15 is served %d, the non-colliding '
+                'unknown, so its stop-duration prediction is not a fit',
+                UNKNOWN_TYRE_LIFE,
+            )
+            value = UNKNOWN_TYRE_LIFE
 
         # Label the call BEFORE clipping, because after the clip the evidence is gone:
         # every value reads as in-range once it has been forced there. The clip is what
         # keeps N15 inside its fitted range and it is unchanged; this only makes the
         # moment it bites visible instead of silent (#710).
+        #
+        # The message reports what is SERVED rather than the ceiling, because `min`
+        # only clips the top. Saying "clipped to 50" for a value below the floor was
+        # false the moment an unknown could reach here, which is what #832 made
+        # possible: 0 is passed through untouched.
+        served  = min(int(value), _MAX_TRAINED_TYRE_LIFE)
         verdict = _N15_TYRE_LIFE_ENVELOPE.check({'tyre_life_in': float(value)})
         if not verdict:
             logger.warning(
-                'N15 called outside its trained range: %s; the value is clipped to %d, '
-                'so the prediction is an extrapolation to the boundary rather than a fit',
+                'N15 called outside its trained range: %s; it is served %d, so the '
+                'prediction is an extrapolation rather than a fit',
                 dict(verdict.violations),
-                _MAX_TRAINED_TYRE_LIFE,
+                served,
             )
-        return min(int(value), _MAX_TRAINED_TYRE_LIFE)
+        return served
 
     def _build_pit_duration_features(
         self,
@@ -888,7 +925,7 @@ class PitStrategyAgent:
         tight_pit_box checks the circuit against N15's trained tight-pit-box set
         (Monaco/Singapore/Hungary); team_year_median looks up the real aggregated
         per-(team, year) median, falling back to cfg.team_year_median_fallback (2.8s)
-        only for a combo with no raw pit data (#450 — both used to be frozen constants).
+        only for a combo with no raw pit data (#450).
 
         Args:
             driver: FastF1 driver abbreviation.
@@ -933,7 +970,7 @@ class PitStrategyAgent:
             # an absurd stint extrapolates outside the fitted range (#450).
             #
             # `_tyre_life_in` rather than `min(int(row.get('TyreLife', 1)), 50)`: `row` is
-            # a Series, so `.get(k, 1)` returns the STORED NaN and the `1` is dead code —
+            # a Series, so `.get(k, 1)` returns the STORED NaN and the `1` is dead code:
             # the default only fires when the COLUMN is missing, never the VALUE. `int(nan)`
             # then raises ValueError inside the ReAct loop, on 451 real rows (1.98%) of the
             # 2025 featured parquet.
@@ -1042,7 +1079,7 @@ class PitStrategyAgent:
         #
         # And on the FEATURED frame it bites harder than the NaN check above can catch.
         # HUL crashed on lap 7 at Lusail; the featured frame drops that lap as inaccurate,
-        # so his LAST row is lap 6 — a normal racing lap carrying Position 10.0. Ask about
+        # so his LAST row is lap 6, a normal racing lap carrying Position 10.0. Ask about
         # him at lap 20 and `_get_lap_row`'s unbounded fallback returns it complete: no
         # NaN, no warning, a confident undercut built from 14-lap-stale telemetry. The
         # position check cannot see it; only presence can.
@@ -1068,7 +1105,7 @@ class PitStrategyAgent:
 
         feat = {
             # N16 trained pos_gap as pos_X_before - pos_Y_before, so X (us, the
-            # undercutter) being BEHIND Y is positive — that is the model's single
+            # undercutter) being BEHIND Y is positive. That is the model's single
             # strongest feature (gain 0.690). The operands were reversed here, which
             # handed every X-behind-Y pair a negative value the model never saw for
             # that case. Keep this order aligned with N16 cell 41 (#444).
@@ -1100,7 +1137,7 @@ class PitStrategyAgent:
     ) -> list[str]:
         """Return drivers strictly ahead of driver within max_pos_gap positions.
 
-        Result is sorted ascending by position so the immediate car ahead is first —
+        Result is sorted ascending by position so the immediate car ahead is first,
         the most likely undercut target.
 
         Args:
@@ -1164,8 +1201,8 @@ class PitStrategyAgent:
             Returns:
                 "physical_stop: P05={p05:.2f}s | P50={p50:.2f}s | P95={p95:.2f}s | total_pit_P50={total:.2f}s (traversal={traversal:.2f}s)"
             """
-            # driver is LLM free text, exactly like score_undercut_tool's driver_y —
-            # replicate that tool's REFUSED shape instead of computing on a car that
+            # driver is LLM free text, exactly like score_undercut_tool's driver_y.
+            # Replicate that tool's REFUSED shape instead of computing on a car that
             # is not (or no longer) on track (#476).
             live = getattr(agent, '_live_drivers', None)
             if live is not None and driver not in live:
@@ -1179,7 +1216,7 @@ class PitStrategyAgent:
             # _run_core, for the duration of one real invocation) is the RCM-confirmed
             # ground truth for THIS lap; when it disagrees with what the LLM supplied,
             # trust the confirmed state rather than the guess. getattr(..., None) keeps
-            # direct/test calls of this tool (outside _run_core) unaffected — the
+            # direct/test calls of this tool (outside _run_core) unaffected. The
             # cross-check only fires when the ground truth is actually reachable.
             known_sc = getattr(agent, 'sc_currently_active', None)
             if known_sc is not None and bool(under_sc) != known_sc:
@@ -1216,7 +1253,7 @@ class PitStrategyAgent:
             Returns:
                 "candidate={driver_y} | P(undercut_success)={prob:.3f} | threshold={threshold} | pos_gap={gap:.0f} | tyre_life_diff={diff:+.0f} laps | verdict={YES/NO}"
                 The leading candidate=<driver_y> is what lets _parse_tool_outputs track
-                the argmax across multiple rivals scored in one run (#432) — every
+                the argmax across multiple rivals scored in one run (#432). Every
                 other tool output format is unaffected.
             """
             # The LLM picks driver_y as free text, so it can name any car on the grid,
@@ -1260,8 +1297,8 @@ class PitStrategyAgent:
         ) -> str:
             """Recommend the optimal next compound using N26 cliff signal or Pirelli stint windows.
 
-            Priority 1 — laps_to_cliff from N26 TireOutput: drives compound choice
-            directly when available. Priority 2 — Pirelli average stint capacities
+            Priority 1: laps_to_cliff from N26 TireOutput drives compound choice
+            directly when available. Priority 2: Pirelli average stint capacities
             (SOFT ~18 laps, MEDIUM ~30 laps, HARD ~38 laps) as fallback.
             Compound choice only excludes the compound currently fitted, it never
             refits what you are on. That is not the FIA two-compound rule, Art.
@@ -1283,7 +1320,7 @@ class PitStrategyAgent:
             """
             # driver is LLM free text here too, exactly like the other two tools; guard
             # it the same way even though the computation below is driver-agnostic
-            # today (only lap_number/current_compound/laps_to_cliff feed it) — a caller
+            # today (only lap_number/current_compound/laps_to_cliff feed it). A caller
             # that later wires in per-driver state must not inherit an unguarded arg (#476).
             live = getattr(agent, '_live_drivers', None)
             if live is not None and driver not in live:
@@ -1366,6 +1403,10 @@ class PitStrategyAgent:
             return self._react_agent
 
         import os
+
+        from langchain.agents import create_agent
+        from langchain_openai import ChatOpenAI
+
         if provider is None:
             provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
 
@@ -1378,10 +1419,10 @@ class PitStrategyAgent:
                 model_kwargs={'parallel_tool_calls': False},
                 disable_streaming=True,
                 timeout=120,
-                max_retries=1,
+                max_retries=LLM_MAX_RETRIES,
             )
         else:
-            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=1)
+            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=LLM_MAX_RETRIES)
 
         self._react_agent = create_agent(
             llm, self._tools, system_prompt=_PIT_STRATEGY_SYSTEM_PROMPT
@@ -1398,13 +1439,13 @@ class PitStrategyAgent:
 
         Args:
             lap_state: Dict with keys:
-                session     — Loaded FastF1 Session.
-                driver      — FastF1 driver abbreviation (e.g. 'NOR').
-                lap_number  — Current lap number.
-                compound    — Compound currently fitted (default 'MEDIUM').
-                rival       — Abbreviation of the nearest rival ahead (optional).
-                sc_prob     — SC probability from N27 (float, default 0.0).
-                laps_to_cliff — P10 laps-to-cliff from N26 (float, optional).
+                session: Loaded FastF1 Session.
+                driver: FastF1 driver abbreviation (e.g. 'NOR').
+                lap_number: Current lap number.
+                compound: Compound currently fitted (default 'MEDIUM').
+                rival: Abbreviation of the nearest rival ahead (optional).
+                sc_prob: SC probability from N27 (float, default 0.0).
+                laps_to_cliff: P10 laps-to-cliff from N26 (float, optional).
 
         Returns:
             PitStrategyOutput with action, compound, stop durations, undercut signal.
@@ -1485,7 +1526,7 @@ class PitStrategyAgent:
         # lets `driver_pos - 1 == 19` accidentally match a REAL P19 rival, inventing a
         # rival-ahead relationship for a car whose position we don't actually know. This
         # is the same Series.get(k, default)-only-fires-on-missing-COLUMN sentinel
-        # pattern documented elsewhere in this file (#428/#444/#462) — here the default
+        # pattern documented elsewhere in this file (#428/#444/#462). Here the default
         # is dict.get, but the failure mode is identical: an explicit unknown must
         # propagate as None, not as a plausible-looking P20 (#465/F6).
         driver_pos  = d.get('position')
@@ -1541,7 +1582,7 @@ class PitStrategyAgent:
 
         score_undercut_tool already refuses to score a driver_y absent from
         _live_drivers, so its P(undercut_success) never reaches _parse_tool_outputs'
-        regex for an invalid target — but that guard and this one must not depend on
+        regex for an invalid target. However, that guard and this one must not depend on
         each other to be correct: assembly re-checks independently before the parsed
         argmax driver becomes PitStrategyOutput.undercut_target (#432).
 
@@ -1609,7 +1650,7 @@ class PitStrategyAgent:
 
         driver_row = self._get_lap_row(driver, lap_number)
         # Series.get returns a stored NaN, so int() would crash on the ~486 featured
-        # rows with NaN TyreLife/Position — guard with pd.notna, not a bare .get
+        # rows with NaN TyreLife/Position. Guard with pd.notna, not a bare .get
         # default (which only fires when the KEY is missing, never the VALUE) (#499).
         _raw_tl    = driver_row.get('TyreLife') if driver_row is not None else None
         tyre_life  = int(_raw_tl) if pd.notna(_raw_tl) else 1
@@ -1626,6 +1667,8 @@ class PitStrategyAgent:
             vsc_active=vsc_active,
         )
 
+        from langchain_core.messages import HumanMessage
+
         react_agent = self.get_react_agent()
         response    = react_agent.invoke({'messages': [HumanMessage(content=message)]})
         messages    = response['messages']
@@ -1633,9 +1676,9 @@ class PitStrategyAgent:
         parsed                          = _parse_tool_outputs(messages)
         action, compound_rec, reasoning = _parse_agent_summary(messages[-1].content)
 
-        # A deployed SC does NOT force a stop. There used to be a guard here flipping
-        # STAY_OUT to PIT_NOW, and it was a strategy opinion, not a rule: staying out
-        # is right whenever you have already stopped, you lead a pack that must stop
+        # A deployed SC does NOT force a stop. A guard here flipping STAY_OUT to
+        # PIT_NOW would encode a strategy opinion, not a rule: staying out is right
+        # whenever the car has already stopped, leads a pack that must stop
         # anyway, or the race is ending (Art. 55.17 finishes it behind the SC, making
         # the surrendered position unrecoverable). The regulatory facts an SC does
         # force live in N27; see tests/mc/test_sc_regulatory_rails.py.
@@ -1652,7 +1695,7 @@ class PitStrategyAgent:
             stop_duration_p95       = parsed['stop_duration_p95'] or 0.0,
             undercut_prob           = parsed['undercut_prob'],
             # The driver score_undercut_tool actually scored highest, not the
-            # POSITIONAL rival_str candidate used to build the prompt — those two
+            # POSITIONAL rival_str candidate used to build the prompt. Those two
             # silently disagreed whenever the agent scored more than one rival (#432).
             undercut_target         = self._validate_undercut_target(parsed['undercut_target']),
             sc_reactive             = sc_reactive,
@@ -1682,7 +1725,7 @@ def _get_default_pit_agent() -> PitStrategyAgent:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public entry points — backward-compatible signatures (unchanged)
+# Public entry points: backward-compatible signatures (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_pit_strategy_agent(lap_state: dict) -> PitStrategyOutput:
@@ -1709,7 +1752,7 @@ def run_pit_strategy_agent_from_state(
     """RSM adapter: run the Pit Strategy Agent from a RaceStateManager lap_state.
 
     Delegates to the process-level PitStrategyAgent singleton. No FastF1 session
-    required — all context is derived from laps_df and the lap_state dict.
+    is required: all context is derived from laps_df and the lap_state dict.
 
     Args:
         lap_state: Dict from RaceStateManager.get_lap_state(). Keys used:

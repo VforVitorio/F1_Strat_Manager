@@ -12,8 +12,22 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent.parent
-_HAS_CORPUS = (ROOT / "data" / "processed" / "radio_nlp" / "radios_raw.csv").exists()
+
+def _radio_nlp(name: str) -> Path:
+    """A corpus file at the path the stage reads, not at the repo's copy of it.
+
+    `alert_llm.py` reads `get_data_root()`, which `F1_STRAT_DATA_ROOT` moves. A probe
+    anchored on the repo does not follow it, and a probe that HITS while the code
+    misses turns this skip into a hard failure.
+    """
+    from src.f1_strat_manager.data_cache import get_data_root
+
+    return get_data_root() / "processed" / "radio_nlp" / name
+
+
+_HAS_CORPUS = (
+    _radio_nlp("radios_raw.csv").exists() and _radio_nlp("intent_labeled_data.csv").exists()
+)
 
 
 def test_render_leads_with_proxy_caveat():
@@ -35,7 +49,7 @@ def test_render_handles_missing_precision():
 
 
 @pytest.mark.data
-@pytest.mark.skipif(not _HAS_CORPUS, reason="radio corpus absent (CI runner without data)")
+@pytest.mark.skipif(not _HAS_CORPUS, reason="radio corpus not downloaded")
 def test_unlabeled_radios_excludes_the_labeled_set():
     """The sample is drawn only from radios absent from the hand-labeled intent set."""
     import pandas as pd
@@ -44,9 +58,5 @@ def test_unlabeled_radios_excludes_the_labeled_set():
 
     sample = _unlabeled_radios(30)
     assert sample is not None and len(sample) == 30
-    labeled = set(
-        pd.read_csv(ROOT / "data" / "processed" / "radio_nlp" / "intent_labeled_data.csv")[
-            "message"
-        ].astype(str)
-    )
+    labeled = set(pd.read_csv(_radio_nlp("intent_labeled_data.csv"))["message"].astype(str))
     assert all(text not in labeled for text in sample)

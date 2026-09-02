@@ -25,7 +25,7 @@ a real racing effect this model does not carry, left out because the alternative
 was an unmeasured constant, which is what the redesign exists to remove:
 
 - **A gap crossing counts as a position change.** In the pit-stop cases that
-  dominate the window this is exact — you emerge where you emerge. On track it
+  dominate the window this is exact: the car emerges where it emerges. On track it
   is optimistic: three tenths does not pass at Monaco and does at Monza, and
   nothing here knows the difference. N11 already models overtake probability and
   is the natural gate, but it was trained on observed gaps, so feeding it the
@@ -34,7 +34,7 @@ was an unmeasured constant, which is what the redesign exists to remove:
   set needs a lap, sometimes a sector, to switch on, and on a hard compound in
   cold conditions the out-lap can be slower than the worn set it replaced. In our
   own dry-race sample the effect is small at the flying-lap level, under a tenth,
-  and most of its true cost already sits inside the pit-loss figure — so it is
+  and most of its true cost already sits inside the pit-loss figure, so it is
   left folded into the measured undercut band rather than modelled per lap.
 - **Dirty air is priced at one moment, not continuously.** The measured
   clean-air gain enters only when a car directly ahead boxes, which is the
@@ -142,7 +142,7 @@ class RivalState:
         gap_s:       Signed seconds, rival minus us. Negative means ahead of us.
                      ``None`` means unknown, and an unknown gap keeps the rival
                      out of the projection entirely rather than at a made-up
-                     zero — a searchable sentinel is how #428 happened.
+                     zero: a searchable sentinel is how #428 happened.
         pace_delta_s: Seconds per lap this rival is slower than us (negative =
                      faster). Zero when unknown, which is the neutral
                      assumption rather than a guess in either direction.
@@ -358,14 +358,14 @@ def measured_clean_air_s(circuit: str | None = None) -> float:
 
     The spread is the finding, which is why this is per circuit and not a single
     constant. It runs from roughly +0.77 s at Suzuka and +0.65 at Monaco down to
-    zero or below at Monza and Spielberg — that is, largest exactly where
+    zero or below at Monza and Spielberg; that is, largest exactly where
     following costs the most downforce, and absent where the tow is worth more
     than the clear track. Nothing in the measurement knows about downforce; the
     ordering came out of the lap times.
 
     Negative cells are returned as measured. A circuit where losing the car
-    ahead costs you a tow is not a measurement error, and clamping it to zero
-    would tell the decision layer that an overcut is free at Monza.
+    ahead costs the follower a tow is not a measurement error, and clamping it
+    to zero would tell the decision layer that an overcut is free at Monza.
 
     Unknown circuits get the pooled figure, which is deliberately small.
     """
@@ -519,7 +519,7 @@ def future_neutralisation_probability(rate_per_lap: float, laps_remaining: int) 
 def _usable_rivals(rivals: Sequence[RivalState]) -> list[RivalState]:
     """Rivals whose gap is a real number.
 
-    An unknown gap cannot be projected, so it is excluded rather than defaulted —
+    An unknown gap cannot be projected, so it is excluded rather than defaulted:
     the house rule that None means unknown. NaN and infinity are excluded on the
     same grounds and for a sharper reason: they are not merely unknown, they are
     contagious. One NaN gap turns every candidate's E, P10, P90 and score into
@@ -571,7 +571,7 @@ def driver_time_delta(
 ) -> np.ndarray:
     """Seconds we lose over the window under ``plan``, per draw.
 
-    Three terms, all in seconds so they can be compared with a rival's:
+    Five terms, all in seconds so they can be compared with a rival's:
 
     - the stop itself, discounted when it is taken under a neutralisation
       (the field is queued, so the same pit lane costs fewer seconds of race),
@@ -636,7 +636,7 @@ def rival_time_deltas(
     """Seconds each rival loses over the window, shaped (draws, rivals).
 
     A rival costs themselves time two ways: by stopping (only when timing says
-    they are in the pit lane right now — v1 trusts the fact, never a guess about
+    they are in the pit lane right now: v1 trusts the fact, never a guess about
     their strategy) and by being slower than us lap after lap.
 
     Deterministic per rival today, so every draw carries the same column. It is
@@ -680,18 +680,18 @@ def _terminal_gaps(
     """Window-end gaps carried forward to a race end where every KNOWN stop is served.
 
     The two-compound rule (Art. 30.5(m)) makes one stop mandatory, so a candidate
-    that skips the window has not avoided the cost, only deferred it — and the
+    that skips the window has not avoided the cost, only deferred it. The
     same is true of a rival. Charging our deferral while exempting theirs is what
     made staying out look free and stopping look expensive: measured over real
     races, 73-84% of the cars counted as passing us still owed a stop of their
     own, and PIT_NOW won once in 110 laps.
 
-    So both sides are carried to the same horizon::
+    Therefore both sides are carried to the same horizon::
 
         terminal_gap = projected_gap + their_residual - our_residual
 
-    and the three cases the deleted rail was patching still fall out of the
-    arithmetic, now by cancellation rather than by exemption:
+    The three cases the deleted rail was patching still fall out of the
+    arithmetic this way, now by cancellation rather than by exemption:
 
     - already stopped (no obligation) -> our residual is zero, staying out costs
       nothing on this term;
@@ -710,9 +710,9 @@ def _terminal_gaps(
     asymmetric with charging it: an unsettled obligation treated as a certainty
     invents twenty-odd seconds of somebody's race.
 
-    **And that rule binds BOTH sides of the subtraction.** If we do not know
+    **That rule binds BOTH sides of the subtraction.** If we do not know
     whether WE still owe a stop, then crediting a rival's fall-back is not a
-    claim about them, it is a claim that we will not fall back with them — a
+    claim about them, it is a claim that we will not fall back with them, a
     fact we do not have. The first version applied their residual anyway and
     handed a candidate that stays out a full terminal place on that bet: it
     scored an unknown obligation exactly like a known-discharged one. A plan
@@ -743,6 +743,31 @@ def _terminal_gaps(
     )
 
     return projected_gaps + their_residual[None, :] - our_residual[:, None]
+
+
+def _projected_gaps(
+    usable: Sequence[RivalState],
+    rivals: Sequence[RivalState],
+    config: ProjectionConfig,
+    our_delta: np.ndarray,
+    draws: int,
+) -> np.ndarray:
+    """Where every usable rival sits relative to us at the end of the window, per draw.
+
+    Shaped ``(draws, rivals)``, in the module's sign convention, so a negative
+    entry is a rival ahead of us. This is the one place the three quantities
+    combine, and it is extracted rather than duplicated because the rejoin
+    readout needs the same arithmetic at a different config: a second copy of
+    this line is the drift this repo pays for most often.
+
+    ``rivals`` is passed whole alongside ``usable`` because
+    ``rival_time_deltas`` runs its own ``_usable_rivals`` filter, and handing it
+    the pre-filtered list would silently make the filter idempotent-by-accident
+    rather than by contract.
+    """
+    current_gaps = np.asarray([rival.gap_s for rival in usable], dtype=float)
+    their_deltas = rival_time_deltas(rivals, config, draws)
+    return current_gaps[None, :] + their_deltas - our_delta[:, None]
 
 
 def project_positions(
@@ -780,10 +805,7 @@ def project_positions(
             rivals_used=0,
         )
 
-    current_gaps = np.asarray([rival.gap_s for rival in usable], dtype=float)
-    their_deltas = rival_time_deltas(rivals, config, draws)
-
-    projected_gaps = current_gaps[None, :] + their_deltas - our_delta[:, None]
+    projected_gaps = _projected_gaps(usable, rivals, config, our_delta, draws)
 
     ahead = projected_gaps < 0
     positions = 1.0 + ahead.sum(axis=1)
@@ -814,12 +836,167 @@ def payoff(result: ProjectionResult, current_position: int, config: ProjectionCo
     Scored on ``terminal_positions``, not on the window-end ``positions``: both
     sides of a comparison must be at the same horizon or the arithmetic favours
     whichever one had its future cost left off. The margin stays on the WINDOW-end
-    gaps on purpose — it is a tie-break about track position now, not a claim
+    gaps on purpose: it is a tie-break about track position now, not a claim
     about the end of the race.
     """
     gained = float(current_position) - result.terminal_positions
     margin_bonus = config.margin_weight * result.margins_s
     return gained + margin_bonus
+
+
+# --- The rejoin readout -------------------------------------------------
+#
+# The config the ground-truth harness grades, defined HERE so the harness and
+# the surfaces cannot drift apart on it. `src/strategy/eval/projection.py`
+# imports this rather than declaring its own, because the whole claim the
+# PIT EXIT card makes is that its number is the number that was graded, and two
+# copies of a config is how that claim quietly stops being true.
+#
+# Two laps, not five: a real stop is observed on the lap before and checked on
+# the lap after. The tyre terms are off and the cliff is far away for the same
+# reason. A projection graded on a horizon it was not asked about is not
+# validated at all.
+REJOIN_CONFIG = ProjectionConfig(
+    window_laps=2,
+    racing_laps=2.0,
+    fresh_gain_s=0.0,
+    cliff_loss_s=0.0,
+    neutralisation_saving_s=0.0,
+)
+
+# Far enough that no draw runs past it, which is what turns the cliff term off.
+# `driver_time_delta` charges `max(0, laps_before_stop - cliff_laps)`, so for a
+# stop taken on this lap the term is already zero for any NONNEGATIVE cliff;
+# this value makes the intent explicit rather than resting on that arithmetic.
+REJOIN_CLIFF_LAPS = 99.0
+
+# Stopping on this lap, which is the hypothetical the readout answers.
+REJOIN_PLAN = DriverPlan("PIT_NOW", stops_in_window=True, stop_offset_laps=0)
+
+
+@dataclass(frozen=True)
+class RejoinNeighbour:
+    """One car the rejoin lands next to.
+
+    Attributes:
+        driver: FIA three-letter code.
+        gap_s:  Signed seconds in the module's convention, so NEGATIVE is ahead
+                of us. Kept signed rather than pre-formatted because the side is
+                a fact and "4.5s ahead" is a rendering.
+    """
+
+    driver: str
+    gap_s: float
+
+
+@dataclass(frozen=True)
+class RejoinReadout:
+    """Where a stop taken on this lap puts us, and between which two cars.
+
+    Attributes:
+        slot:          Projected track position at the rejoin.
+        from_position: Where we sit now, so the surface can render the move
+                       rather than a bare destination. ``None`` when unknown,
+                       never a placeholder integer.
+        band:          Positions between the best and worst draw. Zero means the
+                       draws agree, which they do on about 70% of laps.
+        ahead:         Nearest car projected ahead of us, or ``None`` if the
+                       rejoin is into the lead.
+        behind:        Nearest car projected behind us, or ``None`` if nothing
+                       is projected behind.
+        rivals_used:   How many rivals had a usable gap and entered the count.
+
+    THE AGGREGATION RULE, stated once because it is the readout's whole
+    semantics and it was nearly left to the implementation. Five hundred draws
+    have to become ONE slot and TWO named cars, and the rule is: read the draw
+    whose own pit loss is the MEDIAN. One coherent world, so the slot and the
+    two names always describe the same outcome rather than three marginals that
+    no single draw produced.
+
+    Measured over all 24 races of 2025, that rule agrees with the two obvious
+    alternatives (the median-position draw, and the per-rival median gap) on
+    1434 of 1434 decision laps, because ``rival_time_deltas`` is currently
+    identical across draws and the gap vector is therefore a rigid per-draw
+    translation. The rules only come apart once rival stop durations are
+    sampled, which ``rival_time_deltas`` names as its next refinement, and at
+    that point this rule is the one that stays coherent.
+
+    **NO TEST CAN CURRENTLY CATCH A CHANGE TO THIS RULE, and that is a property
+    of the code rather than a gap in the suite.** Swapping the median draw for
+    the first one leaves every assertion green, because the draws differ only by
+    a shared scalar and therefore agree about the ordering. The guard becomes
+    writable on the day ``rival_time_deltas`` varies per draw; until then the
+    rule is held by this docstring and by the reasoning above, and a reader
+    changing it should know the suite will not argue back.
+    """
+
+    slot: int
+    from_position: int | None
+    band: int
+    ahead: RejoinNeighbour | None
+    behind: RejoinNeighbour | None
+    rivals_used: int
+
+
+def _nearest_either_side(
+    usable: Sequence[RivalState], gaps: np.ndarray
+) -> tuple[RejoinNeighbour | None, RejoinNeighbour | None]:
+    """The closest car ahead and the closest behind, from ONE draw's gap vector."""
+    ahead = [(rival.driver, gap) for rival, gap in zip(usable, gaps) if gap < 0]
+    behind = [(rival.driver, gap) for rival, gap in zip(usable, gaps) if gap >= 0]
+    nearest_ahead = max(ahead, key=lambda pair: pair[1], default=None)
+    nearest_behind = min(behind, key=lambda pair: pair[1], default=None)
+    return (
+        RejoinNeighbour(nearest_ahead[0], float(nearest_ahead[1])) if nearest_ahead else None,
+        RejoinNeighbour(nearest_behind[0], float(nearest_behind[1])) if nearest_behind else None,
+    )
+
+
+def project_rejoin(
+    rivals: Sequence[RivalState],
+    pit_loss_s: np.ndarray,
+    current_position: int | None = None,
+) -> RejoinReadout | None:
+    """Answer "if we box on this lap, where do we come out and next to whom".
+
+    ``None`` when the question has no answer: no rival carries a usable gap, so
+    there is no traffic to land in and a slot would be a claim about an empty
+    grid. Callers render an idle state rather than a number.
+
+    ``pit_loss_s`` is the caller's, not this function's, and that is the point.
+    The Monte Carlo has already drawn a pit loss for the same lap, and a readout
+    that sampled its own would show a rejoin the scored candidates never
+    considered: same lap, two stories on one screen.
+
+    The cliff array is fixed at ``REJOIN_CLIFF_LAPS`` rather than taken from the
+    tyre model. For a stop taken on this lap the cliff term cancels for every
+    NONNEGATIVE draw (verified byte-identically over cliff arrays three orders
+    of magnitude apart), so passing the model's value would add a dependency
+    that changes nothing, and a negative draw would make it change something
+    wrong: ``max(0, 0 - cliff)`` charges cliff loss for laps the plan never runs.
+    """
+    usable = _usable_rivals(rivals)
+    if not usable:
+        return None
+
+    draws = len(pit_loss_s)
+    cliff = np.full(draws, REJOIN_CLIFF_LAPS, dtype=float)
+    our_delta = driver_time_delta(REJOIN_PLAN, pit_loss_s, cliff, REJOIN_CONFIG, False)
+    gaps = _projected_gaps(usable, rivals, REJOIN_CONFIG, our_delta, draws)
+
+    positions = 1 + (gaps < 0).sum(axis=1)
+    # Stable, so the same draws always pick the same world.
+    median_draw = int(np.argsort(our_delta, kind="stable")[draws // 2])
+    ahead, behind = _nearest_either_side(usable, gaps[median_draw])
+
+    return RejoinReadout(
+        slot=int(positions[median_draw]),
+        from_position=int(current_position) if current_position else None,
+        band=int(positions.max() - positions.min()),
+        ahead=ahead,
+        behind=behind,
+        rivals_used=len(usable),
+    )
 
 
 def undercut_targets(rivals: Sequence[RivalState], config: ProjectionConfig) -> list[str]:
@@ -830,14 +1007,14 @@ def undercut_targets(rivals: Sequence[RivalState], config: ProjectionConfig) -> 
     P90 of the gaps at which one actually worked. It replaces the old "within
     five positions" rule, which reasoned in a unit the pit lane does not use.
 
-    Liveness is presence in this list — a car that crashed is simply not in it —
+    Liveness is presence in this list. A car that crashed is simply not in it,
     never a DNF classification or a staleness threshold, because a car that
     finished can legitimately lag twenty laps behind in the data.
 
-    A car already in the pit lane is NOT a target. You cannot undercut someone
-    who is serving their stop as you decide: the whole move is to reach the pit
-    lane before they do. Offering them as a target credited the undercut with a
-    place it had no way to take.
+    A car already in the pit lane is NOT a target. Nobody can undercut a rival
+    who is already serving their stop at the moment of the decision: the whole
+    move is to reach the pit lane before they do. Offering them as a target
+    credited the undercut with a place it had no way to take.
     """
     band = config.undercut_band_s
     return [
@@ -870,7 +1047,8 @@ class TargetRanking:
         driver:            FIA code.
         projected_gap_s:   Signed seconds to them once both pit cycles are done.
         current_gap_s:     Signed seconds now, for comparison.
-        positions_apart:   How far apart the timing screen says we are.
+        positions_apart:   1-based rank in the position-sorted usable-rivals
+                           list, not the positional distance to our own car.
     """
 
     driver: str
@@ -887,10 +1065,9 @@ def rank_targets(
     """Rank rivals by how close they will be once both pit cycles have played out.
 
     A strategist does not attack the car currently ahead, they attack the car
-    they will be racing after the stops. Víctor's own example: leading a race
-    while the car behind pits early and emerges tenth, the right target may be a
-    car eight places down the screen, because after our own stop they come out
-    in front of us.
+    they will be racing after the stops: leading a race while the car behind
+    pits early and emerges tenth, the right target may be a car eight places
+    down the screen, because after our own stop they come out in front of us.
 
     Deterministic and run once (no sampling): it selects who to attack, and the
     Monte Carlo then scores the attacking. Both go through the same

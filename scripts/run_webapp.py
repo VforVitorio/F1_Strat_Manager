@@ -3,7 +3,7 @@
 Exposed via ``[project.scripts]`` in ``pyproject.toml`` so an installed
 checkout gives the user a single-command launcher for the post-race web
 app (FastAPI backend + React SPA) alongside ``f1-sim`` (CLI) and
-``f1-arcade`` (race replay + PySide6 dashboards).
+``f1-arcade`` (race replay + the two PITWALL windows).
 
 Running this module delegates to ``docker compose up`` at the repo root:
 compose is the canonical way to serve the web app (nginx serves the built
