@@ -130,6 +130,7 @@ f1-arcade    = "src.arcade.main:main"
 f1-webapp    = "scripts.run_webapp:main"
 f1-eval      = "src.strategy.eval.cli:main"
 f1-pitwall   = "src.pitwall.__main__:main"
+f1-prefetch  = "src.arcade.prefetch:main"
 
 [project.optional-dependencies]
 dev = [
