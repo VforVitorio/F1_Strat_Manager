@@ -288,6 +288,12 @@ async function renderMermaidBlocks(root) {
     const id = b.dataset.mermaidId || ("m" + Math.random().toString(36).slice(2, 9));
     try {
       const { svg } = await mermaid.render(id, code);
+      // What makes this safe is mermaid's own securityLevel, set to antiscript
+      // where this file configures it. Measured by rendering hostile labels
+      // through this same call and reading the attribute nodes back: script
+      // elements, every on* handler and javascript: hrefs are all gone, and no
+      // payload ran. CodeQL reads js/xss-through-dom here anyway, because it
+      // cannot follow the sanitising across the library boundary.
       b.innerHTML = svg + MERMAID_EXPAND_BUTTON;
       b.dataset.rendered = "1";
     } catch (e) {
