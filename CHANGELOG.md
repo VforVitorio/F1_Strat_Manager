@@ -11,6 +11,13 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.6.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.6.0...v2.6.1) (2026-09-03)
+
+
+### Features
+
+* **arcade:** add f1-prefetch to fill the replay cache ahead of time ([43bc52f](https://github.com/VforVitorio/F1-StratLab/commit/43bc52f1837b0992bec32c45cdc0da431fc2fb37))
+
 ## [2.6.0](https://github.com/VforVitorio/F1-StratLab/compare/v2.5.1...v2.6.0) (2026-09-03)
 
 
