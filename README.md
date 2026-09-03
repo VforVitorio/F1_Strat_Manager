@@ -128,6 +128,7 @@ For a scripted, no-menu run use `f1-sim <gp_name> <driver> <team> --year <yyyy>`
 ```bash
 uv tool install "git+https://github.com/VforVitorio/F1-StratLab.git"
 f1-arcade
+f1-prefetch --year 2025   # optional: fill the replay cache ahead of time (about six minutes per race otherwise)
 ```
 
 **Web app**: clone **with the telemetry submodule**, add an env file, then bring the stack up with Docker (FastAPI + the React SPA):
