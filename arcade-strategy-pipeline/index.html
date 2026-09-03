@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Strategy pipeline · F1 StratLab docs</title>
+  <meta name="description" content="The shared run_lap engine behind all three surfaces, and its two profiles." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/arcade-strategy-pipeline/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/arcade-strategy-pipeline/" />
+  <meta property="og:title" content="Strategy pipeline · F1 StratLab docs" />
+  <meta property="og:description" content="The shared run_lap engine behind all three surfaces, and its two profiles." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/arcade-strategy-pipeline/" />
+  <meta name="twitter:title" content="Strategy pipeline · F1 StratLab docs" />
+  <meta name="twitter:description" content="The shared run_lap engine behind all three surfaces, and its two profiles." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Strategy pipeline",
+  "name": "Strategy pipeline",
+  "description": "The shared run_lap engine behind all three surfaces, and its two profiles.",
+  "url": "https://docs.f1stratlab.com/arcade-strategy-pipeline/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Strategy pipeline",
+      "item": "https://docs.f1stratlab.com/arcade-strategy-pipeline/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Strategy Pipeline, the shared engine</h1>
+<p><code>src/strategy/inference/engine.py::run_lap</code> is the single implementation of the N31 lap pipeline. The CLI, the arcade and the backend all route through it. This page covers what it returns, the two profiles, and why the arcade is now a nine-line delegate instead of a copy.</p>
+<h2>One engine, three surfaces</h2>
+<pre><code class="language-mermaid">graph LR
+    subgraph cli[&quot;CLI&quot;]
+        C1[f1-strat&lt;br/&gt;interactive menu] --&gt;|subprocess| C2[f1-sim&lt;br/&gt;run_simulation_cli.py]
+    end
+    subgraph arc[&quot;Arcade&quot;]
+        A1[SimConnector thread] --&gt; A2[strategy_pipeline.py]
+    end
+    subgraph web[&quot;Web app&quot;]
+        W1[React SPA] --&gt;|HTTP| W2[&quot;/api/v1/strategy/recommend&quot;]
+        W1 --&gt;|SSE| W3[&quot;/api/v1/strategy/simulate&quot;]
+    end
+
+    C2 --&gt; ENG
+    A2 --&gt; ENG
+    W2 --&gt; ENG
+    W3 --&gt; ENG
+
+    ENG[&quot;run_lap&lt;br/&gt;src/strategy/inference/engine.py&quot;]
+    ENG --&gt; P1[&quot;profile=rich&lt;br/&gt;LLM synthesis, full per-stage payloads&quot;]
+    ENG --&gt; P2[&quot;profile=no-llm&lt;br/&gt;MC argmax plus the regulatory guard-rails,&lt;br/&gt;no provider call&quot;]
+    P1 --&gt; SUBS[six sub-agents through their&lt;br/&gt;public *_from_state entry points]
+    P2 --&gt; SUBS
+    SUBS --&gt; OUT[StrategyRecommendation&lt;br/&gt;plus agent_outputs and stage timings]
+</code></pre>
+<p>The arrow that matters is the one that is missing: no surface has its own copy. <strong>A strategy call in the web app is the same call the CLI would print for that lap.</strong> If they ever disagree, that is a bug, not a difference of surface.</p>
+<p>Every surface needs the same six sub-agents, the same MoE routing, the same Monte Carlo pass and the same synthesis. They differ only in what they render. So the pipeline lives in one place and the surfaces choose how much of its output to consume:</p>
+<pre><code>src/strategy/inference/engine.py
+    run_lap(race_state, laps_df, lap_state=None, *, profile=&quot;rich&quot;,
+            return_agent_outputs=True, memory=None)
+        -&gt; tuple[StrategyRecommendation, dict | None, dict[str, float]]
+</code></pre>
+<ul>
+<li><strong><code>StrategyRecommendation</code></strong>, the synthesised decision (14 fields). What the CLI and the web app consume.</li>
+<li><strong><code>agent_outputs</code></strong>, the raw per-sub-agent dataclasses, keyed <code>pace_out</code>, <code>tire_out</code>, <code>situation_out</code>, <code>radio_out</code>, <code>pit_out</code>, <code>regulation_context</code>, <code>rag</code>, <code>active</code>, <code>guardrail_reason</code>. What the arcade dashboard renders its cards and charts from.</li>
+<li><strong>stage timings</strong>, per-stage seconds, for the surfaces that show them.</li>
+</ul>
+<p>The sub-agents are imported through their public <code>*_from_state</code> entry points; the output dataclasses come from <code>src/agents/strategy_orchestrator.py</code>. Nothing about them is engine-specific.</p>
+<h2>Profiles</h2>
+<table>
+<thead>
+<tr>
+<th>profile</th>
+<th>what runs</th>
+<th>use it for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>rich</code></td>
+<td>the full pipeline, including the LLM synthesis step</td>
+<td>the default; reproduces <code>run_strategy_orchestrator_from_state</code> byte for byte</td>
+</tr>
+<tr>
+<td><code>no-llm</code></td>
+<td>everything except the LLM; the deterministic guardrails produce the decision</td>
+<td>fast, offline, reproducible runs, and any path that must not spend tokens</td>
+</tr>
+</tbody></table>
+<p><code>rich</code> is guarded by parity tests against the orchestrator, so the two cannot drift apart silently.</p>
+<h2>The arcade delegates</h2>
+<p><code>src/arcade/strategy_pipeline.py::run_strategy_pipeline</code> keeps its old public signature so <code>src/arcade/strategy.py</code> and the dashboard formatters are untouched. Its body is one call:</p>
+<pre><code class="language-python">rec, agent_outputs, _timings = run_lap(
+    race_state, laps_df, lap_state, profile=&quot;rich&quot;, memory=memory
+)
+return rec, agent_outputs
+</code></pre>
+<p><code>memory</code> is the <code>DecisionMemory</code> the surface owns. It arrived after this page
+was first written and both snippets above used to omit it, which made the
+delegate look thinner than it is.</p>
+<p>The arcade needs the raw outputs and the CLI does not, but that is a difference in <strong>consumption</strong>, not in pipeline. <code>run_lap</code> returns both and each surface takes what it renders.</p>
+<h2>Why this replaced a duplicate</h2>
+<p>This module was a body-copy of the orchestrator, kept in sync by a manual ritual: open both files side by side and transcribe every edit by hand. That ritual was the bug. A copy kept in sync by discipline drifts the first time someone edits one file and not the other, and it did: the two files drifted, and #166 is the crash that followed.</p>
+<p>The lesson generalises beyond the arcade, and the strategy engine relearned it the hard way. <code>src/simulation/race_state_manager.py</code> had already solved a pile of race-data problems correctly (NaN never becomes a searchable number, gaps come from the elapsed-time column, retired cars fall out on their own). A second implementation was later written alongside it for the API path, and it reproduced every one of those bugs from scratch, silently, for months. Two implementations of the same idea do not stay equal because someone intends them to.</p>
+<p><strong>Before writing a second path that shapes race data, check whether a clean one already exists.</strong> If it does, call it.</p>
+<h2>SimConnector threading</h2>
+<p>The arcade strategy driver is <code>src/arcade/strategy.py::SimConnector</code>. It is a plain Python class, not a Qt object, spawned as a <code>threading.Thread</code> from <code>F1ArcadeView._init_strategy_layer</code>.</p>
+<ul>
+<li>Owns a <code>StrategyState</code> dataclass caching the latest <code>LapDecision</code>, the per-agent outputs and playback metadata, behind a <code>threading.Lock</code>.</li>
+<li>Owns the background thread that iterates <code>RaceReplayEngine.replay()</code> and calls <code>run_strategy_pipeline(race_state, laps_df, lap_state, memory=self._memory)</code> per lap. Passing <code>lap_state</code> is not optional: with it <code>None</code> the Monte Carlo falls back to the legacy seconds path and the projection layer is silently amputated, which is the one call shape these pages used to show.</li>
+<li>Emits <code>StartEventDTO</code> once on the first frame, then <code>LapDecisionDTO</code> per lap.</li>
+</ul>
+<h2>Why not SSE from the backend</h2>
+<p>The arcade used to subscribe to <code>GET /api/v1/strategy/simulate/stream</code>. Phase 3.5 replaced it with the direct in-process loop:</p>
+<ul>
+<li><strong>No extra process.</strong> Strategy mode no longer needs <code>uvicorn</code> running first.</li>
+<li><strong>No SSE client.</strong> The arcade&#39;s consumer was a hand-rolled parser over <code>httpx.stream</code> with its own reconnect logic. A thread is simpler.</li>
+<li><strong>Standalone.</strong> The arcade ships without a FastAPI dependency.</li>
+</ul>
+<p>The backend SSE endpoint is still live and smoke-tested; the arcade just does not consume it.</p>
+<h2>Smoke test</h2>
+<pre><code class="language-bash"># CLI path
+python scripts/run_simulation_cli.py Melbourne VER &quot;Red Bull Racing&quot; --no-llm
+
+# Arcade path
+python -m src.arcade.main --viewer --year 2025 --round 3 --driver VER --team &quot;Red Bull Racing&quot; --strategy
+</code></pre>
+<p>Both should reach lap 2 without tracebacks.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

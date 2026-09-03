@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Race replay engine · F1 StratLab docs</title>
+  <meta name="description" content="RaceReplayEngine, RaceStateManager, the lap_state schema." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/simulation/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/simulation/" />
+  <meta property="og:title" content="Race replay engine · F1 StratLab docs" />
+  <meta property="og:description" content="RaceReplayEngine, RaceStateManager, the lap_state schema." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/simulation/" />
+  <meta name="twitter:title" content="Race replay engine · F1 StratLab docs" />
+  <meta name="twitter:description" content="RaceReplayEngine, RaceStateManager, the lap_state schema." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Race replay engine",
+  "name": "Race replay engine",
+  "description": "RaceReplayEngine, RaceStateManager, the lap_state schema.",
+  "url": "https://docs.f1stratlab.com/simulation/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Race replay engine",
+      "item": "https://docs.f1stratlab.com/simulation/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>src/simulation: Race Replay Engine</h1>
+<h2>Purpose</h2>
+<p>Offline replay of a race from a stored parquet snapshot. Emits <code>lap_state</code> dicts, the canonical data contract consumed by all seven strategy agents.</p>
+<p>This is the <strong>demo path</strong> for the thesis defence. The live path will replace the iterator at the <strong>v3.0.0</strong> milestone (<a href="/roadmap/">roadmap</a>) without touching any agent code, because agents only see <code>lap_state</code> dicts regardless of source.</p>
+<h2>Architecture</h2>
+<pre><code>data/raw/2025/&lt;GP&gt;/
+  laps.parquet        ← loaded by RaceReplayEngine
+  weather.parquet     ← loaded if present
+  metadata.json       ← gp_name, year
+
+RaceReplayEngine
+  └── RaceStateManager          ← data boundary enforcement
+        ├── get_driver_state()  ← full telemetry (our car)
+        ├── get_rival_states()  ← timing-screen only (rivals)
+        ├── get_weather_state() ← track + weather snapshot
+        └── get_lap_state()     ← merges all into lap_state dict
+              ↓
+    lap_state dict → all 7 agents → strategy orchestrator
+</code></pre>
+<p><code>RaceReplayEngine.to_arcade_frame()</code> still exists in <code>replay_engine.py</code>, but nothing calls it and its docstring&#39;s <code>/ws/replay</code> WebSocket route was never registered on the backend, the arcade&#39;s real live path is the direct in-process pipeline broadcasting over a local TCP socket, documented in <a href="/arcade-strategy-pipeline/">Arcade strategy pipeline</a> and <a href="/multi-agent/">Multi-agent system → Three-window arcade</a>.</p>
+<h2>Data boundary (architectural constraint)</h2>
+<p>The single most important design decision in this module.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Our driver</th>
+<th>Rivals</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LapTime</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Sector1/2/3</td>
+<td>yes</td>
+<td>NO</td>
+</tr>
+<tr>
+<td>SpeedI1, SpeedI2, SpeedFL</td>
+<td>yes</td>
+<td>NO</td>
+</tr>
+<tr>
+<td>SpeedST</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>TyreLife</td>
+<td>yes</td>
+<td>yes (broadcast)</td>
+</tr>
+<tr>
+<td>Compound</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>FuelLoad</td>
+<td>yes (estimated)</td>
+<td>NO</td>
+</tr>
+<tr>
+<td>Position</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>gap_to_leader</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>interval_to_driver</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+</tbody></table>
+<p>Rivals get only what appears on the FIA live timing screen. This mirrors the real information asymmetry a strategy engineer faces on the pit wall.</p>
+<h3>Who counts as a rival</h3>
+<p>The boundary above says <em>what</em> a rival&#39;s row contains. This says <em>which cars get a row at all</em>, and it is just as load-bearing:</p>
+<p><strong>A car appears in <code>rivals</code> for a lap only if it was classified on that lap.</strong> Retired, crashed, or not yet across the line means no row, so the car is absent from the list entirely. It is never present with an invented position, a placeholder gap or a default lap time.</p>
+<p>This is the rule that a real timing screen follows, and skipping it produces decisions that look reasonable and are absurd. The pit wall once recommended undercutting HUL at Lusail lap 7. HUL had just crashed on lap 6, which is what brought out the safety car the same recommendation was reacting to. The car was gone; only a filled-in default kept it on the list.</p>
+<p>Two habits follow from it, and both are worth copying into any new code that shapes race data:</p>
+<ul>
+<li><strong>Absence beats a default.</strong> If a value is unknown, leave it <code>None</code> and let the consumer filter. A number is a claim, and an invented one is a false claim that nothing downstream can distinguish from a reading.</li>
+<li><strong>Never default to a value the code also searches by.</strong> <code>Position</code> defaulting to <code>0</code> is how the leader found &quot;the car ahead at position <code>pos - 1 == 0</code>&quot; and got handed the car that had just crashed. Placeholders belong in sort keys, never in emitted data.</li>
+</ul>
+<h2>Gap computation</h2>
+<p>Gaps come from <code>session_time_s</code>, the session elapsed time at the end of each lap, read from FastF1&#39;s <code>Time</code> column. This is the same value FastF1 uses internally for gaps in <code>session.laps</code>.</p>
+<pre><code>gap_to_leader[driver, lap]      = session_time[driver, lap] - session_time[leader, lap]
+interval_to_driver[rival, lap]  = session_time[rival, lap]  - session_time[our_driver, lap]
+</code></pre>
+<p><strong>Not</strong> cumulative <code>LapTime</code> sums, which is the tempting alternative. Summed lap times drift away from the real on-track gap wherever timing corrections or safety-car bunching apply, which is exactly where a strategy call matters most. <code>_compute_session_times</code> in <code>src/simulation/race_state_manager.py</code> takes elapsed time for that reason.</p>
+<p>This is worth stating loudly because the feature-engineering step drops the <code>Time</code> column, so any consumer reading the featured parquet directly used to fall back to lap-time deltas without noticing. Measured on Lusail 2025 lap 20, that fallback fed the model a <strong>0.10 s</strong> gap between PIA and NOR when the real one was <strong>3.58 s</strong>: the difference between &quot;inside the DRS window&quot; and &quot;not close&quot;. The loader now restores <code>Time_s</code> from the raw per-race parquet at load time, so both paths agree.</p>
+<p>Known limitations:</p>
+<ul>
+<li>Lapped cars show a large positive gap rather than a &quot;lapped&quot; flag.</li>
+</ul>
+<h2>Files</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>race_state_manager.py</code></td>
+<td>Data boundary, per-lap state construction</td>
+</tr>
+<tr>
+<td><code>replay_engine.py</code></td>
+<td>Parquet loading, lap iterator, Arcade frame builder</td>
+</tr>
+<tr>
+<td><code>stint_history.py</code></td>
+<td>Per-driver stint tracking; emits the Art. 30.5(m) <code>stint_flags</code> and <code>rival_stop_pending</code> this page documents</td>
+</tr>
+<tr>
+<td><code>data_validation.py</code></td>
+<td>Parquet quality checks, including the <code>IsAccurate</code> / <code>Deleted</code> warning the CLI prints on load</td>
+</tr>
+<tr>
+<td><code>__main__.py</code></td>
+<td>Terminal CLI for quick testing</td>
+</tr>
+<tr>
+<td><code>README.md</code></td>
+<td>Package-level notes</td>
+</tr>
+</tbody></table>
+<h2>Running</h2>
+<pre><code class="language-bash"># All laps, no delay
+python -m src.simulation Melbourne NOR McLaren
+
+# Specific lap range
+python -m src.simulation Monaco HAM Mercedes --laps 30-50
+
+# 2s between laps (simulates real-time ingestion)
+python -m src.simulation Melbourne NOR McLaren --interval 2
+
+# Different season
+python -m src.simulation Silverstone VER &quot;Red Bull Racing&quot; --data-dir data/raw/2024
+</code></pre>
+<h3>Example output</h3>
+<pre><code>------------------------------------------------------------------------
+  F1 Strategy - Race Replay   Melbourne  |  NOR / McLaren  |  57 laps
+------------------------------------------------------------------------
+   Lap  Pos      Compound   LapTime  Gap Leader                     Ahead                    Behind
+------------------------------------------------------------------------
+     1    1  INT( 1L)  1:57.099    +0.000s                            P2:VER INT(1L)  +2.276s
+     2    1  INT( 2L)    ---.-     +0.000s                            P2:VER INT(2L)  +1.695s [IN]
+    20    1  INT(20L)  1:30.710    +0.000s                            P2:PIA INT(20L)  +2.623s
+    34    1  INT(34L)  2:02.273    +0.000s                            P2:PIA INT(34L)  +8.185s [IN]
+    35    1  HAR-C3( 2L)  2:03.448    +0.000s                            P2:PIA HAR-C3(2L)  +8.518s [OUT]
+    44    6  HAR-C3(11L)  1:45.587   +15.061s  P5:LEC HAR-C3(11L)  -0.138s  P7:LAW MED-C4(11L)  +4.589s [IN]
+    46    3  INT( 2L)  1:31.567    +4.415s  P2:LEC HAR-C3(13L)  -0.414s  P4:TSU MED-C4(13L)  +0.381s
+    57    1  INT(13L)  1:27.126    +0.000s                            P2:VER INT(11L)  +0.902s
+</code></pre>
+<blockquote>
+<p>Captured from a real run of the command above, on 2026-08-10. The block it
+replaced had the same lap times and <strong>pre-fix gaps</strong>: it showed P2 at
++13.836 s on lap 20 where the code now emits +2.623 s, because it predated
+the <code>Time_s</code> correction the <em>Gap computation</em> section below describes. A
+stale example that demonstrates the exact failure its own page warns about
+is worse than no example. The compound labels also gained their Pirelli
+compound ID (<code>HAR-C3</code>) since the old block was captured.</p>
+</blockquote>
+<p><strong>Reading the output:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Lap</code></td>
+<td>Lap number</td>
+</tr>
+<tr>
+<td><code>Pos</code></td>
+<td>Our driver&#39;s position</td>
+</tr>
+<tr>
+<td><code>Compound</code></td>
+<td>Tyre compound abbreviation + laps on tyre: <code>INT(20L)</code> = Intermediate, 20 laps; <code>HAR(2L)</code> = Hard, 2 laps; <code>MED</code> = Medium; <code>SOF</code> = Soft</td>
+</tr>
+<tr>
+<td><code>LapTime</code></td>
+<td>Lap time in M:SS.mmm. <code>---.-</code> = deleted lap (red flag, pit-in lap, etc.)</td>
+</tr>
+<tr>
+<td><code>Gap Leader</code></td>
+<td>Our gap to P1 in seconds. <code>+0.000</code> = we are the leader</td>
+</tr>
+<tr>
+<td><code>Ahead / Behind</code></td>
+<td>Rival directly ahead/behind in position</td>
+</tr>
+<tr>
+<td><code>[IN]</code></td>
+<td>Driver pitted this lap (in-lap)</td>
+</tr>
+<tr>
+<td><code>[OUT]</code></td>
+<td>Driver exiting the pits (out-lap)</td>
+</tr>
+</tbody></table>
+<h2><code>lap_state</code> schema</h2>
+<pre><code class="language-python">{
+    &quot;lap_number&quot;: int,
+    &quot;driver&quot;: {
+        # Identity, repeated inside the sub-dict so a consumer that has been
+        # handed only this slice still knows whose lap it is holding.
+        &quot;driver&quot;: str,
+        &quot;team&quot;: str,
+        &quot;lap_number&quot;: int,
+        &quot;lap_time_s&quot;: float | None,
+        # This lap&#39;s Prev_LapTime feature, never last lap&#39;s own lap_time_s
+        # reused as a stand-in — that self-reference used to feed the pace
+        # agent its own most recent prediction back in as &quot;previous&quot; (#435).
+        &quot;prev_lap_time&quot;: float | None,
+        &quot;sector1_s&quot;: float | None,
+        &quot;sector2_s&quot;: float | None,
+        &quot;sector3_s&quot;: float | None,
+        &quot;position&quot;: int | None,
+        &quot;gap_to_leader_s&quot;: float | None,
+        &quot;compound&quot;: str,
+        &quot;compound_id&quot;: int | None,
+        &quot;tyre_life&quot;: int | None,
+        &quot;stint&quot;: int | None,
+        # TyreLife at the first lap of the current stint. N06&#39;s FuelEffect is
+        # measured from this baseline, not from lap 1 of the race (#446).
+        &quot;stint_baseline_tyre_life&quot;: int | None,
+        &quot;fresh_tyre&quot;: bool,
+        &quot;speed_i1&quot;: float | None,
+        &quot;speed_i2&quot;: float | None,
+        &quot;speed_fl&quot;: float | None,
+        &quot;speed_st&quot;: float | None,
+        &quot;fuel_load&quot;: float | None,
+        &quot;track_status&quot;: str,
+        &quot;is_in_lap&quot;: bool,
+        &quot;is_out_lap&quot;: bool,
+    },
+    # Only cars classified on this lap. A car that has retired, crashed or has
+    # not yet completed the lap has no row for it, so it is simply ABSENT from
+    # `rivals` — never present with a filled-in default. See &quot;Who counts as a
+    # rival&quot; above.
+    &quot;rivals&quot;: [
+        {
+            &quot;driver&quot;: str,
+            &quot;team&quot;: str,
+            # None when the car has no position that lap. It sorts to the back
+            # through a placeholder confined to the sort key, so no consumer can
+            # look up a car at that position and find one.
+            &quot;position&quot;: int | None,
+            &quot;lap_time_s&quot;: float | None,
+            &quot;compound&quot;: str,
+            &quot;tyre_life&quot;: int | None,
+            &quot;stint&quot;: int | None,
+            &quot;speed_st&quot;: float | None,
+            &quot;gap_to_leader_s&quot;: float | None,
+            &quot;interval_to_driver_s&quot;: float | None,
+            &quot;is_pitting&quot;: bool,
+        }
+    ],
+    &quot;weather&quot;: {
+        &quot;track_status&quot;: str,
+        &quot;air_temp&quot;: float | None,
+        &quot;track_temp&quot;: float | None,
+        # The session&#39;s FIRST track temperature, not this lap&#39;s — a session
+        # constant carried in the weather dict because that is the channel
+        # its consumer (N14&#39;s track_temp_delta feature) reads from (#486).
+        &quot;track_temp_start&quot;: float | None,
+        &quot;humidity&quot;: float | None,
+        &quot;wind_speed&quot;: float | None,
+        &quot;rainfall&quot;: bool,
+    },
+    &quot;session_meta&quot;: {
+        &quot;gp_name&quot;: str,
+        &quot;year&quot;: int,
+        &quot;driver&quot;: str,
+        &quot;team&quot;: str,
+        &quot;total_laps&quot;: int,
+    },
+    # Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023) two-compound obligation, for our driver, as of this lap.
+    # Emitted here (rather than fetched separately) so the CLI, the arcade and
+    # the backend cannot each derive their own, divergent view of who still
+    # owes a stop. A lap with no row falls back to the nearest earlier lap,
+    # since compound history only grows and the last known state is still the
+    # truth about what has been used.
+    &quot;stint_flags&quot;: {
+        &quot;stops_made&quot;: int | None,               # highest visible stint number minus one
+        &quot;compounds_used&quot;: list[str],             # first-seen order, dry and wet compounds
+        &quot;mandatory_stop_pending&quot;: bool | None,   # None when an unseen stint could hide the second compound
+    },
+    # mandatory_stop_pending for every rival present in `rivals`, keyed by
+    # driver code. A rival who must still stop is no threat: they pay the same
+    # price later. A driver absent from this dict has no row for this lap and
+    # is not asserted either way, the same &quot;absence beats a default&quot; rule
+    # `rivals` itself follows.
+    &quot;rival_stop_pending&quot;: {
+        &quot;&lt;driver_code&gt;&quot;: bool | None,
+    },
+}
+</code></pre>
+<h2>Future: live ingestion (v3.0.0)</h2>
+<p>Replace <code>RaceReplayEngine.replay()</code> with a consumer that emits the same <code>lap_state</code> dict from a live feed. Zero changes to agents or orchestrator.</p>
+<blockquote>
+<p>The sketch below is written against Kafka because that was the assumed transport when this page was drafted; the <a href="/roadmap/">roadmap</a>&#39;s v3.0.0 entry names the <strong>OpenF1 WebSocket</strong>. The shape of the change is what matters and it is the same either way: swap the iterator, leave the contract alone. The old <code>v0.14</code> numbering here predated the 1.0 release and is long dead.</p>
+</blockquote>
+<pre><code class="language-python"># Current (offline)
+for lap_state in engine.replay():
+    ...
+
+# Future (live)
+for lap_state in kafka_consumer.consume_lap():
+    ...
+</code></pre>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Tags index · F1 StratLab docs</title>
+  <meta name="description" content="Every tag declared by the docs site, grouped by theme." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/tags/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/tags/" />
+  <meta property="og:title" content="Tags index · F1 StratLab docs" />
+  <meta property="og:description" content="Every tag declared by the docs site, grouped by theme." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/tags/" />
+  <meta name="twitter:title" content="Tags index · F1 StratLab docs" />
+  <meta name="twitter:description" content="Every tag declared by the docs site, grouped by theme." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Tags index",
+  "name": "Tags index",
+  "description": "Every tag declared by the docs site, grouped by theme.",
+  "url": "https://docs.f1stratlab.com/tags/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Tags index",
+      "item": "https://docs.f1stratlab.com/tags/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Tags</h1>
+<p>Every documentation page declares topical tags for navigating by
+concept instead of by file tree. The knowledge graph (see the home page)
+uses these same tags to draw clusters; the tables below give a flat,
+scannable index of the same data.</p>
+<p>Tags that appear on a single page are listed under <strong>Other</strong> at the end.</p>
+<h2>Concepts</h2>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>Pages</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>agents</code></td>
+<td><a href="/architecture/">How it is wired</a>, <a href="/multi-agent/">Multi-agent system</a>, <a href="/agents-api/">Agents API reference</a>, <a href="/arcade-strategy-pipeline/">Strategy pipeline</a></td>
+</tr>
+<tr>
+<td><code>langgraph</code></td>
+<td><a href="/architecture/">How it is wired</a>, <a href="/multi-agent/">Multi-agent system</a>, <a href="/agents-api/">Agents API reference</a></td>
+</tr>
+<tr>
+<td><code>orchestrator</code></td>
+<td><a href="/multi-agent/">Multi-agent system</a>, <a href="/arcade-strategy-pipeline/">Strategy pipeline</a></td>
+</tr>
+<tr>
+<td><code>monte-carlo</code></td>
+<td><a href="/multi-agent/">Multi-agent system</a>, <a href="/arcade-strategy-pipeline/">Strategy pipeline</a></td>
+</tr>
+<tr>
+<td><code>rag</code></td>
+<td><a href="/multi-agent/">Multi-agent system</a>, <a href="/agents-api/">Agents API reference</a>, <a href="/backend-api/">Backend API</a></td>
+</tr>
+<tr>
+<td><code>ml</code></td>
+<td><a href="/multi-agent/">Multi-agent system</a>, <a href="/agents-api/">Agents API reference</a>, <a href="/thesis/">Thesis results</a></td>
+</tr>
+<tr>
+<td><code>xgboost</code></td>
+<td><a href="/multi-agent/">Multi-agent system</a>, <a href="/agents-api/">Agents API reference</a></td>
+</tr>
+<tr>
+<td><code>lightgbm</code></td>
+<td><a href="/multi-agent/">Multi-agent system</a>, <a href="/agents-api/">Agents API reference</a></td>
+</tr>
+<tr>
+<td><code>pydantic</code></td>
+<td><a href="/multi-agent/">Multi-agent system</a>, <a href="/agents-api/">Agents API reference</a>, <a href="/backend-api/">Backend API</a></td>
+</tr>
+<tr>
+<td><code>pipeline</code></td>
+<td><a href="/architecture/">How it is wired</a>, <a href="/arcade-strategy-pipeline/">Strategy pipeline</a></td>
+</tr>
+</tbody></table>
+<h2>Surfaces</h2>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>Pages</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>arcade</code></td>
+<td><a href="/arcade-quick-start/">Arcade quick start</a>, <a href="/arcade-dashboard/">Dashboard architecture</a>, <a href="/arcade-strategy-pipeline/">Strategy pipeline</a></td>
+</tr>
+<tr>
+<td><code>pyside6</code></td>
+<td><a href="/arcade-quick-start/">Arcade quick start</a>, <a href="/arcade-dashboard/">Dashboard architecture</a></td>
+</tr>
+<tr>
+<td><code>frontend</code></td>
+<td><a href="/webapp/">Web app</a>, <a href="/driver-colors/">Driver colors</a>, <a href="/streamlit/">Streamlit frontend</a> (legacy)</td>
+</tr>
+<tr>
+<td><code>ui</code></td>
+<td><a href="/webapp/">Web app</a>, <a href="/arcade-dashboard/">Dashboard architecture</a>, <a href="/streamlit/">Streamlit frontend</a> (legacy)</td>
+</tr>
+<tr>
+<td><code>api</code></td>
+<td><a href="/agents-api/">Agents API reference</a>, <a href="/backend-api/">Backend API</a></td>
+</tr>
+<tr>
+<td><code>telemetry</code></td>
+<td><a href="/simulation/">Race replay engine</a>, <a href="/backend-api/">Backend API</a>, <a href="/webapp/">Web app</a>, <a href="/arcade-dashboard/">Dashboard architecture</a>, <a href="/streamlit/">Streamlit frontend</a> (legacy)</td>
+</tr>
+<tr>
+<td><code>chat</code></td>
+<td><a href="/backend-api/">Backend API</a>, <a href="/webapp/">Web app</a>, <a href="/streamlit/">Streamlit frontend</a> (legacy)</td>
+</tr>
+<tr>
+<td><code>voice</code></td>
+<td><a href="/streamlit/">Streamlit frontend</a> (legacy, the voice surface was retired in v2)</td>
+</tr>
+<tr>
+<td><code>mcp</code></td>
+<td><a href="/backend-api/">Backend API</a>, <a href="/webapp/">Web app</a></td>
+</tr>
+</tbody></table>
+<h2>Operations</h2>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>Pages</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>install</code></td>
+<td><a href="/getting-started/">Getting started</a>, <a href="/arcade-quick-start/">Arcade quick start</a>, <a href="/setup/">Setup &amp; deployment</a></td>
+</tr>
+<tr>
+<td><code>docker</code></td>
+<td><a href="/setup/">Setup &amp; deployment</a></td>
+</tr>
+<tr>
+<td><code>cli</code></td>
+<td><a href="/getting-started/">Getting started</a></td>
+</tr>
+<tr>
+<td><code>uv</code></td>
+<td><a href="/getting-started/">Getting started</a>, <a href="/setup/">Setup &amp; deployment</a>, <a href="/ci-cd/">CI/CD pipeline</a></td>
+</tr>
+<tr>
+<td><code>dev</code></td>
+<td><a href="/development/">Development overview</a>, <a href="/docs-maintenance/">Docs maintenance</a>, <a href="/ci-cd/">CI/CD pipeline</a></td>
+</tr>
+<tr>
+<td><code>git</code></td>
+<td><a href="/development/">Development overview</a>, <a href="/ci-cd/">CI/CD pipeline</a></td>
+</tr>
+<tr>
+<td><code>release</code></td>
+<td><a href="/development/">Development overview</a>, <a href="/ci-cd/">CI/CD pipeline</a>, <a href="/roadmap/">Roadmap</a></td>
+</tr>
+<tr>
+<td><code>github-actions</code></td>
+<td><a href="/docs-maintenance/">Docs maintenance</a>, <a href="/ci-cd/">CI/CD pipeline</a></td>
+</tr>
+</tbody></table>
+<h2>Data</h2>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>Pages</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>data</code></td>
+<td><a href="/simulation/">Race replay engine</a>, <a href="/driver-colors/">Driver colors</a></td>
+</tr>
+<tr>
+<td><code>fastf1</code></td>
+<td><a href="/simulation/">Race replay engine</a></td>
+</tr>
+<tr>
+<td><code>threading</code></td>
+<td><a href="/arcade-dashboard/">Dashboard architecture</a>, <a href="/arcade-strategy-pipeline/">Strategy pipeline</a></td>
+</tr>
+</tbody></table>
+<h2>Other</h2>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>Pages</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>overview</code></td>
+<td><a href="/home/">Welcome</a>, <a href="/meet-the-author/">Meet the author</a>, <a href="/architecture/">How it is wired</a>, <a href="/tags/">Tags index</a>, <a href="/roadmap/">Roadmap</a></td>
+</tr>
+<tr>
+<td><code>fastapi</code></td>
+<td><a href="/backend-api/">Backend API</a></td>
+</tr>
+<tr>
+<td><code>evaluation</code></td>
+<td><a href="/thesis/">Thesis results</a></td>
+</tr>
+<tr>
+<td><code>engine</code></td>
+<td><a href="/arcade-strategy-pipeline/">Strategy pipeline</a></td>
+</tr>
+</tbody></table>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

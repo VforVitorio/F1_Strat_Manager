@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Docs maintenance · F1 StratLab docs</title>
+  <meta name="description" content="How this React docs site is built and deployed." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/docs-maintenance/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/docs-maintenance/" />
+  <meta property="og:title" content="Docs maintenance · F1 StratLab docs" />
+  <meta property="og:description" content="How this React docs site is built and deployed." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/docs-maintenance/" />
+  <meta name="twitter:title" content="Docs maintenance · F1 StratLab docs" />
+  <meta name="twitter:description" content="How this React docs site is built and deployed." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Docs maintenance",
+  "name": "Docs maintenance",
+  "description": "How this React docs site is built and deployed.",
+  "url": "https://docs.f1stratlab.com/docs-maintenance/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Docs maintenance",
+      "item": "https://docs.f1stratlab.com/docs-maintenance/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Documentation maintenance</h1>
+<p>How this documentation site is built, deployed and extended. Read this before adding new pages, changing the theme or pointing the site at a custom domain.</p>
+<h2>Stack overview</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Tool</th>
+<th>Lives in</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>App framework</td>
+<td>React (UMD, no build step)</td>
+<td><code>docs/index.html</code> (CDN script tag)</td>
+</tr>
+<tr>
+<td>App scripts</td>
+<td>Plain <code>React.createElement</code> JS</td>
+<td><code>docs/app/*.js</code></td>
+</tr>
+<tr>
+<td>Markdown rendering</td>
+<td><a href="https://marked.js.org/"><code>marked</code></a></td>
+<td><code>docs/index.html</code> (CDN script tag)</td>
+</tr>
+<tr>
+<td>Syntax highlighting</td>
+<td><a href="https://prismjs.com/">Prism</a></td>
+<td><code>docs/index.html</code> (CDN script tag)</td>
+</tr>
+<tr>
+<td>Diagrams</td>
+<td><a href="https://mermaid.js.org/">Mermaid</a></td>
+<td><code>docs/index.html</code> (CDN script tag)</td>
+</tr>
+<tr>
+<td>Page content</td>
+<td>Markdown</td>
+<td><code>docs/pages/*.md</code></td>
+</tr>
+<tr>
+<td>Page registry</td>
+<td><code>window.PAGES</code> array</td>
+<td><code>docs/app/nav.js</code></td>
+</tr>
+<tr>
+<td>Styles</td>
+<td>CSS custom properties</td>
+<td><code>docs/styles/tokens.css</code>, <code>docs/styles/docs.css</code></td>
+</tr>
+<tr>
+<td>Deploy workflow</td>
+<td>GitHub Actions</td>
+<td><code>.github/workflows/docs.yml</code></td>
+</tr>
+<tr>
+<td>Hosting</td>
+<td>GitHub Pages (<code>gh-pages</code> branch)</td>
+<td>repo Settings -&gt; Pages</td>
+</tr>
+</tbody></table>
+<p>The scripts load in dependency order: <code>nav.js</code>, <code>markdown.js</code>, <code>components.js</code>, <code>graph.js</code>, <code>home.js</code>, <code>main.js</code>. There is no bundler, no transpiler, no build step at author time.</p>
+<p>The brand palette and typography are kept aligned with the public landing at <a href="https://f1stratlab.com/">f1stratlab.com</a> by mirroring the design tokens declared in <code>colors_and_type.css</code> (the landing repo) into <code>docs/styles/tokens.css</code>.</p>
+<h2>Local preview</h2>
+<p>No build step needed. Serve the <code>docs/</code> directory with any static HTTP server:</p>
+<pre><code class="language-bash"># from the repo root
+python -m http.server 8000 --directory docs
+</code></pre>
+<p>Then open <code>http://localhost:8000/</code>. Edit any <code>.md</code> file or <code>.js</code> script and refresh the browser. The app fetches page content on demand, so a plain refresh picks up markdown edits instantly; a script change requires a hard reload (<code>Ctrl+Shift+R</code>) to bypass the browser cache.</p>
+<h2>Adding a new page</h2>
+<ol>
+<li>Create <code>docs/pages/&lt;slug&gt;.md</code> with the page content.</li>
+<li>Open <code>docs/app/nav.js</code> and add an entry to <code>window.PAGES</code>:</li>
+</ol>
+<pre><code class="language-js">{
+  slug: &quot;your-slug&quot;,
+  title: &quot;Page title&quot;,
+  section: &quot;Architecture&quot;,       // must be one of window.SECTIONS
+  file: &quot;pages/your-slug.md&quot;,
+  description: &quot;One-line description for search and graph tooltips.&quot;,
+  eyebrow: &quot;Short label&quot;,        // shown above the title in the page header
+  tags: [&quot;agents&quot;, &quot;api&quot;],       // existing tags only, or declare new ones in TAG_LABELS
+},
+</code></pre>
+<ol start="3">
+<li>If the page uses a tag not already in <code>window.TAG_LABELS</code>, add it there too.</li>
+<li>After editing any <code>docs/app/*.js</code> file, bump its <code>?v=</code> cache-buster in <code>docs/index.html</code> so browsers pick up the change (e.g. <code>main.js?v=4</code> -&gt; <code>main.js?v=5</code>).</li>
+<li>Push to <code>main</code>. The deploy workflow runs automatically.</li>
+</ol>
+<h3>Creating a new section</h3>
+<p>Add the section name to <code>window.SECTIONS</code> in <code>nav.js</code> (order matters -- it controls sidebar ordering) and add a colour entry in <code>window.SECTION_COLORS</code>. Then set <code>section</code> on the new page entry to match the new name exactly.</p>
+<h2>Theme and palette</h2>
+<p>Styles live in <code>docs/styles/tokens.css</code> (CSS custom properties) and <code>docs/styles/docs.css</code> (component rules). The token file references the same property names the landing site uses (<code>--purple-600</code>, <code>--purple-300</code>, <code>--bg-0</code> and friends).</p>
+<p>A change to colours or fonts must update <strong>both</strong> repos:</p>
+<ul>
+<li>This docs site: <code>docs/styles/tokens.css</code></li>
+<li>Public landing: <code>f1stratlab-web/colors_and_type.css</code></li>
+</ul>
+<h2>Deployment</h2>
+<h3>Automatic on push to <code>main</code></h3>
+<p><code>.github/workflows/docs.yml</code> watches:</p>
+<ul>
+<li><code>docs/**</code></li>
+<li><code>scripts/prerender_docs.mjs</code></li>
+<li><code>.github/workflows/docs.yml</code></li>
+</ul>
+<p>When any of these change on <code>main</code>, the workflow:</p>
+<ol>
+<li>Checks out the repo.</li>
+<li>Installs Node dependencies (<code>npm install marked</code>).</li>
+<li>Stages <code>docs/</code> into <code>_site/</code>.</li>
+<li>Runs <code>node scripts/prerender_docs.mjs docs _site</code>, which renders each <code>docs/pages/*.md</code> to a crawlable <code>/&lt;slug&gt;/index.html</code> and also generates <code>sitemap.xml</code>, <code>llms-full.txt</code> and <code>404.html</code>.</li>
+<li>Replaces the <code>2.6.1</code> placeholder in the staged files with the current version from <code>pyproject.toml</code>.</li>
+<li>Publishes <code>_site/</code> to the <code>gh-pages</code> branch via <code>peaceiris/actions-gh-pages@v4</code>.</li>
+</ol>
+<p>GitHub Pages picks up the new <code>gh-pages</code> commit and republishes the site, usually within 60 seconds.</p>
+<h3>Manual trigger</h3>
+<pre><code class="language-bash">gh workflow run docs.yml --ref main
+</code></pre>
+<h2>Custom domain</h2>
+<p>The site is served from the <code>gh-pages</code> branch at the custom domain <code>https://docs.f1stratlab.com/</code> via a <code>CNAME</code> file at the root of that branch (committed as <code>docs/CNAME</code>). DNS is a <code>CNAME</code> record: host <code>docs</code>, value <code>vforvitorio.github.io</code>.</p>
+<p>To change the domain:</p>
+<ol>
+<li>Update the <code>docs/CNAME</code> file with the new hostname.</li>
+<li>Update the DNS record accordingly.</li>
+<li>Confirm in repo Settings -&gt; Pages -&gt; Custom domain.</li>
+</ol>
+<h2>Diagrams</h2>
+<p>Mermaid loads from CDN and is activated by <code>docs/app/markdown.js</code>. Write diagrams as fenced code blocks tagged <code>mermaid</code>:</p>
+<pre><code>```mermaid
+flowchart LR
+  A --&gt; B
+```
+</code></pre>
+<p>For more complex diagrams (Mermaid fenced blocks inside the page markdown (there is no <code>docs/diagrams/</code>; the draw.io sources live in <code>documents/dev_docs/diagrams/</code> in the repo, not on the site)), export as SVG or PNG from <a href="https://app.diagrams.net/">diagrams.net</a> and embed the image in the markdown.</p>
+<h2>Where to change if X</h2>
+<table>
+<thead>
+<tr>
+<th>Desired change</th>
+<th>File(s) to edit</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Add a new docs page</td>
+<td><code>docs/pages/&lt;slug&gt;.md</code> + <code>window.PAGES</code> entry in <code>docs/app/nav.js</code></td>
+</tr>
+<tr>
+<td>Edit the nav order or sections</td>
+<td><code>window.PAGES</code> / <code>window.SECTIONS</code> in <code>docs/app/nav.js</code></td>
+</tr>
+<tr>
+<td>Change colours or fonts</td>
+<td><code>docs/styles/tokens.css</code> (and mirror to <code>f1stratlab-web/colors_and_type.css</code>)</td>
+</tr>
+<tr>
+<td>Change the home page layout</td>
+<td><code>docs/app/home.js</code> + <code>docs/styles/docs.css</code></td>
+</tr>
+<tr>
+<td>Change how markdown is rendered</td>
+<td><code>docs/app/markdown.js</code></td>
+</tr>
+<tr>
+<td>Change the knowledge graph</td>
+<td><code>docs/app/graph.js</code></td>
+</tr>
+<tr>
+<td>Add a new tag</td>
+<td><code>window.TAG_LABELS</code> in <code>docs/app/nav.js</code> + the page&#39;s <code>tags</code> array</td>
+</tr>
+<tr>
+<td>Change the deploy flow</td>
+<td><code>.github/workflows/docs.yml</code> + <code>scripts/prerender_docs.mjs</code></td>
+</tr>
+<tr>
+<td>Change the CDN library versions</td>
+<td><code>&lt;script&gt;</code> tags in <code>docs/index.html</code>; bump <code>?v=</code> on the app scripts too</td>
+</tr>
+</tbody></table>
+<h2>Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Page shows &quot;not found&quot;</td>
+<td>Slug missing from <code>window.PAGES</code> or filename typo</td>
+<td>Check <code>nav.js</code> entry and <code>docs/pages/</code> filename match</td>
+</tr>
+<tr>
+<td>Script changes not reflected</td>
+<td>Browser cached old JS</td>
+<td>Hard reload (<code>Ctrl+Shift+R</code>)</td>
+</tr>
+<tr>
+<td><code>gh-pages</code> push 403</td>
+<td>Workflow permissions too low</td>
+<td>Settings -&gt; Actions -&gt; Workflow permissions -&gt; &quot;Read and write&quot;</td>
+</tr>
+<tr>
+<td>Custom domain says &quot;DNS check unsuccessful&quot;</td>
+<td>DNS not propagated</td>
+<td>Wait 10-30 min</td>
+</tr>
+<tr>
+<td>Mermaid diagram not rendering</td>
+<td>Fenced block not tagged <code>mermaid</code> or Mermaid not yet loaded</td>
+<td>Check the code fence tag; mermaid.initialize runs after DOMContentLoaded</td>
+</tr>
+<tr>
+<td>Prerender step fails locally</td>
+<td><code>marked</code> not installed</td>
+<td>Run <code>npm install marked</code> before running <code>prerender_docs.mjs</code></td>
+</tr>
+</tbody></table>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

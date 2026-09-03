@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Thesis results · F1 StratLab docs</title>
+  <meta name="description" content="Numeric headline metrics for chapter 5 of the TFG." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/thesis/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/thesis/" />
+  <meta property="og:title" content="Thesis results · F1 StratLab docs" />
+  <meta property="og:description" content="Numeric headline metrics for chapter 5 of the TFG." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/thesis/" />
+  <meta name="twitter:title" content="Thesis results · F1 StratLab docs" />
+  <meta name="twitter:description" content="Numeric headline metrics for chapter 5 of the TFG." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Thesis results",
+  "name": "Thesis results",
+  "description": "Numeric headline metrics for chapter 5 of the TFG.",
+  "url": "https://docs.f1stratlab.com/thesis/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Thesis results",
+      "item": "https://docs.f1stratlab.com/thesis/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Thesis results</h1>
+<p><strong>This page reports the headline benchmark results for F1 StratLab, the accuracy and latency of its seven ML models and six sub-agents</strong>, as referenced in chapter 5 of the TFG thesis. Every figure is regenerated automatically from the notebooks under <code>notebooks/agents/</code>, so it always tracks the latest model artefacts.</p>
+<h2>Threshold sweeps</h2>
+<p>Each classifier sub-agent exposes a precision-recall trade-off that the strategist picks deliberately. The sweeps below scan the full threshold space and mark the production operating point.</p>
+<h3>Overtake (N12)</h3>
+<p>Production threshold <strong>0.7976</strong> was tuned in N12 step 5 on the raw LightGBM scores. The sweep shows the trade-off is robust around that point: F1 stays within a few hundredths across the neighbouring grid.</p>
+<h3>Safety Car (N14)</h3>
+<p>The Safety Car model is a soft contextual prior, not an exact predictor. AUC-PR is <strong>0.0723</strong> versus a <strong>0.0432</strong> baseline. The <strong>0.234</strong> production threshold is F2-optimal (recall-weighted) because false alarms cost little and missing an imminent SC is expensive.</p>
+<h3>Undercut (N16)</h3>
+<p>The undercut classifier sees the highest positive prevalence of the three (&gt;30% on the holdout) because the labelling step kept only pairs with a true undercut opportunity. The <strong>0.522</strong> threshold falls in the flat F1 region.</p>
+<h2>MC Dropout coverage</h2>
+<p>The TCN tire-degradation model (N09 global + N10 per-compound fine-tunes) uses 50-pass MC Dropout to produce P10 / P50 / P90 percentile bands. Both the raw [P10, P90] coverage (epistemic only) and the calibrated coverage that adds the empirical residual sigma (aleatoric included) are reported.</p>
+<p>Raw coverage stays around <strong>0.20</strong> across all compounds, active dropout only captures the model-weight uncertainty, not the lap-to-lap aleatoric noise. The calibrated coverage matches the <strong>0.80</strong> nominal target by construction.</p>
+<h2>Monte Carlo projection accuracy</h2>
+<p>The strategy layer scores its four candidates in <strong>projected track position</strong>, not in seconds. That claim is directly checkable, because every real pit stop in the dataset is already a labelled example of it: project the stop from the lap before, then compare against where the car actually came out on the lap after. No hand-labelling is involved, which is what makes this a measured result rather than a plausibility argument.</p>
+<p>Over <strong>552 green-flag stops across the 24 races of 2025</strong>, the projection lands <strong>within one position 86.1%</strong> of the time and is <strong>exactly right 59.6%</strong> of the time, with a mean signed error of <strong>+0.57 positions</strong>. The bias is positive, so the projection is mildly pessimistic about the rejoin, which is the safer direction for a strategy call.</p>
+<p><strong>Why 2025 and not all three seasons.</strong> 2023 and 2024 are training seasons for every model in the stack; 2025 is the holdout the shipped system infers on. A figure that mixes them is partly the system reading back its own training data, so the headline is scoped to the season that describes the product. On all three seasons the same measurement reads 86.3% over 1,768 stops in 70 races, and the earlier published <strong>86.5% over 1,810 stops in 71 races</strong> is retired on two counts: it mixed the training seasons in, and its 71st race was the 2023 Spanish GP counted twice.</p>
+<p>The gap between the training seasons (86.4%, disjoint from the holdout) and the holdout itself (86.1%) is 0.4 points, and that is <strong>not</strong> evidence the projection generalises well. It is a property of this particular measurement: the scorer runs on a fixed <code>ProjectionConfig</code> and consumes no learned model and none of the seven measured tables below, so the season scope has nothing to leak through. Do not carry that reasoning over to any figure that does read a model.</p>
+<p>Neutralised stops are excluded, and not to flatter the number. Under a Safety Car every lap is slow, so the &quot;two normal laps&quot; baseline used to reconstruct the realised pit loss is wrong there: that corrupts the measurement&#39;s <strong>input</strong> rather than the projection itself. Measured separately, those stops show a mean error of +1.54 positions against +0.57 under green, which is the signature of exactly that problem.</p>
+<h3>The tables the scorer reads</h3>
+<p>Seven tables are counted off <strong>70 races of raw laps across 2023 to 2025</strong> rather than assumed, and the scorer reads them at runtime from <code>data/mc_measured_v1.json</code>. Their season scope is deliberately wider than the accuracy figure above: they are descriptive priors about how races behave, not predictions, so more seasons is more data rather than more leakage. The two scopes are different on purpose and each is stated where it applies.</p>
+<table>
+<thead>
+<tr>
+<th>Table</th>
+<th>What it answers</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>clean_air</code></td>
+<td>seconds a lap a follower gains once the car directly ahead pits, per circuit</td>
+</tr>
+<tr>
+<td><code>gap_density</code></td>
+<td>seconds between consecutive cars, so a projected gap maps to a place</td>
+</tr>
+<tr>
+<td><code>neutralisation_rate</code></td>
+<td>chance a Safety Car arrives while a stop is being deferred</td>
+</tr>
+<tr>
+<td><code>sc_window</code></td>
+<td>green laps left inside the 5-lap decision window once neutralised</td>
+</tr>
+<tr>
+<td><code>status_mix</code></td>
+<td>share of laps that are actually racing, the denominator for the rest</td>
+</tr>
+<tr>
+<td><code>stop_hazard</code></td>
+<td>chance a rival stops in the window, by tyre life</td>
+</tr>
+<tr>
+<td><code>undercut_band</code></td>
+<td>undercut success against the gap to the target</td>
+</tr>
+</tbody></table>
+<p>The source is the <strong>raw</strong> parquet and never the featured one, which drops the neutralised and pit laps these tables are precisely about.</p>
+<h2>How to regenerate</h2>
+<pre><code class="language-bash"># Monte Carlo projection accuracy + the measured-table inventory (~1 min).
+# Add --years 2025 for the holdout-only headline above; the default is all three.
+uv run f1-eval projection --years 2025
+
+# The measured tables themselves, from 70 races of raw laps (~10 min)
+uv run python scripts/measure_mc_tables.py
+
+# Threshold sweeps + MC Dropout figures (one notebook, ~5 min on GPU)
+uv run jupyter nbconvert --execute --inplace notebooks/agents/N33_thresholds_and_calibration.ipynb
+
+# Quantitative RAG benchmark (10-15 min, builds 2 additional Qdrant collections)
+uv run jupyter nbconvert --execute --inplace notebooks/agents/N30B_rag_benchmark.ipynb
+</code></pre>
+<p>Both notebooks emit CSV and Markdown tables alongside their PNGs:</p>
+<ul>
+<li>Sweeps: <code>data/eval/threshold_sweep_{overtake,sc,undercut}.{csv,md}</code></li>
+<li>MC Dropout: <code>data/eval/mc_dropout_coverage.{csv,md}</code></li>
+<li>RAG benchmark: <code>data/rag_eval/results_v1.md</code></li>
+<li>Projection accuracy: <code>documents/eval_reports/projection.{md,json}</code></li>
+<li>Measured MC tables: <code>data/mc_measured_v1.json</code>, with thesis-facing extracts at <code>data/eval/mc_{clean_air,gap_density,sc_window,undercut_band}.{csv,md}</code></li>
+</ul>
+<h2>Numeric headline metrics</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Metric</th>
+<th>Value</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Pace model (N06 XGBoost)</td>
+<td>MAE on 2025 holdout</td>
+<td><strong>0.410 s</strong></td>
+<td><code>data/eval/pace_baselines.{csv,md}</code></td>
+</tr>
+<tr>
+<td>Whisper turbo (CUDA)</td>
+<td>mean per-clip latency</td>
+<td><strong>233.9 ms</strong> (P95 325.8 ms)</td>
+<td><code>data/eval/whisper_results.{csv,md}</code></td>
+</tr>
+<tr>
+<td>NLP pipeline (GPU)</td>
+<td>mean <code>run_pipeline</code></td>
+<td><strong>42.1 ms</strong></td>
+<td><code>data/eval/nlp_pipeline_cpu.{csv,md}</code></td>
+</tr>
+<tr>
+<td>Sub-agent latency</td>
+<td>min / max mean</td>
+<td><strong>487 ms</strong> (pace) / <strong>4.4 s</strong> (rag w/ LLM)</td>
+<td><code>data/eval/subagent_latency.{csv,md}</code></td>
+</tr>
+<tr>
+<td>RAG agent</td>
+<td>Content P@5</td>
+<td><strong>0.80</strong></td>
+<td><code>data/rag_eval/results_v1.md</code></td>
+</tr>
+<tr>
+<td>MC Dropout (C2)</td>
+<td>calibrated 80% coverage</td>
+<td><strong>0.840</strong></td>
+<td><code>data/eval/mc_dropout_coverage.{csv,md}</code></td>
+</tr>
+<tr>
+<td>Position projection</td>
+<td>within one place, 552 real stops (2025 only)</td>
+<td><strong>86.1%</strong></td>
+<td><code>documents/eval_reports/projection.{md,json}</code></td>
+</tr>
+</tbody></table>
+<p>All numbers reproducible with the commands above.</p>
+<p><strong>Note on the NLP pipeline figure.</strong> The thesis and IEEE report publish <strong>47.8 ms mean / 59.4 ms P95</strong> for <code>run_pipeline</code> (the original N24 benchmark run). The <strong>42.1 ms</strong> figure in the table above comes from re-running the same benchmark on the current hardware and environment, as this page&#39;s figures are regenerated automatically rather than pinned to the publication. Both numbers are valid measurements of the same pipeline; the difference is measurement lineage (published vs. regenerated), not a correction.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

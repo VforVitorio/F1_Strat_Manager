@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Driver colors · F1 StratLab docs</title>
+  <meta name="description" content="Year-aware color palette covering 2023–2025 seasons." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/driver-colors/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/driver-colors/" />
+  <meta property="og:title" content="Driver colors · F1 StratLab docs" />
+  <meta property="og:description" content="Year-aware color palette covering 2023–2025 seasons." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/driver-colors/" />
+  <meta name="twitter:title" content="Driver colors · F1 StratLab docs" />
+  <meta name="twitter:description" content="Year-aware color palette covering 2023–2025 seasons." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Driver colors",
+  "name": "Driver colors",
+  "description": "Year-aware color palette covering 2023–2025 seasons.",
+  "url": "https://docs.f1stratlab.com/driver-colors/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Driver colors",
+      "item": "https://docs.f1stratlab.com/driver-colors/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Driver Colors: Year-Aware System</h1>
+<h2>Location</h2>
+<p><code>src/telemetry/webapp/src/lib/drivers.ts</code></p>
+<blockquote>
+<p>The year-aware palette came from the Streamlit frontend and was ported one
+for one when the React web app replaced it in v2.0.0 (#551). The design is
+unchanged; the implementation described here is the TypeScript one.</p>
+</blockquote>
+<p><strong>It is still not shared with the backend.</strong> <code>src/telemetry/backend/core/driver_colors.py</code>
+is a separate, older implementation: a single flat <code>DRIVER_COLORS</code> dict labelled
+&quot;F1 2024 Driver Colors&quot;, with its own (different) hex values and no <code>year</code>
+parameter at all. It predates the 2025 driver-swap handling described below: it
+still maps <code>HAM</code> to a Mercedes-silver hex and has no entry for <code>ANT</code>, <code>BOR</code>,
+<code>HAD</code>, or the 2025 <code>SAI</code>-to-Williams move. Used by
+<code>backend/api/v1/endpoints/comparison.py</code> and <code>backend/services/telemetry_service.py</code>.
+Treat the two as independent palettes kept in sync by hand: known tech debt, not
+design intent.</p>
+<h2>Purpose</h2>
+<p>F1 driver lineups change every season. A driver may switch teams between years,
+so the colour associated with a driver abbreviation must be season-specific.
+This module provides a year-aware palette covering the 2023-2025 seasons.</p>
+<h2>Design</h2>
+<h3>Team base colours</h3>
+<p>Each team has two hex constants, one for the primary driver and one for the
+secondary:</p>
+<pre><code class="language-ts">const RED_BULL = &#39;#3671C6&#39;     // primary (e.g. VER)
+const RED_BULL_2 = &#39;#1B3D8E&#39;   // secondary
+</code></pre>
+<h3>Per-year lineups</h3>
+<p><code>DRIVER_COLORS_BY_YEAR</code> maps a season to a <code>{ driverCode: hex }</code> record, so the
+same code can resolve to different teams in different years.</p>
+<h3>Flat fallback</h3>
+<p><code>DRIVER_COLORS_FLAT = DRIVER_COLORS_BY_YEAR[2025]</code> serves any caller that does
+not pass a year, and <code>DEFAULT_DRIVER_COLOR</code> (<code>#A259F7</code>) is returned for a code
+the palette does not know.</p>
+<h2>Public API</h2>
+<h3><code>getDriverColor(code: string, year?: number): string</code></h3>
+<p>Team colour for a driver in a given season. The code is case-insensitive. With
+no <code>year</code>, or with a year the palette has no lineup for, it falls back to the
+flat 2025 record; an unknown code returns <code>DEFAULT_DRIVER_COLOR</code>.</p>
+<h3><code>DEFAULT_DRIVER_COLOR</code></h3>
+<p>The purple used for anything unrecognised, exported so callers can compare
+against it rather than hardcoding the hex a second time.</p>
+<h2>Usage</h2>
+<pre><code class="language-ts">import { getDriverColor } from &#39;@/lib/drivers&#39;
+
+getDriverColor(&#39;HAM&#39;, 2024)  // Mercedes teal
+getDriverColor(&#39;HAM&#39;, 2025)  // Ferrari red — same driver, different team
+getDriverColor(&#39;VER&#39;)        // flat 2025 fallback
+</code></pre>
+<h2>Where it is used</h2>
+<p>It lives in <code>src/lib/</code> rather than a feature folder because several features
+consume it, so shared code stays app-level and the features stay decoupled
+siblings:</p>
+<ul>
+<li><code>features/dashboard/components/</code>, lap and channel chart line colours</li>
+<li><code>features/comparison/</code>, toolbar and replay channel colours</li>
+<li><code>features/chat/charts/</code>, colours for chat tool-result charts</li>
+<li><code>components/radio/RadioBrowser.tsx</code>, per-driver radio tagging</li>
+</ul>
+<p>Backend (static module, <code>backend/core/driver_colors.py</code>):</p>
+<ul>
+<li><code>backend/api/v1/endpoints/comparison.py</code>, comparison endpoint colour assignment</li>
+<li><code>backend/services/telemetry_service.py</code>, telemetry data colour tagging</li>
+</ul>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

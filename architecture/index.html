@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>How it is wired · F1 StratLab docs</title>
+  <meta name="description" content="End-to-end tour of the codebase, layer by layer." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/architecture/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/architecture/" />
+  <meta property="og:title" content="How it is wired · F1 StratLab docs" />
+  <meta property="og:description" content="End-to-end tour of the codebase, layer by layer." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/architecture/" />
+  <meta name="twitter:title" content="How it is wired · F1 StratLab docs" />
+  <meta name="twitter:description" content="End-to-end tour of the codebase, layer by layer." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "How it is wired",
+  "name": "How it is wired",
+  "description": "End-to-end tour of the codebase, layer by layer.",
+  "url": "https://docs.f1stratlab.com/architecture/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "How it is wired",
+      "item": "https://docs.f1stratlab.com/architecture/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>How F1 StratLab is wired</h1>
+<blockquote>
+<p>An end-to-end tour of the codebase: how a single lap-tick travels from the replay engine through the six sub-agents, into the N31 orchestrator and out to the operator surfaces. Use this page as the entry point, then drill into the deeper references below.</p>
+</blockquote>
+<h2>One lap, end to end</h2>
+<p>The diagram below traces the lifecycle of a single lap. Every component is reified in <code>src/</code>, the names match the production modules, so a grep from this page reaches straight into the source.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    autonumber
+    participant Engine as RaceReplayEngine
+    participant State as RaceStateManager
+    participant Orch as N31 Orchestrator
+    participant Subs as Sub-agents (6)
+    participant MC as Monte-Carlo sim
+    participant LLM as LLM synthesis
+    participant UI as Operator surface
+
+    Engine-&gt;&gt;State: emit lap_state(driver, lap_n)
+    State-&gt;&gt;Orch: snapshot RaceState
+    Orch-&gt;&gt;Subs: dispatch parallel queries
+    Subs--&gt;&gt;Orch: structured outputs
+    Orch-&gt;&gt;MC: roll candidate strategies
+    MC--&gt;&gt;Orch: scored outcomes
+    Orch-&gt;&gt;LLM: synthesise recommendation
+    LLM--&gt;&gt;Orch: Decision (ACTION · PACE · RISK · Plan)
+    Orch--&gt;&gt;UI: StrategyRecommendation payload
+</code></pre>
+<p>The same loop runs in three places: the CLI consumes it in batch, the Arcade renders it in the two PITWALL windows, and the web app surfaces it in its strategy and chat tabs.</p>
+<h2>Where to go next</h2>
+<p>Six layers, six pages, each linked from the agent graph and from this page.</p>
+<ul>
+<li><strong><a href="/multi-agent/">Multi-agent system</a></strong>: N25-N31 architecture: agents, MoE routing, Monte-Carlo simulation, LLM synthesis.</li>
+<li><strong><a href="/simulation/">Simulation engine</a></strong>: <code>RaceReplayEngine</code>, <code>RaceStateManager</code>, the <code>lap_state</code> schema every layer agrees on.</li>
+<li><strong><a href="/agents-api/">Agents API reference</a></strong>, per-agent input / output schemas, model artefacts and entry-point signatures.</li>
+<li><strong><a href="/backend-api/">Backend API</a></strong>: FastAPI routers, the SSE simulation endpoint, the contract the web app and the Arcade speak.</li>
+<li><strong><a href="/streamlit/">Streamlit frontend (legacy)</a></strong>, walkthrough of the retired Streamlit app, kept for historical reference.</li>
+<li><strong><a href="/arcade-quick-start/">Arcade dashboard</a></strong>, several independent windows coordinated across two Python processes (pyglet owns the replay and broadcasts; the follower surfaces subscribe from a child process).</li>
+</ul>
+<blockquote>
+<p><strong>Looking for a specific file?</strong> The narratives on this site stop at the contract level. For per-file deep-dives, every function in <code>src/agents/</code>, every notebook from N06 to N34, every helper in <code>src/arcade/</code>, jump to the <a href="https://deepwiki.com/VforVitorio/F1-StratLab">F1 StratLab DeepWiki</a>. It is regenerated on every push to <code>main</code>.</p>
+</blockquote>
+<h2>Key data contracts</h2>
+<p>Three structures cross every boundary in the system, and these are the ones that matter most.</p>
+<h3><code>lap_state</code></h3>
+<p>The atomic payload the simulation engine emits per driver per lap. It carries the bare-minimum slice of telemetry the agents need: current lap number, compound and tire age, current and previous lap times, absolute sector times, gap to leader and per-rival intervals, in-lap and out-lap flags, the Art. 30.5(m) stint history for our driver and every rival (stops made, compounds used, whether the mandatory two-compound stop is still pending), and the active race-control state. Every downstream agent treats <code>lap_state</code> as immutable; mutations happen in the orchestrator&#39;s state machine, not inside the agents.</p>
+<h3><code>RaceState</code></h3>
+<p>A thin, per-lap Pydantic model (<code>src/agents/strategy_orchestrator.py</code>) that carries the single-driver context N31 needs for one decision: driver code, lap, total laps, position, compound, tyre age, gap/pace deltas versus the car ahead, weather, radio/RCM windows, and the risk-tolerance dial. It is <strong>not</strong> a cumulative session object, there is exactly one <code>RaceState</code> class in the codebase, and it holds no stint history, pit log, or field-wide tire roster. The field-wide picture (every driver&#39;s stints, pit stops, and current tyre) lives in the <code>laps_df</code> DataFrame the orchestrator and agents load once per session, plus the <code>rivals</code> list inside each <code>lap_state</code> tick, see <a href="/simulation/">Race replay engine</a> for that schema. The orchestrator builds a fresh <code>RaceState</code> per lap so every sub-agent decision is grounded in the same snapshot, regardless of how fast each agent responds.</p>
+<h3><code>StrategyRecommendation</code></h3>
+<p>The structured output the orchestrator emits per decision tick (called <code>StrategyState</code> on the wire protocol some surfaces consume, but the Pydantic type is <code>StrategyRecommendation</code>). Fourteen fields are frozen by schema: the primary <code>action</code> plus pit-execution detail (<code>pit_lap_target</code>, <code>compound_next</code>, <code>undercut_target</code>), driver-side instructions (<code>pace_mode</code>, <code>target_lap_time_s</code>, <code>risk_posture</code>), multi-lap planning (<code>contingencies</code>, <code>key_risks</code>, <code>expected_stint_end</code>), and post-hoc grounding attached in code (<code>scenario_scores</code>, <code>regulation_context</code>) around the LLM&#39;s own <code>reasoning</code> and <code>confidence</code>. See <a href="/agents-api/">Agents API reference</a> for the full field-by-field table. <code>StrategyRecommendation</code> is what the CLI prints, the Arcade renders and the web app chat surfaces.</p>
+<h2>How the pieces ship</h2>
+<p>Three independent release tracks ship the system so that consumers can pick the surface that fits their workflow:</p>
+<ul>
+<li><strong>R1: CLI wheel.</strong> <code>uv tool install</code> straight from the GitHub release. Headless, batchable, no GPU needed for the inference path.</li>
+<li><strong>R2: Arcade.</strong> The pyglet 2D replay plus its live strategy surfaces. Same wheel, but the <code>f1-arcade</code> entry point boots the GUI and spawns the strategy subprocess locally.</li>
+<li><strong>R3: Backend + web app.</strong> The FastAPI server (SSE simulator, MCP tools) plus the React SPA. The docker-compose recipe ships the whole stack; <code>f1-webapp</code> launches it.</li>
+</ul>
+<p>See <a href="/setup/">Setup and deployment</a> for the full install matrix per surface and platform.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

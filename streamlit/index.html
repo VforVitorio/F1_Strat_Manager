@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Streamlit frontend (legacy) · F1 StratLab docs</title>
+  <meta name="description" content="Retired Streamlit app, kept for historical reference." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/streamlit/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/streamlit/" />
+  <meta property="og:title" content="Streamlit frontend (legacy) · F1 StratLab docs" />
+  <meta property="og:description" content="Retired Streamlit app, kept for historical reference." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/streamlit/" />
+  <meta name="twitter:title" content="Streamlit frontend (legacy) · F1 StratLab docs" />
+  <meta name="twitter:description" content="Retired Streamlit app, kept for historical reference." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Streamlit frontend (legacy)",
+  "name": "Streamlit frontend (legacy)",
+  "description": "Retired Streamlit app, kept for historical reference.",
+  "url": "https://docs.f1stratlab.com/streamlit/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Streamlit frontend (legacy)",
+      "item": "https://docs.f1stratlab.com/streamlit/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Streamlit Frontend (legacy)</h1>
+<blockquote>
+<p><strong>Retired surface.</strong> The Streamlit app was replaced by the React web app in v2 and its code was removed from the repo (parent #551, submodule #188). It survives in git history and in the <code>legacy_version</code> branch. This page is kept as historical reference; the paths below no longer exist on <code>main</code>.</p>
+</blockquote>
+<h2>Overview</h2>
+<p>The frontend was a multi-page Streamlit application at <code>src/telemetry/frontend/</code>. It communicated with the FastAPI backend via HTTP and rendered telemetry visualizations, strategy recommendations, driver comparisons, and a chat interface.</p>
+<p>Entry point: <code>frontend/app/main.py</code>.</p>
+<p align="center">
+  <video src="/assets/demo/streamlit-demo.mp4" poster="/assets/demo/streamlit-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab Streamlit app in action"></video>
+  <br/>
+  <sub>The Streamlit strategy advisor and chat, running against the FastAPI backend.</sub>
+</p>
+
+<h2>Page map</h2>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>File</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Dashboard</td>
+<td><code>pages/dashboard.py</code></td>
+<td>Telemetry charts for selected session/driver</td>
+</tr>
+<tr>
+<td>Comparison</td>
+<td><code>pages/comparison.py</code></td>
+<td>Side-by-side telemetry for two drivers</td>
+</tr>
+<tr>
+<td>Race Analysis</td>
+<td><code>pages/race_analysis.py</code></td>
+<td>Tire, gap, and radio analysis tabs</td>
+</tr>
+<tr>
+<td>Strategy</td>
+<td><code>pages/strategy.py</code></td>
+<td>N25-N31 strategy advisor with agent tabs</td>
+</tr>
+<tr>
+<td>Chat</td>
+<td><code>pages/chat.py</code></td>
+<td>LM Studio chat interface</td>
+</tr>
+<tr>
+<td>Model Lab</td>
+<td><code>pages/model_lab.py</code></td>
+<td>Interactive ML model exploration</td>
+</tr>
+</tbody></table>
+<h2>Directory structure</h2>
+<pre><code>frontend/
+  app/
+    main.py            -- Streamlit entry point, page routing
+    setup_path.py      -- sys.path configuration
+    styles.py          -- GLOBAL_CSS constant
+    track_data.py      -- Track metadata
+  pages/               -- One file per page
+  components/
+    chatbot/           -- Chat UI components
+    common/            -- Shared: driver_colors, chart_styles, loading
+    comparison/        -- Driver comparison charts
+    dashboard/         -- Dashboard-specific CSS and selectors
+    layout/            -- Navbar
+    race_analysis/     -- Tire charts, gap charts, radio panel
+    strategy/          -- Strategy card, scenario chart, agent tabs
+    streamlit_audio_viz/ -- Custom React component for audio visualization
+    telemetry/         -- Individual telemetry graphs
+    voice/             -- Voice input UI
+  services/
+    chat_service.py     -- Chat HTTP client
+    strategy_service.py -- Strategy endpoints HTTP client
+    telemetry_service.py
+    voice_api.py
+  utils/
+    audio_utils.py
+    chat_navigation.py
+    chat_state.py
+    data_loaders.py
+    race_processing.py
+    race_viz.py
+    report_storage.py
+    time_formatters.py
+  shared/
+    img/                -- Static image assets
+  config.py             -- BACKEND_URL, API_BASE_URL from env vars
+</code></pre>
+<h2>Navigation</h2>
+<p>The app launches directly into the Dashboard. Page routing uses <code>st.session_state[&#39;current_page&#39;]</code>. The navbar (<code>components/layout/navbar.py</code>) sets this value. Pages are rendered conditionally in <code>main.py</code>.</p>
+<h2>Strategy page</h2>
+<p>The Strategy page (<code>pages/strategy.py</code>) is the primary interface for the N25-N31 agent system:</p>
+<ol>
+<li><strong>Selectors</strong>: Year (hardcoded 2025), GP, Driver, Lap range, Analysis lap, Risk tolerance</li>
+<li><strong>Run button</strong>: calls <code>StrategyService.get_recommend()</code> which hits <code>/api/v1/strategy/recommend</code></li>
+<li><strong>Results</strong>:<ul>
+<li><code>render_strategy_card()</code>, recommendation card with action, confidence, reasoning</li>
+<li><code>render_scenario_chart()</code>, bar chart comparing MC scenario scores</li>
+<li><code>render_agent_tabs()</code>, tabbed detail view for each sub-agent output</li>
+</ul>
+</li>
+</ol>
+<h2>Chat tool-result rendering</h2>
+<p>The Chat page (<code>pages/chat.py</code>) consumes the MCP tool results streamed by <code>/api/v1/chat/tool-message-stream</code> (and the JSON variant at <code>/api/v1/chat/tool-message</code>). Each tool result carries a <code>display_type</code> hint (see <code>TOOL_DISPLAY_MAP</code> in <a href="/backend-api/">Backend API</a>) that tells the frontend how to render the payload.</p>
+<p>Dispatch lives in <code>components/chatbot/tool_result_renderer.py</code>:</p>
+<pre><code class="language-python">_RENDERERS = {
+    &quot;metrics&quot;:        _render_metrics,
+    &quot;strategy_card&quot;:  _render_strategy_card,
+    &quot;table&quot;:          _render_table,
+    &quot;text&quot;:           _render_text,
+    &quot;chart&quot;:          _render_chart,
+}
+</code></pre>
+<h3>Inline Plotly charts (Phase 2 MCP telemetry tools)</h3>
+<p>The four telemetry tools (<code>get_lap_times</code>, <code>get_telemetry</code>, <code>compare_drivers</code>, <code>get_race_data</code>) are mapped to <code>DisplayType.CHART</code> and render as inline Plotly figures inside the chat bubble. <code>_render_chart(data, tool_name)</code> calls <code>build_figure(tool_name, data)</code> from <code>components/chatbot/chart_builders.py</code>, which dispatches to one of:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Builder</th>
+<th>Figure</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>get_lap_times</code></td>
+<td><code>build_lap_times_figure</code></td>
+<td>Lap-time line per driver</td>
+</tr>
+<tr>
+<td><code>get_telemetry</code></td>
+<td><code>build_telemetry_figure</code></td>
+<td>Speed / throttle / brake traces for one lap</td>
+</tr>
+<tr>
+<td><code>compare_drivers</code></td>
+<td><code>build_compare_drivers_figure</code></td>
+<td>Fastest-lap side-by-side comparison</td>
+</tr>
+<tr>
+<td><code>get_race_data</code></td>
+<td><code>build_race_data_figure</code></td>
+<td>Full race overview (positions / gaps)</td>
+</tr>
+</tbody></table>
+<p>Builders are Streamlit-free: they take the raw tool payload, pull per-driver colors via <code>get_driver_color</code> from <code>components/common/driver_colors.py</code> (see <a href="/driver-colors/">Driver colors</a>), and apply the shared dark theme through <code>_apply_base_layout()</code>. The renderer wraps the figure with <code>apply_telemetry_chart_styles()</code> so the chart inherits the purple-outlined chat bubble look, and falls back to <code>_render_text</code> if the builder returns <code>None</code>.</p>
+<h2>Services layer</h2>
+<p>All HTTP calls go through service classes in <code>services/</code>. Each method returns a <code>(success: bool, data: dict | None, error: str | None)</code> triple so callers handle results consistently.</p>
+<pre><code class="language-python">class StrategyService:
+    @staticmethod
+    def get_pace(lap_state) -&gt; Tuple[bool, Optional[Dict], Optional[str]]: ...
+    @staticmethod
+    def get_tire(lap_state) -&gt; Tuple[bool, Optional[Dict], Optional[str]]: ...
+    @staticmethod
+    def get_recommend(...) -&gt; Tuple[bool, Optional[Dict], Optional[str]]: ...
+</code></pre>
+<p>Timeout is set to 300 seconds because first-call model loading (RoBERTa + SetFit + BERT-large + BGE-M3) is slow.</p>
+<h2>Configuration</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>BACKEND_URL</code></td>
+<td><code>http://localhost:8000</code></td>
+<td>FastAPI backend base URL</td>
+</tr>
+<tr>
+<td><code>FRONTEND_URL</code></td>
+<td><code>http://localhost:8501</code></td>
+<td>Frontend self-reference</td>
+</tr>
+</tbody></table>
+<h2>Appendix: CSS fixes</h2>
+<h3>Scroll fix on Plotly charts</h3>
+<p>Streamlit wraps Plotly charts in <code>div.stElementContainer</code> elements that can develop unwanted horizontal scrollbars. Located in <code>src/telemetry/frontend/components/common/chart_styles.py</code>, <code>apply_telemetry_chart_styles()</code> injects CSS that hides the scrollbar on the parent wrapper without clipping chart content:</p>
+<pre><code class="language-css">div.stElementContainer:has(div[data-testid=&quot;stPlotlyChart&quot;]) {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+div.stElementContainer:has(div[data-testid=&quot;stPlotlyChart&quot;])::-webkit-scrollbar {
+    display: none !important;
+}
+</code></pre>
+<p>The same function applies the visual treatment to all Plotly charts:</p>
+<pre><code class="language-css">div[data-testid=&quot;stPlotlyChart&quot;] {
+    outline: 2px solid #a78bfa !important;
+    outline-offset: -2px !important;
+    border-radius: 12px !important;
+    background-color: #181633 !important;
+    box-shadow: 0 4px 12px rgba(167, 139, 250, 0.2) !important;
+}
+</code></pre>
+<p><code>outline</code> is used instead of <code>border</code> because outlines do not affect the box model and cannot cause layout shifts or trigger scrollbars.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

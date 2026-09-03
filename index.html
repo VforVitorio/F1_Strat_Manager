@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>F1 StratLab · Documentation</title>
+  <meta name="description" content="Open-source multi-agent system for real-time F1 race strategy." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/" />
+  <meta property="og:title" content="F1 StratLab · Documentation" />
+  <meta property="og:description" content="Open-source multi-agent system for real-time F1 race strategy." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/" />
+  <meta name="twitter:title" content="F1 StratLab · Documentation" />
+  <meta name="twitter:description" content="Open-source multi-agent system for real-time F1 race strategy." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Welcome",
+  "name": "Welcome",
+  "description": "Open-source multi-agent system for real-time F1 race strategy.",
+  "url": "https://docs.f1stratlab.com/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Welcome",
+      "item": "https://docs.f1stratlab.com/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Welcome to F1 StratLab</h1>
+<blockquote>
+<p>Open-source multi-agent system that fuses seven machine-learning models, six LangGraph sub-agents and one strategy orchestrator into a single Formula 1 strategy recommender. Shipped under Apache-2.0.</p>
+</blockquote>
+<p>This is the canonical technical reference for the F1 StratLab codebase. It is hand-curated and complements two sibling resources: the public landing at <a href="https://f1stratlab.com/">f1stratlab.com</a> tells the project story for non-technical visitors, and the auto-generated <a href="https://deepwiki.com/VforVitorio/F1-StratLab">DeepWiki</a> gives a notebook-per-notebook tour of the source tree. The pages here focus on the narratives those two cannot: <strong>how the layers connect, why the contracts look the way they do, and what to do when something breaks</strong>.</p>
+<h2>The system at a glance</h2>
+<pre><code class="language-mermaid">graph TD
+    subgraph Sources[&quot;Race data&quot;]
+        FF[FastF1 sessions]
+        OF1[OpenF1 radios]
+        RCM[Race Control messages]
+    end
+
+    subgraph Engine[&quot;Replay engine&quot;]
+        RRE[RaceReplayEngine]
+        RSM[RaceStateManager]
+    end
+
+    subgraph Models[&quot;ML core · 7 models&quot;]
+        M1[Pace XGBoost · N06]
+        M2[Tire TCN · N07-N10]
+        M3[Overtake LightGBM · N12]
+        M4[Safety-car LightGBM · N14]
+        M5[Pit duration HistGBT · N15]
+        M6[Undercut LightGBM · N16]
+        M7[Circuit clusters · N03]
+    end
+
+    subgraph Agents[&quot;LangGraph sub-agents · 6&quot;]
+        A1[Pace · N25]
+        A2[Tire · N26]
+        A3[Race Situation · N27]
+        A4[Pit Strategy · N28]
+        A5[Radio · N29]
+        A6[RAG]
+    end
+
+    ORCH[N31 Strategy Orchestrator]
+
+    subgraph Surfaces[&quot;Operator surfaces&quot;]
+        CLI[Headless CLI]
+        ARC[Arcade dashboard]
+        STR[React web app]
+    end
+
+    Sources --&gt; RRE
+    RRE --&gt; RSM
+    RSM --&gt; ORCH
+    Models -.consumed by.-&gt; Agents
+    Agents --&gt;|structured outputs| ORCH
+    ORCH --&gt;|recommendation| CLI
+    ORCH --&gt;|recommendation| ARC
+    ORCH --&gt;|recommendation| STR
+</code></pre>
+<p>Three layers carry the system from raw telemetry to a strategy call: a machine-learning core, a multi-agent reasoning layer, and three operator surfaces. Each layer lives behind a documented contract, so any one can be swapped without disturbing the others.</p>
+<h2>What lives where</h2>
+<p>The narratives on this site stop at the contract level. For per-file deep-dives, every function in <code>src/agents/</code>, every notebook from N06 to N34, every helper in <code>src/arcade/</code>, jump to the <a href="https://deepwiki.com/VforVitorio/F1-StratLab">F1 StratLab DeepWiki</a>. It is regenerated on every push to <code>main</code>.</p>
+<h2>Project status</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Version</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Multi-agent orchestrator (N31)</td>
+<td>v1.0.0</td>
+<td>shipped</td>
+</tr>
+<tr>
+<td>Arcade three-window MVP</td>
+<td>v1.0.0</td>
+<td>shipped</td>
+</tr>
+<tr>
+<td>Benchmark suite (Chapter 5)</td>
+<td>v1.1.0</td>
+<td>shipped</td>
+</tr>
+<tr>
+<td>Release automation (<code>release-please</code>)</td>
+<td>v1.1.0</td>
+<td>shipped</td>
+</tr>
+<tr>
+<td>Current release</td>
+<td>v2.6.1</td>
+<td>shipped</td>
+</tr>
+</tbody></table>
+<p>F1 StratLab was defended as a Final Degree Project in June 2026, graded 10/10 with Distinction (Matricula de Honor) and unanimously recommended by the tribunal for publication as a research article. Development continues past the defence: the React front-end migration is complete (v2.0.0, the React web app replaced Streamlit as the post-race UI) alongside ongoing correctness hardening across the multi-agent pipeline. See the <a href="https://github.com/VforVitorio/F1-StratLab/blob/main/CHANGELOG.md">project changelog</a> for the full history.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

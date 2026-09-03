@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>CI/CD pipeline · F1 StratLab docs</title>
+  <meta name="description" content="GitHub Actions, release-please automation, Dependabot." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/ci-cd/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/ci-cd/" />
+  <meta property="og:title" content="CI/CD pipeline · F1 StratLab docs" />
+  <meta property="og:description" content="GitHub Actions, release-please automation, Dependabot." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/ci-cd/" />
+  <meta name="twitter:title" content="CI/CD pipeline · F1 StratLab docs" />
+  <meta name="twitter:description" content="GitHub Actions, release-please automation, Dependabot." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "CI/CD pipeline",
+  "name": "CI/CD pipeline",
+  "description": "GitHub Actions, release-please automation, Dependabot.",
+  "url": "https://docs.f1stratlab.com/ci-cd/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "CI/CD pipeline",
+      "item": "https://docs.f1stratlab.com/ci-cd/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>CI/CD pipeline</h1>
+<p>Single source of truth for how F1 StratLab is built, tested, released and deployed. Reading it once explains how a commit becomes a published release and the live docs site.</p>
+<p>The pipeline is split across eight GitHub Actions workflows, a release-please bot for versioning, Dependabot for dependency hygiene, and a few repository-level toggles that make everything work. Three of them carry the weight and get a section each below; the other five are the security scanners and the automation.</p>
+<h2>Branching strategy</h2>
+<p>Three long-lived branches, in increasing order of stability. Every change branches off (<code>feat/…</code>, <code>fix/…</code>, <code>docs/…</code>) and opens a <strong>pull request directly against <code>dev</code></strong>: <code>test</code> is a personal, day-to-day branch that is not part of the enforced PR chain (no PRs are opened against it in practice; <code>git log</code> shows feature branches merging straight into <code>dev</code>). <code>dev</code> is periodically promoted to <code>main</code> via its own PR, and <code>main</code> is release-only.</p>
+<pre><code class="language-mermaid">graph TD
+    A[feature branch: feat/ fix/ docs/] --&gt;|PR| D[dev]
+    D --&gt;|PR| M[main]
+    H[chore/* or fix/* hotfix] --&gt;|PR| M
+    M --&gt;|push trigger| RP[release-please branch]
+    RP --&gt;|merge release PR| M
+    M --&gt;|docs.yml deploy| GP[gh-pages]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Branch</th>
+<th>Purpose</th>
+<th>Who pushes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>main</code></td>
+<td>Production / release branch</td>
+<td>Merge commits from PRs only (from <code>dev</code>, or a hotfix branch)</td>
+</tr>
+<tr>
+<td><code>dev</code></td>
+<td>Integration branch</td>
+<td>Merge commits from <code>feat/</code>/<code>fix/</code>/<code>docs/</code> PRs</td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td>Personal day-to-day branch</td>
+<td>Direct commits; not part of the automated PR promotion chain</td>
+</tr>
+<tr>
+<td><code>legacy_version</code></td>
+<td>Historical snapshot</td>
+<td>Nobody. Frozen</td>
+</tr>
+<tr>
+<td><code>gh-pages</code></td>
+<td>Published output of the <code>docs.yml</code> React SPA deploy</td>
+<td>The <code>docs.yml</code> workflow</td>
+</tr>
+<tr>
+<td><code>release-please--...</code></td>
+<td>Auto-managed by the release-please bot</td>
+<td>The release-please GitHub Action</td>
+</tr>
+</tbody></table>
+<p>The default flow is <code>feature branch → dev → main</code>. Hotfixes go via a <code>chore/...</code> or <code>fix/...</code> branch straight to <code>main</code>. See <a href="https://github.com/VforVitorio/F1-StratLab/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> for the canonical statement of this rule.</p>
+<h2>CI workflows</h2>
+<p>Eight workflows live under <code>.github/workflows/</code>. They run independently, on different triggers, and have different blast radii. The three below do the heavy lifting; the rest are listed after them.</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>What it is for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ci.yml</code></td>
+<td>test / lint / typecheck / pip-audit, plus the PITWALL UI job</td>
+</tr>
+<tr>
+<td><code>release-please.yml</code></td>
+<td>version bumps, the CHANGELOG and the release PR</td>
+</tr>
+<tr>
+<td><code>docs.yml</code></td>
+<td>builds and publishes this site</td>
+</tr>
+<tr>
+<td><code>codeql.yml</code></td>
+<td>SAST over the project&#39;s own code</td>
+</tr>
+<tr>
+<td><code>osv-scanner.yml</code></td>
+<td>cross-ecosystem vulnerability scan</td>
+</tr>
+<tr>
+<td><code>gitleaks.yml</code></td>
+<td>secret scanning over the repo and its diffs</td>
+</tr>
+<tr>
+<td><code>labeler.yml</code></td>
+<td>applies <code>area:</code> labels from the changed paths</td>
+</tr>
+<tr>
+<td><code>auto-update-prs.yml</code></td>
+<td>rebases low-touch PRs when <code>dev</code> moves</td>
+</tr>
+</tbody></table>
+<h3><code>.github/workflows/ci.yml</code></h3>
+<p>Triggered on push to <code>main</code>, <code>dev</code>, <code>test</code>, <code>feat/**</code>, <code>fix/**</code>, <code>docs/**</code>, and on pull request targeting <code>main</code> or <code>dev</code>. Four jobs run in parallel on <code>ubuntu-latest</code>:</p>
+<ul>
+<li><code>test</code>, path-filter gated on <code>src/**</code>, <code>tests/**</code>, <code>pyproject.toml</code>, <code>uv.lock</code> (via <code>dorny/paths-filter@v4</code>; skips entirely on a docs-only or unrelated diff). When triggered: <code>uv sync --all-extras --frozen</code> (Python 3.12), a &quot;collected-count floor&quot; check (<code>pytest --co -q</code> must collect at least 40 nodes, guarding against a refactor silently gutting the suite), then <code>uv run pytest -v --cov=src --cov-report=term-missing</code>.</li>
+<li><code>lint</code>, always runs, no <code>uv sync</code> needed. <code>uvx ruff check .</code> and <code>uvx ruff format --check .</code> as ephemeral tools, so it skips installing the whole ML/torch stack just to lint style.</li>
+<li><code>typecheck</code>, same path-filter gate as <code>test</code>. <code>uv sync --extra dev --frozen</code> then <code>uv run mypy src/rag/</code>. Narrow scope: only production-ready typed modules are checked. Caches <code>.mypy_cache/</code> keyed on <code>pyproject.toml</code> + <code>src/rag/**</code>.</li>
+<li><code>pip-audit</code>, always runs, no path filter. Exports the locked dependency set (<code>uv export --frozen --all-extras</code>) and runs <code>pip-audit</code> against it for same-day CVE alerts, independent of whether the diff touches <code>uv.lock</code>. Advisory (<code>continue-on-error: true</code>) while baselining.</li>
+</ul>
+<p>The jobs are deliberately decoupled. A red <code>lint</code> does not stop <code>test</code> from running. <code>test</code> and <code>typecheck</code> both checkout with <code>fetch-depth: 0</code> <strong>before</strong> the paths-filter step, because the filter falls back to <code>git diff</code> on <code>push</code> events and needs full history.</p>
+<h3><code>.github/workflows/release-please.yml</code></h3>
+<p>Triggered on push to <code>main</code>. Three jobs:</p>
+<ol>
+<li><strong>release-please</strong>, runs <code>googleapis/release-please-action@v5</code> with the built-in <code>GITHUB_TOKEN</code> (not a PAT: <code>main</code> carries no required status checks on the release PR, so a PAT buys nothing here). Reads commits since the last tag and, if any commit uses a bumpable prefix (<code>feat:</code>, <code>fix:</code>, <code>feat!:</code>), opens or updates a <code>chore(main): release X.Y.Z</code> PR on the bot branch. When that PR is merged, the same job creates the tag and the GitHub Release.</li>
+<li><strong>publish-wheel</strong>, gated by <code>if: needs.release-please.outputs.release_created == &#39;true&#39;</code>. Checks out with <code>submodules: recursive</code> (so <code>src/telemetry</code>, the FastAPI backend, is baked into the wheel, which a prior release shipped without), runs <code>uv build</code> to produce a wheel and an sdist, then <strong>smoke-tests the wheel</strong> before uploading: installs it with <code>--no-deps</code> into a scratch venv and asserts all five console scripts (<code>f1-strat</code>, <code>f1-sim</code>, <code>f1-arcade</code>, <code>f1-webapp</code>, <code>f1-eval</code>) resolve and their backing modules shipped. Only then does <code>gh release upload</code> attach the wheel and sdist.</li>
+<li><strong>sync-uv-lock</strong>, gated by <code>if: needs.release-please.outputs.prs_created == &#39;true&#39;</code>, so it runs every time release-please opens or updates the release PR (not only on merge). release-please bumps <code>pyproject.toml</code>&#39;s version but never <code>uv.lock</code>&#39;s own root <code>version</code> field, which would otherwise leave the next <code>uv sync --frozen</code> CI run red on the mismatch. This job checks out the release PR&#39;s branch, runs <code>uv lock</code>, and commits the re-locked <code>uv.lock</code> back onto that branch if it changed.</li>
+</ol>
+<pre><code class="language-yaml">jobs:
+  release-please:
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      prs_created: ${{ steps.release.outputs.prs_created }}
+      pr: ${{ steps.release.outputs.pr }}
+  publish-wheel:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == &#39;true&#39; }}
+  sync-uv-lock:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.prs_created == &#39;true&#39; }}
+</code></pre>
+<h3><code>.github/workflows/docs.yml</code></h3>
+<p>Triggered on push to <code>main</code> only when one of the following paths changes: <code>docs/**</code>, <code>scripts/prerender_docs.mjs</code>, or the workflow file itself.</p>
+<p>A single job stages <code>docs/</code> into <code>_site/</code>, installs <code>marked</code> via <code>npm install</code>, then runs <code>node scripts/prerender_docs.mjs docs _site</code> to render each <code>docs/pages/*.md</code> into a crawlable <code>/&lt;slug&gt;/index.html</code> and generate <code>sitemap.xml</code>, <code>llms-full.txt</code>, and <code>404.html</code>. After injecting the release version from <code>pyproject.toml</code> (replacing the <code>2.6.1</code> placeholder), it publishes <code>_site</code> to the <code>gh-pages</code> branch via <code>peaceiris/actions-gh-pages@v4</code>.</p>
+<p>Concurrency is scoped to <code>docs-${{ github.ref }}</code> with <code>cancel-in-progress: true</code>, so two consecutive pushes to <code>main</code> will not stack two deploys.</p>
+<p>See <a href="/docs-maintenance/">docs maintenance</a> for the site-specific details.</p>
+<h2>The release-please pipeline</h2>
+<p>A release goes through ten steps from the first commit to the published wheel.</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Dev as Developer
+    participant Repo as main branch
+    participant Bot as release-please
+    participant Rel as GitHub Release
+    participant Art as Wheel + sdist
+
+    Dev-&gt;&gt;Repo: push commits (feat / fix)
+    Repo-&gt;&gt;Bot: push trigger on main
+    Bot-&gt;&gt;Bot: read commits since last tag
+    Bot-&gt;&gt;Repo: open/update chore(main): release X.Y.Z PR
+    Bot-&gt;&gt;Repo: sync-uv-lock: re-lock uv.lock, push to the release PR branch
+    Dev-&gt;&gt;Repo: review and merge release PR
+    Repo-&gt;&gt;Bot: push trigger on main (again)
+    Bot-&gt;&gt;Rel: create tag vX.Y.Z + GitHub Release
+    Art-&gt;&gt;Art: uv build -&gt; dist/*.whl + dist/*.tar.gz, then smoke-test the wheel
+    Art-&gt;&gt;Rel: gh release upload vX.Y.Z dist/*
+    Rel--&gt;&gt;Dev: release page with artefacts attached
+</code></pre>
+<p>End users can then install directly from the release URL:</p>
+<pre><code class="language-bash">uv pip install \
+  https://github.com/VforVitorio/F1-StratLab/releases/download/vX.Y.Z/f1_strat_manager-X.Y.Z-py3-none-any.whl
+</code></pre>
+<p>Release cadence is event-driven, not calendar-driven. Releases happen whenever a bumpable commit lands on <code>main</code>.</p>
+<h2>Dependabot policy</h2>
+<table>
+<thead>
+<tr>
+<th>Ecosystem</th>
+<th>Cadence</th>
+<th>Open PR cap</th>
+<th>Ignored</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pip</code></td>
+<td>weekly, Monday 08:00 Europe/Madrid</td>
+<td>5</td>
+<td><code>torch</code>, <code>torchvision</code> (any bump); <code>transformers</code>, <code>numpy</code>, <code>pandas</code>, <code>scikit-learn</code>, <code>lightgbm</code>, <code>xgboost</code> (major bumps only)</td>
+</tr>
+<tr>
+<td><code>github-actions</code></td>
+<td>monthly</td>
+<td>3</td>
+<td>none</td>
+</tr>
+</tbody></table>
+<p>The ignore list exists for hard technical reasons:</p>
+<ul>
+<li><code>torch</code> and <code>torchvision</code> are routed through CUDA-specific indexes (<code>[tool.uv.sources]</code>). Any automatic bump would invalidate the <code>cu128</code> wheel routing on Windows/Linux.</li>
+<li><code>transformers</code> major bumps are blocked because the production model artefacts under <code>data/models/nlp/</code> are saved with tokeniser and config layouts that are not forward-compatible across major versions; bump only alongside re-training the affected notebooks (N17-N24).</li>
+<li><code>numpy</code>, <code>pandas</code>, <code>scikit-learn</code>, <code>lightgbm</code>, <code>xgboost</code> block major bumps only (minor/patch flow through normally): their <code>2.x</code>/<code>3.x</code> releases have historically removed APIs the project relies on (e.g. <code>numpy</code> 2.0 dropped <code>np.bool_</code> aliases, <code>pandas</code> 3.0 removes several <code>DataFrame</code> methods). <code>tests/infra/test_dep_imports.py</code> exercises the relied-on surface so silent breakage is caught even on allowed bumps.</li>
+</ul>
+<h2>Documentation deployment</h2>
+<p>The docs site at <a href="https://docs.f1stratlab.com/">docs.f1stratlab.com</a> is a React SPA (plain <code>React.createElement</code>, no build step) served from the <code>docs/</code> directory and deployed to the <code>gh-pages</code> branch by <code>docs.yml</code>.</p>
+<h3>The Pages source-mode trap</h3>
+<p>GitHub Pages can read its content either from a workflow artefact or from a branch. F1 StratLab uses the branch mode pointing at <code>gh-pages</code> because <code>peaceiris/actions-gh-pages</code> pushes to that branch directly. If a future docs deploy succeeds in CI but the live site shows stale content, check this setting first:</p>
+<pre><code class="language-bash">gh api -X PUT repos/VforVitorio/F1-StratLab/pages \
+  -F build_type=legacy \
+  -f &#39;source[branch]=gh-pages&#39; \
+  -f &#39;source[path]=/&#39;
+</code></pre>
+<h2>Repository settings that make this work</h2>
+<ul>
+<li><strong>Allow GitHub Actions to create and approve pull requests.</strong> Required for release-please to open release PRs.</li>
+<li><strong>Allow auto-merge on the repository.</strong> Required for <code>gh pr merge --auto</code> to be a valid option.</li>
+<li><strong>GitHub Pages source = <code>gh-pages</code> branch.</strong> Required for the docs site to publish.</li>
+<li><strong>Branch protection on <code>main</code> and <code>dev</code>.</strong> Required to ensure CI checks pass before merge.</li>
+</ul>
+<p>The release-please job runs on the built-in <code>GITHUB_TOKEN</code>, not a repository-secret PAT. An earlier setup used a <code>RELEASE_PLEASE_TOKEN</code> fine-grained PAT, but <code>main</code> carries no required status checks on the release PR, so the PAT bought nothing and an expired one silently broke the job (a stale-but-truthy secret does not fall back to <code>GITHUB_TOKEN</code>). If a future deploy needs the release PR itself to trigger CI checks, reintroducing a PAT is the fix; until then, none is configured.</p>
+<h2>Contributor checklist</h2>
+<p>Before opening a PR, run the same commands CI runs:</p>
+<pre><code class="language-bash">uv run pytest -v
+uvx ruff check . &amp;&amp; uvx ruff format --check .
+uv run mypy src/rag/
+</code></pre>
+<p><code>lint</code> uses <code>uvx</code> (ephemeral tool run, no <code>uv sync</code>), not <code>uv run</code>, matching the actual CI job saves a needless full-environment sync just to check style.</p>
+<p>Once the PR is open and green, target <code>dev</code> (see &quot;Branching strategy&quot; above: <code>main</code> is release-only) and queue it for auto-merge:</p>
+<pre><code class="language-bash">gh pr create --base dev --title &quot;feat(arcade): live telemetry chart&quot; --body &quot;...&quot;
+gh pr merge &lt;num&gt; --auto --merge --body &quot;&quot;
+</code></pre>
+<p>The repo does not squash merges (release-please relies on individual commit messages), so use <code>--merge</code>, not <code>--squash</code>. Pass <code>--body &quot;&quot;</code>: <code>gh pr merge --merge</code> otherwise puts the PR title into the merge commit&#39;s body, and release-please parses that body too, a Conventional-Commit PR title there duplicates the CHANGELOG entry the branch commit already produced (hit in production on release 1.10.5).</p>
+<h2>Failure modes and recovery</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Command to fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>release-please PR not opened after <code>feat:</code> merge</td>
+<td>Workflow permissions too low</td>
+<td><code>gh api -X PUT repos/.../actions/permissions/workflow -F default_workflow_permissions=write</code></td>
+</tr>
+<tr>
+<td>Wheel not attached to a freshly cut release</td>
+<td><code>publish-wheel</code> did not run</td>
+<td><code>gh workflow run release-please.yml --ref main</code></td>
+</tr>
+<tr>
+<td>Docs CI green but site shows stale content</td>
+<td>Pages source set to <code>workflow</code> instead of <code>gh-pages</code></td>
+<td><code>gh api -X PUT repos/.../pages -F build_type=legacy -f &#39;source[branch]=gh-pages&#39;</code></td>
+</tr>
+<tr>
+<td>Dependabot bumped <code>torch</code> and broke CUDA wheel routing</td>
+<td>Ignore rule missing from <code>dependabot.yml</code></td>
+<td>Close the PR and re-add the ignore entry</td>
+</tr>
+<tr>
+<td>Need to roll back a bad release</td>
+<td>Delete the tag and the Release</td>
+<td><code>gh release delete vX.Y.Z --yes --cleanup-tag</code></td>
+</tr>
+</tbody></table>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

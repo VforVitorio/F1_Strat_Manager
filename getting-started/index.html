@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Getting started · F1 StratLab docs</title>
+  <meta name="description" content="Three ways to install — wheel, repo clone, Docker." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/getting-started/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/getting-started/" />
+  <meta property="og:title" content="Getting started · F1 StratLab docs" />
+  <meta property="og:description" content="Three ways to install — wheel, repo clone, Docker." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/getting-started/" />
+  <meta name="twitter:title" content="Getting started · F1 StratLab docs" />
+  <meta name="twitter:description" content="Three ways to install — wheel, repo clone, Docker." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Getting started",
+  "name": "Getting started",
+  "description": "Three ways to install — wheel, repo clone, Docker.",
+  "url": "https://docs.f1stratlab.com/getting-started/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Getting started",
+      "item": "https://docs.f1stratlab.com/getting-started/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Getting started</h1>
+<p><strong>F1 StratLab is an open-source (Apache-2.0) multi-agent AI system for real-time Formula 1 race strategy</strong>, combining seven ML models, six LangGraph sub-agents and one orchestrator. This page covers installation, for what it does and how it is wired, see the <a href="/architecture/">architecture overview</a>.</p>
+<p>Three ways to get F1 StratLab running locally, from fastest to deepest.</p>
+<p align="center">
+  <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab Arcade replay in action"></video>
+  <br/>
+  <sub>The <code>f1-arcade</code> replay: a 2D race with the strategy dashboard and live telemetry, all from one command.</sub>
+</p>
+
+<h2>1. Install the latest wheel</h2>
+<p>The quickest path. Installs the latest release into the current environment without cloning the repo.</p>
+<pre><code class="language-bash">uv pip install https://github.com/VforVitorio/F1-StratLab/releases/download/v2.6.1/f1_strat_manager-2.6.1-py3-none-any.whl
+</code></pre>
+<p>After install, seven console entry points are available:</p>
+<pre><code class="language-bash">f1-strat       # interactive launcher (recommended starting point)
+f1-sim         # headless CLI simulation against a saved race
+f1-arcade      # pyglet 2D replay plus the two PITWALL windows
+f1-webapp      # post-race web app (wraps `docker compose up`)
+f1-prefetch    # fill the arcade replay cache ahead of time
+f1-eval        # regenerate the evaluation reports (registry, calibration, hygiene, projection, ...)
+f1-pitwall     # attach the two PITWALL windows to an arcade already running
+</code></pre>
+<p>The first four are what a new user actually runs.</p>
+<p><code>f1-prefetch</code> exists because the first launch of any given race builds its replay telemetry, which takes minutes. It runs the same preparation the arcade menu runs, for a whole season or a rounds spec, so the wait can be paid in advance rather than while somebody is waiting to watch:</p>
+<pre><code class="language-bash">f1-prefetch --year 2025                   # the whole calendar
+f1-prefetch --year 2025 --rounds 1,3,5-8  # commas and ranges
+f1-prefetch --year 2025 --with-radio      # also fetch the team radio the agents read
+</code></pre>
+<p>Rounds already cached are skipped without being loaded, so re-running it costs one filesystem check per round.</p>
+<p><code>f1-eval</code> and <code>f1-pitwall</code> are developer tools rather than end-user surfaces. The first writes versioned markdown and JSON reports under <code>documents/eval_reports/</code> (<code>f1-eval registry</code>, <code>f1-eval calibration</code>, <code>f1-eval all</code>, ...); the second opens the PITWALL windows against an arcade process that is already running, which is how the UI is developed without restarting the replay.</p>
+<p>First boot triggers a one-time download of the cached models and reference data into <code>~/.f1-strat/</code>. Subsequent runs are offline.</p>
+<h2>2. Clone the repo for development</h2>
+<p>To edit the code, run the notebooks or contribute back:</p>
+<pre><code class="language-bash">git clone https://github.com/VforVitorio/F1-StratLab.git
+cd F1-StratLab
+uv sync --all-extras
+</code></pre>
+<p><code>uv sync</code> reads <code>pyproject.toml</code>, resolves the lockfile and pulls the CUDA-routed PyTorch wheel automatically <strong>on Windows</strong>. Everything else, Linux and macOS included, resolves to the CPU wheel: CI runners and CPU-only Linux boxes were downloading about 5 GB of unused CUDA libraries, so the markers were narrowed deliberately (<code>pyproject.toml</code>, #251). A Linux GPU box opts back in by editing those markers.</p>
+<p>Run the simulation against a saved race:</p>
+<pre><code class="language-bash">uv run scripts/run_simulation_cli.py Sakhir NOR McLaren --no-llm
+</code></pre>
+<p>Drop <code>--no-llm</code> once an LLM provider is configured (LM Studio at <code>http://localhost:1234/v1</code> or <code>OPENAI_API_KEY</code> in <code>.env</code>).</p>
+<h2>3. Docker</h2>
+<p>For a reproducible all-in-one setup, see <a href="/setup/">Setup and deployment</a> for the Docker compose recipe that boots the FastAPI backend and the React web app in one command. Qdrant runs on-disk inside the backend process rather than as its own container, so there is nothing extra to start.</p>
+<h2>Where to next</h2>
+<ul>
+<li>New to the architecture? Start at <a href="/architecture/">Architecture overview</a>.</li>
+<li>Want to see the agents in action? Open <a href="/arcade-quick-start/">Arcade quick start</a>.</li>
+<li>Looking for an API to call from external code? Jump to <a href="/agents-api/">Multi-agent system</a>.</li>
+<li>Curious about the numbers in the thesis? See <a href="/thesis/">Thesis results</a>.</li>
+</ul>
+<h2>FAQ</h2>
+<h3>Do I need a GPU?</h3>
+<p>No, but it helps. <code>uv sync</code> pulls the CUDA-routed wheel <strong>on Windows only</strong>; Linux and macOS get the CPU build, so out of the box the stack runs on CPU almost everywhere. A GPU mainly accelerates Whisper radio transcription and the TCN tire model, the benchmark latencies on the <a href="/thesis/">thesis results</a> page (Whisper 233.9 ms, NLP pipeline 42.1 ms) are GPU figures; on CPU it is slower but fully functional.</p>
+<h3>Why is the first run slow?</h3>
+<p>The first boot triggers a one-time download of the cached models and reference data into <code>~/.f1-strat/</code>; subsequent runs are offline. The simulation also pre-warms Whisper and the agents before lap 1, so a cold start takes a while, pass <code>--no-llm</code> for a fast headless run.</p>
+<h3>Which LLM providers are supported?</h3>
+<p>OpenAI and LM Studio, the system is provider-agnostic and does not depend on a single vendor. Set <code>F1_LLM_PROVIDER=openai</code> to use the OpenAI API; the default is a local LM Studio server at <code>http://localhost:1234/v1</code>.</p>
+<h3>Do I need an API key?</h3>
+<p>Only for the LLM synthesis layer. Run with <code>--no-llm</code> and the ML models plus Monte Carlo simulation still produce a recommendation with no key required. LM Studio needs no key; OpenAI needs <code>OPENAI_API_KEY</code> in <code>.env</code>.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

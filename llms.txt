@@ -1,0 +1,36 @@
+# F1 StratLab
+
+> F1 StratLab is an open-source (Apache-2.0) multi-agent AI system that turns public Formula 1 telemetry (FastF1, OpenF1) and FIA regulations into real-time race-strategy recommendations. It combines seven ML predictors (lap-time delta, tire degradation, overtake, safety car, pit duration, undercut, circuit clustering), an NLP pipeline over team radio, a RAG layer over FIA rules, and a LangGraph orchestrator (N31). Built as a Final-Degree Project (TFG) by Víctor Vega Sobral for the 2022–2025 regulation era. Three delivery surfaces from one codebase: a headless CLI, a PySide6 arcade (2D replay + dashboards), and a Streamlit web app. The pages below link to the raw Markdown so AI systems can read the prose directly.
+
+## Start here
+- [Welcome](https://docs.f1stratlab.com/pages/home.md): What F1 StratLab is and how the layers connect.
+- [Getting started](https://docs.f1stratlab.com/pages/getting-started.md): Three ways to install — wheel, repo clone, Docker.
+- [Setup & deployment](https://docs.f1stratlab.com/pages/setup.md): Docker, local dev, environment variables.
+
+## Architecture
+- [How it is wired](https://docs.f1stratlab.com/pages/architecture.md): End-to-end tour of the codebase with the lap_state contract.
+- [Multi-agent system](https://docs.f1stratlab.com/pages/multi-agent.md): Sub-agents N25–N30 and orchestrator N31 (MoE routing, Monte Carlo, LLM synthesis).
+- [Race replay engine](https://docs.f1stratlab.com/pages/simulation.md): RaceReplayEngine, RaceStateManager, the lap_state schema.
+- [Agents API reference](https://docs.f1stratlab.com/pages/agents-api.md): Entry points, feature vectors, and Pydantic output schemas.
+
+## Surfaces
+- [Backend API](https://docs.f1stratlab.com/pages/backend-api.md): FastAPI routers + FastMCP — telemetry, chat, voice, strategy.
+- [Streamlit frontend (legacy)](https://docs.f1stratlab.com/pages/streamlit.md): Retired Streamlit app, kept for historical reference; the React web app replaced it.
+- [Arcade quick start](https://docs.f1stratlab.com/pages/arcade-quick-start.md): One-command launch of the three-window arcade.
+- [Dashboard architecture (legacy)](https://docs.f1stratlab.com/pages/arcade-dashboard.md): Retired PySide6 dashboard, kept for historical reference; PITWALL replaced it.
+- [PITWALL windows](https://docs.f1stratlab.com/pages/pitwall.md): The React strategy surfaces, two pywebview windows sharing one broadcast client.
+- [Arcade strategy pipeline](https://docs.f1stratlab.com/pages/arcade-strategy-pipeline.md): Why the arcade duplicates the N31 orchestrator body.
+- [Driver colors](https://docs.f1stratlab.com/pages/driver-colors.md): Year-aware color palette covering 2023–2025 seasons.
+
+## Results & development
+- [Thesis results](https://docs.f1stratlab.com/pages/thesis.md): Headline benchmark metrics for the TFG (chapter 5).
+- [Development overview](https://docs.f1stratlab.com/pages/development.md): Branch model, conventional commits, contribution workflow.
+- [CI/CD pipeline](https://docs.f1stratlab.com/pages/ci-cd.md): GitHub Actions, release-please automation, Dependabot.
+- [Docs maintenance](https://docs.f1stratlab.com/pages/docs-maintenance.md): How this documentation site is built and deployed.
+
+## Optional
+- [Meet the author](https://docs.f1stratlab.com/pages/meet-the-author.md): About Víctor Vega Sobral and how to reach him.
+- [Source code (GitHub)](https://github.com/VforVitorio/F1-StratLab): Apache-2.0 repository, releases, and issues.
+- [DeepWiki](https://deepwiki.com/VforVitorio/F1-StratLab): Auto-generated per-file technical wiki.
+- [Hugging Face dataset](https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset): Data and models.
+- [Project landing](https://f1stratlab.com/): Non-technical project overview.

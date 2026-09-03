@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Setup &amp; deployment · F1 StratLab docs</title>
+  <meta name="description" content="Docker, local dev, environment variables." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/setup/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/setup/" />
+  <meta property="og:title" content="Setup &amp; deployment · F1 StratLab docs" />
+  <meta property="og:description" content="Docker, local dev, environment variables." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/setup/" />
+  <meta name="twitter:title" content="Setup &amp; deployment · F1 StratLab docs" />
+  <meta name="twitter:description" content="Docker, local dev, environment variables." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Setup & deployment",
+  "name": "Setup & deployment",
+  "description": "Docker, local dev, environment variables.",
+  "url": "https://docs.f1stratlab.com/setup/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Setup & deployment",
+      "item": "https://docs.f1stratlab.com/setup/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Setup and Deployment</h1>
+<h2>Prerequisites</h2>
+<ul>
+<li>Python 3.10+</li>
+<li>Node.js 18+ (for the React web app build / dev server)</li>
+<li>Docker and Docker Compose (for containerized deployment)</li>
+<li>LM Studio or OpenAI API key (for LLM-powered agents)</li>
+</ul>
+<h2>Local development</h2>
+<h3>1. Clone and install</h3>
+<pre><code class="language-bash">git clone https://github.com/VforVitorio/F1-StratLab.git
+cd F1-StratLab
+git submodule update --init --recursive   # src/telemetry/ is a submodule
+uv sync --all-extras
+</code></pre>
+<p><code>uv</code> is the project&#39;s package manager (the lockfile <code>uv.lock</code> is committed and CI runs <code>uv sync --frozen</code>); a bare <code>pip install -e .</code> will not resolve the pinned, CUDA-routed PyTorch wheel the way <code>uv sync</code> does.</p>
+<h3>2. Data</h3>
+<p>The project requires pre-computed data artifacts. Download from HuggingFace:</p>
+<pre><code>https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset
+</code></pre>
+<p>Place contents under <code>data/</code> at the repo root. Expected layout:</p>
+<pre><code>data/
+  raw/2025/&lt;GP&gt;/laps.parquet
+  processed/laps_featured_2025.parquet
+  models/lap_time/                 -- N06 XGBoost
+  models/tire_degradation/         -- N09/N10 TireDegTCN
+  models/overtake_probability/     -- N12 LightGBM
+  models/safety_car_probability/   -- N14 LightGBM
+  models/pit_prediction/           -- N15 HistGBT + N16 undercut
+  models/nlp/                      -- pipeline_config_v1.json
+  models/agents/                   -- agent config JSONs
+  rag/                             -- Qdrant index
+  tire_compounds_by_race.json
+</code></pre>
+<h3>3. Environment variables</h3>
+<p>Create a <code>.env</code> file at the repo root:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>BACKEND_URL</code></td>
+<td>no</td>
+<td><code>http://localhost:8000</code></td>
+<td>Backend URL, read by the frontend</td>
+</tr>
+<tr>
+<td><code>FRONTEND_URL</code></td>
+<td>no</td>
+<td><code>http://localhost:8501</code></td>
+<td>Frontend URL, read by the backend for CORS</td>
+</tr>
+<tr>
+<td><code>F1_LLM_PROVIDER</code></td>
+<td>no</td>
+<td><code>lmstudio</code></td>
+<td>Set to <code>openai</code> for OpenAI API</td>
+</tr>
+<tr>
+<td><code>OPENAI_API_KEY</code></td>
+<td>if provider=openai</td>
+<td>,</td>
+<td>OpenAI API key</td>
+</tr>
+<tr>
+<td><code>F1_STRAT_DATA_ROOT</code></td>
+<td>no</td>
+<td>repo <code>data/</code></td>
+<td>Override data directory</td>
+</tr>
+<tr>
+<td><code>F1_API_KEY</code></td>
+<td>no</td>
+<td>unset</td>
+<td>Shared secret for the <code>X-API-Key</code> header. Unset = unauthenticated (safe only on a loopback bind, see <code>F1_HOST</code> below)</td>
+</tr>
+<tr>
+<td><code>F1_HOST</code></td>
+<td>no</td>
+<td><code>127.0.0.1</code></td>
+<td>The host uvicorn binds to. A non-loopback bind (e.g. <code>0.0.0.0</code>) with <code>F1_API_KEY</code> unset refuses to start</td>
+</tr>
+<tr>
+<td><code>F1_MCP_ENABLED</code></td>
+<td>no</td>
+<td><code>false</code></td>
+<td>Mount the external <code>/mcp</code> Streamable-HTTP endpoint. The chat pipeline uses the same tools in-process regardless</td>
+</tr>
+<tr>
+<td><code>F1_CHAT_MAX_TOKENS</code></td>
+<td>no</td>
+<td><code>2048</code></td>
+<td>Server-side cap on completion tokens per chat turn</td>
+</tr>
+<tr>
+<td><code>F1_RATE_LIMIT_OFF</code></td>
+<td>no</td>
+<td>unset</td>
+<td>Set to <code>1</code> to disable the per-route rate limiter (load tests only)</td>
+</tr>
+</tbody></table>
+<p>See <a href="/backend-api/">Backend API reference → Authentication</a> for how <code>F1_API_KEY</code> and <code>F1_HOST</code> interact.</p>
+<h3>4. Run the backend</h3>
+<pre><code class="language-bash">cd src/telemetry
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+</code></pre>
+<p>Verify at <code>http://localhost:8000/docs</code> (Swagger UI).</p>
+<blockquote>
+<p><strong>Bind to loopback, not <code>0.0.0.0</code>.</strong> <code>enforce_startup_security()</code> refuses to
+start a keyless backend on a non-loopback address, but it reads the <code>F1_HOST</code>
+setting, not the address uvicorn was actually given on the command line. So
+<code>--host 0.0.0.0</code> with <code>F1_HOST</code> left at its default sails past the guard and
+puts an unauthenticated API on the network. Binding wider requires setting
+<code>F1_HOST</code> to match and giving it an <code>F1_API_KEY</code>.</p>
+</blockquote>
+<h3>5. Run the web app</h3>
+<pre><code class="language-bash">cd src/telemetry/webapp
+npm install &amp;&amp; npm run dev   # Vite dev server, proxies /api to :8000
+</code></pre>
+<p>Open <code>http://localhost:5173</code>. The production path serves the built SPA
+through nginx on <code>:8501</code> (see Docker below), launched with <code>f1-webapp</code>.</p>
+<h3>6. LM Studio (for LLM agents)</h3>
+<p>Start LM Studio with a model loaded, serving on <code>http://localhost:1234/v1</code>. The orchestrator defaults to this endpoint. Sub-agents use <code>gpt-4.1-mini</code>; the orchestrator uses <code>gpt-5.4-mini</code>.</p>
+<h2>Docker deployment</h2>
+<pre><code class="language-mermaid">graph TD
+    U[browser] --&gt;|&quot;:8501&quot;| NG
+    subgraph net[&quot;f1_network&quot;]
+        subgraph wsvc[&quot;webapp service&quot;]
+            NG[nginx&lt;br/&gt;serves the built SPA&lt;br/&gt;and reverse-proxies /api]
+        end
+        subgraph bsvc[&quot;backend service&quot;]
+            API[&quot;uvicorn backend.main:app&lt;br/&gt;:8000, --reload&quot;]
+        end
+        NG --&gt;|&quot;/api -&gt; backend:8000&quot;| API
+    end
+    API --&gt;|F1_LLM_PROVIDER| LLM[[&quot;OpenAI, or LM Studio&lt;br/&gt;on the host&quot;]]
+
+    V1[&quot;./src:/app/src :ro&quot;] --&gt; API
+    V2[&quot;./data:/app/data :ro&quot;] --&gt; API
+    V3[&quot;./data/rag :rw&lt;br/&gt;Qdrant writes its on-disk index here&quot;] --&gt; API
+    V4[&quot;backend_cache:/root/.cache&lt;br/&gt;named volume, survives a rebuild&quot;] --&gt; API
+</code></pre>
+<p>Two things are worth reading off that. <strong>Qdrant is not a service:</strong> it runs on-disk inside the backend process, which is why <code>data/rag</code> is the one mount that is read-write. And the browser only ever talks to <code>:8501</code>; <code>/api</code> is reverse-proxied, so there is no second origin and no CORS to configure.</p>
+<p><code>f1-webapp</code> wraps <code>docker compose up</code> on this file. <code>F1_STRAT_DATA_ROOT=/app/data</code> is what makes the container agree with a local checkout about where data lives.</p>
+<p>Two equivalent compose files exist, one at the repo root and one path-relative copy inside the submodule, both already mount volumes for live code reload and data access, so pick whichever working directory is convenient.</p>
+<h3>Root <code>docker-compose.yml</code></h3>
+<pre><code class="language-bash">docker-compose up --build
+</code></pre>
+<p>Services:</p>
+<ul>
+<li><strong>backend</strong>: FastAPI on port 8000. Volumes: <code>./src:/app/src:ro</code> (read-only source, agents import from here), <code>./data:/app/data:ro</code> (read-only data), <code>./data/rag:/app/data/rag:rw</code> (writable RAG index, N30 may write here).</li>
+<li><strong>webapp</strong>: React SPA served by nginx on port 8501; <code>/api</code> is reverse-proxied to <code>backend</code>, so the browser stays same-origin. Depends on <code>backend</code>.</li>
+</ul>
+<p><code>uv run f1-webapp</code> wraps this compose invocation and prints the URLs.</p>
+<p>The <code>:ro</code> mounts mean agents must handle <code>OSError</code> / <code>PermissionError</code> gracefully when they attempt to create export directories inside the container.</p>
+<h3>Telemetry <code>docker-compose.yml</code></h3>
+<pre><code class="language-bash">cd src/telemetry
+docker-compose up --build
+</code></pre>
+<p>Same two services, with paths relative to <code>src/telemetry/</code> instead of the repo root. The cutover (#43) is done: the <strong>webapp</strong> owns <code>:8501</code> in both compose files and the Streamlit service is gone (the legacy Streamlit app was later removed from the repo entirely, #551).</p>
+<h3>Webapp Dockerfile (multi-stage)</h3>
+<p>The webapp Dockerfile has two stages:</p>
+<ol>
+<li><strong>node-builder</strong>: <code>npm ci &amp;&amp; npm run build</code> of the Vite + React SPA</li>
+<li><strong>nginx</strong>: serves the built assets and reverse-proxies <code>/api</code> to the backend service</li>
+</ol>
+<h3>Backend Dockerfile</h3>
+<p>The backend Dockerfile installs <code>setuptools</code> and <code>wheel</code> first (needed by <code>openai-whisper</code> for <code>pkg_resources</code>), then installs all requirements with <code>--no-build-isolation</code>.</p>
+<h2>Building the RAG index</h2>
+<p>Before using the RAG Agent (N30), build the Qdrant vector index:</p>
+<pre><code class="language-bash">python scripts/build_rag_index.py
+</code></pre>
+<p>This processes FIA Sporting Regulations PDFs and stores embeddings in <code>data/rag/</code>.</p>
+<h2>Network architecture (Docker)</h2>
+<pre><code>                    f1_network (bridge)
+                    |                |
+    webapp:8501  ---+                +-- backend:8000
+    (nginx + SPA)   |                |   (FastAPI + uvicorn)
+                    +-- LM Studio --+
+                        :1234 (host)
+</code></pre>
+<p>The webapp&#39;s nginx reverse-proxies <code>/api</code> to <code>http://backend:8000</code> (Docker service name), so the browser stays same-origin. LM Studio runs on the host machine and is accessed at <code>http://host.docker.internal:1234/v1</code> or via host networking.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Backend API · F1 StratLab docs</title>
+  <meta name="description" content="FastAPI routers, telemetry, chat, voice, strategy." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/backend-api/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/backend-api/" />
+  <meta property="og:title" content="Backend API · F1 StratLab docs" />
+  <meta property="og:description" content="FastAPI routers, telemetry, chat, voice, strategy." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/backend-api/" />
+  <meta name="twitter:title" content="Backend API · F1 StratLab docs" />
+  <meta name="twitter:description" content="FastAPI routers, telemetry, chat, voice, strategy." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Backend API",
+  "name": "Backend API",
+  "description": "FastAPI routers, telemetry, chat, voice, strategy.",
+  "url": "https://docs.f1stratlab.com/backend-api/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Backend API",
+      "item": "https://docs.f1stratlab.com/backend-api/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Backend API Reference (FastAPI)</h1>
+<h2>Overview</h2>
+<p>The backend is a FastAPI application at <code>src/telemetry/backend/</code>. It serves telemetry data, driver comparisons, chat (LM Studio proxy), and the N25-N31 strategy agent pipeline. All endpoints are prefixed with <code>/api/v1</code>.</p>
+<p>Entry point: <code>backend/main.py</code>, creates the FastAPI app and registers all routers.</p>
+<h2>Router map</h2>
+<p>There is no <code>auth</code> router. Authentication is a single ASGI middleware wrapping every router (see below), not a mounted endpoint set.</p>
+<table>
+<thead>
+<tr>
+<th>Router</th>
+<th>Prefix</th>
+<th>Tags</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>telemetry</td>
+<td><code>/api/v1/telemetry</code></td>
+<td>telemetry</td>
+<td><code>api/v1/endpoints/telemetry.py</code></td>
+</tr>
+<tr>
+<td>circuit_domination</td>
+<td><code>/api/v1/circuit-domination</code></td>
+<td>telemetry</td>
+<td><code>api/v1/endpoints/circuit_domination.py</code></td>
+</tr>
+<tr>
+<td>comparison</td>
+<td><code>/api/v1/comparison</code></td>
+<td>comparison</td>
+<td><code>api/v1/endpoints/comparison.py</code></td>
+</tr>
+<tr>
+<td>chat</td>
+<td><code>/api/v1/chat</code></td>
+<td>chat</td>
+<td><code>api/v1/endpoints/chat.py</code></td>
+</tr>
+<tr>
+<td>strategy</td>
+<td><code>/api/v1/strategy</code></td>
+<td>strategy</td>
+<td><code>api/v1/endpoints/strategy.py</code></td>
+</tr>
+</tbody></table>
+<p>Two more mount points sit outside the router list:</p>
+<ul>
+<li><strong><code>GET /</code></strong> and <strong><code>GET /health</code></strong>, unauthenticated liveness endpoints, registered directly on the <code>FastAPI</code> app in <code>main.py</code>.</li>
+<li><strong><code>/mcp</code></strong>, the FastMCP Streamable-HTTP server, mounted only when <code>F1_MCP_ENABLED=true</code> (off by default). The chat pipeline reaches the same tools in-process regardless of this flag, so leaving it unmounted removes an open network surface, not a feature. See &quot;Authentication&quot; and &quot;MCP-Driven Tool Routing&quot; below.</li>
+</ul>
+<h2>Authentication</h2>
+<p>Every router (and the <code>/mcp</code> mount, when enabled) sits behind a single shared-secret ASGI middleware, <code>ApiKeyMiddleware</code> (<code>backend/core/auth.py</code>, Security A1 / issue #224). It is intentionally pure ASGI rather than <code>BaseHTTPMiddleware</code>, because the latter buffers the whole response body and would break the SSE streams (<code>/chat/tool-message-stream</code>, <code>/simulate</code>).</p>
+<ul>
+<li><strong>Header</strong>: <code>X-API-Key</code>, compared against the <code>F1_API_KEY</code> env var with <code>hmac.compare_digest</code>.</li>
+<li><strong>Open paths</strong>: <code>/</code> and <code>/health</code> always pass unauthenticated (uptime probes). <code>OPTIONS</code> (CORS preflight) always passes.</li>
+<li><strong>Safe-by-default when unset</strong>: if <code>F1_API_KEY</code> is not set, every other request also passes, this is the local-dev default. The dangerous combination is a non-loopback bind (<code>F1_HOST</code> other than <code>127.0.0.1</code>/<code>localhost</code>/<code>::1</code>) with no key set: <code>enforce_startup_security()</code> refuses to boot in that case rather than come up open on the network.</li>
+<li><strong>WebSocket</strong>: gated the same way; an unauthorized WS handshake gets a policy-violation close (code 1008) instead of a 401 body.</li>
+</ul>
+<p>This means <code>F1_API_KEY</code> and <code>F1_HOST</code> (see <a href="/setup/">Setup and deployment</a>) are the two env vars that decide whether the backend is safe to expose beyond localhost.</p>
+<h2>Rate limiting</h2>
+<p>Every prediction and strategy endpoint (and <code>/simulate</code>) sits behind an in-process token-bucket limiter (<code>backend/core/rate_limit.py</code>) keyed on client IP. No external dependency, a stdlib bucket is enough for a single-process local backend. Buckets are per-route, so hammering <code>/pace</code> does not exhaust the <code>/recommend</code> bucket. The four chat routes carry buckets too (capacity 10, 20/min), so the chat surface is metered as well.</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Burst capacity</th>
+<th>Refill rate</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/pace</code>, <code>/tire</code>, <code>/situation</code>, <code>/pit</code>, <code>/radio</code></td>
+<td>20</td>
+<td>60/min</td>
+</tr>
+<tr>
+<td><code>/pace-range</code>, <code>/tire-range</code>, <code>/rag</code></td>
+<td>5</td>
+<td>10/min</td>
+</tr>
+<tr>
+<td><code>/recommend</code></td>
+<td>5</td>
+<td>10/min</td>
+</tr>
+<tr>
+<td><code>/simulate</code></td>
+<td>3</td>
+<td>3/min</td>
+</tr>
+</tbody></table>
+<p>An exhausted bucket returns <code>429</code> with a <code>Retry-After</code> hint. Set <code>F1_RATE_LIMIT_OFF=1</code> to disable limiting entirely (load tests, benchmarking). A token is consumed only at request admission, so a long-lived SSE stream (<code>/simulate</code>, <code>/chat/tool-message-stream</code>) is metered once and then runs unmetered.</p>
+<h2>Telemetry endpoints</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/v1/telemetry/data</code></td>
+<td>Fetch telemetry for year/gp/session/drivers</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/telemetry/gps</code></td>
+<td>List available GPs for a year</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/telemetry/sessions</code></td>
+<td>List sessions for a GP</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/telemetry/drivers</code></td>
+<td>List drivers for a session</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/telemetry/race-data</code></td>
+<td>Full-field featured-parquet frame for a GP (positions, lap times, inter-driver gaps), optionally filtered to driver codes</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/telemetry/prewarm</code></td>
+<td>Warm the session cache in the background; returns 202 immediately</td>
+</tr>
+</tbody></table>
+<p><strong>Query parameters</strong> vary by endpoint. <code>year</code> (int) and <code>gp</code> (str) are common to all of them; <code>session</code> (str) applies to the lap-time and telemetry endpoints; <code>drivers</code> (comma-separated) to the comparison ones. <code>/race-data</code> takes <code>driver</code>, <strong>singular</strong>, and treats it as an optional filter over the full-field frame.</p>
+<p><code>/race-data</code> computes the inter-driver gap columns (<code>GapToCarAhead</code>, <code>GapToCarBehind</code>) over the whole field first, then applies the optional <code>driver</code> filter afterwards: a single-car frame has no second car to measure a gap against, so filtering before computing the gaps used to return <code>null</code> on every lap whenever a <code>driver</code> was supplied. The gap-annotated frame is cached per <code>(year, gp)</code>, since it is a pure function of the static featured parquet.</p>
+<h2>Comparison endpoints</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/v1/comparison/compare</code></td>
+<td>Compare fastest-lap telemetry between two drivers</td>
+</tr>
+</tbody></table>
+<h2>Chat endpoints</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/v1/chat/health</code></td>
+<td>LM Studio health check</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/chat/models</code></td>
+<td>List available LM Studio models</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/chat/status</code></td>
+<td>Current backend stage for a <code>request_id</code> (smart-spinner poll)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/chat/message</code></td>
+<td>Non-streaming chat message (raw LLM, no tools)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/chat/stream</code></td>
+<td>Streaming chat response (raw LLM, no tools)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/chat/tool-message</code></td>
+<td>Tool-aware chat -- JSON response</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/chat/tool-message-stream</code></td>
+<td>Tool-aware chat -- Server-Sent Events stream</td>
+</tr>
+</tbody></table>
+<p>Chat proxies the configured LLM provider (LM Studio local or OpenAI cloud, switchable via <code>F1_LLM_PROVIDER</code>). Tool-aware endpoints route through the <strong>MCP-driven <code>chat_engine</code></strong> (see below); raw <code>/message</code> and <code>/stream</code> skip the tool layer and return whatever the model writes.</p>
+<h3>MCP-Driven Tool Routing</h3>
+<p><code>/chat/tool-message</code> and <code>/chat/tool-message-stream</code> are powered by <code>services/chatbot/chat_engine.py</code>. The engine pulls every tool from the FastMCP server (<code>backend.mcp_tools.mcp</code>) via the in-process <code>fastmcp.Client</code>, exposes them to the LLM as OpenAI-style <code>tools=[...]</code> schemas, and dispatches the model&#39;s chosen tool back through the MCP client. There is <strong>no parallel keyword/regex registry</strong> anymore -- tool definitions live in one place and the LLM sees the same schemas an external MCP client (Claude Desktop, Cursor) would see when it dials <code>/mcp</code>.</p>
+<p>The flow per request:</p>
+<ol>
+<li><strong>Pull tool catalog</strong> -- <code>mcp_bridge.list_openai_tools()</code> returns every Phase 1 <code>@mcp.tool</code> plus the Phase 2 telemetry tools auto-mounted from the FastAPI OpenAPI spec, formatted as <code>{&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {...}}</code>.</li>
+<li><strong>First LLM call</strong> -- with <code>tools=</code> populated. The model decides whether to call a tool or reply in plain text. Casual greetings, meta questions (&quot;what tools do you have?&quot;), and general F1 knowledge are answered directly without dispatching.</li>
+<li><strong>Tool dispatch</strong> (only when the model returned a <code>tool_call</code>) -- <code>mcp_bridge.call_mcp_tool(name, args)</code> runs the tool through the FastMCP client and returns the structured data.</li>
+<li><strong><code>tool_result</code> SSE event</strong> -- the structured payload is wrapped in <code>{tool_name, display_type, data, summary}</code> and emitted so the frontend can render the right component (chart / metrics / strategy card / table / text).</li>
+<li><strong>Second LLM call</strong> -- without <code>tools=</code>, feeding the tool&#39;s output back as a <code>role=tool</code> message so the model summarises the data in the user&#39;s language.</li>
+</ol>
+<p>The streaming endpoint emits four SSE event types in order: <code>stage</code> (every checkpoint, also reflected in <code>/chat/status</code>), <code>tool_result</code> (rich payload), <code>token</code> (LLM text chunks), <code>done</code> (final marker with provider metadata).</p>
+<h3>Tool results and display hints</h3>
+<p>Each tool is mapped to a <code>DisplayType</code> hint via <code>TOOL_DISPLAY_MAP</code> (<code>models/tool_schemas.py</code>); the frontend&#39;s chat renderer chooses a component based on the hint:</p>
+<table>
+<thead>
+<tr>
+<th>DisplayType</th>
+<th>Used by</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>METRICS</code></td>
+<td><code>predict_pace</code>, <code>predict_situation</code></td>
+</tr>
+<tr>
+<td><code>STRATEGY_CARD</code></td>
+<td><code>predict_tire</code>, <code>predict_pit</code>, <code>recommend_strategy</code></td>
+</tr>
+<tr>
+<td><code>TABLE</code></td>
+<td><code>analyze_radio</code></td>
+</tr>
+<tr>
+<td><code>TEXT</code></td>
+<td><code>query_regulations</code>, <code>list_gps</code>, <code>list_drivers</code>, <code>get_lap_range</code></td>
+</tr>
+<tr>
+<td><code>CHART</code></td>
+<td><code>get_lap_times</code>, <code>get_telemetry</code>, <code>compare_drivers</code>, <code>get_race_data</code></td>
+</tr>
+</tbody></table>
+<p><code>chat_engine._trim_for_llm</code> caps long arrays before they are sent back to the LLM for summarisation; the unmodified payload still reaches the frontend on <code>tool_result.data</code> so charts retain the full series. The four telemetry tools are wired to <code>CHART</code> so the web app chat renders them as inline charts.</p>
+<h3>Tool risk tiers and the chat allowlist (Security A2, #224)</h3>
+<p><code>models/tool_schemas.py</code> classifies every dispatchable MCP tool into a <code>ToolRisk</code> tier: <code>READ_SAFE</code> (cheap, e.g. <code>predict_pace</code>), <code>READ_EXPENSIVE</code> (heavy but still read-only, e.g. <code>recommend_strategy</code>&#39;s 500-sample Monte Carlo, or <code>query_regulations</code>&#39;s RAG lookup), or <code>MUTATING</code> (writes/exports; none exist today). <code>CHAT_ALLOWED_TOOLS</code> is the default-deny set built from the first two tiers: a tool absent from <code>TOOL_RISK_MAP</code>, hallucinated by the LLM, or a newly added tool nobody classified yet, is refused by both <code>mcp_bridge</code> (before it reaches the LLM&#39;s tool list) and <code>chat_engine</code>&#39;s dispatch guard (before it runs), and a <code>MUTATING</code> tool can never join the allowlist. The hard rule: no write/export tool may be added to the MCP server until it has a <code>TOOL_RISK_MAP</code> entry.</p>
+<p>Every Phase 1 tool (<code>predict_pace</code>/<code>predict_tire</code>/<code>predict_situation</code>/<code>predict_pit</code>/<code>analyze_radio</code>/<code>recommend_strategy</code>) also normalises its <code>gp</code>/<code>driver</code>/<code>lap</code>/<code>year</code> arguments in <code>mcp_tools.py</code> before building the <code>lap_state</code> (<code>_normalize_gp_name</code>, <code>_normalize_driver_code</code>, <code>_normalize_lap</code>, <code>_normalize_year</code>). An unparseable lap number used to silently become lap 1 (#442); it now raises <code>ToolInputError</code>, which the <code>_catch_tool_input_error</code> decorator turns into a plain &quot;X is invalid, here are the valid options&quot; string for the LLM instead of a traceback, the same REFUSED shape the agent-level tool guards described in <a href="/agents-api/">Agents API reference</a> already use.</p>
+<h3>Smart-spinner stage tracker</h3>
+<p>The frontend mints a UUID, sends it on every chat request via the <code>X-Request-Id</code> header, and polls <code>/api/v1/chat/status?request_id=...</code> every second. The backend writes the current stage (<code>preparing_tools</code>, <code>model_choosing_tool</code>, <code>calling_&lt;tool&gt;</code>, <code>summarizing_with_llm</code>, ...) into a process-global tracker (<code>services/chatbot/stage_tracker.py</code>) at every checkpoint, cleared in a <code>try/finally</code> so the dict never leaks. The web app chat maps these stages to humanised labels so the spinner narrates the slow phases (model loading, tool execution).</p>
+<h3>Module layout</h3>
+<p><code>services/chatbot/</code> now contains only what the MCP-driven flow needs:</p>
+<ul>
+<li><code>chat_engine.py</code>, async orchestrator (stream + sync entry points).</li>
+<li><code>mcp_bridge.py</code>, async adapter to the FastMCP server (<code>list_openai_tools</code>, <code>call_mcp_tool</code>).</li>
+<li><code>llm_service.py</code>, provider abstraction (LM Studio + OpenAI), now with <code>tools=</code> support.</li>
+<li><code>stage_tracker.py</code>, per-request stage dict for the smart-spinner.</li>
+<li><code>utils/</code>, empty placeholder; the legacy <code>tool_param_extractor</code>, <code>query_classifier</code>, <code>validators</code>, the per-handler files, the <code>router/</code> package and the <code>prompts/</code> directory were deleted along with the <code>/chat/query</code> endpoint.</li>
+</ul>
+<h2>Voice endpoints (retired)</h2>
+<p>The <code>/api/v1/voice</code> router (STT, TTS and the STT to LLM to TTS pipeline) was retired in v2: it came from a course requirement and the web app ships without it. The implementation remains available in git history and in the <code>legacy_version</code> branch (the legacy Streamlit app was removed from the repo, #551).</p>
+<h2>Strategy endpoints (N25-N31)</h2>
+<p>All strategy endpoints live under <code>/api/v1/strategy/</code>. They accept JSON bodies and return <code>StrategyResponse</code> envelopes.</p>
+<h3>Consumers</h3>
+<p>The <code>/api/v1/strategy/simulate</code> SSE endpoint is consumed by the web app and by <code>curl</code> / <code>TestClient</code> smoke tests. The arcade replay no longer calls this endpoint, as of Phase 3.5 Proceso B (April 2026), the arcade owns its own strategy pipeline via <a href="/arcade-strategy-pipeline/"><code>src/arcade/strategy_pipeline.py</code></a>.</p>
+<h3><code>POST /api/v1/strategy/simulate</code></h3>
+<p>Streams per-lap strategy decisions as Server-Sent Events, rate-limited to 3 requests/minute per client (see &quot;Rate limiting&quot; above).</p>
+<pre><code class="language-python">class SimulateRequest(BaseModel):
+    year: int = 2025            # 2023-2025
+    gp: str
+    driver: str
+    team: str
+    driver2: Optional[str] = None
+    lap_range: Optional[tuple[int, int]] = None
+    risk_tolerance: float = 0.5  # 0-1
+    no_llm: bool = False
+    provider: str = &quot;lmstudio&quot;   # &quot;lmstudio&quot; | &quot;openai&quot;
+    interval_s: float = 0.0      # 0-10, artificial delay between laps
+</code></pre>
+<p>Event stream: one <code>start</code> event, then one <code>lap</code> (or <code>error</code>) event per processed lap, closed with a <code>summary</code> event. A blank SSE comment (<code>:\n\n</code>) is sent every 15 <code>lap</code> events as a heartbeat so long runs survive proxy idle timeouts.</p>
+<h3>Metadata (GET)</h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/v1/strategy/available-gps</code></td>
+<td>GP names in the featured parquet</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/available-drivers</code></td>
+<td>Driver codes for a GP</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/lap-range</code></td>
+<td>Min/max lap for a driver at a GP</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/lap-state</code></td>
+<td>Build a lap_state dict from parquet, agent-ready but not identical to the replay engine&#39;s (see below)</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/radio-available-gps</code></td>
+<td>GPs with a recorded radio/RCM corpus</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/radio-laps</code></td>
+<td>Laps with radio messages for a GP (optionally filtered by driver)</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/radio-transcript</code></td>
+<td>Cached Whisper transcript for one driver/lap</td>
+</tr>
+</tbody></table>
+<p><code>/lap-state</code> also returns two Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023) stint-history keys the strategy layer&#39;s terminal-liability term depends on: <code>stint_flags</code> (the requested driver&#39;s <code>stops_made</code>, <code>compounds_used</code>, <code>mandatory_stop_pending</code>) and <code>rival_stop_pending</code> (a <code>{driver_code: mandatory_stop_pending}</code> map, one entry per rival in the response). Both come from <code>src/simulation/stint_history.py</code>, the same helper the replay engine calls, so the CLI, the Arcade and this endpoint read the same stop history and cannot disagree. Any of the three flags can be <code>null</code>: an unresolvable stint history (an invisible earlier stint that could hide a compound change) is reported as unknown rather than guessed.</p>
+<p><code>/radio-laps</code> and <code>/radio-transcript</code> cache their parquet and transcript-JSON reads in memory per <code>(year, gp)</code>, since the underlying radio corpus is static for the life of the process; the first request for a race pays the read cost, later ones are served from the cache.</p>
+<h3>Where this <code>lap_state</code> differs from the replay engine&#39;s</h3>
+<p>Both producers emit the same five top-level keys plus the two stint-history ones, and every agent accepts either. They are <strong>not</strong> field-identical, and it is worth knowing which way, because a producer that diverged from this contract once made a whole strategy candidate permanently ineligible.</p>
+<p>Measured on Lusail 2025 lap 30:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>in <code>RaceStateManager</code> only</th>
+<th>in this endpoint only</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>driver</code></td>
+<td><code>gap_to_leader_s</code>, <code>track_status</code>, <code>is_in_lap</code>, <code>is_out_lap</code></td>
+<td><code>driver_number</code>, <code>gap_ahead_s</code></td>
+</tr>
+<tr>
+<td><code>rivals[*]</code></td>
+<td><code>gap_to_leader_s</code>, <code>speed_st</code>, <code>stint</code></td>
+<td><code>gap_ahead_s</code></td>
+</tr>
+</tbody></table>
+<p><code>weather.rainfall</code> also differs in type: this endpoint coerces it to <code>int</code>, the replay engine leaves it <code>None</code> when the reading is absent.</p>
+<p>None of these are read by the projection, which needs <code>interval_to_driver_s</code> and <code>is_pitting</code>, and both producers emit those. A new consumer should read this table rather than assume the two are interchangeable.</p>
+<h3>Agent endpoints (POST)</h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Request Body</th>
+<th>Agent</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/v1/strategy/pace</code></td>
+<td><code>PaceRequest</code></td>
+<td>N25</td>
+<td>Lap time prediction + CI</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/pace-range</code></td>
+<td><code>PaceRangeRequest</code></td>
+<td>N25</td>
+<td>Batch predictions over a lap range (Model Lab chart)</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/tire</code></td>
+<td><code>TireRequest</code></td>
+<td>N26</td>
+<td>Tire cliff estimation</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/tire-range</code></td>
+<td><code>PaceRangeRequest</code></td>
+<td>N26</td>
+<td>Batch degradation over a lap range (actual vs predicted)</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/situation</code></td>
+<td><code>SituationRequest</code></td>
+<td>N27</td>
+<td>Overtake + SC probability</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/pit</code></td>
+<td><code>PitRequest</code></td>
+<td>N28</td>
+<td>Pit duration + undercut analysis</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/radio</code></td>
+<td><code>RadioRequest</code></td>
+<td>N29</td>
+<td>NLP radio pipeline</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/rag</code></td>
+<td><code>RagRequest</code></td>
+<td>N30</td>
+<td>Regulation retrieval</td>
+</tr>
+<tr>
+<td><code>/api/v1/strategy/recommend</code></td>
+<td><code>RecommendRequest</code></td>
+<td>N31</td>
+<td>Full orchestrator pipeline</td>
+</tr>
+</tbody></table>
+<p><code>/tire-range</code> reuses <code>PaceRangeRequest</code>, same <code>{year, gp, driver, lap_start, lap_end}</code> shape as <code>/pace-range</code>, just routed to the TCN instead of the XGBoost model.</p>
+<p>Every POST endpoint above (plus <code>/pace-range</code> and <code>/tire-range</code>) sits behind its own rate-limit bucket, see &quot;Rate limiting&quot; above.</p>
+<h3>Request schemas</h3>
+<pre><code class="language-python">class PaceRequest(BaseModel):
+    lap_state: Dict[str, Any]
+
+class TireRequest(BaseModel):
+    lap_state: Dict[str, Any]
+
+class SituationRequest(BaseModel):
+    lap_state: Dict[str, Any]
+
+class PitRequest(BaseModel):
+    lap_state: Dict[str, Any]
+
+class RadioRequest(BaseModel):
+    lap_state: Dict[str, Any]
+    radio_msgs: List[Dict[str, Any]] = []
+    rcm_events: List[Dict[str, Any]] = []
+
+class PaceRangeRequest(BaseModel):
+    &quot;&quot;&quot;Shared by /pace-range and /tire-range.&quot;&quot;&quot;
+    year: int = 2025
+    gp: str
+    driver: str
+    lap_start: int
+    lap_end: int
+
+class RagRequest(BaseModel):
+    question: str
+
+class RecommendRequest(BaseModel):
+    lap_state: Dict[str, Any]
+    gp_name: str = &quot;&quot;
+    year: int = 2025
+    gap_ahead_s: float = 2.0
+    pace_delta_s: float = 0.0
+    risk_tolerance: float = 0.5
+    radio_msgs: Optional[List[Dict[str, Any]]] = None
+    rcm_events: Optional[List[Dict[str, Any]]] = None
+    # Three-letter code of the rival selected in the Strategy tab. When set,
+    # gap_ahead_s / pace_delta_s are measured against this car instead of the
+    # positional car ahead (#431). None keeps the old positional behaviour.
+    rival: Optional[str] = None
+</code></pre>
+<h3>Response schemas</h3>
+<p>All agent endpoints return the generic <code>StrategyResponse</code> envelope. Swagger also exposes a typed result model per agent (<code>PaceResult</code>, <code>TireResult</code>, <code>SituationResult</code>, <code>PitResult</code>, <code>RadioResult</code>, <code>RagResult</code>, mirroring the dataclass fields in <a href="/agents-api/">Agents API reference</a>) for self-documentation, but the actual response body is the untyped envelope below:</p>
+<pre><code class="language-python">class StrategyResponse(BaseModel):
+    agent: str       # e.g. &quot;pace&quot;, &quot;tire&quot;, &quot;radio&quot;, &quot;orchestrator&quot;
+    result: Dict[str, Any]
+</code></pre>
+<h3>Error handling</h3>
+<p>Strategy endpoints catch <code>(KeyError, TypeError, ValueError)</code> from the underlying agent and return <strong>422</strong> (a bad/incomplete input); any other exception returns <strong>500</strong>. Both cases share the same structured <code>StrategyError</code> body:</p>
+<pre><code class="language-json">{
+  &quot;error&quot;: &quot;ValueError&quot;,
+  &quot;agent&quot;: &quot;pace&quot;,
+  &quot;detail&quot;: &quot;Missing feature: compound_id&quot;
+}
+</code></pre>
+<p><code>/pace-range</code> and <code>/tire-range</code> also return <code>503</code> when the requested year&#39;s featured parquet is not cached, and <code>404</code> when the GP or driver is not found in it.</p>
+<h2>CORS</h2>
+<p><code>CORSMiddleware</code> allows a single origin: <code>FRONTEND_URL</code> (default <code>http://localhost:8501</code>), not a wildcard. Credentials are dropped (<code>allow_credentials=False</code>; the web app reaches the backend same-origin through its nginx / Vite <code>/api</code> proxy, so cross-origin browser requests are the exception, not the rule), and both the method and header allowlists are enumerated rather than <code>&quot;*&quot;</code>: <code>GET</code>/<code>POST</code>/<code>OPTIONS</code> and <code>Content-Type</code>/<code>Accept</code>/<code>X-Request-Id</code>. The <code>ApiKeyMiddleware</code> described under &quot;Authentication&quot; wraps CORS from the outside (registered after it in <code>main.py</code>), so an unauthenticated request is rejected before any CORS or routing logic runs; <code>OPTIONS</code> preflight is exempted so it still completes.</p>
+<h2>Swagger / OpenAPI</h2>
+<p>Auto-generated at <code>http://localhost:8000/docs</code> when the backend is running.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

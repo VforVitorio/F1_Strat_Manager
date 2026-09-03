@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Dashboard architecture (legacy) · F1 StratLab docs</title>
+  <meta name="description" content="Retired PySide6 dashboard, kept for historical reference." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/arcade-dashboard/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/arcade-dashboard/" />
+  <meta property="og:title" content="Dashboard architecture (legacy) · F1 StratLab docs" />
+  <meta property="og:description" content="Retired PySide6 dashboard, kept for historical reference." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/arcade-dashboard/" />
+  <meta name="twitter:title" content="Dashboard architecture (legacy) · F1 StratLab docs" />
+  <meta name="twitter:description" content="Retired PySide6 dashboard, kept for historical reference." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Dashboard architecture (legacy)",
+  "name": "Dashboard architecture (legacy)",
+  "description": "Retired PySide6 dashboard, kept for historical reference.",
+  "url": "https://docs.f1stratlab.com/arcade-dashboard/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Dashboard architecture (legacy)",
+      "item": "https://docs.f1stratlab.com/arcade-dashboard/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Arcade Dashboard Architecture (legacy)</h1>
+<blockquote>
+<p><strong>Retired surface.</strong> The PySide6 dashboard was replaced by <a href="/pitwall/">PITWALL</a> and <code>src/arcade/dashboard/</code> was removed from the repo, along with the <code>PySide6</code> and <code>pyqtgraph</code> dependencies. It survives in git history, and the window&#39;s rendered output survives as committed screenshots under <code>documents/dev_docs/migration/pitwall/</code>, which is the baseline the port was checked against. This page is kept as historical reference; <strong>the paths below no longer exist on <code>dev</code></strong>.</p>
+<p>Two modules did NOT die with it. <code>agent_formatters.py</code> and <code>reasoning_lines.py</code> moved to <code>src/pitwall/</code>, because PITWALL&#39;s AGENTS window renders by calling them - which is what makes the port 1:1 by construction rather than by inspection.</p>
+</blockquote>
+<p>Developer-level reference for the PySide6 dashboard that shipped alongside the arcade replay, written for someone extending either window.</p>
+<p>Phase 3.5 Proceso B shipped the <code>src/arcade/dashboard/</code> package (fifteen modules, <code>reasoning_lines.py</code> among them) plus a new <code>src/arcade/strategy_pipeline.py</code> and the rewritten <code>src/arcade/strategy.py::SimConnector</code>. The arcade autolaunched the dashboard subprocess when the user enabled strategy mode; the user never ran a second command.</p>
+<h2>The window split</h2>
+<ul>
+<li><strong>Arcade replay</strong>: <code>pyglet</code>-backed, owned by <code>F1ArcadeView</code>. Drives the simulation loop, owns the <code>StrategyState</code>, runs <code>TelemetryStreamServer</code> on <code>127.0.0.1:9998</code>, and renders the track.</li>
+<li><strong>Strategy dashboard</strong>: <code>PySide6</code> <code>MainWindow</code>. Orchestrator card, six sub-agent cards with embedded <code>pyqtgraph</code> charts, scenario bars, six-tab reasoning panel.</li>
+<li><strong>Telemetry window</strong>: <code>PySide6</code> <code>TelemetryWindow</code>. Standalone <code>QMainWindow</code> with a 2x2 grid of <code>pyqtgraph</code> plots (Delta, Speed, Brake, Throttle) in F1-broadcast style.</li>
+<li><strong>PITWALL</strong>: a third process, <code>python -m src.pitwall</code>, opening <strong>PITWALL · DATA</strong> and <strong>PITWALL · AGENTS</strong>, two pywebview windows rendering React over the same broadcast, through one shared TCP client. It also serves the same two pages on loopback and logs the URL.</li>
+</ul>
+<p>The pyglet window runs in the arcade process. The two Qt windows live together inside one subprocess; PITWALL is another.</p>
+<blockquote>
+<p><strong>Both follower stacks run at once, deliberately.</strong> PITWALL is the replacement for the two Qt windows, and keeping the originals alive beside it during the migration is what lets every ported panel be compared against the window it replaces while that window still exists (<code>_spawn_pitwall</code>, <code>src/arcade/app.py</code>). The Qt pair retires at the end of the migration; this page describes it until then.</p>
+</blockquote>
+<h2>Process topology</h2>
+<pre><code>┌────────────────────────────────┐        ┌──────────────────────────────┐
+│ Arcade process (pyglet)        │        │ Dashboard subprocess (Qt)    │
+│                                │  TCP   │                              │
+│  F1ArcadeView                  │◄──────►│  QApplication                │
+│   ├─ RaceReplayEngine thread   │ 127.   │   ├─ MainWindow              │
+│   ├─ StrategyState (_lock)     │ 0.0.1: │   │    + TelemetryStreamClt  │
+│   └─ TelemetryStreamServer     │ 9998   │   └─ TelemetryWindow         │
+│        accept thread           │        │         + TelemetryStreamClt │
+└────────────────────────────────┘        └──────────────────────────────┘
+</code></pre>
+<p>Two processes, not three. Both Qt windows share the same <code>QApplication</code> event loop and Python interpreter, spawning a third process just to host the telemetry window would cost an extra Python startup (roughly 300 ms), another TCP socket, and another set of imported heavy modules (<code>torch</code>, <code>transformers</code>) with no gain.</p>
+<p>The arcade process stays free of PySide6. Importing Qt into the pyglet process would double the memory footprint and couple the two event loops. Keeping Qt out of the arcade is the reason <code>stream.py</code> is stdlib-only; the subprocess launch preserves that separation.</p>
+<h2>Package layout</h2>
+<h3><code>theme.py</code></h3>
+<p>Colour palette, compound pill colour map, flag chip styles, monospace font stack, and the <code>apply_dark_palette(app)</code> helper. The palette mirrors the arcade window&#39;s <code>styles.py</code>. Pirelli compound colours use the canonical hexes (C1 white, C2 yellow, C3 red, INTERMEDIATE green, WET blue).</p>
+<h3><code>stream_client.py</code></h3>
+<p><code>TelemetryStreamClient</code> is a <code>QThread</code> that opens a TCP socket to <code>127.0.0.1:9998</code>, reads newline-delimited JSON payloads, and emits a <code>data_received(dict)</code> Signal on the main Qt thread. Reconnects automatically with exponential backoff; exposes <code>connection_changed(str)</code> so the header bar can light a chip green/red.</p>
+<h3><code>window.py</code></h3>
+<p><code>MainWindow</code> composes the strategy surface. A header bar (40 px) shows session label, driver, connection chip, playback chip, and lap counter. A central <code>QSplitter(Qt.Horizontal)</code> holds two panels at <code>540 / 740</code>. The status bar shows the last error from the stream client.</p>
+<p><code>MainWindow.on_data_received</code> is the fan-out router: pulls <code>latest.per_agent</code>, dispatches each sub-agent dict to the matching card, drives the orchestrator card from <code>latest.recommendation</code>, feeds the scenario bars from <code>latest.scenario_scores</code>, and appends to the reasoning tabs from <code>latest.reasoning_per_agent</code>.</p>
+<h3><code>orchestrator_card.py</code></h3>
+<p>The flagship card. Four visual elements:</p>
+<ul>
+<li><strong>Action badge</strong>, large pill coloured by <code>classify_action</code>: green STAY_OUT, amber PIT_NOW, cyan UNDERCUT, magenta OVERCUT, red ALERT.</li>
+<li><strong>Confidence bar</strong>: <code>QProgressBar</code> with a <code>qlineargradient</code> stylesheet painting a traffic-light gradient.</li>
+<li><strong>Pace and Risk chips</strong>, two smaller pills, recoloured per regime.</li>
+<li><strong>Plan strip</strong>, one line: &quot;Plan: PIT lap 28, fit C3, target UNDERCUT HAM&quot;. The compound is rendered as an inline pill.</li>
+<li><strong>Guardrail line</strong>, shown only when the no-LLM hard guard overrode the LLM pick.</li>
+</ul>
+<h3><code>agent_card.py</code></h3>
+<p>Reusable widget: headline label, body <code>QLabel</code> (rich text with small monospace), and a reserved chart slot. The Pace and Tire cards slot in their <code>pyqtgraph</code> plots via <code>card.set_chart(widget)</code>. The Pit and RAG cards dim to 60% opacity when the conditional agent did not fire on the current lap.</p>
+<h3><code>agent_formatters.py</code></h3>
+<p>Six pure functions: <code>format_pace</code>, <code>format_tire</code>, <code>format_situation</code>, <code>format_pit</code>, <code>format_radio</code>, <code>format_rag</code>. Each takes a sub-agent output dict and returns <code>(headline: str, body_lines: list[str])</code>. Mirrors the CLI inference panel section rules; keeping the mapping pure means the formatters are importable anywhere and unit-testable without Qt.</p>
+<h3><code>pace_chart.py</code> and <code>tire_chart.py</code></h3>
+<p><code>pyqtgraph.PlotWidget</code> subclasses embedded in their cards.</p>
+<ul>
+<li><code>PaceChart</code> plots actual lap time, predicted lap time, and a shaded P10/P90 confidence band per lap.</li>
+<li><code>TireChart</code> plots tyre life by compound with vertical lines at stint boundaries and horizontal dashed lines at the estimated cliff laps.</li>
+</ul>
+<p>Both charts scroll the x-axis to show the last 20 laps.</p>
+<h3><code>scenario_bars.py</code></h3>
+<p>Four horizontal bars for STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT. The raw Monte Carlo scores are sometimes negative; the widget shifts the minimum to zero, then normalises to [0, 1], so the visual remains readable while the tooltip exposes the raw score.</p>
+<h3><code>reasoning_tabs.py</code></h3>
+<p><code>QTabWidget</code> with six tabs: Pace, Tire, Situation, Radio, Pit, RAG. Each tab is a <code>QTextEdit</code> with a <code>QSyntaxHighlighter</code> subclass that paints regex patterns in accent colours, compound codes, flag keywords, numbers with units, and action verbs.</p>
+<h3><code>telemetry_panel.py</code> and <code>telemetry_window.py</code></h3>
+<p>The 2x2 grid of telemetry plots. Lives in its own module so <code>TelemetryWindow</code> can host it as the central widget without pulling in the strategy-side imports.</p>
+<h2>Wire protocol</h2>
+<p>The arcade broadcasts one JSON dict per frame, roughly 10 Hz, as a newline-terminated payload.</p>
+<p><strong>The JSON below is a historical example and no longer describes the wire.</strong> It is the shape the Qt dashboard consumed before that dashboard was retired in <code>7ea6a7a6</code>: a single telemetry sample per car under the role keys <code>main</code> and <code>rival</code>, plus <code>session</code>, <code>driver</code>, <code>driver2</code> and <code>delta_s</code> keys the producer does not emit. The current contract is the table under it, and the frozen shape lives in <code>tests/surfaces/test_arcade_wire_contract.py</code>.</p>
+<pre><code class="language-json">{
+  &quot;arcade&quot;: {
+    &quot;session&quot;: { &quot;year&quot;: 2025, &quot;round&quot;: 3, &quot;location&quot;: &quot;Suzuka&quot;, &quot;lap&quot;: 18, &quot;total_laps&quot;: 53 },
+    &quot;driver&quot;: { &quot;code&quot;: &quot;VER&quot;, &quot;team&quot;: &quot;Red Bull Racing&quot;, &quot;position&quot;: 2 },
+    &quot;driver2&quot;: { &quot;code&quot;: &quot;LEC&quot;, &quot;team&quot;: &quot;Ferrari&quot;, &quot;position&quot;: 4 },
+    &quot;telemetry&quot;: {
+      &quot;main&quot;:  { &quot;speed&quot;: 312.4, &quot;throttle&quot;: 0.98, &quot;brake&quot;: 0.0, &quot;gear&quot;: 7, &quot;drs&quot;: true },
+      &quot;rival&quot;: { &quot;speed&quot;: 308.1, &quot;throttle&quot;: 0.95, &quot;brake&quot;: 0.0, &quot;gear&quot;: 7, &quot;drs&quot;: false }
+    },
+    &quot;delta_s&quot;: -0.412
+  },
+  &quot;strategy&quot;: {
+    &quot;latest&quot;: {
+      &quot;lap&quot;: 18,
+      &quot;recommendation&quot;: { &quot;action&quot;: &quot;STAY_OUT&quot;, &quot;confidence&quot;: 0.73, &quot;pace_mode&quot;: &quot;NEUTRAL&quot;, &quot;risk&quot;: &quot;BALANCED&quot; },
+      &quot;scenario_scores&quot;: { &quot;STAY_OUT&quot;: 0.21, &quot;PIT_NOW&quot;: -0.14, &quot;UNDERCUT&quot;: 0.08, &quot;OVERCUT&quot;: -0.02 },
+      &quot;per_agent&quot;: {
+        &quot;pace&quot;:      { &quot;lap_time_pred&quot;: 93.42, &quot;ci_p10&quot;: 92.81, &quot;ci_p90&quot;: 94.03 },
+        &quot;tire&quot;:      { &quot;laps_to_cliff_p50&quot;: 12, &quot;warning_level&quot;: &quot;MONITOR&quot; },
+        &quot;situation&quot;: { &quot;overtake_prob&quot;: 0.42, &quot;sc_prob_3lap&quot;: 0.11 },
+        // overtake_prob is null when the car ahead is farther than the 2.5s gap the
+        // model was trained on; the dashboards render that as &quot;—&quot;, never as 0%.
+        &quot;pit&quot;:       { &quot;action&quot;: &quot;HOLD&quot;, &quot;compound_recommendation&quot;: &quot;C3&quot; }
+      },
+      &quot;reasoning_per_agent&quot;: { &quot;pace&quot;: &quot;...&quot;, &quot;tire&quot;: &quot;...&quot; },
+      &quot;active&quot;: [&quot;pit&quot;],
+      &quot;guardrail_override&quot;: false
+    }
+  },
+  &quot;playback&quot;: { &quot;state&quot;: &quot;PLAY&quot;, &quot;speed&quot;: 1.0 }
+}
+</code></pre>
+<p>Top-level keys: <code>arcade</code>, <code>strategy</code>, <code>playback</code>. The dashboard&#39;s fan-out router reads from these three roots and nothing else, extending the protocol is additive.</p>
+<h3>What the wire gained for PITWALL</h3>
+<p>Every one of these is additive (the Qt dashboard ignores them and is unaffected), and each exists because a consumer would otherwise have to re-derive it and drift from the producer:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>What it carries</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>arcade.race_order</code></td>
+<td>every published driver, best first, ranked by the arcade leaderboard&#39;s OWN code, so the wire and the panel cannot disagree</td>
+</tr>
+<tr>
+<td><code>arcade.drivers.&lt;code&gt;.laps_completed</code></td>
+<td>laps completed off the crossing map. The reveal carrier: show lap <em>L</em> for a driver iff <code>L &lt;= laps_completed</code></td>
+</tr>
+<tr>
+<td><code>arcade.drivers.&lt;code&gt;.progress</code></td>
+<td>laps plus fraction, the ordering coordinate. <code>null</code> when the telemetry never placed the car</td>
+</tr>
+<tr>
+<td><code>arcade.drivers.&lt;code&gt;.has_finished</code></td>
+<td>chequered flag versus retirement, from FastF1&#39;s official classification. <strong><code>active</code> alone reads the winner as retired</strong></td>
+</tr>
+<tr>
+<td><code>arcade.drivers.&lt;code&gt;.active</code> / <code>.rel_dist</code> / <code>.has_position</code></td>
+<td>on track, fraction of the current lap, and whether the car was ever placed at all</td>
+</tr>
+<tr>
+<td><code>arcade.driver_colors</code></td>
+<td>per-driver RGB from the arcade&#39;s own palette, published so no consumer hardcodes a sixth copy of it</td>
+</tr>
+<tr>
+<td><code>arcade.track_status</code></td>
+<td>FastF1 TrackStatus digits for the lap on screen</td>
+</tr>
+<tr>
+<td><code>arcade.telemetry.drivers</code></td>
+<td>a <strong>span</strong> of samples since the last tick, oldest first, per driver code, not one point, and not just the pinned pair. At 8x, one point per tick discarded 95% of the trace. Schema v2 replaced the role keys <code>main</code>/<code>rival</code> with the whole grid so a consumer can chart any car without asking the producer to publish it; read the old pair as <code>drivers[driver_main]</code> and <code>drivers[driver_rival]</code></td>
+</tr>
+<tr>
+<td><code>arcade.telemetry.rewound</code> / <code>.dropped</code></td>
+<td>the eviction signals: a backwards seek, and frames a forward jump could not carry</td>
+</tr>
+<tr>
+<td><code>arcade.global_t_min</code> / <code>.location</code></td>
+<td>the session-time origin, and FastF1&#39;s authoritative Location for resolving the race directory</td>
+</tr>
+<tr>
+<td><code>schema_version</code> / <code>seq</code></td>
+<td>the payload version, and a strictly increasing sequence per message SENT, which is what lets two consumers on independent timers agree on a frame</td>
+</tr>
+</tbody></table>
+<p>Bumping <code>CACHE_VERSION</code> to v12 came with these; the first launch of a given GP after upgrading rebuilds its session pickle.</p>
+<h2>Extension points</h2>
+<h3>Adding a new sub-agent card</h3>
+<ol>
+<li>Extend the wire protocol: add the new agent&#39;s output dict under <code>strategy.latest.per_agent.&lt;name&gt;</code>.</li>
+<li>Add a formatter in <code>agent_formatters.py</code> (<code>format_&lt;name&gt;(payload) -&gt; (headline, body_lines)</code>).</li>
+<li>Instantiate an <code>AgentCard(title=...)</code> inside <code>MainWindow._build_right_panel</code>.</li>
+<li>In <code>MainWindow.on_data_received</code>, dispatch the new payload into the formatter and call <code>card.set_content(headline, body)</code>.</li>
+<li>If the card needs a chart, create a <code>pyqtgraph</code> subclass following <code>pace_chart.py</code>.</li>
+</ol>
+<h3>Changing the palette</h3>
+<p><code>theme.py</code> is the only place colour literals live. Every widget imports <code>ACCENT</code>, <code>DANGER</code>, <code>SUCCESS</code>, <code>WARNING</code>, <code>TEXT_SECONDARY</code>, and the compound colour map from there. A full retheme means editing <code>theme.py</code> plus the matching <code>styles.py</code> on the arcade side.</p>
+<h2>Threading model</h2>
+<p>Five threads cooperate.</p>
+<ul>
+<li><strong>Arcade main thread</strong> (pyglet), runs the <code>F1ArcadeView.on_update</code> tick, mutates the <code>StrategyState</code> under <code>_lock</code>, calls <code>TelemetryStreamServer.broadcast(snapshot)</code>.</li>
+<li><strong>SimConnector background thread</strong>, iterates <code>RaceReplayEngine.replay()</code> and calls <code>run_strategy_pipeline(race_state, laps_df, lap_state, memory=self._memory)</code> per lap. Passing <code>lap_state</code> is not optional: with it <code>None</code> the Monte Carlo falls back to the legacy seconds path and the projection layer is silently amputated, which is the one call shape these pages used to show. One thread, one lap at a time, so the main pyglet thread never blocks on LLM inference.</li>
+<li><strong>TelemetryStreamServer accept thread</strong>, daemon thread inside the arcade process. Blocks on <code>server_socket.accept()</code>.</li>
+<li><strong>Qt main thread</strong> (dashboard subprocess), runs <code>QApplication.exec()</code>. Drives all UI updates. Never touches the network.</li>
+<li><strong>QThread stream clients</strong> (one per top-level Qt window), each owns its own TCP socket.</li>
+</ul>
+<p>The <code>StrategyState._lock</code> is the only contended mutex. Neither thread holds it across I/O.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

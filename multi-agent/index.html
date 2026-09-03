@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Multi-agent system · F1 StratLab docs</title>
+  <meta name="description" content="N25–N31 agents, MoE routing, MC simulation, LLM synthesis." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/multi-agent/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/multi-agent/" />
+  <meta property="og:title" content="Multi-agent system · F1 StratLab docs" />
+  <meta property="og:description" content="N25–N31 agents, MoE routing, MC simulation, LLM synthesis." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/multi-agent/" />
+  <meta name="twitter:title" content="Multi-agent system · F1 StratLab docs" />
+  <meta name="twitter:description" content="N25–N31 agents, MoE routing, MC simulation, LLM synthesis." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Multi-agent system",
+  "name": "Multi-agent system",
+  "description": "N25–N31 agents, MoE routing, MC simulation, LLM synthesis.",
+  "url": "https://docs.f1stratlab.com/multi-agent/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Multi-agent system",
+      "item": "https://docs.f1stratlab.com/multi-agent/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Multi-Agent Strategy Architecture (N25-N31)</h1>
+<p><strong>The F1 StratLab multi-agent system is a LangGraph pipeline of six sub-agents (N25-N30) and one orchestrator (N31) that turns a per-lap <code>lap_state</code> into a typed <code>StrategyRecommendation</code></strong>, fusing ML model inference, Monte Carlo simulation and LLM synthesis across three layers.</p>
+<h2>Purpose</h2>
+<p>The multi-agent system replaces the legacy Experta rule engine (<code>base_agent.py</code>, <code>strategy_agent.py</code>) with a LangGraph-based pipeline that combines ML model inference, Monte Carlo simulation, and LLM-driven synthesis to produce race strategy recommendations.</p>
+<h2>System overview</h2>
+<pre><code class="language-mermaid">graph TD
+    RSM[RaceStateManager] --&gt;|lap_state dict| ORCH[Strategy Orchestrator N31]
+
+    subgraph &quot;Layer 1: always-on agents&quot;
+        N25[N25 Pace Agent&lt;br/&gt;XGBoost + Bootstrap CI]
+        N26[N26 Tire Agent&lt;br/&gt;TireDegTCN + MC Dropout]
+        N27[N27 Race Situation Agent&lt;br/&gt;LightGBM Overtake + SC]
+        N29[N29 Radio Agent&lt;br/&gt;RoBERTa + SetFit + BERT NER]
+    end
+
+    subgraph &quot;Layer 1: conditional agents (MoE routing)&quot;
+        N28[N28 Pit Strategy Agent&lt;br/&gt;N15 Quantiles + N16 Undercut]
+        N30[N30 RAG Agent&lt;br/&gt;Qdrant + BGE-M3]
+    end
+
+    ORCH --&gt; N25
+    ORCH --&gt; N26
+    ORCH --&gt; N27
+    ORCH --&gt; N29
+
+    N26 --&gt;|tire_warning == PIT_SOON| N28
+    N29 --&gt;|PROBLEM or WARNING alert| N28
+    N27 --&gt;|sc_prob &gt; 0.30| N30
+    N29 --&gt;|WARNING intent, or an RCM RED_FLAG / TIME_PENALTY| N30
+    N28 --&gt;|always when N28 active| N30
+    N27 --&gt;|sc_currently_active, overrides every threshold| N28
+    N27 --&gt;|sc_currently_active, overrides every threshold| N30
+
+    subgraph &quot;Layer 2: Monte Carlo simulation&quot;
+        MC[500 draws x 4 candidates&lt;br/&gt;STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT&lt;br/&gt;score = alpha * E + 1-alpha * P10]
+    end
+
+    subgraph &quot;Layer 3: LLM synthesis&quot;
+        LLM[ChatOpenAI.with_structured_output&lt;br/&gt;StrategyRecommendation]
+    end
+
+    N25 --&gt; MC
+    N26 --&gt; MC
+    N27 --&gt; MC
+    N28 --&gt; MC
+    MC --&gt; LLM
+    N29 --&gt; LLM
+    N30 --&gt; LLM
+    LLM --&gt; REC[StrategyRecommendation]
+</code></pre>
+<p><strong>Routing rules (text equivalent of the diagram above):</strong></p>
+<ul>
+<li>The orchestrator always runs the four always-on agents: N25 Pace, N26 Tire, N27 Race Situation and N29 Radio.</li>
+<li>N28 Pit Strategy activates when N26 reports <code>tire_warning == PIT_SOON</code>, when N29 raises a PROBLEM or WARNING alert, or when N27 reports an active Safety Car.</li>
+<li>N30 RAG activates when N27 reports <code>sc_prob &gt; 0.30</code>, when N28 is active, or under an active Safety Car.</li>
+<li>Monte Carlo then draws 500 samples over four candidates (STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT), scoring <code>score = α·E + (1−α)·P10</code>, and the LLM synthesises the final <code>StrategyRecommendation</code>. Since the projection redesign the score is measured in <strong>projected track position</strong>, not in seconds, see <a href="/multi-agent/">What the Monte Carlo actually scores</a> below.</li>
+</ul>
+<h2>Three-window arcade</h2>
+<p>Since Phase 3.5 Proceso B (April 2026), the <code>python -m src.arcade.main ... --strategy</code> launcher runs several windows driven by one shared telemetry stream. The two follower windows were a PySide6 pair until it was retired; they are the PITWALL pair now, documented in <a href="/pitwall/">PITWALL windows</a>. The layout is:</p>
+<pre><code class="language-mermaid">graph LR
+    subgraph arcade[&quot;Arcade process (pyglet)&quot;]
+        REPLAY[F1ArcadeView&lt;br/&gt;race replay]
+        PIPE[StrategyPipeline&lt;br/&gt;local N31 copy]
+        STREAM[TelemetryStreamServer&lt;br/&gt;TCP 127.0.0.1:9998]
+    end
+
+    subgraph pw[&quot;PITWALL subprocess&quot;]
+        HOST[PitwallHost&lt;br/&gt;ONE ArcadeStreamClient]
+        AGENTS[PITWALL - AGENTS&lt;br/&gt;orchestrator + 6 cards]
+        DATA[PITWALL - DATA&lt;br/&gt;tower, bests, traces, race pace]
+        HOST --&gt;|poll by seq| AGENTS
+        HOST --&gt;|poll by seq| DATA
+    end
+
+    REPLAY --&gt; PIPE
+    PIPE --&gt; STREAM
+    REPLAY --&gt; STREAM
+    STREAM --&gt;|TCP broadcast ~10 Hz| HOST
+</code></pre>
+<p>Four properties are load-bearing:</p>
+<ol>
+<li><strong>The arcade owns the <code>TelemetryStreamServer</code>.</strong> <code>src/arcade/stream.py</code> exposes the merged arcade + strategy snapshot; every other window is a subscriber, never the source of truth.</li>
+<li><strong>One subprocess hosts both windows.</strong> The arcade spawns a single <code>subprocess.Popen</code>. Two windows in one process is cheaper than two, and it is what lets them share a single stream reader.</li>
+<li><strong>The two windows share ONE stream reader.</strong> <code>PitwallHost</code> owns a single <code>ArcadeStreamClient</code> and both windows poll it by sequence number, so they cannot disagree about which frame they are showing - a blind latest-payload slot had them differing on 58% of polls. Closing one window only decrements a count; it does not blind the other.</li>
+<li><strong>Arcade runs the strategy pipeline in-process.</strong> <code>src/arcade/strategy_pipeline.py</code> delegates to the shared engine (<code>src/strategy/inference/engine.py::run_lap</code>), so the arcade does not depend on the FastAPI backend at runtime and does not carry its own copy of the orchestrator. It used to; that copy drifted and crashed (#166), which is why the engine exists.</li>
+</ol>
+<p>See <a href="/arcade-strategy-pipeline/">Arcade strategy pipeline</a> for the shared engine and its profiles, and <a href="/pitwall/">PITWALL windows</a> for the follower architecture.</p>
+<h2>Agent details</h2>
+<h3>N25: Pace Agent (<code>pace_agent.py</code>)</h3>
+<p>Wraps the N06 XGBoost delta-lap-time model. Returns predicted lap time, delta signals against previous lap and session median, and bootstrap confidence intervals (N=200 draws with 2% Gaussian noise on continuous features).</p>
+<ul>
+<li><strong>Model</strong>: XGBoost fitted on 2023-2024 lap data, with <strong>2025 held out</strong>. This line used to read &quot;2023-2025&quot;, which folded the test season into the training set: the feature manifest&#39;s own row counts are 22,106 train and 23,256 validation, exactly the 2023 and 2024 featured parquets, and every operating bound below is measured on those two seasons for the same reason.</li>
+<li><strong>Output</strong>: <code>PaceOutput</code> (lap_time_pred, delta_vs_prev, delta_vs_median, ci_p10, ci_p90)</li>
+<li><strong>Circuit feature</strong>: <code>mean_sector_speed</code> is a property of the track, one value per GP, looked up from the featured parquet. A bug substituted the speed trap reading on every call through the <code>RaceStateManager</code> path instead; see the operating-envelope section under N28 for how that surfaced.</li>
+<li><strong>No LLM step</strong>: unlike its tire/pit/race-situation siblings below, pace calls the XGBoost model directly: <code>reasoning</code> is a deterministic f-string, not LLM output. Pace is the one always-on agent with no qualitative judgment to make (no <code>warning_level</code>/<code>action</code>/<code>threat_level</code> category alongside its numbers), so a <code>pace_agent.py</code> once carried a complete but never-wired LangGraph ReAct scaffold; it was formally retired in #781 after the #778/#779/#780 archaeology and decision. See <a href="/agents-api/">agents-api.md</a> for the full record.</li>
+</ul>
+<h3>N26: Tire Agent (<code>tire_agent.py</code>)</h3>
+<p>Wraps per-compound TireDegTCN models (N09/N10) with MC Dropout inference. Answers: how many laps remain before the degradation cliff?</p>
+<ul>
+<li><strong>Model</strong>: Causal TCN per compound + Platt calibration</li>
+<li><strong>Output</strong>: <code>TireOutput</code> (laps_to_cliff_p10/p50/p90, warning_level, deg_rate)</li>
+<li><strong>Warning levels</strong>: OK, MONITOR, PIT_SOON (derived from <code>laps_to_cliff_p10</code> against circuit-cluster-aware thresholds; there is no CRITICAL level)</li>
+</ul>
+<h3>N27: Race Situation Agent (<code>race_situation_agent.py</code>)</h3>
+<p>Combines N12 (overtake probability via LightGBM) and N14 (safety car probability via LightGBM) into a single threat assessment per lap.</p>
+<ul>
+<li><strong>Models</strong>: LightGBM overtake (AUC-PR 0.5491) + LightGBM SC (AUC-PR 0.0723)</li>
+<li><strong>Output</strong>: <code>RaceSituationOutput</code> (overtake_prob, sc_prob_3lap, threat_level, <strong>sc_currently_active</strong>, <strong>vsc_active</strong>)</li>
+</ul>
+<h4>RCM Safety Car override</h4>
+<p>The N14 LightGBM was trained to predict a <em>future</em> SC, not to recognise one already deployed. To close that gap, N27 inspects the lap&#39;s <code>rcm_events</code> (forwarded by the orchestrator from <code>RadioPipelineRunner</code>) and, when any event matches <code>SAFETY_CAR_DEPLOYED</code> or <code>VIRTUAL_SAFETY_CAR_DEPLOYED</code>, forces <code>sc_prob_3lap = 1.0</code>, sets <code>sc_currently_active = True</code>, and elevates <code>threat_level</code> to <code>HIGH</code>. Release events (<code>SAFETY_CAR_ENDING</code>, <code>SAFETY_CAR_IN_PIT_LANE</code>, <code>VIRTUAL_SAFETY_CAR_ENDING</code>) take priority in the same window so the override clears as soon as the neutralisation ends. The override is logged in the <code>reasoning</code> field with an <code>[RCM OVERRIDE: ...]</code> prefix so the audit trail survives the chat / arcade summary path.</p>
+<p><code>sc_currently_active</code> is deliberately a single back-compat flag: true under <strong>either</strong> a full Safety Car (Art. 55) or a Virtual Safety Car (Art. 56). A second field, <code>vsc_active</code>, records whether the specific neutralisation is a VSC, a full SC and a VSC differ in the pit-time saving they offer, so the Monte Carlo and the N28 prompt need to tell them apart (#471), which the single flag could not. <code>sc_active</code> (a derived property, not stored) is true only for a full SC: <code>sc_currently_active and not vsc_active</code>.</p>
+<h3>N28: Pit Strategy Agent (<code>pit_strategy_agent.py</code>)</h3>
+<p>Wraps N15 (physical pit stop duration P05/P50/P95 via HistGBT) and N16 (undercut success probability via LightGBM). Recommends when to pit, what compound to fit, and whether to undercut.</p>
+<ul>
+<li><strong>Models</strong>: HistGBT quantile pit duration + LightGBM undercut</li>
+<li><strong>Output</strong>: <code>PitStrategyOutput</code> (action, compound_recommendation, stop_duration_p05/p50/p95, undercut_prob, sc_reactive)</li>
+<li><strong>Activation</strong>: conditional, runs when tire_warning is PIT_SOON, radio flags PROBLEM/WARNING, <strong>or N27 reports <code>sc_currently_active = True</code></strong> (the RCM-override path)</li>
+</ul>
+<h4>Honoring an active Safety Car</h4>
+<p><strong>A rail encodes what the regulation makes certain. It never encodes a strategy opinion.</strong> Facts are forced; the stop/stay call stays with the model, which is the only layer that sees the state the decision depends on.</p>
+<p>When <code>sc_currently_active = True</code>, N28&#39;s prompt swaps the &quot;SC probability&quot; line for an explicit <code>SC STATUS: SAFETY CAR DEPLOYED RIGHT NOW</code> banner and waives the <code>MINIMUM STINT LENGTH</code> constraint: a stop under an SC is far cheaper, because the field is delta-limited and queued, so the <em>relative</em> loss shrinks. That makes pitting cheaper. It does not make it correct, and nothing forces it.</p>
+<p>What is forced are the rules:</p>
+<table>
+<thead>
+<tr>
+<th>Fact</th>
+<th>Regulation</th>
+<th>Value</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>No overtaking on track</td>
+<td><strong>Art. 55.8</strong> (SC) / <strong>56.6</strong> (VSC)</td>
+<td><code>overtake_prob = 0</code></td>
+<td>N27</td>
+</tr>
+<tr>
+<td>An SC is deployed</td>
+<td>Art. 55.4</td>
+<td><code>sc_prob_3lap = 1.0</code></td>
+<td>N27</td>
+</tr>
+<tr>
+<td>DRS unavailable</td>
+<td><strong>Art. 22.1(c)</strong></td>
+<td><code>drs_window = 0</code></td>
+<td>N27, feature build</td>
+</tr>
+<tr>
+<td>No green-flag lap-time target</td>
+<td><strong>Art. 55.7</strong></td>
+<td><code>target_lap_time_s = None</code></td>
+<td>final assembly</td>
+</tr>
+</tbody></table>
+<p><code>overtake_prob = 0</code> is not an approximation. N12 models a <em>racing</em> overtake; of the eight exceptions in Art. 55.8, only &quot;a car slows with an obvious problem&quot; yields a real position gain, and N12 has no feature for it. Every input it does use is regulation-corrupted: DRS is off, the gap compresses toward ten car lengths (55.7/55.10), and <code>pace_delta</code> collapses to the FIA ECU delta. Under an SC the model is not imprecise, it is <strong>inapplicable</strong>.</p>
+<p><code>target_lap_time_s</code> is the subtle one. It is grounded in N06&#39;s <strong>green-flag</strong> pace, and Art. 55.7 requires drivers to stay <strong>above</strong> the FIA ECU minimum time: shipping it instructs the driver to earn a penalty. The real delta cannot be sourced, so the field has no valid value. <code>None</code> is forced by <strong>absence of a source</strong>, which is the test that separates a fact from an opinion.</p>
+<h5>Why the old rail was removed</h5>
+<p>This page used to document a rail that flipped any <code>STAY_OUT</code> to <code>PIT_NOW</code> under an SC, &quot;replicating the McLaren Catar 2025 V7 fix&quot;. That is one race generalised into a universal law, and Art. 55.17 makes it provably wrong: if the SC is still out at the start of the last lap, the race <strong>finishes behind it with no overtaking</strong>, so track position surrendered to a late stop is unrecoverable by regulation. The pipeline could emit <code>action=PIT_NOW</code> carrying the reason <em>&quot;too late to pit&quot;</em>, because the rail overrode a correct guard-rail that already knew this.</p>
+<p>It also silenced the computation built to weigh it: with an SC deployed <code>sc_prob_3lap</code> is 1.0, so <strong>every</strong> Monte Carlo draw already receives the full <code>SC_PIT_BONUS</code>. A <code>STAY_OUT</code> argmax under those conditions <em>is</em> the model saying the cheap stop was outweighed.</p>
+<p>Staying out under an SC is right whenever a stop has already been made, the car leads a pack that must stop anyway, pitting now would rejoin into traffic, or the race is ending. Boxing is right when a stop is unavoidable regardless, the tyres are near the cliff, or the two-compound rule is unsatisfied and time is short. Not one of those is a rule. All of them are race state the model is given, and a rail sees none of it.</p>
+<p>See <code>tests/mc/test_sc_regulatory_rails.py</code>.</p>
+<h5>The bounds that stayed, and the test they have to pass</h5>
+<p>Removing that rail did not remove the pit bounds, because they are a different kind of object and are judged differently.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>What it does</th>
+<th>What justifies it</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Prescriptive</strong> rail</td>
+<td>Makes the strategic decision <em>for</em> the model</td>
+<td>A regulation, or nothing</td>
+</tr>
+<tr>
+<td><strong>Proscriptive</strong> bound</td>
+<td>Forbids an action so a generative model cannot emit nonsense</td>
+<td><strong>Calibration</strong></td>
+</tr>
+</tbody></table>
+<p>Bounding an LLM&#39;s output space is legitimate engineering with or without an FIA article: the bounds exist so nothing can recommend a lap-2 stop because it felt like one. But a bound only earns that description if it sits where real strategy essentially never goes. The rule the project holds them to is explicit: <strong>a bound may veto at most 5% of real green-flag stints</strong>, measured over <strong>1,852 of them across the 70 races of 2023-2025</strong>.</p>
+<p>Re-measured on the corrected dataset, <strong>all four bounds now clear that ceiling</strong>: SOFT vetoes 3.4%, MEDIUM 4.6%, HARD 4.9%, and the INTERMEDIATE/WET fallback 4.5%. The bound family that prompted the rule now satisfies it.</p>
+<p>Checked against that rule, three of the four minimum-stint bounds were separating <em>unusual</em> from <em>usual</em> rather than <em>absurd</em> from <em>sane</em>, and were reset to the largest value that clears the ceiling:</p>
+<table>
+<thead>
+<tr>
+<th>Bound</th>
+<th>Was</th>
+<th>Vetoed</th>
+<th>Now</th>
+<th>Vetoes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Minimum stint, SOFT</td>
+<td>8 laps</td>
+<td>15.5%</td>
+<td><strong>2</strong></td>
+<td>3.4%</td>
+</tr>
+<tr>
+<td>Minimum stint, MEDIUM</td>
+<td>12 laps</td>
+<td>17.0%</td>
+<td><strong>7</strong></td>
+<td>4.6%</td>
+</tr>
+<tr>
+<td>Minimum stint, HARD</td>
+<td>15 laps</td>
+<td>12.2%</td>
+<td><strong>8</strong></td>
+<td>4.9%</td>
+</tr>
+<tr>
+<td>Minimum stint, wet fallback</td>
+<td>10 laps</td>
+<td>20.0%</td>
+<td><strong>6</strong></td>
+<td>4.5%</td>
+</tr>
+<tr>
+<td>No pit before lap 5</td>
+<td>5</td>
+<td>2.21%</td>
+<td>unchanged</td>
+<td>2.21%</td>
+</tr>
+<tr>
+<td>No pit in the last 3 laps</td>
+<td>3</td>
+<td>1.37%</td>
+<td>unchanged</td>
+<td>1.37%</td>
+</tr>
+</tbody></table>
+<p>The end-of-race bound is the only one that is partly a <em>fact</em>: under a Safety Car, Art. 55.17 ends the race behind it if it is still deployed on the final lap, so the position a late stop surrenders is unrecoverable by regulation rather than merely expensive. That article does not reach a green-flag lap, where the bound rests on the stop cost and on the measurement above.</p>
+<p>The compounding effect is what made the old values worth changing rather than merely wrong. A stop inside a bound can never be agreed with, so it is excluded from the decision-agreement measurement: the bound was removing its own hardest cases from the evidence about itself.</p>
+<p>Measured as a <strong>single-variable comparison</strong>: both columns run on the product&#39;s real race state, so only the bounds differ:</p>
+<table>
+<thead>
+<tr>
+<th>decision-agreement tier, the retired six-race 2025 subset, 178 eligible stops</th>
+<th>old bounds (8 / 12 / 15, wet 10)</th>
+<th>shipped bounds (2 / 7 / 8, wet 6)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>min_stint</code> exclusion bucket</td>
+<td>17 stops</td>
+<td><strong>5</strong></td>
+</tr>
+<tr>
+<td>scored sample</td>
+<td>54</td>
+<td><strong>66</strong></td>
+</tr>
+<tr>
+<td>exact lap</td>
+<td>25.9%</td>
+<td>21.2%</td>
+</tr>
+<tr>
+<td>within one lap</td>
+<td>40.7%</td>
+<td>37.9%</td>
+</tr>
+<tr>
+<td>within two laps</td>
+<td>46.3%</td>
+<td><strong>51.5%</strong></td>
+</tr>
+<tr>
+<td>mean signed error</td>
+<td>-2.20 laps</td>
+<td>-1.97</td>
+</tr>
+</tbody></table>
+<p>Both columns are the six races the tier sampled when the comparison was made, so the shipped-bounds column is not the system&#39;s current rate. On the whole 2025 season, 573 eligible stops, the shipped bounds score 204, exact 18.6%, within one 34.3%, within two 50.0%, mean signed -2.21 laps. <code>documents/eval_reports/decision_modes.md</code> is the current artefact. The table survives its own sample because comparing two sets of constants needs both arms measured on one sample, and only the shipped arm was re-run wider.</p>
+<p><strong>The recalibration buys sample, not accuracy, and the honest reading is that the twelve stops it admits are harder than the ones already there.</strong> Exact and within-one fall; within-two and the mean error improve. A bound that excludes a case is not scoring it well, it is refusing to be graded on it, so a lower rate over a wider sample is the more informative number, though calling that an accuracy improvement would be the same flattery the bound itself was performing.</p>
+<blockquote>
+<p><strong>The levels above are the 2026-08-06 re-measurement, and everything published before that date is retired.</strong> The old harness built its own <code>RaceState</code> instead of the product&#39;s, and three of its inputs diverged: the gap to the car ahead was a flat 2.0 s on every lap because the key it read does not exist in the lap state, the pace delta was hardcoded to 0.0, and <code>rainfall</code> took the model default <code>False</code> through a wet Silverstone. All three feed the overtake model, the prompt, or the Monte Carlo the tier grades. On the identical sample with the real inputs (#829), <strong>exact drops 31.3% to 21.2%, within one 47.8% to 37.9%, within two 61.2% to 51.5%</strong>, and declines fall from 78 stops to 72.</p>
+<p>The table above is deliberately <strong>not</strong> that comparison. It used to read &quot;54 to 66&quot;, pairing a pre-#829 number with a post-#829 one, so two variables moved inside the one sentence written to attribute an effect to the bounds. Both of its columns are now measured on the fixed inputs; only the constants differ. The <code>min_stint</code> and scored counts happen to be identical either way (17 and 54 under the old bounds, with or without the input fix), which is why the arithmetic half of the old claim survived, but that was luck, not the argument.</p>
+<p>Read them as the <strong>deterministic</strong> layer, <code>profile=&quot;no-llm&quot;</code>: the Monte Carlo plus the guard rails, with the LLM synthesis off. Twelve of the fourteen recommendation fields the multi-agent system emits are written by the LLM, so this is not a measurement of the system this page describes end to end.</p>
+</blockquote>
+<p><code>documents/eval_reports/stint_lengths.md</code> regenerates these shares from the live constants on every run, so the report always grades what is actually shipping rather than what was shipping when it was written.</p>
+<h5>Operating envelopes: knowing when a model is answering outside what it learned</h5>
+<p>A separate contract, and a quieter one. None of the models refuse out-of-range input; they answer with the same confidence whether the call falls inside what they were trained on or not. N26&#39;s tire TCN did exactly that for two years.</p>
+<p>An <code>OperatingEnvelope</code> (<code>src/strategy/inference/envelope.py</code>) names the input range a model&#39;s answer is actually valid over, and <strong>labels only</strong>: checking a feature vector never clips, alters or refuses a prediction, it only tells the call site whether to trust the one it already has. A feature that is absent is tracked as <em>unknown</em> rather than compared, because <em>unknown</em> must never collapse into a number a real reading could also take.</p>
+<p>Two are declared today:</p>
+<ul>
+<li><strong>N15</strong> (pit duration) declares the 50-lap tyre-life ceiling it was trained under. The clip that keeps it inside that range is unchanged; what the envelope adds is that hitting it stops being silent.</li>
+<li><strong>N06</strong> (lap time) declares eleven feature ranges measured from its own training seasons. It has no clip at all, so the label is the entire mechanism.</li>
+</ul>
+<p>The envelope earns its keep by what it surfaced rather than by what it prevents. Wiring it to N06 exposed that <code>mean_sector_speed</code> was carrying the <strong>speed trap</strong> on every real call, because the agent substituted <code>prev_speed_st</code> whenever no mean sector speed was supplied and nothing ever supplied one. Those are different physical quantities, 256.8 against 303.0 km/h on average, and the model had been reading the wrong one throughout. The value is a property of the circuit and was on disk all along; it is now looked up per GP, and a circuit that does not resolve reaches the model as missing rather than as a substituted reading.</p>
+<p>It also surfaced something not yet fixed: N06 is asked to predict on the opening laps of a race and on the first lap of every stint, and it was never trained on either, because its own feature pipeline drops exactly those rows.</p>
+<h3>N29: Radio Agent (<code>radio_agent.py</code>)</h3>
+<p>Two-stream NLP pipeline. Driver radio goes through RoBERTa-base sentiment, SetFit intent classification, and BERT-large NER. Race Control Messages go through a deterministic rule-based parser. Alerts are built deterministically from NLP is_alert flags, the LLM cannot miss or hallucinate alerts.</p>
+<ul>
+<li><strong>Models</strong>: RoBERTa-base, SetFit, BERT-large-conll03 (radio); rule parser (RCM)</li>
+<li><strong>Output</strong>: <code>RadioOutput</code> (radio_events, rcm_events, alerts, corrections)</li>
+</ul>
+<h3>N30: RAG Agent (<code>rag_agent.py</code>)</h3>
+<p>Answers regulation questions by retrieving relevant FIA Sporting Regulation passages from a local Qdrant vector store (built by <code>scripts/build_rag_index.py</code>), using BGE-M3 embeddings and a LangGraph ReAct agent.</p>
+<ul>
+<li><strong>Retriever</strong>: Qdrant + BGE-M3 embeddings</li>
+<li><strong>Output</strong>: <code>RegulationContext</code> (answer, articles, chunks)</li>
+<li><strong>Activation</strong>: conditional, only runs when sc_prob &gt; 0.30, N28 is active, <strong>or N27 reports <code>sc_currently_active = True</code></strong> (so the orchestrator pulls the SC pit-lane regulation snippet into the recommendation context)</li>
+</ul>
+<h3>N31: Strategy Orchestrator (<code>strategy_orchestrator.py</code>)</h3>
+<p>Three-layer pipeline:</p>
+<ol>
+<li><strong>MoE Routing</strong>: deterministic if-else rules decide which conditional agents (N28, N30) to activate based on always-on agent outputs.</li>
+<li><strong>Monte Carlo Simulation</strong>: draws 500 samples from sub-agent probability distributions and evaluates four strategy candidates (STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT). Score = alpha * E[S] + (1-alpha) * P10[S], where S is a <strong>projected track position</strong> (see below).</li>
+<li><strong>LLM Synthesis</strong>: structured-output LLM aggregates all reasoning strings and MC scores into a <code>StrategyRecommendation</code>.</li>
+</ol>
+<ul>
+<li><strong>Output</strong>: <code>StrategyRecommendation</code> (action, reasoning, confidence, scenario_scores, contingencies)</li>
+<li><strong>Action values</strong>: STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, ALERT</li>
+<li><strong>Pace modes</strong>: PUSH, NEUTRAL, MANAGE, LIFT_AND_COAST</li>
+<li><strong>Risk levels</strong>: AGGRESSIVE, BALANCED, DEFENSIVE</li>
+</ul>
+<h2>What the Monte Carlo actually scores</h2>
+<pre><code class="language-mermaid">graph TD
+    LS[lap_state] --&gt; CTX[race_context_from_lap_state&lt;br/&gt;gp_name, traversal_s, mandatory_stop_pending,&lt;br/&gt;rival_stop_pending per driver]
+    LS --&gt; RIV[rivals list]
+    RIV --&gt; GATE{any usable gap?}
+    GATE --&gt;|no| LEG[legacy path&lt;br/&gt;seconds / 1.5, unchanged&lt;br/&gt;pinned by the strategy goldens]
+    GATE --&gt;|yes| STATES[RivalState per car&lt;br/&gt;gap_s, is_pitting, stop_pending]
+
+    subgraph draws[&quot;Per-draw samples, n=500, seed 42&quot;]
+        D1[cliff_s from N26]
+        D2[sc_s from N27]
+        D3[pit_s from N28 / N15]
+        D4[ucut_s from N28 / N16]
+    end
+
+    subgraph tables[&quot;data/mc_measured_v1.json&quot;]
+        T1[undercut_band 4.91 s]
+        T2[neutralisation_rate per circuit&lt;br/&gt;floored: an observed zero means&lt;br/&gt;never seen, not impossible]
+        T3[clean_air per circuit]
+        T4[racing laps under SC 2.61]
+    end
+
+    STATES --&gt; ELIG{eligibility}
+    T1 --&gt; ELIG
+    ELIG --&gt;|&quot;ahead and inside the band&lt;br/&gt;and not already in the pit lane&quot;| UC[UNDERCUT]
+    ELIG --&gt;|&quot;ahead and in the pit lane now&quot;| OC[OVERCUT]
+    ELIG --&gt;|&quot;no target&quot;| NULL[&quot;eligible: false, score: null&lt;br/&gt;never a numeric sentinel&quot;]
+
+    CTX --&gt; CFG[two ProjectionConfigs]
+    T2 --&gt; CFG
+    T3 --&gt; CFG
+    T4 --&gt; CFG
+    CFG --&gt; GC[racing config&lt;br/&gt;clean air and SC option value live here]
+    CFG --&gt; NC[neutralised config&lt;br/&gt;both terms zero: the field runs to a delta]
+
+    D1 --&gt; PROJ
+    D3 --&gt; PROJ
+    STATES --&gt; PROJ[project_positions per candidate&lt;br/&gt;gap_r + delta_r - delta_us,&lt;br/&gt;a crossing is a place]
+    GC --&gt; PROJ
+    NC --&gt; PROJ
+
+    D2 --&gt;|selects which config each draw uses| PROJ
+    PROJ --&gt; PAY[payoff&lt;br/&gt;positions plus a clipped margin tie-break]
+    PAY --&gt; LIAB[terminal_liability&lt;br/&gt;only for candidates that do NOT stop:&lt;br/&gt;the deferred mandatory stop, discounted by q_f]
+    D4 --&gt;|&quot;only on racing draws, Art. 55.8&quot;| PAY
+
+    LIAB --&gt; SCORE[&quot;score = alpha·E + 1-alpha·P10&quot;]
+    UC --&gt; SCORE
+    OC --&gt; SCORE
+    SCORE --&gt; ARG[best_mc_candidate&lt;br/&gt;argmax over scoreable candidates only]
+    NULL --&gt; ARG
+    LEG --&gt; ARG
+    ARG --&gt; OUT[scenario_scores into the LLM prompt]
+</code></pre>
+<p>Four things in that graph are the whole redesign. Eligibility can return <strong>no number at all</strong> rather than a sentinel. The measured tables enter as <em>configuration</em>, not as constants in the code. Each draw picks a racing or a neutralised config, which is what makes the Art. 55.17 endgame arithmetic rather than a rule. And the terminal liability applies only to the candidates that do not stop, because a deferred obligation is a cost only while it is still owed.</p>
+<p>The layer used to score in generic seconds divided by a flat 1.5 s/position, over a sampled state that contained <strong>no cars at all</strong>. That constant cannot be right in both regimes: measured across 70 races, the median gap between consecutive cars is <strong>2.23 s while racing and 1.48 s under a Safety Car</strong>, so a single figure was a bunched-field number applied to green-flag racing. And losing 20 s costs zero positions with a 25 s cushion behind but three positions with cars at +2 / +8 / +15 s, a difference only a model that knows <em>which cars are where</em> can see.</p>
+<p>Scoring now runs on a per-rival gap projection (<code>src/agents/position_projection.py</code>). Each candidate moves every gap by the difference between what a rival loses and what we lose; a gap crossing zero is a car changing sides, so counting the cars projected ahead gives the position directly. Three behaviours that used to need special cases now fall out of that arithmetic:</p>
+<ul>
+<li><strong>Rejoining into traffic</strong> is automatic, every rival within our pit loss behind us is a place lost, counted by name.</li>
+<li><strong>The mandatory-stop cancellation</strong> (Art. 30.5(m) (2024-25 numbering; it was 30.5(n) in 2023)) happens only when the rival stops too. Where the old model argued in a comment that the pit-lane traversal cancels, the projection charges it per car and lets it cancel when it actually does.</li>
+<li><strong>The Art. 55.17 endgame</strong>, a race finishing behind the Safety Car, emerges from the measured racing-lap count dropping to zero: fresh tyres have nothing left to pay themselves back over, so staying out wins on the numbers. This is the case a deleted guard-rail used to force, and it now needs no rail.</li>
+</ul>
+<p>A <strong>terminal liability</strong> replaces the flat Safety Car bonus with option value: a still-owed stop costs the cars it will release behind us, discounted by the measured probability that a later neutralisation covers it cheaply.</p>
+<p>Candidates carry <strong>explicit eligibility</strong>. An undercut with no live rival inside the measured band, or an overcut with nobody in the pit lane, is returned as <code>eligible: false</code> with a <code>score</code> of <code>null</code>, never a number it did not earn. Every constant the layer reads is measured and committed in <code>data/mc_measured_v1.json</code>, regenerated by <code>scripts/measure_mc_tables.py</code>.</p>
+<p><strong>Where the overcut works, and why.</strong> Inside one window an overcut takes the same stop and pays the same pit lane as PIT_NOW, so it forfeits exactly one lap of fresh rubber. What it buys instead is a lap of <strong>clean air</strong>, and whether that is a good trade is a property of the circuit rather than of the strategy.</p>
+<p>Both sides are measured. A fresh set is worth 0.25 s/lap; clean air is measured per circuit over 479 cases where a car sat within two seconds of, and directly behind, a driver who then pitted, <strong>+0.77 s/lap at Suzuka, +0.65 at Monaco, +0.63 at Silverstone</strong>, down to <strong>−0.015 at Monza and −0.285 at Spielberg</strong>, where losing the car ahead costs a slipstream worth more than the clear track. The ordering is high-downforce circuits first and slipstream circuits last, and nothing in the measurement knows what downforce is.</p>
+<p>Clean air is one of two reasons to hold a car out. The other is <strong>option value</strong>: one more lap before the stop is one more lap of exposure to a neutralisation that would make that stop cheap, worth the circuit&#39;s measured onset hazard times what a neutralised stop saves. <strong>Melbourne</strong> separates the two cleanly, its clean-air gain is +0.008 s, effectively nothing, but Albert Park throws more neutralisations per lap than any circuit in the sample, so an overcut pays there on Safety Car odds alone.</p>
+<p>Together the two terms decide it against the 0.25 s/lap the delay costs:</p>
+<table>
+<thead>
+<tr>
+<th>circuit</th>
+<th>clean air</th>
+<th>waiting</th>
+<th>total</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Suzuka</td>
+<td>+0.771</td>
+<td>+0.158</td>
+<td><strong>+0.93</strong></td>
+</tr>
+<tr>
+<td>Lusail</td>
+<td>+0.646</td>
+<td>+0.214</td>
+<td>+0.86</td>
+</tr>
+<tr>
+<td>Melbourne</td>
+<td>+0.008</td>
+<td>+0.597</td>
+<td>+0.61</td>
+</tr>
+<tr>
+<td>Monza</td>
+<td>−0.015</td>
+<td>+0.143</td>
+<td>+0.13</td>
+</tr>
+<tr>
+<td>Spielberg</td>
+<td>−0.285</td>
+<td>+0.161</td>
+<td>−0.12</td>
+</tr>
+</tbody></table>
+<p>The invariant tests assert both directions, comparing the overcut against the same stop taken now: it must out-score a plain stop at Suzuka and at Melbourne, and must lose to one at Monza.</p>
+<p>Dirty air is priced at the moment the car ahead boxes and not continuously, so running a whole window stuck in traffic is still under-penalised. That one is named in the module docstring rather than hidden here.</p>
+<h2>RSM adapter pattern</h2>
+<p>Every agent exposes two entry points: one that expects populated module globals from a FastF1 session, and an RSM adapter that works straight from a parquet frame because it builds <code>SESSION_META</code> itself and then calls the same core logic.</p>
+<p><strong>They are not uniform.</strong> The shapes below come from <code>inspect.signature</code>, and three of them differ from what the pattern would suggest:</p>
+<pre><code class="language-python">run_pace_agent_from_state(lap_state)                                  # no laps_df, unlike every other adapter
+run_tire_agent(stint_state)                                           # a stint state, not a lap state
+run_tire_agent_from_state(lap_state, laps_df)
+run_race_situation_agent_from_state(lap_state, laps_df)
+run_pit_strategy_agent_from_state(lap_state, laps_df)
+run_radio_agent_from_state(lap_state, laps_df, persist=False)
+run_rag_agent_from_state(lap_state, laps_df=None)
+run_strategy_orchestrator_from_state(race_state, laps_df, lap_state=None)
+</code></pre>
+<p>That last argument is the one worth remembering: without <code>lap_state</code> the orchestrator never sees the rival gaps, so the Monte Carlo falls back to the legacy seconds path instead of scoring in projected track position. See <a href="/agents-api/">agents-api.md</a> for the full per-agent reference.</p>
+<h2>Decision memory: three surfaces, not five</h2>
+<p>The Layer 3 prompt is stateless: consecutive laps are 99% identical text, so the orchestrator re-argues the same case in fresh prose every lap and never reuses a plan it made. <code>DecisionMemory</code> (<code>src/strategy/inference/decision_memory.py</code>) fixes that by echoing this race&#39;s own previous calls back into the prompt: the last action and how long it has been held, recent <code>pit_lap_target</code> values, and the contingencies declared last lap.</p>
+<p>It lives in the <strong>caller</strong>, not the engine, because <code>run_lap</code> is pure per lap and a test depends on that. Each surface that owns a race owns one accumulator, the same shape and lifetime as <code>RaceControlStateTracker</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Decision memory</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CLI (<code>f1-sim</code>)</td>
+<td>yes</td>
+<td>owns a race-scoped loop</td>
+</tr>
+<tr>
+<td>Arcade</td>
+<td>yes</td>
+<td>owns a race-scoped connector</td>
+</tr>
+<tr>
+<td>Backend <code>/simulate</code> stream, <code>rich</code> profile</td>
+<td>yes</td>
+<td>owns a race-scoped simulator</td>
+</tr>
+<tr>
+<td><code>/recommend</code></td>
+<td><strong>no</strong></td>
+<td>stateless per request</td>
+</tr>
+<tr>
+<td>MCP <code>strategy</code> tool, and the webapp Strategy tab</td>
+<td><strong>no</strong></td>
+<td>stateless per request</td>
+</tr>
+</tbody></table>
+<p>The bottom two rows are a <strong>declared limitation, not a gap to close</strong>. Neither has a race-scoped object to accumulate on, so any memory they carried would be either empty or filled from something request-scoped that resembles a race and is not. <code>tests/engine/test_memory_scope_is_deliberate.py</code> fails if that asymmetry is ever &quot;harmonised&quot; away.</p>
+<p>Measured effect, on a client that honours <code>temperature=0</code>: under a Safety Car at Lusail 2025 lap 42, the orchestrator acted on a contingency it had itself declared one lap earlier on <strong>8 of 8</strong> runs, against <strong>0 of 8</strong> without the block (Fisher p=0.000155). Over a full race the echo cuts distinct contingency triggers from ~27 to 5.</p>
+<p>Stated precisely, because the two halves of that are easy to blur: on an <strong>ordinary green-flag lap</strong> the block does not change the call (<code>action</code> differed on 0 of 41 laps across a whole race), it changes whether consecutive laps are the same plan. On the lap where a <strong>contingency the model itself declared actually fires</strong>, it does change the call, and that is the entire point. Memory is not a nudge applied to every lap; it is a plan the model can still be holding when the trigger arrives.</p>
+<p>One consequence worth knowing before debugging a call: <strong>the effect does not show up in <code>reasoning</code>.</strong> In the Safety Car runs, none of the eight memory recommendations mentioned the prior plan, yet all eight flipped the call. To understand why a recommendation changed, read the memory block, not the prose.</p>
+<h2>LLM configuration</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Model</th>
+<th>Provider</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Sub-agents N26-N29</td>
+<td>gpt-4.1-mini</td>
+<td>OpenAI or LM Studio</td>
+</tr>
+<tr>
+<td>Orchestrator N31</td>
+<td>gpt-5.4-mini</td>
+<td>OpenAI or LM Studio</td>
+</tr>
+</tbody></table>
+<p>N25 (pace) is not in this table because it never calls an LLM. See the &quot;No LLM step&quot; note under <a href="/multi-agent/#n25-pace-agent-paceagentpy">N25: Pace Agent</a> above.</p>
+<p>Set <code>F1_LLM_PROVIDER=openai</code> env var to use the real OpenAI API. Default is LM Studio at <code>http://localhost:1234/v1</code>.</p>
+<h2>Data flow</h2>
+<pre><code>data/raw/2025/&lt;GP&gt;/laps.parquet
+       |
+  RaceReplayEngine --&gt; RaceStateManager.get_lap_state()
+       |
+  lap_state dict --&gt; Strategy Orchestrator
+       |
+  StrategyRecommendation --&gt; FastAPI /api/v1/strategy/recommend
+       |
+  JSON response --&gt; web app Strategy tab
+</code></pre>
+<h2>References</h2>
+<ul>
+<li>Heilmeier et al. (2020) ApplSci 10/4229: MC motorsport simulation</li>
+<li>Wang et al. (2024) arXiv:2406.04692: MoA reasoning aggregation</li>
+<li>Liu et al. (2024) arXiv:2402.02392: DeLLMa decision under uncertainty with LLM</li>
+</ul>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

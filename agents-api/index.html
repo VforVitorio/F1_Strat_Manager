@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Agents API reference · F1 StratLab docs</title>
+  <meta name="description" content="Entry points, output schemas, request/response models." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/agents-api/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/agents-api/" />
+  <meta property="og:title" content="Agents API reference · F1 StratLab docs" />
+  <meta property="og:description" content="Entry points, output schemas, request/response models." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/agents-api/" />
+  <meta name="twitter:title" content="Agents API reference · F1 StratLab docs" />
+  <meta name="twitter:description" content="Entry points, output schemas, request/response models." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Agents API reference",
+  "name": "Agents API reference",
+  "description": "Entry points, output schemas, request/response models.",
+  "url": "https://docs.f1stratlab.com/agents-api/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Agents API reference",
+      "item": "https://docs.f1stratlab.com/agents-api/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Agents API Reference</h1>
+<h2>Module location</h2>
+<p>All agents live in <code>src/agents/</code>. Each file is extracted from its corresponding notebook (N25-N31).</p>
+<h2>Entry points</h2>
+<p>Every agent has two entry points:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>FastF1 Entry</th>
+<th>RSM Adapter (no FastF1 session)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>N25 Pace</td>
+<td><code>run_pace_agent(**kwargs)</code></td>
+<td><code>run_pace_agent_from_state(lap_state)</code></td>
+</tr>
+<tr>
+<td>N26 Tire</td>
+<td><code>run_tire_agent(stint_state)</code></td>
+<td><code>run_tire_agent_from_state(lap_state, laps_df)</code></td>
+</tr>
+<tr>
+<td>N27 Situation</td>
+<td><code>run_race_situation_agent(lap_state)</code></td>
+<td><code>run_race_situation_agent_from_state(lap_state, laps_df)</code></td>
+</tr>
+<tr>
+<td>N28 Pit</td>
+<td><code>run_pit_strategy_agent(lap_state)</code></td>
+<td><code>run_pit_strategy_agent_from_state(lap_state, laps_df)</code></td>
+</tr>
+<tr>
+<td>N29 Radio</td>
+<td><code>run_radio_agent(lap_state, persist)</code></td>
+<td><code>run_radio_agent_from_state(lap_state, laps_df, persist)</code></td>
+</tr>
+<tr>
+<td>N30 RAG</td>
+<td><code>run_rag_agent(question)</code></td>
+<td><code>run_rag_agent_from_state(lap_state, laps_df)</code></td>
+</tr>
+<tr>
+<td>N31 Orchestrator</td>
+<td><code>run_strategy_orchestrator(race_state, lap_state)</code></td>
+<td><code>run_strategy_orchestrator_from_state(race_state, laps_df, lap_state)</code></td>
+</tr>
+</tbody></table>
+<p><strong>N25 is the odd one out: it takes no <code>laps_df</code>.</strong> Everything it needs must already be in the
+<code>lap_state</code>, which is why the stint fuel baseline is carried there rather than derived from a
+frame. The adapters are not uniform, so check the signature before assuming.</p>
+<p>Only the RAG agent (N30) exposes a module-level <code>get_rag_react_agent()</code> factory returning a compiled LangGraph <code>CompiledGraph</code>, for callers that want to drive the graph directly: the chat backend calls it. N25-N28 (pace, tire, race situation, pit strategy) used to have an equivalent free function each; all four were confirmed dead (zero callers anywhere in the repo) and removed in the 2026-08-01 cleanup pass. Tire, race situation and pit strategy still have their own <code>get_react_agent()</code> <em>instance method</em>, called internally from each agent&#39;s own <code>_run_core</code>. Only the redundant module-level wrapper was removed for those three. The radio agent (N29) never had one: its pipeline is a fixed sequence of model calls rather than a ReAct loop, so there is no graph to compile.</p>
+<p><strong>N25 (pace) is deliberately deterministic: no ReAct loop at all.</strong> Unlike its three siblings above, pace&#39;s <code>run()</code>/<code>run_from_state()</code> call the N06 XGBoost model directly; there is no LLM step to invoke and no category field (<code>warning_level</code>/<code>action</code>/<code>threat_level</code>) for an LLM to decide. <code>pace_agent.py</code> used to carry a complete but never-wired LangGraph ReAct scaffold (tools, system prompt, <code>get_react_agent()</code>) from the moment the module was first extracted, confirmed by archaeology to have been a deliberate per-agent choice made in the same commit that wired tire/pit/race_situation, not a wiring gap. It was formally retired (deleted, not left dead) in #781; see #778 for the full decision record.</p>
+<h2>Output dataclasses</h2>
+<h3>PaceOutput (N25)</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>lap_time_pred</code></td>
+<td>float</td>
+<td>Predicted lap time in seconds</td>
+</tr>
+<tr>
+<td><code>delta_vs_prev</code></td>
+<td>float</td>
+<td>Delta vs previous lap (negative = faster)</td>
+</tr>
+<tr>
+<td><code>delta_vs_median</code></td>
+<td>float</td>
+<td>Delta vs session median</td>
+</tr>
+<tr>
+<td><code>ci_p10</code></td>
+<td>float</td>
+<td>10th percentile bootstrap CI</td>
+</tr>
+<tr>
+<td><code>ci_p90</code></td>
+<td>float</td>
+<td>90th percentile bootstrap CI</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>Deterministic summary string (no LLM call, see the note above)</td>
+</tr>
+</tbody></table>
+<h3>TireOutput (N26)</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>compound</code></td>
+<td>str | None</td>
+<td>The <strong>Pirelli compound ID</strong> (e.g. <code>C2</code>, <code>C3</code>), not the SOFT/MEDIUM/HARD name. <code>None</code> when the compound is not in the slick map (a wet or intermediate lap). Verified on a served run: Melbourne lap 35 on HARD returns <code>&#39;C3&#39;</code></td>
+</tr>
+<tr>
+<td><code>current_tyre_life</code></td>
+<td>int</td>
+<td>Current tire age in laps</td>
+</tr>
+<tr>
+<td><code>deg_rate</code></td>
+<td>float</td>
+<td>Degradation rate (seconds lost per lap)</td>
+</tr>
+<tr>
+<td><code>laps_to_cliff_p10</code></td>
+<td>float</td>
+<td>10th percentile laps until cliff</td>
+</tr>
+<tr>
+<td><code>laps_to_cliff_p50</code></td>
+<td>float</td>
+<td>50th percentile laps until cliff</td>
+</tr>
+<tr>
+<td><code>laps_to_cliff_p90</code></td>
+<td>float</td>
+<td>90th percentile laps until cliff</td>
+</tr>
+<tr>
+<td><code>gp_name</code></td>
+<td>str</td>
+<td>The race the prediction was made for</td>
+</tr>
+<tr>
+<td><code>cumulative_deg_s</code></td>
+<td>float</td>
+<td>Seconds lost to degradation so far this stint</td>
+</tr>
+<tr>
+<td><code>deg_cost_s</code></td>
+<td>float</td>
+<td><strong>The field the scorers consume</strong>: the degradation cost the Monte Carlo prices a stay-out against</td>
+</tr>
+<tr>
+<td><code>warning_level</code></td>
+<td>str</td>
+<td>OK, MONITOR, or PIT_SOON (derived from <code>laps_to_cliff_p10</code> against circuit-cluster-aware thresholds; there is no CRITICAL value)</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>LLM-generated reasoning text</td>
+</tr>
+</tbody></table>
+<h3>RaceSituationOutput (N27)</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>overtake_prob</code></td>
+<td>float | None</td>
+<td>Probability that <strong>the driver&#39;s car passes the car ahead</strong> (0-1). <code>None</code> when that car is farther away than the 2.5 s gap N11 was trained on, because the model has no labelled example out there, so it declines rather than extrapolating. <code>None</code> is not <code>0.0</code>: zero is what the regulation asserts under a Safety Car (Art. 55.8).</td>
+</tr>
+<tr>
+<td><code>sc_prob_3lap</code></td>
+<td>float</td>
+<td>Safety car probability within 3 laps (0-1)</td>
+</tr>
+<tr>
+<td><code>sc_currently_active</code></td>
+<td>bool</td>
+<td>Any neutralisation (full Safety Car <strong>or</strong> Virtual Safety Car) is deployed <strong>right now</strong>. Not a prediction: it is read from the lap&#39;s RCM events, because N14 was trained to forecast a future SC and cannot recognise one already out. When true it forces the regulatory facts (<code>sc_prob_3lap = 1.0</code>, <code>overtake_prob = 0</code> per Art. 55.8/56.6, <code>drs_window = 0</code> per Art. 22.1(c)) and activates N28. It does <strong>not</strong> force the action: whether to pit under a neutralisation is race state, not a rule. See <a href="/multi-agent/">Multi-agent system</a>.</td>
+</tr>
+<tr>
+<td><code>vsc_active</code></td>
+<td>bool</td>
+<td>The active neutralisation is specifically a <strong>Virtual</strong> Safety Car (Art. 56), only meaningful when <code>sc_currently_active</code> is true. Split out (#471) because a VSC and a full SC differ in pit-time saving, and the Monte Carlo / N28 prompt need to tell them apart, the single <code>sc_currently_active</code> flag could not. <code>sc_active</code> (a derived property, not a stored field) is true only under a full SC: <code>sc_currently_active and not vsc_active</code>.</td>
+</tr>
+<tr>
+<td><code>threat_level</code></td>
+<td>str</td>
+<td>LOW, MEDIUM, HIGH</td>
+</tr>
+<tr>
+<td><code>gap_ahead_s</code></td>
+<td>float</td>
+<td>Gap to car ahead in seconds</td>
+</tr>
+<tr>
+<td><code>pace_delta_s</code></td>
+<td>float</td>
+<td>Pace difference vs car ahead</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>LLM-generated reasoning text</td>
+</tr>
+</tbody></table>
+<h3>PitStrategyOutput (N28)</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>action</code></td>
+<td>str</td>
+<td>STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, or REACTIVE_SC (box for an elevated-but-not-yet-confirmed SC probability; when an SC is already confirmed deployed, N28 prefers PIT_NOW directly)</td>
+</tr>
+<tr>
+<td><code>recommended_lap</code></td>
+<td>int or None</td>
+<td>Suggested pit lap</td>
+</tr>
+<tr>
+<td><code>compound_recommendation</code></td>
+<td>str</td>
+<td>Suggested next compound</td>
+</tr>
+<tr>
+<td><code>stop_duration_p05</code></td>
+<td>float</td>
+<td>5th percentile stop duration (s)</td>
+</tr>
+<tr>
+<td><code>stop_duration_p50</code></td>
+<td>float</td>
+<td>Median stop duration (s)</td>
+</tr>
+<tr>
+<td><code>stop_duration_p95</code></td>
+<td>float</td>
+<td>95th percentile stop duration (s)</td>
+</tr>
+<tr>
+<td><code>undercut_prob</code></td>
+<td>float or None</td>
+<td>Undercut success probability (0-1)</td>
+</tr>
+<tr>
+<td><code>undercut_target</code></td>
+<td>str or None</td>
+<td>Target driver for undercut</td>
+</tr>
+<tr>
+<td><code>sc_reactive</code></td>
+<td>bool</td>
+<td>Whether recommendation is SC-reactive</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>LLM-generated reasoning text</td>
+</tr>
+</tbody></table>
+<h3>RadioOutput (N29)</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>radio_events</code></td>
+<td>list</td>
+<td>Processed radio messages with sentiment, intent, NER</td>
+</tr>
+<tr>
+<td><code>rcm_events</code></td>
+<td>list</td>
+<td>Processed Race Control Messages</td>
+</tr>
+<tr>
+<td><code>alerts</code></td>
+<td>list</td>
+<td>Deterministic alert flags from NLP pipeline</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>LLM-generated reasoning text</td>
+</tr>
+<tr>
+<td><code>corrections</code></td>
+<td>list</td>
+<td>Driver-reported corrections (damage, handling issues)</td>
+</tr>
+</tbody></table>
+<h3>RegulationContext (N30)</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>question</code></td>
+<td>str</td>
+<td>The question that was asked of the retriever</td>
+</tr>
+<tr>
+<td><code>answer</code></td>
+<td>str</td>
+<td>Synthesized answer from regulation passages</td>
+</tr>
+<tr>
+<td><code>articles</code></td>
+<td>list[str]</td>
+<td>Referenced FIA article numbers</td>
+</tr>
+<tr>
+<td><code>chunks</code></td>
+<td>list</td>
+<td>Raw retrieved text chunks</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>Alias for <code>answer</code></td>
+</tr>
+</tbody></table>
+<h3>StrategyRecommendation (N31)</h3>
+<p>The v2 schema (frozen at 14 fields) surrounds the primary <code>action</code> with execution detail, driver-side instructions and a contingency list, see <a href="/multi-agent/">Multi-agent system</a> for the full rationale.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>action</code></td>
+<td>str</td>
+<td>STAY_OUT, PIT_NOW, UNDERCUT, OVERCUT, ALERT, the primary decision</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>str</td>
+<td>Multi-sentence LLM synthesis of all sub-agent inputs, MC scores and regulation constraints</td>
+</tr>
+<tr>
+<td><code>confidence</code></td>
+<td>float</td>
+<td>0-1 LLM self-assessed certainty; treat as qualitative, not calibrated</td>
+</tr>
+<tr>
+<td><code>pit_lap_target</code></td>
+<td>int or None</td>
+<td>Absolute lap of the planned stop. Populated for PIT_NOW/UNDERCUT/OVERCUT, optionally for a forward-looking STAY_OUT plan</td>
+</tr>
+<tr>
+<td><code>compound_next</code></td>
+<td>str or None</td>
+<td>Compound (SOFT/MEDIUM/HARD) chosen for the next stint; None for STAY_OUT</td>
+</tr>
+<tr>
+<td><code>undercut_target</code></td>
+<td>str or None</td>
+<td>Rival code targeted by an UNDERCUT/OVERCUT (e.g. &quot;SAI&quot;)</td>
+</tr>
+<tr>
+<td><code>pace_mode</code></td>
+<td>str</td>
+<td>PUSH, NEUTRAL, MANAGE, LIFT_AND_COAST, driving instruction for the next laps (default NEUTRAL)</td>
+</tr>
+<tr>
+<td><code>target_lap_time_s</code></td>
+<td>float or None</td>
+<td>Target lap time, grounded in N25&#39;s CI bounds so the LLM cannot invent a value far outside the model&#39;s prediction. Forced to <code>None</code> under an active SC/VSC (Art. 55.7, see <a href="/multi-agent/">Multi-agent system</a>)</td>
+</tr>
+<tr>
+<td><code>risk_posture</code></td>
+<td>str</td>
+<td>AGGRESSIVE, BALANCED, DEFENSIVE, the championship stance the LLM reasons under (default BALANCED)</td>
+</tr>
+<tr>
+<td><code>contingencies</code></td>
+<td>list[Contingency]</td>
+<td>Conditional branches for upcoming laps, capped at four. Each has <code>trigger</code> (plain-language event), <code>switch_to</code> (replacement action), <code>priority</code> (HIGH/MEDIUM/LOW), <code>rationale</code> (short justification)</td>
+</tr>
+<tr>
+<td><code>key_risks</code></td>
+<td>list[str]</td>
+<td>Up to five short bullets flagging risks the LLM wants to surface outside the narrative</td>
+</tr>
+<tr>
+<td><code>expected_stint_end</code></td>
+<td>int or None</td>
+<td>Lap the current stint is planned to end. Clamped against a physical anchor: <code>pit_lap_target</code> plus the shorter of the N26 cliff P50 and the next compound&#39;s Pirelli stint capacity, bounded by total race laps, accepting the LLM&#39;s value only within ±3 laps of that anchor (#433); falls through unclamped when no anchor (missing <code>pit_lap_target</code>/<code>compound_next</code>/cliff) is available</td>
+</tr>
+<tr>
+<td><code>scenario_scores</code></td>
+<td>dict</td>
+<td>Full MC output per candidate: <code>{&quot;STAY_OUT&quot;: {&quot;E&quot;, &quot;P10&quot;, &quot;P90&quot;, &quot;score&quot;}, ...}</code>. Attached in code after the LLM call, not filled by the LLM. On the projection path each candidate also carries <code>eligible</code> (bool) and <code>target</code> (str or null), and an <strong>ineligible candidate has <code>score: null</code></strong>, an undercut with no reachable rival, or an overcut with nobody in the pit lane, is reported as not offered rather than given a number it did not earn. Consumers must skip nulls; coercing one to <code>0.0</code> draws a real-looking score for a strategy that was never on the table</td>
+</tr>
+<tr>
+<td><code>regulation_context</code></td>
+<td>str</td>
+<td>N30 RAG answer when activated, empty string otherwise. Attached in code after the LLM call</td>
+</tr>
+</tbody></table>
+<h2><code>RaceState</code> input (N31)</h2>
+<p>The orchestrator accepts a <code>RaceState</code> Pydantic model:</p>
+<pre><code class="language-python">class RaceState(BaseModel):
+    driver: str           # Three-letter driver code
+    lap: int              # Current lap number
+    total_laps: int       # Total race laps
+    position: int         # Current race position
+    compound: str         # Current tire compound
+    tyre_life: int        # Current tire age (laps)
+    gap_ahead_s: float    # Gap to car ahead (seconds)
+    pace_delta_s: float   # Pace delta vs car ahead
+    air_temp: float       # Air temperature (C)
+    track_temp: float     # Track temperature (C)
+    rainfall: bool = False
+    radio_msgs: list = []   # RadioMessage dicts for current lap window
+    rcm_events: list = []   # RCMEvent dicts for current lap window
+    risk_tolerance: float = 0.5  # 0=conservative, 1=aggressive
+</code></pre>
+<h2>Model artifacts</h2>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Model directory</th>
+<th>Files</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>N25</td>
+<td><code>data/models/lap_time/</code></td>
+<td>XGBoost model</td>
+</tr>
+<tr>
+<td>N26</td>
+<td><code>data/models/tire_degradation/</code></td>
+<td>TireDegTCN <code>.pt</code> files + calibration JSON</td>
+</tr>
+<tr>
+<td>N27</td>
+<td><code>data/models/overtake_probability/</code></td>
+<td>LightGBM + calibrator + config</td>
+</tr>
+<tr>
+<td>N27</td>
+<td><code>data/models/safety_car_probability/</code></td>
+<td>LightGBM + calibrator + feature list</td>
+</tr>
+<tr>
+<td>N28</td>
+<td><code>data/models/pit_prediction/</code></td>
+<td>HistGBT P05/P50/P95 + undercut LightGBM</td>
+</tr>
+<tr>
+<td>N29</td>
+<td><code>data/models/nlp/</code></td>
+<td>pipeline_config_v1.json + .pt state dicts</td>
+</tr>
+<tr>
+<td>N30</td>
+<td><code>data/rag/</code></td>
+<td>Qdrant index (built by <code>scripts/build_rag_index.py</code>)</td>
+</tr>
+</tbody></table>
+<h2>LLM tool-level input validation</h2>
+<p>Every LangChain tool the LLM can call takes free-text arguments (<code>driver</code>, <code>lap_number</code>, <code>gp_name</code>, <code>year</code>, ...) with no server-side roster or range check other than what the tool itself enforces. A hardening pass (#476) closed the gap where a hallucinated or long-retired driver code, or a lap outside the loaded session, produced a confident but meaningless prediction instead of a visible failure:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Tools guarded</th>
+<th>Refuses when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>N26 Tire</td>
+<td><code>predict_tire_deg_tool</code>, <code>estimate_laps_to_cliff_tool</code></td>
+<td><code>driver</code> is not on track at the currently loaded lap, or the loaded <code>current_lap</code> is outside <code>[1, total_laps]</code></td>
+</tr>
+<tr>
+<td>N27 Situation</td>
+<td><code>predict_overtake_tool</code>, <code>predict_sc_tool</code></td>
+<td><code>lap_number</code> is out of range, or (for <code>predict_overtake_tool</code>) either driver is unknown for that lap</td>
+</tr>
+<tr>
+<td>N28 Pit</td>
+<td><code>predict_pit_duration_tool</code>, <code>score_undercut_tool</code></td>
+<td>the named driver (<code>driver</code>/<code>driver_y</code>) is not present in the live roster for the current lap</td>
+</tr>
+</tbody></table>
+<p>N25 Pace originally had an equivalent guard on its own <code>predict_pace_tool</code> (#476), but that tool was deleted along with the rest of pace&#39;s unreachable LangGraph scaffold in #781: pace has no LLM-facing tool left to guard, so the class of bug #476 fixed cannot occur for it anymore.</p>
+<p>The refusal is a plain string return (e.g. <code>&quot;error: &#39;HAM&#39; is not on track at lap 12; valid: [...]&quot;</code> or <code>&quot;... REFUSED — {driver} is not on track ...&quot;</code>), not an exception, the LLM sees a normal-looking tool result it can react to, rather than a traceback. <code>predict_pit_duration_tool</code> additionally cross-checks the LLM-supplied <code>under_sc</code> flag against the RCM-confirmed <code>sc_currently_active</code> ground truth when a real orchestrator run has set it, and trusts the confirmed value over the guess (logging a warning) rather than the other way round.</p>
+<p>&quot;On track&quot; is a <strong>presence</strong> check (the driver has a row in the live roster for this lap), the same convention <code>RaceStateManager</code> uses for <code>rivals</code>, see <a href="/simulation/">Race replay engine, who counts as a rival</a>. An age/lap-count cutoff cannot substitute for it: a finisher can go 20 laps without a row, and a retirement can surface as few as 9 laps in, so the ranges overlap.</p>
+<p>The MCP-facing tools one layer up (<code>src/telemetry/backend/mcp_tools.py</code>, consumed by chat) apply an equivalent guard on <code>gp</code>/<code>driver</code>/<code>lap</code>/<code>year</code> before they even reach these agent-level tools, see <a href="/backend-api/">Backend API reference → Tool risk tiers and the chat allowlist</a>.</p>
+<h2>Testing examples</h2>
+<p><strong>Tool-level (no LLM needed):</strong></p>
+<pre><code class="language-python">from src.agents.radio_agent import process_radio_tool
+result = process_radio_tool.invoke({
+    &quot;driver&quot;: &quot;NOR&quot;, &quot;lap&quot;: 18, &quot;text&quot;: &quot;Box this lap.&quot;
+})
+</code></pre>
+<p><strong>Agent-level (no LLM needed):</strong></p>
+<p>Whatever else a <code>*_from_state</code> entry point takes, its <code>lap_state</code> must be the real
+nested dict (<code>driver</code> / <code>rivals</code> / <code>weather</code> / <code>session_meta</code>), not a flat one. Most of
+them take a <code>laps_df</code> alongside it; the table above has the exact shapes, and they are
+not uniform. Build it
+with <code>RaceStateManager</code> rather than by hand: it is the component that owns the contract,
+and hand-rolling one is how the second, buggy implementation of this got written.</p>
+<pre><code class="language-python">from pathlib import Path
+from itertools import islice
+from src.simulation.replay_engine import RaceReplayEngine
+from src.agents.pace_agent import run_pace_agent_from_state
+
+replay = RaceReplayEngine(Path(&quot;data/raw/2025/Lusail&quot;), driver_code=&quot;PIA&quot;, team=&quot;McLaren&quot;)
+lap_state = next(islice(replay.replay(), 19, 20))   # lap 20
+output = run_pace_agent_from_state(lap_state)
+
+print(output.lap_time_pred, output.ci_p10, output.ci_p90)
+</code></pre>
+<p><strong>Take the <code>lap_state</code> from <code>replay()</code>, not from <code>rsm.get_lap_state(lap)</code> directly.</strong>
+<code>get_lap_state</code>&#39;s <code>weather_df</code> argument is optional, and <code>replay()</code> is what passes it. Call
+the RSM bare and the weather dict comes back with only <code>track_status</code>, so consumers fall
+through to their hardcoded defaults (the arcade&#39;s are 25.0 C air / 35.0 C track) and never
+say so. At Lusail the real values are 23.7 C and 29.8 C, and track temperature is a live
+input to tire degradation.</p>
+<p>See <a href="/simulation/">Race replay engine</a> for the full <code>lap_state</code> schema.</p>
+<p><strong>Full orchestrator (requires LM Studio or OpenAI):</strong></p>
+<pre><code class="language-python">from pathlib import Path
+from itertools import islice
+import pandas as pd
+from src.simulation.replay_engine import RaceReplayEngine
+from src.agents.strategy_orchestrator import RaceState
+from src.strategy.inference.engine import run_lap
+
+race_dir = Path(&quot;data/raw/2025/Lusail&quot;)
+laps_df = pd.read_parquet(race_dir / &quot;laps.parquet&quot;)
+replay = RaceReplayEngine(race_dir, driver_code=&quot;PIA&quot;, team=&quot;McLaren&quot;)
+lap_state = next(islice(replay.replay(), 19, 20))   # lap 20
+
+driver = lap_state[&quot;driver&quot;]
+ahead = [r for r in lap_state[&quot;rivals&quot;] if r[&quot;position&quot;] == driver[&quot;position&quot;] - 1]
+race_state = RaceState(
+    driver=driver[&quot;driver&quot;], lap=20, total_laps=replay.total_laps,
+    position=driver[&quot;position&quot;], compound=driver[&quot;compound&quot;],
+    tyre_life=driver[&quot;tyre_life&quot;],
+    # rivals ahead report a NEGATIVE interval; RaceState wants a magnitude
+    gap_ahead_s=abs(ahead[0][&quot;interval_to_driver_s&quot;]) if ahead else 0.0,
+    pace_delta_s=0.0,
+    air_temp=lap_state[&quot;weather&quot;][&quot;air_temp&quot;],
+    track_temp=lap_state[&quot;weather&quot;][&quot;track_temp&quot;],
+)
+
+rec, agent_outputs, timings = run_lap(race_state, laps_df, lap_state, profile=&quot;no-llm&quot;)
+print(rec.action, rec.confidence, rec.reasoning)
+</code></pre>
+<p>Prefer <code>run_lap</code> over calling <code>run_strategy_orchestrator_from_state</code> directly: it is the
+same pipeline (parity-tested), and it also hands back the per-agent outputs and stage
+timings. Pass <code>profile=&quot;no-llm&quot;</code> to run the deterministic path with no provider at all.</p>
+<p><strong>Pass the <code>lap_state</code>, and make sure it carries <code>session_meta</code>.</strong> The <code>laps_df</code> is scoped
+to the Grand Prix named there. Without it, the engine falls back to the whole frame and
+logs a warning, and the agents then look up rivals by driver and lap number across the
+entire season: the Zandvoort grid can end up deciding a race at Lusail. The fallback is
+loud on purpose, but the fix is to supply the <code>session_meta</code>, not to ignore the warning.</p>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

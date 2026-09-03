@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- FOUC guard: each deployed page ships prerendered HTML inside #root (for
+       crawlers / no-JS). React mounts with createRoot (replace, not hydrate),
+       so without this the raw placeholder flashes before the app renders. Mark
+       JS as available so docs.css can hide that placeholder until React mounts.
+       Crawlers run no JS, so they keep the prerendered content. Safety net:
+       reveal it again if React never mounts. -->
+  <script>
+    (function () {
+      var d = document.documentElement;
+      d.classList.add("js");
+      setTimeout(function () { d.classList.remove("js"); }, 3000);
+
+      /* The theme, stamped before the first paint.
+         It shares this block with the .js gate because both have the same deadline: land before
+         the body paints. A stored choice wins over the system preference, which is only the
+         opening guess. Both reads are wrapped, because a browser set to block site data throws on
+         the property access itself rather than returning null.
+         This runs before the stylesheet links below, so the page paints in the right colour
+         rather than painting dark and correcting. prerender_docs.mjs uses this file verbatim as
+         the shell for all 22 routes, so the guard covers every one of them. */
+      var stored = null;
+      try { stored = localStorage.getItem("f1sl.docs.theme"); } catch (e) {}
+      var theme = stored === "light" || stored === "dark" ? stored
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      d.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <title>Arcade quick start · F1 StratLab docs</title>
+  <meta name="description" content="One-command launch of the three-window arcade." />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://docs.f1stratlab.com/arcade-quick-start/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://docs.f1stratlab.com/arcade-quick-start/" />
+  <meta property="og:title" content="Arcade quick start · F1 StratLab docs" />
+  <meta property="og:description" content="One-command launch of the three-window arcade." />
+  <meta property="og:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+  <meta property="og:image:alt" content="F1 StratLab documentation banner with purple gradient and the F1 StratLab wordmark" />
+  <meta property="og:site_name" content="F1 StratLab Documentation" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://docs.f1stratlab.com/arcade-quick-start/" />
+  <meta name="twitter:title" content="Arcade quick start · F1 StratLab docs" />
+  <meta name="twitter:description" content="One-command launch of the three-window arcade." />
+  <meta name="twitter:image" content="https://docs.f1stratlab.com/assets/og-card.jpg" />
+
+  <!-- Structured data — entity graph for AI/search discovery.
+       Global (site-level) graph: lives in the shell so it ships in the initial
+       HTML and survives client-side rendering. Per-page TechArticle/BreadcrumbList
+       is added by the deploy-time prerender step (see .github/workflows/docs.yml). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://docs.f1stratlab.com/#website",
+        "url": "https://docs.f1stratlab.com/",
+        "name": "F1 StratLab Documentation",
+        "description": "Open-source multi-agent AI for real-time F1 race strategy. Architecture, agent API, arcade dashboard and deployment guides.",
+        "inLanguage": "en",
+        "about": { "@id": "https://docs.f1stratlab.com/#software" },
+        "publisher": { "@id": "https://docs.f1stratlab.com/#author" }
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://docs.f1stratlab.com/#software",
+        "name": "F1 StratLab",
+        "alternateName": "F1 Strategy Manager",
+        "description": "Multi-agent AI system that turns public Formula 1 telemetry and FIA regulations into real-time race-strategy recommendations, combining seven ML predictors, an NLP radio pipeline, a RAG layer over FIA rules and a LangGraph orchestrator.",
+        "url": "https://f1stratlab.com",
+        "codeRepository": "https://github.com/VforVitorio/F1-StratLab",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": "Python",
+        "applicationCategory": "DeveloperApplication",
+        "author": { "@id": "https://docs.f1stratlab.com/#author" },
+        "sameAs": [
+          "https://github.com/VforVitorio/F1-StratLab",
+          "https://deepwiki.com/VforVitorio/F1-StratLab",
+          "https://huggingface.co/datasets/VforVitorio/f1-strategy-dataset"
+        ]
+      },
+      {
+        "@type": "Person",
+        "@id": "https://docs.f1stratlab.com/#author",
+        "name": "Víctor Vega Sobral",
+        "alternateName": "VforVitorio",
+        "url": "https://victorvegasobral.com",
+        "jobTitle": "Intelligent Systems Engineering student; AI & Data Intern",
+        "affiliation": "UIE Campus Coruña",
+        "sameAs": [
+          "https://github.com/VforVitorio",
+          "https://www.linkedin.com/in/victorvegasobral/",
+          "https://huggingface.co/VforVitorio",
+          "https://victorvegasobral.com",
+          "https://f1stratlab.com"
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <!-- Theme color (mobile browsers). One tag, no media query: a manual theme choice cannot be
+       expressed as prefers-color-scheme, and both values here used to be the same dark hex
+       anyway. components.js keeps it in step with data-theme. -->
+  <meta name="theme-color" content="#0c0d14" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Inter (body) uses display=swap; the secondary display families use
+       display=optional so they never hold up first paint. Split into two
+       requests so each family can set its own font-display. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/docs.css" />
+
+  <!-- Favicon — F1 StratLab brand icon -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Arcade quick start",
+  "name": "Arcade quick start",
+  "description": "One-command launch of the three-window arcade.",
+  "url": "https://docs.f1stratlab.com/arcade-quick-start/",
+  "inLanguage": "en",
+  "isPartOf": {
+    "@id": "https://docs.f1stratlab.com/#website"
+  },
+  "about": {
+    "@id": "https://docs.f1stratlab.com/#software"
+  },
+  "author": {
+    "@id": "https://docs.f1stratlab.com/#author"
+  },
+  "speakable": {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [
+      "h1",
+      ".prerender-content > p"
+    ]
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://docs.f1stratlab.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Arcade quick start",
+      "item": "https://docs.f1stratlab.com/arcade-quick-start/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+  <div id="root"><main class="prerender-content">
+<h1>Arcade Quick Start</h1>
+<blockquote>
+<p>End-user guide for running the F1 StratLab arcade replay with the live strategy surfaces. Aimed at someone who has cloned the repository and wants everything on screen inside ten minutes.</p>
+</blockquote>
+<p>One command launches everything. The arcade process owns the simulation loop and broadcasts merged state on a local TCP port; the follower surfaces subscribe and render.</p>
+<p><strong>One follower stack.</strong> PITWALL (two pywebview windows rendering React) is the whole strategy surface. The original PySide6 pair ran beside it through the migration so every PITWALL panel could be compared against the window it replaced while that window still existed; it has now been retired, along with the <code>PySide6</code> and <code>pyqtgraph</code> dependencies. The comparison baseline is not lost with it: the Qt windows&#39; rendered output is committed as screenshots under <code>documents/dev_docs/migration/pitwall/</code>. The pyglet replay is unchanged either way.</p>
+<p align="center">
+  <video src="/assets/demo/arcade-demo.mp4" poster="/assets/demo/arcade-demo-poster.jpg" width="760" autoplay loop muted playsinline preload="metadata" aria-label="F1 StratLab arcade replay in action"></video>
+  <br/>
+  <sub>The arcade: 2D replay, strategy dashboard and live telemetry, all in sync. Recorded before PITWALL joined; the pyglet replay on the left is unchanged.</sub>
+</p>
+
+<h2>Prerequisites</h2>
+<ul>
+<li><strong>Python</strong>: 3.10 or newer. The project pins dependencies with <code>uv</code>.</li>
+<li><strong>Dependencies</strong>: run <code>uv sync</code> from the repo root. The lockfile pulls <code>arcade</code>, <code>pywebview</code>, <code>fastf1</code>, <code>langchain-openai</code>, the model stack (<code>xgboost</code>, <code>lightgbm</code>, <code>torch</code>), and the NLP stack (<code>transformers</code>, <code>sentence-transformers</code>, <code>setfit</code>). No manual install steps required beyond <code>uv sync</code>.</li>
+<li><strong>LLM credentials</strong>: either set <code>OPENAI_API_KEY</code> in a repo-root <code>.env</code> (the canonical TFG setup) or run LM Studio locally on <code>http://localhost:1234/v1</code> and pass <code>--provider lmstudio</code> on the command line (the arcade&#39;s own flag; its default is <code>openai</code>, independent of the <code>F1_LLM_PROVIDER</code> env var the backend and CLI read). Only the wording of the orchestrator&#39;s reasoning changes.</li>
+<li><strong>Race data cache</strong>: the replay reads <code>data/raw/{year}/{Location}/laps.parquet</code> and optionally <code>weather.parquet</code>. The parquet files are produced by FastF1 on first run. Expect a 20-40 second delay on the first launch of a round.</li>
+<li><strong>Vector store (optional)</strong>: the N30 RAG agent reads a local Qdrant index under <code>data/rag/</code>. If missing, the orchestrator degrades gracefully, regulation lookups return an empty context. Run <code>python scripts/build_rag_index.py</code> once to build it.</li>
+</ul>
+<h2>One-command launch</h2>
+<p>From the repository root:</p>
+<pre><code class="language-bash">python -m src.arcade.main --viewer --year 2025 --round 3 --driver VER --team &quot;Red Bull Racing&quot; --driver2 LEC --strategy
+</code></pre>
+<p>What happens:</p>
+<ol>
+<li><code>src.arcade.main</code> parses the CLI and opens the arcade <code>Window</code>.</li>
+<li>The <code>--viewer</code> flag skips the menu and goes straight to <code>F1ArcadeView</code>.</li>
+<li>The view loads the 2025 Round 3 (Suzuka) parquet for Verstappen.</li>
+<li>With <code>--strategy</code> set, the view starts a <code>TelemetryStreamServer</code> on <code>127.0.0.1:9998</code>, owns a <code>StrategyState</code>, and spawns <code>python -m src.pitwall</code>.</li>
+<li>PITWALL opens <strong>PITWALL · DATA</strong> and <strong>PITWALL · AGENTS</strong>, two pywebview windows rendering React against the same broadcast, through a single shared TCP client.</li>
+</ol>
+<p>The arcade window drives playback; every other window reacts to broadcasts. PITWALL additionally serves the same two pages over loopback, and prints the URL on startup, so they can be opened in a browser (and get devtools) instead of, or as well as, the windows.</p>
+<h2>What each window shows</h2>
+<h3>Arcade replay (pyglet)</h3>
+<p>Track outline with the DRS zones drawn in green, two driver icons (our driver in team colour, rival in rival-team colour), a leaderboard on the right with compound pills and gaps, a weather panel, a driver-info strip, and a progress bar with the current lap.</p>
+<h3>PITWALL · AGENTS</h3>
+<p>Four strata, top to bottom: header, decision band, agent grid, status bar. The band runs left to right in the order a reader asks the questions, which is what the orchestrator is doing, why, on what evidence, and what happens next: the orchestrator card with its action badge and confidence bar, the reasoning panel, the scenario bars (STAY_OUT / PIT_NOW / UNDERCUT / OVERCUT, scored by the Monte Carlo over the agents&#39; own distributions) and the plan strip.</p>
+<p>Under it a grid places its cards by name rather than in reading order, because three of them want a shape reading order does not give them:</p>
+<pre><code>pace   tire   side
+radio  exit   rag
+</code></pre>
+<p><code>side</code> stacks Situation (N27) and Pit (N28); <code>exit</code> is the PIT EXIT card, which answers what position a stop taken on this lap rejoins in and which cars land either side. Pace (N25) and Tire (N26) carry embedded ECharts plots, and Radio (N29) and RAG (N30) dim when inactive.</p>
+<h3>PITWALL · DATA</h3>
+<p>A full-width status strip over two columns. Left: the twenty-row timing tower and the session bests. Right: a tab strip over <strong>TRACES</strong> (the own-car 2x2 telemetry grid, the track ring and the radio / RCM feed), <strong>RACE PACE</strong> (a lap-by-lap grid coloured by each lap&#39;s own ranking) and <strong>RACE TRACE</strong> (accumulated time against the leader, the field average or our own car).</p>
+<h2>Menu mode vs <code>--viewer</code></h2>
+<p>Drop the <code>--viewer</code> flag and the arcade opens <code>MenuView</code> first:</p>
+<pre><code class="language-bash">python -m src.arcade.main --strategy
+</code></pre>
+<p><code>MenuView</code> is a pure-keyboard navigator (Arrow keys + Enter, Escape to go back). It lists years (2023-2025), rounds per year, drivers, and teams. The <code>--viewer</code> shortcut exists for regression testing and for the &quot;I know what I want&quot; path.</p>
+<h2>Single-driver vs two-driver mode</h2>
+<p>Omit <code>--driver2</code> and only the main driver renders on track and in the telemetry charts. The Delta trace in the telemetry window stays empty (no rival to compare against) and the Situation card focuses solely on safety-car probability.</p>
+<p>Pass <code>--driver2 LEC</code> and:</p>
+<ul>
+<li>The rival icon appears on the track in the rival-team colour.</li>
+<li>The Delta plot renders the rolling gap between our driver and the rival.</li>
+<li>The Situation card gains the overtake-probability gauge driven by the N27 LightGBM model.</li>
+<li>The Pit card&#39;s undercut probability is computed against the rival.</li>
+</ul>
+<h2>Playback controls</h2>
+<p>Hotkeys handled by <code>F1ArcadeView.on_key_press</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Space</code></td>
+<td>pause / resume</td>
+</tr>
+<tr>
+<td><code>Left</code> / <code>Right</code></td>
+<td><strong>hold</strong> to scrub backwards or forwards. Holding pauses playback; releasing restores whatever state was active before. Not a one-lap step</td>
+</tr>
+<tr>
+<td><code>Up</code> / <code>Down</code></td>
+<td>next / previous playback speed</td>
+</tr>
+<tr>
+<td><code>1</code> <code>2</code> <code>3</code> <code>4</code></td>
+<td>jump straight to 0.5x, 1x, 2x, 4x</td>
+</tr>
+<tr>
+<td><code>R</code></td>
+<td>restart: back to frame zero, default speed, playing</td>
+</tr>
+<tr>
+<td><code>D</code></td>
+<td>show / hide the DRS zones on the track</td>
+</tr>
+<tr>
+<td><code>B</code></td>
+<td>show / hide the progress bar</td>
+</tr>
+<tr>
+<td><code>A</code></td>
+<td>show / hide the eighteen non-featured cars</td>
+</tr>
+<tr>
+<td><code>C</code></td>
+<td>show / hide the controls list itself</td>
+</tr>
+<tr>
+<td><code>Escape</code></td>
+<td>close the window</td>
+</tr>
+</tbody></table>
+<p><code>Escape</code> quits rather than returning to the menu, and it does so whether or not
+<code>--viewer</code> was used at launch.</p>
+<p>The controls list collapses to a single <code>C  Controls</code> line when the column above
+it has no room. The list needs 158 px, and the left column leaves 263 at the
+default 1280x720 whether one driver is followed or two, so the collapse fires
+only on a window dragged below 615 px tall. <code>C</code> opens the list anyway
+where it does not fit, on the grounds that a list you asked for is one you can
+dismiss with the same key.</p>
+<p>The telemetry under the weather card is one table with a column per driver. It
+used to be a card each, which repeated the same six labels under two headers and
+took 354 px of the column for twelve values; at the default height that left
+146 px against a list needing 158, and the list drew over the second card.</p>
+<p>The window has no minimum size, and below about 475 px tall the table reaches
+the collapsed hint line. Nothing collapses further at that point. Before the
+table replaced the two cards the same crossing happened at about 652.</p>
+<h2>Known limitations</h2>
+<ul>
+<li><strong>First-lap warmup</strong>: the orchestrator runs cold for the first ~15 seconds while agent models load.</li>
+<li><strong>Cold FastF1 cache</strong>: the first time a given round is requested, FastF1 downloads the session. Expect roughly 30 seconds on cold cache.</li>
+<li><strong>Port 9998</strong>: the TCP broadcaster binds <code>127.0.0.1:9998</code>. If another process holds the port, the dashboard cannot connect.</li>
+<li><strong>Strategy mode requires year 2025</strong>: the multi-agent pipeline only ships with 2025-season features. Running <code>--strategy</code> against 2023 or 2024 falls back to arcade-only replay.</li>
+</ul>
+<h2>Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FileNotFoundError: data/raw/.../laps.parquet</code></td>
+<td>the race is not in the local cache</td>
+<td><code>uv run python -c &quot;from src.f1_strat_manager.data_cache import ensure_race; ensure_race(2025, &#39;Melbourne&#39;)&quot;</code>, or just pick the race from the <code>f1-strat</code> menu, which calls the same function</td>
+</tr>
+<tr>
+<td>&quot;Backend offline&quot; / &quot;Connection refused&quot;</td>
+<td>Arcade did not start the stream server</td>
+<td>Restart the arcade with <code>--strategy</code></td>
+</tr>
+<tr>
+<td>&quot;OpenAI api_key missing&quot;</td>
+<td><code>.env</code> missing or <code>OPENAI_API_KEY</code> unset</td>
+<td>Add the key to <code>.env</code>, or <code>F1_LLM_PROVIDER=lmstudio</code></td>
+</tr>
+<tr>
+<td>PITWALL renders but charts stay empty</td>
+<td>First broadcast carries only the arcade frame</td>
+<td>Per-agent outputs arrive on the second broadcast</td>
+</tr>
+<tr>
+<td><code>PITWALL needs its UI bundle</code> on startup</td>
+<td>the React bundle was never built</td>
+<td><code>npm ci &amp;&amp; npm run build</code> in <code>src/pitwall/ui</code></td>
+</tr>
+</tbody></table>
+<h2>Related reading</h2>
+<ul>
+<li><a href="/pitwall/">PITWALL windows</a>, the two React surfaces and the client they share.</li>
+<li><a href="/arcade-dashboard/">Arcade dashboard (legacy)</a>, the retired PySide6 package PITWALL replaced.</li>
+<li><a href="/arcade-strategy-pipeline/">Arcade strategy pipeline</a>, why the arcade delegates to the shared engine instead of keeping its own copy of the orchestrator.</li>
+<li><a href="/multi-agent/">Multi-agent system</a>: N25-N31 multi-agent pipeline reference.</li>
+</ul>
+
+</main></div>
+
+  <!-- React (pinned + integrity) — production builds: smaller, faster, no dev warnings -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+
+  <!-- Markdown + diagrams + syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+
+  <!-- App — plain React.createElement scripts (no JSX, no Babel, no build step).
+       Loaded in dependency order; they share window globals. -->
+  <script src="/app/nav.js?v=9"></script>
+  <script src="/app/markdown.js?v=9"></script>
+  <script src="/app/components.js?v=10"></script>
+  <script src="/app/graph.js?v=9"></script>
+  <script src="/app/home.js?v=7"></script>
+  <script src="/app/main.js?v=7"></script>
+
+  <!-- Cloudflare Web Analytics -->
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "990410867d3e4ee5afb262861e771b0e"}'></script>
+</body>
+</html>

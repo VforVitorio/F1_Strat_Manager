@@ -1,0 +1,440 @@
+/* =========================================================
+   F1 Strategy Manager — Design Tokens
+   Source of truth: legacy/app_streamlit_v1/assets/style.css
+   ========================================================= */
+
+:root {
+  color-scheme: dark;
+
+  /* ---------- BASE BACKGROUND RAMP ---------- */
+  --bg-0:   #08080c;   /* page black */
+  --bg-1:   #0c0d14;   /* deep surface (hero) */
+  --bg-2:   #111827;   /* sidebar / card dark */
+  --bg-3:   #17192b;   /* card resting */
+  --bg-4:   #1e2139;   /* card hovered / elevated */
+  --bg-5:   #23234a;   /* sidebar-hover / input bg */
+
+  /* ---------- FOREGROUND RAMP ---------- */
+  --fg-1:   #ffffff;           /* primary text */
+  --fg-2:   rgba(255,255,255,0.72);  /* secondary text */
+  --fg-3:   rgba(255,255,255,0.52);  /* tertiary / captions */
+  --fg-4:   rgba(255,255,255,0.32);  /* disabled / hairline labels */
+  --fg-inv: #0c0d14;           /* on-primary text */
+
+  /* ---------- BRAND / PURPLE (PRIMARY) ---------- */
+  --purple-50:  #f2efff;
+  --purple-100: #e0d9ff;
+  --purple-200: #c2b4ff;
+  --purple-300: #a29bfe;   /* hover */
+  --purple-400: #8b7cf6;
+  --purple-500: #7f6ff0;   /* secondary */
+  --purple-600: #6c5ce7;   /* PRIMARY */
+  --purple-700: #5a48d4;
+  --purple-800: #4434a6;
+  --purple-900: #2a1f6b;
+
+  --accent-primary:   var(--purple-600);
+  --accent-secondary: var(--purple-500);
+  --accent-hover:     var(--purple-300);
+  /* The accent AS TEXT, which is a different job from the accent as a fill and needs a different
+     value per theme. purple-300 is the lift that reads on black and measures 2.23:1 on white, so
+     every eyebrow, link and inline accent on the light theme would ship below AA if they pointed
+     at the scale directly. */
+  --accent-text:      var(--purple-300);
+  /* Its hover, one step brighter on dark and one step deeper on light. */
+  --accent-text-hover: var(--purple-200);
+
+  /* ---------- BLUE (TELEMETRY / DATA) ---------- */
+  --blue-300: #60a5fa;
+  --blue-400: #3385ff;
+  --blue-500: #2563eb;
+  --blue-600: #1d4ed8;
+
+  /* ---------- SEMANTIC / STATUS ---------- */
+  --success: #43ff64;   /* green pill */
+  --warning: #ffbd33;   /* amber */
+  --danger:  #ff5733;   /* pit/stop red */
+  --info:    #3385ff;   /* info blue */
+
+  /* ---------- F1 TIRE COMPOUND ACCENTS ---------- */
+  --tire-soft:   #ff2d3a;   /* red */
+  --tire-medium: #ffcf2d;   /* yellow */
+  --tire-hard:   #e6e6e6;   /* white */
+  --tire-inter:  #2dd47a;   /* green */
+  --tire-wet:    #2d8fff;   /* blue */
+
+  /* ---------- DIVIDERS / SURFACES ---------- */
+  --divider:        rgba(255,255,255,0.10);
+  --divider-strong: rgba(255,255,255,0.18);
+  --hairline:       rgba(255,255,255,0.06);
+
+  /* ---------- GRADIENTS ---------- */
+  --grad-purple: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+  --grad-purple-soft: linear-gradient(135deg, rgba(108,92,231,0.18) 0%, rgba(162,155,254,0.08) 100%);
+  --grad-hero: radial-gradient(ellipse 120% 80% at 50% 0%, rgba(108,92,231,0.28) 0%, rgba(108,92,231,0.08) 35%, transparent 70%);
+  --grad-halo: radial-gradient(circle at 50% 50%, rgba(162,155,254,0.35) 0%, transparent 60%);
+
+  /* ---------- SHADOWS ---------- */
+  --shadow-card:    0 2px 10px rgba(0,0,0,0.25);
+  --shadow-elev:    0 12px 40px rgba(0,0,0,0.45);
+  --shadow-glow:    0 0 0 1px rgba(108,92,231,0.35), 0 12px 40px rgba(108,92,231,0.25);
+  --shadow-inset:   inset 0 1px 0 rgba(255,255,255,0.06);
+
+
+  /* ---------- SURFACE TINTS ----------
+     One step away from the page colour, in whichever direction the theme lifts.
+     On black a surface separates by going lighter; on white it separates by going
+     darker. Same four roles, opposite signs, so a rule can say "one step up" once
+     instead of hardcoding a white alpha that vanishes on a light ground. */
+  --tint-1: rgba(255,255,255,0.015);  /* table row hover, the faintest step */
+  --tint-2: rgba(255,255,255,0.03);   /* resting panel, chip, search field */
+  --tint-3: rgba(255,255,255,0.06);   /* hovered panel */
+  --tint-4: rgba(255,255,255,0.10);   /* pressed, or a divider that must read */
+
+  /* ---------- CHROME ----------
+     Translucent surfaces that sit OVER content and therefore cannot be a tint:
+     the sticky header, the graph's full-screen scrim, and the solid panels that
+     float on top of the canvas. */
+  --chrome-veil:  rgba(8,8,12,0.72);   /* sticky top nav */
+  --overlay-veil: rgba(8,8,12,0.85);   /* graph scrim */
+  --overlay-soft: rgba(8,8,12,0.60);   /* graph header strip */
+  --panel-solid:  rgba(17,24,39,0.92); /* graph legend and tooltip */
+  --scroll-thumb: rgba(255,255,255,0.08);
+  --grid-wash:    rgba(255,255,255,0.018);  /* the page's faint graph-paper grid */
+  --fade-to-page: rgba(8,8,12,0);           /* the mini-graph's bottom fade, page colour at zero alpha */
+  --fade-to-page-end: rgba(8,8,12,0.7);
+
+  /* ---------- DISPLAY HEADING GRADIENT ----------
+     The article h1 and the home h1 paint their glyphs with this and set
+     -webkit-text-fill-color: transparent. A gradient tuned to run from white down
+     into lilac leaves nothing visible on a white page, so it is a token. */
+  --grad-heading: linear-gradient(180deg, #ffffff 0%, #d6d0ff 100%);
+  --grad-heading-home: linear-gradient(180deg, #ffffff 0%, #d0c8ff 100%);
+  /* The home h1's coloured span. Runs the brand's purple into the telemetry blue. */
+  --grad-heading-accent: linear-gradient(120deg, #a29bfe 0%, #6c5ce7 55%, #3385ff 100%);
+  --pill-live-bg:   rgba(67,255,100,0.08);
+  --pill-live-edge: rgba(67,255,100,0.22);
+
+  /* ---------- SYNTAX ----------
+     Prism ships no stylesheet here, so these nine are the whole highlighter. */
+  --code-comment:  rgba(255,255,255,0.38);
+  --code-keyword:  #c2b4ff;
+  --code-string:   #9ae6b4;
+  --code-function: #a29bfe;
+  --code-number:   #f6ad55;
+  --code-punct:    rgba(255,255,255,0.6);
+  --code-property: #60a5fa;
+  --code-param:    #d4caff;
+
+  /* ---------- RADII ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* ---------- SPACING SCALE (4px base) ---------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* ---------- TYPOGRAPHY ---------- */
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Type scale (display-heavy, 1.25 ratio) */
+  --fs-xs:   12px;
+  --fs-sm:   14px;
+  --fs-base: 16px;
+  --fs-md:   18px;
+  --fs-lg:   20px;
+  --fs-xl:   24px;
+  --fs-2xl:  32px;
+  --fs-3xl:  44px;
+  --fs-4xl:  60px;
+  --fs-5xl:  84px;
+  --fs-6xl:  112px;
+
+  --lh-tight: 1.05;
+  --lh-snug:  1.2;
+  --lh-normal:1.45;
+  --lh-loose: 1.6;
+
+  --tracking-tightest: -0.04em;
+  --tracking-tighter:  -0.02em;
+  --tracking-tight:    -0.01em;
+  --tracking-normal:    0;
+  --tracking-wide:      0.04em;
+  --tracking-widest:    0.18em;
+
+  /* Semantic type tokens */
+  --h1-size: var(--fs-5xl);
+  --h1-lh:   var(--lh-tight);
+  --h1-weight: 700;
+  --h1-tracking: var(--tracking-tightest);
+
+  --h2-size: var(--fs-3xl);
+  --h2-lh:   var(--lh-snug);
+  --h2-weight: 600;
+  --h2-tracking: var(--tracking-tighter);
+
+  --h3-size: var(--fs-2xl);
+  --h3-weight: 600;
+
+  --eyebrow-size: var(--fs-xs);
+  --eyebrow-weight: 600;
+  --eyebrow-tracking: var(--tracking-widest);
+
+  --body-size: var(--fs-base);
+  --body-lh:   var(--lh-loose);
+
+  --code-size: var(--fs-sm);
+}
+
+/* =========================================================
+   LIGHT THEME
+   Stamped as data-theme='light' on <html> by the guard in index.html. Only the
+   SEMANTIC ramp flips: backgrounds, foregrounds, dividers, gradients, shadows.
+   Identity keeps its hue, so the purple scale, the blue telemetry scale and the
+   tyre compounds are untouched.
+
+   THE ALPHAS ARE SOLVED, NOT MIRRORED. Black on white and white on black are not
+   symmetric in WCAG luminance, so each step below was solved to land on the ratio
+   its dark counterpart already hits, measured on the WORST light ground the site
+   paints text on, which is the sidebar rather than the page:
+
+     token     dark page/sidebar    light page/sidebar
+     --fg-1        19.99 / 17.74        17.01 / 15.44
+     --fg-2        10.29 /  9.57         7.91 /  7.49
+     --fg-3         5.68 /  5.55         5.76 /  5.54
+     --fg-4         2.78 /  2.90         2.87 /  2.81   decorative in both
+
+   The webapp ships a light block with the same token names and it was NOT copied
+   across: its --fg-3 of 0.58 measures 4.41 on this page and fails AA. It gets away
+   with the value because its cards are pure white; this site puts tertiary text on
+   the page and on the sidebar, where the same alpha does not clear.
+
+   Four status colours and the tag colour move too. Every one of them is a light
+   hue chosen to read on black, and all five fail as text on white: #43ff64 is
+   1.23:1, #ffbd33 is 1.54:1, #ff5733 is 2.90:1. They keep their meaning and change
+   their lightness.
+   ========================================================= */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* ---------- BASE BACKGROUND RAMP ---------- */
+  /* The ramp inverts its direction: in dark it climbs from page black up to an
+     elevated card, in light it starts near-white and the CARD is the brightest
+     step, because on a light ground elevation means closer to white. */
+  --bg-0:   #f5f5fa;   /* page */
+  --bg-1:   #eef0f7;   /* deep surface (hero) */
+  --bg-2:   #e9eaf4;   /* sidebar / code block */
+  --bg-3:   #ffffff;   /* card resting */
+  --bg-4:   #f7f7fc;   /* card hovered / elevated */
+  --bg-5:   #eceaf9;   /* sidebar-hover / input bg */
+
+  /* ---------- FOREGROUND RAMP ---------- */
+  /* Near-black with a purple tint rather than #000, the mirror of the dark theme's
+     page colour, so the text sits in the same family as the brand. */
+  --fg-1:   #14121f;                 /* primary text */
+  --fg-2:   rgba(20,18,31,0.75);     /* secondary text */
+  --fg-3:   rgba(20,18,31,0.66);     /* tertiary / captions */
+  --fg-4:   rgba(20,18,31,0.44);     /* disabled / hairline labels */
+  --fg-inv: #ffffff;                 /* on-primary text */
+
+  /* ---------- ACCENT ---------- */
+  /* The scale is identity and does not move, but the hover ALIAS does: purple-300
+     is 2.23:1 on this page, so the value that reads as a lift on black reads as
+     unreadable on white. purple-700 is 5.83:1. */
+  --accent-hover: var(--purple-700);
+  --accent-text:  var(--purple-700);   /* 5.83:1 on the page, 5.30:1 on the sidebar */
+  --accent-text-hover: var(--purple-800);
+
+  /* ---------- SEMANTIC / STATUS ---------- */
+  /* Solved on the sidebar, the darkest ground text lands on, so they also clear on
+     the page and inside a code block. */
+  --success: #146c34;
+  --warning: #9a4a08;
+  --danger:  #b91c1c;
+  --info:    #1d4ed8;
+
+  /* ---------- DIVIDERS / SURFACES ---------- */
+  /* Black alpha needs a little more of itself than white alpha did to read at the
+     same strength on the opposite ground. */
+  --divider:        rgba(20,18,31,0.12);
+  --divider-strong: rgba(20,18,31,0.20);
+  --hairline:       rgba(20,18,31,0.07);
+
+  /* ---------- GRADIENTS ---------- */
+  /* --grad-purple is identity and stays. The other three are the accent at low
+     alpha, tuned to lift a black page; over near-white the same alphas wash out to
+     nothing, so each is raised. */
+  --grad-purple-soft: linear-gradient(135deg, rgba(108,92,231,0.14) 0%, rgba(162,155,254,0.07) 100%);
+  --grad-hero: radial-gradient(ellipse 120% 80% at 50% 0%, rgba(108,92,231,0.16) 0%, rgba(108,92,231,0.05) 35%, transparent 70%);
+  --grad-halo: radial-gradient(circle at 50% 50%, rgba(108,92,231,0.20) 0%, transparent 60%);
+
+  /* ---------- SHADOWS ---------- */
+  /* Lighter and softer. A shadow tuned for a dark page is a black smear on a white
+     one, and --shadow-inset inverts outright: a white top highlight is invisible
+     on white, so it becomes a dark one. */
+  --shadow-card:    0 2px 10px rgba(20,18,31,0.08);
+  --shadow-elev:    0 12px 40px rgba(20,18,31,0.14);
+  --shadow-glow:    0 0 0 1px rgba(108,92,231,0.30), 0 12px 40px rgba(108,92,231,0.15);
+  --shadow-inset:   inset 0 1px 0 rgba(20,18,31,0.05);
+
+  /* ---------- SURFACE TINTS ---------- */
+  /* Sign flipped: on white a surface separates by going darker. The alphas are a
+     touch higher because black over near-white reads weaker than white over black
+     at the same value. */
+  --tint-1: rgba(20,18,31,0.025);
+  --tint-2: rgba(20,18,31,0.04);
+  --tint-3: rgba(20,18,31,0.07);
+  --tint-4: rgba(20,18,31,0.12);
+
+  /* ---------- CHROME ---------- */
+  --chrome-veil:  rgba(245,245,250,0.78);
+  --overlay-veil: rgba(245,245,250,0.88);
+  --overlay-soft: rgba(245,245,250,0.65);
+  --panel-solid:  rgba(255,255,255,0.96);
+  --scroll-thumb: rgba(20,18,31,0.18);
+  --grid-wash:    rgba(20,18,31,0.03);
+  --fade-to-page: rgba(245,245,250,0);
+  --fade-to-page-end: rgba(245,245,250,0.85);
+
+  /* ---------- DISPLAY HEADING GRADIENT ---------- */
+  /* Runs the other way, from the ink colour down into the deep purple, so the
+     glyphs stay dark enough to read while keeping the brand's fade. */
+  --grad-heading: linear-gradient(180deg, #14121f 0%, #4434a6 100%);
+  --grad-heading-home: linear-gradient(180deg, #14121f 0%, #3d2f96 100%);
+  /* Both stops darken: #a29bfe is 2.23:1 on this page and #3385ff is 3.25:1. */
+  --grad-heading-accent: linear-gradient(120deg, #5a48d4 0%, #4434a6 55%, #1d4ed8 100%);
+  --pill-live-bg:   rgba(20,109,52,0.10);
+  --pill-live-edge: rgba(20,109,52,0.30);
+
+  /* ---------- SYNTAX ---------- */
+  /* Solved on --bg-2 #e9eaf4, the ground a code block paints on, which is darker
+     than the page and therefore the binding case. Every dark value fails there:
+     the string green #9ae6b4 is 1.4:1. */
+  --code-comment:  rgba(20,18,31,0.60);
+  --code-keyword:  #6d28d9;
+  --code-string:   #146c34;
+  --code-function: #5a48d4;
+  --code-number:   #9a4a08;
+  --code-punct:    rgba(20,18,31,0.72);
+  --code-property: #1d4ed8;
+  --code-param:    #5b21b6;
+
+}
+
+/* =========================================================
+   BASE ELEMENT STYLES
+   ========================================================= */
+
+html, body {
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-family: var(--font-body);
+  font-size: var(--body-size);
+  line-height: var(--body-lh);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--h1-size);
+  line-height: var(--h1-lh);
+  font-weight: var(--h1-weight);
+  letter-spacing: var(--h1-tracking);
+  margin: 0;
+}
+
+h2, .h2 {
+  font-family: var(--font-display);
+  font-size: var(--h2-size);
+  line-height: var(--h2-lh);
+  font-weight: var(--h2-weight);
+  letter-spacing: var(--h2-tracking);
+  margin: 0;
+}
+
+h3, .h3 {
+  font-family: var(--font-display);
+  font-size: var(--h3-size);
+  font-weight: var(--h3-weight);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  margin: 0;
+}
+
+p { margin: 0; color: var(--fg-2); }
+
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--eyebrow-size);
+  font-weight: var(--eyebrow-weight);
+  letter-spacing: var(--eyebrow-tracking);
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+code, .code, pre {
+  font-family: var(--font-mono);
+  font-size: var(--code-size);
+  font-feature-settings: "ss01", "ss02", "cv01";
+}
+
+/* Selection */
+::selection { background: var(--purple-600); color: var(--fg-1); }
+
+/* =========================================================
+   THEME TRANSITION
+   A circle of the new theme opening from the toggle button. The technique is
+   theme-toggle.rdsx.dev's, and the same one the webapp ships. Three of its four
+   parts are here; the fourth is the clip-path animation in components.js, which
+   has to be JavaScript because the circle's origin is wherever the button is.
+
+   `animation: none` on both pseudo-elements is not a tidy-up. The browser
+   cross-fades the two snapshots by default, and that fade running underneath the
+   circle is what turns a clean wipe into mush. Killing it leaves the old frame
+   sitting still while the new one is revealed over it, which is the effect.
+
+   --- WHERE TO CHANGE IF THE DURATION CHANGES ---
+   Here and THEME_TRANSITION_MS in docs/app/components.js. A keyframe on a
+   pseudo-element outside the document tree cannot read a custom property.
+   ========================================================= */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) {
+  z-index: 2;
+  animation: theme-reveal-focus 480ms ease-out;
+}
+
+/* The incoming frame arrives a hair out of focus and sharpens as the circle
+   completes, so the reveal reads as a depth change rather than a hard wipe. */
+@keyframes theme-reveal-focus {
+  from { filter: blur(2px); }
+  to   { filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
+}
