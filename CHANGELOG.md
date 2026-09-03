@@ -68,7 +68,6 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 * **pitwall:** the radio feed says what it is hiding, and the lanes can be read ([bc99bc6](https://github.com/VforVitorio/F1-StratLab/commit/bc99bc679860ece8ade12a3c23452a270cfb322b))
 * **pitwall:** the reasoning tabs, with the Qt highlighter ported as segments ([8642810](https://github.com/VforVitorio/F1-StratLab/commit/86428100494a074a1ba5633db39967f8cdd92166))
 * **pitwall:** the tower row pins the broadcast rival ([e72d74a](https://github.com/VforVitorio/F1-StratLab/commit/e72d74a2202773ae1774b5e5dd00ccd1b33c66d9)), closes [#1051](https://github.com/VforVitorio/F1-StratLab/issues/1051)
-* **pitwall:** the vertical slice, two windows on one sequenced tick ([97d416d](https://github.com/VforVitorio/F1-StratLab/commit/97d416d6381947f0200aecc84f556a8f91dafe61))
 * **pitwall:** the vertical slice, two windows on one sequenced tick ([e9a79a8](https://github.com/VforVitorio/F1-StratLab/commit/e9a79a817027d5fb2e1e082033f461768e18c57c))
 * **pitwall:** the window says what the call moved from, on the lap it moves ([e5b4858](https://github.com/VforVitorio/F1-StratLab/commit/e5b4858dcd77fa17fc87c4a55d876a5c9e96e30a))
 * **pitwall:** the windows acknowledge state changes and the mouse ([d6c8aa0](https://github.com/VforVitorio/F1-StratLab/commit/d6c8aa05b10de0565a402da72a3ff317b497353d)), closes [#1076](https://github.com/VforVitorio/F1-StratLab/issues/1076)
