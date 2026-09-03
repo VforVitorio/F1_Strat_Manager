@@ -40,7 +40,14 @@ desktop.
 ## Launching
 
 Nothing extra to run. `f1-arcade --strategy` (or `python -m src.arcade.main …
---strategy`) spawns it. To develop against an already-running arcade:
+--strategy`) spawns it.
+
+The first launch of any given race builds its replay telemetry, which takes
+minutes, so the menu reports the stages while a worker thread does the work.
+`f1-prefetch --year 2025` runs that same preparation for a whole season ahead
+of time, and skips the rounds already cached.
+
+To develop against an already-running arcade:
 
 ```bash
 python -m src.pitwall

@@ -18,17 +18,31 @@ The quickest path. Installs the latest release into the current environment with
 uv pip install https://github.com/VforVitorio/F1-StratLab/releases/download/v__DOCS_VERSION__/f1_strat_manager-__DOCS_VERSION__-py3-none-any.whl
 ```
 
-After install, five console entry points are available:
+After install, seven console entry points are available:
 
 ```bash
 f1-strat       # interactive launcher (recommended starting point)
 f1-sim         # headless CLI simulation against a saved race
-f1-arcade      # pyglet 2D replay plus the live strategy surfaces
+f1-arcade      # pyglet 2D replay plus the two PITWALL windows
 f1-webapp      # post-race web app (wraps `docker compose up`)
+f1-prefetch    # fill the arcade replay cache ahead of time
 f1-eval        # regenerate the evaluation reports (registry, calibration, hygiene, projection, ...)
+f1-pitwall     # attach the two PITWALL windows to an arcade already running
 ```
 
-`f1-eval` is a developer/thesis tool, not an end-user surface, it writes versioned markdown + JSON reports under `documents/eval_reports/` (`f1-eval registry`, `f1-eval calibration`, `f1-eval all`, ...). The first four are what a new user actually runs.
+The first four are what a new user actually runs.
+
+`f1-prefetch` exists because the first launch of any given race builds its replay telemetry, which takes minutes. It runs the same preparation the arcade menu runs, for a whole season or a rounds spec, so the wait can be paid in advance rather than while somebody is waiting to watch:
+
+```bash
+f1-prefetch --year 2025                   # the whole calendar
+f1-prefetch --year 2025 --rounds 1,3,5-8  # commas and ranges
+f1-prefetch --year 2025 --with-radio      # also fetch the team radio the agents read
+```
+
+Rounds already cached are skipped without being loaded, so re-running it costs one filesystem check per round.
+
+`f1-eval` and `f1-pitwall` are developer tools rather than end-user surfaces. The first writes versioned markdown and JSON reports under `documents/eval_reports/` (`f1-eval registry`, `f1-eval calibration`, `f1-eval all`, ...); the second opens the PITWALL windows against an arcade process that is already running, which is how the UI is developed without restarting the replay.
 
 First boot triggers a one-time download of the cached models and reference data into `~/.f1-strat/`. Subsequent runs are offline.
 
