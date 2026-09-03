@@ -41,20 +41,34 @@ function remaining() {
 
 if (remaining() !== 0) {
   try {
-    rmSync(DIST, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    rmSync(DIST, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    });
   } catch (error) {
-    console.error(`clean-dist: node rm failed (${error.code ?? error.message}), trying the shell`);
+    console.error(
+      `clean-dist: node rm failed (${error.code ?? error.message}), trying the shell`,
+    );
   }
 }
 
 if (remaining() !== 0) {
   // The platform's own delete. Reached routinely on this machine, not as a
   // last resort, so it is not treated as an error path.
+  //
+  // The directory travels as `cwd` and the argument is the literal "dist", so
+  // nothing derived from the script's own location reaches `cmd /c`, which
+  // re-parses whatever text it is given. Node's own argument escaping already
+  // covered the paths that matter, measured on a tree under a directory named
+  // "A & B" where both forms delete correctly, so this is about not building a
+  // command line out of a path at all rather than about a delete that fails.
   const [command, args] =
     process.platform === "win32"
-      ? ["cmd", ["/c", "rmdir", "/s", "/q", DIST]]
-      : ["rm", ["-rf", DIST]];
-  spawnSync(command, args, { stdio: "ignore" });
+      ? ["cmd", ["/c", "rmdir", "/s", "/q", "dist"]]
+      : ["rm", ["-rf", "dist"]];
+  spawnSync(command, args, { cwd: dirname(DIST), stdio: "ignore" });
 }
 
 if (remaining() !== 0) {
