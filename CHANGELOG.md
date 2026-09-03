@@ -11,6 +11,13 @@ above v1.1.0 was seeded retroactively from the GitHub Releases history.
 
 <!-- next-version-placeholder -->
 
+## [2.6.2](https://github.com/VforVitorio/F1-StratLab/compare/v2.6.1...v2.6.2) (2026-09-03)
+
+
+### Documentation
+
+* list every entry point and point at f1-prefetch ([60637e4](https://github.com/VforVitorio/F1-StratLab/commit/60637e4a9e45a62e1447a63121c9cfa199661bb9))
+
 ## [2.6.1](https://github.com/VforVitorio/F1-StratLab/compare/v2.6.0...v2.6.1) (2026-09-03)
 
 
