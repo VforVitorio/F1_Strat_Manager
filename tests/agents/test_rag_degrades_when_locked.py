@@ -83,7 +83,7 @@ def _reset_once_flag(orch):
 def test_a_locked_store_returns_none_instead_of_raising(orch, monkeypatch):
     """The lap survives without a regulation block."""
 
-    def _locked(_question):
+    def _locked(_question, year=None):
         raise RuntimeError(_REAL_QDRANT_LOCK_MESSAGE)
 
     monkeypatch.setattr(orch, "run_rag_agent", _locked)
@@ -93,7 +93,7 @@ def test_a_locked_store_returns_none_instead_of_raising(orch, monkeypatch):
 def test_the_cause_is_named_once_and_not_once_per_lap(orch, monkeypatch, caplog):
     """Sixty identical warnings is how a configuration problem looks like flaky data."""
 
-    def _locked(_question):
+    def _locked(_question, year=None):
         raise RuntimeError(_REAL_QDRANT_LOCK_MESSAGE)
 
     monkeypatch.setattr(orch, "run_rag_agent", _locked)
@@ -114,7 +114,7 @@ def test_a_different_runtime_error_still_surfaces(orch, monkeypatch):
     escape. The distinction is the message, not the type.
     """
 
-    def _broken(_question):
+    def _broken(_question, year=None):
         raise RuntimeError("collection 'fia_regulations' not found")
 
     monkeypatch.setattr(orch, "run_rag_agent", _broken)
@@ -125,5 +125,23 @@ def test_a_different_runtime_error_still_surfaces(orch, monkeypatch):
 def test_a_working_store_is_passed_straight_through(orch, monkeypatch):
     """Guards the guard: the degradation path must not be the only path that runs."""
     sentinel = object()
-    monkeypatch.setattr(orch, "run_rag_agent", lambda _q: sentinel)
+    monkeypatch.setattr(orch, "run_rag_agent", lambda _q, year=None: sentinel)
     assert orch._run_rag_agent_or_degrade("q") is sentinel
+
+
+def test_the_season_reaches_the_agent(orch, monkeypatch):
+    """The degrade wrapper is on the season's path, so it has to carry it.
+
+    Without this the wrapper could swallow the argument and every lap would be
+    answered out of whatever season the index happened to rank first, which is the
+    state #320 describes and no other test in this file would notice.
+    """
+    seen = {}
+
+    def _record(_question, year=None):
+        seen["year"] = year
+        return "ctx"
+
+    monkeypatch.setattr(orch, "run_rag_agent", _record)
+    assert orch._run_rag_agent_or_degrade("q", year=2023) == "ctx"
+    assert seen["year"] == 2023

@@ -15,7 +15,7 @@ Every agent has two entry points:
 | N27 Situation | `run_race_situation_agent(lap_state)` | `run_race_situation_agent_from_state(lap_state, laps_df)` |
 | N28 Pit | `run_pit_strategy_agent(lap_state)` | `run_pit_strategy_agent_from_state(lap_state, laps_df)` |
 | N29 Radio | `run_radio_agent(lap_state, persist)` | `run_radio_agent_from_state(lap_state, laps_df, persist)` |
-| N30 RAG | `run_rag_agent(question)` | `run_rag_agent_from_state(lap_state, laps_df)` |
+| N30 RAG | `run_rag_agent(question, year=None)` | `run_rag_agent_from_state(lap_state, laps_df)` |
 | N31 Orchestrator | `run_strategy_orchestrator(race_state, lap_state)` | `run_strategy_orchestrator_from_state(race_state, laps_df, lap_state)` |
 
 **N25 is the odd one out: it takes no `laps_df`.** Everything it needs must already be in the

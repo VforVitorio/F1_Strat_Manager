@@ -12,14 +12,16 @@ the RegulationContext output dataclass, and the two entry points used by N31.
 
 Entry points
 ------------
-run_rag_agent(question)
+run_rag_agent(question, year=None)
     Takes a natural-language regulation question, invokes the ReAct agent,
     and returns a RegulationContext with the LLM answer + source chunks.
+    ``year`` scopes retrieval to one season's rulebook and reaches both of the
+    retrievals this function makes; None searches every indexed season.
 
 run_rag_agent_from_state(lap_state)
-    RSM adapter: extracts the question from lap_state["question"] and
-    delegates to run_rag_agent(). laps_df is not used (RAG is stateless
-    with respect to lap data).
+    RSM adapter: extracts the question from lap_state["question"] and the
+    season from lap_state["year"], then delegates to run_rag_agent(). laps_df
+    is not used (RAG is stateless with respect to lap data).
 """
 
 import json
@@ -152,7 +154,8 @@ Regulations (2023–2025). When asked a regulation question:
 7. If no relevant passage is found, say "The regulation does not cover this case."
    Say this rather than stretching a nearby article to fit.
 
-Always prefer the most recent regulation year (2025) unless the question specifies otherwise.
+The passages you receive are already restricted to the season being raced, so cite
+them as they stand and do not reach for another year's wording.
 """
 
 # Lazy singleton: created on first call to avoid LLM connection at import time
@@ -204,7 +207,7 @@ def get_rag_react_agent():
 # Entry points
 # ==============================================================================
 
-def run_rag_agent(question: str) -> "RegulationContext":
+def run_rag_agent(question: str, year: int | None = None) -> "RegulationContext":
     """Run the RAG ReAct agent for a single regulation question.
 
     Invokes the LangGraph agent with query_rag_tool, extracts the final answer
@@ -217,10 +220,23 @@ def run_rag_agent(question: str) -> "RegulationContext":
     formatted string, not RegulationChunk instances, so a second retrieval is
     needed to populate ctx.chunks and ctx.articles.
 
+    BOTH calls take the season, and they have to stay in step. The agent's call
+    receives it through the RunnableConfig the graph forwards to the tool, the
+    re-query below as a plain argument. Scoping only one of them would leave the
+    LLM reading one season while ctx.chunks and ctx.articles cite another, and
+    those articles are what the orchestrator prints as citations.
+
     question:
         Natural-language regulation question from the orchestrator (N31).
         Examples: "What must a driver do when the safety car is deployed?",
         "What is the minimum pit stop time during a race?".
+
+    year:
+        Season whose rulebook to search, normally lap_state["year"]. None
+        searches every indexed season, which is what the notebook demos and any
+        caller predating season scoping get. It is a process-context argument on
+        purpose: the model never chooses it, because a model asked to pick the
+        year of a regulation is the failure this scoping exists to remove.
 
     Returns a RegulationContext with answer, chunks, and deduplicated articles.
     Use ctx.articles for citations, not the article numbers in ctx.answer.
@@ -228,11 +244,14 @@ def run_rag_agent(question: str) -> "RegulationContext":
     from langchain_core.messages import HumanMessage
 
     agent  = get_rag_react_agent()
-    result = agent.invoke({"messages": [HumanMessage(content=question)]})
+    result = agent.invoke(
+        {"messages": [HumanMessage(content=question)]},
+        config={"configurable": {"season": year}},
+    )
     answer = result["messages"][-1].content
 
     retriever = get_retriever()
-    chunks    = retriever.query(question)
+    chunks    = retriever.query(question, year=year)
     articles  = list(dict.fromkeys(c.article for c in chunks if c.article))
 
     return RegulationContext(
@@ -255,6 +274,9 @@ def run_rag_agent_from_state(
 
     lap_state keys:
         question (str): Natural-language FIA regulation question. Required.
+        year (int, optional): Season to scope retrieval to. Absent means every
+            indexed season, so a caller that omits it keeps the old behaviour
+            rather than getting an empty result.
         session_meta (dict, optional): Unused, kept for interface parity.
 
     laps_df:
@@ -265,4 +287,4 @@ def run_rag_agent_from_state(
     Raises KeyError when lap_state does not contain a 'question' key.
     """
     question = lap_state["question"]
-    return run_rag_agent(question)
+    return run_rag_agent(question, year=lap_state.get("year"))
