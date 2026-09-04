@@ -83,9 +83,12 @@ which is one additive field from a producer that exists, not a pipeline.
 
 ## 5. Cache and environment facts a sprint-4 session will hit
 
-- `CACHE_VERSION` is **v12**. First launch per GP rebuilds (< 3 min, no re-download).
-- `data/` is a **curated** download: only 2025/Melbourne has raw laps. Anything scoring across
-  races needs `data_cache.ensure_race()`.
+- `CACHE_VERSION` was **v12** when this page was written and is v17 since #1121. First launch per
+  GP after a bump rebuilds, with no re-download: 55 s for Lusail 2025 on 2026-09-04, 254 s for
+  Melbourne on 2026-08-20, both with FastF1's own cache already warm.
+- `data/` was a **curated** download carrying raw laps for 2025/Melbourne alone. `data/raw/2025/`
+  holds all 24 race folders since the prefetch work, so `data_cache.ensure_race()` is what fills a
+  race that is still missing rather than what every cross-race script has to call.
 - The orchestrator imports on a clean install since #883; `tests/agents` runs **236 tests** where
   it used to skip two thirds of them.
 - The submodule's lite CI installs neither pandas nor fastmcp, so its strategy tests **skip

@@ -13,6 +13,7 @@ behaviour: repeated samples, a negative slice, and an unbounded payload.
 
 from __future__ import annotations
 
+import ast
 import math
 from pathlib import Path
 from types import SimpleNamespace
@@ -1016,3 +1017,80 @@ def test_a_shared_lap_boundary_sample_comes_out_lap_ascending():
     assert list(concat["tyre_life"][falls + 1]) == [1.0], "a tyre aged backwards mid-stint"
     # And the compound changes once, rather than flickering back and forth.
     assert int(np.count_nonzero(np.diff(concat["tyre"]) != 0)) == 1
+
+
+# --- #1121: the merge happens once per driver, and CI is the only place that sees it ---
+#
+# The per-lap windows still exist after the merge, so every guard above keeps working
+# under the change AND under a revert to `lap.get_telemetry()`. What a revert moves is
+# the cost (270.4 s against 80.0 s for a Lusail 2025 build) and, for the other revert,
+# the served order. Both are invisible to the assertions in this file: the six guards
+# that read a real pickle skip on every CI runner, and a rebuilt pickle passes them
+# whichever path built it. So the property is asserted on the source instead.
+
+
+def _extraction_ast() -> dict[str, ast.FunctionDef]:
+    """`_process_driver_data` and `_merge_driver_channels`, parsed rather than imported.
+
+    Parsed because the property is about which FastF1 calls appear and how often,
+    which a text search cannot tell from a mention in a comment, and because this
+    has to run where there is no FastF1 cache and no race on disk.
+    """
+    source = Path(__file__).resolve().parents[2] / "src" / "arcade" / "data.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    wanted = {"_process_driver_data", "_merge_driver_channels"}
+    found = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    }
+    missing = wanted - set(found)
+    assert not missing, f"src/arcade/data.py no longer defines {sorted(missing)}"
+    return found
+
+
+def _called_attrs(node: ast.AST) -> list[str]:
+    return [
+        call.func.attr
+        for call in ast.walk(node)
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+    ]
+
+
+def test_the_extraction_never_asks_for_the_driver_ahead_channel():
+    """`DriverAhead` costs 5.29 s of the 6.6 s a driver used to take and nothing reads it.
+
+    `Lap.get_telemetry()` and `Laps.get_telemetry()` both call `add_driver_ahead()`
+    internally, which is why neither of them appears here either.
+    """
+    functions = _extraction_ast()
+    for name, node in functions.items():
+        called = _called_attrs(node)
+        assert "add_driver_ahead" not in called, f"{name} pays for DriverAhead again"
+        assert "get_telemetry" not in called, (
+            f"{name} calls get_telemetry(), which computes DriverAhead whether it is "
+            "asked per lap or once per driver"
+        )
+
+
+def test_the_merge_happens_once_per_driver_and_the_slicing_per_lap():
+    """The shape of the fix, stated where a revert has to break it.
+
+    A revert to the per-lap call puts `get_telemetry` back inside the `for` (caught
+    above). A jump the other way, to `Laps.get_telemetry()` for the whole driver,
+    drops `slice_by_lap` and with it the boundary sample at every lap line: measured
+    on Lusail 2025 that moves 754 of 1,063 crossings and reorders 5,343 of 129,084
+    served frames, 736 of them at the front.
+    """
+    functions = _extraction_ast()
+    merge_calls = _called_attrs(functions["_merge_driver_channels"])
+    assert merge_calls.count("merge_channels") == 1, "the channels are merged once per driver"
+    assert "add_distance" in merge_calls, "race distance has to be integrated over the whole span"
+
+    loops = [n for n in ast.walk(functions["_process_driver_data"]) if isinstance(n, ast.For)]
+    assert loops, "_process_driver_data no longer iterates the driver's laps"
+    sliced_in_a_loop = any("slice_by_lap" in _called_attrs(loop) for loop in loops)
+    assert sliced_in_a_loop, (
+        "nothing slices the merged frame per lap, so the shared lap-boundary sample "
+        "#1069 orders does not exist"
+    )

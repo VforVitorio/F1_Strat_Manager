@@ -229,7 +229,8 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # forever from the commit that writes it and can never see the NEXT change that forgets to
 # bump. A golden test keyed to the version COULD catch part of it (pin a small rebuilt
 # session's frames against a fixture and require the version to move when they do), and is
-# not written because rebuilding a session costs 254 s. Until it is, the obligation lives
+# not written because rebuilding a session is slow: 254 s for Melbourne on 2026-08-20 and
+# 55 to 80 s for Lusail on 2026-09-04, both with FastF1's own cache already warm. Until it is, the obligation lives
 # here: if the bytes a rebuild would produce differ from the bytes on disk, this string moves
 # in the SAME commit, or the fix reaches nobody who already has a pickle.
 # v15: a NaN Rainfall sample now pickles as None instead of "WET" (#1087). The bytes differ only
@@ -241,7 +242,14 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # back byte-identical (Lusail, Monaco, Las Vegas, zero rows touched) and Melbourne moves 162 rows
 # across 5 drivers, taking unknown ages from 5 to 167. A pickle of a healthy race is unchanged, so
 # holding the version would have shipped the fix to everyone except the races that need it.
-CACHE_VERSION: Final[str] = "v16"  # + the shared lap-boundary sample sorts stably (#1069)
+# v17: the per-driver channels are merged once and then sliced per lap, so `dist` is FastF1's
+# own continuous race distance instead of a sum of per-lap distances (#1121). The bytes move and
+# the version moves with them: measured on Lusail 2025, x and y shift by up to 3.9 and 7.0 mm on
+# about 195,000 frames, `dist` by up to 12.2 m as a per-car offset, `rel_dist` by up to 0.00057.
+# The served order changes on 87 of 129,084 frames, all of them adjacent cars within 3 m of each
+# other, with the leader unchanged and every crossing, lap number, compound, tyre age, gear, DRS
+# code, brake, speed and throttle identical to v16.
+CACHE_VERSION: Final[str] = "v17"  # + the shared lap-boundary sample sorts stably (#1069)
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial. The reason recorded here used to be a hang: Windows spawn plus pickling
@@ -251,10 +259,13 @@ CACHE_VERSION: Final[str] = "v16"  # + the shared lap-boundary sample sorts stab
 # re-run it either, so treat the hang as unexplained rather than as the reason.
 #
 # What actually keeps this at 1 is that raising it has never been measured as a
-# win, and the work a pool would spread is FastF1's per-lap telemetry loop, which
-# is 93% of a cold build and which #1121 removes outright rather than
-# parallelises. Raise this only alongside a timed cold build, never on the
-# strength of the core count.
+# win, and the work a pool would spread is the per-driver extraction, which #1121
+# already cut by about 70%: a Lusail 2025 build with FastF1's cache warm went from
+# 270.4 s to 80.0 s back to back on one machine, and from 148.2 s to 55.0 s on the
+# same machine under a lighter load earlier the same day. The 93% share quoted here
+# before was Suzuka with FastF1 warm as well; on a first-ever build, where FastF1's
+# own download and parse are most of the wall clock, the loop was about 42%. Raise
+# this only alongside a timed cold build, never on the strength of the core count.
 POOL_SIZE: Final[int] = 1
 
 
