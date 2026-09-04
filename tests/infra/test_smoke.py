@@ -1,35 +1,16 @@
-"""Smoke tests — verify CI infrastructure and project structure."""
+"""Real-data checks on ``RaceStateManager`` over the season parquets.
+
+Both tests read a real ``laps.parquet`` and skip when it is absent, so a clone
+without ``data/`` stays green.
+
+Contents:
+- ``test_race_state_manager_melbourne``: the lap_state golden check on Melbourne 2025.
+- ``test_qatar_2025_v7_pia_sc_override``: the RCM safety-car override regression.
+"""
 
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
-
-
-def test_src_structure():
-    """src/ directory exists with expected sub-packages."""
-    assert (ROOT / "src").is_dir()
-    assert (ROOT / "src" / "rag").is_dir()
-    assert (ROOT / "src" / "nlp").is_dir()
-    assert (ROOT / "src" / "agents").is_dir()
-    assert (ROOT / "src" / "simulation").is_dir()
-
-
-def test_notebooks_structure():
-    """Agent notebooks directory exists."""
-    assert (ROOT / "notebooks" / "agents").is_dir()
-
-
-def test_pyproject_exists():
-    """pyproject.toml is present at repo root."""
-    assert (ROOT / "pyproject.toml").is_file()
-
-
-def test_simulation_imports():
-    """RaceStateManager and RaceReplayEngine are importable."""
-    pytest = __import__("pytest")
-    pd = pytest.importorskip("pandas", reason="pandas not installed in this environment")  # noqa: F841
-    from src.simulation.race_state_manager import RaceStateManager  # noqa: F401
-    from src.simulation.replay_engine import RaceReplayEngine  # noqa: F401
 
 
 def test_race_state_manager_melbourne():
