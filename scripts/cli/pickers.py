@@ -185,8 +185,33 @@ def _arrow_pick(title: str, options: list[str], default: int = 0) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+_UNKNOWN_ROUND = 99  # sorts a folder the calendar does not know after every real round
+
+
+def _calendar_order(year: int) -> dict[str, int]:
+    """Map each race folder name to its round number for one season.
+
+    Args:
+        year: the season whose calendar to read.
+
+    Returns:
+        Folder name to round number, taken from ``data/tire_compounds_by_race.json``
+        via the same folder-name mapper the data cache uses, so a renamed folder
+        such as ``Miami_Gardens`` resolves. Empty when neither module can be
+        imported, which is the signal to fall back to alphabetical ordering.
+    """
+    try:
+        from src.arcade.config import get_gp_names
+        from src.f1_strat_manager.data_cache import race_folder
+    except ImportError:
+        return {}
+
+    rounds_by_folder = {race_folder(year, name): rnd for rnd, name in get_gp_names(year).items()}
+    return rounds_by_folder
+
+
 def discover_races(repo_root: Path, year: int = 2025) -> list[str]:
-    """Return sorted list of race directories found under the data root.
+    """Return the race directories under the data root, in calendar order.
 
     Historically this joined ``repo_root / "data" / "raw" / <year>`` because
     the CLI only ran from a git checkout. Now that ``f1-strat`` can be
@@ -208,7 +233,18 @@ def discover_races(repo_root: Path, year: int = 2025) -> list[str]:
     # Only return folders that actually contain race files: empty
     # placeholders from a partial download would otherwise crash the
     # downstream RaceReplayEngine.
-    return sorted(d.name for d in raw_dir.iterdir() if d.is_dir() and any(d.iterdir()))
+    downloaded = [d.name for d in raw_dir.iterdir() if d.is_dir() and any(d.iterdir())]
+    rounds_by_folder = _calendar_order(year)
+
+    def by_round_then_name(folder: str) -> tuple[int, str]:
+        """A folder the calendar does not know keeps its place at the end.
+
+        Dropping it instead would hide a race from the menu on a partial or
+        hand-assembled download, which is the case this discovery exists for.
+        """
+        return (rounds_by_folder.get(folder, _UNKNOWN_ROUND), folder)
+
+    return sorted(downloaded, key=by_round_then_name)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

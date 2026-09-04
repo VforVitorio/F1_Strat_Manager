@@ -58,9 +58,12 @@ class IndexConfig:
         embedding_dim:    Output vector size of the embedding model. BGE-M3 produces
                           1024-dim vectors; changing the model requires updating this
                           value or Qdrant will reject the upsert silently.
-        chunk_size:       Sliding window size in characters. 512 chars ≈ 80–120 words,
-                          fitting comfortably inside BGE-M3's 512-token limit while
-                          keeping each chunk semantically coherent (one or two articles).
+        chunk_size:       Sliding window size in characters. 512 chars is roughly
+                          80-120 words, or 100-170 bge-m3 tokens, so a chunk occupies a
+                          small fraction of the model's 8192-token window (see the
+                          model's own tokenizer_config.json). The size is set for
+                          article-level coherence, not by an encoder limit; widening it
+                          is RAG-06, gated on the RAG eval rather than decided here.
         chunk_overlap:    Characters repeated at the start of each new window so that
                           sentences at chunk boundaries appear complete in at least one
                           chunk and are not truncated mid-article.

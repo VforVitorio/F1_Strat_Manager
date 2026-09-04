@@ -49,7 +49,7 @@ Eight workflows live under `.github/workflows/`. They run independently, on diff
 Triggered on push to `main`, `dev`, `test`, `feat/**`, `fix/**`, `docs/**`, and on pull request targeting `main` or `dev`. Four jobs run in parallel on `ubuntu-latest`:
 
 - `test`, path-filter gated on `src/**`, `tests/**`, `pyproject.toml`, `uv.lock` (via `dorny/paths-filter@v4`; skips entirely on a docs-only or unrelated diff). When triggered: `uv sync --all-extras --frozen` (Python 3.12), a "collected-count floor" check (`pytest --co -q` must collect at least 40 nodes, guarding against a refactor silently gutting the suite), then `uv run pytest -v --cov=src --cov-report=term-missing`.
-- `lint`, always runs, no `uv sync` needed. `uvx ruff check .` and `uvx ruff format --check .` as ephemeral tools, so it skips installing the whole ML/torch stack just to lint style.
+- `lint`, always runs, no `uv sync` needed. `uvx ruff@$RUFF_VERSION check .` and `uvx ruff@$RUFF_VERSION format --check .` as ephemeral tools, so it skips installing the whole ML/torch stack just to lint style. The version comes from the `RUFF_VERSION` variable at the top of the workflow, pinned because an unpinned `uvx ruff` resolves the newest release at run time and can turn every branch red without a commit.
 - `typecheck`, same path-filter gate as `test`. `uv sync --extra dev --frozen` then `uv run mypy src/rag/`. Narrow scope: only production-ready typed modules are checked. Caches `.mypy_cache/` keyed on `pyproject.toml` + `src/rag/**`.
 - `pip-audit`, always runs, no path filter. Exports the locked dependency set (`uv export --frozen --all-extras`) and runs `pip-audit` against it for same-day CVE alerts, independent of whether the diff touches `uv.lock`. Advisory (`continue-on-error: true`) while baselining.
 
@@ -166,11 +166,11 @@ Before opening a PR, run the same commands CI runs:
 
 ```bash
 uv run pytest -v
-uvx ruff check . && uvx ruff format --check .
+uv run ruff check . && uv run ruff format --check .
 uv run mypy src/rag/
 ```
 
-`lint` uses `uvx` (ephemeral tool run, no `uv sync`), not `uv run`, matching the actual CI job saves a needless full-environment sync just to check style.
+The local commands use `uv run`, so ruff comes from `uv.lock` and cannot disagree with the gate: the lock and `RUFF_VERSION` hold the same version, and a bump changes `pyproject.toml`, `uv.lock` and the workflow in one PR. CI itself uses `uvx ruff@$RUFF_VERSION` instead, because the `lint` job never syncs and would otherwise install the whole ML stack to check style.
 
 Once the PR is open and green, target `dev` (see "Branching strategy" above: `main` is release-only) and queue it for auto-merge:
 

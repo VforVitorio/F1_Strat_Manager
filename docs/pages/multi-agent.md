@@ -358,8 +358,8 @@ Every agent exposes two entry points: one that expects populated module globals 
 **They are not uniform.** The shapes below come from `inspect.signature`, and three of them differ from what the pattern would suggest:
 
 ```python
-run_pace_agent_from_state(lap_state)                                  # no laps_df, unlike every other adapter
-run_tire_agent(stint_state)                                           # a stint state, not a lap state
+run_pace_agent_from_state(lap_state)  # no laps_df, unlike every other adapter
+run_tire_agent(stint_state)  # a stint state, not a lap state
 run_tire_agent_from_state(lap_state, laps_df)
 run_race_situation_agent_from_state(lap_state, laps_df)
 run_pit_strategy_agent_from_state(lap_state, laps_df)
