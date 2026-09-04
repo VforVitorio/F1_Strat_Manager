@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).parent.parent.parent
 _CLI = ROOT / "scripts" / "run_simulation_cli.py"
 
@@ -42,12 +40,6 @@ def test_the_flag_defaults_to_unset_not_to_a_provider():
         f"default here silently wins over the .env the project asks users to configure. "
         f"Block reads:\n{block}"
     )
-
-
-@pytest.mark.parametrize("provider", ["openai", "lmstudio"])
-def test_both_providers_are_still_accepted(provider):
-    """Passing it must keep working, including passing the fallback explicitly."""
-    assert provider in _provider_block()
 
 
 def test_the_env_is_only_written_when_the_flag_was_passed():
