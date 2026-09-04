@@ -109,7 +109,6 @@ dependencies = [
     # Declared here on its own — it used to ride in via the retired voice extra
     # and librosa's transitive dependency, which is not a contract.
     "soundfile>=0.12.0",
-    "nltk>=3.10.0",
     "gliner>=0.2.25",
     "onnxruntime<1.24",
     "setfit>=1.1.3",

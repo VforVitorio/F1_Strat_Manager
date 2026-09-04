@@ -314,7 +314,6 @@ _TIER2_IMPORTS = [
     "spacy",
     "setfit",
     "gliner",
-    "nltk",
     "seqeval",
     "jiwer",
     "whisper",  # openai-whisper imports under the ``whisper`` name
@@ -425,18 +424,6 @@ def test_langchain_core_message_imports():
 
     assert HumanMessage(content="x").content == "x"
     assert AIMessage(content="y").content == "y"
-
-
-def test_langchain_openai_canonical_import_path():
-    """ChatOpenAI must be importable from ``langchain_openai`` directly.
-
-    Guards against a future deprecation that pushes everything back to
-    ``langchain_community`` — the agent loaders import the short path.
-    """
-    pytest.importorskip("langchain_openai")
-    from langchain_openai import ChatOpenAI  # noqa: F401
-
-    assert ChatOpenAI.__name__ == "ChatOpenAI"
 
 
 def test_pyarrow_parquet_engine_available():

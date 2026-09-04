@@ -58,6 +58,8 @@ uv sync --all-extras
 
 `uv sync` reads `pyproject.toml`, resolves the lockfile and pulls the CUDA-routed PyTorch wheel automatically **on Windows**. Everything else, Linux and macOS included, resolves to the CPU wheel: CI runners and CPU-only Linux boxes were downloading about 5 GB of unused CUDA libraries, so the markers were narrowed deliberately (`pyproject.toml`, #251). A Linux GPU box opts back in by editing those markers.
 
+`uv sync --all-extras` does not cover one notebook. `N19_sentiment_vader.ipynb` is the VADER sentiment baseline that RoBERTa replaced, so nothing on the three surfaces reaches it, and nltk was dropped from the dependencies rather than waived against an advisory with no patched release (#1176). That notebook runs with `uv run --with nltk jupyter lab`.
+
 Run the simulation against a saved race:
 
 ```bash

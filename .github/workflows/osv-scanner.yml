@@ -4,11 +4,12 @@ name: OSV-Scanner
 # any npm/JS manifests). Uploads SARIF to the Security tab. The submodule's own
 # manifests are owned by Security epic #223; this covers the parent.
 #
-# The full scan is BLOCKING again (#403 triaged the pre-existing backlog): nltk
-# was bumped to its fixed release, and the CVEs with no reachable fix (Pillow x6,
-# blocked by arcade's <11.4 pin; torch; ecdsa) are waived with documented reasons
-# in osv-scanner.toml, which osv-scanner auto-discovers. Any NEW vulnerability not
-# on that list fails the build.
+# The full scan is BLOCKING (#403 triaged the pre-existing backlog). A
+# vulnerability with no reachable fix is waived one entry at a time in
+# osv-scanner.toml, each carrying the reason the fix is out of reach and, where
+# the situation can change, an expiry date. osv-scanner auto-discovers that file,
+# and it is the only place the waivers are listed, so this comment does not
+# repeat them. Any vulnerability not on that list fails the build.
 on:
   push:
     branches: [main]

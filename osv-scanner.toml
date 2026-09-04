@@ -157,22 +157,9 @@ id = "PYSEC-2026-3447"
 ignoreUntil = 2026-10-12T00:00:00Z
 reason = "setuptools: fix in 83.0.0 blocked by torch 2.11/2.12 (setuptools<82 pin); flaw only affects MANIFEST.in exclude normalization when building an sdist on macOS APFS/HFS+, never exercised here. Revisit when CUDA-pinned torch allows setuptools>=83."
 
-# --- nltk (no patched release exists) -----------------------------------------
-# The advisory carries `last_affected: 3.10.3` and no `fixed` event, and 3.10.3
-# is the newest release, so there is nothing to bump to. The flaw is in the
-# model-artifact APIs (TransitionParser.train/parse, AveragedPerceptron.save and
-# load, PerceptronTagger.save_to_json, save_maxent_params) reading and writing
-# caller-controlled paths outside the pathsec roots. Nothing under src/, scripts/
-# or tests/ imports nltk at all, let alone those APIs: the only consumer in the
-# repository is the N19 VADER sentiment notebook, which calls
-# SentimentIntensityAnalyzer and nltk.download.
-#
-# That last sentence is the argument for dropping the dependency rather than for
-# tolerating it, which is what the ecdsa note above says in the same situation.
-# Tracked as its own decision in #1176 rather than settled here, because taking a
-# package out of the released distribution is a bigger change than a waiver and
-# the notebook is a documented reproduction path. Short window on purpose.
-[[IgnoredVulns]]
-id = "GHSA-8mgp-746c-j5xp"
-ignoreUntil = 2026-10-03T00:00:00Z
-reason = "nltk: no patched release exists (last_affected 3.10.3, no fix event). Affected model-artifact APIs are imported nowhere in src/scripts/tests; only the N19 VADER notebook uses nltk at all. Removal is the better fix, tracked in #1176."
+# --- nltk: waiver removed, the dependency is gone -----------------------------
+# GHSA-8mgp-746c-j5xp (CVE-2026-81726) had nothing to bump to: last_affected
+# 3.10.3, no fix event, and 3.10.3 is the newest release. Nothing under src/,
+# scripts/ or tests/ imported nltk; the only consumer was the N19 VADER sentiment
+# notebook. #1176 dropped the dependency, which took nltk out of the lock, so
+# there is no longer a vulnerability to ignore.
