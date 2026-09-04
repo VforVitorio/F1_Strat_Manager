@@ -66,7 +66,7 @@ Run the simulation against a saved race:
 uv run scripts/run_simulation_cli.py Sakhir NOR McLaren --no-llm
 ```
 
-Drop `--no-llm` once an LLM provider is configured (LM Studio at `http://localhost:1234/v1` or `OPENAI_API_KEY` in `.env`).
+Drop `--no-llm` once an LLM provider is configured. Without `--provider`, `f1-sim` reads `F1_LLM_PROVIDER` from a repo-root `.env` and falls back to LM Studio at `http://localhost:1234/v1`; `--provider openai` selects OpenAI, which needs `OPENAI_API_KEY`.
 
 ## 3. Docker
 
@@ -91,7 +91,7 @@ The first boot triggers a one-time download of the cached models and reference d
 
 ### Which LLM providers are supported?
 
-OpenAI and LM Studio, the system is provider-agnostic and does not depend on a single vendor. Set `F1_LLM_PROVIDER=openai` to use the OpenAI API; the default is a local LM Studio server at `http://localhost:1234/v1`.
+OpenAI and LM Studio, the system is provider-agnostic and does not depend on a single vendor. Setting `F1_LLM_PROVIDER=openai` selects the OpenAI API everywhere. The fallback when it is unset is per surface, a local LM Studio server at `http://localhost:1234/v1` for the CLI and the backend, OpenAI for the arcade, listed in [INSTALL.md](https://github.com/VforVitorio/F1-StratLab/blob/main/INSTALL.md#llm-provider-per-surface).
 
 ### Do I need an API key?
 

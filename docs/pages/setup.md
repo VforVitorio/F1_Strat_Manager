@@ -53,7 +53,7 @@ Create a `.env` file at the repo root:
 |---|---|---|---|
 | `BACKEND_URL` | no | `http://localhost:8000` | Backend URL, read by the frontend |
 | `FRONTEND_URL` | no | `http://localhost:8501` | Frontend URL, read by the backend for CORS |
-| `F1_LLM_PROVIDER` | no | `lmstudio` | Set to `openai` for OpenAI API |
+| `F1_LLM_PROVIDER` | no | per surface, see [INSTALL.md](https://github.com/VforVitorio/F1-StratLab/blob/main/INSTALL.md#llm-provider-per-surface) | Set to `openai` for OpenAI API |
 | `OPENAI_API_KEY` | if provider=openai |, | OpenAI API key |
 | `F1_STRAT_DATA_ROOT` | no | repo `data/` | Override data directory |
 | `F1_API_KEY` | no | unset | Shared secret for the `X-API-Key` header. Unset = unauthenticated (safe only on a loopback bind, see `F1_HOST` below) |
@@ -92,7 +92,7 @@ through nginx on `:8501` (see Docker below), launched with `f1-webapp`.
 
 ### 6. LM Studio (for LLM agents)
 
-Start LM Studio with a model loaded, serving on `http://localhost:1234/v1`. The orchestrator defaults to this endpoint. Sub-agents use `gpt-4.1-mini`; the orchestrator uses `gpt-5.4-mini`.
+Start LM Studio with a model loaded, serving on `http://localhost:1234/v1`. The CLI and the backend fall back to this endpoint when `F1_LLM_PROVIDER` is unset; the arcade falls back to OpenAI instead ([INSTALL.md](https://github.com/VforVitorio/F1-StratLab/blob/main/INSTALL.md#llm-provider-per-surface)). Sub-agents use `gpt-4.1-mini`; the orchestrator uses `gpt-5.4-mini`.
 
 ## Docker deployment
 

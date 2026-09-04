@@ -12,7 +12,7 @@ That wraps `docker compose up` and brings two services online: the FastAPI backe
 
 `f1-webapp --help` works without Docker installed, so the options can be read before committing to a pull.
 
-A `.env` with `OPENAI_API_KEY` is required, or `F1_LLM_PROVIDER=lmstudio` when running a local model. The chat tab is the only part that needs it; everything else works without an LLM.
+The backend reads `F1_LLM_PROVIDER` and falls back to `lmstudio`, so a repo-root `.env` needs `F1_LLM_PROVIDER=openai` plus `OPENAI_API_KEY` to reach OpenAI; left unset, the chat tab expects LM Studio on the host ([INSTALL.md](https://github.com/VforVitorio/F1-StratLab/blob/main/INSTALL.md#llm-provider-per-surface)). The chat tab is the only part that needs an LLM; everything else works without one.
 
 ## What is in it
 
