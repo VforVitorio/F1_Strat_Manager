@@ -37,16 +37,6 @@ def test_the_name_is_built_from_what_decides_the_contents(loader: SessionLoader)
     assert path.name == "2025_r03_race.pkl"
 
 
-def test_the_label_cannot_change_where_a_session_is_cached(loader: SessionLoader) -> None:
-    """The defect, stated as the assertion that catches it.
-
-    Two callers asking for the same round under different names must land on the
-    same file. Under the old key they landed on two, and the one that wrote
-    first decided what the other read.
-    """
-    assert loader._cache_path(2025, 3) == loader._cache_path(2025, 3)
-
-
 @pytest.mark.parametrize(("year", "round_"), [(2025, 1), (2025, 3), (2024, 24), (2023, 22)])
 def test_a_different_race_is_a_different_file(
     loader: SessionLoader, year: int, round_: int

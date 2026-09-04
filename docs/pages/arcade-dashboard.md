@@ -152,7 +152,7 @@ Every one of these is additive (the Qt dashboard ignores them and is unaffected)
 | `arcade.global_t_min` / `.location` | the session-time origin, and FastF1's authoritative Location for resolving the race directory |
 | `schema_version` / `seq` | the payload version, and a strictly increasing sequence per message SENT, which is what lets two consumers on independent timers agree on a frame |
 
-Bumping `CACHE_VERSION` to v12 came with these; the first launch of a given GP after upgrading rebuilds its session pickle.
+The fields above arrived across several releases rather than with one bump, and the telemetry span carries its own `schema_version` for that reason. What holds for all of them is the mechanism: whenever `CACHE_VERSION` moves, the first launch of a given GP after upgrading rebuilds its session pickle.
 
 ## Extension points
 

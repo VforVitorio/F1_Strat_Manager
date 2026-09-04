@@ -326,19 +326,21 @@ def _nearest_sample(t: np.ndarray, timeline: np.ndarray) -> np.ndarray:
 
 # The eight forward gears plus neutral, and the validity test is ONE-SIDED because
 # 0 is a real reading rather than a sentinel: `session.car_data` for Melbourne 2025
-# carries 202,509 of them across the 20 drivers, and the PITWALL GEAR lane's [0, 9]
+# carries 315,550 of them across the 20 drivers, and the PITWALL GEAR lane's [0, 9]
 # range renders it.
 #
-# **None of them reaches a replay, and that is a property of the DATA, not a filter
-# here.** Every one of those 202,509 samples falls OUTSIDE every lap window: the
-# cars are stationary in the garage and on the grid, before lap 1 starts at 00:56:06
-# session time, while the laps run to 02:19:37. `_process_driver_data` reads
-# `lap.get_telemetry()`, so it only ever sees samples inside a lap, and across all
-# 1,059 laps of this race not one carries gear 0. Measured 2026-08-26 (#1094).
+# **Most of them never reach a replay, and that is a property of the DATA rather
+# than of a filter here.** The cars are stationary in the garage and on the grid,
+# outside every lap window, so the extraction never sees those samples. What does
+# reach a replay is a car stationary INSIDE a lap: Melbourne 2025 serves 1,400
+# gear-0 samples, 862 of them HAD's entire lap 1 and 506 of them DOO's.
 #
-# So a replay of this race legitimately serves no neutral frame. Do NOT widen the
-# predicate below to `< 1` on the strength of that: the reading is real, other
-# sessions can put a stationary car inside a lap window, and one-sided is the rule.
+# Do NOT widen the predicate below to `< 1`: the reading is real, a stationary car
+# inside a lap window is exactly the case that produces it, and one-sided is the
+# rule. An earlier version of this comment said no lap of the race carried gear 0
+# and put the session between 00:56:06 and 02:19:37. Both came from the pickle
+# labelled Melbourne that held Suzuka (#1119), whose race is 1h23 long against
+# Melbourne's 1h43. Re-measured on both extraction paths 2026-09-04 (#1094, #1121).
 def _concat_sorted_by_time(arrays: dict[str, list[np.ndarray]]) -> dict[str, np.ndarray]:
     """Flatten the per-lap arrays into one time-ordered block per channel.
 
@@ -432,18 +434,60 @@ def _drop_impossible_gears(gears: np.ndarray) -> np.ndarray:
     return repaired.ffill().bfill().to_numpy()
 
 
+def _merge_driver_channels(laps_driver) -> "fastf1.core.Telemetry | None":
+    """Position and car data for one driver, merged and integrated ONCE (#1121).
+
+    `Lap.get_telemetry()` does this per lap, and 5.29 s of the 6.6 s a driver
+    costs is the `add_driver_ahead()` it runs 57 times to produce `DriverAhead`
+    and `DistanceToDriverAhead`, two channels `_process_driver_data` never
+    reads. Doing the merge once and skipping that call is where the saving is.
+
+    Returns None when a driver has no usable position or car data, which the
+    caller treats the same way it treats an empty lap set.
+
+    --- WHERE TO CHANGE IF THIS CHANGES ---
+    The per-lap windows are still cut afterwards by `slice_by_lap`, so
+    `_concat_sorted_by_time` keeps its boundary ties and `_nearest_sample`
+    keeps its `<=` tie-break. Switching to `Laps.get_telemetry()` would drop
+    both: it interpolates an edge sample only at the driver's first lap start
+    and last lap end, so no sample sits on an internal lap line, the lap
+    increments up to eleven frames off, and 754 of 1,063 crossings move.
+    Measured on Lusail 2025: 5,343 of 129,084 served frames change the
+    leaderboard order and 736 change the leader.
+    """
+    try:
+        pos = laps_driver.get_pos_data(pad=1, pad_side="both")
+        car = laps_driver.get_car_data(pad=1, pad_side="both").add_distance()
+        merged = pos.merge_channels(car)
+    except (KeyError, ValueError, AttributeError):
+        return None
+    if merged is None or merged.empty:
+        return None
+    return merged
+
+
 def _process_driver_data(args: tuple) -> dict | None:
-    """Module-level worker: iterate a driver's laps and flatten telemetry.
+    """Module-level worker: flatten one driver's telemetry, lap by lap.
 
     Must stay at module scope so `multiprocessing.Pool` can pickle it by
-    qualified name on Windows spawn. Mirrors the reference per-driver loop
-    but actually increments the race-distance accumulator each lap."""
+    qualified name on Windows spawn.
+
+    The channels are merged once for the whole driver and then sliced per lap,
+    so `dist` is FastF1's own continuous race distance rather than a sum of
+    per-lap distances. The old accumulator dropped the span between a lap's
+    last sample and the line crossing, and re-deriving it over once-integrated
+    windows was measured and is worse: it reorders 106 served frames against
+    continuous distance's 87, and moves the leader on the grid frames."""
 
     driver_no, session, driver_code = args
     _enable_fastf1_cache()
 
     laps_driver = session.laps.pick_drivers(driver_no)
     if laps_driver.empty:
+        return None
+
+    merged = _merge_driver_channels(laps_driver)
+    if merged is None:
         return None
 
     arrays: dict[str, list[np.ndarray]] = {
@@ -463,12 +507,11 @@ def _process_driver_data(args: tuple) -> dict | None:
             "tyre_life",
         )
     }
-    total_dist_so_far = 0.0
     max_lap = 0
 
     for _, lap in laps_driver.iterlaps():
         try:
-            tel = lap.get_telemetry()
+            tel = merged.slice_by_lap(lap, interpolate_edges=True)
         except (KeyError, ValueError, AttributeError):
             continue
         if tel is None or tel.empty:
@@ -487,15 +530,17 @@ def _process_driver_data(args: tuple) -> dict | None:
         thr = tel["Throttle"].to_numpy().astype(float) if "Throttle" in tel.columns else np.zeros(n)
         brk = tel["Brake"].to_numpy().astype(float) if "Brake" in tel.columns else np.zeros(n)
 
-        d_lap = (
-            tel["Distance"].to_numpy().astype(float) if "Distance" in tel.columns else np.zeros(n)
-        )
+        # Continuous already: `add_distance()` integrated the whole driver span
+        # once, so the window carries race distance rather than lap distance and
+        # there is nothing to accumulate.
+        #
         # FastF1's `RelativeDistance` is deliberately NOT collected. The
         # resampler stopped consuming it when the fraction became a
         # derivation over the driver's own distance; extracting it was
         # three lines of work per lap per driver feeding nothing.
-        race_dist = total_dist_so_far + d_lap
-        total_dist_so_far += float(d_lap[-1]) if n else 0.0
+        race_dist = (
+            tel["Distance"].to_numpy().astype(float) if "Distance" in tel.columns else np.zeros(n)
+        )
 
         lap_no = int(lap.LapNumber) if not pd.isna(lap.LapNumber) else 0
         max_lap = max(max_lap, lap_no)
@@ -673,10 +718,12 @@ class SessionLoader:
     def _process_all_drivers(
         self, session: Any, driver_nums: list, driver_codes: dict
     ) -> list[dict | None]:
-        # Serial by default: pickling a fully-loaded FastF1 session across N
-        # Windows spawn workers is heavy and has hung in prior sessions. Set
-        # `pool_size > 1` explicitly to opt into parallel extraction once the
-        # FastF1 cache is warm.
+        # Serial by default. The hang this comment used to assert is not
+        # established: the load audit went looking and could not reproduce it,
+        # and `config.POOL_SIZE` records the same correction. What is true is
+        # that pickling a fully-loaded FastF1 session across N Windows spawn
+        # workers is heavy and that raising the count has never been measured
+        # as a win. Set `pool_size > 1` explicitly to opt into it.
         args = [(n, session, driver_codes[n]) for n in driver_nums]
         if self.pool_size <= 1:
             return self._process_serial(args)
