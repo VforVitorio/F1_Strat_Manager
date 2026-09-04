@@ -15,9 +15,12 @@ concurrency:
 
 env:
   # Pinned so a linter release cannot turn every branch red on its own. See the
-  # note above the lint steps before bumping — the bump and the reformatting it
+  # note above the lint steps before bumping: the bump and the reformatting it
   # implies belong in one deliberate PR.
-  RUFF_VERSION: "0.15.22"
+  RUFF_VERSION: "0.16.6"
+  # Same reasoning for the advisory audit job: an unpinned tool can change its
+  # findings without a commit, which makes a red run impossible to bisect.
+  PIP_AUDIT_VERSION: "2.10.1"
 
 # Notes on dependency strategy across the three jobs:
 #   - All three jobs enable uv's built-in cache (`enable-cache: true`) and
@@ -113,11 +116,15 @@ jobs:
 
       # Ruff is PINNED. `uvx ruff` resolves the latest release at run time, so a
       # ruff release could turn every branch red without a single line of our code
-      # changing — and worse, inconsistently: 0.16.0 shipped on 2026-07-23 and
-      # started formatting Python code blocks inside Markdown, yet runs kept
-      # passing while the tool cache still held 0.15.x, so the same commit passed
-      # one run and failed the next. Bump this deliberately, with the reformat it
-      # implies in the same PR (the webapp CI pins prettier for this same reason).
+      # changing, and inconsistently at that: the same commit passed one run and
+      # failed the next while the tool cache still held an older build.
+      #
+      # The pin sat at 0.15.22 until 2026-09-04. That held the gate below 0.16.0,
+      # which began formatting Python code blocks inside Markdown by default, so
+      # the check covered 208 files while an unpinned ruff covered 384. Moving to
+      # 0.16.6 brought those 176 documentation files into the gate and reformatted
+      # the 7 that needed it. Bump this deliberately, with the reformat it implies
+      # in the same PR (the webapp CI pins prettier for this same reason).
       - name: Ruff check
         run: uvx ruff@${{ env.RUFF_VERSION }} check .
 
@@ -268,4 +275,4 @@ jobs:
         run: |
           uv export --frozen --no-emit-project --all-extras --no-hashes \
             --format requirements-txt -o requirements.audit.txt
-          uvx pip-audit -r requirements.audit.txt
+          uvx pip-audit@${{ env.PIP_AUDIT_VERSION }} -r requirements.audit.txt

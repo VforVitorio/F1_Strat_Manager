@@ -130,19 +130,19 @@ The orchestrator accepts a `RaceState` Pydantic model:
 
 ```python
 class RaceState(BaseModel):
-    driver: str           # Three-letter driver code
-    lap: int              # Current lap number
-    total_laps: int       # Total race laps
-    position: int         # Current race position
-    compound: str         # Current tire compound
-    tyre_life: int        # Current tire age (laps)
-    gap_ahead_s: float    # Gap to car ahead (seconds)
-    pace_delta_s: float   # Pace delta vs car ahead
-    air_temp: float       # Air temperature (C)
-    track_temp: float     # Track temperature (C)
+    driver: str  # Three-letter driver code
+    lap: int  # Current lap number
+    total_laps: int  # Total race laps
+    position: int  # Current race position
+    compound: str  # Current tire compound
+    tyre_life: int  # Current tire age (laps)
+    gap_ahead_s: float  # Gap to car ahead (seconds)
+    pace_delta_s: float  # Pace delta vs car ahead
+    air_temp: float  # Air temperature (C)
+    track_temp: float  # Track temperature (C)
     rainfall: bool = False
-    radio_msgs: list = []   # RadioMessage dicts for current lap window
-    rcm_events: list = []   # RCMEvent dicts for current lap window
+    radio_msgs: list = []  # RadioMessage dicts for current lap window
+    rcm_events: list = []  # RCMEvent dicts for current lap window
     risk_tolerance: float = 0.5  # 0=conservative, 1=aggressive
 ```
 
@@ -182,9 +182,8 @@ The MCP-facing tools one layer up (`src/telemetry/backend/mcp_tools.py`, consume
 
 ```python
 from src.agents.radio_agent import process_radio_tool
-result = process_radio_tool.invoke({
-    "driver": "NOR", "lap": 18, "text": "Box this lap."
-})
+
+result = process_radio_tool.invoke({"driver": "NOR", "lap": 18, "text": "Box this lap."})
 ```
 
 **Agent-level (no LLM needed):**
@@ -203,7 +202,7 @@ from src.simulation.replay_engine import RaceReplayEngine
 from src.agents.pace_agent import run_pace_agent_from_state
 
 replay = RaceReplayEngine(Path("data/raw/2025/Lusail"), driver_code="PIA", team="McLaren")
-lap_state = next(islice(replay.replay(), 19, 20))   # lap 20
+lap_state = next(islice(replay.replay(), 19, 20))  # lap 20
 output = run_pace_agent_from_state(lap_state)
 
 print(output.lap_time_pred, output.ci_p10, output.ci_p90)
@@ -231,13 +230,16 @@ from src.strategy.inference.engine import run_lap
 race_dir = Path("data/raw/2025/Lusail")
 laps_df = pd.read_parquet(race_dir / "laps.parquet")
 replay = RaceReplayEngine(race_dir, driver_code="PIA", team="McLaren")
-lap_state = next(islice(replay.replay(), 19, 20))   # lap 20
+lap_state = next(islice(replay.replay(), 19, 20))  # lap 20
 
 driver = lap_state["driver"]
 ahead = [r for r in lap_state["rivals"] if r["position"] == driver["position"] - 1]
 race_state = RaceState(
-    driver=driver["driver"], lap=20, total_laps=replay.total_laps,
-    position=driver["position"], compound=driver["compound"],
+    driver=driver["driver"],
+    lap=20,
+    total_laps=replay.total_laps,
+    position=driver["position"],
+    compound=driver["compound"],
     tyre_life=driver["tyre_life"],
     # rivals ahead report a NEGATIVE interval; RaceState wants a magnitude
     gap_ahead_s=abs(ahead[0]["interval_to_driver_s"]) if ahead else 0.0,

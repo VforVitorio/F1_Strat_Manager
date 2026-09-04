@@ -148,7 +148,7 @@ Streams per-lap strategy decisions as Server-Sent Events, rate-limited to 3 requ
 
 ```python
 class SimulateRequest(BaseModel):
-    year: int = 2025            # 2023-2025
+    year: int = 2025  # 2023-2025
     gp: str
     driver: str
     team: str
@@ -156,8 +156,8 @@ class SimulateRequest(BaseModel):
     lap_range: Optional[tuple[int, int]] = None
     risk_tolerance: float = 0.5  # 0-1
     no_llm: bool = False
-    provider: str = "lmstudio"   # "lmstudio" | "openai"
-    interval_s: float = 0.0      # 0-10, artificial delay between laps
+    provider: str = "lmstudio"  # "lmstudio" | "openai"
+    interval_s: float = 0.0  # 0-10, artificial delay between laps
 ```
 
 Event stream: one `start` event, then one `lap` (or `error`) event per processed lap, closed with a `summary` event. A blank SSE comment (`:\n\n`) is sent every 15 `lap` events as a heartbeat so long runs survive proxy idle timeouts.
@@ -217,30 +217,38 @@ Every POST endpoint above (plus `/pace-range` and `/tire-range`) sits behind its
 class PaceRequest(BaseModel):
     lap_state: Dict[str, Any]
 
+
 class TireRequest(BaseModel):
     lap_state: Dict[str, Any]
+
 
 class SituationRequest(BaseModel):
     lap_state: Dict[str, Any]
 
+
 class PitRequest(BaseModel):
     lap_state: Dict[str, Any]
+
 
 class RadioRequest(BaseModel):
     lap_state: Dict[str, Any]
     radio_msgs: List[Dict[str, Any]] = []
     rcm_events: List[Dict[str, Any]] = []
 
+
 class PaceRangeRequest(BaseModel):
     """Shared by /pace-range and /tire-range."""
+
     year: int = 2025
     gp: str
     driver: str
     lap_start: int
     lap_end: int
 
+
 class RagRequest(BaseModel):
     question: str
+
 
 class RecommendRequest(BaseModel):
     lap_state: Dict[str, Any]
@@ -263,7 +271,7 @@ All agent endpoints return the generic `StrategyResponse` envelope. Swagger also
 
 ```python
 class StrategyResponse(BaseModel):
-    agent: str       # e.g. "pace", "tire", "radio", "orchestrator"
+    agent: str  # e.g. "pace", "tire", "radio", "orchestrator"
     result: Dict[str, Any]
 ```
 

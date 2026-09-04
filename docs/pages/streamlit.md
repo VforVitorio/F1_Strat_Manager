@@ -88,11 +88,11 @@ Dispatch lives in `components/chatbot/tool_result_renderer.py`:
 
 ```python
 _RENDERERS = {
-    "metrics":        _render_metrics,
-    "strategy_card":  _render_strategy_card,
-    "table":          _render_table,
-    "text":           _render_text,
-    "chart":          _render_chart,
+    "metrics": _render_metrics,
+    "strategy_card": _render_strategy_card,
+    "table": _render_table,
+    "text": _render_text,
+    "chart": _render_chart,
 }
 ```
 

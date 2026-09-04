@@ -83,10 +83,12 @@ Substituting the offline replay for live ingestion is a one-line change:
 
 ```python
 # Offline (today)
-for lap_state in engine.replay(): ...
+for lap_state in engine.replay():
+    ...
 
 # Live (v0.14+)
-for lap_state in LiveKafkaConsumer.consume_lap(): ...
+for lap_state in LiveKafkaConsumer.consume_lap():
+    ...
 ```
 
 Every consumer downstream of the iterator already speaks the `lap_state`
