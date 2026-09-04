@@ -10,6 +10,8 @@ Exported symbols used by the rest of the cli package:
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
+
 from rich.align import Align
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -63,6 +65,25 @@ _COMPACT = (
 )
 
 
+def _package_version() -> str:
+    """The installed distribution version, or ``"dev"`` from an uninstalled checkout.
+
+    Returns:
+        The version string release-please writes into ``pyproject.toml``, so the
+        banner cannot drift from the release the way a hardcoded literal did. A
+        source tree that was never installed has no distribution metadata, which
+        is not worth a traceback in a welcome banner.
+    """
+    try:
+        return version("f1-strat-manager")
+    except PackageNotFoundError:
+        return "dev"
+
+
+# Both branches of make_banner() render this, so the subtitle has one source.
+_SUBTITLE = f"Multi-Agent Race Intelligence System · v{_package_version()}"
+
+
 def make_banner() -> Panel:
     """Return the F1 STRAT welcome banner as a Rich Panel.
 
@@ -72,7 +93,7 @@ def make_banner() -> Panel:
     if console.width < 66:
         content = Group(
             Align.center(Text.from_markup(_COMPACT)),
-            Align.center(Text("Multi-Agent Race Intelligence System · v0.9", style=F1_GRAY)),
+            Align.center(Text(_SUBTITLE, style=F1_GRAY)),
         )
         return Panel(content, border_style=F1_RED, padding=(0, 2))
 
@@ -86,7 +107,7 @@ def make_banner() -> Panel:
     lines += [
         Text(""),
         Align.center(Text("F1 StratLab", style=f"bold {F1_GRAY}")),
-        Align.center(Text("Multi-Agent Race Intelligence System · v0.9", style=F1_GRAY)),
+        Align.center(Text(_SUBTITLE, style=F1_GRAY)),
     ]
 
     return Panel(Group(*lines), border_style=F1_RED, padding=(1, 4))

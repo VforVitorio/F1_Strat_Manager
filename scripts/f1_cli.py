@@ -8,7 +8,7 @@ Usage
 Menu
 ----
     1  Single Driver   : lap-by-lap strategy for one driver
-    2  Head-to-Head    : two drivers, same race, shown back-to-back
+    2  Head-to-Head    : one run, second driver tracked as rival (--rival)
     3  Quit
 
 All UI logic lives in scripts/cli/:
