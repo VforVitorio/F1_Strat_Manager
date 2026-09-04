@@ -69,7 +69,7 @@ after merge.
 git clone https://github.com/VforVitorio/F1-StratLab.git
 cd F1-StratLab
 git submodule update --init --recursive     # src/telemetry/ is a submodule
-uv sync                                      # installs every dependency
+uv sync --all-extras                         # base deps + the dev extra (pytest, ruff, mypy)
 cp .env.example .env                         # add OPENAI_API_KEY here
 ```
 
@@ -186,9 +186,9 @@ Four jobs run on every push and PR (`.github/workflows/ci.yml`):
 
 | Job | Installs | Runs |
 |---|---|---|
-| `lint` | nothing, ruff via `uvx` | `ruff check .` + `ruff format --check .` |
-| `typecheck` | `uv sync --extra dev` (mypy + project deps, no voice extras) | `mypy src/rag/` |
-| `test` | `uv sync --all-extras` (full ML/voice/arcade stack) | `pytest -v --cov=src` + a collected-test-count floor (guards against a refactor silently dropping the suite) |
+| `lint` | nothing, ruff via `uvx ruff@$RUFF_VERSION` | `ruff check .` + `ruff format --check .` |
+| `typecheck` | `uv sync --extra dev` (mypy ships in the dev extra) | `mypy src/rag/` |
+| `test` | `uv sync --all-extras` (same set: `dev` is the only extra) | `pytest -v --cov=src` + a collected-test-count floor (guards against a refactor silently dropping the suite) |
 | `pip-audit` | `uv export` to a requirements file | `pip-audit` against the locked deps (advisory, `continue-on-error: true` while baselining) |
 
 `test` and `typecheck` are additionally gated by `dorny/paths-filter`:
