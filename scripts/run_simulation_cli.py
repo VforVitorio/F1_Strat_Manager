@@ -16,7 +16,8 @@ Examples
     # No LLM — prints MC scores only (fast, no LM Studio required)
     python scripts/run_simulation_cli.py Melbourne NOR McLaren --no-llm
 
-    # Laps 15-25 with LLM synthesis (LM Studio must be running)
+    # Laps 15-25 with LLM synthesis (LM Studio must be running, unless
+    # .env or --provider selects openai)
     python scripts/run_simulation_cli.py Sakhir NOR McLaren --laps 15-25
 
     # Custom data paths
@@ -121,7 +122,8 @@ _REPO_ROOT = next(
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Load .env so OPENAI_API_KEY is available when --provider openai is used
+# Load .env for both LLM settings it can carry: OPENAI_API_KEY, and since #805
+# F1_LLM_PROVIDER itself, which applies whenever --provider is not passed.
 try:
     from dotenv import load_dotenv
 

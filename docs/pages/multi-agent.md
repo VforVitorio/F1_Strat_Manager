@@ -401,7 +401,7 @@ One consequence worth knowing before debugging a call: **the effect does not sho
 
 N25 (pace) is not in this table because it never calls an LLM. See the "No LLM step" note under [N25: Pace Agent](#/multi-agent#n25-pace-agent-paceagentpy) above.
 
-Set `F1_LLM_PROVIDER=openai` env var to use the real OpenAI API. Default is LM Studio at `http://localhost:1234/v1`.
+Setting `F1_LLM_PROVIDER=openai` selects the OpenAI API on every surface. The fallback when it is unset differs per surface, LM Studio at `http://localhost:1234/v1` for the CLI and the backend, OpenAI for the arcade. Full table in [INSTALL.md](https://github.com/VforVitorio/F1-StratLab/blob/main/INSTALL.md#llm-provider-per-surface).
 
 ## Data flow
 

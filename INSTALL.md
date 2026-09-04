@@ -9,13 +9,12 @@ prerequisites are on the machine.
 
 - Python **3.10, 3.11, or 3.12** (the project pins `>=3.10,<3.13` in
   `pyproject.toml`; CI runs on 3.12).
-- `OPENAI_API_KEY` in a `.env` at the repo root (or exported in the
-  shell) for OpenAI `gpt-4.1-mini`, the sub-agent default on every provider
-  path. Arcade and the web app backend read `F1_LLM_PROVIDER` from `.env`
-  (`.env.example` ships `openai`). **The CLI is the exception:** `f1-sim`'s
-  `--provider` flag overrides `.env` and defaults to `lmstudio` (a local
-  LM Studio server on `http://localhost:1234`), pass `--provider openai`
-  to use OpenAI instead, or `--no-llm` to skip the LLM step entirely.
+- `OPENAI_API_KEY` in a `.env` at the repo root (or exported in the shell)
+  when the resolved provider is OpenAI. `.env.example` ships
+  `F1_LLM_PROVIDER=openai`; which surface reads it, and what each one falls
+  back to, is in [LLM provider, per surface](#llm-provider-per-surface)
+  below. Every surface can also skip the LLM step entirely, in which case no
+  key is needed.
 - For the web app Docker flow: **Docker Desktop** (Windows/Mac) or
   `docker + compose` plugin (Linux).
 - For Arcade: a working OpenGL graphics stack (any modern laptop
@@ -29,6 +28,46 @@ prerequisites are on the machine.
   first launch also spends ~30 s warming imports before the first panel
   paints, and the first GP replay may fetch an extra ~1.5 GB Whisper
   checkpoint. Subsequent runs read a warm cache and start fast.
+
+---
+
+## LLM provider, per surface
+
+Each surface resolves the LLM provider on its own. The table is the single
+place that records how, and every cell is checkable against the file named
+in it. `tests/infra/test_install_provider_table.py` reads those files and
+fails when a value here stops matching the code.
+
+| Surface | Reads `.env` | Provider when nothing is set | Overridden by | Model |
+|---|---|---|---|---|
+| `f1-sim` | repo root, source checkout only (`scripts/run_simulation_cli.py`) | `lmstudio` (`src/agents/strategy_orchestrator.py`) | `--provider openai\|lmstudio`, or `--no-llm` to skip the step | sub-agents `gpt-4.1-mini`, orchestrator `gpt-5.4-mini` |
+| `f1-strat` | repo root, for `OPENAI_API_KEY` only (`scripts/f1_cli.py`) | the wizard's LLM-mode pick, which highlights "No LLM" | the wizard, always forwarded to `f1-sim` as `--provider` or `--no-llm` (`scripts/cli/runner.py`) | as `f1-sim` |
+| `f1-arcade`, `f1-pitwall` | repo root, source checkout only (`src/arcade/main.py`) | `openai` (`src/arcade/app.py`) | `F1_LLM_PROVIDER`, or `--no-llm` | as `f1-sim` |
+| `f1-webapp` chat tab | repo root, then `src/telemetry/.env` as an override (`src/telemetry/backend/core/config.py`) | `lmstudio` (`src/telemetry/backend/services/chatbot/llm_service.py`) | `F1_LLM_PROVIDER`, then a bare `LLM_PROVIDER` | `gpt-5.4-mini`, or `OPENAI_CHAT_MODEL` |
+| backend `POST /simulate` | as the chat tab | `lmstudio` (`src/telemetry/backend/api/v1/endpoints/strategy.py`) | the request body's `provider` field, which is written over `.env` on every call (#1192) | as `f1-sim` |
+
+Four things the table cannot fit:
+
+**The shell wins over the file.** None of the nine `load_dotenv` calls passes
+`override=True` except the second one in
+`src/telemetry/backend/core/config.py`, so an exported `F1_LLM_PROVIDER`
+beats the repo-root `.env` everywhere. For the backend only, a
+`src/telemetry/.env` beats both.
+
+**A wheel install reads no `.env` at all.** `f1-sim` and `f1-arcade` locate
+the file by walking up from the source tree for a `.git` directory. After
+`uv tool install` there is none, so nothing is loaded and the built-in
+fallback applies. On that path the provider is set through the shell
+environment, or through `--provider` for `f1-sim`.
+
+**The fallback is not the same on every surface**, LM Studio for the CLI and
+the backend, OpenAI for the arcade. That is issue #264; this table records
+the current behaviour rather than resolving it. Setting `F1_LLM_PROVIDER`
+explicitly makes the difference irrelevant.
+
+**The model names are constants**, sent unchanged on both provider paths.
+`OPENAI_CHAT_MODEL` is the only environment variable that changes one, and
+it applies to the web app chat tab alone.
 
 ---
 
