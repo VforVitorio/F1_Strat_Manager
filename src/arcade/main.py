@@ -80,7 +80,7 @@ def _show_viewer_directly(window: arcade.Window, args: argparse.Namespace) -> No
     This used to be a second implementation: its own `SessionLoader().load`, its
     own driver fallback, its own `F1ArcadeView`. The menu grew a lazy per-race
     fetch and a worker thread so the window keeps drawing through a download and
-    a 349 s telemetry build; this path would not have grown either, because
+    a telemetry build of several minutes; this path would not have grown either, because
     nothing here shared a line with it. It now fills a `LaunchConfig` and hands
     it over, so `--viewer` and the menu can only ever behave the same (#1115).
     """

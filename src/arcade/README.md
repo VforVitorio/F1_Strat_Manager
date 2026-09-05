@@ -33,7 +33,7 @@ f1-arcade --viewer --year 2025 --round 3 --driver VER --team "Red Bull Racing"
 src/arcade/
 ├── main.py              # CLI entry point (f1-arcade)
 ├── app.py               # F1ArcadeView — pyglet replay loop, TCP broadcast
-├── data.py              # SessionLoader + SessionData + FrameData
+├── data.py              # SessionLoader + SessionData + DriverFrames (columnar) + FrameData
 ├── config.py            # Palette, GP calendars, constants
 ├── strategy.py          # SimConnector + StrategyState + DTOs
 ├── strategy_pipeline.py # Thin delegate over the shared engine (run_lap)

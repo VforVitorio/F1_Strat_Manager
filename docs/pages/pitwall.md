@@ -45,7 +45,9 @@ Nothing extra to run. `f1-arcade --strategy` (or `python -m src.arcade.main …
 The first launch of any given race builds its replay telemetry, which takes
 minutes, so the menu reports the stages while a worker thread does the work.
 `f1-prefetch --year 2025` runs that same preparation for a whole season ahead
-of time, and skips the rounds already cached.
+of time, and skips the rounds already cached. That skip tests for the file, not
+for its version, so after a release that changes the replay format the stale
+rounds read as cached; `--force` rebuilds them.
 
 To develop against an already-running arcade:
 

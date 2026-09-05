@@ -98,11 +98,10 @@ def test_the_race_data_is_fetched_before_anything_reads_it(recorder: _Recorder) 
 
 
 def test_the_downloads_come_before_the_long_build(recorder: _Recorder) -> None:
-    """Failing in seconds beats failing after a 349 s telemetry build.
+    """Failing in seconds beats failing after a telemetry build of minutes.
 
-    That is the measured cold cost of `SessionLoader().load` for Lusail 2025, so
-    ordering the cheap failable steps first is the difference between a user
-    learning a race is unavailable now and learning it six minutes from now.
+    Ordering the cheap failable steps first is the difference between a user
+    learning a race is unavailable now and learning it several minutes from now.
     """
     prepare_race(2025, 23, "Lusail", strategy_enabled=True)
     assert recorder.names == ["ensure_race", "ensure_radio_corpus", "load"]
@@ -180,9 +179,9 @@ def test_the_label_names_the_stage_and_its_place() -> None:
 def test_the_elapsed_seconds_climb_rather_than_sitting_at_zero() -> None:
     """Each stage reports ONCE, at its start, so a stored elapsed is always 0.
 
-    The telemetry build is 349 s on a cold race. A readout frozen at "0s" for
-    six minutes says exactly what a hung window says, which is the opposite of
-    what putting this on a worker was for (#1116).
+    The telemetry build runs for minutes on a cold race. A readout frozen at
+    "0s" for that long says exactly what a hung window says, which is the
+    opposite of what putting this on a worker was for (#1116).
     """
     progress = PrepareProgress(stage=STAGE_TELEMETRY, index=3, total=3, started_at=100.0)
     assert progress.elapsed_s(100.0) == 0.0
@@ -208,14 +207,28 @@ def test_the_bar_shows_work_finished_not_work_started() -> None:
 def test_prepare_touches_no_gl_object() -> None:
     """It runs on a worker thread, so anything needing the context would crash.
 
-    `arcade` must not appear in the module at all: the caller builds `Track` and
-    `F1ArcadeView` on the main thread from what this returns.
+    `arcade` must not be imported by the module at all: the caller builds
+    `Track` and `F1ArcadeView` on the main thread from what this returns.
+
+    Parsed rather than substring-matched. The two checks this replaced were
+    `"import arcade" not in text` and `"arcade.Text" not in text`, and
+    `from arcade import Text` contains neither, so the guard was green against
+    the exact import it exists to forbid.
     """
-    source = prepare.__file__
-    with open(source, encoding="utf-8") as handle:
-        text = handle.read()
-    assert "import arcade" not in text
-    assert "arcade.Text" not in text
+    import ast
+
+    with open(prepare.__file__, encoding="utf-8") as handle:
+        tree = ast.parse(handle.read())
+
+    imported: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported += [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            imported.append(node.module or "")
+    assert imported, "the module imports nothing at all, so this guard read the wrong file"
+    offenders = [name for name in imported if name == "arcade" or name.startswith("arcade.")]
+    assert not offenders, f"prepare.py imports the GL layer: {offenders}"
 
 
 def test_a_race_the_dataset_does_not_hold_refuses_instead_of_degrading(

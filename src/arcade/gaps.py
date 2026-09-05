@@ -105,7 +105,7 @@ from typing import Callable
 import numpy as np
 
 from src.arcade.config import DT
-from src.arcade.data import SessionData
+from src.arcade.data import DriverFrames, SessionData
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ logger = logging.getLogger(__name__)
 ProgressAt = Callable[[str, int], float | None]
 
 
-def _telemetry_end_frame(frames: list) -> int:
+def _telemetry_end_frame(frames: DriverFrames) -> int:
     """Index of the first frame past this driver's last real sample.
 
     The resampler clamps every field beyond that sample, so this is the
@@ -130,8 +130,7 @@ def _telemetry_end_frame(frames: list) -> int:
     A driver whose telemetry runs to the end of the session is never
     inactive, hence the fallback to the last frame.
     """
-    active = np.fromiter((bool(f.active) for f in frames), dtype=bool, count=len(frames))
-    ended = np.flatnonzero(~active)
+    ended = np.flatnonzero(~frames.active)
     return int(ended[0]) if len(ended) else len(frames) - 1
 
 
@@ -255,7 +254,7 @@ def _derived_flag_frames(
     the primary path and this one only answers when nothing better exists.
     """
     candidates = sorted(
-        (end, code) for code, end in ends.items() if frames_by_driver[code][-1].lap >= final_lap
+        (end, code) for code, end in ends.items() if frames_by_driver[code].lap[-1] >= final_lap
     )
     leader_flag = next(
         (end for end, code in candidates if _leads_at(code, end, ends, progress_at)),
@@ -389,12 +388,10 @@ class RaceGapCalculator:
             # a single 0.11 m and the worst total deviation 0.60 m across a
             # 300 km race, against a 2.8 m frame at racing speed. It is
             # removing float noise, not physics.
-            self._dist[code] = np.maximum.accumulate(
-                np.fromiter((f.dist for f in frames), dtype=float, count=len(frames))
-            )
+            self._dist[code] = np.maximum.accumulate(frames.dist)
 
     @staticmethod
-    def _lap_crossings(frames: list, flag_frame: int | None) -> dict[int, float]:
+    def _lap_crossings(frames: DriverFrames, flag_frame: int | None) -> dict[int, float]:
         """Map each completed lap to the replay time the driver crossed the line.
 
         **Only real increments of the lap field count, plus the chequered
@@ -414,7 +411,7 @@ class RaceGapCalculator:
         """
         if not frames:
             return {}
-        lap_numbers = np.fromiter((f.lap for f in frames), dtype=int, count=len(frames))
+        lap_numbers = frames.lap
         crossings: dict[int, float] = {}
         for i in np.flatnonzero(np.diff(lap_numbers) > 0) + 1:
             crossings.setdefault(int(lap_numbers[i]) - 1, float(i) * DT)

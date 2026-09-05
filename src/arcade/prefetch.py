@@ -5,8 +5,12 @@
     f1-prefetch --year 2025 --with-radio       # also fetch the team radio corpus
     f1-prefetch --year 2025 --force            # prepare cached rounds too
 
-Picking a race the arcade has never built costs 349 s measured for the
-telemetry alone, plus the downloads before it (`prepare.py`). The menu runs
+Picking a race the arcade has never built costs minutes for the telemetry
+alone, plus the downloads before it (`prepare.py`). How many depends on the
+race and on whether FastF1's own cache is warm, so the figure is not quoted
+here: it was 349 s for Lusail 2025 on a first-ever build before #1121 cut the
+per-driver extraction, and a rebuild with FastF1 warm is a fraction of that.
+The menu runs
 that on a worker thread so the window keeps drawing, but whoever picked the
 race still waits the first time, for every race. This command fills the cache
 in advance, unattended, so picking one later is instant.
@@ -200,7 +204,7 @@ def prefetch(
 
     The GP name comes from the same calendar the menu resolves it from, so the
     two can only ever fetch the same race for a given round. `cache_dir` and
-    `out` exist for the tests: the real cache holds pickles that cost 349 s
+    `out` exist for the tests: the real cache holds pickles that cost minutes
     each to rebuild, and nothing here may touch them through a fake.
     """
     out = out or sys.stdout
@@ -249,7 +253,8 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="f1-prefetch",
         description=(
             "Fill the arcade's replay cache ahead of time, so picking a race from the "
-            "menu later is instant instead of a 349 s build. Rounds already cached are "
+            "menu later is instant instead of a build that takes minutes. Rounds already "
+            "cached are "
             "skipped without being loaded."
         ),
     )

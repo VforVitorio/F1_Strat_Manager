@@ -5,9 +5,10 @@ whose pickle exists, so what is asserted here is the loop's own behaviour: the
 rounds spec, the skip and its `--force` override, one round's failure not
 ending the run, the flags reaching the call, and the exit code.
 
-**`prepare_race` is always faked.** A real call is a download plus a 349 s
-build, and the cache directory is always a `tmp_path`: the six pickles under
-`data/cache/arcade/` cost that much each and nothing here may touch them.
+**`prepare_race` is always faked.** A real call is a download plus a build of
+several minutes, and the cache directory is always a `tmp_path`: the six
+pickles under `data/cache/arcade/` cost that much each and nothing here may
+touch them.
 """
 
 from __future__ import annotations

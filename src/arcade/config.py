@@ -249,7 +249,12 @@ ARCADE_CACHE_DIR: Final[Path] = get_data_root() / "cache" / "arcade"
 # The served order changes on 87 of 129,084 frames, all of them adjacent cars within 3 m of each
 # other, with the leader unchanged and every crossing, lap number, compound, tyre age, gear, DRS
 # code, brake, speed and throttle identical to v16.
-CACHE_VERSION: Final[str] = "v17"  # + the shared lap-boundary sample sorts stably (#1069)
+# v18: `frames_by_driver` holds fourteen numpy arrays per driver instead of one `FrameData`
+# per sample (#1118). The VALUES do not move, because the columns are float64 and int64 and the
+# loader already computed them at that width before boxing them; what changes is the shape of
+# the payload, so an older pickle cannot be read into it. Measured on Las Vegas 2025, the warm
+# read goes from 10.2 s to 0.13 s and the loaded race from 4,143 MB of resident memory to 260 MB.
+CACHE_VERSION: Final[str] = "v18"  # + the shared lap-boundary sample sorts stably (#1069)
 
 # --- Multiprocessing pool -------------------------------------------------
 # Serial. The reason recorded here used to be a hang: Windows spawn plus pickling

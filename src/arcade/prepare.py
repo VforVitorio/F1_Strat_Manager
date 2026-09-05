@@ -17,7 +17,7 @@ Three artefacts, and until #1115 the arcade fetched exactly one of them:
   and the half the agents need was not.
 
 The other reason this module exists is TIME. Building the Lusail 2025 pickle
-takes 349 s measured, and the fetches add to it, so the preparation cannot run
+takes minutes, and the fetches add to it, so the preparation cannot run
 on the thread that draws: the menu used to force one frame of "Loading
 session..." and then block pyglet for minutes, which Windows paints as a dead
 window. Everything here is plain I/O returning plain data, so a worker thread
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # What the user is told is happening, in the order it happens. The downloads go
 # first because they are the steps that can fail on a missing race, and failing
-# in 5 s beats failing after a 349 s telemetry build.
+# in 5 s beats failing after a telemetry build that takes minutes.
 STAGE_RACE_DATA = "Downloading race data"
 STAGE_TEAM_RADIO = "Downloading team radio"
 STAGE_TELEMETRY = "Building telemetry"
@@ -81,7 +81,7 @@ class PrepareProgress:
         """Share of the run FINISHED, which is the stages before this one.
 
         `index / total` would read 100% the moment the last stage starts, and
-        the last stage is the 349 s telemetry build, so the bar would sit full
+        the last stage is the telemetry build and it is minutes long, so the bar would sit full
         for the entire wait (#1116).
         """
         return (self.index - 1) / self.total
