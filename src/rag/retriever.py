@@ -257,9 +257,12 @@ class RagRetriever:
         # Imported here rather than at module level because
         # tests/agents/test_agent_import_cost.py forbids qdrant_client in a fresh
         # agent import, and unlike most of the RAG suite that test runs on CI.
-        from qdrant_client.models import FieldCondition, Filter, MatchValue
+        from qdrant_client.models import Condition, FieldCondition, Filter, MatchValue
 
-        conditions = []
+        # Annotated with qdrant's own Condition union rather than
+        # list[FieldCondition]: a list is invariant, so the narrower element type
+        # does not satisfy Filter(must=...) and mypy rejects it.
+        conditions: list[Condition] = []
         if year is not None:
             conditions.append(FieldCondition(key="year", match=MatchValue(value=int(year))))
         if doc_type is not None:
