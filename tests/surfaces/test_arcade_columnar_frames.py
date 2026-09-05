@@ -201,3 +201,34 @@ def test_the_loader_fills_every_column_exactly_once() -> None:
     keywords = [kw.arg for kw in calls[0].keywords]
     assert keywords.count(None) == 0, "a **kwargs spread would hide which columns are filled"
     assert sorted(keywords) == sorted(FIELDS), f"columns filled: {sorted(keywords)}"
+
+
+def test_a_slice_stays_columnar_and_holds_the_right_frames(
+    frames: list[FrameData],
+) -> None:
+    """`zip(frames, frames[1:])` is how the real-data guards walk pairs.
+
+    The first version of `__getitem__` handled integers only, so a slice fell
+    through to `float(self.t[slice])` and raised `TypeError: only length-1
+    arrays can be converted to Python scalars`. Nothing in `src/` slices a
+    driver's frames, which is why a sweep of the production consumers alone
+    said the change was safe, and the caller that does slice lives in
+    `test_arcade_telemetry_span.py` and had never run.
+    """
+    columns = DriverFrames.from_frames(frames)
+    tail = columns[1:]
+    assert isinstance(tail, DriverFrames)
+    assert len(tail) == len(frames) - 1
+    assert list(tail) == frames[1:]
+    assert list(columns[10:20]) == frames[10:20]
+    assert list(columns[-3:]) == frames[-3:]
+    assert list(columns[:0]) == []
+
+
+def test_consecutive_pairs_walk_the_whole_race(frames: list[FrameData]) -> None:
+    """The exact shape the lap-number guard uses, asserted on its own."""
+    columns = DriverFrames.from_frames(frames)
+    pairs = list(zip(columns, columns[1:]))
+    assert len(pairs) == len(frames) - 1
+    assert pairs[0] == (frames[0], frames[1])
+    assert pairs[-1] == (frames[-2], frames[-1])

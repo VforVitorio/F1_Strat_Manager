@@ -149,14 +149,25 @@ class DriverFrames:
     def __len__(self) -> int:
         return int(self.t.shape[0])
 
-    def __getitem__(self, index: int) -> FrameData:
-        """The sample at `index` as a `FrameData`, negative indices included.
+    def __getitem__(self, index: int | slice) -> "FrameData | DriverFrames":
+        """One sample as a `FrameData`, or a slice of them as more columns.
 
-        Built on demand, so a caller holding the result is holding a copy:
-        writing to it does not reach the columns. Nothing in the replay mutates
-        a frame, and the fixtures that do mutate one do it to a plain list
-        before it ever reaches `SessionData`.
+        Negative indices included. A frame is built on demand, so a caller
+        holding one is holding a copy: writing to it does not reach the
+        columns. Nothing in the replay mutates a frame, and the fixtures that
+        do mutate one do it to a plain list before it ever reaches
+        `SessionData`.
+
+        A slice stays columnar and comes back as a `DriverFrames` over numpy
+        views, which copies no data. `zip(frames, frames[1:])` is how the
+        real-data guards walk consecutive samples, so handing back frames one
+        at a time here would build a whole race twice to compare it with
+        itself.
         """
+        if isinstance(index, slice):
+            return DriverFrames(
+                **{name: getattr(self, name)[index] for name in _FRAME_COLUMN_DTYPES}
+            )
         return FrameData(
             t=float(self.t[index]),
             x=float(self.x[index]),
