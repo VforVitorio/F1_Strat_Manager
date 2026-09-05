@@ -776,7 +776,7 @@ class MenuView(arcade.View):
         """Validate, then hand the preparation to a worker and keep drawing.
 
         It used to force one frame of "Loading session..." and then block the
-        pyglet thread for as long as the load took. That is measured at 349 s
+        pyglet thread for as long as the load took. That is minutes on a cold race
         for a race whose telemetry is not cached yet, plus the downloads, and a
         window that does not pump events for six minutes is one the OS paints as
         dead (#1115).

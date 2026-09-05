@@ -38,7 +38,10 @@ The first four are what a new user actually runs.
 f1-prefetch --year 2025                   # the whole calendar
 f1-prefetch --year 2025 --rounds 1,3,5-8  # commas and ranges
 f1-prefetch --year 2025 --with-radio      # also fetch the team radio the agents read
+f1-prefetch --year 2025 --force           # rebuild rounds that are already cached
 ```
+
+A round whose file is already on disk is skipped without being read, which is what makes a second run cheap. The check is the presence of that file and nothing else, so it cannot see a cache left stale by a release that changed the replay format. After such a release the skip reports every round as cached and rebuilds nothing, and `--force` is the way past it.
 
 Rounds already cached are skipped without being loaded, so re-running it costs one filesystem check per round.
 
