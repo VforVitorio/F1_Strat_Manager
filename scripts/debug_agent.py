@@ -286,7 +286,7 @@ def _run_rag(lap_state: dict, laps_df: pd.DataFrame, args: argparse.Namespace) -
     from src.agents.rag_agent import run_rag_agent
 
     query = args.query or f"What are the safety car regulations for the {args.gp_name} GP?"
-    out = run_rag_agent(query)
+    out = run_rag_agent(query, year=args.year)
     _print_output(out)
 
 

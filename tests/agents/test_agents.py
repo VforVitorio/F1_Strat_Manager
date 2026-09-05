@@ -58,48 +58,14 @@ def test_agent_module_importable(module_path):
 # ---------------------------------------------------------------------------
 # Entry-point function existence
 # ---------------------------------------------------------------------------
-
-
-@_skip_no_models
-def test_pace_agent_entry_points():
-    from src.agents.pace_agent import run_pace_agent_from_state
-
-    assert callable(run_pace_agent_from_state)
-
-
-@_skip_no_models
-def test_tire_agent_entry_points():
-    from src.agents.tire_agent import run_tire_agent_from_state
-
-    assert callable(run_tire_agent_from_state)
-
-
-@_skip_no_models
-def test_situation_agent_entry_points():
-    from src.agents.race_situation_agent import run_race_situation_agent_from_state
-
-    assert callable(run_race_situation_agent_from_state)
-
-
-@_skip_no_models
-def test_pit_agent_entry_points():
-    from src.agents.pit_strategy_agent import run_pit_strategy_agent_from_state
-
-    assert callable(run_pit_strategy_agent_from_state)
-
-
-@_skip_no_models
-def test_radio_agent_entry_points():
-    from src.agents.radio_agent import run_radio_agent_from_state
-
-    assert callable(run_radio_agent_from_state)
-
-
-@_skip_no_models
-def test_rag_agent_entry_points():
-    from src.agents.rag_agent import run_rag_agent
-
-    assert callable(run_rag_agent)
+#
+# One test, not seven. The six per-agent versions asserted that a name imported
+# and was callable, which test_agent_module_importable above already covers for
+# them: strategy_orchestrator imports all six entry points at module level, so
+# renaming any one of them turns that test red on its own (measured, one rename
+# at a time). The orchestrator's own entry point is the exception, because
+# nothing imports it, so a rename there leaves the import test green and this is
+# the only guard that catches it.
 
 
 @_skip_no_models

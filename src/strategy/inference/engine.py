@@ -95,7 +95,7 @@ logger = logging.getLogger(__name__)
 # instantiates the radio agent's three transformer models, and the backend needs the
 # scoping rule without paying for them. Kept importable under the old name because
 # callers and tests already reference `engine._scope_laps_to_gp`.
-from src.strategy.inference.scoping import _scope_laps_to_gp  # noqa: E402
+from src.strategy.inference.scoping import _scope_laps_to_gp, season_of  # noqa: E402
 
 
 class _StageTimer:
@@ -387,7 +387,7 @@ def _build_default_lap_state(race_state: RaceState, laps_df: pd.DataFrame) -> di
     """
     driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
     lap_row = driver_rows[driver_rows["LapNumber"] == race_state.lap]
-    year = int(laps_df["Year"].iloc[0]) if "Year" in laps_df.columns else 2025
+    year = season_of(laps_df)
     gp_name = str(laps_df["GP_Name"].iloc[0]) if "GP_Name" in laps_df.columns else ""
     stint = int(lap_row["Stint"].iloc[0]) if not lap_row.empty else 1
     team = str(lap_row["Team"].iloc[0]) if not lap_row.empty and "Team" in lap_row else "Unknown"

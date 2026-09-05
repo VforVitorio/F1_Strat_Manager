@@ -12,11 +12,13 @@ Public interface::
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 # QdrantClient and SentenceTransformer are imported inside RagRetriever.__init__.
@@ -25,6 +27,8 @@ from langchain_core.tools import tool
 # run, so `f1-sim --help` and any --no-llm lap paid for a vector store neither
 # one opens. get_retriever() is already a lazy singleton (see its docstring), so
 # the cost now lands on the first regulation question instead of on startup.
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -193,6 +197,9 @@ class RagRetriever:
         self._collection_name = collection_name
         self._embedding_model = embedding_model
         self._top_k = top_k
+        # Scopes already reported as absent from the index, so the warning in
+        # _warn_unindexed_scope fires once per scope instead of once per lap.
+        self._unscoped_warned: set[tuple[int | None, str | None]] = set()
 
         self._client = QdrantClient(path=str(self._qdrant_path))
         self._encoder = SentenceTransformer(embedding_model)
@@ -218,18 +225,123 @@ class RagRetriever:
         """
         return self._encoder.encode(text, normalize_embeddings=True).tolist()
 
+    def _build_scope_filter(self, year: int | None, doc_type: str | None):
+        """Build the Qdrant payload filter that restricts a search to one season.
+
+        The embedding carries no year signal: three near-identical rulebooks differ
+        by a few numbers, so a bi-encoder ranks the 2023 and the 2025 wording of the
+        same article almost equally. Measured on the tracked gold set, an unfiltered
+        top-5 puts 43 of 75 hits in a season other than the one asked about, which is
+        not distinguishable from drawing by chunk share (z = -1.3 against a 64.6%
+        baseline). Scoping therefore happens on the payload, where the year is exact,
+        rather than in the question text, where naming the season moves the mix by a
+        few hits and sometimes the wrong way.
+
+        Args:
+            year:     Season to restrict to, coerced to ``int``. ``None`` leaves the
+                      search unscoped, which is what the notebooks and both README
+                      examples rely on.
+            doc_type: Document family to restrict to (``"sporting_regs"``). ``None``
+                      leaves it unscoped. Only one family is indexed today, so this
+                      discriminates nothing until a technical rulebook is added.
+
+        Returns:
+            A ``Filter`` matching every condition given, or ``None`` when neither
+            argument was, which callers read as "do not filter".
+
+        Raises:
+            ValueError: If ``year`` cannot be coerced to an int. The season arrives
+                from ``lap_state["year"]``, so a value that is not a year is a wiring
+                fault and stays loud rather than silently returning nothing.
+        """
+        # Imported here rather than at module level because
+        # tests/agents/test_agent_import_cost.py forbids qdrant_client in a fresh
+        # agent import, and unlike most of the RAG suite that test runs on CI.
+        from qdrant_client.models import Condition, FieldCondition, Filter, MatchValue
+
+        # Annotated with qdrant's own Condition union rather than
+        # list[FieldCondition]: a list is invariant, so the narrower element type
+        # does not satisfy Filter(must=...) and mypy rejects it.
+        conditions: list[Condition] = []
+        if year is not None:
+            conditions.append(FieldCondition(key="year", match=MatchValue(value=int(year))))
+        if doc_type is not None:
+            conditions.append(FieldCondition(key="doc_type", match=MatchValue(value=str(doc_type))))
+
+        if not conditions:
+            return None
+        return Filter(must=conditions)
+
+    def _search(self, vector: list[float], limit: int, scope: Any) -> list[Any]:
+        """Run one vector search, optionally restricted to a payload scope.
+
+        Args:
+            vector: The encoded question.
+            limit:  How many hits to ask Qdrant for.
+            scope:  A ``Filter`` from ``_build_scope_filter``, or ``None`` for an
+                    unscoped search.
+
+        Returns:
+            The raw Qdrant hits, each still carrying its payload and its score.
+        """
+        response = self._client.query_points(
+            collection_name=self._collection_name,
+            query=vector,
+            limit=limit,
+            with_payload=True,
+            query_filter=scope,
+        )
+        return list(response.points)
+
+    def _warn_unindexed_scope(self, year: int | None, doc_type: str | None) -> None:
+        """Say once that a scope matched nothing, then let the caller run unscoped.
+
+        A filtered search comes back empty only when no point carries that payload
+        value, so an empty filtered result means the scope is absent from the index
+        rather than that the question has no answer. Repeating the warning would emit
+        it on every routed lap, which is how a configuration problem comes to look
+        like flaky data.
+
+        Args:
+            year:     The season that matched nothing, named in the message.
+            doc_type: The document family that matched nothing, named in the message.
+        """
+        scope_key = (year, doc_type)
+        if scope_key in self._unscoped_warned:
+            return
+
+        self._unscoped_warned.add(scope_key)
+        logger.warning(
+            "The regulation index holds nothing for season=%s doc_type=%s, so this "
+            "query and every later one like it run UNSCOPED across all indexed "
+            "seasons. Rebuild the index with that document to scope it. Logged once, "
+            "not per lap.",
+            year,
+            doc_type,
+        )
+
     def query(
         self,
         question: str,
         top_k: int | None = None,
+        year: int | None = None,
+        doc_type: str | None = None,
     ) -> list[RegulationChunk]:
         """Retrieve the most relevant regulation chunks for a natural-language question.
 
-        Encodes the question, searches the Qdrant collection by cosine similarity,
-        and maps each hit back to a ``RegulationChunk`` with its source metadata.
-        The payload fields (``article``, ``doc_type``, ``year``, ``section_title``)
-        are stored verbatim from indexing time, so they are available even when the
+        Encodes the question, searches the Qdrant collection by cosine similarity, and
+        maps each hit back to a ``RegulationChunk`` with its source metadata. The
+        payload fields (``article``, ``doc_type``, ``year``, ``section_title``) are
+        stored verbatim from indexing time, so they are available even when the
         original PDFs are not present at query time.
+
+        When ``year`` is given the search is restricted to that season's rulebook,
+        because the same article carries different numbers in different years: the 2024
+        chunk of the dry-tyre allocation reads "twelve (12) sets" where 2025 reads
+        thirteen. A season the index does not hold falls back to an unscoped search
+        with one warning rather than returning nothing, because the regulation block is
+        an enrichment and an empty result reaches the agent as "the regulation does not
+        cover this case", which is false when the case is covered in another year.
 
         Args:
             question: The natural-language query to answer. Can be a full sentence
@@ -240,20 +352,23 @@ class RagRetriever:
                       instance default set at construction time. Pass a larger value
                       (e.g. 10) when the question spans multiple regulation articles
                       and the LLM needs broader context.
+            year:     Season whose rulebook to search. ``None`` searches every indexed
+                      season, the behaviour every caller had before season scoping.
+            doc_type: Document family to search. ``None`` searches all of them.
 
         Returns:
-            List of ``RegulationChunk`` objects ordered by descending cosine similarity.
-            Empty list if the collection exists but contains no matching vectors.
+            List of ``RegulationChunk`` objects ordered by descending cosine
+            similarity, every one of them from ``year`` when that season is indexed.
+            Empty list only when the collection itself holds no vectors.
         """
         k = top_k if top_k is not None else self._top_k
         vector = self._encode(question)
+        scope = self._build_scope_filter(year, doc_type)
 
-        response = self._client.query_points(
-            collection_name=self._collection_name,
-            query=vector,
-            limit=k,
-            with_payload=True,
-        )
+        hits = self._search(vector, k, scope)
+        if scope is not None and not hits:
+            self._warn_unindexed_scope(year, doc_type)
+            hits = self._search(vector, k, None)
 
         return [
             RegulationChunk(
@@ -264,7 +379,7 @@ class RagRetriever:
                 score=round(float(hit.score), 4),
                 section_title=hit.payload.get("section_title", ""),
             )
-            for hit in response.points
+            for hit in hits
         ]
 
     def health_check(self) -> dict[str, Any]:
@@ -338,8 +453,23 @@ def get_retriever(
     )
 
 
+# `config` carries the active season and is deliberately NOT documented in the
+# tool's Args: block. LangChain builds the schema the LLM fills in from the typed
+# arguments and their docstring entries, and a `year` argument there would put the
+# choice of season in the model's hands, which is the failure #320 exists to close
+# (driving the real agent graph with a stub model, it invented 2019). RunnableConfig
+# is injected by LangChain instead, so it stays out of the schema, and an unconfigured
+# `query_rag_tool.invoke({"question": ...})` still runs unscoped, which is what the
+# notebook and both README examples do.
+#
+# The annotation has to stay exactly `RunnableConfig`, with no default and no
+# `| None`. This module runs under `from __future__ import annotations`, so
+# LangChain resolves the string and injects only on an exact match: written as
+# `RunnableConfig | None = None` the parameter is treated as an ordinary argument,
+# lands in the schema as `['config', 'question']`, and the season silently never
+# arrives. Measured both ways before this line was written.
 @tool
-def query_rag_tool(question: str) -> str:
+def query_rag_tool(question: str, config: RunnableConfig) -> str:
     """Search the FIA regulation index and return the most relevant passages.
 
     This is the LangGraph-compatible wrapper around ``RagRetriever.query()``.
@@ -358,8 +488,10 @@ def query_rag_tool(question: str) -> str:
                   rule lookups ("pit lane speed limit"), and sanction checks
                   ("penalty for causing a collision").
     """
+    season = (config or {}).get("configurable", {}).get("season")
+
     retriever = get_retriever()
-    chunks = retriever.query(question)
+    chunks = retriever.query(question, year=season)
 
     if not chunks:
         return "No relevant regulation passages found for this query."

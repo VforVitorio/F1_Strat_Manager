@@ -100,3 +100,48 @@ def _scope_laps_to_gp(
         )
         return laps_df
     return scoped
+
+
+# The season this frame belongs to, and the fallback both call sites used to inline.
+_FALLBACK_SEASON = 2025
+
+_season_fallback_warned = False
+
+
+def season_of(laps_df: pd.DataFrame) -> int:
+    """Read the season from a laps frame, warning once when it has to be assumed.
+
+    ``Year`` is not in ``REQUIRED_LAPS_COLUMNS``, so a structurally valid frame can
+    arrive without it. Both callers used to fall back to 2025 silently, which cost
+    nothing while the season was only stamped into ``lap_state`` for reporting. It
+    stopped being free when the season began scoping RAG retrieval (#320): a 2023
+    replay on a frame with no ``Year`` would now be answered out of the 2025
+    rulebook, and the two would differ on exactly the articles that get renumbered
+    between seasons.
+
+    The fallback is kept rather than raising, because every other consumer of
+    ``lap_state["year"]`` has worked with it for the life of the frame and a hard
+    failure here would turn a reporting default into a crash. It warns instead.
+
+    Args:
+        laps_df: A laps frame, expected to be scoped to a single GP already.
+
+    Returns:
+        The frame's own ``Year``, or 2025 when the column is absent, in which case
+        the first such call logs a warning naming the consequence.
+    """
+    global _season_fallback_warned
+
+    if "Year" in laps_df.columns:
+        return int(laps_df["Year"].iloc[0])
+
+    if not _season_fallback_warned:
+        _season_fallback_warned = True
+        logger.warning(
+            "The laps frame carries no 'Year' column, so the season is assumed to be "
+            "%d. Regulation retrieval is scoped by season, so a race from another year "
+            "will be answered out of the %d rulebook. Logged once, not per lap.",
+            _FALLBACK_SEASON,
+            _FALLBACK_SEASON,
+        )
+    return _FALLBACK_SEASON

@@ -105,6 +105,7 @@ from src.agents.radio_agent        import (
     RCMEvent,
 )
 from src.agents.rag_agent          import run_rag_agent
+from src.strategy.inference.scoping import season_of
 
 
 # ==============================================================================
@@ -1573,7 +1574,7 @@ from src.rag.store_lock import is_store_locked as _is_store_locked
 _rag_unavailable_logged = False
 
 
-def _run_rag_agent_or_degrade(question: str):
+def _run_rag_agent_or_degrade(question: str, year: int | None = None):
     """N30's answer, or None when the regulation store cannot be opened.
 
     The store is local single-writer (`QdrantClient(path=...)`), so a second
@@ -1592,10 +1593,18 @@ def _run_rag_agent_or_degrade(question: str):
     missing embedding model or a bad question must still surface: those are not
     "another process is running", and swallowing them would trade one silent
     failure for another.
+
+    Args:
+        question: The regulation question built by :func:`_build_rag_question`.
+        year:     Season to scope retrieval to, normally ``lap_state["year"]``.
+                  None searches every indexed season. The season travels from here
+                  rather than being named inside ``question``, because putting it in
+                  the text only shifts the embedding and still leaves a third of the
+                  hits in another year.
     """
     global _rag_unavailable_logged
     try:
-        return run_rag_agent(question)
+        return run_rag_agent(question, year=year)
     except (RuntimeError, *_LOCK_EXCEPTIONS) as exc:
         if not _is_store_locked(exc):
             raise
@@ -2185,7 +2194,8 @@ def _run_conditional_agents(
             pit_action = pit_action,
             compound   = race_state.compound,
         )
-        reg_out = _run_rag_agent_or_degrade(question)
+        # lap_state["year"], not race_state.year: RaceState has no year field.
+        reg_out = _run_rag_agent_or_degrade(question, year=lap_state["year"])
 
     if reg_out is not None:
         regulation_context = reg_out.answer
@@ -2569,7 +2579,7 @@ def run_strategy_orchestrator_from_state(
     if lap_state is None:
         driver_rows = laps_df[laps_df["Driver"] == race_state.driver]
         lap_row     = driver_rows[driver_rows["LapNumber"] == race_state.lap]
-        year        = int(laps_df["Year"].iloc[0]) if "Year" in laps_df.columns else 2025
+        year        = season_of(laps_df)
         # Derive the GP from the (driver, lap) row match, NOT laps_df.iloc[0] (the
         # first row of the whole-season frame): the latter blends one race's GP with
         # another race's stint/team: the #465 wrong-GP bug engine._build_default_lap_state
