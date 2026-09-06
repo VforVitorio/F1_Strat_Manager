@@ -196,6 +196,11 @@ def test_the_neutralisation_rate_is_keyed_by_circuit_slugs_agents_can_query(tabl
 # ---------------------------------------------------------------------------
 
 
+# `data` as well as the two skipifs: the skipifs decide whether this CAN run, the
+# marker is what lets a save-loop run opt out with `-m "not data"` on a box where
+# it CAN. It is 86 s, and it was the only one of the five golden re-derivations
+# the marker did not already cover.
+@pytest.mark.data
 @_skip_no_raw
 @_skip_no_undercut
 def test_the_committed_tables_match_a_fresh_measurement():
