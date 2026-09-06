@@ -136,6 +136,14 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.21.0",
+    # Parallel runner, opt-in per run rather than in addopts: a single failing
+    # test reads better serially. Measured on 20 logical cores, three legs back
+    # to back: the whole suite serially is 628.7 s, `-m "not data"` serially is
+    # 115.6 s, and `-m "not data" -n auto --dist=loadfile` is 61.5 s. So the
+    # marker does most of the work and xdist is worth 1.88x on top of it. The
+    # gain stays far under the core count because with loadfile no run can go
+    # below its slowest single FILE.
+    "pytest-xdist>=3.6.0",
     "black>=26.3.1",
     "ruff>=0.16.6",
     "mypy>=1.0.0",
