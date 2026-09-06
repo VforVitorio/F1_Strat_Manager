@@ -48,7 +48,7 @@ from src.rag.retriever import (  # noqa: E402
     query_rag_tool,
 )
 
-from src.agents._shared_defaults import LLM_MAX_RETRIES
+from src.agents._shared_defaults import LLM_MAX_RETRIES, subagent_model
 
 # ── Optional LangChain / LangGraph imports ─────────────────────────────
 # Probed, not imported. `import langchain_openai` costs 14.3 s measured: it drags
@@ -165,7 +165,8 @@ _rag_agent = None
 def get_rag_react_agent():
     """Return the cached LangGraph ReAct agent, creating it on first call.
 
-    Uses OpenAI (`gpt-4.1-mini`) when `F1_LLM_PROVIDER=openai`, otherwise LM
+    Uses `subagent_model()` (`F1_LLM_MODEL_AGENTS`, default `gpt-4.1-mini`) when
+    `F1_LLM_PROVIDER=openai`, otherwise LM
     Studio at localhost:1234. The agent has one tool: query_rag_tool from
     src/rag/retriever.py. Raises ImportError when langgraph or
     langchain_openai are not installed.
@@ -183,11 +184,12 @@ def get_rag_react_agent():
         from langchain_openai import ChatOpenAI
 
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
+        model_name = subagent_model()
         if provider == "openai":
-            llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0, timeout=120, max_retries=LLM_MAX_RETRIES)
+            llm = ChatOpenAI(model=model_name, temperature=0, timeout=120, max_retries=LLM_MAX_RETRIES)
         else:
             llm = ChatOpenAI(
-                model="gpt-4.1-mini",
+                model=model_name,
                 base_url="http://localhost:1234/v1",
                 api_key="lm-studio",
                 temperature=0,

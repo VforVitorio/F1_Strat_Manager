@@ -56,8 +56,10 @@ def test_chat_openai_still_accepts_timeout_and_retries():
 def test_every_agent_chatopenai_has_a_timeout(filename: str):
     """Each ``ChatOpenAI(`` construction in the agent carries a ``timeout=`` kwarg.
 
-    Source-level guard so a future edit that drops the timeout on any of the 14
-    construction sites fails here instead of shipping a hang-prone agent.
+    Source-level guard so a future edit that drops the timeout on any of the 12
+    construction sites fails here instead of shipping a hang-prone agent. Two per
+    module, one per provider branch. ``pace_agent.py`` has none since #778/#780 took
+    its LLM out, so it iterates nothing; it stays in the list to cover a future one.
     """
     source = (_AGENTS_DIR / filename).read_text(encoding="utf-8")
     # For each construction, scan from ``ChatOpenAI(`` to its balanced close paren.
@@ -98,6 +100,28 @@ def _orchestrator_cfg_defaults() -> dict[str, object]:
     raise AssertionError("OrchestratorCFG not found in strategy_orchestrator.py")
 
 
+def _served_orchestrator_model() -> str:
+    """The model ``_get_orchestrator_llm`` will actually send, resolved its way.
+
+    ``OrchestratorCFG.model_name`` defaults to ``None`` since #264, meaning "the
+    layer default", so reading the field alone now yields ``None`` rather than a
+    model. This mirrors ``strategy_orchestrator.py``'s own
+    ``CFG.model_name or orchestrator_model()``, which keeps the canary below aimed
+    at the model the orchestrator really builds with instead of at a literal that
+    no longer lives in the dataclass.
+
+    Returns:
+        The field's default when it holds one, otherwise ``orchestrator_model()``.
+        Importing ``_shared_defaults`` is safe here where importing the
+        orchestrator is not: it is a leaf module with no heavy imports, which
+        ``tests/agents/test_no_shadowed_shared_defaults.py`` already relies on.
+    """
+    from src.agents._shared_defaults import orchestrator_model
+
+    declared = _orchestrator_cfg_defaults()["model_name"]
+    return declared or orchestrator_model()
+
+
 def test_the_orchestrator_model_still_discards_temperature():
     """Canary: the audit's central premise is that this kwarg does not survive.
 
@@ -112,16 +136,16 @@ def test_the_orchestrator_model_still_discards_temperature():
     OrchestratorCFG docstring. Do not just flip the assertion.
     """
     ChatOpenAI = pytest.importorskip("langchain_openai").ChatOpenAI
-    cfg = _orchestrator_cfg_defaults()
+    model = _served_orchestrator_model()
 
-    dropped = ChatOpenAI(model=cfg["model_name"], api_key="test-key", temperature=0.0)
+    dropped = ChatOpenAI(model=model, api_key="test-key", temperature=0.0)
     kept = ChatOpenAI(model="gpt-4.1-mini", api_key="test-key", temperature=0.0)
 
     assert kept.temperature == 0.0, (
         "gpt-4.1-mini stopped honoring temperature; the sub-agents relied on it"
     )
     assert dropped.temperature is None, (
-        f"{cfg['model_name']} now KEEPS temperature - this is good news and it "
+        f"{model} now KEEPS temperature - this is good news and it "
         "invalidates the audit's measurements; see this test's docstring"
     )
 

@@ -55,11 +55,14 @@ def apply_model_flag(model: str | None) -> str:
     Must run BEFORE the first ``_get_orchestrator_llm()``, which caches the client:
     afterwards the assignment lands on config nothing reads again.
     """
+    from src.agents._shared_defaults import orchestrator_model
     from src.agents.strategy_orchestrator import CFG
 
     if model:
         CFG.model_name = model
-    return CFG.model_name
+    # The field defaults to None (#264): unset means the layer default, which is
+    # what `_get_orchestrator_llm` will build with, so report that and not None.
+    return CFG.model_name or orchestrator_model()
 
 
 def load_env() -> str:

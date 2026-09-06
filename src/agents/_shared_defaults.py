@@ -6,6 +6,7 @@ drags in model weights (same reasoning as ``tire_parsing.py``).
 
 from __future__ import annotations
 
+import os
 from typing import Any, Mapping
 
 # RaceStateManager.get_session_meta() always supplies total_laps (CLAUDE.md section 6,
@@ -103,3 +104,50 @@ def reading_or_default(source: Mapping[str, Any], key: str, default: float) -> f
 # the constants are a claim about the dataset, and it was the dataset that was wrong.
 DEFAULT_AIR_TEMP_C: float = 24.6
 DEFAULT_TRACK_TEMP_C: float = 34.7
+
+
+# The LLM the agent layers talk to, resolved through these two functions rather than
+# through a literal at each construction site.
+#
+# There were EIGHT such literals before this, in six modules, and they disagreed about
+# WHERE the policy lived: tire, race_situation and pit read a `get_react_agent`
+# PARAMETER default; radio and the orchestrator read a dataclass field; rag passed the
+# string inline, once per provider branch. Three of those six modules also carried a
+# second `model_name` field on their config dataclass, documented as the knob to turn
+# and read by nothing, so editing the obvious place changed nothing at runtime (#264).
+#
+# Read at CALL time, not at import, which is why these are functions and not constants.
+# The agents build their client lazily on the first `get_react_agent()` /
+# `_get_orchestrator_llm()`, so a caller that sets the variable after importing the
+# module still gets what it asked for. A module constant would freeze the value at
+# import and silently ignore that caller, which is the trap
+# `src/telemetry/backend/services/chatbot/llm_service.py:23` already has to be worked
+# around in its own tests.
+#
+# Two layers, not one, because they genuinely differ: the sub-agents each run a small
+# ReAct loop where the cheap model is enough, while the orchestrator writes the final
+# synthesis and runs a stronger one.
+_DEFAULT_SUBAGENT_MODEL: str = "gpt-4.1-mini"
+_DEFAULT_ORCHESTRATOR_MODEL: str = "gpt-5.4-mini"
+
+
+def subagent_model() -> str:
+    """The model identifier the sub-agents N26-N30 build their ReAct client with.
+
+    Returns:
+        ``F1_LLM_MODEL_AGENTS`` when it is set, otherwise ``gpt-4.1-mini``. On the
+        ``lmstudio`` provider the string is still sent, but the server answers with
+        whatever model it has loaded, so it only really selects a model on OpenAI.
+    """
+    return os.environ.get("F1_LLM_MODEL_AGENTS", _DEFAULT_SUBAGENT_MODEL)
+
+
+def orchestrator_model() -> str:
+    """The model identifier N31 builds its synthesis client with.
+
+    Returns:
+        ``F1_LLM_MODEL_ORCHESTRATOR`` when it is set, otherwise ``gpt-5.4-mini``.
+        Kept separate from `subagent_model` because Layer 3 writes the recommendation
+        prose and the sub-agents only fill a small structured output.
+    """
+    return os.environ.get("F1_LLM_MODEL_ORCHESTRATOR", _DEFAULT_ORCHESTRATOR_MODEL)

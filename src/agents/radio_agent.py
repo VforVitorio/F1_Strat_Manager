@@ -143,7 +143,7 @@ from src.f1_strat_manager.rcm_events import (  # noqa: E402
     classify_rcm_event as _classify_rcm_event,
 )
 
-from src.agents._shared_defaults import LLM_MAX_RETRIES
+from src.agents._shared_defaults import LLM_MAX_RETRIES, subagent_model
 
 
 
@@ -250,7 +250,10 @@ class RadioAgentCFG:
         Also used as the sentiment tokenizer's max_length.
     """
 
-    model_name:       str   = "gpt-4.1-mini"
+    # None means "whatever the layer default resolves to", so the value is read at
+    # BUILD time and an env change still lands. A literal here would freeze the
+    # policy at import. Set it to override for one process; otherwise `subagent_model()` wins.
+    model_name:       str | None = None
     device:           str   = field(
         default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -804,17 +807,18 @@ def _get_radio_llm():
             )
         from langchain_openai import ChatOpenAI
         provider = os.environ.get('F1_LLM_PROVIDER', 'lmstudio')
+        model_name = CFG.model_name or subagent_model()
         if provider == 'openai':
             # parallel_tool_calls is NOT sent, because OpenAI rejects it when no tools are specified
             base_llm = ChatOpenAI(
-                model=CFG.model_name,
+                model=model_name,
                 temperature=0.0,
                 timeout=120,
                 max_retries=LLM_MAX_RETRIES,
             )
         else:
             base_llm = ChatOpenAI(
-                model=CFG.model_name,
+                model=model_name,
                 base_url="http://localhost:1234/v1",
                 api_key="lm-studio",
                 temperature=0.0,
