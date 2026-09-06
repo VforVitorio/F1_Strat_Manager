@@ -61,18 +61,36 @@ def _race_dir(tmp_path: Path) -> Path:
 
 
 def _sleep_recorder(monkeypatch) -> list[float]:
-    """Replace the engine module's `time.sleep` with a recorder and return its log.
+    """Record the sleeps issued by THIS thread, leaving every other thread untouched.
 
-    Patching the module rather than `time` itself keeps the rest of the process, pytest
-    included, on the real function.
+    `replay_engine.time` is the `time` module itself, not a per-module copy, so patching
+    its `sleep` attribute patches the whole process. Background threads that earlier
+    tests left running then land in the recorder: draining a six-lap replay collected
+    2142 calls of 0.016 s from a 60 Hz poll loop this guard has nothing to do with, which
+    turned the assertion into a report on the rest of the suite.
+
+    Filtering on the thread id keeps the guard about the engine, and forwarding the other
+    threads to the real function keeps them paced rather than spinning.
 
     Returns:
-        A list that receives one entry per sleep call, holding the seconds requested.
+        A list that receives one entry per sleep call made on the calling thread, holding
+        the seconds requested.
     """
+    import threading
+
     from src.simulation import replay_engine
 
+    real_sleep = replay_engine.time.sleep
+    caller = threading.get_ident()
     slept: list[float] = []
-    monkeypatch.setattr(replay_engine.time, "sleep", slept.append)
+
+    def recording_sleep(seconds: float) -> None:
+        if threading.get_ident() == caller:
+            slept.append(seconds)
+            return
+        real_sleep(seconds)
+
+    monkeypatch.setattr(replay_engine.time, "sleep", recording_sleep)
     return slept
 
 
