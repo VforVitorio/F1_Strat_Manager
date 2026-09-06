@@ -40,7 +40,7 @@ fails when a value here stops matching the code.
 
 | Surface | Reads `.env` | Provider when nothing is set | Overridden by | Model |
 |---|---|---|---|---|
-| `f1-sim` | repo root, source checkout only (`scripts/run_simulation_cli.py`) | `lmstudio` (`src/agents/strategy_orchestrator.py`) | `--provider openai\|lmstudio`, or `--no-llm` to skip the step | sub-agents `gpt-4.1-mini`, orchestrator `gpt-5.4-mini` |
+| `f1-sim` | repo root, source checkout only (`scripts/run_simulation_cli.py`) | `lmstudio` (`src/agents/strategy_orchestrator.py`) | `--provider openai\|lmstudio`, or `--no-llm` to skip the step | sub-agents `gpt-4.1-mini` (`F1_LLM_MODEL_AGENTS`), orchestrator `gpt-5.4-mini` (`F1_LLM_MODEL_ORCHESTRATOR`) |
 | `f1-strat` | repo root, for `OPENAI_API_KEY` only (`scripts/f1_cli.py`) | the wizard's LLM-mode pick, which highlights "No LLM" | the wizard, always forwarded to `f1-sim` as `--provider` or `--no-llm` (`scripts/cli/runner.py`) | as `f1-sim` |
 | `f1-arcade`, `f1-pitwall` | repo root, source checkout only (`src/arcade/main.py`) | `openai` (`src/arcade/app.py`) | `F1_LLM_PROVIDER`, or `--no-llm` | as `f1-sim` |
 | `f1-webapp` chat tab | repo root, then `src/telemetry/.env` as an override (`src/telemetry/backend/core/config.py`) | `lmstudio` (`src/telemetry/backend/services/chatbot/llm_service.py`) | `F1_LLM_PROVIDER`, then a bare `LLM_PROVIDER` | `gpt-5.4-mini`, or `OPENAI_CHAT_MODEL` |

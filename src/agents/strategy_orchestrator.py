@@ -47,7 +47,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.agents._shared_defaults import LLM_MAX_RETRIES
+from src.agents._shared_defaults import LLM_MAX_RETRIES, orchestrator_model
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,11 @@ class OrchestratorCFG:
     See documents/audits/AUDIT_ORCHESTRATOR_MEMORY.md, section 1.1.
     """
 
-    model_name:             str   = "gpt-5.4-mini"
+    # None means "whatever the layer default resolves to", so the value is read at
+    # BUILD time and an env change still lands. A literal here would freeze the
+    # policy at import. Set it to override for one process; otherwise `orchestrator_model()` wins.
+    # `scripts/prompt_ab/_common.py:apply_model_flag` writes it for an A/B run.
+    model_name:             str | None = None
     base_url:               str   = "http://localhost:1234/v1"
     temperature:            float = 0.0
     n_sim:                  int   = 500
@@ -194,12 +198,13 @@ def _get_orchestrator_llm():
             )
         from langchain_openai import ChatOpenAI
         provider = os.environ.get("F1_LLM_PROVIDER", "lmstudio")
+        model_name = CFG.model_name or orchestrator_model()
         if provider == "openai":
             # No parallel_tool_calls: OpenAI rejects it when no tools are specified
-            llm = ChatOpenAI(model=CFG.model_name, temperature=CFG.temperature, timeout=120, max_retries=LLM_MAX_RETRIES)
+            llm = ChatOpenAI(model=model_name, temperature=CFG.temperature, timeout=120, max_retries=LLM_MAX_RETRIES)
         else:
             llm = ChatOpenAI(
-                model=CFG.model_name,
+                model=model_name,
                 base_url=CFG.base_url,
                 api_key="lm-studio",
                 temperature=CFG.temperature,
@@ -216,7 +221,7 @@ def _get_orchestrator_llm():
                 "deterministically: consecutive laps will disagree on confidence, "
                 "pit_lap_target and reasoning even when the prompt is identical. "
                 "See documents/audits/AUDIT_ORCHESTRATOR_MEMORY.md, section 1.1.",
-                CFG.temperature, CFG.model_name,
+                CFG.temperature, model_name,
             )
         # _LLMSynthesis only has the 3 fields the LLM actually fills.
         # scenario_scores (dict) and regulation_context are attached in code after.

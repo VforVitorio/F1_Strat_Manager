@@ -422,7 +422,10 @@ class F1ArcadeView(arcade.View):
         gp_name = self._resolve_gp_name()
         # Provider defaults to OpenAI (what the agents load with
         # ``F1_LLM_PROVIDER=openai``, ChatOpenAI model=gpt-4.1-mini for
-        # N25-N30 and the orchestrator model for N31). ``F1_LLM_PROVIDER``
+        # N26-N30 and the orchestrator model for N31; N25 has no LLM step
+        # since #778/#780). Both models resolve through
+        # ``src/agents/_shared_defaults.py`` and can be pointed elsewhere with
+        # ``F1_LLM_MODEL_AGENTS`` / ``F1_LLM_MODEL_ORCHESTRATOR``. ``F1_LLM_PROVIDER``
         # env wins so a user running LM Studio locally (set it to
         # "lmstudio") keeps working without a code edit.
         provider = os.environ.get("F1_LLM_PROVIDER") or "openai"

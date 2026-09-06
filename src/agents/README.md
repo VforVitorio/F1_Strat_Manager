@@ -190,9 +190,16 @@ The legacy engine is not used. Do not import from it in new code.
 
 ## LLM configuration (production)
 
-| Layer | Model |
-|---|---|
-| Sub-agents N25-N29 | `gpt-4.1-mini` |
-| Orchestrator N31 | `gpt-5.4-mini` (`OrchestratorConfig.model_name`) |
+| Layer | Model | Environment variable |
+|---|---|---|
+| Sub-agents N26-N30 | `gpt-4.1-mini` | `F1_LLM_MODEL_AGENTS` |
+| Orchestrator N31 | `gpt-5.4-mini` | `F1_LLM_MODEL_ORCHESTRATOR` |
+
+N25 (pace) is absent because it has no LLM step: its ReAct scaffold was retired in #778/#780.
+N30 (rag) runs on the sub-agent model like the rest.
+
+Both defaults live in `src/agents/_shared_defaults.py`, resolved by `subagent_model()` and
+`orchestrator_model()` at the moment a client is built, so setting either variable after import
+still takes effect. `OrchestratorCFG.model_name` overrides the second one for a single process.
 
 Notebooks default to `local-model` (LM Studio). Switch to the OpenAI model IDs above when deploying via FastAPI.
