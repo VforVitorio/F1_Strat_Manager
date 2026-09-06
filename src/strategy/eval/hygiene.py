@@ -159,15 +159,22 @@ def audit_findings() -> list[ProvenanceEntry]:
             "mean_sector_speed), not pre-race geometry",
             "N03_circuit_clustering.ipynb (load_all_races / drop_redundant_features / fit_kmeans_final)",
             "REAL but coarse test-season leak (corrects an earlier 'no leak' over-claim, caught "
-            "by the Fable gate): Cluster is a 4-way (2-bit) bucket over ~25 circuits encoding "
+            "by the Fable gate): Cluster is a 4-way (2-bit) bucket over 24 circuits encoding "
             "2023-2025 aggregates that include mean_laptime - an aggregate of the pace target "
-            "itself - so it is NOT target-free. It is deployed via N04's static fit-time 71-GP "
-            "lookup, not a clean 2023-24 frozen model. Scope: every model using Cluster / "
-            "lap_time_vs_cluster_mean / mean_sector_speed (overtake, SC, laptime AND tire Model "
-            "A). Materiality is bounded (2-bit quantization over stable circuit character; the "
-            "delta pace target absorbs per-circuit constants) but NOT yet measured - the "
-            "demonstration (refit k-means 2023-24-only, count 2025 label flips) is deferred to "
-            "#376. N03 is untouchable, so no code fix here",
+            "itself - so it is NOT target-free. TWO labellings are deployed and they disagree "
+            "on 7 of the 24 circuits: tire, overtake and SC read the pooled fit-time lookup "
+            "(circuit_clusters_k4.parquet) while the pace model reads the pooled model's "
+            "predictions on 2025 aggregates (circuit_clusters_k4_2025.parquet, N03 Step 7). "
+            "Scope: every model using Cluster / lap_time_vs_cluster_mean / mean_sector_speed "
+            "(overtake, SC, laptime AND tire Model A). MEASURED (#376, "
+            "scripts/measure_cluster_leak.py): refitting k-means on 2023-24 only moves 5/24 "
+            "circuits on the lookup path (24.0% of served 2025 laps) and 4/24 on the predict "
+            "path (18.9%), Hungarian-matched since k-means ids are arbitrary. That is NOT the "
+            "~0 the demonstration set out to show, but it is inside the k-means seed noise "
+            "(3-6 flips over random_state 0-9) and smaller than the 7/24 the two shipped "
+            "labellings already disagree by. Dropping n_laps and max_stint_length, which count "
+            "seasons rather than describe the circuit, does not reduce the flips (6/24 and "
+            "5/24). N03 is untouchable, so no code fix here",
         ),
         ProvenanceEntry(
             "year_circuit_median / team_pace_rank",
