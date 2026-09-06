@@ -42,7 +42,8 @@ class RaceReplayEngine:
     Attributes:
         rsm:         The underlying ``RaceStateManager``.
         total_laps:  Number of laps in the race.
-        interval:    Seconds to sleep between lap emissions (0 for batch).
+        interval:    Seconds to sleep between lap emissions, 0 for batch and
+                     the default. Only the interactive surfaces raise it.
     """
 
     def __init__(
@@ -50,7 +51,7 @@ class RaceReplayEngine:
         race_dir: str | Path,
         driver_code: str,
         team: str,
-        interval_seconds: float = 3.0,
+        interval_seconds: float = 0.0,
     ) -> None:
         """Load race data and initialise the state manager.
 
@@ -62,8 +63,14 @@ class RaceReplayEngine:
                               ``"NOR"``).
             team:             Our driver's team name, must match the Team
                               column in the laps parquet exactly.
-            interval_seconds: Seconds to sleep between lap emissions.
-                              Pass ``0.0`` for batch/test mode (no sleep).
+            interval_seconds: Seconds to sleep between lap emissions. Defaults
+                              to no sleep, so a caller that does not ask for
+                              pacing runs at full speed. The interactive
+                              surfaces ask for it explicitly: both CLIs pass
+                              ``args.interval`` and the arcade passes
+                              ``StrategyRequest.interval_s``. A caller that
+                              forgets the argument pays nothing, which is the
+                              direction that fails safe (#1202).
         """
         race_dir = Path(race_dir)
 
